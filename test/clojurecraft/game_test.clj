@@ -86,7 +86,7 @@
       (let [[w _] (run w [(packet {:packet/name :set-cursor-item :item nil})
                           (packet {:packet/name :open-screen :window-id 3 :menu-type 12 :title (byte-array 0)})])]
         (is (nil? (:window/cursor w)))
-        (is (= {:window/id 3 :window/menu-type 12} (:window/open w)))
+        (is (= {:window/id 3 :window/menu-type 12 :window/slots {}} (:window/open w)))
         (is (nil? (:window/open (first (run w [(packet {:packet/name :container-close :window-id 3})])))))))))
 
 (deftest chunks-blocks-entities-and-memory

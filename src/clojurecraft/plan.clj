@@ -12,7 +12,9 @@
 (def goals
   [{:goal/id :wood :goal/priority 1 :goal/doc "hold one log"}
    {:goal/id :kit :goal/priority 2 :goal/doc "a crafting table and four sticks, from logs"
-    :goal/wants [[:crafting_table 1] [:stick 4]]}])
+    :goal/wants [[:crafting_table 1] [:stick 4]]}
+   {:goal/id :pickaxe :goal/priority 3 :goal/doc "a wooden pickaxe, placing a crafting table to make it"
+    :goal/wants [[:wooden_pickaxe 1]]}])
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def wait-timeout 20000)              ; a goal that has nothing to do for this long has failed

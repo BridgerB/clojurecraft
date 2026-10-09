@@ -45,6 +45,7 @@
    :player/controls {}
    :player/inventory {}
    :window/grid {}
+   :player/held-slot 0
    :world/chunks {}
    :world/blocks {}
    :world/entities {}
@@ -216,6 +217,34 @@
 (defmethod on-packet [:play :block-update] [w p] (set-block w (:pos p) (:state p)))
 (defmethod on-packet [:play :section-blocks-update] [w p] (section-update w p))
 (defmethod on-packet [:play :set-health] [w p] (assoc w :player/health (:health p)))
+(def menus
+  "Container layouts by menu type id (registry minecraft:menu). :menu/grid are the crafting
+   slots (0 is the result); :menu/inventory is the first of the 36 player-inventory slots,
+   27 main then 9 hotbar, as every vanilla container appends them."
+  {12 {:menu/name :crafting :menu/size 3 :menu/grid (range 0 10) :menu/inventory 10}})
+
+(defn window->player-slot
+  "A slot of an open container → player-inventory slot, or nil when it is the container's own."
+  [menu-type ^long s]
+  (when-let [start (:menu/inventory (menus menu-type))]
+    (let [i (- s start)]
+      (cond (<= 0 i 26) (+ i 9)
+            (<= 27 i 35) (- i 27)
+            :else nil))))
+
+(defn- set-open-window-slot
+  "An open container: its own slots live in :window/open's :window/slots; slots that are the
+   player's inventory update :player/inventory, so items are never counted in two places."
+  [w s item]
+  (let [menu-type (get-in w [:window/open :window/menu-type])]
+    (if-let [p (window->player-slot menu-type s)]
+      (set-slot w p item)
+      (if item
+        (assoc-in w [:window/open :window/slots s] item)
+        (update-in w [:window/open :window/slots] dissoc s)))))
+
+(defn- open? [w window-id] (= window-id (get-in w [:window/open :window/id])))
+
 (defn- set-window-0-slot
   "Window 0 is the player's own screen: slots 0-4 are the crafting grid (0 is the result) and
    are kept verbatim in :window/grid, so nothing in the grid is ever invisible; the rest map to
@@ -227,21 +256,24 @@
     :else w))
 
 (defmethod on-packet [:play :container-set-content] [w {:keys [window-id state-id items carried]}]
-  (if (zero? window-id)
-    (reduce (fn [w [i item]] (set-window-0-slot w i item))
-            (cond-> (assoc w :window/state-id state-id)
-              carried (assoc :window/cursor carried)
-              (nil? carried) (dissoc :window/cursor))
-            (map-indexed vector items))
-    w))
+  (let [w (cond-> w carried (assoc :window/cursor carried) (nil? carried) (dissoc :window/cursor))]
+    (cond
+      (zero? window-id)
+      (reduce (fn [w [i item]] (set-window-0-slot w i item)) (assoc w :window/state-id state-id) (map-indexed vector items))
+      (open? w window-id)
+      (reduce (fn [w [i item]] (set-open-window-slot w i item))
+              (assoc-in w [:window/open :window/state-id] state-id) (map-indexed vector items))
+      :else w)))
 (defmethod on-packet [:play :container-set-slot] [w {:keys [window-id state-id slot item]}]
-  (if (zero? window-id)
-    (-> w (assoc :window/state-id state-id) (set-window-0-slot slot item))
-    w))
+  (cond
+    (zero? window-id) (-> w (assoc :window/state-id state-id) (set-window-0-slot slot item))
+    (open? w window-id) (-> w (assoc-in [:window/open :window/state-id] state-id) (set-open-window-slot slot item))
+    :else w))
+(defmethod on-packet [:play :set-held-slot] [w {:keys [slot]}] (if (<= 0 slot 8) (assoc w :player/held-slot slot) w))
 (defmethod on-packet [:play :set-cursor-item] [w {:keys [item]}]
   (if item (assoc w :window/cursor item) (dissoc w :window/cursor)))
 (defmethod on-packet [:play :open-screen] [w {:keys [window-id menu-type]}]
-  (assoc w :window/open {:window/id window-id :window/menu-type menu-type}))
+  (assoc w :window/open {:window/id window-id :window/menu-type menu-type :window/slots {}}))
 (defmethod on-packet [:play :container-close] [w _] (dissoc w :window/open))
 (defmethod on-packet [:play :set-player-inventory] [w {:keys [slot item]}] (set-slot w slot item))
 (defmethod on-packet [:play :add-entity] [w {:keys [entity-id type x y z]}]

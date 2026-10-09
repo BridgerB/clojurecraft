@@ -123,27 +123,29 @@
   "The clicks that lay one craft of r into the size×size grid of window 0, or nil when the
    inventory cannot cover it. Each ingredient group comes from a single stack: pick it up,
    right-click one item into each cell, put the remainder back. Clicks are
-   {:click/slot :click/button :click/mode}."
-  [inventory r size]
-  (let [groups (group-by val (placement r size))]
-    (loop [[[s cells] & more] (seq groups) used {} acc []]
-      (if (nil? s)
-        acc
-        (let [n (count cells)
-              source (->> (sort-by key inventory)
-                          (filter (fn [[slot {:keys [item count]}]]
-                                    (and (player->container-slot slot)
-                                         (contains? s (item-name item))
-                                         (>= (- count (get used slot 0)) n))))
-                          ffirst)]
-          (when source
-            (let [cs (player->container-slot source)
-                  left (- (get-in inventory [source :count]) (get used source 0) n)]
-              (recur more (update used source (fnil + 0) n)
-                     (-> acc
-                         (conj {:click/slot cs :click/button 0 :click/mode 0})
-                         (into (for [[g _] (sort-by key cells)] {:click/slot g :click/button 1 :click/mode 0}))
-                         (cond-> (pos? left) (conj {:click/slot cs :click/button 0 :click/mode 0})))))))))))
+   {:click/slot :click/button :click/mode}. slot-of maps a player-inventory slot to a slot of
+   the window being clicked (window 0 by default)."
+  ([inventory r size] (clicks inventory r size player->container-slot))
+  ([inventory r size slot-of]
+   (let [groups (group-by val (placement r size))]
+     (loop [[[s cells] & more] (seq groups) used {} acc []]
+       (if (nil? s)
+         acc
+         (let [n (count cells)
+               source (->> (sort-by key inventory)
+                           (filter (fn [[slot {:keys [item count]}]]
+                                     (and (slot-of slot)
+                                          (contains? s (item-name item))
+                                          (>= (- count (get used slot 0)) n))))
+                           ffirst)]
+           (when source
+             (let [cs (slot-of source)
+                   left (- (get-in inventory [source :count]) (get used source 0) n)]
+               (recur more (update used source (fnil + 0) n)
+                      (-> acc
+                          (conj {:click/slot cs :click/button 0 :click/mode 0})
+                          (into (for [[g _] (sort-by key cells)] {:click/slot g :click/button 1 :click/mode 0}))
+                          (cond-> (pos? left) (conj {:click/slot cs :click/button 0 :click/mode 0}))))))))))))
 
 ;; ---------------------------------------------------------------- the graph
 
