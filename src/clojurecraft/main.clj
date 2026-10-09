@@ -13,6 +13,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.record :as record]
             [clojurecraft.make]
+            [clojurecraft.memory :as memory]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.wood])
   (:gen-class))
@@ -79,6 +80,8 @@
             :planks (recipe/have held (recipe/tags :planks))
             :sticks (get held :stick 0)
             :tables (get held :crafting_table 0)})
+         (when-let [t (memory/nearest world (game/eye world) 32 memory/crafting-table?)]
+           {:table/pos t})
          (when (:plan/status world) {:plan (plan/summary world)})))
 
 (defn -main [& args]

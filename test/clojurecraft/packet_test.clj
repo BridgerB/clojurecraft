@@ -69,6 +69,14 @@
                                  :mode 0 :changed [] :cursor nil})]
       (is (= [0x12 0 7 0 36 1 0 0 0] (map #(bit-and % 0xFF) bytes))))))
 
+(deftest use-item-on-wire-format
+  (testing "775 layout: hand, position, face varint, cursor x y z f32, inside-block, world-border-hit, sequence"
+    (let [bytes (p/encode :play {:packet/name :use-item-on :hand 0 :pos [7 64 5] :face 1 :cursor-x 0.5 :cursor-y 1.0
+                                 :cursor-z 0.5 :inside-block false :world-border-hit false :sequence 3})]
+      (is (= [0x42 0x00 0x00 0x00 0x01 0xC0 0x00 0x00 0x50 0x40 0x01 0x3F 0x00 0x00 0x00 0x3F 0x80 0x00 0x00
+              0x3F 0x00 0x00 0x00 0x00 0x00 0x03]
+             (map #(bit-and % 0xFF) bytes))))))
+
 (deftest transitions
   (is (= :login (p/next-state :handshake :intention)))
   (is (= :configuration (p/next-state :login :login-acknowledged)))

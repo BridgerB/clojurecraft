@@ -16,6 +16,10 @@
           :recipe/key {"#" (recipe/tags :planks)} :recipe/width 1 :recipe/height 2}
          (recipe/by-id :stick)))
   (is (contains? (recipe/tags :logs) :birch_log))
+  (testing "shaped patterns are shrunk like vanilla: padding columns are not part of the shape"
+    (is (= ["#" "X" "X"] (:recipe/pattern (recipe/by-id :spyglass))))
+    (is (= 1 (:recipe/width (recipe/by-id :spyglass))))
+    (is (recipe/fits? (recipe/by-id :waxed_chiseled_copper) 2) "a 1x2 recipe written 3 wide fits the 2x2 grid"))
   (is (= {(recipe/tags :planks) 4} (recipe/needs (recipe/by-id :crafting_table)))))
 
 (deftest match-is-the-servers-rule

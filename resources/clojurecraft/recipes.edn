@@ -199,7 +199,7 @@
  #:recipe{:id :copper_trapdoor, :result :copper_trapdoor, :count 1, :kind :shaped, :pattern ["##" "##"], :key {"#" #{:copper_ingot}}, :width 2, :height 2}
  #:recipe{:id :crafter, :result :crafter, :count 1, :kind :shaped, :pattern ["###" "#C#" "RDR"], :key {"#" #{:iron_ingot}, "C" #{:crafting_table}, "D" #{:dropper}, "R" #{:redstone}}, :width 3, :height 3}
  #:recipe{:id :crafting_table, :result :crafting_table, :count 1, :kind :shaped, :pattern ["##" "##"], :key {"#" #{:acacia_planks :bamboo_planks :birch_planks :cherry_planks :crimson_planks :dark_oak_planks :jungle_planks :mangrove_planks :oak_planks :pale_oak_planks :spruce_planks :warped_planks}}, :width 2, :height 2}
- #:recipe{:id :creaking_heart, :result :creaking_heart, :count 1, :kind :shaped, :pattern [" L " " R " " L "], :key {"L" #{:pale_oak_log}, "R" #{:resin_block}}, :width 3, :height 3}
+ #:recipe{:id :creaking_heart, :result :creaking_heart, :count 1, :kind :shaped, :pattern ["L" "R" "L"], :key {"L" #{:pale_oak_log}, "R" #{:resin_block}}, :width 1, :height 3}
  #:recipe{:id :creeper_banner_pattern, :result :creeper_banner_pattern, :count 1, :kind :shapeless, :ingredients [#{:paper} #{:creeper_head}]}
  #:recipe{:id :crimson_button, :result :crimson_button, :count 1, :kind :shapeless, :ingredients [#{:crimson_planks}]}
  #:recipe{:id :crimson_door, :result :crimson_door, :count 3, :kind :shaped, :pattern ["##" "##" "##"], :key {"#" #{:crimson_planks}}, :width 2, :height 3}
@@ -528,7 +528,7 @@
  #:recipe{:id :lime_terracotta, :result :lime_terracotta, :count 8, :kind :shaped, :pattern ["###" "#X#" "###"], :key {"#" #{:terracotta}, "X" #{:lime_dye}}, :width 3, :height 3}
  #:recipe{:id :lodestone, :result :lodestone, :count 1, :kind :shaped, :pattern ["SSS" "S#S" "SSS"], :key {"#" #{:iron_ingot}, "S" #{:chiseled_stone_bricks}}, :width 3, :height 3}
  #:recipe{:id :loom, :result :loom, :count 1, :kind :shaped, :pattern ["@@" "##"], :key {"#" #{:acacia_planks :bamboo_planks :birch_planks :cherry_planks :crimson_planks :dark_oak_planks :jungle_planks :mangrove_planks :oak_planks :pale_oak_planks :spruce_planks :warped_planks}, "@" #{:string}}, :width 2, :height 2}
- #:recipe{:id :mace, :result :mace, :count 1, :kind :shaped, :pattern [" # " " I "], :key {"#" #{:heavy_core}, "I" #{:breeze_rod}}, :width 3, :height 2}
+ #:recipe{:id :mace, :result :mace, :count 1, :kind :shaped, :pattern ["#" "I"], :key {"#" #{:heavy_core}, "I" #{:breeze_rod}}, :width 1, :height 2}
  #:recipe{:id :magenta_banner, :result :magenta_banner, :count 1, :kind :shaped, :pattern ["###" "###" " | "], :key {"#" #{:magenta_wool}, "|" #{:stick}}, :width 3, :height 3}
  #:recipe{:id :magenta_bed, :result :magenta_bed, :count 1, :kind :shaped, :pattern ["###" "XXX"], :key {"#" #{:magenta_wool}, "X" #{:acacia_planks :bamboo_planks :birch_planks :cherry_planks :crimson_planks :dark_oak_planks :jungle_planks :mangrove_planks :oak_planks :pale_oak_planks :spruce_planks :warped_planks}}, :width 3, :height 2}
  #:recipe{:id :magenta_candle, :result :magenta_candle, :count 1, :kind :shapeless, :ingredients [#{:candle} #{:magenta_dye}]}
@@ -820,7 +820,7 @@
  #:recipe{:id :spruce_stairs, :result :spruce_stairs, :count 4, :kind :shaped, :pattern ["#  " "## " "###"], :key {"#" #{:spruce_planks}}, :width 3, :height 3}
  #:recipe{:id :spruce_trapdoor, :result :spruce_trapdoor, :count 2, :kind :shaped, :pattern ["###" "###"], :key {"#" #{:spruce_planks}}, :width 3, :height 2}
  #:recipe{:id :spruce_wood, :result :spruce_wood, :count 3, :kind :shaped, :pattern ["##" "##"], :key {"#" #{:spruce_log}}, :width 2, :height 2}
- #:recipe{:id :spyglass, :result :spyglass, :count 1, :kind :shaped, :pattern [" # " " X " " X "], :key {"#" #{:amethyst_shard}, "X" #{:copper_ingot}}, :width 3, :height 3}
+ #:recipe{:id :spyglass, :result :spyglass, :count 1, :kind :shaped, :pattern ["#" "X" "X"], :key {"#" #{:amethyst_shard}, "X" #{:copper_ingot}}, :width 1, :height 3}
  #:recipe{:id :stick, :result :stick, :count 4, :kind :shaped, :pattern ["#" "#"], :key {"#" #{:acacia_planks :bamboo_planks :birch_planks :cherry_planks :crimson_planks :dark_oak_planks :jungle_planks :mangrove_planks :oak_planks :pale_oak_planks :spruce_planks :warped_planks}}, :width 1, :height 2}
  #:recipe{:id :stick_from_bamboo_item, :result :stick, :count 1, :kind :shaped, :pattern ["#" "#"], :key {"#" #{:bamboo}}, :width 1, :height 2}
  #:recipe{:id :sticky_piston, :result :sticky_piston, :count 1, :kind :shaped, :pattern ["S" "P"], :key {"P" #{:piston}, "S" #{:slime_ball}}, :width 1, :height 2}
@@ -901,7 +901,7 @@
  #:recipe{:id :warped_slab, :result :warped_slab, :count 6, :kind :shaped, :pattern ["###"], :key {"#" #{:warped_planks}}, :width 3, :height 1}
  #:recipe{:id :warped_stairs, :result :warped_stairs, :count 4, :kind :shaped, :pattern ["#  " "## " "###"], :key {"#" #{:warped_planks}}, :width 3, :height 3}
  #:recipe{:id :warped_trapdoor, :result :warped_trapdoor, :count 2, :kind :shaped, :pattern ["###" "###"], :key {"#" #{:warped_planks}}, :width 3, :height 2}
- #:recipe{:id :waxed_chiseled_copper, :result :waxed_chiseled_copper, :count 1, :kind :shaped, :pattern [" M " " M "], :key {"M" #{:waxed_cut_copper_slab}}, :width 3, :height 2}
+ #:recipe{:id :waxed_chiseled_copper, :result :waxed_chiseled_copper, :count 1, :kind :shaped, :pattern ["M" "M"], :key {"M" #{:waxed_cut_copper_slab}}, :width 1, :height 2}
  #:recipe{:id :waxed_chiseled_copper_from_honeycomb, :result :waxed_chiseled_copper, :count 1, :kind :shapeless, :ingredients [#{:chiseled_copper} #{:honeycomb}]}
  #:recipe{:id :waxed_copper_bars_from_honeycomb, :result :waxed_copper_bars, :count 1, :kind :shapeless, :ingredients [#{:copper_bars} #{:honeycomb}]}
  #:recipe{:id :waxed_copper_block_from_honeycomb, :result :waxed_copper_block, :count 1, :kind :shapeless, :ingredients [#{:copper_block} #{:honeycomb}]}
@@ -921,7 +921,7 @@
  #:recipe{:id :waxed_cut_copper_slab_from_honeycomb, :result :waxed_cut_copper_slab, :count 1, :kind :shapeless, :ingredients [#{:cut_copper_slab} #{:honeycomb}]}
  #:recipe{:id :waxed_cut_copper_stairs, :result :waxed_cut_copper_stairs, :count 4, :kind :shaped, :pattern ["#  " "## " "###"], :key {"#" #{:waxed_cut_copper}}, :width 3, :height 3}
  #:recipe{:id :waxed_cut_copper_stairs_from_honeycomb, :result :waxed_cut_copper_stairs, :count 1, :kind :shapeless, :ingredients [#{:cut_copper_stairs} #{:honeycomb}]}
- #:recipe{:id :waxed_exposed_chiseled_copper, :result :waxed_exposed_chiseled_copper, :count 1, :kind :shaped, :pattern [" M " " M "], :key {"M" #{:waxed_exposed_cut_copper_slab}}, :width 3, :height 2}
+ #:recipe{:id :waxed_exposed_chiseled_copper, :result :waxed_exposed_chiseled_copper, :count 1, :kind :shaped, :pattern ["M" "M"], :key {"M" #{:waxed_exposed_cut_copper_slab}}, :width 1, :height 2}
  #:recipe{:id :waxed_exposed_chiseled_copper_from_honeycomb, :result :waxed_exposed_chiseled_copper, :count 1, :kind :shapeless, :ingredients [#{:exposed_chiseled_copper} #{:honeycomb}]}
  #:recipe{:id :waxed_exposed_copper_bars_from_honeycomb, :result :waxed_exposed_copper_bars, :count 1, :kind :shapeless, :ingredients [#{:exposed_copper_bars} #{:honeycomb}]}
  #:recipe{:id :waxed_exposed_copper_bulb, :result :waxed_exposed_copper_bulb, :count 4, :kind :shaped, :pattern [" C " "CBC" " R "], :key {"B" #{:blaze_rod}, "C" #{:waxed_exposed_copper}, "R" #{:redstone}}, :width 3, :height 3}
@@ -943,7 +943,7 @@
  #:recipe{:id :waxed_exposed_cut_copper_stairs_from_honeycomb, :result :waxed_exposed_cut_copper_stairs, :count 1, :kind :shapeless, :ingredients [#{:exposed_cut_copper_stairs} #{:honeycomb}]}
  #:recipe{:id :waxed_exposed_lightning_rod_from_honeycomb, :result :waxed_exposed_lightning_rod, :count 1, :kind :shapeless, :ingredients [#{:exposed_lightning_rod} #{:honeycomb}]}
  #:recipe{:id :waxed_lightning_rod_from_honeycomb, :result :waxed_lightning_rod, :count 1, :kind :shapeless, :ingredients [#{:lightning_rod} #{:honeycomb}]}
- #:recipe{:id :waxed_oxidized_chiseled_copper, :result :waxed_oxidized_chiseled_copper, :count 1, :kind :shaped, :pattern [" M " " M "], :key {"M" #{:waxed_oxidized_cut_copper_slab}}, :width 3, :height 2}
+ #:recipe{:id :waxed_oxidized_chiseled_copper, :result :waxed_oxidized_chiseled_copper, :count 1, :kind :shaped, :pattern ["M" "M"], :key {"M" #{:waxed_oxidized_cut_copper_slab}}, :width 1, :height 2}
  #:recipe{:id :waxed_oxidized_chiseled_copper_from_honeycomb, :result :waxed_oxidized_chiseled_copper, :count 1, :kind :shapeless, :ingredients [#{:oxidized_chiseled_copper} #{:honeycomb}]}
  #:recipe{:id :waxed_oxidized_copper_bars_from_honeycomb, :result :waxed_oxidized_copper_bars, :count 1, :kind :shapeless, :ingredients [#{:oxidized_copper_bars} #{:honeycomb}]}
  #:recipe{:id :waxed_oxidized_copper_bulb, :result :waxed_oxidized_copper_bulb, :count 4, :kind :shaped, :pattern [" C " "CBC" " R "], :key {"B" #{:blaze_rod}, "C" #{:waxed_oxidized_copper}, "R" #{:redstone}}, :width 3, :height 3}
@@ -964,7 +964,7 @@
  #:recipe{:id :waxed_oxidized_cut_copper_stairs, :result :waxed_oxidized_cut_copper_stairs, :count 4, :kind :shaped, :pattern ["#  " "## " "###"], :key {"#" #{:waxed_oxidized_cut_copper}}, :width 3, :height 3}
  #:recipe{:id :waxed_oxidized_cut_copper_stairs_from_honeycomb, :result :waxed_oxidized_cut_copper_stairs, :count 1, :kind :shapeless, :ingredients [#{:oxidized_cut_copper_stairs} #{:honeycomb}]}
  #:recipe{:id :waxed_oxidized_lightning_rod_from_honeycomb, :result :waxed_oxidized_lightning_rod, :count 1, :kind :shapeless, :ingredients [#{:oxidized_lightning_rod} #{:honeycomb}]}
- #:recipe{:id :waxed_weathered_chiseled_copper, :result :waxed_weathered_chiseled_copper, :count 1, :kind :shaped, :pattern [" M " " M "], :key {"M" #{:waxed_weathered_cut_copper_slab}}, :width 3, :height 2}
+ #:recipe{:id :waxed_weathered_chiseled_copper, :result :waxed_weathered_chiseled_copper, :count 1, :kind :shaped, :pattern ["M" "M"], :key {"M" #{:waxed_weathered_cut_copper_slab}}, :width 1, :height 2}
  #:recipe{:id :waxed_weathered_chiseled_copper_from_honeycomb, :result :waxed_weathered_chiseled_copper, :count 1, :kind :shapeless, :ingredients [#{:weathered_chiseled_copper} #{:honeycomb}]}
  #:recipe{:id :waxed_weathered_copper_bars_from_honeycomb, :result :waxed_weathered_copper_bars, :count 1, :kind :shapeless, :ingredients [#{:weathered_copper_bars} #{:honeycomb}]}
  #:recipe{:id :waxed_weathered_copper_bulb, :result :waxed_weathered_copper_bulb, :count 4, :kind :shaped, :pattern [" C " "CBC" " R "], :key {"B" #{:blaze_rod}, "C" #{:waxed_weathered_copper}, "R" #{:redstone}}, :width 3, :height 3}

@@ -67,6 +67,26 @@
             [_ fx] (fx/fold step w [(tick 100)])]
         (is (= [[1 0 1 5]] (clicks fx)) "a shift-click on the stray plank, not on slot 0")))))
 
+(deftest a-stale-state-id-in-the-table-window-is-just-another-answer
+  ;; vanilla applies a click that carries a stale state id and answers with the full window;
+  ;; the bot treats that like any answer: the state id moved, the next click carries the new one
+  (let [table {:window/id 2 :window/menu-type 12 :window/state-id 5 :window/slots {}}
+        w (-> (in-play)
+              (assoc :window/open table
+                     :player/inventory {0 {:item planks :count 3} 1 {:item stick :count 2}}
+                     :plan/intent {:intent/kind :craft :intent/recipe :wooden_pickaxe :intent/window :table
+                                   :intent/status :active}))
+        [w fx] (fx/fold step w [(tick 50) (tick 100)])
+        first-click (first (fx/packets fx))]
+    (is (= {:window-id 2 :state-id 5 :slot 37 :button 0 :mode 0}
+           (select-keys first-click [:window-id :state-id :slot :button :mode])) "planks from hotbar 0 = table slot 37")
+    (let [items (assoc (vec (repeat 46 nil)) 38 {:item stick :count 2})
+          [w _] (fx/fold step w [(packet {:packet/name :container-set-content :window-id 2 :state-id 9 :items items
+                                          :carried {:item planks :count 3}})])
+          _ (is (= {:item planks :count 3} (:window/cursor w)) "the resend says what the cursor really holds")
+          [_ fx] (fx/fold step w [(tick 150)])]
+      (is (= [[1 1 0 9]] (clicks fx)) "the full resend moved the state id; the next click carries 9"))))
+
 (deftest a-lost-click-fails-stale-and-never-takes-blind
   (let [[w fx] (fx/fold step (in-play) (map tick (range 50 3500 50)))]
     (is (= [[36 0 0 5]] (clicks fx)) "the click is never repeated blindly and slot 0 is never clicked")

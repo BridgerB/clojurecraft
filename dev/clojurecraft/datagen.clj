@@ -88,8 +88,22 @@
     (str/starts-with? v "#") (get tags (keyword (strip-ns (subs v 1))) (sorted-set))
     :else (sorted-set (name-kw v))))
 
+(defn shrink
+  "A shaped pattern with blank rows and columns trimmed, as vanilla does when it loads the
+   recipe: [\" # \" \" X \"] is a 1-wide recipe that fits anywhere a 1-wide recipe fits."
+  [pattern]
+  (let [width (apply max (map count pattern))
+        rows (mapv #(apply str (take width (concat % (repeat \space)))) pattern)
+        blank-row? (fn [r] (every? #{\space} r))
+        blank-col? (fn [c] (every? #(= \space (nth % c)) rows))
+        rows (->> rows (drop-while blank-row?) reverse (drop-while blank-row?) reverse vec)
+        cols (remove blank-col? (range width))
+        c0 (first cols) c1 (inc (last cols))]
+    (mapv #(subs % c0 c1) rows)))
+
 (defn recipes
-  "[{:recipe/id ...}] for every crafting_shaped / crafting_shapeless recipe, tags resolved."
+  "[{:recipe/id ...}] for every crafting_shaped / crafting_shapeless recipe, tags resolved,
+   shaped patterns shrunk like vanilla."
   [entries tags]
   (->> (for [[p j] entries
              :when (str/starts-with? p "data/minecraft/recipe/")
@@ -100,7 +114,7 @@
                          :recipe/result (name-kw (get-in r ["result" "id"]))
                          :recipe/count (get-in r ["result" "count"] 1)}]]
          (if (= t "minecraft:crafting_shaped")
-           (let [pattern (get r "pattern")]
+           (let [pattern (shrink (get r "pattern"))]
              (assoc base :recipe/kind :shaped
                     :recipe/pattern pattern
                     :recipe/key (into (sorted-map) (for [[k v] (get r "key")] [k (ingredient tags v)]))
