@@ -6,7 +6,7 @@ tags: [bot, plan, goals, intents]
 aliases: [planner, plan/step, intent/run, goal table, blacklist, retries]
 status: verified
 lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+verifiedAgainst: 85e133d
 sourceRefs:
   - src/clojurecraft/plan.clj#def goals
   - src/clojurecraft/plan.clj#defmulti goal-done?
@@ -35,7 +35,7 @@ related:
 ## How it works
 1. Each tick with an active intent: run it; if it ended, plan again in the same tick (finish or fail, then choose).
 2. With no intent: choose the highest-priority goal in play that is not done ([[goals-in-play-from-go]]); ask it for the next intent; start it, or wait; a wait longer than `wait-timeout` (20 s) fails the plan with the wait reason.
-3. A failed intent blacklists its target and counts an attempt; `max-attempts` (3) fails the plan.
+3. A failed intent blacklists its target (when it has one) and counts an attempt; a successful intent resets the count, so `max-attempts` (3) means three failures in a row fail the plan.
 4. No goal left means `:plan/status :done`.
 
 ## Gotchas

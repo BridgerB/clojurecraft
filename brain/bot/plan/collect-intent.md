@@ -1,12 +1,12 @@
 ---
 title: Collect intent
-description: How :collect walks onto the drop until any log is held, how it detects a stall against leaves and ends naming the blocker (:intent/blocked-by) so the gather chain can dig it, and its 10 s timeout.
+description: How :collect walks onto the drop until the bot holds one more log than when it began, how it detects a stall against leaves and ends naming the blocker (:intent/blocked-by) so the gather chain can dig it, and its 10 s timeout.
 type: reference
 tags: [bot, plan, intents, pickup]
 aliases: [:collect, pickup intent, not-picked-up, nearest-item, blocked-by, blocker]
 status: verified
 lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+verifiedAgainst: 85e133d
 sourceRefs:
   - src/clojurecraft/intent.clj#defmethod run :collect
   - src/clojurecraft/intent.clj#defn blocker
@@ -32,13 +32,12 @@ related:
 
 ## How it works
 1. Progress is horizontal distance to the goal beating the best so far by 0.1; its tick is `:intent/best-tick`.
-2. Done when `game/logs-held` is positive.
+2. Done when `game/logs-held` is greater than `:intent/logs-before`, the count taken on the collect's first tick: one more log than when it began.
 3. Stalled = horizontal collision and no progress for more than `collect-stall-ticks` (20, one second). If stalled and `blocker` finds a leaf, the intent ends **done** with `:intent/blocked-by [x y z]`; the gather chain then digs that leaf and resumes the same collect ([[gather-chain]]).
 4. Failure `:not-picked-up` after `collect-timeout` (10 s) since the intent began.
 5. Otherwise walk toward the goal until within 0.4 horizontally, then stand.
 
 ## Gotchas
-- "Done" means **any** log held, not "one more log than before". It works for `:wood` (zero to one) and for `:kit`, because the recipe graph crafts planks as soon as a log is held, so every gather starts from zero logs ([[make-goals]]).
 - A blocked collect is reported as done, not failed, so it never counts an attempt or blacklists the trunk.
 - The 10 s timeout counts from the first collect; a resumed collect is a new intent with a fresh clock.
 

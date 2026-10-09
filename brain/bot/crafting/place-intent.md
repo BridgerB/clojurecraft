@@ -1,12 +1,12 @@
 ---
 title: Place intent
-description: How :place puts a held block (a crafting table) into the world - equip by held slot or a hotbar-swap click, pick a spot two blocks away, settle, right-click the support's top face - and how it decides placed, rejected or no answer from the server's reports only.
+description: How :place puts a held block (a crafting table) into the world - equip by held slot or a hotbar-swap click, pick a spot in rings 1-3 around the feet, settle, right-click the support's top face - and how it decides placed, rejected or no answer from the server's reports only.
 type: reference
 tags: [bot, crafting, intents, placement]
 aliases: [:place, place.clj, spot, place a crafting table, rejected placement, no-spot]
 status: verified
 lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+verifiedAgainst: 85e133d
 sourceRefs:
   - src/clojurecraft/place.clj#defmethod intent/run :place
   - src/clojurecraft/place.clj#defmethod place-stage :equip
@@ -33,7 +33,7 @@ related:
 4. **`:sent`**: done when `game/block-at` at the target equals `memory/placed-state` of the item (the server's `block-update` wrote it). Fails `:rejected` once `:stats/last-ack` has reached our sequence and 500 ms have passed without the block. Fails `:no-answer` after 3000 ms.
 
 ## Key files
-- `place.clj`, `spot` - pure: the first of twelve feet-level cells two blocks away (`around`) whose target is loaded, not solid and not liquid, whose support below is solid, and whose centre is within `place-reach` (4.0) of the eye.
+- `place.clj`, `spot` - pure: the first cell of `around` (rings 1-3, feet level then one down then one up) whose target is loaded, not solid and not liquid, whose support below is solid, which does not intersect the player (`inside-player?`), and whose centre is within `place-reach` (4.0) of the eye ([[spot-two-blocks-away]]).
 - `place.clj`, `use-item-on` - the packet, sequence and timestamp.
 - `place_test.clj` - a property (300 cases) that a spot always exists on flat ground, never overlaps the player, sits on its support, and is in reach; and that a rejection (block-update with air, then the ack) fails `:rejected` while a confirming block-update is done and remembered.
 

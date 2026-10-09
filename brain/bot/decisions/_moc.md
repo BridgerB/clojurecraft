@@ -22,7 +22,7 @@ related:
 - [[grid-in-its-own-attribute]] - the 2x2 grid is not inventory, and not dropped either.
 - [[goals-in-play-from-go]] - which goals run arrives on the :go event, so replays match.
 - [[placement-judged-by-server]] - a placed block exists only when the server says so.
-- [[spot-two-blocks-away]] - placement cells that can never overlap the player.
+- [[spot-two-blocks-away]] - where a table goes: rings 1-3 around the feet, ±1 in height, never inside the player (and why the first design failed in CI).
 - [[any-log-species]] - gather the nearest log of any kind; the next plan picks the planks recipe.
 
 ## See also
