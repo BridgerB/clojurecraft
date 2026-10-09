@@ -1,0 +1,168 @@
+(ns clojurecraft.intent
+  "Intents are values: {:intent/kind k :intent/status :active|:done|:failed ...}. The planner
+   puts one in :plan/intent; `run` advances it by one tick, returning the world with the intent,
+   :player/controls and effects updated. The set of kinds is open: a new kind is a defmethod in a
+   new namespace. Every deadline is an absolute ms value compared against :time/now; the only
+   randomness comes in on the tick event."
+  (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.game :as game]
+            [clojurecraft.physics :as physics]))
+
+(def reach 4.0)                       ; eye → block centre; the server allows ~4.5
+(def walk-timeout-ticks 1200)         ; 60 s
+(def stuck-ticks 40)                  ; no progress for 2 s → detour
+(def detour-ticks 20)
+(def max-detours 4)
+(def settle-ms 500)                   ; let the server catch up before START
+(def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks
+(def finish-after (+ (* dig-ms 1.35) 200)) ; an early FINISH aborts the break; a late one is accepted
+(def swing-every 350)
+(def collect-timeout 10000)
+
+(defn centre [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
+
+(defn face-toward
+  "Block face nearest the eye: 0 down 1 up 2 north 3 south 4 west 5 east."
+  [eye target]
+  (let [[dx dy dz] (map - eye (centre target))
+        ax (abs dx) ay (abs dy) az (abs dz)]
+    (cond (and (>= ay ax) (>= ay az)) (if (pos? dy) 1 0)
+          (>= ax az) (if (pos? dx) 5 4)
+          :else (if (pos? dz) 3 2))))
+
+(defn- intent [world f & args] (apply update world :plan/intent f args))
+(defn done [world] (intent world assoc :intent/status :done))
+(defn fail [world reason] (intent world assoc :intent/status :failed :intent/reason reason))
+(defn done? [i] (= :done (:intent/status i)))
+(defn failed? [i] (= :failed (:intent/status i)))
+
+(defn- toward
+  "Controls that walk toward a point, jumping when blocked."
+  [world point yaw-offset]
+  (let [[yaw pitch] (physics/look-at (game/eye world) point)
+        yaw (+ yaw yaw-offset)]
+    {:control/forward? true
+     :control/jump? (boolean (:player/horizontal-collision? world))
+     :control/yaw yaw
+     :control/look [yaw pitch]}))
+
+(defmulti run
+  "Advance the current intent by one tick."
+  (fn [_world intent _event] (:intent/kind intent)))
+
+(defmethod run :default [world i _] (fail world [:unknown-intent (:intent/kind i)]))
+
+;; ---------------------------------------------------------------- walk
+
+(defmethod run :walk
+  [world {:intent/keys [target best-dist best-tick started detours detour-until detour-yaw]
+          :or {best-dist Double/MAX_VALUE detours 0}} {:event/keys [rand]}]
+  (let [tick (:time/tick world)
+        started (or started tick)
+        best-tick (or best-tick tick)
+        d (physics/distance (game/eye world) (centre target))
+        progressed? (< d (- best-dist 0.25))
+        best-dist (if progressed? d best-dist)
+        best-tick (if progressed? tick best-tick)
+        stuck? (> (- tick best-tick) stuck-ticks)
+        detouring? (and detour-until (< tick detour-until))
+        world (intent world assoc :intent/started started :intent/best-dist best-dist :intent/best-tick best-tick)]
+    (cond
+      (<= d reach)
+      (-> world (assoc :player/controls {:control/look (physics/look-at (game/eye world) (centre target))}) done)
+
+      (or (> (- tick started) walk-timeout-ticks) (>= detours max-detours))
+      (-> world (assoc :player/controls {}) (fail :stuck))
+
+      (and stuck? (not detouring?))
+      (let [yaw (if (< rand 0.5) -70.0 70.0)]
+        (-> world
+            (intent assoc :intent/detour-until (+ tick detour-ticks) :intent/detour-yaw yaw
+                    :intent/detours (inc detours) :intent/best-tick tick)
+            (assoc :player/controls (assoc (toward world (centre target) yaw) :control/jump? true))))
+
+      :else
+      (assoc world :player/controls (toward world (centre target) (if detouring? detour-yaw 0.0))))))
+
+;; ---------------------------------------------------------------- dig
+
+(defn- still? [world]
+  (let [[vx _ vz] (:player/vel world)]
+    (and (:player/on-ground? world) (< (abs vx) 0.05) (< (abs vz) 0.05))))
+
+(defmethod run :dig
+  [world {:intent/keys [target stage since still next-swing finish-at face] :or {stage :settle still 0}} _]
+  (let [now (:time/now world)
+        since (or since now)
+        eye (game/eye world)
+        world (intent world assoc :intent/stage stage :intent/since since)
+        at-target (game/block-at world target)]
+    (case stage
+      :settle
+      (cond
+        (and at-target (not (blocks/log? at-target)))
+        (fail world :target-gone)
+
+        (> (physics/distance eye (centre target)) (+ reach 0.5))
+        (fail world :out-of-reach)
+
+        (and (>= still 3) (> (- now since) settle-ms))
+        (let [seq (inc (:bot/sequence world))
+              face (face-toward eye target)]
+          (-> world
+              (assoc :bot/sequence seq)
+              (game/emit {:packet/name :set-carried-item :slot 0})
+              (game/emit {:packet/name :player-action :status 0 :pos target :face face :sequence seq})
+              (game/emit {:packet/name :swing :hand 0})
+              (intent assoc :intent/stage :digging :intent/face face :intent/started now
+                      :intent/next-swing (+ now swing-every) :intent/finish-at (+ now finish-after))
+              (game/say (str "digging " target " face " face))))
+
+        :else
+        (-> world
+            (assoc :player/controls {:control/look (physics/look-at eye (centre target))})
+            (intent assoc :intent/still (if (still? world) (inc still) 0))))
+
+      :digging
+      (cond
+        (>= now finish-at)
+        (let [seq (inc (:bot/sequence world))]
+          (-> world
+              (assoc :bot/sequence seq)
+              (game/emit {:packet/name :player-action :status 2 :pos target :face face :sequence seq})
+              (game/set-block target blocks/air)   ; the server does not echo to the breaker
+              done))
+
+        (>= now next-swing)
+        (-> world (game/emit {:packet/name :swing :hand 0}) (intent assoc :intent/next-swing (+ now swing-every)))
+
+        :else world))))
+
+;; ---------------------------------------------------------------- collect
+
+(defn- nearest-item [world near]
+  (->> (:world/entities world)
+       vals
+       (map (fn [e] [(physics/distance near (:entity/pos e)) e]))
+       (filter (fn [[d _]] (<= d 6.0)))
+       (sort-by first)
+       first
+       second))
+
+(defmethod run :collect
+  [world {:intent/keys [target since]} _]
+  (let [now (:time/now world)
+        since (or since now)
+        world (intent world assoc :intent/since since)
+        goal (or (:entity/pos (nearest-item world (centre target))) (centre target))]
+    (cond
+      (pos? (game/logs-held world))
+      (-> world (assoc :player/controls {}) done)
+
+      (> (- now since) collect-timeout)
+      (-> world (assoc :player/controls {}) (fail :not-picked-up))
+
+      (> (physics/horizontal-distance (:player/pos world) goal) 0.4)
+      (assoc world :player/controls (toward world goal 0.0))
+
+      :else (assoc world :player/controls {}))))
