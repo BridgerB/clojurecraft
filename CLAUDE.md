@@ -2,6 +2,10 @@
 
 clojurecraft: a from-scratch Minecraft Java Edition bot in Clojure whose purpose is to beat the Ender Dragon with no human input. It is the third bot in the `mc` monorepo next to steve (TypeScript) and ruststeve (Rust) and is deliberately built the opposite way: no mutable Bot object, no framework.
 
+## The brain
+
+`brain/` is the verified knowledge base (method: `/Users/bridger/Developer/BRAIN.md`). Read `brain/_index.md` first, then one MOC, then the few notes a question needs; never dump it. Every verified note cites `path#symbol` anchors at a pinned commit. When a change touches a subsystem, update its note in the same change and run `clojure -M:brain` (four invariants at zero: broken, ambiguous, orphans, unresolved sourceRefs). Sibling-research notes are `draft` until someone opens their anchors.
+
 ## Style (the point of the project)
 
 Read `docs/hickey.md` first; it is the design brief. In short:
@@ -52,6 +56,7 @@ clojure -M:run --port 25571 --until play --hold-ms 20000     # just connect and 
 clojure -M:run ... --record data/runs/x.edn                   # record every event
 clojure -M:replay data/runs/x.edn                             # replay it with no server
 clojure -M:fmt fix src test dev                               # format (cljfmt)
+clojure -M:brain                                              # brain checker (must be zero)
 clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data get entity Clj_wood Inventory
 scripts/datagen.sh                            # regenerate the EDN tables (needs the jar)
 ```
