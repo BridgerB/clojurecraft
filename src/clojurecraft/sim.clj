@@ -14,9 +14,18 @@
    loaded cursor."
   (:refer-clojure :exclude [send])
   (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.chunk :as chunk]
             [clojurecraft.recipe :as recipe]))
 
-(def dig-ms 3000)
+(def dig-ms 3000)                       ; a log by hand (hardness 2)
+(def leaf-dig-ms 300)                   ; leaves by hand (hardness 0.2)
+
+(defn block-at
+  "The server's view of a block: broken positions are air, otherwise the fixture column."
+  [sim pos]
+  (if (contains? (:sim/broken sim) pos) 0 (chunk/block-at {[0 0] (:sim/chunk sim)} pos)))
+
+(defn- break-ms [id] (if (blocks/leaves? id) leaf-dig-ms dig-ms))
 (def pickup-delay 500)
 (def keep-alive-every 15000)
 
@@ -31,6 +40,7 @@
    :sim/now 0
    :sim/out []
    :sim/column column
+   :sim/chunk (chunk/decode column)
    :sim/spawn spawn
    :sim/broken #{}
    :sim/items {}
@@ -70,19 +80,25 @@
   (case (long status)
     0 (assoc sim :sim/dig {:pos pos :at (:sim/now sim)})
     2 (let [{:keys [at] dpos :pos} (:sim/dig sim)
-            sim (send sim {:packet/name :block-changed-ack :sequence sequence})]
-        (if (and (= dpos pos) (>= (- (:sim/now sim) at) dig-ms) (not (contains? (:sim/broken sim) pos)))
+            id (block-at sim pos)]
+        (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id)))
           (let [eid (:sim/next-eid sim)
                 [x y z] pos
-                item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]]
-            (-> sim
-                (update :sim/broken conj pos)
-                (dissoc :sim/dig)
-                (assoc :sim/next-eid (inc eid))
-                (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim)})
-                (send {:packet/name :add-entity :entity-id eid :uuid nil :type blocks/item-entity-type
-                       :x (first item-pos) :y (second item-pos) :z (nth item-pos 2)})))
-          (dissoc sim :sim/dig)))
+                item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
+                sim (-> sim
+                        (update :sim/broken conj pos)
+                        (dissoc :sim/dig)
+                        ;; observed live on 26.1.2: the breaker gets the block update, then the ack
+                        (send {:packet/name :block-update :pos pos :state 0})
+                        (send {:packet/name :block-changed-ack :sequence sequence}))]
+            (if (blocks/log? id)
+              (-> sim
+                  (assoc :sim/next-eid (inc eid))
+                  (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim)})
+                  (send {:packet/name :add-entity :entity-id eid :uuid nil :type blocks/item-entity-type
+                         :x (first item-pos) :y (second item-pos) :z (nth item-pos 2)}))
+              sim))
+          (-> sim (dissoc :sim/dig) (send {:packet/name :block-changed-ack :sequence sequence}))))
     sim))
 
 ;; ---------------------------------------------------------------- window 0

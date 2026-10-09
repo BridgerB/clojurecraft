@@ -52,6 +52,18 @@
     (is (= [] (:sim/violations sim)))
     (is (= 4 (:stick (held w))))))
 
+(deftest a-low-canopy-is-cleared-to-reach-the-drop
+  ;; the first CI failure: oak leaves one block above the ground between the bot and the trunk;
+  ;; the drop lands under them, out of reach of a 1.8-tall player
+  (let [canopy (into {} (for [x [3 4] z [0 1]] [[x 65 z] 252]))
+        column (world/column-bytes (merge canopy {[5 64 0] 136 [5 65 0] 136 [5 66 0] 136 [5 67 0] 252}))
+        [w sim] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                         #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (game/logs-held w)))
+    (is (contains? (:sim/broken sim) [3 65 0]) "it broke the leaf in its way")
+    (is (zero? (:plan/attempts w)) "no failed attempts")))
+
 (deftest an-early-finish-does-not-break-the-block
   (let [sim0 (assoc (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]}) :sim/phase :play :sim/now 1000)
         sim (-> sim0

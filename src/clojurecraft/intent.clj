@@ -16,8 +16,17 @@
 (def settle-ms 500)                   ; let the server catch up before START
 (def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks
 (def finish-after (+ (* dig-ms 1.35) 200)) ; an early FINISH aborts the break; a late one is accepted
+
+(defn dig-time
+  "ms to break a block by hand. Only the two kinds the bot digs today; real hardness and tools
+   are issue #9. Leaves: hardness 0.2 → 6 ticks."
+  [id]
+  (if (and id (blocks/leaves? id)) 300 dig-ms))
+
+(defn finish-delay [id] (+ (* (dig-time id) 1.35) 200))
 (def swing-every 350)
 (def collect-timeout 10000)
+(def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
 
 (defn centre [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
 
@@ -100,7 +109,7 @@
     (case stage
       :settle
       (cond
-        (and at-target (not (blocks/log? at-target)))
+        (and at-target (not (blocks/solid? at-target)))
         (fail world :target-gone)
 
         (> (physics/distance eye (centre target)) (+ reach 0.5))
@@ -115,7 +124,7 @@
               (game/emit {:packet/name :player-action :status 0 :pos target :face face :sequence seq})
               (game/emit {:packet/name :swing :hand 0})
               (intent assoc :intent/stage :digging :intent/face face :intent/started now
-                      :intent/next-swing (+ now swing-every) :intent/finish-at (+ now finish-after))
+                      :intent/next-swing (+ now swing-every) :intent/finish-at (+ now (finish-delay at-target)))
               (game/say (str "digging " target " face " face))))
 
         :else
@@ -130,7 +139,7 @@
           (-> world
               (assoc :bot/sequence seq)
               (game/emit {:packet/name :player-action :status 2 :pos target :face face :sequence seq})
-              (game/set-block target blocks/air)   ; the server does not echo to the breaker
+              (game/set-block target blocks/air)   ; do not wait for the server's echo
               done))
 
         (>= now next-swing)
@@ -149,20 +158,45 @@
        first
        second))
 
+(defn blocker
+  "The leaf block in the way of walking from the player toward goal, at head or feet height,
+   or nil. Only leaves: anything else is a job for the pathfinder (#4)."
+  [world goal]
+  (let [[px py pz] (:player/pos world)
+        [gx _ gz] goal
+        fx (long (Math/floor px)) fz (long (Math/floor pz)) feet (long (Math/floor py))
+        cx (long (Math/floor (+ px (* 0.8 (Math/signum (double (- gx px)))))))
+        cz (long (Math/floor (+ pz (* 0.8 (Math/signum (double (- gz pz)))))))]
+    (first (for [[x z] (distinct [[cx fz] [fx cz] [cx cz]])
+                 :when (not= [x z] [fx fz])
+                 y [(inc feet) feet]
+                 :let [id (game/block-at world [x y z])]
+                 :when (and id (blocks/leaves? id))]
+             [x y z]))))
+
 (defmethod run :collect
-  [world {:intent/keys [target since]} _]
+  [world {:intent/keys [target since best-dist best-tick] :or {best-dist Double/MAX_VALUE}} _]
   (let [now (:time/now world)
+        tick (:time/tick world)
         since (or since now)
-        world (intent world assoc :intent/since since)
-        goal (or (:entity/pos (nearest-item world (centre target))) (centre target))]
+        goal (or (:entity/pos (nearest-item world (centre target))) (centre target))
+        d (physics/horizontal-distance (:player/pos world) goal)
+        progressed? (< d (- best-dist 0.1))
+        best-tick (if (or progressed? (nil? best-tick)) tick best-tick)
+        world (intent world assoc :intent/since since :intent/best-tick best-tick
+                      :intent/best-dist (if progressed? d best-dist))
+        stalled? (and (:player/horizontal-collision? world) (> (- tick best-tick) collect-stall-ticks))]
     (cond
       (pos? (game/logs-held world))
       (-> world (assoc :player/controls {}) done)
 
+      (and stalled? (blocker world goal))
+      (-> world (assoc :player/controls {}) (intent assoc :intent/blocked-by (blocker world goal)) done)
+
       (> (- now since) collect-timeout)
       (-> world (assoc :player/controls {}) (fail :not-picked-up))
 
-      (> (physics/horizontal-distance (:player/pos world) goal) 0.4)
+      (> d 0.4)
       (assoc world :player/controls (toward world goal 0.0))
 
       :else (assoc world :player/controls {}))))

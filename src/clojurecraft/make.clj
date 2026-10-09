@@ -13,16 +13,13 @@
 (defn action [world goal]
   (recipe/next-action (recipe/counts (:player/inventory world)) (:goal/wants goal) grid-size))
 
-(defn- in-a-chain? [world] (#{:walk :dig} (:intent/kind (:plan/last world))))
-
 (defmethod plan/goal-done? :kit [world goal] (nil? (action world goal)))
 
 (defmethod plan/next-intent :kit [world goal]
-  (if (in-a-chain? world)
-    (wood/gather-next world)
-    (let [a (action world goal)]
-      (cond
-        (= :stuck a) {:plan/wait :stuck}
-        (= :gather (:action a)) (wood/gather-next world)
-        (= :craft (:action a)) {:intent/kind :craft :intent/recipe (:recipe a)}
-        :else nil))))
+  (or (wood/continue-gather world)
+      (let [a (action world goal)]
+        (cond
+          (= :stuck a) {:plan/wait :stuck}
+          (= :gather (:action a)) (wood/gather-next world)
+          (= :craft (:action a)) {:intent/kind :craft :intent/recipe (:recipe a)}
+          :else nil))))
