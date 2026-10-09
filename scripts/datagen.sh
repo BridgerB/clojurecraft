@@ -24,4 +24,4 @@ if [ ! -f "$REPORTS/reports/blocks.json" ]; then
   (cd "$REPORTS" && "$JAVA" -DbundlerMainClass=net.minecraft.data.Main -jar "$JAR" --reports --output "$REPORTS")
 fi
 ls -la "$REPORTS/reports"
-cd "$DIR" && clojure -M:datagen "$REPORTS/reports" "$DIR/resources/clojurecraft"
+cd "$DIR" && clojure -M:datagen "$REPORTS/reports" "$DIR/resources/clojurecraft" "$JAR"

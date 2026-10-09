@@ -64,6 +64,10 @@
    [:play :s2c :take-item-entity] [[:collected :varint] [:collector :varint] [:count :varint]]
    [:play :s2c :block-changed-ack] [[:sequence :varint]]
    [:play :s2c :disconnect] [[:reason :rest]]
+   [:play :s2c :open-screen] [[:window-id :varint] [:menu-type :varint] [:title :rest]]   ; title is NBT, kept raw
+   [:play :s2c :container-close] [[:window-id :varint]]
+   [:play :s2c :set-cursor-item] [[:item :slot]]
+   [:play :s2c :set-held-slot] [[:slot :varint]]
    [:play :s2c :start-configuration] []
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
@@ -81,7 +85,12 @@
    [:play :c2s :move-player-status-only] [[:flags :u8]]
    [:play :c2s :set-carried-item] [[:slot :i16]]
    [:play :c2s :player-action] [[:status :varint] [:pos :position] [:face :i8] [:sequence :varint]]
-   [:play :c2s :swing] [[:hand :varint]]})
+   [:play :c2s :swing] [[:hand :varint]]
+   ;; 775 clicks carry the client's prediction as hashed slots; we always predict nothing
+   ;; (:changed [] :cursor nil) so the server answers every click with authoritative slots.
+   [:play :c2s :container-click] [[:window-id :varint] [:state-id :varint] [:slot :i16] [:button :i8] [:mode :varint]
+                                  [:changed [:vec [[:slot :i16] [:item :hashed-slot]]]] [:cursor :hashed-slot]]
+   [:play :c2s :container-close] [[:window-id :varint]]})
 
 (def transitions
   "Protocol state after the client sends a packet: {[state name] next-state}."
@@ -102,6 +111,21 @@
   [v]
   (boolean (or (and (map? v) (:components? v))
                (and (vector? v) (some truncating? v)))))
+
+(defn- read-hashed-slot
+  "option(item varint, count varint, [type varint, hash i32]..., [type varint]...)."
+  [buf]
+  (when (b/read-bool buf)
+    (let [item (b/read-varint buf) n (b/read-varint buf)
+          added (b/read-varint buf) _ (dotimes [_ added] (b/read-varint buf) (b/read-i32 buf))
+          removed (b/read-varint buf) _ (dotimes [_ removed] (b/read-varint buf))]
+      {:item item :count n})))
+
+(defn- write-hashed-slot [out v]
+  (b/write-bool out (some? v))
+  (when v
+    (b/write-varint out (:item v)) (b/write-varint out (:count v))
+    (b/write-varint out 0) (b/write-varint out 0)))
 
 (defn- read-slot [buf]
   (let [n (b/read-varint buf)]
@@ -129,7 +153,8 @@
             :varint (b/read-varint buf) :varlong (b/read-varlong buf)
             :string (b/read-string buf) :uuid (b/read-uuid buf) :position (b/read-position buf)
             :bytes (b/read-bytes buf (b/read-varint buf)) :rest (b/read-rest buf)
-            :slot (read-slot buf))))
+            :slot (read-slot buf)
+            :hashed-slot (read-hashed-slot buf))))
 
 (defn read-fields [buf fields]
   (loop [fields fields m {}]
@@ -165,7 +190,8 @@
             :varint (b/write-varint out v) :varlong (b/write-varlong out v)
             :string (b/write-string out v) :uuid (b/write-uuid out v) :position (b/write-position out v)
             :bytes (do (b/write-varint out (alength ^bytes v)) (b/write-bytes out v))
-            :rest (b/write-bytes out v))))
+            :rest (b/write-bytes out v)
+            :hashed-slot (write-hashed-slot out v))))
 
 (defn write-fields [out fields m]
   (doseq [[k t] fields]

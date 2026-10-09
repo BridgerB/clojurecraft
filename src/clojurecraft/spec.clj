@@ -40,6 +40,15 @@
 (s/def :control/look :player/look)
 (s/def :player/controls (s/keys :opt [:control/forward? :control/jump? :control/yaw :control/look]))
 
+;; window 0 (the player's own screen) and any open container
+(s/def ::slot-item (s/keys :req-un [::item ::count]))
+(s/def :window/state-id int?)
+(s/def :window/grid (s/map-of #{0 1 2 3 4} ::slot-item))
+(s/def :window/cursor ::slot-item)
+(s/def :window/id int?)
+(s/def :window/menu-type int?)
+(s/def :window/open (s/keys :req [:window/id :window/menu-type]))
+
 ;; world
 (s/def :world/chunks (s/map-of (s/coll-of int? :count 2) map?))
 (s/def :world/blocks (s/map-of ::block-pos int?))
@@ -82,6 +91,7 @@
                 :player/pos :player/vel :player/look :player/on-ground? :player/horizontal-collision?
                 :player/jump-ticks :player/loaded? :player/entity-id :player/inventory :player/controls
                 :world/chunks :world/blocks :world/sightings :world/entities
+                :window/state-id :window/grid :window/cursor :window/open
                 :plan/intent :plan/status :plan/blacklist]))
 
 (s/fdef game/step :args (s/cat :world ::world :event ::event) :ret ::world)

@@ -64,10 +64,28 @@
                               (packet {:packet/name :container-set-slot :window-id 0 :state-id 2 :slot 9 :item {:item 1 :count 3}})
                               (packet {:packet/name :container-set-slot :window-id 3 :state-id 2 :slot 9 :item {:item 134 :count 64}})])]
     (is (= {0 log 5 {:item 134 :count 2} 9 {:item 1 :count 3}} (:player/inventory w)))
+    (is (= 2 (:window/state-id w)) "window 0's latest state id is kept")
     (is (= 3 (game/logs-held w)))
     (is (= 0 (game/container->player-slot 36)))
     (is (= 40 (game/container->player-slot 45)))
     (is (nil? (game/container->player-slot 2)))))
+
+(deftest the-crafting-grid-is-never-invisible
+  (let [items (vec (concat [{:item 30 :count 1} {:item 36 :count 1} nil {:item 36 :count 1} nil] (repeat 41 nil)))
+        [w _] (run (in-play) [(packet {:packet/name :container-set-content :window-id 0 :state-id 4 :items items
+                                       :carried {:item 36 :count 6}})
+                              (packet {:packet/name :container-set-slot :window-id 0 :state-id 5 :slot 3 :item {:item 36 :count 1}})
+                              (packet {:packet/name :container-set-slot :window-id 0 :state-id 6 :slot 1 :item nil})])]
+    (is (= {0 {:item 30 :count 1} 3 {:item 36 :count 1}} (:window/grid w)))
+    (is (= {:item 36 :count 6} (:window/cursor w)))
+    (is (= 6 (:window/state-id w)))
+    (is (= {} (:player/inventory w)) "grid items are in the grid, not double-counted")
+    (testing "cursor and open windows"
+      (let [[w _] (run w [(packet {:packet/name :set-cursor-item :item nil})
+                          (packet {:packet/name :open-screen :window-id 3 :menu-type 12 :title (byte-array 0)})])]
+        (is (nil? (:window/cursor w)))
+        (is (= {:window/id 3 :window/menu-type 12} (:window/open w)))
+        (is (nil? (:window/open (first (run w [(packet {:packet/name :container-close :window-id 3})])))))))))
 
 (deftest chunks-blocks-entities-and-memory
   (let [col (world/column-bytes {[3 64 0] 136 [3 65 0] 136})
