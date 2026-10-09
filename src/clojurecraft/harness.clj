@@ -49,6 +49,16 @@
   "Where to try when a landing is wet: the located point, then nearby points in the same forest."
   [[0 0] [24 0] [0 24] [-24 0] [0 -24] [40 40] [-40 -40]])
 
+(defn perched?
+  "Is the player standing on or inside a tree? The motion_blocking_no_leaves heightmap skips
+   leaves but not the top of a trunk, so a forest point can land the bot on a log in the canopy
+   (seen in CI: on oak leaves at y=91, unable to come down)."
+  [world]
+  (let [[x y z] (:player/pos world)
+        fx (long (Math/floor x)) fy (long (Math/floor y)) fz (long (Math/floor z))
+        tree? (fn [id] (and id (or (blocks/log? id) (blocks/leaves? id))))]
+    (boolean (or (tree? (game/block-at world [fx (dec fy) fz])) (tree? (game/block-at world [fx fy fz]))))))
+
 (defn wet?
   "Is the player standing in or on a liquid? (Water physics is issue #5; the fixture avoids it.)"
   [world]
@@ -76,8 +86,8 @@
               (wait-for world* #(> (:stats/teleports %) teleports) 20000)
               (wait-for world* #(game/chunk-loaded? % (:player/pos %)) 20000)
               (Thread/sleep 1000)
-              (when (and (wet? @world*) (seq more))
-                (stamp "landed in water, trying another spot")
+              (when (and (or (wet? @world*) (perched? @world*)) (seq more))
+                (stamp (if (wet? @world*) "landed in water" "landed in a tree") "- trying another spot")
                 (recur more))))))))
   (let [w @world*] (stamp "landed at" (:player/pos w) (standing-on w)))
   (a/>!! events (or go {:event/kind :go})))

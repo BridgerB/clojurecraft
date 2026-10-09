@@ -104,6 +104,13 @@
     (is (= 0 (:plan/attempts w)) "the walk succeeded, so two earlier failures no longer count")
     (is (= :dig (get-in w [:plan/intent :intent/kind])))))
 
+(deftest the-harness-notices-a-landing-in-a-tree
+  (let [tree (world/column {[0 63 0] 136 [0 64 0] 252 [3 63 3] 1})
+        w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] tree}))]
+    (is (clojurecraft.harness/perched? (w [0.5 64.0 0.5])) "standing on a log, in leaves")
+    (is (clojurecraft.harness/perched? (w [0.5 65.0 0.5])) "standing on leaves")
+    (is (not (clojurecraft.harness/perched? (w [3.5 64.0 3.5]))) "on stone")))
+
 (deftest the-harness-notices-a-wet-landing
   (let [pond (world/column {[0 63 0] 86 [0 64 0] 86})
         w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] pond}))]
