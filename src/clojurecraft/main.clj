@@ -12,12 +12,14 @@
             [clojurecraft.harness :as harness]
             [clojurecraft.plan :as plan]
             [clojurecraft.record :as record]
+            [clojurecraft.make]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.wood])
   (:gen-class))
 
 (def step
-  "The whole bot: the world reducer, then the planner. Requiring clojurecraft.wood registers
-   the goal."
+  "The whole bot: the world reducer, then the planner. Requiring clojurecraft.wood and
+   clojurecraft.make registers the goals."
   (game/compose game/step plan/step))
 
 (defn parse-args [args]
@@ -59,6 +61,10 @@
           w
           (recur (if (= :tick (:event/kind event)) (+ next-tick 50) next-tick)))))))
 
+(def planned
+  "--until value → the goals put in play by the :go event."
+  {"wood" [:wood] "table" [:kit]})
+
 (defn result [world until ok]
   (merge {:ok ok
           :until until
@@ -68,7 +74,8 @@
                         (plan/failed? world) (:plan/reason world)
                         :else :timeout)}
          (game/summary world)
-         (when (= until "wood") {:plan (plan/summary world)})))
+         {:held (recipe/counts (:player/inventory world))}
+         (when (:plan/status world) {:plan (plan/summary world)})))
 
 (defn -main [& args]
   (let [{:keys [host port name until timeout-ms hold-ms rcon-host rcon-port rcon-pass record]
@@ -77,18 +84,19 @@
         opts {:host host :port (Long/parseLong port) :name name}
         deadline (+ (now) (Long/parseLong timeout-ms))
         hold (Long/parseLong hold-ms)
-        goal? (case until "play" :player/loaded? "wood" plan/done?)
-        stop? (fn [w] (or (goal? w) (and (= until "wood") (plan/failed? w)) (> (now) deadline)))
+        goal? (if (planned until) plan/done? :player/loaded?)
+        stop? (fn [w] (or (goal? w) (and (planned until) (plan/failed? w)) (> (now) deadline)))
+        go {:event/kind :go :go/goals (planned until)}
         tap (some-> record record/tap)
         c (conn/open opts)
         events (a/chan 16)
         world* (atom (game/init opts))]
     (stamp "connected to" host port "as" name)
-    (when (= until "wood")
+    (when (planned until)
       (a/thread (try (harness/land-and-go! world* events {:name name :rcon-host (or rcon-host host)
                                                           :rcon-port (some-> rcon-port Long/parseLong)
-                                                          :rcon-pass rcon-pass})
-                     (catch Throwable e (stamp "harness failed:" e) (a/>!! events {:event/kind :go})))))
+                                                          :rcon-pass rcon-pass :go go})
+                     (catch Throwable e (stamp "harness failed:" e) (a/>!! events go)))))
     (apply-event! world* {:event/kind :start} (:out c) tap)
     (let [final (run-loop c events world* stop? tap)
           ok (boolean (and (goal? final) (not (:bot/closed final)) (not (:bot/disconnected final))))]
@@ -107,5 +115,5 @@
   [& [path]]
   (let [world0 (game/init {:host "replay" :port 0 :name "Clj_replay"})
         final (record/replay step world0 path)]
-    (prn 'RESULT (result final "wood" (plan/done? final)))
+    (prn 'RESULT (result final "replay" (plan/done? final)))
     (shutdown-agents)))

@@ -25,7 +25,7 @@
          (memory/remember-column [0 0] col)))))
 
 (defn run [w events] (fold step w events))
-(def go {:event/kind :go})
+(def go {:event/kind :go :go/goals [:wood]})
 
 (deftest memory-finds-the-bottom-of-the-trunk
   (let [w (world-state [0.5 64.0 0.5])]

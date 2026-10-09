@@ -49,7 +49,7 @@
 (defn land-and-go!
   "Once the bot is loaded: land it (when RCON is configured), wait for the teleport and its
    chunks, then send {:event/kind :go}."
-  [world* events {:keys [name rcon-host rcon-port rcon-pass]}]
+  [world* events {:keys [name rcon-host rcon-port rcon-pass go]}]
   (wait-for world* :player/loaded? 60000)
   (when rcon-pass
     (let [teleports (:stats/teleports @world*)]
@@ -58,4 +58,4 @@
       (wait-for world* #(game/chunk-loaded? % (:player/pos %)) 20000)
       (Thread/sleep 1000)))
   (let [w @world*] (stamp "landed at" (:player/pos w) (standing-on w)))
-  (a/>!! events {:event/kind :go}))
+  (a/>!! events (or go {:event/kind :go})))

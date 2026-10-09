@@ -17,9 +17,10 @@
         column (take-while #(memory/log-at? world %) (map (fn [dy] [x (+ y dy) z]) (range max-trunk)))]
     (apply min-key (fn [[_ ly _]] (abs (- ly feet))) (reverse column))))
 
-(defmethod plan/goal-done? :wood [world _] (pos? (game/logs-held world)))
-
-(defmethod plan/next-intent :wood [world _]
+(defn gather-next
+  "The next step of getting a log: continue walk → dig → collect, or start toward the nearest
+   remembered trunk. Any goal that needs a log uses this."
+  [world]
   (let [last (:plan/last world)]
     (case (:intent/kind last)
       :walk {:intent/kind :dig :intent/target (:intent/target last)}
@@ -27,3 +28,7 @@
       (if-let [bottom (memory/nearest-log world (game/eye world) search-radius (:plan/blacklist world #{}))]
         {:intent/kind :walk :intent/target (trunk-target world bottom)}
         {:plan/wait :no-log}))))
+
+(defmethod plan/goal-done? :wood [world _] (pos? (game/logs-held world)))
+
+(defmethod plan/next-intent :wood [world _] (gather-next world))

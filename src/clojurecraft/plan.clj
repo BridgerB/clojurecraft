@@ -10,7 +10,9 @@
             [clojurecraft.intent :as intent]))
 
 (def goals
-  [{:goal/id :wood :goal/priority 1 :goal/doc "hold one log"}])
+  [{:goal/id :wood :goal/priority 1 :goal/doc "hold one log"}
+   {:goal/id :kit :goal/priority 2 :goal/doc "a crafting table and four sticks, from logs"
+    :goal/wants [[:crafting_table 1] [:stick 4]]}])
 
 (def max-attempts 3)
 (def wait-timeout 20000)              ; a goal that has nothing to do for this long has failed
@@ -22,13 +24,19 @@
 (defmethod next-intent :default [_ _] nil)
 
 (defn choose
-  "The highest-priority goal the world does not yet satisfy."
+  "The highest-priority goal in play (:plan/goals, or every goal) the world does not satisfy."
   [world]
-  (->> goals (sort-by :goal/priority) (remove #(goal-done? world %)) first))
+  (let [in-play (:plan/goals world)]
+    (->> goals
+         (filter #(or (nil? in-play) (contains? in-play (:goal/id %))))
+         (sort-by :goal/priority)
+         (remove #(goal-done? world %))
+         first)))
 
-(defn- begin [world]
+(defn- begin [world {:go/keys [goals]}]
   (-> world
       (assoc :plan/status :active :plan/since (:time/now world) :plan/blacklist #{} :plan/attempts 0)
+      (cond-> goals (assoc :plan/goals (set goals)))
       (dissoc :plan/intent :plan/last :plan/waiting-since)))
 
 (defn- finish-intent [world i]
@@ -38,7 +46,7 @@
   (let [attempts (inc (:plan/attempts world 0))]
     (-> world
         (assoc :player/controls {})
-        (update :plan/blacklist (fnil conj #{}) (:intent/target i))
+        (cond-> (:intent/target i) (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (assoc :plan/attempts attempts)
         (dissoc :plan/intent :plan/last)
         (game/say (str "intent " (:intent/kind i) " failed: " (:intent/reason i) " (attempt " attempts ")"))
@@ -60,7 +68,7 @@
   (-> world
       (assoc :plan/intent (assoc i :intent/status :active))
       (dissoc :plan/waiting-since)
-      (game/say (str "intent " (:intent/kind i) " " (:intent/target i)))))
+      (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i))))))
 
 (defn- wait [world reason]
   (let [since (or (:plan/waiting-since world) (:time/now world))]
@@ -82,7 +90,7 @@
 
 (defn step [world {:event/keys [kind] :as event}]
   (case kind
-    :go (-> world begin (game/say "go"))
+    :go (-> world (begin event) (game/say "go"))
     :tick (if (= :active (:plan/status world)) (plan-tick world event) world)
     world))
 

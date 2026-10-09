@@ -71,19 +71,23 @@
 (s/def :event/rand (s/double-in :min 0.0 :max 1.0 :NaN? false))
 (s/def :event/packet ::packet)
 (s/def :event/reason string?)
-(s/def ::event (s/keys :req [:event/kind] :opt [:event/now :event/rand :event/packet :event/reason]))
+(s/def :go/goals (s/coll-of keyword?))
+(s/def ::event (s/keys :req [:event/kind] :opt [:event/now :event/rand :event/packet :event/reason :go/goals]))
 
 ;; plan and intents
 (s/def :intent/kind keyword?)
 (s/def :intent/status #{:active :done :failed})
 (s/def :intent/target ::block-pos)
-(s/def ::intent (s/keys :req [:intent/kind] :opt [:intent/status :intent/target]))
+(s/def ::intent (s/keys :req [:intent/kind] :opt [:intent/status :intent/target :intent/recipe]))
 (s/def :plan/intent ::intent)
 (s/def :plan/status #{:active :done :failed})
 (s/def :plan/blacklist (s/coll-of ::block-pos :kind set?))
+(s/def :plan/goals (s/coll-of keyword? :kind set?))
+(s/def :intent/recipe keyword?)
+(s/def :goal/wants (s/coll-of (s/tuple keyword? pos-int?)))
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
-(s/def ::goal (s/keys :req [:goal/id :goal/priority]))
+(s/def ::goal (s/keys :req [:goal/id :goal/priority] :opt [:goal/wants]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
