@@ -86,3 +86,11 @@
         "re-planned in the same tick toward the next log")
     (is (= #{[13 64 0]} (:plan/blacklist w)))
     (is (= 1 (:plan/attempts w)))))
+
+(deftest digs-the-log-at-feet-height
+  (testing "standing level with the trunk base: the bottom log"
+    (is (= [3 64 0] (clojurecraft.wood/trunk-target (world-state [0.5 64.0 0.5]) [3 64 0]))))
+  (testing "standing two blocks above the base: the log at feet height, so the drop lands in reach"
+    (is (= [3 66 0] (clojurecraft.wood/trunk-target (world-state [0.5 66.0 0.5]) [3 64 0]))))
+  (testing "standing above the whole trunk: its top log"
+    (is (= [3 66 0] (clojurecraft.wood/trunk-target (world-state [0.5 70.0 0.5]) [3 64 0])))))
