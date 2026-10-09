@@ -1,0 +1,85 @@
+name: wood
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  wood:
+    name: collect one log
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+          clojure --version
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clj-${{ hashFiles('deps.edn') }}
+
+      - uses: actions/cache@v4
+        with:
+          path: data/local-server/server-26.1.2.jar
+          key: server-jar-97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51
+
+      - name: Fetch deps
+        run: clojure -P -M:run:rcon:test
+
+      - name: Unit tests
+        run: clojure -M:test
+
+      - name: Start a vanilla 26.1.2 server
+        run: |
+          RCON_PASS=$(openssl rand -hex 16)
+          echo "::add-mask::$RCON_PASS"
+          echo "RCON_PASS=$RCON_PASS" >> "$GITHUB_ENV"
+          PORT=25565 RCON_PORT=25575 RCON_PASS=$RCON_PASS WORLD=$PWD/work/world HEAP_MB=3072 scripts/server.sh start
+
+      - name: Run the bot
+        run: |
+          clojure -M:run --host 127.0.0.1 --port 25565 --name Clj_wood \
+            --rcon-port 25575 --rcon-pass "$RCON_PASS" \
+            --timeout-ms 150000 --hold-ms 30000 > bot.log 2>&1 &
+          echo $! > bot.pid
+          for i in $(seq 1 210); do
+            grep -q '^RESULT' bot.log && break
+            kill -0 "$(cat bot.pid)" 2>/dev/null || break
+            sleep 1
+          done
+          cat bot.log
+          grep -q '^RESULT {.*:ok true' bot.log
+
+      - name: Independent judge over RCON
+        run: |
+          clojure -M:rcon --host 127.0.0.1 --port 25575 --pass "$RCON_PASS" data get entity Clj_wood Inventory | tee inventory.txt
+          grep -q '_log' inventory.txt
+          wait "$(cat bot.pid)" 2>/dev/null || true
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: |
+            bot.log
+            inventory.txt
+            work/world/server.log
+            work/world/logs/latest.log
+          if-no-files-found: ignore
+
+      - name: Stop the server
+        if: always()
+        run: WORLD=$PWD/work/world scripts/server.sh stop
