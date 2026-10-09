@@ -89,6 +89,15 @@
         (is (= {:window/id 3 :window/menu-type 12 :window/slots {}} (:window/open w)))
         (is (nil? (:window/open (first (run w [(packet {:packet/name :container-close :window-id 3})])))))))))
 
+(deftest a-login-or-respawn-gives-fresh-menus
+  (let [w (assoc (in-play) :window/open {:window/id 3 :window/menu-type 12 :window/slots {}}
+                 :window/cursor {:item 36 :count 2} :window/grid {1 {:item 36 :count 1}})]
+    (doseq [p [{:packet/name :respawn} {:packet/name :login :entity-id 9}]]
+      (let [[w _] (run w [(packet p)])]
+        (is (nil? (:window/open w)) (str (:packet/name p)))
+        (is (nil? (:window/cursor w)))
+        (is (= {} (:window/grid w)))))))
+
 (deftest chunks-blocks-entities-and-memory
   (let [col (world/column-bytes {[3 64 0] 136 [3 65 0] 136})
         [w _] (run (in-play) [(packet {:packet/name :level-chunk-with-light :x 0 :z 0 :heightmaps [] :data col})

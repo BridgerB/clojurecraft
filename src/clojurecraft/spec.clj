@@ -5,7 +5,8 @@
   (:require [clojure.spec.alpha :as s]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
-            [clojurecraft.plan :as plan]))
+            [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]))
 
 (s/def ::vec3 (s/coll-of double? :kind vector? :count 3))
 (s/def ::block-pos (s/coll-of int? :kind vector? :count 3))
@@ -108,3 +109,30 @@
 (s/fdef plan/choose :args (s/cat :world ::world) :ret (s/nilable ::goal))
 
 (def goals-valid? (every? #(s/valid? ::goal %) plan/goals))
+
+;; recipes and clicks
+(s/def ::item-set (s/coll-of keyword? :kind set? :min-count 1))
+(s/def :recipe/id keyword?)
+(s/def :recipe/result keyword?)
+(s/def :recipe/count pos-int?)
+(s/def :recipe/kind #{:shaped :shapeless})
+(s/def :recipe/pattern (s/coll-of string? :kind vector? :min-count 1 :max-count 3))
+(s/def :recipe/key (s/map-of string? ::item-set))
+(s/def :recipe/width (s/int-in 1 4))
+(s/def :recipe/height (s/int-in 1 4))
+(s/def :recipe/ingredients (s/coll-of ::item-set :kind vector? :min-count 1 :max-count 9))
+(s/def ::recipe (s/and (s/keys :req [:recipe/id :recipe/result :recipe/count :recipe/kind]
+                               :opt [:recipe/pattern :recipe/key :recipe/width :recipe/height :recipe/ingredients])
+                       #(if (= :shaped (:recipe/kind %))
+                          (every? % [:recipe/pattern :recipe/key :recipe/width :recipe/height])
+                          (contains? % :recipe/ingredients))))
+(s/def :click/slot (s/int-in 0 46))
+(s/def :click/button (s/int-in 0 9))
+(s/def :click/mode #{0 1 2})
+(s/def ::click (s/keys :req [:click/slot :click/button :click/mode]))
+
+(def recipes-valid? (every? #(s/valid? ::recipe %) recipe/recipes))
+
+(s/fdef recipe/clicks
+  :args (s/cat :inventory :player/inventory :recipe ::recipe :size #{2 3} :slot-of (s/? fn?))
+  :ret (s/nilable (s/coll-of ::click :kind vector?)))
