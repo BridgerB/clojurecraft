@@ -47,7 +47,9 @@
 (s/def :window/cursor ::slot-item)
 (s/def :window/id int?)
 (s/def :window/menu-type int?)
-(s/def :window/open (s/keys :req [:window/id :window/menu-type]))
+(s/def :window/slots (s/map-of int? ::slot-item))
+(s/def :window/open (s/keys :req [:window/id :window/menu-type] :opt [:window/state-id :window/slots]))
+(s/def :player/held-slot (s/int-in 0 9))
 
 ;; world
 (s/def :world/chunks (s/map-of (s/coll-of int? :count 2) map?))
@@ -84,6 +86,8 @@
 (s/def :plan/blacklist (s/coll-of ::block-pos :kind set?))
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :intent/recipe keyword?)
+(s/def :intent/window #{:inventory :table})
+(s/def :intent/item keyword?)
 (s/def :goal/wants (s/coll-of (s/tuple keyword? pos-int?)))
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
@@ -95,7 +99,7 @@
                 :player/pos :player/vel :player/look :player/on-ground? :player/horizontal-collision?
                 :player/jump-ticks :player/loaded? :player/entity-id :player/inventory :player/controls
                 :world/chunks :world/blocks :world/sightings :world/entities
-                :window/state-id :window/grid :window/cursor :window/open
+                :window/state-id :window/grid :window/cursor :window/open :player/held-slot
                 :plan/intent :plan/status :plan/blacklist]))
 
 (s/fdef game/step :args (s/cat :world ::world :event ::event) :ret ::world)

@@ -10,7 +10,16 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.physics :as physics]))
 
-(defn watched? [id] (blocks/log? id))
+(def crafting-table (first (keep (fn [[n _ lo]] (when (= n :crafting_table) lo)) blocks/table)))
+
+(defn crafting-table? [id] (= id crafting-table))
+
+(defn placed-state
+  "The block state a placed item turns into, for the blocks the bot places today."
+  [item]
+  (case item :crafting_table crafting-table nil))
+
+(defn watched? [id] (or (blocks/log? id) (crafting-table? id)))
 
 (defn remember-column
   "Record every watched block in a freshly loaded chunk column."
@@ -38,6 +47,16 @@
   (and (log-at? world [x y z]) (not (log-at? world [x (dec y) z]))))
 
 (defn- centre [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
+
+(defn nearest
+  "Nearest remembered position whose state satisfies pred, within radius of eye, or nil."
+  [world eye radius pred]
+  (->> (:world/sightings world)
+       (keep (fn [[p {:block/keys [state]}]] (when (pred state) [(physics/distance eye (centre p)) p])))
+       (filter (fn [[d _]] (<= d radius)))
+       (sort-by first)
+       first
+       second))
 
 (defn nearest-log
   "Nearest trunk-bottom log on record within radius of eye, skipping blacklisted positions and

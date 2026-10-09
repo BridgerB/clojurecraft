@@ -95,7 +95,9 @@
 
 ;; ---------------------------------------------------------------- dig
 
-(defn- still? [world]
+(defn still?
+  "On the ground and not moving horizontally (vertical velocity is never zero at rest)."
+  [world]
   (let [[vx _ vz] (:player/vel world)]
     (and (:player/on-ground? world) (< (abs vx) 0.05) (< (abs vz) 0.05))))
 
@@ -120,6 +122,7 @@
               face (face-toward eye target)]
           (-> world
               (assoc :bot/sequence seq)
+              (assoc :player/held-slot 0)
               (game/emit {:packet/name :set-carried-item :slot 0})
               (game/emit {:packet/name :player-action :status 0 :pos target :face face :sequence seq})
               (game/emit {:packet/name :swing :hand 0})

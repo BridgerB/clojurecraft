@@ -52,6 +52,21 @@
     (is (= [] (:sim/violations sim)))
     (is (= 4 (:stick (held w))))))
 
+(deftest places-a-table-and-crafts-a-wooden-pickaxe
+  (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 136 [6 68 0] 252})
+        [w sim] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                         #(or (plan/done? %) (plan/failed? %)) 180000 {:event/kind :go :go/goals [:pickaxe]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (:wooden_pickaxe (held w))))
+    (is (= 1 (count (:sim/placed sim))) "one table placed in the world")
+    (is (nil? (:sim/window sim)) "the table window was closed")
+    (is (nil? (:window/open w)))
+    (is (= [] (:sim/violations sim)))
+    (is (zero? (:plan/attempts w)))
+    (testing "the table is remembered where the server put it"
+      (let [[pos state] (first (:sim/placed sim))]
+        (is (= state (get-in w [:world/sightings pos :block/state])))))))
+
 (deftest a-low-canopy-is-cleared-to-reach-the-drop
   ;; the first CI failure: oak leaves one block above the ground between the bot and the trunk;
   ;; the drop lands under them, out of reach of a 1.8-tall player

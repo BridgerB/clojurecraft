@@ -90,7 +90,10 @@
    ;; (:changed [] :cursor nil) so the server answers every click with authoritative slots.
    [:play :c2s :container-click] [[:window-id :varint] [:state-id :varint] [:slot :i16] [:button :i8] [:mode :varint]
                                   [:changed [:vec [[:slot :i16] [:item :hashed-slot]]]] [:cursor :hashed-slot]]
-   [:play :c2s :container-close] [[:window-id :varint]]})
+   [:play :c2s :container-close] [[:window-id :varint]]
+   ;; right-click on a block face: places the held block, or opens a container
+   [:play :c2s :use-item-on] [[:hand :varint] [:pos :position] [:face :varint] [:cursor-x :f32] [:cursor-y :f32]
+                              [:cursor-z :f32] [:inside-block :bool] [:world-border-hit :bool] [:sequence :varint]]})
 
 (def transitions
   "Protocol state after the client sends a packet: {[state name] next-state}."

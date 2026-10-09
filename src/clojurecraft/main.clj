@@ -63,7 +63,7 @@
 
 (def planned
   "--until value → the goals put in play by the :go event."
-  {"wood" [:wood] "table" [:kit]})
+  {"wood" [:wood] "table" [:kit] "pickaxe" [:pickaxe]})
 
 (defn result [world until ok]
   (merge {:ok ok
