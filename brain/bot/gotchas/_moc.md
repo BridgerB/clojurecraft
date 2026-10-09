@@ -4,7 +4,7 @@ type: moc
 tags: [bot, gotchas]
 status: verified
 lastUpdated: 2026-10-09
-verifiedAgainst: 60b624e
+verifiedAgainst: 5c7d6c1
 related:
   - "[[bot/_moc|Bot pillar]]"
 ---
@@ -16,6 +16,10 @@ related:
 - [[packet-name-collision]] - a wire field called `name` collides with the packet's name.
 - [[early-finish-aborts]] - FINISH before the server is done cancels the break silently.
 - [[drop-under-the-trunk]] - digging the bottom log from above drops the item where the bot cannot stand.
+- [[leaf-canopy-over-the-drop]] - collect times out three times because leaves at head height block the drop.
+- [[phantom-cursor-stale-window]] - a no-op click is never answered because the model kept a cursor the server emptied.
+- [[junk-crafts]] - a dirty grid crafts a pressure plate or a button.
+- [[memory-edge-cases]] - logs broken while unloaded stay logs in memory.
 
 ## See also
 - [[bot/_moc|Bot pillar]]

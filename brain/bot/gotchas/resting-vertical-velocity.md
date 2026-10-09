@@ -6,10 +6,10 @@ tags: [bot, gotcha, physics]
 aliases: [vy never zero, settle never fires, stillness check]
 status: verified
 lastUpdated: 2026-10-09
-verifiedAgainst: 60b624e
+verifiedAgainst: 5c7d6c1
 sourceRefs:
   - src/clojurecraft/physics.clj#defn step
-  - src/clojurecraft/intent.clj#defn- still?
+  - src/clojurecraft/intent.clj#(and (:player/on-ground? world) (< (abs vx) 0.05) (< (abs vz) 0.05))
   - test/clojurecraft/physics_test.clj#vanilla keeps a resting vy of -0.0784
 related:
   - "[[bot/gotchas/_moc|Gotchas]]"

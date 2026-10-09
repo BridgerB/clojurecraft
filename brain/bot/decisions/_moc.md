@@ -4,7 +4,7 @@ type: moc
 tags: [bot, decisions]
 status: verified
 lastUpdated: 2026-10-09
-verifiedAgainst: 60b624e
+verifiedAgainst: 5c7d6c1
 related:
   - "[[bot/_moc|Bot pillar]]"
 ---
@@ -15,6 +15,15 @@ related:
 - [[natural-tree-not-fixture]] - CI chops a real tree in a normal world, not a setblock on a flat world.
 - [[map-memory-not-datalog]] - sightings are a plain map until a query needs a join.
 - [[randomness-on-the-tick]] - why `rand` is an event field and not a call.
+- [[manual-clicks-not-place-recipe]] - clicks we compute, not the recipe book; needs a decoder we lack.
+- [[predict-nothing]] - clicks claim no changes and an empty cursor; the server stays the only truth.
+- [[one-stack-per-ingredient]] - each ingredient from one stack chosen up front, never cell-by-cell.
+- [[one-item-per-cell]] - one craft per intent, taken by one verified shift-click.
+- [[grid-in-its-own-attribute]] - the 2x2 grid is not inventory, and not dropped either.
+- [[goals-in-play-from-go]] - which goals run arrives on the :go event, so replays match.
+- [[placement-judged-by-server]] - a placed block exists only when the server says so.
+- [[spot-two-blocks-away]] - placement cells that can never overlap the player.
+- [[any-log-species]] - gather the nearest log of any kind; the next plan picks the planks recipe.
 
 ## See also
 - [[bot/_moc|Bot pillar]]
