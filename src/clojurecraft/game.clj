@@ -100,7 +100,7 @@
   [^long s]
   (cond (<= 36 s 44) (- s 36)
         (<= 9 s 35) s
-        (<= 5 s 8) (+ s 31)
+        (<= 5 s 8) (- 44 s)                ; window 5-8 are head..feet; player 36-39 are feet..head
         (= s 45) 40
         :else nil))
 

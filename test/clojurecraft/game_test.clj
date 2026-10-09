@@ -68,6 +68,8 @@
     (is (= 3 (game/logs-held w)))
     (is (= 0 (game/container->player-slot 36)))
     (is (= 40 (game/container->player-slot 45)))
+    (is (= 39 (game/container->player-slot 5)) "window 5 is the helmet, player slot 39")
+    (is (= 36 (game/container->player-slot 8)) "window 8 is the boots, player slot 36")
     (is (nil? (game/container->player-slot 2)))))
 
 (deftest the-crafting-grid-is-never-invisible

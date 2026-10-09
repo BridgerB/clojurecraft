@@ -14,7 +14,7 @@
    {:goal/id :kit :goal/priority 2 :goal/doc "a crafting table and four sticks, from logs"
     :goal/wants [[:crafting_table 1] [:stick 4]]}])
 
-(def max-attempts 3)
+(def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def wait-timeout 20000)              ; a goal that has nothing to do for this long has failed
 
 (defmulti goal-done? (fn [_world goal] (:goal/id goal)))
@@ -39,8 +39,11 @@
       (cond-> goals (assoc :plan/goals (set goals)))
       (dissoc :plan/intent :plan/last :plan/waiting-since)))
 
-(defn- finish-intent [world i]
-  (-> world (assoc :plan/last i) (dissoc :plan/intent)))
+(defn- finish-intent
+  "An intent that succeeds ends any failure streak: attempts count consecutive failures, so a
+   long goal is not killed by three unrelated hiccups an hour apart."
+  [world i]
+  (-> world (assoc :plan/last i :plan/attempts 0) (dissoc :plan/intent)))
 
 (defn- fail-intent [world i]
   (let [attempts (inc (:plan/attempts world 0))]

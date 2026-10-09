@@ -175,7 +175,7 @@
              [x y z]))))
 
 (defmethod run :collect
-  [world {:intent/keys [target since best-dist best-tick] :or {best-dist Double/MAX_VALUE}} _]
+  [world {:intent/keys [target since best-dist best-tick logs-before] :or {best-dist Double/MAX_VALUE}} _]
   (let [now (:time/now world)
         tick (:time/tick world)
         since (or since now)
@@ -183,11 +183,12 @@
         d (physics/horizontal-distance (:player/pos world) goal)
         progressed? (< d (- best-dist 0.1))
         best-tick (if (or progressed? (nil? best-tick)) tick best-tick)
-        world (intent world assoc :intent/since since :intent/best-tick best-tick
+        logs-before (or logs-before (game/logs-held world))
+        world (intent world assoc :intent/since since :intent/best-tick best-tick :intent/logs-before logs-before
                       :intent/best-dist (if progressed? d best-dist))
         stalled? (and (:player/horizontal-collision? world) (> (- tick best-tick) collect-stall-ticks))]
     (cond
-      (pos? (game/logs-held world))
+      (> (game/logs-held world) logs-before)          ; one more log than when the collect began
       (-> world (assoc :player/controls {}) done)
 
       (and stalled? (blocker world goal))

@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx :refer [fold packets sent packet ticks]]
             [clojurecraft.game :as game]
+            [clojurecraft.harness]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
@@ -94,3 +95,18 @@
     (is (= [3 66 0] (clojurecraft.wood/trunk-target (world-state [0.5 66.0 0.5]) [3 64 0]))))
   (testing "standing above the whole trunk: its top log"
     (is (= [3 66 0] (clojurecraft.wood/trunk-target (world-state [0.5 70.0 0.5]) [3 64 0])))))
+
+(deftest a-success-ends-the-failure-streak
+  (let [w (assoc (world-state [0.5 64.0 0.5]) :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 2
+                 :plan/goals #{:wood}
+                 :plan/intent {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/status :active})
+        [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (= 0 (:plan/attempts w)) "the walk succeeded, so two earlier failures no longer count")
+    (is (= :dig (get-in w [:plan/intent :intent/kind])))))
+
+(deftest the-harness-notices-a-wet-landing
+  (let [pond (world/column {[0 63 0] 86 [0 64 0] 86})
+        w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] pond}))]
+    (is (clojurecraft.harness/wet? (w [0.5 64.0 0.5])) "in water")
+    (is (clojurecraft.harness/wet? (w [0.5 65.0 0.5])) "standing on the water surface")
+    (is (not (clojurecraft.harness/wet? (w [3.5 64.0 3.5]))) "dry ground")))
