@@ -69,6 +69,7 @@
    [:play :s2c :set-cursor-item] [[:item :slot]]
    [:play :s2c :set-held-slot] [[:slot :varint]]
    [:play :s2c :start-configuration] []
+   [:play :s2c :respawn] []                    ; fields not modelled yet (issue #5); its arrival matters
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
    [:play :c2s :pong] [[:id :i32]]

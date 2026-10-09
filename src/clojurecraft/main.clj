@@ -74,7 +74,11 @@
                         (plan/failed? world) (:plan/reason world)
                         :else :timeout)}
          (game/summary world)
-         {:held (recipe/counts (:player/inventory world))}
+         (let [held (recipe/counts (:player/inventory world))]
+           {:held held
+            :planks (recipe/have held (recipe/tags :planks))
+            :sticks (get held :stick 0)
+            :tables (get held :crafting_table 0)})
          (when (:plan/status world) {:plan (plan/summary world)})))
 
 (defn -main [& args]

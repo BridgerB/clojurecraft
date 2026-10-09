@@ -23,7 +23,7 @@ jobs:
             judge: '_log'
           - until: table
             bot: Clj_table
-            judge: 'minecraft:crafting_table'
+            judge: 'minecraft:crafting_table minecraft:stick'
           - until: pickaxe
             bot: Clj_pickaxe
             judge: 'minecraft:wooden_pickaxe'
@@ -83,7 +83,7 @@ jobs:
       - name: Independent judge over RCON
         run: |
           clojure -M:rcon --host 127.0.0.1 --port 25575 --pass "$RCON_PASS" data get entity ${{ matrix.bot }} Inventory | tee inventory.txt
-          grep -q '${{ matrix.judge }}' inventory.txt
+          for item in ${{ matrix.judge }}; do grep -q "$item" inventory.txt || { echo "missing $item"; exit 1; }; done
           wait "$(cat bot.pid)" 2>/dev/null || true
 
       - name: Upload logs

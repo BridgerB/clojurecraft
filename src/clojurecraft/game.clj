@@ -200,8 +200,17 @@
 (defmethod on-packet [:configuration :disconnect] [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
 
+(defn- fresh-menus
+  "A login or respawn gives the player a fresh menu: nothing open, an empty cursor, and a grid
+   the server empties back into the inventory (it then sends the window's contents)."
+  [w]
+  (-> w (dissoc :window/open :window/cursor) (assoc :window/grid {})))
+
+(defmethod on-packet [:play :respawn] [w _] (fresh-menus w))
+
 (defmethod on-packet [:play :login] [w p]
   (-> w
+      fresh-menus
       (assoc :player/entity-id (:entity-id p))
       (emit {:packet/name :client-information :locale "en_US" :view-distance 6 :chat-mode 0
              :chat-colors true :skin-parts 0x7f :main-hand 1 :text-filtering false

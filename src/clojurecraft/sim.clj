@@ -31,8 +31,9 @@
 (def pickup-delay 500)
 (def keep-alive-every 15000)
 
-(defn init [{:keys [column spawn keep-alive-every drop-clicks inventory] :or {keep-alive-every keep-alive-every}}]
+(defn init [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks] :or {keep-alive-every keep-alive-every}}]
   {:sim/phase :handshake
+   :sim/lag-ticks (or lag-ticks 0)
    :sim/inv (or inventory {})
    :sim/state-id 1
    :sim/held 0
@@ -244,7 +245,12 @@
 (defmethod on-packet [:play :container-click] [sim {:keys [window-id state-id] :as pkt}]
   (let [n (:sim/clicks sim)
         sim (update sim :sim/clicks inc)
-        kind (window-kind sim window-id)]
+        kind (window-kind sim window-id)
+        ;; with a container open, the player's own window is not the open menu: vanilla
+        ;; ignores the click, and a careful client never sends it
+        sim (cond-> sim (and (= kind :inventory) (:sim/window sim))
+                    (update :sim/violations conj [:click-inventory-while-open window-id]))
+        kind (if (and (= kind :inventory) (:sim/window sim)) nil kind)]
     (if (or (nil? kind) (contains? (:sim/drop-clicks sim) n))
       sim
       (let [layout (layouts kind)
@@ -352,13 +358,18 @@
 (defn run
   "Run a bot reducer against the model from a fresh handshake, 50 ms per tick, until (stop?
    world) or max-ms. Sends go (default {:event/kind :go}) once the bot is loaded. Returns
-   [world sim]."
+   [world sim]. :sim/lag-ticks in sim0 delays every server→client packet by that many ticks,
+   in order: a slow network as an input."
   [bot-step world0 sim0 stop? max-ms & [go]]
-  (let [w (bot-step world0 {:event/kind :start})]
-    (loop [world (assoc w :bot/effects []) sim sim0 pending (sends w) t 0 went? false]
+  (let [w (bot-step world0 {:event/kind :start})
+        lag (* 50 (:sim/lag-ticks sim0 0))]
+    (loop [world (assoc w :bot/effects []) sim sim0 pending (sends w) t 0 went? false inflight []]
       (let [sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim pending)
             sim (step sim {:sim/kind :tick :sim/now t})
-            [sim inbound] (drain sim)
+            [sim fresh] (drain sim)
+            inflight (into inflight (map (fn [p] [(+ t lag) p]) fresh))
+            inbound (map second (take-while #(<= (first %) t) inflight))
+            inflight (vec (drop-while #(<= (first %) t) inflight))
             world (reduce #(bot-step %1 {:event/kind :packet :event/packet %2}) world inbound)
             world (bot-step world {:event/kind :tick :event/now t :event/rand 0.5})
             go? (and (not went?) (:player/loaded? world))
@@ -367,4 +378,4 @@
             world (assoc world :bot/effects [])]
         (if (or (stop? world) (> t max-ms))
           [world (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out)]   ; deliver the last tick's packets
-          (recur world sim out (+ t 50) (or went? go?)))))))
+          (recur world sim out (+ t 50) (or went? go?) inflight))))))

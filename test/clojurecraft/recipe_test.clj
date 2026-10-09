@@ -3,12 +3,15 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [clojurecraft.recipe :as recipe]))
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.spec]))
 
 (defn inv [& kvs] (into {} (for [[slot name n] (partition 3 kvs)] [slot {:item (recipe/item-id name) :count n}])))
 
 (deftest the-table-is-vanilla
   (is (= 1030 (count recipe/recipes)))
+  (is clojurecraft.spec/recipes-valid? "every generated recipe satisfies ::recipe")
+  (is clojurecraft.spec/goals-valid?)
   (is (= {:recipe/id :stick :recipe/result :stick :recipe/count 4 :recipe/kind :shaped :recipe/pattern ["#" "#"]
           :recipe/key {"#" (recipe/tags :planks)} :recipe/width 1 :recipe/height 2}
          (recipe/by-id :stick)))

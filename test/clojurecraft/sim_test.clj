@@ -43,6 +43,33 @@
       (is (= (into {} (for [[s it] (:sim/inv sim) :when (<= 9 s 44)] [(game/container->player-slot s) it]))
              (:player/inventory w))))))
 
+(def kit-items #{:oak_log :oak_planks :stick :crafting_table})
+
+(defn- kit-run [lag drop]
+  (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})]
+    (sim/run step (game/init fx/opts)
+             (sim/init {:column column :spawn [0.5 64.0 0.5] :lag-ticks lag :drop-clicks (if drop #{drop} #{})})
+             #(or (plan/done? %) (plan/failed? %)) 150000 {:event/kind :go :go/goals [:kit]})))
+
+(deftest no-blind-take-under-lag-or-a-dropped-click
+  ;; every single lost click (the kit takes 17-23 clicks) at lags of 0, 3 and 10 ticks, plus no
+  ;; loss: the server never sees a click on an empty result, nothing but the kit's own items is
+  ;; ever crafted (no buttons, no pressure plates), and the run ends with the table and sticks
+  ;; or, failing that, an empty grid. Enumerated, not sampled: disabling the grid reclaim fails
+  ;; drops 5-8 (dirty grid) and 14 (a button), which a 12-sample property missed.
+  (let [bad (for [lag [0 3 10]
+                  drop (cons nil (range 0 28))
+                  :let [[w sim] (kit-run lag drop)
+                        items (set (keys (held w)))
+                        ok (and (= [] (:sim/violations sim))
+                                (every? kit-items items)
+                                (or (and (plan/done? w) (= 1 (:crafting_table (held w))) (<= 4 (:stick (held w) 0)))
+                                    (empty? (:window/grid w))))]
+                  :when (not ok)]
+              {:lag lag :drop drop :status (:plan/status w) :reason (:plan/reason w) :held (held w)
+               :grid (:window/grid w) :violations (:sim/violations sim)})]
+    (is (empty? bad) (pr-str (vec bad)))))
+
 (deftest a-lost-click-is-a-stale-window-never-a-blind-take
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
         [w sim] (sim/run step (game/init fx/opts)
@@ -78,6 +105,14 @@
     (is (= 1 (game/logs-held w)))
     (is (contains? (:sim/broken sim) [3 65 0]) "it broke the leaf in its way")
     (is (zero? (:plan/attempts w)) "no failed attempts")))
+
+(deftest the-sim-flags-a-click-into-window-0-while-a-container-is-open
+  (let [sim (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
+                (assoc :sim/phase :play :sim/window {:id 1 :grid {} :state-id 1})
+                (sim/step {:sim/kind :packet :sim/packet {:packet/name :container-click :window-id 0 :state-id 1
+                                                          :slot 36 :button 0 :mode 0 :changed [] :cursor nil}}))]
+    (is (= [[:click-inventory-while-open 0]] (:sim/violations sim)))
+    (is (= [] (:sim/out sim)) "vanilla ignores it: no answer")))
 
 (deftest an-early-finish-does-not-break-the-block
   (let [sim0 (assoc (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]}) :sim/phase :play :sim/now 1000)
