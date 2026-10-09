@@ -25,25 +25,39 @@
 (defn- now [world] (:time/now world))
 
 (def ^:private around
-  "Feet-level cells two blocks away: never inside the player's own box."
-  [[2 0] [-2 0] [0 2] [0 -2] [2 1] [2 -1] [-2 1] [-2 -1] [1 2] [-1 2] [1 -2] [-1 -2]])
+  "Candidate cells around the feet, nearest ring first, at feet level then one down then one
+   up (an uneven forest floor): a CI run found no spot when only feet-level cells two away
+   were tried."
+  (for [r [1 2 3]
+        dy [0 -1 1]
+        dx (range (- r) (inc r))
+        dz (range (- r) (inc r))
+        :when (= r (max (abs dx) (abs dz)))]
+    [dx dy dz]))
+
+(defn- inside-player?
+  "Would a block at cell intersect the player's box? The server rejects such a placement."
+  [world [x y z]]
+  (let [[x0 y0 z0 x1 y1 z1] (physics/aabb (:player/pos world))]
+    (and (< x0 (inc x)) (> x1 x) (< y0 (inc y)) (> y1 y) (< z0 (inc z)) (> z1 z))))
 
 (defn spot
-  "[target support] for placing a block next to the player: target empty (air or a plant,
-   not liquid), support solid, within reach. Pure; nil when there is none."
+  "[target support] for placing a block near the player: target empty (air or a plant, not
+   liquid), support solid, not inside the player, within reach. Pure; nil when there is none."
   [world]
   (let [[px py pz] (:player/pos world)
         fx (long (Math/floor px)) fy (long (Math/floor py)) fz (long (Math/floor pz))
         eye (game/eye world)]
-    (first (for [[dx dz] around
-                 :let [target [(+ fx dx) fy (+ fz dz)]
-                       support [(+ fx dx) (dec fy) (+ fz dz)]
+    (first (for [[dx dy dz] around
+                 :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
+                       support [(+ fx dx) (+ fy dy -1) (+ fz dz)]
                        t (game/block-at world target)
                        s (game/block-at world support)]
                  :when (and t s
                             (not (blocks/solid? t))
                             (not= :liquid (blocks/type-of t))
                             (blocks/solid? s)
+                            (not (inside-player? world target))
                             (<= (physics/distance eye (intent/centre target)) place-reach))]
              [target support]))))
 

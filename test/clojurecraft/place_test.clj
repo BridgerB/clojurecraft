@@ -31,6 +31,7 @@
                            (and target
                                 (not (overlaps? (:player/pos w) target))
                                 (= support (update target 1 dec))
+                                (<= (abs (- (second target) 64)) 1)
                                 (<= (physics/distance (game/eye w) (intent/centre target)) place/place-reach)))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
 
@@ -41,6 +42,12 @@
     (if (and (= :tick (:event/kind e)) (:plan/intent w))
       (intent/run w (:plan/intent w) e)
       w)))
+
+(deftest a-spot-is-found-on-an-uneven-floor
+  (testing "every feet-level cell around is walled: place on top of the nearest wall, one up"
+    (let [walls (into {} (for [x (range 3 10) z (range 3 10) :when (not= [x z] [6 6])] [[x 64 z] 1]))
+          w (assoc (standing [6.5 64.0 6.5]) :world/chunks {[0 0] (world/column walls)})]
+      (is (= [[5 65 5] [5 64 5]] (place/spot w))))))
 
 (deftest a-rejected-placement-fails-instead-of-believing
   (let [w (-> (standing [5.5 64.0 5.5])
