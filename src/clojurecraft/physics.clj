@@ -1,7 +1,9 @@
 (ns clojurecraft.physics
-  "Vanilla land movement for a player, as a pure function of the previous player value, the
-   controls and a solidity oracle. Full-cube collision only; no fluids, no step-up (a one-block
-   ledge needs a jump, as in vanilla).")
+  "Vanilla land movement as a pure function over the world's :player/* attributes. Full-cube
+   collision only; no fluids, no step-up (a one-block ledge needs a jump, as in vanilla).
+
+   (step solid? world controls) → world'   where solid? is (fn [x y z] bool) over block
+   coordinates and controls is {:control/forward? bool :control/jump? bool :control/yaw deg}.")
 
 (def gravity 0.08)
 (def vertical-drag 0.98)
@@ -9,14 +11,14 @@
 (def height 1.8)
 (def eye-height 1.62)
 (def jump-velocity 0.42)
-(def ground-inertia (* 0.6 0.91))
+(def ground-inertia (* 0.6 0.91))                     ; slipperiness × 0.91
 (def air-inertia 0.91)
 (def air-acceleration 0.02)
-(def ground-acceleration (* 0.1 (/ 0.16277136 (Math/pow ground-inertia 3))))
-(def negligible 0.003)
+(def ground-acceleration (* 0.1 (/ 0.16277136 (Math/pow ground-inertia 3)))) ; ≈ 0.1
+(def negligible 0.003)                                ; velocities below this snap to zero
 
 (defn aabb
-  "[x0 y0 z0 x1 y1 z1] of a player standing at pos (feet centre)."
+  "[x0 y0 z0 x1 y1 z1] of a player whose feet centre is pos."
   [[x y z]]
   [(- x half-width) y (- z half-width) (+ x half-width) (+ y height) (+ z half-width)])
 
@@ -60,9 +62,10 @@
 (defn- squash ^double [^double v] (if (< (Math/abs v) negligible) 0.0 v))
 
 (defn step
-  "One tick. solid? is (fn [x y z] bool) over block coordinates; controls is
-   {:forward? bool :jump? bool :yaw degrees}."
-  [solid? {:keys [pos vel on-ground? jump-ticks] :or {vel [0.0 0.0 0.0] jump-ticks 0}} {:keys [forward? jump? yaw]}]
+  "One tick of movement. Reads :player/pos :player/vel :player/on-ground? :player/jump-ticks and
+   writes them back plus :player/horizontal-collision?."
+  [solid? {:player/keys [pos vel on-ground? jump-ticks] :or {vel [0.0 0.0 0.0] jump-ticks 0} :as world}
+   {:control/keys [forward? jump? yaw]}]
   (let [[vx vy vz] (map squash vel)
         jump-ticks (max 0 (dec (long jump-ticks)))
         jumping? (and jump? on-ground? (zero? jump-ticks))
@@ -85,14 +88,15 @@
         vz (if (not= dz vz) 0.0 vz)
         inertia (if landed? ground-inertia air-inertia)
         [x y z] pos]
-    {:pos [(+ x dx) (+ y dy) (+ z dz)]
-     :vel [(* vx inertia) (* (- vy gravity) vertical-drag) (* vz inertia)]
-     :on-ground? landed?
-     :horizontal-collision? hit?
-     :jump-ticks jump-ticks}))
+    (assoc world
+           :player/pos [(+ x dx) (+ y dy) (+ z dz)]
+           :player/vel [(* vx inertia) (* (- vy gravity) vertical-drag) (* vz inertia)]
+           :player/on-ground? landed?
+           :player/horizontal-collision? hit?
+           :player/jump-ticks jump-ticks)))
 
 (defn look-at
-  "[yaw pitch] in degrees from eye to target, Notchian convention."
+  "[yaw pitch] in degrees from eye to target, Notchian convention (south = 0, west = +90)."
   [[ex ey ez] [tx ty tz]]
   (let [dx (- tx ex) dy (- ty ey) dz (- tz ez)
         horiz (Math/sqrt (+ (* dx dx) (* dz dz)))]

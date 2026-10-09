@@ -16,7 +16,7 @@
 
 (deftest every-c2s-spec-roundtrips
   (doseq [[[state dir pkt-name] fields] p/specs :when (= dir :c2s)]
-    (let [m (assoc (into {} (map (fn [[k t]] [k (sample t)]) fields)) :name pkt-name)]
+    (let [m (assoc (into {} (map (fn [[k t]] [k (sample t)]) fields)) :packet/name pkt-name)]
       (is (= m (p/decode state :c2s (p/encode state m))) (str state " " pkt-name)))))
 
 (deftest ids-match-the-vanilla-report
@@ -36,22 +36,22 @@
                               (b/write-f64 o 1.5) (b/write-f64 o 64.0) (b/write-f64 o -3.5)
                               (b/write-f64 o 0.0) (b/write-f64 o 0.0) (b/write-f64 o 0.0)
                               (b/write-f32 o 90.0) (b/write-f32 o 0.0) (b/write-u32 o 0)))]
-      (is (= {:name :player-position :teleport-id 7 :x 1.5 :y 64.0 :z -3.5 :dx 0.0 :dy 0.0 :dz 0.0
+      (is (= {:packet/name :player-position :teleport-id 7 :x 1.5 :y 64.0 :z -3.5 :dx 0.0 :dy 0.0 :dz 0.0
               :yaw 90.0 :pitch 0.0 :flags 0}
              (p/decode :play :s2c frame)))))
   (testing "the tail of a frame is ignored"
     (let [frame (b/with-out (fn [o] (b/write-varint o 0x2c) (b/write-i64 o 99) (b/write-bytes o (byte-array 10))))]
-      (is (= {:name :keep-alive :id 99} (p/decode :play :s2c frame)))))
+      (is (= {:packet/name :keep-alive :id 99} (p/decode :play :s2c frame)))))
   (testing "unknown and unmodelled ids"
-    (is (= :unknown (:name (p/decode :play :s2c (b/with-out #(b/write-varint % 999))))))
+    (is (= :unknown (:packet/name (p/decode :play :s2c (b/with-out #(b/write-varint % 999))))))
     (let [d (p/decode :play :s2c (b/with-out #(b/write-varint % 113)))]
-      (is (= :unknown (:name d)))
-      (is (= :set-time (:packet d)))))
+      (is (= :unknown (:packet/name d)))
+      (is (= :set-time (:packet/known d)))))
   (testing "slots"
     (let [frame (b/with-out (fn [o] (b/write-varint o 0x14) (b/write-varint o 0) (b/write-varint o 3)
                               (b/write-i16 o 36) (b/write-varint o 1) (b/write-varint o 134)
                               (b/write-varint o 0) (b/write-varint o 0)))]
-      (is (= {:name :container-set-slot :window-id 0 :state-id 3 :slot 36 :item {:item 134 :count 1}}
+      (is (= {:packet/name :container-set-slot :window-id 0 :state-id 3 :slot 36 :item {:item 134 :count 1}}
              (p/decode :play :s2c frame))))
     (let [frame (b/with-out (fn [o] (b/write-varint o 0x14) (b/write-varint o 0) (b/write-varint o 3)
                               (b/write-i16 o 36) (b/write-varint o 1) (b/write-varint o 134)
@@ -60,7 +60,7 @@
       (is (:truncated d))
       (is (= {:item 134 :count 1 :components? true} (:item d))))
     (let [empty-slot (b/with-out (fn [o] (b/write-varint o 0x6c) (b/write-varint o 5) (b/write-varint o 0)))]
-      (is (= {:name :set-player-inventory :slot 5 :item nil} (p/decode :play :s2c empty-slot))))))
+      (is (= {:packet/name :set-player-inventory :slot 5 :item nil} (p/decode :play :s2c empty-slot))))))
 
 (deftest transitions
   (is (= :login (p/next-state :handshake :intention)))

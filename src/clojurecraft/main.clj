@@ -1,14 +1,24 @@
 (ns clojurecraft.main
-  "Wiring: socket ↔ reducer loop ↔ effects, the RCON harness, the RESULT line.
-   The only namespace with a loop, an atom holding game state, and a clock."
+  "The loop: the one place with an atom, a clock, randomness and effects. Reads packets and
+   external events, feeds the reducer, drains :bot/effects, prints RESULT.
+
+     clojure -M:run --port 25571 --rcon-port 25581 --rcon-pass S [--name N] [--until play|wood]
+                    [--timeout-ms 120000] [--hold-ms 0] [--record run.edn]
+     clojure -M:replay run.edn"
   (:require [clojure.core.async :as a]
             [clojure.string :as str]
-            [clojurecraft.blocks :as blocks]
             [clojurecraft.conn :as conn]
             [clojurecraft.game :as game]
-            [clojurecraft.rcon :as rcon]
-            [clojurecraft.wood :as wood])
+            [clojurecraft.harness :as harness]
+            [clojurecraft.plan :as plan]
+            [clojurecraft.record :as record]
+            [clojurecraft.wood])
   (:gen-class))
+
+(def step
+  "The whole bot: the world reducer, then the planner. Requiring clojurecraft.wood registers
+   the goal."
+  (game/compose game/step plan/step))
 
 (defn parse-args [args]
   (into {} (map (fn [[k v]] [(keyword (subs k 2)) v]) (partition 2 args))))
@@ -16,118 +26,86 @@
 (defn- now [] (System/currentTimeMillis))
 
 (defn- stamp [& xs]
-  (binding [*out* *err*]
-    (println (str (java.time.LocalTime/now)) (str/join " " xs))
-    (flush)))
+  (binding [*out* *err*] (println (str (java.time.LocalTime/now)) (str/join " " xs)) (flush)))
 
-(defn start!
-  "Send the handshake and login packets."
-  [{:keys [out]} state* step]
-  (let [{:keys [state effects]} (step @state* [:start])]
-    (reset! state* state)
-    (doseq [[kind x] effects] (when (= kind :send) (a/>!! out x)))))
+(defn- perform [{:effect/keys [kind packet message]} out]
+  (case kind
+    :send (a/>!! out packet)
+    :log (stamp message)))
+
+(defn apply-event!
+  "The epochal write: swap the world, then perform and clear what it asked for."
+  [world* event out tap]
+  (when tap ((:write tap) event))
+  (swap! world* step event)
+  (let [effects (:bot/effects @world*)]
+    (swap! world* assoc :bot/effects [])
+    (doseq [e effects] (perform e out))))
 
 (defn run-loop
-  "Drive step over socket packets, 50 ms ticks and external events until (stop? state) or the
-   socket closes. state* is the one atom; only this loop writes it."
-  [{:keys [in out]} events state* step stop?]
-  (do
-    (loop [next-tick (+ (now) 50)]
-      (let [[v ch] (a/alts!! [in events (a/timeout (max 0 (- next-tick (now))))])
-            event (cond (= ch in) (if (nil? v) [:closed "socket closed"] [:packet v])
-                        (= ch events) v
-                        :else [:tick (now)])
-            {:keys [state effects]} (step @state* event)]
-        (reset! state* state)
-        (doseq [[kind x] effects]
-          (case kind
-            :send (a/>!! out x)
-            :log (stamp x)))
-        (if (or (stop? state) (:closed state) (:disconnected state))
-          state
-          (recur (if (= :tick (first event)) (+ next-tick 50) next-tick)))))))
+  "Drive the reducer over socket packets, 50 ms ticks and external events until (stop? world)
+   or the socket closes. Returns the final world."
+  [{:keys [in out]} events world* stop? tap]
+  (loop [next-tick (+ (now) 50)]
+    (let [[v ch] (a/alts!! [in events (a/timeout (max 0 (- next-tick (now))))])
+          event (cond (= ch in) (if (nil? v)
+                                  {:event/kind :closed :event/reason "socket closed"}
+                                  {:event/kind :packet :event/packet v})
+                      (= ch events) v
+                      :else {:event/kind :tick :event/now (now) :event/rand (rand)})]
+      (apply-event! world* event out tap)
+      (let [w @world*]
+        (if (or (stop? w) (:bot/closed w) (:bot/disconnected w))
+          w
+          (recur (if (= :tick (:event/kind event)) (+ next-tick 50) next-tick)))))))
 
-(defn- wait-for
-  "Block until (pred @state*) or timeout-ms; returns the truthy value or nil."
-  [state* pred timeout-ms]
-  (let [until (+ (now) timeout-ms)]
-    (loop []
-      (or (pred @state*)
-          (when (< (now) until) (Thread/sleep 200) (recur))))))
-
-(defn land!
-  "RCON fixture: find the nearest forest from the bot and teleport it onto the ground there.
-   Returns [x z] of the landing, or nil when no forest was found."
-  [rc name]
-  (rcon/command rc (str "gamemode survival " name))
-  (rcon/command rc (str "clear " name))
-  (let [r (rcon/command rc (str "execute at " name " run locate biome minecraft:forest"))
-        [_ fx fz] (re-find #"\[(-?\d+), (?:~|-?\d+), (-?\d+)\]" r)]
-    (stamp "locate:" r)
-    (when fx
-      (rcon/command rc (str "forceload add " fx " " fz))
-      (loop [i 0]
-        (let [r (rcon/command rc (str "execute if loaded " fx " 0 " fz))]
-          (when (and (not (str/includes? r "passed")) (< i 150))
-            (Thread/sleep 200)
-            (recur (inc i)))))
-      (stamp "tp:" (rcon/command rc (str "execute positioned " fx " 0 " fz
-                                         " positioned over motion_blocking_no_leaves run tp " name " ~0.5 ~ ~0.5")))
-      (rcon/command rc (str "forceload remove " fx " " fz))
-      [(Long/parseLong fx) (Long/parseLong fz)])))
-
-(defn- harness!
-  "Once the bot is loaded: land it in a forest (when RCON is configured), wait for the
-   teleport and its chunks, then send [:go]."
-  [state* events {:keys [name rcon-host rcon-port rcon-pass]}]
-  (wait-for state* #(get-in % [:player :loaded?]) 60000)
-  (when rcon-pass
-    (let [teleports (get-in @state* [:stats :teleports])]
-      (rcon/with-rcon rcon-host rcon-port rcon-pass #(land! % name))
-      (wait-for state* #(> (get-in % [:stats :teleports]) teleports) 20000)
-      (wait-for state* #(game/chunk-loaded? % (get-in % [:player :pos])) 20000)
-      (Thread/sleep 1000)))
-  (let [s @state* [x y z] (get-in s [:player :pos]) at (fn [dy] (blocks/name-of (or (game/block-at s [(long (Math/floor x)) (+ (long (Math/floor y)) dy) (long (Math/floor z))]) -1)))]
-    (stamp "landed at" (get-in s [:player :pos]) "on" (at -1) "in" (at 0) "/" (at 1)))
-  (a/>!! events [:go]))
+(defn result [world until ok]
+  (merge {:ok ok
+          :until until
+          :reason (cond ok :goal
+                        (:bot/disconnected world) :disconnected
+                        (:bot/closed world) :closed
+                        (plan/failed? world) (:plan/reason world)
+                        :else :timeout)}
+         (game/summary world)
+         (when (= until "wood") {:plan (plan/summary world)})))
 
 (defn -main [& args]
-  (let [{:keys [host port name until timeout-ms hold-ms rcon-host rcon-port rcon-pass]
+  (let [{:keys [host port name until timeout-ms hold-ms rcon-host rcon-port rcon-pass record]
          :or {host "127.0.0.1" port "25571" name "Clj_wood" until "wood" timeout-ms "120000" hold-ms "0"}}
         (parse-args args)
         opts {:host host :port (Long/parseLong port) :name name}
         deadline (+ (now) (Long/parseLong timeout-ms))
         hold (Long/parseLong hold-ms)
-        goal? (case until
-                "play" (fn [s] (get-in s [:player :loaded?]))
-                "wood" wood/done?)
-        stop? (fn [s] (or (goal? s) (and (= until "wood") (wood/failed? s)) (> (now) deadline)))
+        goal? (case until "play" :player/loaded? "wood" plan/done?)
+        stop? (fn [w] (or (goal? w) (and (= until "wood") (plan/failed? w)) (> (now) deadline)))
+        tap (some-> record record/tap)
         c (conn/open opts)
         events (a/chan 16)
-        state* (atom (game/init opts))
-        _ (stamp "connected to" host port "as" name)
-        _ (when (= until "wood")
-            (a/thread (try (harness! state* events {:name name :rcon-host (or rcon-host host)
-                                                     :rcon-port (some-> rcon-port Long/parseLong)
-                                                     :rcon-pass rcon-pass})
-                           (catch Throwable e (stamp "harness failed:" e) (a/>!! events [:go])))))
-        step (game/compose game/step wood/step)
-        _ (start! c state* step)
-        final (run-loop c events state* step stop?)
-        ok (boolean (and (goal? final) (not (:closed final)) (not (:disconnected final))))]
-    (prn 'RESULT (merge {:ok ok :until until
-                         :reason (cond ok :goal
-                                       (:disconnected final) :disconnected
-                                       (:closed final) :closed
-                                       (wood/failed? final) (get-in final [:task :reason])
-                                       :else :timeout)}
-                        (game/summary final)
-                        (when (= until "wood") {:task (wood/summary final)})))
-    (flush)
-    (when (and ok (pos? hold))
-      (stamp "holding" hold "ms for an outside judge")
-      (let [until (+ (now) hold)]
-        (run-loop c events state* step (fn [_] (> (now) until)))))
-    ((:close! c))
-    (shutdown-agents)
-    (System/exit (if ok 0 1))))
+        world* (atom (game/init opts))]
+    (stamp "connected to" host port "as" name)
+    (when (= until "wood")
+      (a/thread (try (harness/land-and-go! world* events {:name name :rcon-host (or rcon-host host)
+                                                          :rcon-port (some-> rcon-port Long/parseLong)
+                                                          :rcon-pass rcon-pass})
+                     (catch Throwable e (stamp "harness failed:" e) (a/>!! events {:event/kind :go})))))
+    (apply-event! world* {:event/kind :start} (:out c) tap)
+    (let [final (run-loop c events world* stop? tap)
+          ok (boolean (and (goal? final) (not (:bot/closed final)) (not (:bot/disconnected final))))]
+      (prn 'RESULT (result final until ok))
+      (flush)
+      (when (and ok (pos? hold))
+        (stamp "holding" hold "ms for an outside judge")
+        (let [until (+ (now) hold)] (run-loop c events world* (fn [_] (> (now) until)) tap)))
+      (some-> tap :close (apply []))
+      ((:close! c))
+      (shutdown-agents)
+      (System/exit (if ok 0 1)))))
+
+(defn replay
+  "clojure -M:replay run.edn → RESULT of folding the reducer over the recording."
+  [& [path]]
+  (let [world0 (game/init {:host "replay" :port 0 :name "Clj_replay"})
+        final (record/replay step world0 path)]
+    (prn 'RESULT (result final "wood" (plan/done? final)))
+    (shutdown-agents)))

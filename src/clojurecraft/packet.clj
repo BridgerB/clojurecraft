@@ -1,11 +1,13 @@
 (ns clojurecraft.packet
   "Packet specs as data, and one interpreter that reads and writes them.
 
-   A packet is a flat map with a :name. A spec is a vector of [key type] pairs; a type is a
+   A packet is a flat map with a :packet/name; its fields are the wire's own names, unqualified,
+   because they are scoped by the packet. A spec is a vector of [key type] pairs; a type is a
    keyword for a primitive, [:vec T] for a varint-counted sequence, or a vector of pairs for a
    nested struct. Ids come from resources/clojurecraft/packets.edn (generated from the vanilla
    reports). Decoding reads only the listed fields and ignores the tail of the frame: that is
-   how big packets (chunks) skip the parts we do not model."
+   how big packets (chunks) skip the parts we do not model. Unknown ids decode to
+   {:packet/name :unknown ...}; nothing here throws on foreign data."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojurecraft.bytes :as b]))
@@ -144,8 +146,8 @@
         id (b/read-varint buf)
         pkt-name (get-in names [state dir id])]
     (if-let [fields (and pkt-name (specs [state dir pkt-name]))]
-      (assoc (read-fields buf fields) :name pkt-name)
-      {:name :unknown :id id :packet pkt-name :len (alength frame)})))
+      (assoc (read-fields buf fields) :packet/name pkt-name)
+      {:packet/name :unknown :packet/id id :packet/known pkt-name :packet/len (alength frame)})))
 
 ;; ---------------------------------------------------------------- writing
 
@@ -173,11 +175,11 @@
 (defn encode
   "Packet map → bytes of one frame (id + fields), for the client→server direction."
   ^bytes [state pkt]
-  (let [pkt-name (:name pkt)
+  (let [pkt-name (:packet/name pkt)
         id (get-in ids [state :c2s pkt-name])
         fields (specs [state :c2s pkt-name])]
     (when-not (and id fields)
-      (throw (ex-info "no c2s spec for packet" {:state state :name pkt-name})))
+      (throw (ex-info "no c2s spec for packet" {:state state :packet/name pkt-name})))
     (b/with-out (fn [out]
                   (b/write-varint out id)
                   (write-fields out fields pkt)))))

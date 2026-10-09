@@ -68,15 +68,16 @@
         proto (atom {:state :handshake :threshold -1})
         inbox (a/chan 1024)
         outbox (a/chan 256)
-        closed (fn [reason] (a/>!! inbox {:name :closed :reason reason}) (a/close! inbox))]
+        closed (fn [reason] (a/>!! inbox {:packet/name :closed :packet/reason reason}) (a/close! inbox))]
     (a/thread
       (try
         (loop []
           (let [frame (read-frame in (:threshold @proto))
                 state (:state @proto)
                 pkt (try (p/decode state :s2c frame)
-                         (catch Exception e {:name :decode-error :state state :error (str e) :len (alength frame)}))]
-            (when (and (= state :login) (= :login-compression (:name pkt)))
+                         (catch Exception e {:packet/name :decode-error :packet/state state
+                                             :packet/error (str e) :packet/len (alength frame)}))]
+            (when (and (= state :login) (= :login-compression (:packet/name pkt)))
               (swap! proto assoc :threshold (:threshold pkt)))
             (a/>!! inbox pkt)
             (recur)))
@@ -87,7 +88,7 @@
           (when-let [pkt (a/<!! outbox)]
             (let [state (:state @proto)
                   payload (p/encode state pkt)]
-              (swap! proto update :state p/next-state (:name pkt))
+              (swap! proto update :state p/next-state (:packet/name pkt))
               (write-frame out payload (:threshold @proto))
               (recur))))
         (catch Throwable e (closed (str e)))))
