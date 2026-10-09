@@ -40,6 +40,15 @@
 (s/def :control/look :player/look)
 (s/def :player/controls (s/keys :opt [:control/forward? :control/jump? :control/yaw :control/look]))
 
+;; window 0 (the player's own screen) and any open container
+(s/def ::slot-item (s/keys :req-un [::item ::count]))
+(s/def :window/state-id int?)
+(s/def :window/grid (s/map-of #{0 1 2 3 4} ::slot-item))
+(s/def :window/cursor ::slot-item)
+(s/def :window/id int?)
+(s/def :window/menu-type int?)
+(s/def :window/open (s/keys :req [:window/id :window/menu-type]))
+
 ;; world
 (s/def :world/chunks (s/map-of (s/coll-of int? :count 2) map?))
 (s/def :world/blocks (s/map-of ::block-pos int?))
@@ -62,19 +71,23 @@
 (s/def :event/rand (s/double-in :min 0.0 :max 1.0 :NaN? false))
 (s/def :event/packet ::packet)
 (s/def :event/reason string?)
-(s/def ::event (s/keys :req [:event/kind] :opt [:event/now :event/rand :event/packet :event/reason]))
+(s/def :go/goals (s/coll-of keyword?))
+(s/def ::event (s/keys :req [:event/kind] :opt [:event/now :event/rand :event/packet :event/reason :go/goals]))
 
 ;; plan and intents
 (s/def :intent/kind keyword?)
 (s/def :intent/status #{:active :done :failed})
 (s/def :intent/target ::block-pos)
-(s/def ::intent (s/keys :req [:intent/kind] :opt [:intent/status :intent/target]))
+(s/def ::intent (s/keys :req [:intent/kind] :opt [:intent/status :intent/target :intent/recipe]))
 (s/def :plan/intent ::intent)
 (s/def :plan/status #{:active :done :failed})
 (s/def :plan/blacklist (s/coll-of ::block-pos :kind set?))
+(s/def :plan/goals (s/coll-of keyword? :kind set?))
+(s/def :intent/recipe keyword?)
+(s/def :goal/wants (s/coll-of (s/tuple keyword? pos-int?)))
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
-(s/def ::goal (s/keys :req [:goal/id :goal/priority]))
+(s/def ::goal (s/keys :req [:goal/id :goal/priority] :opt [:goal/wants]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
@@ -82,6 +95,7 @@
                 :player/pos :player/vel :player/look :player/on-ground? :player/horizontal-collision?
                 :player/jump-ticks :player/loaded? :player/entity-id :player/inventory :player/controls
                 :world/chunks :world/blocks :world/sightings :world/entities
+                :window/state-id :window/grid :window/cursor :window/open
                 :plan/intent :plan/status :plan/blacklist]))
 
 (s/fdef game/step :args (s/cat :world ::world :event ::event) :ret ::world)

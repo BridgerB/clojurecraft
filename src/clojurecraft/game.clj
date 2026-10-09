@@ -44,6 +44,7 @@
    :player/loaded? false
    :player/controls {}
    :player/inventory {}
+   :window/grid {}
    :world/chunks {}
    :world/blocks {}
    :world/entities {}
@@ -82,6 +83,11 @@
 
 (defn eye [world] (physics/eye (:player/pos world)))
 
+(defn item-count
+  "How many of an item (by id) the player holds; the crafting grid is not the inventory."
+  [world id]
+  (reduce + 0 (for [[_ {:keys [item count]}] (:player/inventory world) :when (= item id)] count)))
+
 (defn logs-held [world]
   (reduce + 0 (for [[_ {:keys [item count]}] (:player/inventory world) :when (blocks/log-item? item)] count)))
 
@@ -94,7 +100,7 @@
   [^long s]
   (cond (<= 36 s 44) (- s 36)
         (<= 9 s 35) s
-        (<= 5 s 8) (+ s 31)
+        (<= 5 s 8) (- 44 s)                ; window 5-8 are head..feet; player 36-39 are feet..head
         (= s 45) 40
         :else nil))
 
@@ -210,13 +216,33 @@
 (defmethod on-packet [:play :block-update] [w p] (set-block w (:pos p) (:state p)))
 (defmethod on-packet [:play :section-blocks-update] [w p] (section-update w p))
 (defmethod on-packet [:play :set-health] [w p] (assoc w :player/health (:health p)))
-(defmethod on-packet [:play :container-set-content] [w {:keys [window-id items]}]
+(defn- set-window-0-slot
+  "Window 0 is the player's own screen: slots 0-4 are the crafting grid (0 is the result) and
+   are kept verbatim in :window/grid, so nothing in the grid is ever invisible; the rest map to
+   :player/inventory."
+  [w i item]
+  (cond
+    (<= 0 i 4) (if item (assoc-in w [:window/grid i] item) (update w :window/grid dissoc i))
+    (container->player-slot i) (set-slot w (container->player-slot i) item)
+    :else w))
+
+(defmethod on-packet [:play :container-set-content] [w {:keys [window-id state-id items carried]}]
   (if (zero? window-id)
-    (reduce (fn [w [i item]] (if-let [slot (container->player-slot i)] (set-slot w slot item) w))
-            w (map-indexed vector items))
+    (reduce (fn [w [i item]] (set-window-0-slot w i item))
+            (cond-> (assoc w :window/state-id state-id)
+              carried (assoc :window/cursor carried)
+              (nil? carried) (dissoc :window/cursor))
+            (map-indexed vector items))
     w))
-(defmethod on-packet [:play :container-set-slot] [w {:keys [window-id slot item]}]
-  (if-let [slot (and (zero? window-id) (container->player-slot slot))] (set-slot w slot item) w))
+(defmethod on-packet [:play :container-set-slot] [w {:keys [window-id state-id slot item]}]
+  (if (zero? window-id)
+    (-> w (assoc :window/state-id state-id) (set-window-0-slot slot item))
+    w))
+(defmethod on-packet [:play :set-cursor-item] [w {:keys [item]}]
+  (if item (assoc w :window/cursor item) (dissoc w :window/cursor)))
+(defmethod on-packet [:play :open-screen] [w {:keys [window-id menu-type]}]
+  (assoc w :window/open {:window/id window-id :window/menu-type menu-type}))
+(defmethod on-packet [:play :container-close] [w _] (dissoc w :window/open))
 (defmethod on-packet [:play :set-player-inventory] [w {:keys [slot item]}] (set-slot w slot item))
 (defmethod on-packet [:play :add-entity] [w {:keys [entity-id type x y z]}]
   (if (= type blocks/item-entity-type)

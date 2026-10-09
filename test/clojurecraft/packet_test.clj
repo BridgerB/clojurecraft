@@ -12,7 +12,8 @@
     :else (case t
             :bool true :i8 -5 :u8 200 :i16 -300 :u16 60000 :i32 -70000 :u32 4000000000
             :i64 -1234567890123 :f32 1.5 :f64 -2.25 :varint -1 :varlong 1234567890123
-            :string "héllo" :uuid a-uuid :position [-17 -60 42])))
+            :string "héllo" :uuid a-uuid :position [-17 -60 42]
+            :hashed-slot {:item 134 :count 3})))
 
 (deftest every-c2s-spec-roundtrips
   (doseq [[[state dir pkt-name] fields] p/specs :when (= dir :c2s)]
@@ -61,6 +62,12 @@
       (is (= {:item 134 :count 1 :components? true} (:item d))))
     (let [empty-slot (b/with-out (fn [o] (b/write-varint o 0x6c) (b/write-varint o 5) (b/write-varint o 0)))]
       (is (= {:packet/name :set-player-inventory :slot 5 :item nil} (p/decode :play :s2c empty-slot))))))
+
+(deftest container-click-wire-format
+  (testing "775 layout: window, state id, slot, button, mode, changed slots, cursor"
+    (let [bytes (p/encode :play {:packet/name :container-click :window-id 0 :state-id 7 :slot 36 :button 1
+                                 :mode 0 :changed [] :cursor nil})]
+      (is (= [0x12 0 7 0 36 1 0 0 0] (map #(bit-and % 0xFF) bytes))))))
 
 (deftest transitions
   (is (= :login (p/next-state :handshake :intention)))

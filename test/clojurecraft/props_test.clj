@@ -28,6 +28,7 @@
             :varint (gen/choose -2147483648 2147483647) :varlong gen/large-integer
             :string gen/string :uuid (gen/return nil) :position (gen/vector (gen/choose -1000 1000) 3)
             :bytes gen/bytes :rest gen/bytes
+            :hashed-slot (gen/one-of [(gen/return nil) (gen/hash-map :item (gen/choose 0 2000) :count (gen/choose 1 64))])
             :slot (gen/one-of [(gen/return nil) (gen/hash-map :item (gen/choose 0 2000) :count (gen/choose 1 64))]))))
 
 (def s2c-play-packet

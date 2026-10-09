@@ -63,6 +63,13 @@
 (defn log? [^long id] (and (<= 0 id max-state) (aget ^booleans log-flags id)))
 
 (def log-items (set (for [[n id] items :when (log-name? n)] id)))
+
+(def ^:private leaf-flags
+  (let [arr (boolean-array (inc max-state))]
+    (doseq [[n _ lo hi] table :when (str/ends-with? (name n) "_leaves"), s (range lo (inc hi))] (aset arr s true))
+    arr))
+
+(defn leaves? [^long id] (and (<= 0 id max-state) (aget ^booleans leaf-flags id)))
 (defn log-item? [id] (contains? log-items id))
 
 (def air 0)

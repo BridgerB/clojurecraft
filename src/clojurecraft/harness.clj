@@ -21,25 +21,40 @@
       (or (pred @world*) (deref p timeout-ms nil))
       (finally (remove-watch world* k)))))
 
-(defn land!
-  "Find the nearest forest from the bot and teleport it onto the ground there. Returns [x z] or nil."
+(defn locate-forest
+  "The nearest forest from the bot, [x z], or nil."
   [rc name]
   (rcon/command rc (str "gamemode survival " name))
   (rcon/command rc (str "clear " name))
   (let [r (rcon/command rc (str "execute at " name " run locate biome minecraft:forest"))
         [_ fx fz] (re-find #"\[(-?\d+), (?:~|-?\d+), (-?\d+)\]" r)]
     (stamp "locate:" r)
-    (when fx
-      (rcon/command rc (str "forceload add " fx " " fz))
-      (loop [i 0]
-        (let [r (rcon/command rc (str "execute if loaded " fx " 0 " fz))]
-          (when (and (not (str/includes? r "passed")) (< i 150))
-            (Thread/sleep 200)
-            (recur (inc i)))))
-      (stamp "tp:" (rcon/command rc (str "execute positioned " fx " 0 " fz
-                                         " positioned over motion_blocking_no_leaves run tp " name " ~0.5 ~ ~0.5")))
-      (rcon/command rc (str "forceload remove " fx " " fz))
-      [(Long/parseLong fx) (Long/parseLong fz)])))
+    (when fx [(Long/parseLong fx) (Long/parseLong fz)])))
+
+(defn teleport!
+  "Load the column at x z and teleport the bot onto its surface. The motion_blocking_no_leaves
+   heightmap counts water as a surface, so this can land the bot on a pond."
+  [rc name [x z]]
+  (rcon/command rc (str "forceload add " x " " z))
+  (loop [i 0]
+    (let [r (rcon/command rc (str "execute if loaded " x " 0 " z))]
+      (when (and (not (str/includes? r "passed")) (< i 150))
+        (Thread/sleep 200)
+        (recur (inc i)))))
+  (stamp "tp:" (rcon/command rc (str "execute positioned " x " 0 " z
+                                     " positioned over motion_blocking_no_leaves run tp " name " ~0.5 ~ ~0.5")))
+  (rcon/command rc (str "forceload remove " x " " z)))
+
+(def landing-offsets
+  "Where to try when a landing is wet: the located point, then nearby points in the same forest."
+  [[0 0] [24 0] [0 24] [-24 0] [0 -24] [40 40] [-40 -40]])
+
+(defn wet?
+  "Is the player standing in or on a liquid? (Water physics is issue #5; the fixture avoids it.)"
+  [world]
+  (let [[x y z] (:player/pos world)
+        fx (long (Math/floor x)) fy (long (Math/floor y)) fz (long (Math/floor z))]
+    (boolean (some #(= :liquid (some-> (game/block-at world [fx % fz]) blocks/type-of)) [fy (dec fy)]))))
 
 (defn- standing-on [world]
   (let [[x y z] (:player/pos world)
@@ -49,13 +64,20 @@
 (defn land-and-go!
   "Once the bot is loaded: land it (when RCON is configured), wait for the teleport and its
    chunks, then send {:event/kind :go}."
-  [world* events {:keys [name rcon-host rcon-port rcon-pass]}]
+  [world* events {:keys [name rcon-host rcon-port rcon-pass go]}]
   (wait-for world* :player/loaded? 60000)
   (when rcon-pass
-    (let [teleports (:stats/teleports @world*)]
-      (rcon/with-rcon rcon-host rcon-port rcon-pass #(land! % name))
-      (wait-for world* #(> (:stats/teleports %) teleports) 20000)
-      (wait-for world* #(game/chunk-loaded? % (:player/pos %)) 20000)
-      (Thread/sleep 1000)))
+    (rcon/with-rcon rcon-host rcon-port rcon-pass
+      (fn [rc]
+        (when-let [[fx fz] (locate-forest rc name)]
+          (loop [[[ox oz] & more] landing-offsets]
+            (let [teleports (:stats/teleports @world*)]
+              (teleport! rc name [(+ fx ox) (+ fz oz)])
+              (wait-for world* #(> (:stats/teleports %) teleports) 20000)
+              (wait-for world* #(game/chunk-loaded? % (:player/pos %)) 20000)
+              (Thread/sleep 1000)
+              (when (and (wet? @world*) (seq more))
+                (stamp "landed in water, trying another spot")
+                (recur more))))))))
   (let [w @world*] (stamp "landed at" (:player/pos w) (standing-on w)))
-  (a/>!! events {:event/kind :go}))
+  (a/>!! events (or go {:event/kind :go})))
