@@ -106,6 +106,30 @@
     (is (contains? (:sim/broken sim) [3 65 0]) "it broke the leaf in its way")
     (is (zero? (:plan/attempts w)) "no failed attempts")))
 
+(deftest a-stale-click-gets-the-full-window
+  (let [sim (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]
+                           :inventory {10 {:item (recipe/item-id :oak_planks) :count 3}}})
+                (assoc :sim/phase :play :sim/window {:id 1 :grid {} :state-id 4})
+                (sim/step {:sim/kind :packet :sim/packet {:packet/name :container-click :window-id 1 :state-id 2
+                                                          :slot 11 :button 0 :mode 0 :changed [] :cursor nil}}))
+        [reply] (:sim/out sim)]
+    (is (= :container-set-content (:packet/name reply)) "a stale state id is answered with the whole window")
+    (is (= 5 (:state-id reply)))
+    (is (= {:item (recipe/item-id :oak_planks) :count 3} (:sim/cursor sim)) "and the click was applied")))
+
+(deftest a-pickaxe-from-held-planks-sticks-and-a-table
+  ;; issue #2's end state: the table item and the ingredients already held, on bare ground
+  (let [planks (recipe/item-id :oak_planks) stick (recipe/item-id :stick) table (recipe/item-id :crafting_table)
+        [w sim] (sim/run step (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]
+                                    :inventory {36 {:item planks :count 4} 37 {:item stick :count 2} 38 {:item table :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:pickaxe]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (:wooden_pickaxe (held w))))
+    (is (< (:time/now w) 60000) "under 60 simulated seconds")
+    (is (= 1 (count (:sim/placed sim))))
+    (is (= [] (:sim/violations sim)))))
+
 (deftest the-sim-flags-a-click-into-window-0-while-a-container-is-open
   (let [sim (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
                 (assoc :sim/phase :play :sim/window {:id 1 :grid {} :state-id 1})

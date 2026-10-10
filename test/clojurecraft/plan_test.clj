@@ -104,6 +104,21 @@
     (is (= 0 (:plan/attempts w)) "the walk succeeded, so two earlier failures no longer count")
     (is (= :dig (get-in w [:plan/intent :intent/kind])))))
 
+(deftest the-harness-notices-a-landing-in-a-tree
+  (let [tree (world/column {[0 63 0] 136 [0 64 0] 252 [3 63 3] 1})
+        w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] tree}))]
+    (is (clojurecraft.harness/perched? (w [0.5 64.0 0.5])) "standing on a log, in leaves")
+    (is (clojurecraft.harness/perched? (w [0.5 65.0 0.5])) "standing on leaves")
+    (is (not (clojurecraft.harness/perched? (w [3.5 64.0 3.5]))) "on stone")))
+
+(deftest the-harness-names-a-bad-landing
+  (let [col (world/column {[0 63 0] 86 [0 64 0] 86 [2 63 2] 136 [2 64 2] 252 [4 64 4] 1 [4 65 4] 1})
+        w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] col}))]
+    (is (= :water (clojurecraft.harness/bad-landing (w [0.5 64.0 0.5]))))
+    (is (= :tree (clojurecraft.harness/bad-landing (w [2.5 64.0 2.5]))))
+    (is (= :buried (clojurecraft.harness/bad-landing (w [4.5 64.0 4.5]))) "stone at the feet and head")
+    (is (nil? (clojurecraft.harness/bad-landing (w [8.5 64.0 8.5]))) "air on stone ground")))
+
 (deftest the-harness-notices-a-wet-landing
   (let [pond (world/column {[0 63 0] 86 [0 64 0] 86})
         w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] pond}))]
