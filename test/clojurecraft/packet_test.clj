@@ -1,5 +1,6 @@
 (ns clojurecraft.packet-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.edn :as edn]
+            [clojure.test :refer [deftest is testing]]
             [clojurecraft.bytes :as b]
             [clojurecraft.packet :as p]))
 
@@ -82,3 +83,18 @@
   (is (= :configuration (p/next-state :login :login-acknowledged)))
   (is (= :play (p/next-state :configuration :finish-configuration)))
   (is (= :play (p/next-state :play :swing))))
+
+(def ever
+  "Every packet spec as it has ever been committed (test/clojurecraft/packet_specs_ever.edn)."
+  (edn/read-string (slurp "test/clojurecraft/packet_specs_ever.edn")))
+
+(deftest packet-specs-only-grow
+  ;; docs/hickey.md, Accrete: "A packet spec only ever gains fields." The decoder reads a
+  ;; packet's fields in wire order, so growing means appending: what was there stays a prefix.
+  (testing "every spec ever committed still exists, its fields an unchanged prefix of today's"
+    (is (= [] (vec (for [[k fields] ever
+                         :let [now (get p/specs k)]
+                         :when (not= fields (vec (take (count fields) now)))]
+                     k)))))
+  (testing "every spec today is in the history, so the next change is held to it too"
+    (is (= [] (vec (remove #(contains? ever %) (keys p/specs)))))))

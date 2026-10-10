@@ -1,0 +1,138 @@
+;; Every packet spec as it has ever been committed (docs/hickey.md: "a packet spec only ever gains fields").
+;; packet_test holds it: each spec here must still exist with these fields as a prefix of its
+;; current fields. Adding a field: append it to the spec, then add it here. Adding a packet: add it here.
+{[:configuration :c2s :finish-configuration] [],
+ [:configuration :c2s :keep-alive] [[:id :i64]],
+ [:configuration :c2s :pong] [[:id :i32]],
+ [:configuration :c2s :select-known-packs]
+ [[:packs
+   [:vec [[:namespace :string] [:id :string] [:version :string]]]]],
+ [:configuration :s2c :disconnect] [[:reason :rest]],
+ [:configuration :s2c :finish-configuration] [],
+ [:configuration :s2c :keep-alive] [[:id :i64]],
+ [:configuration :s2c :ping] [[:id :i32]],
+ [:configuration :s2c :select-known-packs] [],
+ [:handshake :c2s :intention]
+ [[:protocol-version :varint]
+  [:host :string]
+  [:port :u16]
+  [:next-state :varint]],
+ [:login :c2s :hello] [[:username :string] [:uuid :uuid]],
+ [:login :c2s :login-acknowledged] [],
+ [:login :s2c :login-compression] [[:threshold :varint]],
+ [:login :s2c :login-disconnect] [[:reason :string]],
+ [:login :s2c :login-finished] [[:uuid :uuid] [:username :string]],
+ [:play :c2s :accept-teleportation] [[:teleport-id :varint]],
+ [:play :c2s :chunk-batch-received] [[:chunks-per-tick :f32]],
+ [:play :c2s :client-information]
+ [[:locale :string]
+  [:view-distance :i8]
+  [:chat-mode :varint]
+  [:chat-colors :bool]
+  [:skin-parts :u8]
+  [:main-hand :varint]
+  [:text-filtering :bool]
+  [:server-listing :bool]
+  [:particle-status :varint]],
+ [:play :c2s :configuration-acknowledged] [],
+ [:play :c2s :container-click]
+ [[:window-id :varint]
+  [:state-id :varint]
+  [:slot :i16]
+  [:button :i8]
+  [:mode :varint]
+  [:changed [:vec [[:slot :i16] [:item :hashed-slot]]]]
+  [:cursor :hashed-slot]],
+ [:play :c2s :container-close] [[:window-id :varint]],
+ [:play :c2s :keep-alive] [[:id :i64]],
+ [:play :c2s :move-player-pos]
+ [[:x :f64] [:y :f64] [:z :f64] [:flags :u8]],
+ [:play :c2s :move-player-pos-rot]
+ [[:x :f64]
+  [:y :f64]
+  [:z :f64]
+  [:yaw :f32]
+  [:pitch :f32]
+  [:flags :u8]],
+ [:play :c2s :move-player-rot]
+ [[:yaw :f32] [:pitch :f32] [:flags :u8]],
+ [:play :c2s :move-player-status-only] [[:flags :u8]],
+ [:play :c2s :player-action]
+ [[:status :varint] [:pos :position] [:face :i8] [:sequence :varint]],
+ [:play :c2s :player-loaded] [],
+ [:play :c2s :pong] [[:id :i32]],
+ [:play :c2s :set-carried-item] [[:slot :i16]],
+ [:play :c2s :swing] [[:hand :varint]],
+ [:play :c2s :use-item-on]
+ [[:hand :varint]
+  [:pos :position]
+  [:face :varint]
+  [:cursor-x :f32]
+  [:cursor-y :f32]
+  [:cursor-z :f32]
+  [:inside-block :bool]
+  [:world-border-hit :bool]
+  [:sequence :varint]],
+ [:play :s2c :add-entity]
+ [[:entity-id :varint]
+  [:uuid :uuid]
+  [:type :varint]
+  [:x :f64]
+  [:y :f64]
+  [:z :f64]],
+ [:play :s2c :block-changed-ack] [[:sequence :varint]],
+ [:play :s2c :block-update] [[:pos :position] [:state :varint]],
+ [:play :s2c :chunk-batch-finished] [[:batch-size :varint]],
+ [:play :s2c :container-close] [[:window-id :varint]],
+ [:play :s2c :container-set-content]
+ [[:window-id :varint]
+  [:state-id :varint]
+  [:items [:vec :slot]]
+  [:carried :slot]],
+ [:play :s2c :container-set-slot]
+ [[:window-id :varint] [:state-id :varint] [:slot :i16] [:item :slot]],
+ [:play :s2c :disconnect] [[:reason :rest]],
+ [:play :s2c :entity-position-sync]
+ [[:entity-id :varint] [:x :f64] [:y :f64] [:z :f64]],
+ [:play :s2c :forget-level-chunk] [[:pos :i64]],
+ [:play :s2c :keep-alive] [[:id :i64]],
+ [:play :s2c :level-chunk-with-light]
+ [[:x :i32]
+  [:z :i32]
+  [:heightmaps [:vec [[:type :varint] [:data [:vec :i64]]]]]
+  [:data :bytes]],
+ [:play :s2c :login] [[:entity-id :i32]],
+ [:play :s2c :move-entity-pos]
+ [[:entity-id :varint]
+  [:dx :i16]
+  [:dy :i16]
+  [:dz :i16]
+  [:on-ground :bool]],
+ [:play :s2c :move-entity-pos-rot]
+ [[:entity-id :varint] [:dx :i16] [:dy :i16] [:dz :i16]],
+ [:play :s2c :open-screen]
+ [[:window-id :varint] [:menu-type :varint] [:title :rest]],
+ [:play :s2c :ping] [[:id :i32]],
+ [:play :s2c :player-position]
+ [[:teleport-id :varint]
+  [:x :f64]
+  [:y :f64]
+  [:z :f64]
+  [:dx :f64]
+  [:dy :f64]
+  [:dz :f64]
+  [:yaw :f32]
+  [:pitch :f32]
+  [:flags :u32]],
+ [:play :s2c :remove-entities] [[:ids [:vec :varint]]],
+ [:play :s2c :respawn] [],
+ [:play :s2c :section-blocks-update]
+ [[:section :i64] [:blocks [:vec :varlong]]],
+ [:play :s2c :set-cursor-item] [[:item :slot]],
+ [:play :s2c :set-health]
+ [[:health :f32] [:food :varint] [:saturation :f32]],
+ [:play :s2c :set-held-slot] [[:slot :varint]],
+ [:play :s2c :set-player-inventory] [[:slot :varint] [:item :slot]],
+ [:play :s2c :start-configuration] [],
+ [:play :s2c :take-item-entity]
+ [[:collected :varint] [:collector :varint] [:count :varint]]}
