@@ -149,6 +149,7 @@
 (s/def :plan/go-at ::vec3)
 (s/def :go/at ::vec3)
 (s/def :plan/blacklist (s/coll-of ::block-pos :kind set?))
+(s/def :plan/trunk-failures (s/map-of (s/tuple int? int?) pos-int?))
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :intent/recipe keyword?)
 (s/def :intent/window #{:inventory :table})
@@ -174,7 +175,7 @@
                 :player/jump-ticks :player/loaded? :player/entity-id :player/inventory :player/controls
                 :world/chunks :world/blocks :world/facts :world/entities
                 :window/state-id :window/grid :window/cursor :window/open :player/held-slot
-                :plan/intent :plan/status :plan/blacklist]))
+                :plan/intent :plan/status :plan/blacklist :plan/trunk-failures]))
 
 (s/fdef game/step :args (s/cat :world ::world :event ::event) :ret ::world)
 (s/fdef plan/step :args (s/cat :world ::world :event ::event) :ret ::world)
@@ -248,6 +249,7 @@
 (s/def :plan/wait some?)
 (s/def :intent/reason some?)
 (s/def :intent/for keyword?)
+(s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
 (s/def :intent/started int?)
@@ -351,7 +353,8 @@
 (s/fdef terrain/block-at :args (s/cat :world (requires :world/chunks) :pos (s/coll-of number? :count 3)))
 (s/fdef terrain/solid-fn :args (s/cat :world (requires :world/chunks)))
 (s/fdef memory/positions-now :args (s/cat :world (requires :world/facts) :states coll?))
-(s/fdef memory/nearest-log :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number? :blacklist any?))
+(s/fdef memory/nearest-log :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number? :blacklist any?
+                                        :bottom? (s/? ifn?)))
 (s/fdef make/near :args (s/cat :world (requires :player/pos :world/facts) :block keyword?))
 (s/fdef make/decide :args (s/cat :world (requires :player/inventory :player/pos :world/facts) :goal map? :table vector?))
 (s/fdef wood/gather-next :args (s/cat :world (requires :player/pos :world/facts)))
@@ -387,3 +390,33 @@
 (s/def :gym/result (s/nilable map?))
 (s/def ::gym-result (s/keys :req [:gym/goal :gym/run :gym/landed? :gym/outcome :gym/truths]
                             :opt [:gym/landing :gym/ms :gym/reason :gym/commit :gym/result]))
+
+;; ---------------------------------------------------------------- the fleet
+(s/def :fleet/label string?)
+(s/def :fleet/workers (s/int-in 1 257))              ; a matrix holds at most 256 jobs
+(s/def :fleet/max-parallel (s/int-in 1 21))
+(s/def :fleet/max-worker-s pos-int?)
+(s/def :fleet/issue pos-int?)
+(s/def :fleet/salt string?)                         ; a repeated plan's run, so its sims sample fresh worlds
+(s/def :exp/name string?)
+(s/def :exp/kind #{:gym :sim})
+(s/def :exp/goal string?)
+(s/def :exp/set string?)
+(s/def :exp/runs pos-int?)
+(s/def :exp/bots pos-int?)
+(s/def :exp/est-s pos-int?)
+(s/def :arm/name string?)
+(s/def :arm/ref string?)
+(s/def :exp/arms (s/coll-of (s/keys :req [:arm/name] :opt [:arm/ref]) :kind vector? :min-count 1))
+(s/def :exp/property string?)
+(s/def :exp/shards pos-int?)
+(s/def :exp/worlds pos-int?)
+(s/def ::experiment
+  (s/and (s/keys :req [:exp/name :exp/kind :exp/est-s]
+                 :opt [:exp/goal :exp/set :exp/runs :exp/bots :exp/arms :exp/property :exp/shards :exp/worlds])
+         #(case (:exp/kind %)
+            :gym (and (:exp/goal %) (:exp/runs %))
+            :sim (and (:exp/property %) (:exp/shards %) (:exp/worlds %)))))
+(s/def :fleet/experiments (s/coll-of ::experiment :kind vector? :min-count 1))
+(s/def ::fleet-plan (s/keys :req [:fleet/label :fleet/workers :fleet/experiments]
+                            :opt [:fleet/max-parallel :fleet/max-worker-s :fleet/issue :fleet/salt]))

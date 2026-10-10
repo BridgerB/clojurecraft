@@ -32,3 +32,14 @@ jobs:
         run: clojure -M:test
       - name: Brain checker
         run: clojure -M:brain
+
+  workflows:
+    # A workflow GitHub cannot parse runs no jobs and says little; lint every one on push.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: actionlint
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -shellcheck= -color

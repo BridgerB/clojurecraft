@@ -15,6 +15,8 @@
 (def stuck-ticks 40)                  ; no progress for 2 s → detour
 (def detour-ticks 20)                 ; how long one detour lasts (1 s)
 (def max-detours 4)                   ; detours before a walk fails :stuck
+(def pickup-rise 2)                   ; a drop resting more than 2 blocks above the feet is above
+                                      ; the pickup box (1.8 tall, grown 0.5 up)
 (def settle-ms 500)                   ; let the server catch up before START
 (def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks
 (def finish-after (+ (* dig-ms 1.35) 200)) ; an early FINISH aborts the break; a late one is accepted
@@ -70,9 +72,17 @@
 
 ;; ---------------------------------------------------------------- walk
 
+(defn arrived?
+  "Is a walk over: the target within reach, and, for a log, the feet no more than pickup-rise
+   below it, so the drop comes to rest inside the pickup box rather than on a bank above it."
+  [world {:intent/keys [target for]} d]
+  (and (<= d reach)
+       (or (not= :log for)
+           (<= (- (second target) (long (Math/floor (second (:player/pos world))))) pickup-rise))))
+
 (defmethod run :walk
   [world {:intent/keys [target best-dist best-tick started detours detour-until detour-yaw]
-          :or {best-dist Double/MAX_VALUE detours 0}} {:event/keys [rand]}]
+          :or {best-dist Double/MAX_VALUE detours 0} :as i} {:event/keys [rand]}]
   (let [tick (:time/tick world)
         started (or started tick)
         best-tick (or best-tick tick)
@@ -84,7 +94,7 @@
         detouring? (and detour-until (< tick detour-until))
         world (intent world assoc :intent/started started :intent/best-dist best-dist :intent/best-tick best-tick)]
     (cond
-      (<= d reach)
+      (arrived? world i d)
       (-> world (assoc :player/controls {:control/look (physics/look-at (game/eye world) (physics/centre target))}) done)
 
       (or (> (- tick started) walk-timeout-ticks) (>= detours max-detours))

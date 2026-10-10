@@ -28,6 +28,13 @@
             (game/init fx/opts) evs)
     ((:close tap))))
 
+(deftest a-result-may-gain-attributes-never-lose-or-change-them
+  (let [r {:ok true :plan {:plan/status :done :plan/last {:intent/kind :dig}}}]
+    (is (record/accretes? r r))
+    (is (record/accretes? r (assoc-in r [:plan :plan/last :intent/trunk] [1 2 3])) "a new attribute is accretion")
+    (is (not (record/accretes? r (assoc-in r [:plan :plan/status] :failed))) "a changed value is not")
+    (is (not (record/accretes? r (update r :plan dissoc :plan/last))) "a lost attribute is not")))
+
 (deftest a-recording-replays-to-the-same-world
   (let [path (tmp "record-test")]
     (record! path events)

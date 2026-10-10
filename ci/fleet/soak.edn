@@ -1,0 +1,12 @@
+;; The soak: what the launcher runs when the queue is spent, each time with a fresh salt, so the
+;; sims sample new worlds every run. Sims are the bug finders (about 50 worlds a second on one
+;; runner, measured in smoke2); the gym walks landing set A once per goal to catch what only real
+;; terrain shows. No issue: the report lands in the run's summary, and failures are pulled with
+;; clojure -M:fleet pull --run <id>. Pushed (rather than launched) it runs unsalted.
+{:fleet/label "soak"
+ :fleet/workers 16
+ :fleet/experiments
+ [{:exp/name "forests" :exp/kind :sim :exp/property "forests" :exp/shards 14 :exp/worlds 4200000 :exp/est-s 6000}
+  {:exp/name "wood" :exp/kind :gym :exp/goal "wood" :exp/runs 20 :exp/bots 2 :exp/est-s 180}
+  {:exp/name "table" :exp/kind :gym :exp/goal "table" :exp/runs 20 :exp/bots 2 :exp/est-s 300}
+  {:exp/name "pickaxe" :exp/kind :gym :exp/goal "pickaxe" :exp/runs 20 :exp/bots 2 :exp/est-s 360}]}

@@ -9,6 +9,7 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.gym :as gym]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main :as main]
@@ -178,28 +179,41 @@
 
 (def tree-gen
   "One tree: a trunk of 3-6 logs of one species at a local (x, z) at least 3 blocks from the
-   spawn columns, with a leaf block on top; maybe on a one-block stone mound (the trunk's cell
-   and its four neighbours), maybe with low leaves one block above its base over every cell
-   within two steps of the trunk. A mound under a low canopy is the ledge a live run once
-   failed on: leaves over the step and over the ground beside it."
+   spawn columns, with a leaf block on top; maybe on a stone bank 1 or 2 high (the 3x3 square
+   around the trunk, so a 2-high bank holds the drop out of reach from every side), maybe with low leaves one block above its base over every cell
+   within two steps of the trunk, maybe (4 logs or more) with a branch: a log beside the trunk,
+   two below its top, with air under it. A bank under a low canopy is the ledge a live run once
+   failed on; a branch and a bank above the feet are what the fleet found at 21280,18720 (a 2-high
+   bank puts the drop at the top of the pickup box)."
   (gen/let [x (gen/choose 3 13) z (gen/choose 3 13) h (gen/choose 3 6) id (gen/elements log-species)
-            mound? gen/boolean canopy? gen/boolean]
-    {:x x :z z :h h :id id :mound? mound? :canopy? canopy?}))
+            mound (gen/elements [0 0 1 2]) canopy? gen/boolean
+            branch (gen/elements [nil [1 0] [-1 0] [0 1] [0 -1]])]
+    {:x x :z z :h h :id id :mound mound :canopy? canopy? :branch (when (>= h 4) branch)}))
 
 (def stone 1)
 
 (defn tree-blocks
   "{[lx y lz] id} for one tree."
-  [{:keys [x z h id mound? canopy?]}]
-  (let [base (if mound? 65 64)
-        around [[(inc x) z] [(dec x) z] [x (inc z)] [x (dec z)]]]
-    (merge (when mound? (into {} (for [[mx mz] (cons [x z] around) :when (and (<= 0 mx 15) (<= 0 mz 15))] [[mx 64 mz] stone])))
+  [{:keys [x z h id mound canopy? branch]}]
+  (let [base (+ 64 mound)
+        [bx bz] (when branch [(+ x (first branch)) (+ z (second branch))])]
+    (merge (into {} (for [mx (range (dec x) (+ x 2)) mz (range (dec z) (+ z 2)) :when (and (<= 0 mx 15) (<= 0 mz 15)) y (range 64 base)] [[mx y mz] stone]))
            (when canopy? (into {} (for [dx (range -2 3) dz (range -2 3)
                                         :let [cx (+ x dx) cz (+ z dz) d (+ (abs dx) (abs dz))]
                                         :when (and (<= 1 d 2) (<= 0 cx 15) (<= 0 cz 15))]
                                     [[cx (inc base) cz] leaf-id])))
            (into {} (for [y (range base (+ base h))] [[x y z] id]))
+           (when (and branch (<= 0 bx 15) (<= 0 bz 15)) {[bx (+ base h -2) bz] id})
            {[x (+ base h) z] leaf-id})))
+
+(defn apart?
+  "Do the trees' 3x3 squares keep at least one clear block between them? Overlapping trees would
+   merge (a bare trunk inside another's bank), and the property's oracle reads each tree alone."
+  [trees]
+  (every? (fn [[a b]] (>= (max (abs (- (:x a) (:x b))) (abs (- (:z a) (:z b)))) 4))
+          (for [[i a] (map-indexed vector trees) b (drop (inc i) trees)] [a b])))
+
+(def forest-gen "1-3 trees, apart." (gen/such-that apart? (gen/vector tree-gen 1 3) 100))
 
 (defn forest
   "{[lx y lz] id} for trees on the stone floor (y 64 up); a later tree's blocks win."
@@ -210,16 +224,27 @@
   ;; the bot against the model in 2,000 worlds test.check builds (docs/hickey.md: "thousands of
   ;; generated worlds in the time one real run takes"): 1-3 trees of mixed species and heights
   ;; anywhere in the column, on mounds or flat ground, under low leaves or open sky, from a
-  ;; varied spawn. In every one it ends holding a log, without the sim ever seeing something a
-  ;; real server would punish. FOREST_TRIALS=n overrides the count.
+  ;; varied spawn. Where any tree stands on a bank it can climb (0 or 1 high) it ends holding a
+  ;; log; where every tree stands on a 2-high bank (the drop rests on the bank, beyond a pickup
+  ;; from the ground; digging a step into the bank is not yet a thing it can do) it gives the
+  ;; trees up (two tries a trunk) and waits or fails :no-log rather than looping. Either way the
+  ;; sim never sees something a real server would punish, within the gym's own time for the goal. FOREST_TRIALS=n overrides the count, FOREST_SEED=s fixes the seed
+  ;; (a fleet shard's), FOREST_OUT=f writes the verdict as EDN.
   (let [r (tc/quick-check
            (or (some-> (System/getenv "FOREST_TRIALS") Long/parseLong) 2000)
-           (prop/for-all [trees (gen/vector tree-gen 1 3) sx (gen/choose 0 1) sz (gen/choose 0 1)]
+           (prop/for-all [trees forest-gen sx (gen/choose 0 1) sz (gen/choose 0 1)]
                          (let [sim0 (sim/init {:column (world/column-bytes (forest trees)) :spawn [(+ sx 0.5) 64.0 (+ sz 0.5)]})
                                [w sim] (sim/run step (game/init fx/opts) sim0 #(or (plan/done? %) (plan/failed? %))
-                                                90000 {:event/kind :go :go/goals [:wood]})]
-                           (and (plan/done? w) (= 1 (inventory/logs-held w)) (empty? (:sim/violations sim))))))]
-    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests])))))
+                                                (:gym/timeout-ms (gym/gym "wood")) {:event/kind :go :go/goals [:wood]})]
+                           (and (if (some #(<= (:mound %) 1) trees)
+                                  (and (plan/done? w) (= 1 (inventory/logs-held w)))
+                                  (and (not (plan/done? w)) (= :no-log (or (:plan/reason w) (:plan/waiting w))) (zero? (inventory/logs-held w))))
+                                (empty? (:sim/violations sim)))))
+           :seed (or (some-> (System/getenv "FOREST_SEED") Long/parseLong) (System/currentTimeMillis)))]
+    (when-let [out (System/getenv "FOREST_OUT")]               ; a fleet shard reads its verdict as data
+      (spit out (pr-str {:pass? (boolean (:pass? r)) :num-tests (:num-tests r) :seed (:seed r)
+                         :smallest (get-in r [:shrunk :smallest])})))
+    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed])))))
 
 ;; ---------------------------------------------------------------- intentions as facts
 
@@ -276,6 +301,34 @@
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (inventory/logs-held w)))
     (is (some (:sim/broken sim) (keys ceiling)) "it broke a leaf over the ledge")))
+
+(def bank
+  "A trunk on a stone bank four blocks high (x 2), the pit beside it walled in (z 2; the chunk's
+   unloaded neighbours wall x -1 and z -1)."
+  (merge (into {} (for [y (range 64 68) z [0 1 2]] [[2 y z] 1]))
+         (into {} (for [y (range 64 68) x [0 1]] [[x y 2] 1]))
+         {[2 68 0] 136 [2 69 0] 136 [2 70 0] 136 [2 71 0] 136 [2 72 0] 252}))
+
+(deftest a-drop-out-of-reach-is-never-dug-for
+  ;; recorded by the gym and the fleet at landing 21280,18720 (wood-a2 run 5, smoke2 run 5): the
+  ;; bot stood in a pit, dug the base of a trunk on the bank four blocks above its feet, and the
+  ;; drop came to rest on the bank, above a 1.8-tall player's pickup box. Reach is not enough: a
+  ;; log walk arrives only where the drop will land within pickup height; a trunk it cannot
+  ;; reach is given up whole.
+  (let [[w sim] (sim/run step (game/init fx/opts) (sim/init {:column (world/column-bytes bank) :spawn [1.5 64.0 0.5]})
+                         #(or (plan/done? %) (plan/failed? %) (= :no-log (:plan/waiting %))) 60000
+                         {:event/kind :go :go/goals [:wood]})]
+    (is (not-any? (:sim/broken sim) [[2 68 0] [2 69 0]]) "no log dug whose drop it could not take")
+    (is (pos? (get-in w [:plan/trunk-failures [2 0]] 0)) "the failure is counted against the trunk")
+    (is (= :no-log (:plan/waiting w)) (pr-str (plan/summary w)))))
+
+(deftest a-trunk-on-a-bank-is-taken-from-the-bank
+  (let [platform (into {} (for [y (range 64 68) x [0 1] z [0 1]] [[x y z] 1]))
+        [w _] (sim/run step (game/init fx/opts)
+                       (sim/init {:column (world/column-bytes (merge bank platform)) :spawn [0.5 68.0 0.5]})
+                       #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (inventory/logs-held w)))))
 
 ;; ---------------------------------------------------------------- through a channel pair
 

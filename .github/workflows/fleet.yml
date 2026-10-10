@@ -1,0 +1,183 @@
+name: fleet
+run-name: "fleet ${{ inputs.plan || 'push' }}${{ inputs.salt && format(' salt {0}', inputs.salt) || '' }}"
+
+# Many runners kept busy from one plan file (ci/fleet/<label>.edn). The plan job reads the plan,
+# counts the jobs already running and emits only worker numbers; each worker recomputes its own
+# share from the plan (clojure -M:fleet work). The aggregate folds every result into one report.
+# A plan runs when it is pushed (a new or changed file under ci/fleet/) or dispatched by path.
+
+on:
+  push:
+    paths: ['ci/fleet/*.edn']
+  workflow_dispatch:
+    inputs:
+      plan:
+        description: the plan file, e.g. ci/fleet/smoke1.edn
+        required: true
+      salt:
+        description: makes a repeated plan (the soak) sample fresh sim worlds
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      plan: ${{ steps.pick.outputs.plan }}
+      matrix: ${{ steps.plan.outputs.matrix }}
+      width: ${{ steps.plan.outputs.width }}
+      label: ${{ steps.plan.outputs.label }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: pick
+        name: The plan
+        env:
+          INPUT: ${{ inputs.plan }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [ -n "$INPUT" ]; then plan=$INPUT
+          elif git cat-file -e "$BEFORE" 2>/dev/null; then plan=$(git diff --name-only --diff-filter=AMR "$BEFORE" HEAD -- 'ci/fleet/*.edn' | tail -n 1)
+          else plan=$(git diff --name-only --diff-filter=AMR HEAD~1 HEAD -- 'ci/fleet/*.edn' | tail -n 1)
+          fi
+          [ -f "$plan" ] || { echo "::error::no plan file ($plan)"; exit 1; }
+          echo "plan: $plan"
+          echo "plan=$plan" >> "$GITHUB_OUTPUT"
+      - name: Jobs already running
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          busy=0
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=in_progress&per_page=100" --jq '.workflow_runs[].id'); do
+            n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100" --jq '[.jobs[] | select(.status == "in_progress")] | length')
+            busy=$((busy + n))
+          done
+          echo "jobs in progress across this repository (this one included): $busy"
+          echo "BUSY=$busy" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clj-${{ hashFiles('deps.edn') }}
+      - id: plan
+        name: The worker matrix
+        env:
+          SALT: ${{ inputs.salt }}
+        run: |
+          clojure -M:fleet plan --plan "${{ steps.pick.outputs.plan }}" --busy "$BUSY" ${SALT:+--salt "$SALT"} | tee plan.out
+          cat plan.out >> "$GITHUB_OUTPUT"
+
+  world:
+    uses: ./.github/workflows/gym-world.yml
+    with:
+      set: A
+
+  worker:
+    needs: [plan, world]
+    name: w${{ matrix.worker }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(needs.plan.outputs.width) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: The pregenerated world (never built here)
+        uses: actions/cache/restore@v4
+        with:
+          path: cache/worlds/A
+          key: ${{ needs.world.outputs.key }}
+          fail-on-cache-miss: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clj-${{ hashFiles('deps.edn') }}
+      - uses: actions/cache@v4
+        with:
+          path: data/local-server/server-26.1.2.jar
+          key: server-jar-97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51
+      - name: Work
+        env:
+          SALT: ${{ inputs.salt }}
+        run: clojure -M:fleet work --plan "${{ needs.plan.outputs.plan }}" --worker "${{ matrix.worker }}" --out out --worlds cache/worlds ${SALT:+--salt "$SALT"}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fleet-${{ needs.plan.outputs.label }}-w${{ matrix.worker }}
+          retention-days: 3
+          path: out
+          if-no-files-found: ignore
+
+  aggregate:
+    needs: [plan, worker]
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fleet-${{ needs.plan.outputs.label }}-w*
+          path: artifacts
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clj-${{ hashFiles('deps.edn') }}
+      - name: Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLAN: ${{ needs.plan.outputs.plan }}
+          LABEL: ${{ needs.plan.outputs.label }}
+        run: |
+          {
+            echo "## fleet $LABEL ($PLAN) at ${GITHUB_SHA::7}, run $GITHUB_RUN_ID"
+            echo
+            clojure -M:fleet report --dir artifacts
+          } > summary.md
+          cat summary.md
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+          issue=$(clojure -M -e "(println (or (:fleet/issue (clojure.edn/read-string (slurp \"$PLAN\"))) \"\"))")
+          if [ -n "$issue" ]; then gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body-file summary.md; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fleet-${{ needs.plan.outputs.label }}-summary
+          path: |
+            summary.md
+            artifacts/**/result.edn
+            artifacts/**/sim.edn

@@ -86,7 +86,7 @@
   [world {:go/keys [goals at]} table]
   (-> world
       (cond-> (:plan/intent world) (memory/remember-intention (:plan/intent world) :abandoned))
-      (assoc :plan/status (if at :landing :active) :plan/since (:time/now world) :plan/blacklist #{} :plan/attempts 0)
+      (assoc :plan/status (if at :landing :active) :plan/since (:time/now world) :plan/blacklist #{} :plan/trunk-failures {} :plan/attempts 0)
       (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
       (dissoc :plan/intent :plan/last :plan/waiting-since)))
@@ -116,7 +116,8 @@
   (-> world (memory/remember-intention i :done) (assoc :plan/last i :plan/attempts 0) (dissoc :plan/intent)))
 
 (defn fail-intent
-  "An intent failed: stop moving, blacklist its target, count the attempt; max-attempts
+  "An intent failed: stop moving, blacklist its target (and count a failure against its trunk's
+   column, for a log: digging the base moves the bottom up, the column stays), count the attempt; max-attempts
    failures in a row fail the plan with the intent's reason."
   [world i]
   (let [attempts (inc (:plan/attempts world 0))]
@@ -124,6 +125,7 @@
         (memory/remember-intention i :failed)
         (assoc :player/controls {})
         (cond-> (:intent/target i) (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
+        (cond-> (:intent/trunk i) (update-in [:plan/trunk-failures (let [[x _ z] (:intent/trunk i)] [x z])] (fnil inc 0)))
         (assoc :plan/attempts attempts)
         (dissoc :plan/intent :plan/last)
         (game/say (str "intent " (:intent/kind i) " failed: " (:intent/reason i) " (attempt " attempts ")"))
