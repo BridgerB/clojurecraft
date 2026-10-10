@@ -1,57 +1,66 @@
 ---
 title: Harness landing
-description: The RCON landing the harness runs before :go (survival, clear, locate forest, then teleport onto the surface and re-try nearby spots until the landing is dry), and how it observes the atom without touching the reducer.
+description: The fixture as its own process - it waits for the bot over RCON, lands it in a forest, judges the landing by asking the server, and speaks to the bot only through one EDN :go event on a pipe; the planner then waits in :landing until the bot is there.
 type: reference
 tags: [bot, tooling, harness, rcon]
-aliases: [land-and-go!, locate-forest, teleport!, wet?, perched?, buried?, bad-landing, landing-offsets, locate biome forest, forceload, wait-for, forest landing, landed in water]
+aliases: [clojure -M:harness, --events stdin, go/at, plan/go-at, :landing, landed?, land!, locate-forest, teleport!, checks, bad-landing, parse-pos, go-event, landing-offsets, wait-online, read-events!, locate biome forest, forceload, forest landing, landed in water, fixture process]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 2d7f669
+lastUpdated: 2026-10-10
+verifiedAgainst: 96ac5ed
 sourceRefs:
+  - src/clojurecraft/harness.clj#defn -main
+  - src/clojurecraft/harness.clj#defn wait-online
   - src/clojurecraft/harness.clj#defn locate-forest
   - src/clojurecraft/harness.clj#defn teleport!
-  - src/clojurecraft/harness.clj#defn wet?
-  - src/clojurecraft/harness.clj#defn perched?
-  - src/clojurecraft/harness.clj#defn buried?
+  - src/clojurecraft/harness.clj#def checks
   - src/clojurecraft/harness.clj#defn bad-landing
   - src/clojurecraft/harness.clj#def landing-offsets
-  - src/clojurecraft/harness.clj#defn land-and-go!
-  - src/clojurecraft/harness.clj#defn wait-for
-  - src/clojurecraft/main.clj#harness failed:
+  - src/clojurecraft/harness.clj#defn land!
+  - src/clojurecraft/harness.clj#defn go-event
+  - src/clojurecraft/main.clj#defn read-events!
+  - src/clojurecraft/plan.clj#defn landed?
+  - src/clojurecraft/plan.clj#defn landing-tick
+  - test/clojurecraft/plan_test.clj#a-go-with-a-landing-waits-until-the-bot-is-there
+  - docs/hickey.md#He would make the fixture its own process that speaks to the bot through a queue
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[natural-tree-not-fixture]]"
   - "[[rcon-client]]"
+  - "[[main-loop]]"
 ---
 
 # Harness landing
 
-The harness is a test fixture that lands the bot in a forest and then sends `:go`. It runs on its own `a/thread`, started by `main` only when `--until` names planned goals. It watches the world atom with `add-watch` (perception without coordination) and reaches the loop only through the events channel.
+The harness is the test fixture, and it is its own process (`clojure -M:harness`). It shares nothing with the bot but data: it reaches the server only over RCON and reaches the bot only through a queue, one EDN line on its stdout piped into the bot's stdin (`--events stdin`). This is what `docs/hickey.md` asks for; the earlier harness was a thread inside the bot that watched the world atom.
+
+```bash
+clojure -M:harness --rcon-port 25581 --rcon-pass "$P" --name Clj_wood --until wood 2> harness.log \
+  | clojure -M:run --port 25571 --name Clj_wood --until wood --events stdin
+```
 
 ## Key files
-- `harness.clj`, `wait-for` - blocks until a predicate over the atom is truthy or a timeout passes, via a watch and a promise.
-- `harness.clj`, `locate-forest` - survival, clear, `locate biome minecraft:forest` from the bot.
-- `harness.clj`, `teleport!` - forceload, wait until loaded, teleport onto the surface, unforceload.
-- `harness.clj`, `bad-landing` - why a landing will not do: `:water` (`wet?`), `:tree` (`perched?`: log or leaves underfoot, or leaves at the feet), `:buried` (`buried?`: solid at the feet or head); nil when the landing is good.
-- `harness.clj`, `landing-offsets` - 17 points tried in turn: the located point, then rings of eight at 24 and 48 blocks.
-- `harness.clj`, `land-and-go!` - the sequence and the `:go`.
-- `main.clj`, `-main` - on any harness exception it logs "harness failed:" and sends `:go` anyway.
+- `harness.clj`, `-main` - the sequence below; logs go to stderr because stdout is the queue.
+- `harness.clj`, `checks` - the landing tests as data: `[reason "if|unless block ..."]`, each run as `execute at <bot> <test>`; `bad-landing` names the first that passed.
+- `harness.clj`, `landing-offsets` - 17 points: the located point, then rings of eight at 24 and 48 blocks.
+- `harness.clj`, `go-event` - `{:event/kind :go :go/goals (plan/goals-for until) :go/at [x y z]}`.
+- `main.clj`, `read-events!` - reads EDN lines from stdin onto the events channel until end of input.
+- `plan.clj`, `landed?` and `landing-tick` - the bot side of the wait.
 
 ## Sequence
-1. Wait (60 s) for `:player/loaded?`.
-2. If an RCON password was given, over one RCON connection: `gamemode survival <name>`, `clear <name>` (an empty inventory every run), `execute at <name> run locate biome minecraft:forest`, parse `[x, ~, z]` from the reply.
-3. For each offset in `landing-offsets`: `forceload add x z`, then poll `execute if loaded x 0 z` every 200 ms (up to 150 times) until it reports passed.
-4. `execute positioned x 0 z positioned over motion_blocking_no_leaves run tp <name> ~0.5 ~ ~0.5` - the highest motion-blocking block that is not leaves, so the bot lands on the ground under the canopy, centred in the block.
-5. `forceload remove x z`.
-6. Back on the bot side: wait (20 s) for `:stats/teleports` to increase, then (20 s) for the chunk at the new position to load, then sleep 1 s. If `bad-landing` names a reason and offsets remain, log "bad landing <reason> - trying another spot" and go to the next offset.
-7. Log what the bot stands on and put the `:go` event on the channel.
+1. `wait-online`: poll `data get entity <name> Pos` every 250 ms (up to 120 s) until the server knows the player.
+2. `locate-forest`: `gamemode survival`, `clear` (an empty inventory every run), `execute at <name> run locate biome minecraft:forest`, parse `[x, y, z]`.
+3. For each offset: `teleport!` forceloads the column, polls `execute if loaded x 0 z`, runs `execute positioned x 0 z positioned over motion_blocking_no_leaves run tp <name> ~0.5 ~ ~0.5` (the highest non-leaf motion-blocking block), and unforceloads. After 1 s it runs every check; a passing one logs "bad landing <reason> - trying another spot" and moves on. The last offset is used whatever it says.
+4. Read the final position from `data get entity <name> Pos` and print the `:go` event. On any failure it logs "harness failed:" and still prints `:go` without `:go/at`, so the bot plans where it stands.
+5. In the bot, `plan/begin` with `:go/at` sets `:plan/status :landing` and `:plan/go-at`. Each tick `landing-tick` turns it `:active` (logging "landed") once the bot is within 2 blocks horizontally of `:go/at`, loaded, in a loaded chunk; after 30 s it fails with `:no-landing`.
 
 ## Gotchas
-- Three bad landings were each seen in CI and each made a run fail before the check existed: on a pond (sank to y=50), on a log inside an oak canopy at y=91 (the heightmap skips leaves but not a trunk top), and inside stone at y=58 (the forest point's heightmap was not ready). All three recurred and recovered in the nine CI jobs that closed issue #7; one run needed seven tries around a pond.
-- The `motion_blocking_no_leaves` heightmap counts water as a surface, so a forest point can land the bot on a pond. A CI `wood` run did exactly that: every walk stuck and the bot sank to y=50. Water physics is issue #5; until then the fixture avoids water.
-- Without `--rcon-pass` there is no landing: the bot gets `:go` where it spawned.
-- The `:go` event is recorded like any other, so a replay never needs RCON ([[record-replay]]).
+- The checks replace bot-side predicates over the bot's own chunks. The fixture now asks the server, which is the authority on what is at the bot's feet, and needs no access to the bot at all.
+- Three bad landings were each seen in CI before the checks existed: a pond (the heightmap counts water as a surface), a log inside an oak canopy (the heightmap skips leaves but not a trunk top), and inside stone (the heightmap was not ready). The first live run of this process tried water, then buried, then landed.
+- That run read y 57 one second after a teleport to y 63; the bot still walked to and dug a log at y 64. The checks only look at the feet and the block under them.
+- Without `--events stdin` and with a planned `--until`, `main` sends `:go` itself once the player is loaded (`go-when-loaded!`): no fixture, no landing.
+- The `:go` event, `:go/at` included, is recorded like any other, so a replay needs neither RCON nor the harness ([[record-replay]]).
 - `clear` means a `--until table` run always starts from nothing; prerequisites over RCON are issue #3.
 
 ## See also
 - [[natural-tree-not-fixture]] - why a real forest.
+- [[goals-in-play-from-go]] - what `:go/goals` selects.

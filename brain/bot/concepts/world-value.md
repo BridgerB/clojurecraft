@@ -6,7 +6,7 @@ tags: [bot, concepts, state]
 aliases: [world map, the atom, game state, flat namespaced world]
 status: verified
 lastUpdated: 2026-10-10
-verifiedAgainst: 095578b
+verifiedAgainst: 9c46e4b
 sourceRefs:
   - src/clojurecraft/game.clj#defn init
   - src/clojurecraft/spec.clj#(s/def ::world

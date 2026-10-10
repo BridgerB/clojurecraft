@@ -2,13 +2,13 @@
 ;; a function; executing is open). A row says what it needs, what it provides, which registered
 ;; predicate decides it is done, and which registered act satisfies it once its needs are met.
 ;; Need and provide keys: :item/<name> n, :tag/<item-tag> n, :block/<name> :near.
-;; Targets (:goal/target? true) are what a run is for; --until puts one in play. Producers are
+;; Targets (:goal/target? true) are what a run is for; --until <:goal/until> puts one in play. Producers are
 ;; how a need is met; recipes add one generated producer row each (clojurecraft.make/craft-rows).
-[{:goal/id :wood :goal/priority 1 :goal/target? true :goal/doc "hold one log"
+[{:goal/id :wood :goal/priority 1 :goal/target? true :goal/until "wood" :goal/doc "hold one log"
   :goal/provides {:tag/logs 1} :goal/done? :provided?}
- {:goal/id :kit :goal/priority 2 :goal/target? true :goal/doc "a crafting table and four sticks, from logs"
+ {:goal/id :kit :goal/priority 2 :goal/target? true :goal/until "table" :goal/doc "a crafting table and four sticks, from logs"
   :goal/provides {:item/crafting_table 1 :item/stick 4} :goal/done? :provided?}
- {:goal/id :pickaxe :goal/priority 3 :goal/target? true :goal/doc "a wooden pickaxe, placing a crafting table to make it"
+ {:goal/id :pickaxe :goal/priority 3 :goal/target? true :goal/until "pickaxe" :goal/doc "a wooden pickaxe, placing a crafting table to make it"
   :goal/provides {:item/wooden_pickaxe 1} :goal/done? :provided?}
 
  {:goal/id :gather-log :goal/priority 10 :goal/doc "chop the nearest remembered trunk and pick the log up"

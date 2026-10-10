@@ -6,7 +6,7 @@ tags: [bot, decision, memory]
 aliases: [why DataScript, Datalog memory, map-memory-not-datalog, facts with time, sightings store]
 status: verified
 lastUpdated: 2026-10-10
-verifiedAgainst: 095578b
+verifiedAgainst: 9c46e4b
 sourceRefs:
   - src/clojurecraft/memory.clj#(def schema
   - src/clojurecraft/memory.clj#defn- observation

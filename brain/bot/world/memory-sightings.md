@@ -6,7 +6,7 @@ tags: [bot, world, memory]
 aliases: [sightings, block memory, remembered logs, nearest-log]
 status: verified
 lastUpdated: 2026-10-10
-verifiedAgainst: 095578b
+verifiedAgainst: 9c46e4b
 sourceRefs:
   - src/clojurecraft/memory.clj#defn remember-column
   - src/clojurecraft/memory.clj#defn observe

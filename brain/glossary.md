@@ -32,5 +32,6 @@ lastUpdated: 2026-10-10
 - **Stale window**: `:stale-window`, the craft failure when a click goes unanswered for 3 s.
 - **Gather chain**: walk then dig then collect toward a log (`wood/gather-next`), reused by any goal that needs logs.
 - **Violation**: an entry in `:sim/violations`, something a real server would punish or a careful client never does; see [[sim-faults]].
-- **Planned**: `main/planned`, the `--until` values that put goals in play through `:go/goals`; see [[goals-in-play-from-go]].
+- **Until**: `--until <name>`, matched against the target rows' `:goal/until` by `plan/goals-for`; the ids go on `:go/goals`; see [[goals-in-play-from-go]].
+- **Landing**: `:plan/status :landing`, the wait between a fixture's `:go` with `:go/at` and the bot standing there; see [[harness-landing]].
 - **775**: the protocol number of Minecraft 26.1.x; **26.1.2** is the server version every pin in the `game` pillar refers to.

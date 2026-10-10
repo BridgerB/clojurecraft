@@ -18,5 +18,5 @@ The process around the reducers: the loop, the clock, effects, and what a run pr
 
 ## See also
 - [[reducer-and-effects]] - what the loop feeds.
-- [[harness-landing]] - the other thread that sends events.
+- [[harness-landing]] - the fixture process whose :go arrives on stdin.
 - [[conn-framing]] - the socket threads.

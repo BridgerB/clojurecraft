@@ -4,7 +4,7 @@ type: moc
 tags: [bot, decisions]
 status: verified
 lastUpdated: 2026-10-10
-verifiedAgainst: 095578b
+verifiedAgainst: 9c46e4b
 related:
   - "[[bot/_moc|Bot pillar]]"
 ---

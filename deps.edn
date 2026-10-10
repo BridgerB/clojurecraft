@@ -5,6 +5,7 @@
  :aliases
  {:run {:main-opts ["-m" "clojurecraft.main"]}
   :rcon {:main-opts ["-m" "clojurecraft.rcon"]}
+  :harness {:main-opts ["-m" "clojurecraft.harness"]}
   :datagen {:extra-paths ["dev"]
             :extra-deps {org.clojure/data.json {:mvn/version "2.5.1"}}
             :main-opts ["-m" "clojurecraft.datagen"]}

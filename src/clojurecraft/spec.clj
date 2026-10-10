@@ -78,7 +78,7 @@
 (s/def :start/host string?)
 (s/def :start/port int?)
 (s/def :start/name string?)
-(s/def ::event (s/keys :req [:event/kind] :opt [:event/now :event/rand :event/packet :event/reason :go/goals
+(s/def ::event (s/keys :req [:event/kind] :opt [:event/now :event/rand :event/packet :event/reason :go/goals :go/at
                                                 :start/host :start/port :start/name]))
 
 ;; plan and intents
@@ -87,7 +87,9 @@
 (s/def :intent/target ::block-pos)
 (s/def ::intent (s/keys :req [:intent/kind] :opt [:intent/status :intent/target :intent/recipe]))
 (s/def :plan/intent ::intent)
-(s/def :plan/status #{:active :done :failed})
+(s/def :plan/status #{:landing :active :done :failed})
+(s/def :plan/go-at ::vec3)
+(s/def :go/at ::vec3)
 (s/def :plan/blacklist (s/coll-of ::block-pos :kind set?))
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :intent/recipe keyword?)
@@ -100,10 +102,11 @@
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
 (s/def :goal/target? boolean?)
+(s/def :goal/until string?)                ; the --until name that selects a target row
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
 (s/def ::goal (s/keys :req [:goal/id :goal/priority :goal/provides :goal/done?]
-                      :opt [:goal/needs :goal/act :goal/target? :goal/doc]))
+                      :opt [:goal/needs :goal/act :goal/target? :goal/until :goal/doc]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]

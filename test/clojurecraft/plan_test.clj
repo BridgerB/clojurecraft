@@ -2,7 +2,6 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx :refer [fold packets sent packet ticks]]
             [clojurecraft.game :as game]
-            [clojurecraft.harness]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
@@ -105,24 +104,28 @@
     (is (= 0 (:plan/attempts w)) "the walk succeeded, so two earlier failures no longer count")
     (is (= :dig (get-in w [:plan/intent :intent/kind])))))
 
-(deftest the-harness-notices-a-landing-in-a-tree
-  (let [tree (world/column {[0 63 0] 136 [0 64 0] 252 [3 63 3] 1})
-        w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] tree}))]
-    (is (clojurecraft.harness/perched? (w [0.5 64.0 0.5])) "standing on a log, in leaves")
-    (is (clojurecraft.harness/perched? (w [0.5 65.0 0.5])) "standing on leaves")
-    (is (not (clojurecraft.harness/perched? (w [3.5 64.0 3.5]))) "on stone")))
+(deftest a-go-with-a-landing-waits-until-the-bot-is-there
+  (let [w (assoc (world-state [12.5 64.0 12.5]) :time/now 0)            ; same loaded chunk, 17 blocks away
+        go-at (assoc go :go/at [0.5 64.0 0.5])
+        [w _] (run w [go-at])]
+    (is (= :landing (:plan/status w)) "the fixture's :go names a landing")
+    (is (= [0.5 64.0 0.5] (:plan/go-at w)))
+    (let [[w' _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+      (is (= :landing (:plan/status w')) "in a loaded chunk but far from the landing: no planning yet")
+      (is (nil? (:plan/intent w'))))
+    (let [[w' _] (run (assoc w :player/pos [0.5 64.0 0.5]) [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+      (is (= :active (:plan/status w')) "at the landing with the chunk loaded: planning starts"))
+    (let [[w' _] (run (assoc w :player/pos [0.5 64.0 200.5]) [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+      (is (= :landing (:plan/status w')) "far away in an unloaded chunk: still waiting"))
+    (let [[w' _] (run w [{:event/kind :tick :event/now (+ 50 plan/landing-timeout) :event/rand 0.5}])]
+      (is (= [:failed :no-landing] [(:plan/status w') (:plan/reason w')]) "never arrived"))))
 
-(deftest the-harness-names-a-bad-landing
-  (let [col (world/column {[0 63 0] 86 [0 64 0] 86 [2 63 2] 136 [2 64 2] 252 [4 64 4] 1 [4 65 4] 1})
-        w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] col}))]
-    (is (= :water (clojurecraft.harness/bad-landing (w [0.5 64.0 0.5]))))
-    (is (= :tree (clojurecraft.harness/bad-landing (w [2.5 64.0 2.5]))))
-    (is (= :buried (clojurecraft.harness/bad-landing (w [4.5 64.0 4.5]))) "stone at the feet and head")
-    (is (nil? (clojurecraft.harness/bad-landing (w [8.5 64.0 8.5]))) "air on stone ground")))
+(deftest a-go-without-a-landing-starts-where-the-bot-stands
+  (let [[w _] (run (world-state [0.5 64.0 0.5]) [go])]
+    (is (= :active (:plan/status w)))))
 
-(deftest the-harness-notices-a-wet-landing
-  (let [pond (world/column {[0 63 0] 86 [0 64 0] 86})
-        w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] pond}))]
-    (is (clojurecraft.harness/wet? (w [0.5 64.0 0.5])) "in water")
-    (is (clojurecraft.harness/wet? (w [0.5 65.0 0.5])) "standing on the water surface")
-    (is (not (clojurecraft.harness/wet? (w [3.5 64.0 3.5]))) "dry ground")))
+(deftest until-names-come-from-the-goal-table
+  (is (= [:wood] (plan/goals-for "wood")))
+  (is (= [:kit] (plan/goals-for "table")))
+  (is (= [:pickaxe] (plan/goals-for "pickaxe")))
+  (is (nil? (plan/goals-for "play"))))

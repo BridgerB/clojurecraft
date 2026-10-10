@@ -12,13 +12,22 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojurecraft.game :as game]
-            [clojurecraft.intent :as intent]))
+            [clojurecraft.intent :as intent]
+            [clojurecraft.physics :as physics]))
 
 (def goals
   "The goal table, loaded from resources/clojurecraft/goals.edn."
   (edn/read-string (slurp (io/resource "clojurecraft/goals.edn"))))
 
 (def targets (filterv :goal/target? goals))
+
+(defn goals-for
+  "The goal ids a --until name puts in play (the target rows' :goal/until), or nil."
+  [until]
+  (some (fn [g] (when (= until (:goal/until g)) [(:goal/id g)])) targets))
+
+(def landing-timeout 30000)           ; a :go that names a landing waits this long for the bot to be there
+(def landing-reach 2.0)               ; horizontal distance from :go/at that counts as landed
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def wait-timeout 20000)              ; a goal that has nothing to do for this long has failed
@@ -51,11 +60,33 @@
          (remove #(done-by world %))
          first)))
 
-(defn- begin [world {:go/keys [goals]}]
+(defn- begin
+  "Start planning. A :go that names a landing (:go/at, from the fixture) first waits in
+   :landing until the bot is there with its chunk loaded; the wait is plan state, not a sleep."
+  [world {:go/keys [goals at]}]
   (-> world
-      (assoc :plan/status :active :plan/since (:time/now world) :plan/blacklist #{} :plan/attempts 0)
+      (assoc :plan/status (if at :landing :active) :plan/since (:time/now world) :plan/blacklist #{} :plan/attempts 0)
       (cond-> goals (assoc :plan/goals (set goals)))
+      (cond-> at (assoc :plan/go-at at))
       (dissoc :plan/intent :plan/last :plan/waiting-since)))
+
+(defn landed?
+  "Is the bot at the landing the fixture named, standing in a loaded chunk?"
+  [world at]
+  (let [pos (:player/pos world)]
+    (boolean (and pos (:player/loaded? world)
+                  (<= (physics/horizontal-distance pos at) landing-reach)
+                  (game/chunk-loaded? world pos)))))
+
+(defn landing-tick
+  "While :landing, wait for the bot to be at :plan/go-at; then plan, or fail after landing-timeout."
+  [world]
+  (cond
+    (landed? world (:plan/go-at world))
+    (-> world (assoc :plan/status :active :plan/since (:time/now world)) (game/say "landed"))
+    (> (- (:time/now world) (:plan/since world)) landing-timeout)
+    (assoc world :plan/status :failed :plan/reason :no-landing)
+    :else world))
 
 (defn- finish-intent
   "An intent that succeeds ends any failure streak: attempts count consecutive failures, so a
@@ -112,7 +143,10 @@
 (defn step [world {:event/keys [kind] :as event}]
   (case kind
     :go (-> world (begin event) (game/say "go"))
-    :tick (if (= :active (:plan/status world)) (plan-tick world event) world)
+    :tick (case (:plan/status world)
+            :active (plan-tick world event)
+            :landing (landing-tick world)
+            world)
     world))
 
 (defn done? [world] (= :done (:plan/status world)))

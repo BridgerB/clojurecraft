@@ -6,7 +6,7 @@ tags: [bot, world, memory, gotcha]
 aliases: [sightings edge cases, watched?, seen-at 0, forgotten logs, height window]
 status: verified
 lastUpdated: 2026-10-10
-verifiedAgainst: 095578b
+verifiedAgainst: 9c46e4b
 sourceRefs:
   - src/clojurecraft/memory.clj#defn watched?
   - src/clojurecraft/memory.clj#defn observe

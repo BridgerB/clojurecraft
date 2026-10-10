@@ -9,7 +9,7 @@ lastUpdated: 2026-10-10
 verifiedAgainst: 3452f18
 sourceRefs:
   - src/clojurecraft/plan.clj#def goals
-  - resources/clojurecraft/goals.edn#{:goal/id :wood :goal/priority 1 :goal/target? true :goal/doc "hold one log"
+  - resources/clojurecraft/goals.edn#{:goal/id :wood :goal/priority 1 :goal/target? true :goal/until "wood" :goal/doc "hold one log"
   - src/clojurecraft/plan.clj#defmulti done-by
   - src/clojurecraft/plan.clj#defmulti act
   - src/clojurecraft/plan.clj#defmulti next-intent
@@ -25,7 +25,7 @@ related:
 
 # Goals and intents
 
-The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id :goal/priority :goal/needs :goal/provides :goal/done? :goal/act}`. Keys of needs and provides are `:item/<name> n`, `:tag/<item-tag> n` and `:block/<name> :near`. Rows marked `:goal/target? true` are what a run is for (`:wood`, `:kit`, `:pickaxe`); the others are producers (gather a log, place a table). Recipes add one generated producer row each ([[make-goals]]).
+The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id :goal/priority :goal/needs :goal/provides :goal/done? :goal/act}`. Keys of needs and provides are `:item/<name> n`, `:tag/<item-tag> n` and `:block/<name> :near`. Rows marked `:goal/target? true` are what a run is for (`:wood`, `:kit`, `:pickaxe`), each naming the `--until` value that selects it (`:goal/until`); the others are producers (gather a log, place a table). Recipes add one generated producer row each ([[make-goals]]).
 
 ## Key files
 - `goals.edn` - the hand-written table; `plan.clj`, `goals` and `targets` load it.

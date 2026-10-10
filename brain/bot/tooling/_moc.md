@@ -19,7 +19,7 @@ related:
 - [[specs-and-instrumentation]] - what is specced, what is instrumented, what is not.
 - [[property-tests]] - what each generative property guarantees.
 - [[test-fixtures]] - fold, ticks, packet, and the chunk-column builder.
-- [[harness-landing]] - the RCON forest landing before :go, step by step.
+- [[harness-landing]] - the fixture process: RCON forest landing, then one :go on the bot's stdin.
 - [[rcon-client]] - the RCON wire format, auth, and the -M:rcon command.
 
 ## See also

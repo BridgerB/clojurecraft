@@ -18,7 +18,7 @@ Read `docs/hickey.md` first; it is the design brief. In short:
 - **Memory is facts with time** (`memory`): `:world/facts` is a DataScript value of observation facts `{:sight/pos :sight/state :sight/at}`, appended when what is seen changes, never retracted, queried with Datalog, kept after chunks unload.
 - **Every run is a file**: `--record run.edn` writes each event; `clojure -M:replay run.edn` folds the reducer over it with no server. Keep this true (no hidden inputs).
 - **Specs** live in `spec.clj` and are instrumented in tests; properties in `props_test.clj`; the whole bot runs against the pure server model in `sim.clj` (`sim_test.clj`) with no Java process.
-- I/O lives in exactly four namespaces: `conn` (socket), `rcon`, `harness` (RCON fixture, an observer of the atom), `main`. Everything else is values in, values out.
+- I/O lives in exactly four namespaces: `conn` (socket), `rcon`, `main`, and `harness`, the RCON fixture, which is its own process (`clojure -M:harness`) and reaches the bot only as EDN events on its stdin (`--events stdin`). Everything else is values in, values out.
 
 Prefer a new pure function over a flag; a map over a record; data over a protocol; a defmethod over an edit to a case. Never change the meaning of an attribute: add a new name beside it.
 
@@ -40,7 +40,7 @@ src/clojurecraft/wood.clj     the gather chain toward a log (walk → dig → co
 src/clojurecraft/spec.clj     specs for attributes, events, effects, intents; fdefs on the reducers
 src/clojurecraft/record.clj   event recorder and replay
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs
-src/clojurecraft/harness.clj  RCON forest landing; watches the atom, sends {:event/kind :go}
+src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin
 src/clojurecraft/rcon.clj     RCON client (fixtures, CI judge); `clojure -M:rcon`
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, replay
 dev/clojurecraft/datagen.clj  vanilla --reports → resources/clojurecraft/*.edn
@@ -52,7 +52,8 @@ dev/clojurecraft/datagen.clj  vanilla --reports → resources/clojurecraft/*.edn
 nix shell nixpkgs#jdk25 nixpkgs#clojure      # this Mac has neither on PATH
 clojure -M:test                               # unit tests, no server needed
 ./local-server.sh start|stop                  # vanilla 26.1.2 on game 25571 / RCON 25581
-clojure -M:run --port 25571 --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)"
+clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)" --name Clj_wood --until wood \
+  | clojure -M:run --port 25571 --name Clj_wood --until wood --events stdin   # land in a forest, then run
 clojure -M:run --port 25571 --until play --hold-ms 20000     # just connect and stay in-world
 clojure -M:run ... --record data/runs/x.edn                   # record every event
 clojure -M:replay data/runs/x.edn                             # replay it with no server
@@ -62,7 +63,7 @@ clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data ge
 scripts/datagen.sh                            # regenerate the EDN tables (needs the jar)
 ```
 
-The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI (`.github/workflows/wood.yml`) boots a vanilla server on one runner, runs the bot, and judges by that line plus an independent RCON inventory read.
+The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI (`.github/workflows/wood.yml`) boots a vanilla server on one runner, pipes the harness into the bot, and judges by that line plus an independent RCON inventory read.
 
 ## Server facts
 
