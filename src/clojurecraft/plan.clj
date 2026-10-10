@@ -152,6 +152,25 @@
         (dissoc :plan/waiting-since)
         (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i)))))))
 
+(defn abandon-intent
+  "Drop the running intent i before it ended, for reason (:goal-met, :preempted): remember it
+   as abandoned, stop moving, and close any open container so the server is not left with one.
+   Only called with an empty cursor (see can-abandon?), so closing never drops an item."
+  [world i reason]
+  (-> world
+      (memory/remember-intention (assoc i :intent/reason reason) :abandoned)
+      (assoc :player/controls {})
+      (cond-> (:window/open world)
+        (-> (game/emit {:packet/name :container-close :window-id (get-in world [:window/open :window/id])})
+            (dissoc :window/open)))
+      (dissoc :plan/intent)))
+
+(defn can-abandon?
+  "May the planner drop the running work now? Not while the cursor holds an item: the intent
+   puts it down first, and the planner looks again next tick."
+  [world]
+  (nil? (:window/cursor world)))
+
 (defn wait
   "Nothing to do yet for reason; waiting longer than wait-timeout fails the plan with it."
   [world reason]
@@ -161,20 +180,30 @@
       (assoc world :plan/waiting-since since :plan/waiting reason))))
 
 (defn plan-tick
-  "One planning tick while :active: run the intent, or choose a target and start its next
-   intent, or mark the plan :done when no target in play is left."
+  "One planning tick while :active. The goals are re-derived from the world every tick, even
+   while an intent runs (docs/hickey.md: \"the planner runs every tick against the current
+   value, so done is re-derived, regressions re-plan automatically\"): no target left means
+   :done, whatever is running; a running intent that serves another target than the one chosen
+   now is preempted; either waits while the cursor holds an item. Otherwise the intent runs, or
+   the chosen target's next intent starts."
   [world event]
   (let [i (:plan/intent world)
         active? (= :active (:plan/status world))
-        goal (when (and (nil? i) active?) (choose world))
-        next (when goal (next-intent world goal))]
+        goal (when active? (choose world))
+        preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)))
+        next (when (and goal (nil? i)) (next-intent world goal))]
     (cond
-      i (run-intent world i event)
       (not active?) world
-      (nil? goal) (-> world (assoc :plan/status :done :player/controls {}) (dissoc :plan/intent))
+      (and i (or (nil? goal) preempt?) (not (can-abandon? world))) (run-intent world i event)
+      (nil? goal) (-> world
+                      (cond-> i (abandon-intent i :goal-met))
+                      (assoc :plan/status :done :player/controls {})
+                      (dissoc :plan/intent))
+      preempt? (plan-tick (abandon-intent world i :preempted) event)
+      i (run-intent world i event)
       (nil? next) (wait world :nothing-to-do)
       (:plan/wait next) (wait world (:plan/wait next))
-      :else (start-intent world next))))
+      :else (start-intent world (assoc next :intent/goal (:goal/id goal))))))
 
 (defn step
   "The planner reducer, composed after game/step: :go begins a plan, :tick advances it."

@@ -29,7 +29,7 @@ The essay's information model includes "facts about its own intentions (planned,
 
 ## How it works
 1. `plan/start-intent` numbers the intent from `:plan/intents` (`:intent/id`) and appends `{:intention/id :intention/event :started :intention/kind :intention/at}` plus the target or recipe.
-2. `finish-intent` appends `:done`; `fail-intent` appends `:failed` with `:intention/reason`; a new `:go` that replaces a running intent appends `:abandoned` (`plan/begin`).
+2. `finish-intent` appends `:done`; `fail-intent` appends `:failed` with `:intention/reason`; `:abandoned` is appended when a new `:go` replaces a running intent (`plan/begin`), when the plan sees its goals met mid-intent (reason `:goal-met`), or when a regressed higher-priority target preempts it (reason `:preempted`).
 3. `memory/intentions` is the whole story, oldest first. `memory/intention-as-of world t` is a Datalog query: for each intention, its latest fact at or before t; the newest one still `:started` is what the bot was doing at t, nil when nothing was.
 
 ## The server's answers

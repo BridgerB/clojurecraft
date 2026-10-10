@@ -209,10 +209,10 @@
         story (memory/intentions w)
         started (filter #(= :started (:intention/event %)) story)]
     (is (plan/done? w))
-    (testing "every intent that started has a fact for how it ended, in order"
+    (testing "every intent that started has a fact for how it ended (done, or abandoned once the goal was met), in order"
       (is (= [:walk :dig :collect] (mapv :intention/kind started)))
       (is (= (mapv :intention/id started) (distinct (map :intention/id story))))
-      (is (every? (fn [{:intention/keys [id]}] (some #(and (= id (:intention/id %)) (= :done (:intention/event %))) story))
+      (is (every? (fn [{:intention/keys [id]}] (some #(and (= id (:intention/id %)) (#{:done :abandoned} (:intention/event %))) story))
                   started)))
     (testing "as of each start, that intent is what the bot was doing; after the last end, nothing"
       (doseq [s started]

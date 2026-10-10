@@ -293,3 +293,4 @@
 (s/def ::problem (s/keys :req [:problem/stage :problem/statement :problem/needs :problem/risks :problem/done
                                :problem/last-failure :problem/sources]
                          :opt [:problem/issue :problem/goals]))
+(s/def :intent/goal keyword?)

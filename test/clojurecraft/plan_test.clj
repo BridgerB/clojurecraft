@@ -85,7 +85,7 @@
                  :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/status :active
                                :intent/started 0 :intent/best-tick 0 :intent/detours 4})
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
-    (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/status :active :intent/id 1} (:plan/intent w))
+    (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/status :active :intent/id 1 :intent/goal :wood} (:plan/intent w))
         "re-planned in the same tick toward the next log")
     (is (= #{[13 64 0]} (:plan/blacklist w)))
     (is (= 1 (:plan/attempts w)))))
@@ -172,3 +172,32 @@
   (let [col (world/column {[0 64 1] 1 [0 66 0] 252})
         w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
     (is (= [0 66 0] (clojurecraft.intent/blocker w [0.5 65.0 3.5])) "the leaf over the bot caps the jump")))
+
+(defn walking
+  "Active plan over goals, mid-walk toward a point out of reach, the walk serving goal."
+  [goals goal]
+  (assoc (world-state [0.5 64.0 0.5]) :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0
+         :plan/goals goals :plan/intents 1
+         :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/for :log :intent/status :active
+                       :intent/id 1 :intent/goal goal :intent/started 0 :intent/best-tick 0}))
+
+(deftest done-is-re-derived-every-tick-even-mid-intent
+  (let [w (assoc (walking #{:wood} :wood) :player/inventory {0 {:item 134 :count 1}})   ; a log arrived
+        [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (plan/done? w) "the world says the goal is met, so the plan is done this tick")
+    (is (nil? (:plan/intent w)) "the walk is dropped")
+    (is (= [:abandoned :goal-met] ((juxt :intention/event :intention/reason) (last (memory/intentions w)))))))
+
+(deftest a-regressed-target-preempts-the-running-intent
+  ;; the walk serves :kit, but :wood (priority 1) is in play and no log is held: :wood comes first
+  (let [[w _] (run (walking #{:wood :kit} :kit) [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (= [:abandoned :preempted] ((juxt :intention/event :intention/reason)
+                                    (first (filter #(= 1 (:intention/id %)) (reverse (memory/intentions w)))))))
+    (is (= :wood (get-in w [:plan/intent :intent/goal])) "the next intent serves the regressed target")))
+
+(deftest nothing-is-dropped-with-an-item-on-the-cursor
+  (let [w (-> (walking #{:wood} :wood)
+              (assoc :player/inventory {0 {:item 134 :count 1}} :window/cursor {:item 36 :count 1}))
+        [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (not (plan/done? w)) "the plan waits until the hand is empty")
+    (is (= 1 (get-in w [:plan/intent :intent/id])))))
