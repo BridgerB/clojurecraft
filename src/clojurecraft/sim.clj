@@ -183,25 +183,36 @@
   [view layout]
   (reduce (fn [view s] (if (get view s) (take-one view s) view)) view (grid-slots layout)))
 
+(defn craft-all
+  "Shift-click on the result: craft and move results into the store until the grid matches
+   nothing or the store is full."
+  [view layout]
+  (loop [view view]
+    (let [out (result-of view layout)
+          [view' left] (when out (insert view (:store layout) out))]
+      (cond (nil? out) view
+            left view
+            :else (recur (craft-once view' layout))))))
+
+(defn click-result
+  "A click on the result slot (0): vanilla crafts onto the cursor, or with a shift-click into the
+   store; a click when the grid matches nothing is recorded as a violation."
+  [layout view cursor mode]
+  (let [out (result-of view layout)]
+    (cond
+      (nil? out) {:view view :cursor cursor :violation [:click-on-empty-result mode]}
+      (= mode 1) {:view (craft-all view layout) :cursor cursor}
+      (or (nil? cursor) (and (= (:item cursor) (:item out)) (<= (+ (:count cursor) (:count out)) max-stack)))
+      {:view (craft-once view layout) :cursor (update out :count + (:count cursor 0))}
+      :else {:view view :cursor cursor})))
+
 (defn click-view
   "Vanilla click rules over one window's slots. Returns {:view :cursor :violation}."
   [layout view cursor {:keys [slot button mode]}]
   (let [at (get view slot)
         store (:store layout)]
     (cond
-      (= slot 0)
-      (if-let [out (result-of view layout)]
-        (if (= mode 1)
-          {:view (loop [view view]
-                   (if-let [out (result-of view layout)]
-                     (let [[view' left] (insert view store out)]
-                       (if left view (recur (craft-once view' layout))))
-                     view))
-           :cursor cursor}
-          (if (or (nil? cursor) (and (= (:item cursor) (:item out)) (<= (+ (:count cursor) (:count out)) max-stack)))
-            {:view (craft-once view layout) :cursor (update out :count + (:count cursor 0))}
-            {:view view :cursor cursor}))
-        {:view view :cursor cursor :violation [:click-on-empty-result mode]})
+      (= slot 0) (click-result layout view cursor mode)
 
       (= mode 2)
       (let [h (+ (:hotbar layout) button) other (get view h)]
@@ -222,12 +233,12 @@
             :else {:view (assoc view slot cursor) :cursor at})
 
       :else
-      (cond (nil? cursor) (if at
-                            (let [half (long (Math/ceil (/ (:count at) 2)))
-                                  rest (- (:count at) half)]
-                              {:cursor (assoc at :count half)
-                               :view (if (pos? rest) (assoc view slot (assoc at :count rest)) (dissoc view slot))})
-                            {:view view :cursor nil})
+      (cond (and (nil? cursor) at)
+            (let [half (long (Math/ceil (/ (:count at) 2)))
+                  rest (- (:count at) half)]
+              {:cursor (assoc at :count half)
+               :view (if (pos? rest) (assoc view slot (assoc at :count rest)) (dissoc view slot))})
+            (nil? cursor) {:view view :cursor nil}
             (or (nil? at) (and (= (:item at) (:item cursor)) (< (:count at) max-stack)))
             {:view (assoc view slot {:item (:item cursor) :count (inc (:count at 0))})
              :cursor (when (> (:count cursor) 1) (update cursor :count dec))}

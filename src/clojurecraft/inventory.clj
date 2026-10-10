@@ -53,12 +53,10 @@
   "An open container: its own slots live in :window/open's :window/slots; slots that are the
    player's inventory update :player/inventory, so items are never counted in two places."
   [w s item]
-  (let [menu-type (get-in w [:window/open :window/menu-type])]
-    (if-let [p (window->player-slot menu-type s)]
-      (set-slot w p item)
-      (if item
-        (assoc-in w [:window/open :window/slots s] item)
-        (update-in w [:window/open :window/slots] dissoc s)))))
+  (let [p (window->player-slot (get-in w [:window/open :window/menu-type]) s)]
+    (cond p (set-slot w p item)
+          item (assoc-in w [:window/open :window/slots s] item)
+          :else (update-in w [:window/open :window/slots] dissoc s))))
 
 (defn open? "Is window-id the container the player has open?" [w window-id] (= window-id (get-in w [:window/open :window/id])))
 

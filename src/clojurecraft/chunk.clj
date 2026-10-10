@@ -78,9 +78,10 @@
 (defn section-may-contain?
   "Cheap palette test before scanning 4096 cells."
   [section pred]
-  (if-let [s (:single section)]
-    (boolean (pred s))
-    (if-let [p (:palette section)] (boolean (some pred p)) true)))
+  (let [{:keys [single palette]} section]
+    (cond single (boolean (pred single))
+          palette (boolean (some pred palette))
+          :else true)))
 
 (defn section-find
   "Seq of [lx ly lz id] for cells whose id satisfies pred."

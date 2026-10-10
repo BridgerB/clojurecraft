@@ -164,16 +164,17 @@
   "One planning tick while :active: run the intent, or choose a target and start its next
    intent, or mark the plan :done when no target in play is left."
   [world event]
-  (if-let [i (:plan/intent world)]
-    (run-intent world i event)
-    (if (not= :active (:plan/status world))
-      world
-      (if-let [goal (choose world)]
-        (let [next (next-intent world goal)]
-          (cond (nil? next) (wait world :nothing-to-do)
-                (:plan/wait next) (wait world (:plan/wait next))
-                :else (start-intent world next)))
-        (-> world (assoc :plan/status :done :player/controls {}) (dissoc :plan/intent))))))
+  (let [i (:plan/intent world)
+        active? (= :active (:plan/status world))
+        goal (when (and (nil? i) active?) (choose world))
+        next (when goal (next-intent world goal))]
+    (cond
+      i (run-intent world i event)
+      (not active?) world
+      (nil? goal) (-> world (assoc :plan/status :done :player/controls {}) (dissoc :plan/intent))
+      (nil? next) (wait world :nothing-to-do)
+      (:plan/wait next) (wait world (:plan/wait next))
+      :else (start-intent world next))))
 
 (defn step
   "The planner reducer, composed after game/step: :go begins a plan, :tick advances it."
