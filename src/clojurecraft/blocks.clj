@@ -1,5 +1,6 @@
 (ns clojurecraft.blocks
-  "Block-state, item and entity-type tables generated from the vanilla reports
+  "Block-state, item and entity-type tables generated from the vanilla reports, and the
+   hardness, harvest and tool-material tables generated from the game's own classes and tags
    (resources/clojurecraft/*.edn). Lookups are by numeric id; nothing here is mutable."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -10,6 +11,9 @@
 (def table "[[name type min-state max-state] ...]" (resource "blocks"))
 (def items "{name id}" (resource "items"))
 (def entity-types "{name id}" (resource "entity-types"))
+(def hardness-by-name "{block-name hardness}; -1.0 is unbreakable" (resource "hardness"))
+(def harvest-by-name "{block-name {:tool kind :needs tier}}" (resource "harvest"))
+(def materials "{tier {:speed s :durability d :incorrect tag}}: the game's ToolMaterial constants" (resource "materials"))
 
 (def passable-types
   "Block definition types with no full-cube collision. The ground must never be here:
@@ -69,6 +73,48 @@
 
 (defn leaves? "Is the state id any leaves block?" [id] (contains? leaf-states id))
 (defn log-item? "Is the item id any log item?" [id] (contains? log-items id))
+
+;; ---------------------------------------------------------------- digging: hardness, harvest, tools
+
+(defn hardness
+  "How hard a block state is to break (the number the server divides by): -1.0 when it cannot
+   be broken (bedrock), nil for an id the table does not know."
+  [id]
+  (some-> (name-of id) hardness-by-name))
+
+(defn tool-of
+  "The tool kind (:pickaxe :axe :shovel :hoe) that mines a block state faster, or nil when
+   every tool is as good as the hand."
+  [id]
+  (some-> (name-of id) harvest-by-name :tool))
+
+(defn needs-tier
+  "The lowest tool tier (:stone :iron :diamond) a block state drops for, or nil when it drops
+   for any tool and the hand."
+  [id]
+  (some-> (name-of id) harvest-by-name :needs))
+
+(def tier-rank
+  "Harvest tiers in order: a tool of a higher rank drops what a lower one drops. Copper sits
+   with stone because the game's incorrect_for_copper_tool tag equals stone's."
+  {:wooden 0 :golden 0 :stone 1 :copper 1 :iron 2 :diamond 3 :netherite 3})
+
+(def tool-kinds
+  "The tool kinds an item name can end in; a sword is a tool that mines nothing faster here."
+  #{:pickaxe :axe :shovel :hoe :sword})
+
+(def tools
+  "{item-id {:tier t :kind k}} for every tool item, read off the item names (wooden_pickaxe
+   is tier :wooden, kind :pickaxe); the tiers are the ones materials.edn names."
+  (into {} (for [[n id] items
+                 :let [[tier kind] (map keyword (str/split (name n) #"_" 2))]
+                 :when (and (contains? materials tier) (contains? tool-kinds kind))]
+             [id {:tier tier :kind kind}])))
+
+(defn tool
+  "{:tier t :kind k} of an item id when it is a tool, else nil."
+  [item-id]
+  (get tools item-id))
 
 (def air 0)                           ; the state id of air
 (def item-entity-type (:item entity-types))
