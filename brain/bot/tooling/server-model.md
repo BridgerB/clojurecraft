@@ -27,7 +27,7 @@ related:
 ## Key files
 - `sim.clj`, `init` - takes `{:column bytes :spawn [x y z] :keep-alive-every ms :drop-clicks #{n} :inventory {slot item}}`.
 - `sim.clj`, `run` - drives a bot reducer against the model 50 ms per tick, sends `:go` once loaded, stops on a predicate.
-- `sim_test.clj`, `the-wood-goal-holds-in-generated-forests` - test.check builds worlds (1-3 trees of oak, spruce or birch, 3-6 logs high, anywhere in the column at least 3 blocks from spawn) and runs the whole bot against the model in each: it must end holding a log with no violation. 100 worlds by default, `FOREST_TRIALS=n` for more; one run takes tens of milliseconds, so 300 worlds take seconds. Treating only oak as a log passes every hand-built test and fails this one, shrunk to a single 3-high spruce.
+- `sim_test.clj`, `the-wood-goal-holds-in-generated-forests` - test.check builds 2,000 worlds (`docs/hickey.md`: "thousands of generated worlds in the time one real run takes"): 1-3 trees of oak, spruce or birch, 3-6 logs high, anywhere in the column; each maybe on a one-block stone mound and maybe under low leaves over every cell within two steps; the spawn varies. The whole bot runs against the instrumented model in each and must end holding a log with no violation. About 16 ms a world, about 40 s for the test; `FOREST_TRIALS=n` overrides the count. Treating only oak as a log fails it (shrunk to one spruce), and so does removing the blocker's headroom check over a step: the mounds under canopies reproduce the ledge a live run failed on.
 - `sim_test.clj` - end-to-end tests: one log held (`:wood`), a low canopy cleared, a table and four sticks (`:kit`), a placed table and a wooden pickaxe (`:pickaxe`), and recovery from a lost click.
 
 ## Gotchas

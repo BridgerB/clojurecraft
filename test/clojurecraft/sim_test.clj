@@ -176,25 +176,44 @@
 
 (def tree-gen
   "One tree: a trunk of 3-6 logs of one species at a local (x, z) at least 3 blocks from the
-   spawn column, with a leaf block on top."
-  (gen/let [x (gen/choose 3 13) z (gen/choose 3 13) h (gen/choose 3 6) id (gen/elements log-species)]
-    {:x x :z z :h h :id id}))
+   spawn columns, with a leaf block on top; maybe on a one-block stone mound (the trunk's cell
+   and its four neighbours), maybe with low leaves one block above its base over every cell
+   within two steps of the trunk. A mound under a low canopy is the ledge a live run once
+   failed on: leaves over the step and over the ground beside it."
+  (gen/let [x (gen/choose 3 13) z (gen/choose 3 13) h (gen/choose 3 6) id (gen/elements log-species)
+            mound? gen/boolean canopy? gen/boolean]
+    {:x x :z z :h h :id id :mound? mound? :canopy? canopy?}))
+
+(def stone 1)
+
+(defn tree-blocks
+  "{[lx y lz] id} for one tree."
+  [{:keys [x z h id mound? canopy?]}]
+  (let [base (if mound? 65 64)
+        around [[(inc x) z] [(dec x) z] [x (inc z)] [x (dec z)]]]
+    (merge (when mound? (into {} (for [[mx mz] (cons [x z] around) :when (and (<= 0 mx 15) (<= 0 mz 15))] [[mx 64 mz] stone])))
+           (when canopy? (into {} (for [dx (range -2 3) dz (range -2 3)
+                                        :let [cx (+ x dx) cz (+ z dz) d (+ (abs dx) (abs dz))]
+                                        :when (and (<= 1 d 2) (<= 0 cx 15) (<= 0 cz 15))]
+                                    [[cx (inc base) cz] leaf-id])))
+           (into {} (for [y (range base (+ base h))] [[x y z] id]))
+           {[x (+ base h) z] leaf-id})))
 
 (defn forest
-  "{[lx y lz] id} for trees standing on the stone floor (y 64 up); a later tree's blocks win."
+  "{[lx y lz] id} for trees on the stone floor (y 64 up); a later tree's blocks win."
   [trees]
-  (into {} (for [{:keys [x z h id]} trees
-                 [y b] (concat (for [y (range 64 (+ 64 h))] [y id]) [[(+ 64 h) leaf-id]])]
-             [[x y z] b])))
+  (apply merge (map tree-blocks trees)))
 
 (deftest the-wood-goal-holds-in-generated-forests
-  ;; the bot against the model in worlds test.check builds: 1-3 trees of mixed species and
-  ;; heights anywhere in the column. In every one it ends holding a log, without the sim ever
-  ;; seeing something a real server would punish.
+  ;; the bot against the model in 2,000 worlds test.check builds (docs/hickey.md: "thousands of
+  ;; generated worlds in the time one real run takes"): 1-3 trees of mixed species and heights
+  ;; anywhere in the column, on mounds or flat ground, under low leaves or open sky, from a
+  ;; varied spawn. In every one it ends holding a log, without the sim ever seeing something a
+  ;; real server would punish. FOREST_TRIALS=n overrides the count.
   (let [r (tc/quick-check
-           (or (some-> (System/getenv "FOREST_TRIALS") Long/parseLong) 100)
-           (prop/for-all [trees (gen/vector tree-gen 1 3)]
-                         (let [sim0 (sim/init {:column (world/column-bytes (forest trees)) :spawn [0.5 64.0 0.5]})
+           (or (some-> (System/getenv "FOREST_TRIALS") Long/parseLong) 2000)
+           (prop/for-all [trees (gen/vector tree-gen 1 3) sx (gen/choose 0 1) sz (gen/choose 0 1)]
+                         (let [sim0 (sim/init {:column (world/column-bytes (forest trees)) :spawn [(+ sx 0.5) 64.0 (+ sz 0.5)]})
                                [w sim] (sim/run step (game/init fx/opts) sim0 #(or (plan/done? %) (plan/failed? %))
                                                 90000 {:event/kind :go :go/goals [:wood]})]
                            (and (plan/done? w) (= 1 (inventory/logs-held w)) (empty? (:sim/violations sim))))))]

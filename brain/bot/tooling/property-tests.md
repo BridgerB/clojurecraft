@@ -38,7 +38,7 @@ related:
 | `the-phase-only-moves-along-the-transition-table` | under arbitrary play packets the phase stays in play/configuration and equals the phase the emitted packets imply through `next-state` |
 | `a-dig-never-finishes-before-its-deadline` | over uneven tick gaps (1-400 ms) and both diggable kinds, a dig sends exactly one START and one FINISH, and FINISH comes no sooner than `intent/finish-delay` (and so the vanilla break time) after START |
 | `the-planner-only-picks-executable-intents` (make_test) | over generated inventories, a remembered table or none, and every target in the goal table: a done target plans nothing, and any other intent is executable from what is held and known (the essay's "never selects a goal whose needs are unmet") |
-| `the-wood-goal-holds-in-generated-forests` (sim_test) | the whole bot against the server model, in 100 generated forests, always ends holding a log with no violation ([[server-model]]) |
+| `the-wood-goal-holds-in-generated-forests` (sim_test) | the whole bot against the server model, in 2,000 generated forests with mounds, low canopies and varied spawns, always ends holding a log with no violation ([[server-model]]) |
 | `clicks-then-match-round-trip` (recipe_test) | for every recipe that fits 2x2, a stock of one species per ingredient yields clicks whose right-clicked cells are exactly `placement`'s, and `match` on that grid gives the recipe's result |
 
 ## Gotchas
