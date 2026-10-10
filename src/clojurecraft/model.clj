@@ -133,7 +133,7 @@
    [:intent/route "how the route ended: :found, :partial (budget spent) or :none (no way on)" "walk, once planned"]
    [:intent/at "index of the next waypoint" "walk, once planned"]
    [:intent/replans "routes planned for this walk; more than intent/max-replans fails :no-path" "walk, once planned"]
-   [:intent/planned-chunks "chunk columns loaded when the route was made; a new one replans" "walk, once planned"]
+   [:intent/planned-chunks "chunk columns loaded when the route was made (kept for the record; a new chunk no longer replans by itself)" "walk, once planned"]
    [:intent/logs-before "logs held when collecting began" "collect"]
    [:intent/blocked-by "leaf block over the drop" "collect, when the drop is covered"]
    [:intent/clears "leaf blocks cleared for this drop" "a collect resumed after clearing"]

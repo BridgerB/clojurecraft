@@ -232,20 +232,24 @@
 
 ;; ---------------------------------------------------------------- a walk follows a route
 
-(deftest a-walk-plans-again-when-a-chunk-arrives
-  ;; a route is made over the chunks loaded now; a new column changes the ground the route
-  ;; assumed, so the walk plans once more and no more
+(deftest a-walk-plans-again-only-when-its-route-breaks
+  ;; gym batch cobble-a1 run 7: six chunks arrived in the first seconds after landing and each
+  ;; one re-planned the walk, spending its six plans before a step was taken, though every plan
+  ;; found the same route. A chunk arriving is not news; a waypoint ahead that can no longer be
+  ;; stood on is
   (let [w (walking #{:wood} :wood)
         [w1 _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])
         i1 (:plan/intent w1)
-        w2 (assoc w1 :stats/chunks (inc (:stats/chunks w1 0)))               ; a column arrived
-        [w3 _] (run w2 [{:event/kind :tick :event/now 100 :event/rand 0.5}])
-        [w4 _] (run w3 [{:event/kind :tick :event/now 150 :event/rand 0.5}])]
+        arrivals (reduce (fn [w n] (first (run (assoc w :stats/chunks (+ n (:stats/chunks w 0)))
+                                               [{:event/kind :tick :event/now (* 100 n) :event/rand 0.5}])))
+                         w1 (range 1 7))]
     (is (= 1 (:intent/replans i1)) "the first tick plans")
     (is (= :found (:intent/route i1)))
-    (is (seq (:intent/waypoints i1)))
-    (is (= 2 (:intent/replans (:plan/intent w3))) "one more plan for the new chunk")
-    (is (= 2 (:intent/replans (:plan/intent w4))) "and not again while nothing changes")))
+    (is (= 1 (:intent/replans (:plan/intent arrivals))) "six chunk arrivals, the route intact: no plan spent")
+    (let [i (:plan/intent arrivals)
+          broken (terrain/set-block arrivals (get (:intent/waypoints i) (:intent/at i)) 1)   ; stone where the next step is
+          [w2 _] (run broken [{:event/kind :tick :event/now 1000 :event/rand 0.5}])]
+      (is (= 2 (:intent/replans (:plan/intent w2))) "a waypoint ahead gone solid: plan again"))))
 
 (deftest a-walk-with-no-way-on-fails-no-path
   ;; walled in on every side two blocks high: the search exhausts its frontier at once

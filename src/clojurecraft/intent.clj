@@ -122,15 +122,16 @@
             :intent/best-tick (:time/tick world))))
 
 (defn route-stale?
-  "Should the walk plan again: the next waypoint can no longer be stood on, a chunk arrived
-   since the route was made, no waypoint was reached for stuck-ticks, or the route ended short
-   of the target (:partial or :none) and every waypoint is behind."
-  [world {:intent/keys [waypoints at planned-chunks best-tick route]}]
-  (let [wp (get waypoints at)]
-    (or (and wp (not (path/standable? world wp)))
-        (not= planned-chunks (:stats/chunks world 0))
+  "Should the walk plan again: a waypoint still ahead can no longer be stood on (a chunk that
+   arrived or a block that changed broke the route), no waypoint was reached for stuck-ticks,
+   or the route ended short of the target (:partial or :none) and every waypoint is behind. A
+   chunk arriving is not by itself a reason: six arrived in the first seconds of a gym run and
+   spent all six plans before the bot had walked a step, though every plan found the same route."
+  [world {:intent/keys [waypoints at best-tick route]}]
+  (let [ahead (drop at waypoints)]
+    (or (some #(not (path/standable? world %)) ahead)
         (> (- (:time/tick world) best-tick) stuck-ticks)
-        (and (nil? wp) (not= :found route)))))
+        (and (empty? ahead) (not= :found route)))))
 
 (defmethod run :walk
   [world {:intent/keys [target started waypoints at replans route] :or {replans 0} :as i} _]
