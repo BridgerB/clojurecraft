@@ -157,7 +157,7 @@ jobs:
 
   aggregate:
     needs: [plan, shard]
-    if: always() && needs.plan.result == 'success'
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
