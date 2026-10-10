@@ -27,15 +27,19 @@
    clojurecraft.make registers the goals."
   (game/compose game/step plan/step))
 
-(defn parse-args [args]
+(defn parse-args
+  "--key value pairs → {:key \"value\"}; values stay strings, a trailing lone flag is dropped."
+  [args]
   (into {} (map (fn [[k v]] [(keyword (subs k 2)) v]) (partition 2 args))))
 
 (defn- now [] (System/currentTimeMillis))
 
-(defn stamp [& xs]
+(defn stamp "One timestamped line on stderr; stdout carries only RESULT." [& xs]
   (binding [*out* *err*] (println (str (java.time.LocalTime/now)) (str/join " " xs)) (flush)))
 
-(defn perform [{:effect/keys [kind packet message]} out]
+(defn perform
+  "Do one effect: :send puts the packet on the socket's out channel (blocking), :log stamps it."
+  [{:effect/keys [kind packet message]} out]
   (case kind
     :send (a/>!! out packet)
     :log (stamp message)))
@@ -67,7 +71,10 @@
           w
           (recur (if (= :tick (:event/kind event)) (+ next-tick 50) next-tick)))))))
 
-(defn result [world until ok]
+(defn result
+  "The RESULT map: :ok, :until, the reason, the game summary, held items, the nearest
+   remembered table and the plan summary (once a plan began)."
+  [world until ok]
   (merge {:ok ok
           :until until
           :reason (cond ok :goal
@@ -105,7 +112,10 @@
                              (remove-watch r k)
                              (a/put! queue go)))))
 
-(defn -main [& args]
+(defn -main
+  "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,
+   hold for an outside judge when ok, and exit 0 when ok else 1."
+  [& args]
   (let [{:keys [host port name until timeout-ms hold-ms events record]
          :or {host "127.0.0.1" port "25571" name "Clj_wood" until "wood" timeout-ms "120000" hold-ms "0"}}
         (parse-args args)

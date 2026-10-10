@@ -23,12 +23,16 @@
   [id]
   (if (and id (blocks/leaves? id)) 300 dig-ms))
 
-(defn finish-delay [id] (+ (* (dig-time id) 1.35) 200))
+(defn finish-delay
+  "ms from START to FINISH when digging block id: its dig time with margin, since an early
+   FINISH aborts the break and a late one is accepted."
+  [id]
+  (+ (* (dig-time id) 1.35) 200))
 (def swing-every 350)
 (def collect-timeout 10000)
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
 
-(defn centre [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
+(defn centre "The centre point of the block at integer position [x y z]." [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
 
 (defn face-toward
   "Block face nearest the eye: 0 down 1 up 2 north 3 south 4 west 5 east."
@@ -40,10 +44,13 @@
           :else (if (pos? dz) 3 2))))
 
 (defn- intent [world f & args] (apply update world :plan/intent f args))
-(defn done [world] (intent world assoc :intent/status :done))
-(defn fail [world reason] (intent world assoc :intent/status :failed :intent/reason reason))
-(defn done? [i] (= :done (:intent/status i)))
-(defn failed? [i] (= :failed (:intent/status i)))
+(defn done "Mark the current intent done." [world] (intent world assoc :intent/status :done))
+(defn fail
+  "Mark the current intent failed, with the reason the planner reports."
+  [world reason]
+  (intent world assoc :intent/status :failed :intent/reason reason))
+(defn done? "Did intent i finish?" [i] (= :done (:intent/status i)))
+(defn failed? "Did intent i fail?" [i] (= :failed (:intent/status i)))
 
 (defn toward
   "Controls that walk toward a point, jumping when blocked."
@@ -152,7 +159,9 @@
 
 ;; ---------------------------------------------------------------- collect
 
-(defn nearest-item [world near]
+(defn nearest-item
+  "The tracked entity nearest the point near, within 6 blocks, or nil."
+  [world near]
   (->> (:world/entities world)
        vals
        (map (fn [e] [(physics/distance near (:entity/pos e)) e]))

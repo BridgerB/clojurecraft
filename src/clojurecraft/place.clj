@@ -61,7 +61,11 @@
                             (<= (physics/distance eye (intent/centre target)) place-reach))]
              [target support]))))
 
-(defn use-item-on [world pos face [cx cy cz]]
+(defn use-item-on
+  "Right-click face of the block at pos with the held item: emit use-item-on with a fresh
+   :bot/sequence and a swing, and record the sequence and send time on the intent so the
+   answer can be judged by the server's ack."
+  [world pos face [cx cy cz]]
   (let [seq (inc (:bot/sequence world))]
     (-> world
         (assoc :bot/sequence seq)
@@ -70,12 +74,17 @@
         (game/emit {:packet/name :swing :hand 0})
         (set-intent :intent/sequence seq :intent/sent-at (now world)))))
 
-(defn held-slot-of [world item-id]
+(defn held-slot-of
+  "The lowest player-inventory slot holding item-id, or nil."
+  [world item-id]
   (some (fn [[p {:keys [item]}]] (when (= item item-id) p)) (sort-by key (:player/inventory world))))
 
 ;; ---------------------------------------------------------------- place
 
-(defmulti place-stage (fn [_world i] (:intent/stage i)))
+(defmulti place-stage
+  "Advance a :place intent one tick in its :intent/stage (:equip :spot :settle :sent). Called
+   only when no inventory click is unanswered."
+  (fn [_world i] (:intent/stage i)))
 
 (defmethod place-stage :equip [world {:intent/keys [item]}]
   (let [id (recipe/item-id item)

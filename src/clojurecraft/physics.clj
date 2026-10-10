@@ -22,9 +22,11 @@
   [[x y z]]
   [(- x half-width) y (- z half-width) (+ x half-width) (+ y height) (+ z half-width)])
 
-(defn eye [[x y z]] [x (+ y eye-height) z])
+(defn eye "Eye position of a player whose feet centre is [x y z]." [[x y z]] [x (+ y eye-height) z])
 
-(defn expand [[x0 y0 z0 x1 y1 z1] [vx vy vz]]
+(defn expand
+  "The box grown along a velocity: the region a move may sweep through this tick."
+  [[x0 y0 z0 x1 y1 z1] [vx vy vz]]
   [(+ x0 (min 0.0 vx)) (+ y0 (min 0.0 vy)) (+ z0 (min 0.0 vz))
    (+ x1 (max 0.0 vx)) (+ y1 (max 0.0 vy)) (+ z1 (max 0.0 vz))])
 
@@ -37,7 +39,9 @@
         :when (solid? x y z)]
     [(double x) (double y) (double z) (+ x 1.0) (+ y 1.0) (+ z 1.0)]))
 
-(defn overlaps? [a b axis]
+(defn overlaps?
+  "Do boxes a and b overlap strictly along axis (0 x, 1 y, 2 z)? Touching faces do not."
+  [a b axis]
   (and (< (double (a axis)) (double (b (+ axis 3))))
        (> (double (a (+ axis 3))) (double (b axis)))))
 
@@ -56,10 +60,10 @@
                 d))
             d boxes)))
 
-(defn shift [box axis d]
+(defn shift "The box moved d along axis." [box axis d]
   (-> box (update axis + d) (update (+ axis 3) + d)))
 
-(defn squash ^double [^double v] (if (< (Math/abs v) negligible) 0.0 v))
+(defn squash "v, or 0.0 when it is below negligible (vanilla's velocity snap)." ^double [^double v] (if (< (Math/abs v) negligible) 0.0 v))
 
 (defn step
   "One tick of movement. Reads :player/pos :player/vel :player/on-ground? :player/jump-ticks and
@@ -103,8 +107,8 @@
     [(Math/toDegrees (Math/atan2 (- dx) dz))
      (Math/toDegrees (- (Math/atan2 dy horiz)))]))
 
-(defn distance [[ax ay az] [bx by bz]]
+(defn distance "Euclidean distance between two points." [[ax ay az] [bx by bz]]
   (Math/sqrt (+ (Math/pow (- ax bx) 2) (Math/pow (- ay by) 2) (Math/pow (- az bz) 2))))
 
-(defn horizontal-distance [[ax _ az] [bx _ bz]]
+(defn horizontal-distance "Distance between two points ignoring y." [[ax _ az] [bx _ bz]]
   (Math/sqrt (+ (Math/pow (- ax bx) 2) (Math/pow (- az bz) 2))))

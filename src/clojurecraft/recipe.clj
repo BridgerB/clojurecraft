@@ -21,8 +21,8 @@
 (def by-id (into {} (map (juxt :recipe/id identity) recipes)))
 
 (def item-names (into {} (map (fn [[n id]] [id n]) blocks/items)))
-(defn item-name [id] (item-names id))
-(defn item-id [name] (blocks/items name))
+(defn item-name "The item keyword for a numeric item id, or nil." [id] (item-names id))
+(defn item-id "The numeric item id for an item keyword, or nil." [name] (blocks/items name))
 
 (def raw?
   "Ingredient sets we gather rather than craft."
@@ -39,7 +39,10 @@
           :when (not= ch \space)]
       [[r c] (key (str ch))])))
 
-(defn fits? [{:recipe/keys [kind width height ingredients]} size]
+(defn fits?
+  "Can recipe r be crafted in a size×size grid? Shaped: its pattern fits; shapeless: it has no
+   more ingredients than cells."
+  [{:recipe/keys [kind width height ingredients]} size]
   (if (= kind :shaped)
     (and (<= width size) (<= height size))
     (<= (count ingredients) (* size size))))
@@ -60,7 +63,10 @@
 
 ;; ---------------------------------------------------------------- match
 
-(defn shaped-match? [r grid size]
+(defn shaped-match?
+  "Does the occupied part of grid (non-empty, {slot item-name}) equal r's pattern, as drawn or
+   mirrored left to right? The pattern may sit anywhere in the grid, as in vanilla."
+  [r grid size]
   (let [occupied (keep (fn [[slot item]] (when item [(quot (dec slot) size) (rem (dec slot) size)])) grid)
         rows (map first occupied) cols (map second occupied)
         r0 (apply min rows) c0 (apply min cols)
@@ -75,7 +81,9 @@
                            (if (= ch \space) (nil? item) (contains? (key (str ch)) item))))))]
     (and (= [h w] [height width]) (or (fits false) (fits true)))))
 
-(defn shapeless-match? [r grid]
+(defn shapeless-match?
+  "Can the grid's items be paired one-to-one with r's ingredient sets, in any order?"
+  [r grid]
   (let [items (vec (keep val grid))
         sets (:recipe/ingredients r)]
     (and (= (count items) (count sets))
@@ -108,9 +116,15 @@
   [inventory]
   (reduce (fn [m {:keys [item count]}] (update m (item-name item) (fnil + 0) count)) {} (vals inventory)))
 
-(defn have [counts s] (reduce + 0 (map #(get counts % 0) s)))
+(defn have
+  "How many items of any name in set s the counts hold."
+  [counts s]
+  (reduce + 0 (map #(get counts % 0) s)))
 
-(defn consume [counts s n]
+(defn consume
+  "counts with n items taken from the names in set s, in name order; takes what there is when
+   counts hold fewer than n."
+  [counts s n]
   (loop [counts counts [item & more] (sort s) n n]
     (if (or (zero? n) (nil? item))
       counts

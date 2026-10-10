@@ -94,7 +94,10 @@
   [world i]
   (-> world (assoc :plan/last i :plan/attempts 0) (dissoc :plan/intent)))
 
-(defn fail-intent [world i]
+(defn fail-intent
+  "An intent failed: stop moving, blacklist its target, count the attempt; max-attempts
+   failures in a row fail the plan with the intent's reason."
+  [world i]
   (let [attempts (inc (:plan/attempts world 0))]
     (-> world
         (assoc :player/controls {})
@@ -116,19 +119,24 @@
           (intent/failed? i) (plan-tick (fail-intent world i) event)
           :else world)))
 
-(defn start-intent [world i]
+(defn start-intent "Make i the active intent and stop waiting." [world i]
   (-> world
       (assoc :plan/intent (assoc i :intent/status :active))
       (dissoc :plan/waiting-since)
       (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i))))))
 
-(defn wait [world reason]
+(defn wait
+  "Nothing to do yet for reason; waiting longer than wait-timeout fails the plan with it."
+  [world reason]
   (let [since (or (:plan/waiting-since world) (:time/now world))]
     (if (> (- (:time/now world) since) wait-timeout)
       (assoc world :plan/status :failed :plan/reason reason)
       (assoc world :plan/waiting-since since :plan/waiting reason))))
 
-(defn plan-tick [world event]
+(defn plan-tick
+  "One planning tick while :active: run the intent, or choose a target and start its next
+   intent, or mark the plan :done when no target in play is left."
+  [world event]
   (if-let [i (:plan/intent world)]
     (run-intent world i event)
     (if (not= :active (:plan/status world))
@@ -140,7 +148,9 @@
                 :else (start-intent world next)))
         (-> world (assoc :plan/status :done :player/controls {}) (dissoc :plan/intent))))))
 
-(defn step [world {:event/keys [kind] :as event}]
+(defn step
+  "The planner reducer, composed after game/step: :go begins a plan, :tick advances it."
+  [world {:event/keys [kind] :as event}]
   (case kind
     :go (-> world (begin event) (game/say "go"))
     :tick (case (:plan/status world)
@@ -149,8 +159,8 @@
             world)
     world))
 
-(defn done? [world] (= :done (:plan/status world)))
-(defn failed? [world] (= :failed (:plan/status world)))
+(defn done? "Has the plan reached every target in play?" [world] (= :done (:plan/status world)))
+(defn failed? "Has the plan given up (see :plan/reason)?" [world] (= :failed (:plan/status world)))
 
-(defn summary [world]
+(defn summary "Every :plan/* attribute but the blacklist, for the RESULT line." [world]
   (into {} (filter (fn [[k _]] (= "plan" (namespace k))) (dissoc world :plan/blacklist))))

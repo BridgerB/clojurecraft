@@ -85,7 +85,10 @@
   (when (= block :crafting_table)
     (memory/nearest world (game/eye world) table-search memory/crafting-table?)))
 
-(defn consume [counts s n]
+(defn consume
+  "Take up to n items from counts, drawing from the items of set s in sorted order; never
+   below zero."
+  [counts s n]
   (loop [counts counts [item & more] (sort s) n n]
     (if (or (zero? n) (nil? item))
       counts

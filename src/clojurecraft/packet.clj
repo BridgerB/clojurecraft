@@ -103,12 +103,16 @@
    [:configuration :finish-configuration] :play
    [:play :configuration-acknowledged] :configuration})
 
-(defn next-state [state pkt-name]
+(defn next-state
+  "The protocol state after the client sends pkt-name in state (unchanged for most)."
+  [state pkt-name]
   (get transitions [state pkt-name] state))
 
 ;; ---------------------------------------------------------------- reading
 
-(defn struct? [t] (and (vector? t) (vector? (first t))))
+(defn struct?
+  "Is a spec type a nested struct (a vector of [key type] pairs)?"
+  [t] (and (vector? t) (vector? (first t))))
 
 (defn truncating?
   "A slot with components ends what we can parse of a frame."
@@ -125,13 +129,19 @@
           removed (b/read-varint buf) _ (dotimes [_ removed] (b/read-varint buf))]
       {:item item :count n})))
 
-(defn write-hashed-slot [out v]
+(defn write-hashed-slot
+  "A slot as the server expects in a click: present flag, item, count, and no
+   component hashes. nil is the empty slot."
+  [out v]
   (b/write-bool out (some? v))
   (when v
     (b/write-varint out (:item v)) (b/write-varint out (:count v))
     (b/write-varint out 0) (b/write-varint out 0)))
 
-(defn read-slot [buf]
+(defn read-slot
+  "{:item :count} or nil for an empty slot. Components are not parsed: a slot with
+   any is marked :components? and ends what can be read of the frame."
+  [buf]
   (let [n (b/read-varint buf)]
     (when (pos? n)
       (let [item (b/read-varint buf) added (b/read-varint buf) removed (b/read-varint buf)]
@@ -140,7 +150,10 @@
 
 (declare read-fields)
 
-(defn read-field [t buf]
+(defn read-field
+  "One value of type t from buf. A vector stops early after a truncating slot,
+   because what follows it cannot be located."
+  [t buf]
   (cond
     (struct? t) (read-fields buf t)
     (vector? t) (let [n (b/read-varint buf) et (second t)]
@@ -160,7 +173,10 @@
             :slot (read-slot buf)
             :hashed-slot (read-hashed-slot buf))))
 
-(defn read-fields [buf fields]
+(defn read-fields
+  "The struct's fields in order into a map; stops at a truncating value and marks
+   the map :truncated."
+  [buf fields]
   (loop [fields fields m {}]
     (if-let [[k t] (first fields)]
       (let [v (read-field t buf) m (assoc m k v)]
@@ -169,7 +185,7 @@
 
 (defn decode
   "Bytes of one frame (after decompression) → packet map. Unknown or unmodelled ids decode to
-   {:name :unknown ...} so the caller can count them."
+   {:packet/name :unknown ...} so the caller can count them."
   [state dir ^bytes frame]
   (let [buf (b/buffer frame)
         id (b/read-varint buf)
@@ -182,7 +198,9 @@
 
 (declare write-fields)
 
-(defn write-field [t out v]
+(defn write-field
+  "One value of type t to out. :slot is read-only; only :hashed-slot is written."
+  [t out v]
   (cond
     (struct? t) (write-fields out t v)
     (vector? t) (do (b/write-varint out (count v))
@@ -197,7 +215,9 @@
             :rest (b/write-bytes out v)
             :hashed-slot (write-hashed-slot out v))))
 
-(defn write-fields [out fields m]
+(defn write-fields
+  "Each field of the struct from m, in spec order; throws when m lacks one."
+  [out fields m]
   (doseq [[k t] fields]
     (when-not (contains? m k) (throw (ex-info "missing field" {:field k :packet m})))
     (write-field t out (get m k))))

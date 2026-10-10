@@ -3,4 +3,4 @@
   (:require [clojurecraft.main :as main])
   (:gen-class))
 
-(defn -main [& [path]] (main/replay path))
+(defn -main "Replay the recording at path with no server and print RESULT." [& [path]] (main/replay path))

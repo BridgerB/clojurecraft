@@ -27,11 +27,18 @@
         (contains? (:sim/broken sim) pos) 0
         :else (chunk/block-at {[0 0] (:sim/chunk sim)} pos)))
 
-(defn break-ms [id] (if (blocks/leaves? id) leaf-dig-ms dig-ms))
+(defn break-ms
+  "ms the server requires between START and FINISH on block id: leaves or, for anything else,
+   a log by hand."
+  [id]
+  (if (blocks/leaves? id) leaf-dig-ms dig-ms))
 (def pickup-delay 500)
 (def keep-alive-every 15000)
 
-(defn init [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks] :or {keep-alive-every keep-alive-every}}]
+(defn init
+  "A fresh server before the handshake, from {:column bytes :spawn [x y z]} plus optional
+   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {window-0-slot item} and :lag-ticks."
+  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks] :or {keep-alive-every keep-alive-every}}]
   {:sim/phase :handshake
    :sim/lag-ticks (or lag-ticks 0)
    :sim/inv (or inventory {})
@@ -54,9 +61,12 @@
    :sim/next-keep-alive keep-alive-every
    :sim/keep-alives-pending #{}})
 
-(defn send [sim pkt] (update sim :sim/out conj pkt))
+(defn send "Queue pkt for the client in :sim/out." [sim pkt] (update sim :sim/out conj pkt))
 
-(defmulti on-packet (fn [sim pkt] [(:sim/phase sim) (:packet/name pkt)]))
+(defmulti on-packet
+  "The server's answer to one client packet, by [phase packet-name]; unknown packets are
+   ignored."
+  (fn [sim pkt] [(:sim/phase sim) (:packet/name pkt)]))
 (defmethod on-packet :default [sim _] sim)
 
 (defmethod on-packet [:handshake :intention] [sim _] (assoc sim :sim/phase :login))
@@ -119,20 +129,28 @@
   {:inventory {:size 2 :store (range 9 45) :hotbar 36}
    :table {:size 3 :store (range 10 46) :hotbar 37}})
 
-(defn grid-slots [{:keys [size]}] (range 1 (inc (* size size))))
+(defn grid-slots "The crafting-grid slots of a layout, 1..size²." [{:keys [size]}] (range 1 (inc (* size size))))
 
-(defn result-of [view layout]
+(defn result-of
+  "What the grid of view crafts, {:item id :count n}, or nil when it matches no recipe."
+  [view layout]
   (let [grid (into {} (for [s (grid-slots layout) :let [it (get view s)] :when it] [s (recipe/item-name (:item it))]))]
     (when-let [r (recipe/match grid (:size layout))]
       {:item (recipe/item-id (:recipe/result r)) :count (:recipe/count r)})))
 
-(defn view-of [sim kind]
+(defn view-of
+  "The slots of window kind as the click rules see them, {slot item} without the result slot:
+   :inventory is window 0; :table is the table grid plus the inventory shifted up one slot."
+  [sim kind]
   (case kind
     :inventory (:sim/inv sim)
     :table (merge (get-in sim [:sim/window :grid])
                   (into {} (for [[s it] (:sim/inv sim) :when (<= 9 s 44)] [(inc s) it])))))
 
-(defn with-view [sim kind view]
+(defn with-view
+  "Write a clicked view of window kind back into the sim; the inverse of view-of. The result
+   slot is dropped, since it is always derived."
+  [sim kind view]
   (let [view (dissoc view 0)]
     (case kind
       :inventory (assoc sim :sim/inv view)
@@ -141,7 +159,7 @@
                  (assoc :sim/inv (merge (into {} (remove (fn [[s _]] (<= 9 s 44)) (:sim/inv sim)))
                                         (into {} (for [[s it] view :when (<= 10 s 45)] [(dec s) it]))))))))
 
-(defn full [view layout] (assoc view 0 (result-of view layout)))
+(defn full "view with slot 0 set to what its grid crafts." [view layout] (assoc view 0 (result-of view layout)))
 
 (defn insert
   "Put a stack into the given slots, stacking first. Returns [view leftover]."
@@ -153,11 +171,15 @@
         (let [have (:count (get view s) 0) k (min n (- max-stack have))]
           (recur (assoc view s {:item item :count (+ have k)}) more (- n k)))))))
 
-(defn take-one [view s]
+(defn take-one
+  "view with one item removed from slot s; the slot empties at zero. s must hold an item."
+  [view s]
   (let [{:keys [count] :as it} (get view s)]
     (if (> count 1) (assoc view s (assoc it :count (dec count))) (dissoc view s))))
 
-(defn craft-once [view layout]
+(defn craft-once
+  "view after one craft: one item taken from every occupied grid slot."
+  [view layout]
   (reduce (fn [view s] (if (get view s) (take-one view s) view)) view (grid-slots layout)))
 
 (defn click-view
@@ -210,8 +232,12 @@
              :cursor (when (> (:count cursor) 1) (update cursor :count dec))}
             :else {:view view :cursor cursor}))))
 
-(defn state-id-path [kind] (case kind :inventory [:sim/state-id] :table [:sim/window :state-id]))
-(defn window-id [sim kind] (case kind :inventory 0 :table (get-in sim [:sim/window :id])))
+(defn state-id-path
+  "Where the sim keeps the state id of window kind."
+  [kind] (case kind :inventory [:sim/state-id] :table [:sim/window :state-id]))
+(defn window-id
+  "The protocol window id of window kind: 0, or the open table's."
+  [sim kind] (case kind :inventory 0 :table (get-in sim [:sim/window :id])))
 
 (defn sync-window
   "Answer a click the way vanilla does. The click's own changed-slots and cursor fields are the
@@ -238,7 +264,10 @@
                 sim (range 46))
         (if (= predicted-cursor (:sim/cursor sim)) sim (send sim {:packet/name :set-cursor-item :item (:sim/cursor sim)}))))))
 
-(defn window-kind [sim window-id]
+(defn window-kind
+  "Which window a protocol window id names: :inventory, :table when it is the open table,
+   else nil."
+  [sim window-id]
   (cond (zero? window-id) :inventory
         (= window-id (get-in sim [:sim/window :id])) :table))
 
@@ -279,7 +308,10 @@
 
 (def faces {0 [0 -1 0] 1 [0 1 0] 2 [0 0 -1] 3 [0 0 1] 4 [-1 0 0] 5 [1 0 0]})
 
-(defn overlaps-player? [sim [x y z]]
+(defn overlaps-player?
+  "Would a block at [x y z] intersect the player's 0.6×1.8 box at its last reported position?
+   nil before the player has moved."
+  [sim [x y z]]
   (when-let [[px py pz] (:sim/player-pos sim)]
     (and (< (- px 0.3) (inc x)) (> (+ px 0.3) x)
          (< py (inc y)) (> (+ py 1.8) y)
@@ -318,10 +350,16 @@
                 (send ack)))
           (-> sim (send {:packet/name :block-update :pos dest :state (or d 0)}) (send ack)))))))
 
-(defn within-pickup? [[px py pz] [ix iy iz]]
+(defn within-pickup?
+  "Is an item at [ix iy iz] inside the pickup box of a player at [px py pz] (its box inflated
+   by 1 horizontally and 0.5 vertically)?"
+  [[px py pz] [ix iy iz]]
   (and (< (abs (- px ix)) 1.3) (< (abs (- pz iz)) 1.3) (< -0.5 (- iy py) 2.3)))
 
-(defn tick [sim now]
+(defn tick
+  "Advance the server clock to now: send a keep-alive when one is due, and hand over every
+   item whose pickup delay has passed and that the player stands within reach of."
+  [sim now]
   (let [sim (assoc sim :sim/now now)
         sim (if (>= now (:sim/next-keep-alive sim))
               (-> sim
@@ -341,7 +379,9 @@
                 sim))
             sim (:sim/items sim))))
 
-(defn step [sim {:sim/keys [kind packet now]}]
+(defn step
+  "The model's reducer: a client packet or a tick in, the next sim out."
+  [sim {:sim/keys [kind packet now]}]
   (case kind
     :packet (on-packet sim packet)
     :tick (tick sim now)
@@ -352,7 +392,9 @@
   [sim]
   [(assoc sim :sim/out []) (:sim/out sim)])
 
-(defn sends [world]
+(defn sends
+  "The packets a bot world asked to send, from its :bot/effects."
+  [world]
   (mapv :effect/packet (filter #(= :send (:effect/kind %)) (:bot/effects world))))
 
 (defn run

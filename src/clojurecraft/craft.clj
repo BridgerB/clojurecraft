@@ -25,10 +25,16 @@
 (defn- now [world] (:time/now world))
 (defn- set-intent [world & kvs] (apply update world :plan/intent assoc kvs))
 
-(defn dirty-grid-slot [{:view/keys [size grid]}]
+(defn dirty-grid-slot
+  "The first crafting-grid slot (1..size²) of the view that still holds an item, or nil when
+   the grid is clean. A craft lays its ingredients only into a clean grid."
+  [{:view/keys [size grid]}]
   (first (filter #(get grid %) (range 1 (inc (* size size))))))
 
-(defmulti stage (fn [_world i _view] (:intent/stage i)))
+(defmulti stage
+  "Advance a :craft intent one tick in its current :intent/stage (:settle :click :verify :take)
+   against view v. Called only when no click is unanswered."
+  (fn [_world i _view] (:intent/stage i)))
 
 (defmethod stage :settle [world {:intent/keys [recipe since window]} v]
   (let [r (recipe/by-id recipe)]

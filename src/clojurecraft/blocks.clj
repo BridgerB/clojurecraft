@@ -38,9 +38,13 @@
     (doseq [[_ _ lo hi :as row] table, s (range lo (inc hi))] (aset arr s row))
     arr))
 
-(defn row [^long id] (when (<= 0 id max-state) (aget ^objects rows id)))
-(defn name-of [id] (some-> (row id) (nth 0)))
-(defn type-of [id] (some-> (row id) (nth 1)))
+(defn row
+  "[name type min-state max-state] for a block-state id, or nil when out of range."
+  [^long id] (when (<= 0 id max-state) (aget ^objects rows id)))
+(defn name-of "The block name keyword of a state id, or nil." [id] (some-> (row id) (nth 0)))
+(defn type-of
+  "The block definition type keyword of a state id (grass_block's is :grass), or nil."
+  [id] (some-> (row id) (nth 1)))
 
 (def solid-flags
   (let [arr (boolean-array (inc max-state))]
@@ -53,14 +57,18 @@
   [^long id]
   (and (<= 0 id max-state) (aget ^booleans solid-flags id)))
 
-(defn log-name? [n] (str/ends-with? (name n) "_log"))
+(defn log-name?
+  "Does a block or item name end in _log (every species, stripped ones too)?"
+  [n] (str/ends-with? (name n) "_log"))
 
 (def log-flags
   (let [arr (boolean-array (inc max-state))]
     (doseq [[n _ lo hi] table :when (log-name? n), s (range lo (inc hi))] (aset arr s true))
     arr))
 
-(defn log? [^long id] (and (<= 0 id max-state) (aget ^booleans log-flags id)))
+(defn log?
+  "Is the state id any log block?"
+  [^long id] (and (<= 0 id max-state) (aget ^booleans log-flags id)))
 
 (def log-items (set (for [[n id] items :when (log-name? n)] id)))
 
@@ -69,8 +77,10 @@
     (doseq [[n _ lo hi] table :when (str/ends-with? (name n) "_leaves"), s (range lo (inc hi))] (aset arr s true))
     arr))
 
-(defn leaves? [^long id] (and (<= 0 id max-state) (aget ^booleans leaf-flags id)))
-(defn log-item? [id] (contains? log-items id))
+(defn leaves?
+  "Is the state id any leaves block?"
+  [^long id] (and (<= 0 id max-state) (aget ^booleans leaf-flags id)))
+(defn log-item? "Is the item id any log item?" [id] (contains? log-items id))
 
 (def air 0)
 (def item-entity-type (:item entity-types))

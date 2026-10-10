@@ -6,7 +6,10 @@
            [java.nio ByteBuffer ByteOrder]
            [java.nio.charset StandardCharsets]))
 
-(defn encode-packet ^bytes [^long id ^long type ^String payload]
+(defn encode-packet
+  "One RCON packet: little-endian length, id, type (3 login, 2 command), the
+   UTF-8 payload and two null bytes."
+  ^bytes [^long id ^long type ^String payload]
   (let [body (.getBytes payload StandardCharsets/UTF_8)
         len (+ 4 4 (alength body) 2)
         bb (doto (ByteBuffer/allocate (+ 4 len)) (.order ByteOrder/LITTLE_ENDIAN))]
@@ -27,7 +30,7 @@
           (.get bb) (.get bb)
           {:id id :type type :body (String. body StandardCharsets/UTF_8)})))))
 
-(defn read-response [^DataInputStream in]
+(defn read-response "Block for one whole response packet and decode it." [^DataInputStream in]
   (let [head (byte-array 4)]
     (.readFully in head)
     (let [len (.getInt (.order (ByteBuffer/wrap head) ByteOrder/LITTLE_ENDIAN))
@@ -35,7 +38,10 @@
       (.readFully in rest)
       (decode-packet (ByteBuffer/wrap (byte-array (concat head rest)))))))
 
-(defn connect [host port pass]
+(defn connect
+  "Open and authenticate; returns {:sock :in :out :next-id}. Throws when the
+   password is refused (the server answers with id -1)."
+  [host port pass]
   (let [sock (doto (Socket.) (.connect (InetSocketAddress. ^String host (int port)) 5000))
         in (DataInputStream. (.getInputStream sock))
         out (DataOutputStream. (.getOutputStream sock))]
@@ -57,9 +63,12 @@
           (str acc (:body r))
           (recur acc))))))
 
-(defn close [{:keys [^Socket sock]}] (.close sock))
+(defn close "Close the connection's socket." [{:keys [^Socket sock]}] (.close sock))
 
-(defn with-rcon [host port pass f]
+(defn with-rcon
+  "Call (f conn) on an authenticated connection and close it afterwards, even on
+   a throw; returns what f returns."
+  [host port pass f]
   (let [c (connect host port pass)]
     (try (f c) (finally (close c)))))
 
