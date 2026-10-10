@@ -7,9 +7,11 @@
    effects were recorded are read unchanged; they just have nothing to verify."
   (:require [clojure.core.async :as a]
             [clojure.edn :as edn]
-            [clojure.java.io :as io])
+            [clojure.java.io :as io]
+            [clojure.string :as str])
   (:import [java.io PushbackReader Writer]
-           [java.util Base64]))
+           [java.util Base64]
+           [java.util.zip GZIPInputStream]))
 
 (defmethod print-method (Class/forName "[B") [^bytes b ^Writer w]
   (.write w "#clojurecraft/bytes \"")
@@ -54,9 +56,12 @@
      :close (fn [] (a/close! ch) (a/<!! done))}))
 
 (defn entries
-  "Every line of a recording, in order: event maps and {:record/effects ...} maps."
+  "Every line of a recording, in order: event maps, {:record/effects ...} and {:record/result
+   ...} maps. A path ending in .gz is read through gzip (the size recordings are kept at in git)."
   [path]
-  (with-open [r (PushbackReader. (io/reader path))]
+  (with-open [r (PushbackReader. (io/reader (if (str/ends-with? (str path) ".gz")
+                                              (GZIPInputStream. (io/input-stream path))
+                                              path)))]
     (into [] (take-while some? (repeatedly #(edn/read {:readers readers :eof nil} r))))))
 
 (defn recorded-result

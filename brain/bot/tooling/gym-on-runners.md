@@ -21,6 +21,7 @@ sourceRefs:
   - ".github/workflows/gym.yml#fail-on-cache-miss: true"
   - ".github/workflows/gym.yml#max-parallel: 20"
   - test/clojurecraft/gym_test.clj#outcome-is-judged-twice
+  - test/clojurecraft/recordings_test.clj#every-recorded-run-replays
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[harness-landing]]"
@@ -43,6 +44,9 @@ Three workflows. `test.yml` runs `clojure -M:test` and the brain checker on ever
 
 ## Landing sets
 `ci/gym.edn` names each set: a centre far from world spawn (20000, 20000), n grid cells spacing apart, the biome cells snap to, and a pregeneration radius. `landings/landings!` snaps each cell with `locate biome`, finds the surface with a marker entity, keeps it when y >= 55 and no harness landing check passes (else tries the harness's nearby offsets), and pregenerates the chunks around it. Run k always lands on `landings[k]` (`landing-for`, wrapping), so batches are paired.
+
+## Recordings as regression inputs
+A gym run's recording can be promoted into `test/recordings/<name>/` (`run.edn.gz`, gzip because `record/entries` reads it natively, plus the run's `result.edn`); the corpus stays under 10 MB. `recordings_test` folds each one: every intermediate world must satisfy the world spec, and the fold must reach exactly the RESULT the run printed, which must also be the one the gym judged. The first entry is run 3 of batch wood-a1 (1.2 MB). A replay is open-loop, so when the bot's behaviour changes on purpose a diverging recording is re-promoted from the next batch.
 
 ## Gotchas
 - The recording ends at RESULT and stores it ([[record-replay]]), so a downloaded `run.edn.zst` replays to exactly the RESULT in `result.edn` (`:replay/result :identical`).
