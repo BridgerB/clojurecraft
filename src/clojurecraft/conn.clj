@@ -89,7 +89,7 @@
                 state (:state @proto)
                 pkt (try (chunk/attach (p/decode state :s2c frame))
                          (catch Exception e {:packet/name :decode-error :packet/state state
-                                             :packet/error (str e) :packet/len (alength frame)}))]
+                                             :packet/error (str e) :packet/len (alength ^bytes frame)}))]
             (when (and (= state :login) (= :login-compression (:packet/name pkt)))
               (swap! proto assoc :threshold (:threshold pkt)))
             (a/>!! inbox pkt)

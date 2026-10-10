@@ -49,9 +49,9 @@
 
 (defn clip
   "Shrink the move d along axis so box does not enter any of boxes."
-  ^double [box boxes axis ^double d]
+  [box boxes axis d]
   (let [others (remove #{axis} [0 1 2])]
-    (reduce (fn [^double d c]
+    (reduce (fn [d c]
               (if (every? #(overlaps? box c %) others)
                 (cond
                   (and (pos? d) (>= (double (c axis)) (double (box (+ axis 3)))))
@@ -65,7 +65,7 @@
 (defn shift "The box moved d along axis." [box axis d]
   (-> box (update axis + d) (update (+ axis 3) + d)))
 
-(defn squash "v, or 0.0 when it is below negligible (vanilla's velocity snap)." ^double [^double v] (if (< (Math/abs v) negligible) 0.0 v))
+(defn squash "v, or 0.0 when it is below negligible (vanilla's velocity snap)." [v] (if (< (Math/abs (double v)) negligible) 0.0 v))
 
 (defn step
   "One tick of movement. Reads :player/pos :player/vel :player/on-ground? :player/jump-ticks and

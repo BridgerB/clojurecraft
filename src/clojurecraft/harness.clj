@@ -104,7 +104,7 @@
   (when-let [[fx fz] (locate-forest rc name)]
     (loop [[[ox oz] & more] landing-offsets]
       (teleport! rc name [(+ fx ox) (+ fz oz)])
-      (Thread/sleep settle-ms)
+      (Thread/sleep (long settle-ms))
       (let [why (bad-landing (for [[reason test] checks]
                                [reason (rcon/command rc (str "execute at " name " " test))]))]
         (if (and why (seq more))

@@ -16,7 +16,7 @@
 (defn table-slot
   "Player-inventory slot → crafting-table window slot (hotbar 0-8 → 37-45, store 9-35 → 10-36),
    or nil for armor and offhand, which the table window does not show."
-  [^long p] (cond (<= 0 p 8) (+ 37 p) (<= 9 p 35) (inc p) :else nil))
+  [p] (cond (<= 0 p 8) (+ 37 p) (<= 9 p 35) (inc p) :else nil))
 
 (defn view
   "The window an intent clicks in: :inventory (window 0, 2x2 grid) or :table (the open

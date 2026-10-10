@@ -47,7 +47,7 @@
   (let [sock (doto (Socket.) (.connect (InetSocketAddress. ^String host (int port)) 5000))
         in (DataInputStream. (.getInputStream sock))
         out (DataOutputStream. (.getOutputStream sock))]
-    (.write out (encode-packet 1 3 pass))
+    (.write out ^bytes (encode-packet 1 3 pass))
     (.flush out)
     (let [r (read-response in)]
       (when (= -1 (:id r)) (throw (ex-info "rcon auth failed" {:host host :port port}))))
@@ -57,7 +57,7 @@
   "Send one command, return the server's text response."
   [{:keys [^DataInputStream in ^DataOutputStream out next-id]} ^String s]
   (let [id (swap! next-id inc)]
-    (.write out (encode-packet id 2 s))
+    (.write out ^bytes (encode-packet id 2 s))
     (.flush out)
     (loop [acc ""]
       (let [r (read-response in)]

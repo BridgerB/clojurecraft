@@ -31,55 +31,43 @@
     :wall_sign :ceiling_hanging_sign :wall_hanging_sign :ladder :snow_layer :web :fire :soul_fire
     :lily_pad :small_dripleaf :moving_piston})
 
-(def max-state (long (apply max (map #(nth % 3) table))))
+(defn states-where
+  "The set of every state id of the table rows matching pred."
+  [pred]
+  (set (for [[_ _ lo hi :as row] table :when (pred row), s (range lo (inc hi))] s)))
 
 (def rows
-  (let [arr (object-array (inc max-state))]
-    (doseq [[_ _ lo hi :as row] table, s (range lo (inc hi))] (aset arr s row))
-    arr))
+  "state id → its [name type min-state max-state] row."
+  (into {} (for [[_ _ lo hi :as row] table, s (range lo (inc hi))] [s row])))
 
-(defn row
-  "[name type min-state max-state] for a block-state id, or nil when out of range."
-  [^long id] (when (<= 0 id max-state) (aget ^objects rows id)))
+(defn row "[name type min-state max-state] for a block-state id, or nil." [id] (get rows id))
 (defn name-of "The block name keyword of a state id, or nil." [id] (some-> (row id) (nth 0)))
 (defn type-of
   "The block definition type keyword of a state id (grass_block's is :grass), or nil."
   [id] (some-> (row id) (nth 1)))
 
-(def solid-flags
-  (let [arr (boolean-array (inc max-state))]
-    (doseq [[_ type lo hi] table, s (range lo (inc hi))]
-      (aset arr s (not (contains? passable-types type))))
-    arr))
+(def solid-states
+  "Every state that collides as a full cube (approximation: every non-passable type does)."
+  (states-where (fn [[_ type]] (not (contains? passable-types type)))))
 
 (defn solid?
   "Does the block state collide as a full cube (approximation: every non-passable type does)?"
-  [^long id]
-  (and (<= 0 id max-state) (aget ^booleans solid-flags id)))
+  [id]
+  (contains? solid-states id))
 
 (defn log-name?
   "Does a block or item name end in _log (every species, stripped ones too)?"
   [n] (str/ends-with? (name n) "_log"))
 
-(def log-flags
-  (let [arr (boolean-array (inc max-state))]
-    (doseq [[n _ lo hi] table :when (log-name? n), s (range lo (inc hi))] (aset arr s true))
-    arr))
+(def log-states "Every state of every log block." (states-where (fn [[n]] (log-name? n))))
 
-(defn log?
-  "Is the state id any log block?"
-  [^long id] (and (<= 0 id max-state) (aget ^booleans log-flags id)))
+(defn log? "Is the state id any log block?" [id] (contains? log-states id))
 
 (def log-items (set (for [[n id] items :when (log-name? n)] id)))
 
-(def leaf-flags
-  (let [arr (boolean-array (inc max-state))]
-    (doseq [[n _ lo hi] table :when (str/ends-with? (name n) "_leaves"), s (range lo (inc hi))] (aset arr s true))
-    arr))
+(def leaf-states "Every state of every leaves block." (states-where (fn [[n]] (str/ends-with? (name n) "_leaves"))))
 
-(defn leaves?
-  "Is the state id any leaves block?"
-  [^long id] (and (<= 0 id max-state) (aget ^booleans leaf-flags id)))
+(defn leaves? "Is the state id any leaves block?" [id] (contains? leaf-states id))
 (defn log-item? "Is the item id any log item?" [id] (contains? log-items id))
 
 (def air 0)                           ; the state id of air

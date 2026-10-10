@@ -16,7 +16,7 @@
 
 (defn container->player-slot
   "Window-0 slot → player-inventory slot (the key space of :player/inventory), or nil."
-  [^long s]
+  [s]
   (cond (<= 36 s 44) (- s 36)
         (<= 9 s 35) s
         (<= 5 s 8) (- 44 s)                ; window 5-8 are head..feet; player 36-39 are feet..head
@@ -42,7 +42,7 @@
 
 (defn window->player-slot
   "A slot of an open container → player-inventory slot, or nil when it is the container's own."
-  [menu-type ^long s]
+  [menu-type s]
   (when-let [start (:menu/inventory (menus menu-type))]
     (let [i (- s start)]
       (cond (<= 0 i 26) (+ i 9)

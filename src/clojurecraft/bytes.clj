@@ -55,7 +55,7 @@
   (let [a (byte-array n)] (.get b a) a))
 
 (defn read-string "A varint byte length, then that many bytes of UTF-8." ^String [^ByteBuffer b]
-  (String. (read-bytes b (read-varint b)) StandardCharsets/UTF_8))
+  (String. ^bytes (read-bytes b (read-varint b)) StandardCharsets/UTF_8))
 
 (defn read-uuid "16 raw bytes: most significant long, then least." ^UUID [^ByteBuffer b]
   (let [msb (.getLong b) lsb (.getLong b)] (UUID. msb lsb)))
