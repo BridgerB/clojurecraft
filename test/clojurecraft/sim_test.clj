@@ -215,12 +215,12 @@
   ;; (a fleet shard's), FOREST_OUT=f writes the verdict as EDN.
   (let [r (tc/quick-check
            (or (some-> (System/getenv "FOREST_TRIALS") Long/parseLong) 2000)
-           :seed (or (some-> (System/getenv "FOREST_SEED") Long/parseLong) (System/currentTimeMillis))
            (prop/for-all [trees (gen/vector tree-gen 1 3) sx (gen/choose 0 1) sz (gen/choose 0 1)]
                          (let [sim0 (sim/init {:column (world/column-bytes (forest trees)) :spawn [(+ sx 0.5) 64.0 (+ sz 0.5)]})
                                [w sim] (sim/run step (game/init fx/opts) sim0 #(or (plan/done? %) (plan/failed? %))
                                                 90000 {:event/kind :go :go/goals [:wood]})]
-                           (and (plan/done? w) (= 1 (inventory/logs-held w)) (empty? (:sim/violations sim))))))]
+                           (and (plan/done? w) (= 1 (inventory/logs-held w)) (empty? (:sim/violations sim)))))
+           :seed (or (some-> (System/getenv "FOREST_SEED") Long/parseLong) (System/currentTimeMillis)))]
     (when-let [out (System/getenv "FOREST_OUT")]               ; a fleet shard reads its verdict as data
       (spit out (pr-str {:pass? (boolean (:pass? r)) :num-tests (:num-tests r) :seed (:seed r)
                          :smallest (get-in r [:shrunk :smallest])})))

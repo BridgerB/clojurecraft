@@ -154,7 +154,7 @@
   "The bot's classpath in dir (`clojure -Spath`), computed once per worker so each bot starts as
    a plain java process."
   [dir]
-  (let [f (java.io.File/createTempFile "cp" ".txt")]
+  (let [f (java.io.File/createTempFile "classpath" ".txt")]
     (exec! ["clojure" "-Spath"] {:dir dir :log f})
     (str/trim (last (str/split-lines (slurp f))))))
 
