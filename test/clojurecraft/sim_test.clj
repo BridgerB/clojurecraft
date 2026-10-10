@@ -3,6 +3,9 @@
    drop → pickup → done, with no socket and no Java process."
   (:require [clojure.spec.alpha]
             [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojure.test.check :as tc]
+            [clojure.test.check.generators :as gen]
+            [clojure.test.check.properties :as prop]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.make]
@@ -163,3 +166,34 @@
                        #(or (plan/done? %) (plan/failed? %)) 200000 {:event/kind :go :go/goals [:pickaxe]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= [] @bad))))
+
+;; ---------------------------------------------------------------- generated worlds
+
+(def log-species "Axis-y log state ids: oak, spruce, birch." [137 140 143])
+(def leaf-id 252)
+
+(def tree-gen
+  "One tree: a trunk of 3-6 logs of one species at a local (x, z) at least 3 blocks from the
+   spawn column, with a leaf block on top."
+  (gen/let [x (gen/choose 3 13) z (gen/choose 3 13) h (gen/choose 3 6) id (gen/elements log-species)]
+    {:x x :z z :h h :id id}))
+
+(defn forest
+  "{[lx y lz] id} for trees standing on the stone floor (y 64 up); a later tree's blocks win."
+  [trees]
+  (into {} (for [{:keys [x z h id]} trees
+                 [y b] (concat (for [y (range 64 (+ 64 h))] [y id]) [[(+ 64 h) leaf-id]])]
+             [[x y z] b])))
+
+(deftest the-wood-goal-holds-in-generated-forests
+  ;; the bot against the model in worlds test.check builds: 1-3 trees of mixed species and
+  ;; heights anywhere in the column. In every one it ends holding a log, without the sim ever
+  ;; seeing something a real server would punish.
+  (let [r (tc/quick-check
+           (or (some-> (System/getenv "FOREST_TRIALS") Long/parseLong) 100)
+           (prop/for-all [trees (gen/vector tree-gen 1 3)]
+                         (let [sim0 (sim/init {:column (world/column-bytes (forest trees)) :spawn [0.5 64.0 0.5]})
+                               [w sim] (sim/run step (game/init fx/opts) sim0 #(or (plan/done? %) (plan/failed? %))
+                                                90000 {:event/kind :go :go/goals [:wood]})]
+                           (and (plan/done? w) (= 1 (game/logs-held w)) (empty? (:sim/violations sim))))))]
+    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests])))))

@@ -5,14 +5,15 @@ type: reference
 tags: [bot, tooling, sim, tests]
 aliases: [sim.clj, fake server, socket-free test, sim/run]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-10
+verifiedAgainst: cc7365f
 sourceRefs:
   - src/clojurecraft/sim.clj#defn init
   - src/clojurecraft/sim.clj#defn run
   - src/clojurecraft/sim.clj#def dig-ms
   - src/clojurecraft/sim.clj#observed live on 26.1.2: the breaker gets the block update, then the ack
   - test/clojurecraft/sim_test.clj#collects-one-log-against-the-model
+  - test/clojurecraft/sim_test.clj#the-wood-goal-holds-in-generated-forests
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[early-finish-aborts]]"
@@ -26,6 +27,7 @@ related:
 ## Key files
 - `sim.clj`, `init` - takes `{:column bytes :spawn [x y z] :keep-alive-every ms :drop-clicks #{n} :inventory {slot item}}`.
 - `sim.clj`, `run` - drives a bot reducer against the model 50 ms per tick, sends `:go` once loaded, stops on a predicate.
+- `sim_test.clj`, `the-wood-goal-holds-in-generated-forests` - test.check builds worlds (1-3 trees of oak, spruce or birch, 3-6 logs high, anywhere in the column at least 3 blocks from spawn) and runs the whole bot against the model in each: it must end holding a log with no violation. 100 worlds by default, `FOREST_TRIALS=n` for more; one run takes tens of milliseconds, so 300 worlds take seconds. Treating only oak as a log passes every hand-built test and fails this one, shrunk to a single 3-high spruce.
 - `sim_test.clj` - end-to-end tests: one log held (`:wood`), a low canopy cleared, a table and four sticks (`:kit`), a placed table and a wooden pickaxe (`:pickaxe`), and recovery from a lost click.
 
 ## Gotchas
