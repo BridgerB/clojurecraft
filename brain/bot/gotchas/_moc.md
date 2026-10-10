@@ -21,5 +21,7 @@ related:
 - [[junk-crafts]] - a dirty grid crafts a pressure plate or a button.
 - [[memory-edge-cases]] - logs broken while unloaded stay logs in memory.
 
+- [[recipe-patterns-shrink]] - a recipe never matches, or a 1x2 recipe seems to need a table: vanilla trims pattern padding.
+
 ## See also
 - [[bot/_moc|Bot pillar]]
