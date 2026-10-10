@@ -532,3 +532,27 @@
                          {:event/kind :go :go/goals [:cobblestone]})]
     (is (not-any? #(= 1 (sim/block-at (assoc sim :sim/broken #{}) %)) (:sim/broken sim)) "no stone was dug by hand")
     (is (or (pos? (get (held w) :wooden_pickaxe 0)) (plan/failed? w)) (pr-str (plan/summary w)))))
+
+;; ---------------------------------------------------------------- death and respawn (issue #5)
+
+(def well
+  "A one-wide well of water seven deep at the spawn column, stone all round: a bot dropped in
+   sinks to the bottom and its eye never clears the surface."
+  (into {} (for [y (range 58 65)] [[0 y 0] 86])))
+
+(deftest held-under-water-the-bot-drowns-and-respawns-with-no-intent
+  ;; issue #5: before this the bot could not tell it was in water, set-health only recorded a
+  ;; number, and nothing handled death; now the model drowns it and it asks to respawn
+  (let [[w sim] (sim/run step (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes well) :spawn [0.5 64.0 0.5] :respawn [2.5 64.0 0.5]})
+                         #(and (pos? (:stats/deaths % 0)) (not (:player/dead? %)) (:player/on-ground? %))
+                         40000 {:event/kind :go :go/goals []})]
+    (is (= 1 (:stats/deaths w)) "died once")
+    (is (not (:player/dead? w)) "and was respawned")
+    (is (nil? (:plan/intent w)))
+    (is (= game/max-air (:player/air w)) "lungs full after the respawn")
+    (is (= 20.0 (:sim/health sim)))
+    (is (= [:death] (map :answer/kind (memory/answers w :death))) "the death is a fact")
+    (is (= 1 (:sim/respawns sim)) "the bot asked to respawn, once")
+    (is (= 2.5 (first (:player/pos w))) "on the world spawn, beside the well")
+    (is (empty? (:sim/violations sim)))))

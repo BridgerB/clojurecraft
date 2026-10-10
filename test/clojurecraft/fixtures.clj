@@ -18,6 +18,11 @@
   "The login-finished packet as the decoder produces it: every field its spec lists."
   {:packet/name :login-finished :uuid #uuid "00000000-0000-3000-8000-000000000000" :username "Clj_test"})
 
+(def respawn
+  "A respawn as the decoder produces it (the spec's fields, issue #5), into the overworld."
+  {:packet/name :respawn :dimension-type 0 :dimension "minecraft:overworld" :seed 0 :game-type 0
+   :previous-game-type -1 :debug? false :flat? false})
+
 (defn fold
   "Fold events through step; returns [final-world [[now effect] ...]] with effects cleared
    after each step, as the loop does."

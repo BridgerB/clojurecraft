@@ -69,7 +69,14 @@
    [:play :s2c :set-cursor-item] [[:item :slot]]
    [:play :s2c :set-held-slot] [[:slot :varint]]
    [:play :s2c :start-configuration] []
-   [:play :s2c :respawn] []                    ; fields not modelled yet (issue #5); its arrival matters
+   ;; respawn: CommonPlayerSpawnInfo first; the optional death location and what follows are an
+   ;; unmodelled tail (the decoder ignores the rest of a frame). Field order read from the game's
+   ;; own ClientboundRespawnPacket at datagen (issue #5)
+   [:play :s2c :respawn] [[:dimension-type :varint] [:dimension :string] [:seed :i64] [:game-type :u8]
+                          [:previous-game-type :i8] [:debug? :bool] [:flat? :bool]]
+   [:play :s2c :damage-event] [[:entity-id :varint] [:source-type :varint] [:source-cause :varint] [:source-direct :varint]]
+   [:play :s2c :player-combat-kill] [[:player-id :varint]]
+   [:play :s2c :game-event] [[:event :u8] [:param :f32]]
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
    [:play :c2s :pong] [[:id :i32]]
@@ -87,6 +94,7 @@
    [:play :c2s :set-carried-item] [[:slot :i16]]
    [:play :c2s :player-action] [[:status :varint] [:pos :position] [:face :i8] [:sequence :varint]]
    [:play :c2s :swing] [[:hand :varint]]
+   [:play :c2s :client-command] [[:action :varint]]   ; 0: perform respawn
    ;; 775 clicks carry the client's prediction as hashed slots; we always predict nothing
    ;; (:changed [] :cursor nil) so the server answers every click with authoritative slots.
    [:play :c2s :container-click] [[:window-id :varint] [:state-id :varint] [:slot :i16] [:button :i8] [:mode :varint]

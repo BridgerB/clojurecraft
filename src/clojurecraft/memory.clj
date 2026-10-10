@@ -14,7 +14,7 @@
    :started|:done|:failed|:abandoned :intention/kind k :intention/at ms} plus the target, recipe
    or reason when there is one. `intention-as-of` answers what the bot was trying to do at any time t.
 
-   The server's answers to the bot's own actions are facts too: {:answer/kind :ack|:pickup
+   The server's answers to the bot's own actions are facts too: {:answer/kind :ack|:pickup|:death
    :answer/at ms} with the acknowledged :answer/sequence, or the picked-up :answer/entity and
    :answer/count. A broken block needs no answer fact: it is a sighting of air where it stood."
   (:require [clojurecraft.blocks :as blocks]

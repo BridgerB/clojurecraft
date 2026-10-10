@@ -75,11 +75,16 @@
 (def pickup-delay 500)                ; ms before a dropped item can be picked up (vanilla: 10 ticks)
 (def keep-alive-every 15000)          ; ms between the model's keep-alives (vanilla: 15 s)
 (def max-stack 64)                    ; items per slot
+(def max-air 300)                     ; a full breath, as the game's
+(def drown-every 20)                  ; ticks between drowning hurts at zero air
+(def drown-damage 2.0)                ; health taken by each
 
 (defn init
   "A fresh server before the handshake, from {:column bytes :spawn [x y z]} plus optional
-   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {window-0-slot item} and :lag-ticks."
-  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks] :or {keep-alive-every keep-alive-every}}]
+   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {window-0-slot item}, :lag-ticks and
+   :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
+   from the world spawn)."
+  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn] :or {keep-alive-every keep-alive-every}}]
   {:sim/phase :handshake
    :sim/lag-ticks (or lag-ticks 0)
    :sim/inv (or inventory {})
@@ -96,7 +101,11 @@
    :sim/column column
    :sim/chunk (chunk/decode column)
    :sim/spawn spawn
+   :sim/respawn (or respawn spawn)
    :sim/broken #{}
+   :sim/air max-air
+   :sim/health 20.0
+   :sim/respawns 0
    :sim/items {}
    :sim/next-eid 100
    :sim/next-keep-alive keep-alive-every
@@ -380,6 +389,24 @@
 
 (defmethod on-packet [:play :set-carried-item] [sim {:keys [slot]}] (assoc sim :sim/held slot))
 
+(def respawn
+  "The respawn the model sends for a new life: the overworld, survival, nothing before it."
+  {:packet/name :respawn :dimension-type 0 :dimension "minecraft:overworld" :seed 0 :game-type 0
+   :previous-game-type -1 :debug? false :flat? false})
+
+(defmethod on-packet [:play :client-command] [sim {:keys [action]}]
+  ;; 0 asks to respawn: a dead player gets a new life at spawn, full health and breath, then
+  ;; the teleport that places it
+  (if (and (= 0 action) (<= (:sim/health sim) 0.0))
+    (let [[x y z] (:sim/respawn sim)]
+      (-> sim
+          (assoc :sim/health 20.0 :sim/air max-air :sim/player-pos [x y z])
+          (update :sim/respawns inc)
+          (send respawn)
+          (send {:packet/name :player-position :teleport-id 2 :x x :y y :z z :dx 0.0 :dy 0.0 :dz 0.0
+                 :yaw 0.0 :pitch 0.0 :flags 0})))
+    sim))
+
 (defmethod on-packet [:play :use-item-on] [sim {:keys [pos face sequence]}]
   (let [ack {:packet/name :block-changed-ack :sequence sequence}]
     (if (= table-state (block-at sim pos))
@@ -417,11 +444,31 @@
   [[px py pz] [ix iy iz]]
   (and (< (abs (- px ix)) 1.3) (< (abs (- pz iz)) 1.3) (< -0.5 (- iy py) 2.3)))
 
+(defn eye-under?
+  "Is the player's eye (y + 1.62, from the position the client last reported) in a water block
+   of the model's column?"
+  [sim]
+  (when-let [[x y z] (:sim/player-pos sim)]
+    (= :water (:fluid/kind (blocks/fluid (block-at sim [(long (Math/floor x)) (long (Math/floor (+ y 1.62))) (long (Math/floor z))]))))))
+
+(defn drown
+  "One tick of breath: air falls while the eye is under and refills otherwise; at zero, a hurt
+   of drown-damage every drown-every ticks, each told to the client as set-health. A dead
+   player (health at zero) is left for client-command to respawn."
+  [sim]
+  (let [under? (eye-under? sim)
+        air (if under? (max 0 (- (:sim/air sim) 1)) (min max-air (+ (:sim/air sim) 4)))
+        hurt? (and under? (zero? air) (zero? (mod (quot (:sim/now sim) 50) drown-every)) (pos? (:sim/health sim)))
+        health (if hurt? (max 0.0 (- (:sim/health sim) drown-damage)) (:sim/health sim))]
+    (cond-> (assoc sim :sim/air air :sim/health health)
+      hurt? (send {:packet/name :set-health :health health :food 20 :saturation 5.0}))))
+
 (defn tick
-  "Advance the server clock to now: send a keep-alive when one is due, and hand over every
-   item whose pickup delay has passed and that the player stands within reach of."
+  "Advance the server clock to now: send a keep-alive when one is due, breathe or drown, and
+   hand over every item whose pickup delay has passed and that the player stands within reach
+   of."
   [sim now]
-  (let [sim (assoc sim :sim/now now)
+  (let [sim (drown (assoc sim :sim/now now))
         sim (if (>= now (:sim/next-keep-alive sim))
               (-> sim
                   (send {:packet/name :keep-alive :id now})

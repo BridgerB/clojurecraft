@@ -128,3 +128,17 @@
                            :else (and (= 2 (count actions)) (= 0 (:status start)) (= 2 (:status finish))
                                       (>= (- t1 t0) (intent/finish-delay ms))
                                       (= (:sequence finish) (inc (:sequence start)))))))))
+
+(deftest step-is-total-after-a-death
+  ;; issue #5: a set-health of 0 followed by any packets never throws, and the intent that was
+  ;; running is gone (a new life plans afresh)
+  (check (prop/for-all [pkts (gen/vector s2c-play-packet 0 20)]
+                       (let [w0 (assoc (in-play) :plan/intent {:intent/kind :walk :intent/target [1 64 1]}
+                                       :plan/last {:intent/kind :walk :intent/target [1 64 1]})
+                             [w fx] (fx/fold game/step w0
+                                             (cons (fx/packet {:packet/name :set-health :health 0.0 :food 20 :saturation 5.0})
+                                                   (map fx/packet pkts)))]
+                         (and (s/valid? :clojurecraft.spec/world w)
+                              (not (contains? w :plan/intent))
+                              (not (contains? w :plan/last))
+                              (some #(= % {:packet/name :client-command :action 0}) (fx/packets fx)))))))

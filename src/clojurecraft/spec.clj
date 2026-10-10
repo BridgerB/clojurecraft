@@ -44,6 +44,8 @@
 (s/def :player/horizontal-collision? boolean?)
 (s/def :player/fall-distance (s/double-in :min 0.0 :NaN? false :infinite? false))
 (s/def :player/in-water? boolean?)
+(s/def :player/air (s/int-in 0 301))
+(s/def :player/dead? boolean?)
 (s/def :player/in-lava? boolean?)
 (s/def :player/eye-in-water? boolean?)
 (s/def :control/sneak? boolean?)
@@ -319,7 +321,7 @@
 (s/def :intention/target ::block-pos)
 (s/def :intention/recipe keyword?)
 (s/def :intention/reason some?)
-(s/def :answer/kind #{:ack :pickup})
+(s/def :answer/kind #{:ack :pickup :death})
 (s/def :answer/at int?)
 (s/def :answer/sequence int?)
 (s/def :answer/entity int?)
@@ -381,7 +383,8 @@
   (s/and map? (fn has-every-key [m] (every? #(contains? m %) ks))))
 
 (s/fdef game/eye :args (s/cat :world (requires :player/pos)))
-(s/fdef physics/step :args (s/cat :solid? fn? :world (requires :player/pos) :controls map?))
+(s/fdef physics/step :args (s/cat :solid? fn? :fluid-at (s/? fn?) :world (requires :player/pos) :controls map?))
+(s/fdef terrain/fluid-fn :args (s/cat :world (requires :world/chunks)))
 (s/fdef inventory/item-count :args (s/cat :world (requires :player/inventory) :id int?))
 (s/fdef inventory/logs-held :args (s/cat :world (requires :player/inventory)))
 (s/fdef terrain/block-at :args (s/cat :world (requires :world/chunks) :pos (s/coll-of number? :count 3)))
@@ -401,7 +404,7 @@
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
-   `terrain/solid-fn `memory/positions-now `memory/nearest-log `make/near `make/decide
+   `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-log `make/near `make/decide
    `wood/gather-next `place/spot `window/view `path/plan `path/classify])
 (s/def :stats/deaths pos-int?)
 
