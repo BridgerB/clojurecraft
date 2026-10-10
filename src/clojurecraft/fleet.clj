@@ -308,12 +308,12 @@
     [(vec (filter :gym/outcome rows)) (vec (remove :gym/outcome rows))]))
 
 (defn pull!
-  "Download a fleet run's artifacts into data/runs/<run-id>/ (gh run download), print its report
+  "Download a fleet run's worker artifacts into data/runs/<run-id>/ (gh run download), print its report
    and every failure with the directory that holds its recording."
   [run-id]
   (let [dir (io/file "data" "runs" (str run-id))]
     (.mkdirs dir)
-    (exec! ["gh" "run" "download" (str run-id) "--dir" (str dir)] {})
+    (exec! ["gh" "run" "download" (str run-id) "--pattern" "fleet-*-w*" "--dir" (str dir)] {}) ; workers only: the summary repeats their rows
     (let [[g s] (rows-in dir)
           fs (failures (located-in dir))]
       (println (report g s))
