@@ -6,6 +6,14 @@
             [clojure.string :as str]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
+            [clojurecraft.make :as make]
+            [clojurecraft.memory :as memory]
+            [clojurecraft.physics :as physics]
+            [clojurecraft.place :as place]
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.window :as window]
+            [clojurecraft.wood :as wood]
             [clojurecraft.packet :as p]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -323,3 +331,34 @@
 (s/def :sim/keep-alives-pending set?)
 (s/def ::sim (s/keys :req [:sim/phase :sim/now :sim/out]))
 (s/fdef sim/step :args (s/cat :sim ::sim :event ::sim-event) :ret ::sim)
+
+;; ---------------------------------------------------------------- selection
+;; Maybe Not: schema (what an attribute is, the specs above) and selection (which attributes a
+;; given function needs) are different things. A selection only says which keys must be
+;; present; their shapes come from the schema. Each function below states its selection as an
+;; fdef on its world argument; selected lists them for instrumentation.
+
+(defn requires
+  "A spec for a map that holds every key in ks (selection only: shapes are the schema's)."
+  [& ks]
+  (s/and map? (fn has-every-key [m] (every? #(contains? m %) ks))))
+
+(s/fdef game/eye :args (s/cat :world (requires :player/pos)))
+(s/fdef physics/step :args (s/cat :solid? fn? :world (requires :player/pos) :controls map?))
+(s/fdef inventory/item-count :args (s/cat :world (requires :player/inventory) :id int?))
+(s/fdef inventory/logs-held :args (s/cat :world (requires :player/inventory)))
+(s/fdef terrain/block-at :args (s/cat :world (requires :world/chunks) :pos (s/coll-of number? :count 3)))
+(s/fdef terrain/solid-fn :args (s/cat :world (requires :world/chunks)))
+(s/fdef memory/positions-now :args (s/cat :world (requires :world/facts) :states coll?))
+(s/fdef memory/nearest-log :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number? :blacklist any?))
+(s/fdef make/near :args (s/cat :world (requires :player/pos :world/facts) :block keyword?))
+(s/fdef make/decide :args (s/cat :world (requires :player/inventory :player/pos :world/facts) :goal map?))
+(s/fdef wood/gather-next :args (s/cat :world (requires :player/pos :world/facts)))
+(s/fdef place/spot :args (s/cat :world (requires :player/pos :world/chunks)))
+(s/fdef window/view :args (s/cat :world (requires :window/grid) :which #{:inventory :table}))
+
+(def selected
+  "Every function whose selection is stated above, for instrument."
+  [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
+   `terrain/solid-fn `memory/positions-now `memory/nearest-log `make/near `make/decide
+   `wood/gather-next `place/spot `window/view])
