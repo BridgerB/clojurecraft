@@ -75,7 +75,11 @@
 (s/def :event/packet ::packet)
 (s/def :event/reason string?)
 (s/def :go/goals (s/coll-of keyword?))
-(s/def ::event (s/keys :req [:event/kind] :opt [:event/now :event/rand :event/packet :event/reason :go/goals]))
+(s/def :start/host string?)
+(s/def :start/port int?)
+(s/def :start/name string?)
+(s/def ::event (s/keys :req [:event/kind] :opt [:event/now :event/rand :event/packet :event/reason :go/goals
+                                                :start/host :start/port :start/name]))
 
 ;; plan and intents
 (s/def :intent/kind keyword?)

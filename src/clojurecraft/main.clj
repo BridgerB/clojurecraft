@@ -42,6 +42,7 @@
   (when tap ((:write tap) event))
   (swap! world* step event)
   (let [effects (:bot/effects @world*)]
+    (when tap ((:effects tap) effects))
     (swap! world* assoc :bot/effects [])
     (doseq [e effects] (perform e out))))
 
@@ -104,7 +105,7 @@
                                                           :rcon-port (some-> rcon-port Long/parseLong)
                                                           :rcon-pass rcon-pass :go go})
                      (catch Throwable e (stamp "harness failed:" e) (a/>!! events go)))))
-    (apply-event! world* {:event/kind :start} (:out c) tap)
+    (apply-event! world* {:event/kind :start :start/host host :start/port (:port opts) :start/name name} (:out c) tap)
     (let [final (run-loop c events world* stop? tap)
           ok (boolean (and (goal? final) (not (:bot/closed final)) (not (:bot/disconnected final))))]
       (prn 'RESULT (result final until ok))
@@ -121,6 +122,10 @@
   "clojure -M:replay run.edn → RESULT of folding the reducer over the recording."
   [& [path]]
   (let [world0 (game/init {:host "replay" :port 0 :name "Clj_replay"})
-        final (record/replay step world0 path)]
-    (prn 'RESULT (result final "replay" (plan/done? final)))
+        final (record/replay step world0 path)
+        check (record/verify step world0 path)]
+    (prn 'RESULT (assoc (result final "replay" (plan/done? final))
+                        :replay/effects (cond (nil? check) :identical
+                                              (= check :record/no-effects) :not-recorded
+                                              :else check)))
     (shutdown-agents)))

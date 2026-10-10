@@ -6,7 +6,7 @@
    The world is a flat map of namespaced attributes (:player/pos, :world/chunks, :bot/phase ...),
    open and sparse: an attribute the bot does not know yet is simply absent. Events are maps:
 
-     {:event/kind :start}
+     {:event/kind :start :start/host h :start/port p :start/name n}   ; connection, all optional
      {:event/kind :packet :event/packet pkt}
      {:event/kind :tick :event/now ms :event/rand r}   ; the clock and randomness are inputs
      {:event/kind :go}
@@ -346,11 +346,22 @@
 
 (defmethod on-event :default [world _] world)
 
-(defmethod on-event :start [world _]
-  (-> world
-      (emit {:packet/name :intention :protocol-version protocol-version
-             :host (:conn/host world) :port (:conn/port world) :next-state 2})
-      (emit {:packet/name :hello :username (:bot/name world) :uuid (:bot/uuid world)})))
+(defn- connection
+  "The :start event may carry the connection it starts (:start/host :start/port :start/name);
+   then it, not init's arguments, decides them. That makes the connection an input in the
+   recording, so a replay rebuilds the same handshake (and the same offline UUID)."
+  [world {:start/keys [host port name]}]
+  (cond-> world
+    host (assoc :conn/host host)
+    port (assoc :conn/port port)
+    name (assoc :bot/name name :bot/uuid (b/offline-uuid name))))
+
+(defmethod on-event :start [world event]
+  (let [world (connection world event)]
+    (-> world
+        (emit {:packet/name :intention :protocol-version protocol-version
+               :host (:conn/host world) :port (:conn/port world) :next-state 2})
+        (emit {:packet/name :hello :username (:bot/name world) :uuid (:bot/uuid world)}))))
 
 (defmethod on-event :packet [world {:event/keys [packet]}] (on-packet world packet))
 (defmethod on-event :tick [world event] (on-tick world event))
