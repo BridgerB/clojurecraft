@@ -157,33 +157,40 @@
 
 ;;;; I/O: RCON, files, stdout ;;;;
 
-(defn land!
-  "The fixture for one run: wait for the bot, reset it (survival, empty inventory), give the
-   goal's prerequisites, land it on this run's landing of the set, pin its spawn there, write
-   what happened to the landed file and print the :go event for the bot's stdin. A landing that
-   fails still prints :go (without :go/at), and the judge will call the run :harness."
-  [{:keys [goal run name host rcon-port rcon-pass landings out]}]
+(defn landing!
+  "The fixture's work for one run: wait for the bot, reset it (survival, empty inventory), give
+   the goal's prerequisites, land it on this run's landing of the set and pin its spawn there.
+   Returns what happened: {:gym/landed? true :gym/landing :gym/at :gym/started}, or
+   {:gym/landed? false :gym/error ...}; never throws."
+  [{:keys [goal run name host rcon-port rcon-pass landings]}]
   (let [row (gym goal)
-        [x z y :as landing] (landings/landing-for (landings/read-landings landings) (parse-long run))
-        started (System/currentTimeMillis)
-        landed (try
-                 (rcon/with-rcon (or host "127.0.0.1") (parse-long rcon-port) rcon-pass
-                   (fn [rc]
-                     (when-not (harness/wait-online rc name harness/online-timeout)
-                       (throw (ex-info "bot never came online" {:name name})))
-                     (rcon/command rc (str "gamemode survival " name))
-                     (rcon/command rc (str "clear " name))
-                     (doseq [p (:gym/prereqs row)] (rcon/command rc (str "give " name " " p)))
-                     (harness/teleport! rc name [x z])
-                     (rcon/command rc (str "spawnpoint " name " " x " " y " " z))
-                     (Thread/sleep (long harness/settle-ms))
-                     {:gym/landed? true :gym/landing landing :gym/at (harness/position rc name) :gym/started started}))
-                 (catch Throwable e
-                   (harness/log "landing failed:" e)
-                   {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))]
+        [x z y :as landing] (landings/landing-for (landings/read-landings landings) (parse-long (str run)))
+        started (System/currentTimeMillis)]
+    (try
+      (rcon/with-rcon (or host "127.0.0.1") (parse-long (str rcon-port)) rcon-pass
+        (fn [rc]
+          (when-not (harness/wait-online rc name harness/online-timeout)
+            (throw (ex-info "bot never came online" {:name name})))
+          (rcon/command rc (str "gamemode survival " name))
+          (rcon/command rc (str "clear " name))
+          (doseq [p (:gym/prereqs row)] (rcon/command rc (str "give " name " " p)))
+          (harness/teleport! rc name [x z])
+          (rcon/command rc (str "spawnpoint " name " " x " " y " " z))
+          (Thread/sleep (long harness/settle-ms))
+          {:gym/landed? true :gym/landing landing :gym/at (harness/position rc name) :gym/started started}))
+      (catch Throwable e
+        (harness/log "landing failed:" e)
+        {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
+
+(defn land!
+  "The fixture as a process: landing!, then write what happened to the landed file and print the
+   :go event for the bot's stdin. A landing that fails still prints :go (without :go/at), and
+   the judge will call the run :harness."
+  [{:keys [goal out] :as opts}]
+  (let [landed (landing! opts)]
     (spit out (pr-str landed))
     (harness/log "landed" (pr-str landed))
-    (prn (harness/go-event (:gym/until row) (:gym/at landed)))
+    (prn (harness/go-event (:gym/until (gym goal)) (:gym/at landed)))
     (flush)))
 
 (defn wait-result!
@@ -207,11 +214,11 @@
                (edn/read-string (slurp landed))
                {:gym/landed? false :gym/error "no landed file"})
         truths (when result
-                 (try (rcon/with-rcon (or host "127.0.0.1") (parse-long rcon-port) rcon-pass
+                 (try (rcon/with-rcon (or host "127.0.0.1") (parse-long (str rcon-port)) rcon-pass
                         (fn [rc] (mapv #(truth % name (rcon/command rc (truth-cmd % name))) (:gym/truth row))))
                       (catch Throwable e (harness/log "truth failed:" e) [])))
         judged-row (judged (assoc left
-                                  :gym/goal (:gym/goal row) :gym/run (parse-long run) :gym/result result
+                                  :gym/goal (:gym/goal row) :gym/run (parse-long (str run)) :gym/result result
                                   :gym/truths truths :gym/commit commit
                                   :gym/ms (- (System/currentTimeMillis) (:gym/started left 0))))]
     (spit out (pr-str judged-row))
@@ -242,7 +249,7 @@
       "env" (let [row (gym goal)]
               (println (str "UNTIL=" (:gym/until row)))
               (println (str "TIMEOUT_MS=" (:gym/timeout-ms row))))
-      "landings" (let [ls (rcon/with-rcon (or host "127.0.0.1") (parse-long rcon-port) rcon-pass
+      "landings" (let [ls (rcon/with-rcon (or host "127.0.0.1") (parse-long (str rcon-port)) rcon-pass
                             #(landings/landings! % (landings/read-set plan set)))]
                    (spit out (pr-str ls))
                    (println (count ls) "landings in set" set))

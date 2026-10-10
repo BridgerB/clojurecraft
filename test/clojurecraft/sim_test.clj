@@ -211,15 +211,20 @@
   ;; generated worlds in the time one real run takes"): 1-3 trees of mixed species and heights
   ;; anywhere in the column, on mounds or flat ground, under low leaves or open sky, from a
   ;; varied spawn. In every one it ends holding a log, without the sim ever seeing something a
-  ;; real server would punish. FOREST_TRIALS=n overrides the count.
+  ;; real server would punish. FOREST_TRIALS=n overrides the count, FOREST_SEED=s fixes the seed
+  ;; (a fleet shard's), FOREST_OUT=f writes the verdict as EDN.
   (let [r (tc/quick-check
            (or (some-> (System/getenv "FOREST_TRIALS") Long/parseLong) 2000)
+           :seed (or (some-> (System/getenv "FOREST_SEED") Long/parseLong) (System/currentTimeMillis))
            (prop/for-all [trees (gen/vector tree-gen 1 3) sx (gen/choose 0 1) sz (gen/choose 0 1)]
                          (let [sim0 (sim/init {:column (world/column-bytes (forest trees)) :spawn [(+ sx 0.5) 64.0 (+ sz 0.5)]})
                                [w sim] (sim/run step (game/init fx/opts) sim0 #(or (plan/done? %) (plan/failed? %))
                                                 90000 {:event/kind :go :go/goals [:wood]})]
                            (and (plan/done? w) (= 1 (inventory/logs-held w)) (empty? (:sim/violations sim))))))]
-    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests])))))
+    (when-let [out (System/getenv "FOREST_OUT")]               ; a fleet shard reads its verdict as data
+      (spit out (pr-str {:pass? (boolean (:pass? r)) :num-tests (:num-tests r) :seed (:seed r)
+                         :smallest (get-in r [:shrunk :smallest])})))
+    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed])))))
 
 ;; ---------------------------------------------------------------- intentions as facts
 

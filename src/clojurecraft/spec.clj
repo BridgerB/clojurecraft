@@ -387,3 +387,32 @@
 (s/def :gym/result (s/nilable map?))
 (s/def ::gym-result (s/keys :req [:gym/goal :gym/run :gym/landed? :gym/outcome :gym/truths]
                             :opt [:gym/landing :gym/ms :gym/reason :gym/commit :gym/result]))
+
+;; ---------------------------------------------------------------- the fleet
+(s/def :fleet/label string?)
+(s/def :fleet/workers (s/int-in 1 257))              ; a matrix holds at most 256 jobs
+(s/def :fleet/max-parallel (s/int-in 1 21))
+(s/def :fleet/max-worker-s pos-int?)
+(s/def :fleet/issue pos-int?)
+(s/def :exp/name string?)
+(s/def :exp/kind #{:gym :sim})
+(s/def :exp/goal string?)
+(s/def :exp/set string?)
+(s/def :exp/runs pos-int?)
+(s/def :exp/bots pos-int?)
+(s/def :exp/est-s pos-int?)
+(s/def :arm/name string?)
+(s/def :arm/ref string?)
+(s/def :exp/arms (s/coll-of (s/keys :req [:arm/name] :opt [:arm/ref]) :kind vector? :min-count 1))
+(s/def :exp/property string?)
+(s/def :exp/shards pos-int?)
+(s/def :exp/worlds pos-int?)
+(s/def ::experiment
+  (s/and (s/keys :req [:exp/name :exp/kind :exp/est-s]
+                 :opt [:exp/goal :exp/set :exp/runs :exp/bots :exp/arms :exp/property :exp/shards :exp/worlds])
+         #(case (:exp/kind %)
+            :gym (and (:exp/goal %) (:exp/runs %))
+            :sim (and (:exp/property %) (:exp/shards %) (:exp/worlds %)))))
+(s/def :fleet/experiments (s/coll-of ::experiment :kind vector? :min-count 1))
+(s/def ::fleet-plan (s/keys :req [:fleet/label :fleet/workers :fleet/experiments]
+                            :opt [:fleet/max-parallel :fleet/max-worker-s :fleet/issue]))
