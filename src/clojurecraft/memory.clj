@@ -41,12 +41,14 @@
   [item]
   (case item :crafting_table crafting-table nil))
 
-(def stone-states "Every state of stone, watched so cobblestone can be planned for." (blocks/states-where (fn [[n]] (= n :stone))))
-
 (defn watched?
-  "Does seeing this state start a record? Logs, crafting tables and stone."
+  "Does seeing this state start a record? Logs and crafting tables: things rare enough to
+   remember after their chunk is gone. Stone is not: ten chunks hold 120,000 of it, and
+   recording them made every chunk load and every planner tick take seconds (gym batch
+   cobble-a1, 2026-10-10: eleven of twelve bots timed out). What is exposed now is the
+   terrain's question, not memory's."
   [id]
-  (or (blocks/log? id) (crafting-table? id) (contains? stone-states id)))
+  (or (blocks/log? id) (crafting-table? id)))
 
 ;; ---------------------------------------------------------------- reading
 

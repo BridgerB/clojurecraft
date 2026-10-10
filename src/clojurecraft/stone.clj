@@ -4,6 +4,7 @@
    where stone begins. The :mine act of the goal table (clojurecraft.make) runs this, the way
    :gather runs clojurecraft.wood. Requiring this namespace registers the act."
   (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]
@@ -12,7 +13,8 @@
             [clojurecraft.stairs]
             [clojurecraft.terrain :as terrain]))
 
-(def search-radius 24)                ; blocks from the eye searched for remembered stone
+(def search-radius 24)                ; blocks from the eye searched for exposed stone
+(def search-height 12)                ; blocks above or below the eye searched
 (def stair-depth 6)                   ; stairs cut when no stone is in sight, before looking again
 (def stone-states "Every state of the blocks that drop cobblestone: stone." (blocks/states-where (fn [[n]] (= n :stone))))
 
@@ -28,17 +30,30 @@
   [world [x y z]]
   (boolean (some #(path/standable? world %) (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ x dx) y (+ z dz)]))))
 
+(defn near-chunks
+  "The loaded chunk columns within search-radius of the feet: the terrain a stone search reads."
+  [world]
+  (let [[x _ z] (:player/pos world)
+        cx (bit-shift-right (long (Math/floor x)) 4)
+        cz (bit-shift-right (long (Math/floor z)) 4)
+        r (inc (quot search-radius 16))]
+    (into {} (filter (fn [[[kx kz] _]] (and (<= (abs (- kx cx)) r) (<= (abs (- kz cz)) r))) (:world/chunks world)))))
+
 (defn nearest-stone
-  "The nearest remembered stone within search-radius of the eye the bot can stand beside, not
-   blacklisted, within 12 blocks of the eye's height; nil when none."
+  "The nearest exposed stone within search-radius of the eye and search-height of its height
+   that the bot can stand beside, not blacklisted; nil when none. Read from the loaded terrain
+   (the live view), not memory: stone is most of the world, and only what is exposed now is
+   worth a route."
   [world]
   (let [eye (game/eye world)
         ey (second eye)
-        blacklist (:plan/blacklist world #{})]
+        blacklist (:plan/blacklist world #{})
+        lo (- ey search-height) hi (+ ey search-height)]
     (memory/nearest-of eye search-radius
-                       (->> (memory/positions-now world stone-states)
+                       (->> (chunk/find-blocks (near-chunks world) #(contains? stone-states %))
+                            (map (fn [[x y z _]] [x y z]))
+                            (filter (fn [[_ y _]] (<= lo y hi)))
                             (remove blacklist)
-                            (filter (fn [[_ y _]] (<= (abs (- y ey)) 12)))
                             (filter #(exposed? world %))))))
 
 (defn continue-mine
