@@ -1,7 +1,9 @@
 (ns clojurecraft.make-test
   "The planner never asks for something the world cannot do: over generated inventories, the
    intent it picks for the :pickaxe goal is always executable from what is held and known."
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.edn]
+            [clojure.spec.alpha]
+            [clojure.test :refer [deftest is testing]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
@@ -11,6 +13,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.spec]
             [clojurecraft.world :as world]))
 
 (def pickaxe (first (filter #(= :pickaxe (:goal/id %)) plan/goals)))
@@ -57,3 +60,20 @@
                                         (or (not= :no-log (:plan/wait i))
                                             (zero? (get counts :oak_log 0))))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
+
+(deftest goals-are-data
+  (testing "a recipe is a goal row in the essay's shape"
+    (let [row (first (filter #(= :craft/wooden_pickaxe (:goal/id %)) make/craft-rows))]
+      (is (= {:tag/planks 3 :item/stick 2 :block/crafting_table :near} (:goal/needs row)))
+      (is (= {:item/wooden_pickaxe 1} (:goal/provides row)))
+      (is (= :provided? (:goal/done? row)))
+      (is (= :craft (:goal/act row)))))
+  (testing "a 2x2 recipe needs no table"
+    (is (= {:tag/planks 2} (:goal/needs (first (filter #(= :craft/stick (:goal/id %)) make/craft-rows))))))
+  (testing "every row, hand-written or generated, satisfies ::goal"
+    (is (every? #(clojure.spec.alpha/valid? :clojurecraft.spec/goal %) (concat plan/goals make/craft-rows))))
+  (testing "the table is printable and reads back as the same value"
+    (is (= plan/goals (clojure.edn/read-string (pr-str plan/goals)))))
+  (testing "no target needs a per-goal method: wood, kit and pickaxe all plan through the same registries"
+    (is (every? #(= :provided? (:goal/done? %)) plan/targets))
+    (is (= #{:needs} (set (keys (dissoc (methods plan/next-intent) :default)))))))

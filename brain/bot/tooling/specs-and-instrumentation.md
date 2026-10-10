@@ -28,7 +28,7 @@ related:
 - **window**: `:window/state-id`, `:window/grid` (`{#{0..4} slot-item}`), `:window/cursor`, `:window/open` (`{:window/id :window/menu-type}` plus optional `:window/state-id` and `:window/slots`), `:player/held-slot` (0-8).
 - **world**: chunks, the block overlay (`{[int int int] int}`), sightings, entities.
 - **events/effects/packets**: `:event/kind` in `#{:start :packet :tick :go :closed}`, `:event/rand` a double in [0, 1], `:go/goals`; `:effect/kind` in `#{:send :log}`; a packet needs only `:packet/name`.
-- **plan**: intents (`:intent/kind` required; status, target, recipe optional; `:intent/window` in `#{:inventory :table}`, `:intent/item`), `:plan/status`, `:plan/blacklist`, `:plan/goals`, and goals (`:goal/id`, `:goal/priority`, optional `:goal/wants` as `[keyword pos-int]` tuples).
+- **plan**: intents (`:intent/kind` required; status, target, recipe optional; `:intent/window` in `#{:inventory :table}`, `:intent/item`), `:plan/status`, `:plan/blacklist`, `:plan/goals`, and goal rows (`::goal` requires `:goal/id :goal/priority :goal/provides :goal/done?`; needs, act, target? optional; need keys are keywords or item sets, amounts a count or `:near`).
 - `::world` requires only `:bot/phase :bot/effects :time/now :time/tick`; everything else is optional, matching "absent, never nil-filled".
 
 ## Instrumented functions

@@ -1,47 +1,50 @@
 ---
 title: Goals and intents
-description: The goal table, how the planner re-derives the current goal every tick, and how an intent advances, finishes, fails and is retried.
+description: The goal table as EDN data, the registries that give a row meaning, how the planner picks the target in play every tick, and how an intent advances, finishes, fails and is retried.
 type: reference
 tags: [bot, plan, goals, intents]
-aliases: [planner, plan/step, intent/run, goal table, blacklist, retries]
+aliases: [planner, plan/step, intent/run, goal table, goals.edn, done-by, plan/act, blacklist, retries]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 85e133d
+lastUpdated: 2026-10-10
+verifiedAgainst: 3452f18
 sourceRefs:
   - src/clojurecraft/plan.clj#def goals
-  - src/clojurecraft/plan.clj#defmulti goal-done?
+  - resources/clojurecraft/goals.edn#{:goal/id :wood :goal/priority 1 :goal/target? true :goal/doc "hold one log"
+  - src/clojurecraft/plan.clj#defmulti done-by
+  - src/clojurecraft/plan.clj#defmulti act
   - src/clojurecraft/plan.clj#defmulti next-intent
   - src/clojurecraft/plan.clj#defn- run-intent
-  - src/clojurecraft/intent.clj#defmulti run
-  - src/clojurecraft/wood.clj#defmethod plan/next-intent :wood
   - src/clojurecraft/plan.clj#defn choose
+  - src/clojurecraft/intent.clj#defmulti run
 related:
   - "[[bot/plan/_moc|Plan]]"
+  - "[[make-goals]]"
   - "[[dig-timeline]]"
   - "[[add-a-goal]]"
 ---
 
 # Goals and intents
 
-`plan/goals` is a table of `{:goal/id :goal/priority :goal/doc}` plus optional `:goal/wants`; today `:wood` (priority 1, hold one log), `:kit` (priority 2, a crafting table and four sticks) and `:pickaxe` (priority 3, a wooden pickaxe via a placed table). Two multimethods keyed on `:goal/id` answer for each goal: `goal-done?` (is the world already the way it wants) and `next-intent` (given the world and `:plan/last`, the intent just finished: an intent map, `{:plan/wait reason}` for not yet, or nil). Intents are `{:intent/kind k :intent/status :active|:done|:failed ...}` advanced by `intent/run`, a multimethod on `:intent/kind` (`:walk`, `:dig`, `:collect` in `intent.clj`; `:craft` in `craft.clj`; `:place` and `:open-container` in `place.clj`).
+The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id :goal/priority :goal/needs :goal/provides :goal/done? :goal/act}`. Keys of needs and provides are `:item/<name> n`, `:tag/<item-tag> n` and `:block/<name> :near`. Rows marked `:goal/target? true` are what a run is for (`:wood`, `:kit`, `:pickaxe`); the others are producers (gather a log, place a table). Recipes add one generated producer row each ([[make-goals]]).
 
 ## Key files
-- `plan.clj`, `goals`, `goal-done?`, `next-intent`, `run-intent` - the planner; `plan/step` reacts to `:go` (begin) and `:tick`.
-- `intent.clj`, `run` - the executors; each returns the world with `:plan/intent`, `:player/controls` and effects updated.
-- `plan.clj`, `choose` - the highest-priority goal in play (`:plan/goals`, or every goal when absent) that is not done.
-- `wood.clj`, `next-intent :wood` - walk then dig then collect; a fresh search when nothing is in flight.
-- `make.clj`, `next-intent :kit` - the recipe graph's next action ([[make-goals]]).
+- `goals.edn` - the hand-written table; `plan.clj`, `goals` and `targets` load it.
+- `plan.clj`, `done-by` - an open registry keyed by the row's `:goal/done?`, the name of a predicate (`:provided?` is registered by `make`).
+- `plan.clj`, `act` - an open registry keyed by `:goal/act`: what to do once a row's needs are met (`:gather`, `:place`, `:craft`).
+- `plan.clj`, `next-intent` - keyed by `:goal/plan` (default `:needs`); `make` registers the needs planner.
+- `plan.clj`, `choose`, `run-intent` - the tick loop; `intent.clj`, `run` - the executors.
 
 ## How it works
 1. Each tick with an active intent: run it; if it ended, plan again in the same tick (finish or fail, then choose).
-2. With no intent: choose the highest-priority goal in play that is not done ([[goals-in-play-from-go]]); ask it for the next intent; start it, or wait; a wait longer than `wait-timeout` (20 s) fails the plan with the wait reason.
-3. A failed intent blacklists its target (when it has one) and counts an attempt; a successful intent resets the count, so `max-attempts` (3) means three failures in a row fail the plan.
-4. No goal left means `:plan/status :done`.
+2. With no intent: `choose` takes the highest-priority target in play (`:plan/goals` from the `:go` event, or every target) whose `done-by` is false, and `next-intent` turns it into an intent, `{:plan/wait reason}`, or nil. A wait longer than `wait-timeout` (20 s) fails the plan.
+3. A failed intent blacklists its target (when it has one) and counts an attempt; a success resets the count, so `max-attempts` (3) means three failures in a row.
+4. No target left means `:plan/status :done`.
 
 ## Gotchas
-- Goal completion is re-derived from the world each tick, so a lost log is simply chosen again; nothing remembers "done".
+- No goal needs a method of its own: wood, kit and pickaxe are rows that differ only in data, and `make_test` asserts `:needs` is the only `next-intent` registered.
+- Completion is re-derived from the world each tick, so a lost log is simply planned for again; nothing remembers "done".
 - The planner never re-chooses while an intent is active; preemption (escape water) is a planner change, tracked in issue #5.
 
 ## See also
-- [[dig-timeline]] - the dig intent's schedule.
-- [[walk-intent]], [[collect-intent]], [[craft-intent]] - the other executors.
+- [[make-goals]] - the needs planner, the generated recipe rows and the acts.
+- [[add-a-goal]] - the recipe.

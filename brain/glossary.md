@@ -3,7 +3,7 @@ title: Glossary
 type: glossary
 tags: [brain, glossary]
 status: verified
-lastUpdated: 2026-10-09
+lastUpdated: 2026-10-10
 ---
 
 # Glossary
@@ -14,7 +14,7 @@ lastUpdated: 2026-10-09
 - **Packet**: a flat map with `:packet/name` and the wire's own field names; see [[packet-specs]].
 - **Phase**: the protocol state (`:handshake`, `:login`, `:configuration`, `:play`), advanced only by emitting a transition packet; see [[connection-phases]].
 - **Intent**: a value in `:plan/intent` (`{:intent/kind :dig ...}`) advanced one tick at a time by `intent/run`; see [[goals-and-intents]].
-- **Goal**: a row in `plan/goals`, answered by `plan/goal-done?` and `plan/next-intent` defmethods.
+- **Goal**: a row of data in `resources/clojurecraft/goals.edn` (`:goal/needs :goal/provides :goal/done? :goal/act`); `plan/done-by` and `plan/act` are the registries that give it meaning.
 - **Sighting**: a remembered block state with a timestamp in `:world/sightings`; see [[memory-sightings]].
 - **Recording**: an EDN file of every event of a run, replayable with no server; see [[record-replay]].
 - **Sim**: the pure server model in `sim.clj` that tests run the whole bot against; see [[server-model]].
@@ -24,7 +24,7 @@ lastUpdated: 2026-10-09
 - **State id**: the counter the server stamps on every window update and the client echoes in each click; an unanswered click is one whose state id never moves; see [[mc-state-ids-prediction]].
 - **Prediction**: the `changed` slots and `cursor` a 775 click claims; we always claim nothing ([[predict-nothing]]), and the server adopts the cursor claim ([[phantom-cursor-stale-window]]).
 - **Recipe graph**: `recipe/next-action`, the walk from wanted items to one next action (craft, gather, stuck); see [[recipe-graph]].
-- **Wants**: `:goal/wants`, a goal's ordered `[[item-name n] ...]`, satisfied through the recipe graph; see [[make-goals]].
+- **Needs / provides**: a goal row's maps of `:item/<name> n`, `:tag/<tag> n` or `:block/<name> :near`; the needs planner traces provides back through producer rows; see [[make-goals]].
 - **View**: a map describing one window for the click rules (`:view/id :view/state-id :view/size :view/grid :view/slot-of`); see [[window-views]].
 - **Menu type**: the registry index an `open-screen` names; 12 is the crafting table ([[mc-crafting-table-window]]).
 - **Kit**: the `:kit` goal, a crafting table and four sticks; `--until table`.

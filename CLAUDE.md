@@ -14,7 +14,7 @@ Read `docs/hickey.md` first; it is the design brief. In short:
 - **The protocol is a pure reducer** `(step world event) → world'` in `game`; the planner `plan/step` has the same signature and is composed after it. Events are maps: `{:event/kind :start}`, `{:event/kind :packet :event/packet p}`, `{:event/kind :tick :event/now ms :event/rand r}`, `{:event/kind :go}`, `{:event/kind :closed}`. The clock and randomness are inputs; nothing inside a reducer reads a clock or calls `rand`.
 - **Effects are data** in `:bot/effects` (`{:effect/kind :send :effect/packet p}`, `{:effect/kind :log ...}`); the loop drains and performs them. The protocol phase advances only in `game/emit`, from `packet/transitions`.
 - **Packets are maps with a `:packet/name`**; specs are data (`packet/specs`), ids are generated from the vanilla reports. Unknown ids decode to `{:packet/name :unknown}` and are counted, never thrown.
-- **Dispatch is open**: multimethods for packets (`game/on-packet` on `[phase name]`), intents (`intent/run` on `:intent/kind`) and goals (`plan/goal-done?`, `plan/next-intent` on `:goal/id`). A new packet, intent or goal is a `defmethod` in a new namespace; `plan/goals` is a table.
+- **Dispatch is open**: multimethods for packets (`game/on-packet` on `[phase name]`), intents (`intent/run` on `:intent/kind`) and goal rows (`plan/done-by` on `:goal/done?`, `plan/act` on `:goal/act`, `plan/next-intent` on `:goal/plan`). A new packet, intent or goal is a `defmethod` in a new namespace; The goal table is data, `resources/clojurecraft/goals.edn`; recipes add generated rows (`make`).
 - **Memory is facts with time** (`memory`): sightings keyed by position with `:block/state` and `:block/seen-at`, kept after chunks unload.
 - **Every run is a file**: `--record run.edn` writes each event; `clojure -M:replay run.edn` folds the reducer over it with no server. Keep this true (no hidden inputs).
 - **Specs** live in `spec.clj` and are instrumented in tests; properties in `props_test.clj`; the whole bot runs against the pure server model in `sim.clj` (`sim_test.clj`) with no Java process.
@@ -34,8 +34,9 @@ src/clojurecraft/physics.clj  vanilla land movement over :player/* attributes, l
 src/clojurecraft/memory.clj   sightings: what the bot has seen, with time, after chunks unload
 src/clojurecraft/game.clj     the world reducer: handshake, keep-alive, teleports, chunks, inventory, ticks
 src/clojurecraft/intent.clj   open executors: :walk :dig :collect (multimethod on :intent/kind)
-src/clojurecraft/plan.clj     goal table + planner; plan state under :plan/*
-src/clojurecraft/wood.clj     the :wood goal (walk → dig → collect)
+src/clojurecraft/plan.clj     loads goals.edn; registries done-by, act, next-intent; the planner; :plan/*
+src/clojurecraft/make.clj     the needs planner: recipe rows, netting needs against inventory, the acts
+src/clojurecraft/wood.clj     the gather chain toward a log (walk → dig → collect)
 src/clojurecraft/spec.clj     specs for attributes, events, effects, intents; fdefs on the reducers
 src/clojurecraft/record.clj   event recorder and replay
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs

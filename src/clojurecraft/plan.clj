@@ -1,38 +1,54 @@
 (ns clojurecraft.plan
   "Goals are data; planning is a function; executing is open.
 
-   `goals` is a table. Each goal answers two multimethods keyed on :goal/id: `goal-done?` (is the
-   world already the way this goal wants it) and `next-intent` (given the world and the intent
-   that just finished, what to do now: an intent map, {:plan/wait reason} for not yet, or nil
-   for nothing). Every tick the planner re-derives the current goal from the world, so a goal
-   that regresses (the log was lost) is simply chosen again. Plan state lives under :plan/*."
-  (:require [clojurecraft.game :as game]
+   `goals` is the table in resources/clojurecraft/goals.edn: rows of {:goal/id :goal/priority
+   :goal/needs :goal/provides :goal/done? :goal/act}. Two open registries, keyed by data in the
+   row, give it meaning: `done-by` (keyed by :goal/done?, the name of a predicate) and `act`
+   (keyed by :goal/act, what to do once the row's needs are met). `next-intent` (keyed by
+   :goal/plan, default :needs) turns the goal in play into the next intent; clojurecraft.make
+   registers the needs planner. Every tick the planner re-derives the current goal from the
+   world, so a goal that regresses (the log was lost) is simply chosen again. Plan state lives
+   under :plan/*."
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]))
 
 (def goals
-  [{:goal/id :wood :goal/priority 1 :goal/doc "hold one log"}
-   {:goal/id :kit :goal/priority 2 :goal/doc "a crafting table and four sticks, from logs"
-    :goal/wants [[:crafting_table 1] [:stick 4]]}
-   {:goal/id :pickaxe :goal/priority 3 :goal/doc "a wooden pickaxe, placing a crafting table to make it"
-    :goal/wants [[:wooden_pickaxe 1]]}])
+  "The goal table, loaded from resources/clojurecraft/goals.edn."
+  (edn/read-string (slurp (io/resource "clojurecraft/goals.edn"))))
+
+(def targets (filterv :goal/target? goals))
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def wait-timeout 20000)              ; a goal that has nothing to do for this long has failed
 
-(defmulti goal-done? (fn [_world goal] (:goal/id goal)))
-(defmulti next-intent (fn [_world goal] (:goal/id goal)))
+(defmulti done-by
+  "Is the goal satisfied in this world? A registry keyed by the row's :goal/done? (a predicate
+   name), so the table stays data and another namespace can add predicates."
+  (fn [_world goal] (:goal/done? goal)))
 
-(defmethod goal-done? :default [_ _] true)
+(defmulti act
+  "The intent that satisfies a row whose needs are met, keyed by its :goal/act."
+  (fn [_world goal] (:goal/act goal)))
+
+(defmulti next-intent
+  "The next intent toward a goal in play: an intent map, {:plan/wait reason}, or nil when there
+   is nothing to do. Keyed by :goal/plan (default :needs)."
+  (fn [_world goal] (:goal/plan goal :needs)))
+
+(defmethod done-by :default [_ _] false)
+(defmethod act :default [_ goal] {:plan/wait [:no-act (:goal/act goal)]})
 (defmethod next-intent :default [_ _] nil)
 
 (defn choose
-  "The highest-priority goal in play (:plan/goals, or every goal) the world does not satisfy."
+  "The highest-priority target in play (:plan/goals, or every target) the world does not satisfy."
   [world]
   (let [in-play (:plan/goals world)]
-    (->> goals
+    (->> targets
          (filter #(or (nil? in-play) (contains? in-play (:goal/id %))))
          (sort-by :goal/priority)
-         (remove #(goal-done? world %))
+         (remove #(done-by world %))
          first)))
 
 (defn- begin [world {:go/keys [goals]}]

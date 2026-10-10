@@ -7,6 +7,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.make]
             [clojurecraft.wood]
             [clojurecraft.world :as world]))
 
