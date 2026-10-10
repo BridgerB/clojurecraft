@@ -96,9 +96,9 @@
 
 (deftest a-failed-intent-is-blacklisted-and-retried
   (let [w (world-state [0.5 64.0 0.5])
-        w (assoc w :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0
+        w (assoc w :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0 :time/tick 1300 ; past the walk's timeout
                  :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/status :active
-                               :intent/started 0 :intent/best-tick 0 :intent/detours 4})
+                               :intent/started 0 :intent/best-tick 0})
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/trunk [3 64 0] :intent/status :active
             :intent/id 1 :intent/goal :wood} (:plan/intent w))
@@ -108,9 +108,9 @@
 
 (deftest a-trunk-that-fails-twice-is-given-up-whole
   (let [failing {:intent/kind :walk :intent/target [13 65 0] :intent/for :log :intent/trunk [3 64 0]
-                 :intent/status :active :intent/started 0 :intent/best-tick 0 :intent/detours 4}
+                 :intent/status :active :intent/started 0 :intent/best-tick 0}
         w (assoc (world-state [0.5 64.0 0.5]) :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0
-                 :plan/intent failing)
+                 :time/tick 1300 :plan/intent failing)   ; past the walk's timeout: it fails at once
         [w1 _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (= {[3 0] 1} (:plan/trunk-failures w1)))
     (is (= [3 64 0] (:intent/trunk (:plan/intent w1))) "once is chance: the same trunk again")
@@ -229,3 +229,40 @@
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (not (plan/done? w)) "the plan waits until the hand is empty")
     (is (= 1 (get-in w [:plan/intent :intent/id])))))
+
+;; ---------------------------------------------------------------- a walk follows a route
+
+(deftest a-walk-plans-again-when-a-chunk-arrives
+  ;; a route is made over the chunks loaded now; a new column changes the ground the route
+  ;; assumed, so the walk plans once more and no more
+  (let [w (walking #{:wood} :wood)
+        [w1 _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])
+        i1 (:plan/intent w1)
+        w2 (assoc w1 :stats/chunks (inc (:stats/chunks w1 0)))               ; a column arrived
+        [w3 _] (run w2 [{:event/kind :tick :event/now 100 :event/rand 0.5}])
+        [w4 _] (run w3 [{:event/kind :tick :event/now 150 :event/rand 0.5}])]
+    (is (= 1 (:intent/replans i1)) "the first tick plans")
+    (is (= :found (:intent/route i1)))
+    (is (seq (:intent/waypoints i1)))
+    (is (= 2 (:intent/replans (:plan/intent w3))) "one more plan for the new chunk")
+    (is (= 2 (:intent/replans (:plan/intent w4))) "and not again while nothing changes")))
+
+(deftest a-walk-with-no-way-on-fails-no-path
+  ;; walled in on every side two blocks high: the search exhausts its frontier at once
+  (let [cage (into {} (for [x [-1 1] y [64 65] z [-1 0 1]] [[(+ 2 x) y (+ 2 z)] 1]))
+        cage (merge cage (into {} (for [z [-1 1] y [64 65]] [[2 y (+ 2 z)] 1])))
+        col (world/column (merge cage {[13 64 0] 136 [13 65 0] 136 [13 66 0] 252}))
+        w (-> (game/init fx/opts)
+              (assoc :bot/phase :play :player/pos [2.5 64.0 2.5] :player/loaded? true :player/on-ground? true)
+              (assoc :world/chunks {[0 0] col})
+              (memory/remember-column [0 0] col)
+              (assoc :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0 :plan/goals #{:wood}
+                     :plan/intents 1
+                     :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/for :log :intent/status :active
+                                   :intent/id 1 :intent/goal :wood}))
+        [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (= 1 (:plan/attempts w)) "the walk failed on its first tick")
+    (is (= #{[13 64 0]} (:plan/blacklist w)) "and its target is blacklisted")
+    (is (= :no-path (:intent/reason (first (filter #(= :failed (:intention/event %)) (memory/intentions w)))
+                                    (:intention/reason (first (filter #(= :failed (:intention/event %)) (memory/intentions w))))))
+        "for :no-path")))

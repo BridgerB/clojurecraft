@@ -8,13 +8,16 @@
             [clojurecraft.game :as game]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]))
 
 (def reach 4.0)                       ; eye → block centre; the server allows ~4.5
 (def walk-timeout-ticks 1200)         ; 60 s
-(def stuck-ticks 40)                  ; no progress for 2 s → detour
-(def detour-ticks 20)                 ; how long one detour lasts (1 s)
-(def max-detours 4)                   ; detours before a walk fails :stuck
+(def stuck-ticks 40)                  ; no waypoint reached for 2 s → plan again
+(def max-replans 6)                   ; plans one walk may make before it fails :no-path
+(def goal-range 3)                    ; a walk's route ends within this of its target
+(def waypoint-reach 0.35)             ; horizontal distance to a waypoint's centre that reaches it
+(def jump-near 1.3)                   ; a waypoint above the feet is jumped for from this close
 (def pickup-rise 2)                   ; a drop resting more than 2 blocks above the feet is above
                                       ; the pickup box (1.8 tall, grown 0.5 up)
 (def settle-ms 500)                   ; let the server catch up before START
@@ -80,35 +83,79 @@
        (or (not= :log for)
            (<= (- (second target) (long (Math/floor (second (:player/pos world))))) pickup-rise))))
 
+(defn waypoint-reached?
+  "Is the player at waypoint [x y z]: within waypoint-reach of its centre on the plane, and the
+   feet within half a block of its height. A climb counts only once the feet are up and a drop
+   only once they are down: a looser gate let the siblings advance past a step they had not
+   climbed, and let a bot stand on the lip of a ledge counting the cell below as reached."
+  [world [wx wy wz]]
+  (let [[px py pz] (:player/pos world)]
+    (and (<= (physics/horizontal-distance [px 0 pz] [(+ wx 0.5) 0 (+ wz 0.5)]) waypoint-reach)
+         (<= (abs (- py wy)) 0.5))))
+
+(defn follow
+  "Controls that walk to a waypoint: face its centre, forward, and jump only when it is above
+   the feet and near (jumping from afar bounces in open air), or when blocked."
+  [world [wx wy wz :as wp]]
+  (let [[px py pz] (:player/pos world)
+        centre [(+ wx 0.5) (+ wy 0.5) (+ wz 0.5)]
+        near? (< (physics/horizontal-distance [px 0 pz] centre) jump-near)
+        up? (> wy (+ (Math/floor py) 0.5))]
+    (update (toward world centre 0.0) :control/jump? #(or % (and up? near?)))))
+
+(defn route!
+  "The intent with a fresh route from the feet toward the target (goal :near target within
+   goal-range), counting the plan and noting how many chunks were loaded when it was made."
+  [world {:intent/keys [target replans] :or {replans 0}}]
+  (let [r (path/plan world (path/feet-cell (:player/pos world)) {:goal/kind :near :goal/pos target :goal/range goal-range})]
+    (intent world assoc :intent/waypoints (:path/waypoints r) :intent/route (:path/status r)
+            :intent/at 0 :intent/replans (inc replans) :intent/planned-chunks (:stats/chunks world 0)
+            :intent/best-tick (:time/tick world))))
+
+(defn route-stale?
+  "Should the walk plan again: the next waypoint can no longer be stood on, a chunk arrived
+   since the route was made, no waypoint was reached for stuck-ticks, or the route ended short
+   of the target (:partial or :none) and every waypoint is behind."
+  [world {:intent/keys [waypoints at planned-chunks best-tick route]}]
+  (let [wp (get waypoints at)]
+    (or (and wp (not (path/standable? world wp)))
+        (not= planned-chunks (:stats/chunks world 0))
+        (> (- (:time/tick world) best-tick) stuck-ticks)
+        (and (nil? wp) (not= :found route)))))
+
 (defmethod run :walk
-  [world {:intent/keys [target best-dist best-tick started detours detour-until detour-yaw]
-          :or {best-dist Double/MAX_VALUE detours 0} :as i} {:event/keys [rand]}]
+  [world {:intent/keys [target started waypoints at replans route] :or {replans 0} :as i} _]
   (let [tick (:time/tick world)
         started (or started tick)
-        best-tick (or best-tick tick)
         d (physics/distance (game/eye world) (physics/centre target))
-        progressed? (< d (- best-dist 0.25))
-        best-dist (if progressed? d best-dist)
-        best-tick (if progressed? tick best-tick)
-        stuck? (> (- tick best-tick) stuck-ticks)
-        detouring? (and detour-until (< tick detour-until))
-        world (intent world assoc :intent/started started :intent/best-dist best-dist :intent/best-tick best-tick)]
+        world (intent world assoc :intent/started started)
+        i (:plan/intent world)]
     (cond
       (arrived? world i d)
       (-> world (assoc :player/controls {:control/look (physics/look-at (game/eye world) (physics/centre target))}) done)
 
-      (or (> (- tick started) walk-timeout-ticks) (>= detours max-detours))
+      (> (- tick started) walk-timeout-ticks)
       (-> world (assoc :player/controls {}) (fail :stuck))
 
-      (and stuck? (not detouring?))
-      (let [yaw (if (< rand 0.5) -70.0 70.0)]
-        (-> world
-            (intent assoc :intent/detour-until (+ tick detour-ticks) :intent/detour-yaw yaw
-                    :intent/detours (inc detours) :intent/best-tick tick)
-            (assoc :player/controls (assoc (toward world (physics/centre target) yaw) :control/jump? true))))
+      (nil? waypoints)                                  ; the first tick: plan
+      (let [world (route! world i)]
+        (if (and (= :none (get-in world [:plan/intent :intent/route])) (empty? (get-in world [:plan/intent :intent/waypoints])))
+          (-> world (assoc :player/controls {}) (fail :no-path))
+          (assoc world :player/controls {})))
+
+      (route-stale? world i)
+      (if (>= replans max-replans)
+        (-> world (assoc :player/controls {}) (fail :no-path))
+        (assoc (route! world i) :player/controls {}))
+
+      (nil? (get waypoints at))                         ; route walked to its end, target still out of reach
+      (assoc world :player/controls (toward world (physics/centre target) 0.0))
+
+      (waypoint-reached? world (get waypoints at))
+      (-> world (intent assoc :intent/at (inc at) :intent/best-tick tick) (assoc :player/controls {}))
 
       :else
-      (assoc world :player/controls (toward world (physics/centre target) (if detouring? detour-yaw 0.0))))))
+      (assoc world :player/controls (follow world (get waypoints at))))))
 
 ;; ---------------------------------------------------------------- dig
 

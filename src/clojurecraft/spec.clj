@@ -11,6 +11,7 @@
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
+            [clojurecraft.path :as path]
             [clojurecraft.place :as place]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
@@ -262,6 +263,21 @@
 (s/def :intent/detour-until int?)
 (s/def :intent/detour-yaw number?)
 (s/def :intent/detours nat-int?)
+(s/def :intent/waypoints (s/coll-of ::block-pos :kind vector?))
+(s/def :intent/route #{:found :partial :none})
+(s/def :intent/at nat-int?)
+(s/def :intent/replans nat-int?)
+(s/def :intent/planned-chunks nat-int?)
+(s/def :path/waypoints (s/coll-of ::block-pos :kind vector?))
+(s/def :path/cost double?)
+(s/def :path/status #{:found :partial :none})
+(s/def :path/max-nodes pos-int?)
+(s/def :path/from ::block-pos)
+(s/def ::route (s/keys :req [:path/waypoints :path/cost :path/status] :opt [:path/from]))
+(s/def :goal/kind #{:near :block :xz :away})
+(s/def :goal/pos ::block-pos)
+(s/def :goal/range number?)
+(s/def ::path-goal (s/keys :req [:goal/kind :goal/pos] :opt [:goal/range]))
 (s/def :intent/logs-before nat-int?)
 (s/def :intent/blocked-by ::block-pos)
 (s/def :intent/clears nat-int?)
@@ -359,13 +375,16 @@
 (s/fdef make/decide :args (s/cat :world (requires :player/inventory :player/pos :world/facts) :goal map? :table vector?))
 (s/fdef wood/gather-next :args (s/cat :world (requires :player/pos :world/facts)))
 (s/fdef place/spot :args (s/cat :world (requires :player/pos :world/chunks)))
+(s/fdef path/plan :args (s/cat :world (requires :world/chunks) :from ::block-pos :goal ::path-goal :opts (s/? (s/keys :opt [:path/max-nodes])))
+  :ret ::route)
+(s/fdef path/classify :args (s/cat :world (requires :world/chunks) :pos ::block-pos))
 (s/fdef window/view :args (s/cat :world (requires :window/grid) :which #{:inventory :table}))
 
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `memory/positions-now `memory/nearest-log `make/near `make/decide
-   `wood/gather-next `place/spot `window/view])
+   `wood/gather-next `place/spot `window/view `path/plan `path/classify])
 (s/def :stats/deaths pos-int?)
 
 ;; ---------------------------------------------------------------- the gym

@@ -20,14 +20,20 @@
   (b/write-u8 o 0) (b/write-varint o id)
   (b/write-u8 o 0) (b/write-varint o 0))
 
+(def floor-y 64)                      ; the stone floor fills every cell below this
+
 (defn column-bytes
-  "blocks: {[lx y lz] id} with world y; everything below y=64 is stone."
+  "blocks: {[lx y lz] id} with world y; everything below y=64 is stone unless blocks says
+   otherwise (a listed cell below the floor, e.g. air for a trench or water for a pond, wins)."
   [blocks]
   (b/with-out
     (fn [o]
       (dotimes [si 24]
         (let [y0 (+ chunk/min-y (* 16 si))
-              cells (into {} (for [[[lx y lz] id] blocks :when (<= y0 y (+ y0 15))] [[lx (- y y0) lz] id]))]
+              listed (into {} (for [[[lx y lz] id] blocks :when (<= y0 y (+ y0 15))] [[lx (- y y0) lz] id]))
+              stone (when (and (seq listed) (< y0 floor-y))
+                      (into {} (for [lx (range 16) ly (range 16) lz (range 16) :when (< (+ y0 ly) floor-y)] [[lx ly lz] 1])))
+              cells (merge stone listed)]
           (cond
             (seq cells) (direct-section o cells)
             (< y0 64) (single-section o 1)

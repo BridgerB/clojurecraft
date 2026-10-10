@@ -36,7 +36,8 @@ src/clojurecraft/memory.clj   observation facts in DataScript, with time, after 
 src/clojurecraft/game.clj     the protocol reducer: handshake, keep-alive, teleports, every packet's handler, ticks
 src/clojurecraft/inventory.clj the player's items and screen as values: slot maps, window state, what is held
 src/clojurecraft/terrain.clj  the blocks around the bot: columns, the block overlay, block-at, solid-fn; feeds memory
-src/clojurecraft/intent.clj   open executors (multimethod on :intent/kind): :walk :dig :collect, and the leaf blocker
+src/clojurecraft/path.clj     a route for the feet over the block grid: A* with a node budget, moves and goals as data
+src/clojurecraft/intent.clj   open executors (multimethod on :intent/kind): :walk (follows a route) :dig :collect, and the leaf blocker
 src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with clicks, verify, take
 src/clojurecraft/place.clj    the :place and :open-container executors: a spot, use-item-on, the server's answer
 src/clojurecraft/window.clj   window views (inventory or table) and the click that predicts nothing
