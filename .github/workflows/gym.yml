@@ -19,6 +19,9 @@ on:
       label:
         description: names this batch's artifacts and summary
         required: true
+      world-key:
+        description: override the world's cache key (a key with no entry shows a shard failing fast instead of building)
+        default: ''
 
 permissions:
   contents: read
@@ -94,7 +97,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: cache/worlds/${{ env.SET }}
-          key: ${{ needs.world.outputs.key }}
+          key: ${{ inputs.world-key || needs.world.outputs.key }}
           fail-on-cache-miss: true
       - uses: actions/setup-java@v4
         with:
