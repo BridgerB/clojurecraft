@@ -5,6 +5,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.packet :as p]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]))
 
@@ -64,7 +65,53 @@
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
-(s/def ::packet (s/keys :req [:packet/name]))
+(defn int-in? "Is x an integer in [lo, hi]?" [lo hi x] (and (int? x) (<= lo x hi)))
+
+(def slot? "A decoded slot: nil when empty, else at least {:item id :count n}." #(or (nil? %) (and (map? %) (int? (:item %)) (int? (:count %)))))
+
+(def wire-types
+  "What a value of each wire type in packet/specs must be, with the wire's own range."
+  {:bool boolean?
+   :i8 (partial int-in? -128 127) :u8 (partial int-in? 0 255)
+   :i16 (partial int-in? -32768 32767) :u16 (partial int-in? 0 65535)
+   :i32 (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE) :u32 (partial int-in? 0 4294967295)
+   :i64 int? :varint (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE) :varlong int?
+   :f32 number? :f64 number?
+   :string string? :uuid #(or (nil? %) (uuid? %))
+   :position #(and (vector? %) (= 3 (count %)) (every? int? %))
+   :bytes bytes? :rest bytes?
+   :slot slot? :hashed-slot slot?})
+
+(declare fields-ok?)
+
+(defn value-ok?
+  "Does v fit wire type t: a primitive, [:vec T], or a struct (a vector of [key type] pairs)?"
+  [t v]
+  (cond
+    (and (vector? t) (vector? (first t))) (and (map? v) (fields-ok? t v))
+    (vector? t) (and (sequential? v) (every? #(value-ok? (second t) %) v))
+    (empty? (str t)) false
+    :else ((wire-types t) v)))
+
+(defn fields-ok?
+  "Does map m carry every field of a spec, each fitting its type? Extra keys are fine."
+  [fields m]
+  (every? (fn [[k t]] (and (contains? m k) (value-ok? t (get m k)))) fields))
+
+(def shapes
+  "packet name → every field vector the table gives it (a name can recur across states and
+   directions, e.g. keep-alive)."
+  (reduce (fn [m [[_ _ n] fields]] (update m n (fnil conj []) fields)) {} p/specs))
+
+(defn packet-ok?
+  "Is pkt a packet the table can account for? A name the table models must match one of its
+   shapes; a name it does not model (:closed, :unknown, :decode-error) only needs the name."
+  [pkt]
+  (if-let [fs (shapes (:packet/name pkt))]
+    (boolean (some #(fields-ok? % pkt) fs))
+    true))
+
+(s/def ::packet (s/and (s/keys :req [:packet/name]) packet-ok?))
 (s/def :effect/kind #{:send :log})
 (s/def :effect/packet ::packet)
 (s/def :effect/message string?)

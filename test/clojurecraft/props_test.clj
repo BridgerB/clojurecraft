@@ -14,7 +14,7 @@
 
 (defn in-play []
   (first (fx/fold game/step (game/init fx/opts)
-                  [{:event/kind :start} (fx/packet {:packet/name :login-finished})
+                  [{:event/kind :start} (fx/packet fx/login-finished)
                    (fx/packet {:packet/name :finish-configuration}) (fx/packet {:packet/name :login :entity-id 7})])))
 
 (defn field-gen [t]

@@ -1,7 +1,8 @@
 (ns clojurecraft.sim-test
   "The whole bot against the pure server model: handshake → spawn → chunk → find → walk → dig →
    drop → pickup → done, with no socket and no Java process."
-  (:require [clojure.test :refer [deftest is testing use-fixtures]]
+  (:require [clojure.spec.alpha]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.make]
@@ -147,3 +148,18 @@
                 (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))]
     (is (empty? (:sim/broken sim)))
     (is (= [:block-changed-ack] (mapv :packet/name (:sim/out sim))))))
+
+(deftest every-packet-the-bot-sends-fits-the-table
+  ;; instrumentation checks what a reducer is given; this checks what the bot says, over a whole
+  ;; pickaxe run (handshake, digs, clicks, placement, a table window): every packet it sends has
+  ;; every field packet/specs lists, each in its wire range, or the writer could not encode it.
+  (let [bad (atom [])
+        checked (fn [w e] (let [w (step w e)]
+                            (doseq [p (sim/sends w) :when (not (clojure.spec.alpha/valid? :clojurecraft.spec/packet p))]
+                              (swap! bad conj p))
+                            w))
+        column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 136 [6 68 0] 252})
+        [w _] (sim/run checked (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                       #(or (plan/done? %) (plan/failed? %)) 200000 {:event/kind :go :go/goals [:pickaxe]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= [] @bad))))

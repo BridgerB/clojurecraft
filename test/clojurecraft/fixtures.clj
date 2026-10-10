@@ -12,6 +12,10 @@
 
 (def opts {:host "h" :port 1 :name "Clj_test"})
 
+(def login-finished
+  "The login-finished packet as the decoder produces it: every field its spec lists."
+  {:packet/name :login-finished :uuid #uuid "00000000-0000-3000-8000-000000000000" :username "Clj_test"})
+
 (defn fold
   "Fold events through step; returns [final-world [[now effect] ...]] with effects cleared
    after each step, as the loop does."

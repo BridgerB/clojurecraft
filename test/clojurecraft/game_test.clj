@@ -13,7 +13,7 @@
   (let [[w fx] (run (game/init fx/opts)
                     [{:event/kind :start}
                      (packet {:packet/name :login-compression :threshold 256})
-                     (packet {:packet/name :login-finished})
+                     (packet fx/login-finished)
                      (packet {:packet/name :select-known-packs})
                      (packet {:packet/name :keep-alive :id 5})
                      (packet {:packet/name :finish-configuration})
@@ -29,7 +29,7 @@
 
 (defn in-play []
   (first (run (game/init fx/opts)
-              [{:event/kind :start} (packet {:packet/name :login-finished})
+              [{:event/kind :start} (packet fx/login-finished)
                (packet {:packet/name :finish-configuration}) (packet {:packet/name :login :entity-id 7})])))
 
 (deftest teleports

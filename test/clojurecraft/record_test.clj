@@ -8,7 +8,7 @@
 
 (def events
   [{:event/kind :start :start/host "h" :start/port 25571 :start/name "Clj_rec"}
-   (fx/packet {:packet/name :login-finished})
+   (fx/packet fx/login-finished)
    (fx/packet {:packet/name :finish-configuration})
    (fx/packet {:packet/name :login :entity-id 7})
    (fx/packet {:packet/name :keep-alive :id 42})
