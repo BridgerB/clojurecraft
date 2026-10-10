@@ -482,6 +482,17 @@
     (is (= :done (:intent/status (:plan/intent w))))
     (is (not= [1 0] (:intent/dir (:plan/intent w))) "turned")))
 
+(deftest ore-the-pickaxe-cannot-drop-turns-the-stairs
+  ;; gym batch cobble-a2 run 2: four levels down the stair met iron ore, the child dig refused
+  ;; :needs-tool (a wooden pickaxe drops nothing from it), and the stair failed with it, three
+  ;; times in a second. An undroppable cell is a refusal like lava: turn
+  (let [iron-ore (first (blocks/states-where (fn [[n]] (= n :iron_ore))))
+        blocks (assoc deep-stone [9 75 8] iron-ore)                              ; the first stair's head cell on +x
+        [w sim] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 74 60000)]
+    (is (= :done (:intent/status (:plan/intent w))) (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (not= [1 0] (:intent/dir (:plan/intent w))) "it turned away from the ore")
+    (is (not (contains? (:sim/broken sim) [9 75 8])) "the ore was never dug")))
+
 (deftest boxed-in-by-lava-on-every-side-fails-boxed
   (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
         blocks (reduce (fn [b [x z]] (assoc b [x 74 z] lava)) deep-stone [[9 8] [7 8] [8 9] [8 7]])

@@ -9,7 +9,9 @@
    and is walked onto. Before any of them is dug every cell the stair exposes is checked on
    the world value: water, lava or an unloaded chunk in any of them, lava beside any of them,
    or no floor under the new feet (a drop) refuses the stair; a refusal turns the intent a
-   quarter turn and after four it fails :boxed. Each dig is a child :dig intent run by the dig
+   quarter turn and after four it fails :boxed; so does a cell the held tool cannot drop (an ore
+   under a wooden pickaxe: gym batch cobble-a2 run 2 failed three stairs in a second on one).
+   Each dig is a child :dig intent run by the dig
    executor itself (intents composing intents: no second rule for breaking blocks), and the
    descent is judged by the feet having actually gone down, never by a packet having been
    sent, since a dig the server refused leaves the bot where it stood."
@@ -113,6 +115,13 @@
       (cond
         (and child (intent/done? child))
         (drop-i world :intent/child)
+
+        (and child (= :needs-tool (:intent/reason child)))   ; ore the pickaxe cannot drop: this way is refused, turn
+        (if (>= (inc turns) max-turns)
+          (-> world (assoc :player/controls {}) (intent/fail :boxed))
+          (-> world (set-i :intent/dir (turn dir) :intent/turns (inc turns) :intent/stage :plan)
+              (drop-i :intent/child :intent/cells)
+              (game/say (str "stairs: " (:intent/target child) " needs a better tool, turning"))))
 
         (and child (intent/failed? child))
         (-> world (assoc :player/controls {}) (intent/fail (:intent/reason child)))
