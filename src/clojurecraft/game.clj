@@ -57,7 +57,7 @@
    :world/chunks {}
    :world/blocks {}
    :world/entities {}
-   :world/sightings {}
+   :world/facts (memory/empty-facts)
    :stats/unknown {}
    :stats/keep-alives 0
    :stats/teleports 0
@@ -380,7 +380,7 @@
    :on-ground? (:player/on-ground? world)
    :loaded? (:player/loaded? world)
    :chunks (count (:world/chunks world))
-   :sightings (count (:world/sightings world))
+   :sightings (count (memory/latest world))
    :logs (logs-held world)
    :inventory (count (:player/inventory world))
    :entities (count (:world/entities world))

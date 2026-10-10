@@ -55,7 +55,7 @@
 ;; world
 (s/def :world/chunks (s/map-of (s/coll-of int? :count 2) map?))
 (s/def :world/blocks (s/map-of ::block-pos int?))
-(s/def :world/sightings (s/map-of ::block-pos (s/keys :req [:block/state :block/seen-at])))
+(s/def :world/facts #(instance? datascript.db.DB %))
 (s/def :block/state int?)
 (s/def :block/seen-at int?)
 (s/def :world/entities (s/map-of int? (s/keys :req [:entity/type :entity/pos])))
@@ -110,7 +110,7 @@
           :opt [:bot/name :bot/sequence :bot/closed :bot/disconnected
                 :player/pos :player/vel :player/look :player/on-ground? :player/horizontal-collision?
                 :player/jump-ticks :player/loaded? :player/entity-id :player/inventory :player/controls
-                :world/chunks :world/blocks :world/sightings :world/entities
+                :world/chunks :world/blocks :world/facts :world/entities
                 :window/state-id :window/grid :window/cursor :window/open :player/held-slot
                 :plan/intent :plan/status :plan/blacklist]))
 

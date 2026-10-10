@@ -5,8 +5,8 @@ type: reference
 tags: [bot, world, memory, gotcha]
 aliases: [sightings edge cases, watched?, seen-at 0, forgotten logs, height window]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-10
+verifiedAgainst: 095578b
 sourceRefs:
   - src/clojurecraft/memory.clj#defn watched?
   - src/clojurecraft/memory.clj#defn observe
@@ -16,7 +16,7 @@ sourceRefs:
 related:
   - "[[bot/world/_moc|World]]"
   - "[[memory-sightings]]"
-  - "[[map-memory-not-datalog]]"
+  - "[[facts-in-datascript]]"
 ---
 
 # Memory edge cases
@@ -33,7 +33,7 @@ The mechanism is in [[memory-sightings]]; this note lists the edges.
 - **Blacklist.** `nearest-log` removes blacklisted positions before testing `trunk-bottom?`, so a blacklisted bottom does not make the log above it a bottom; that whole trunk is skipped.
 
 ## Limits
-No eviction: the store grows with every log ever seen. Fine for one goal; a two-hour race is the point where [[map-memory-not-datalog]] is revisited.
+No eviction: the store grows with every log ever seen. Fine for one goal; a two-hour race is where the cost of an ever-growing fact store gets measured ([[facts-in-datascript]]).
 
 ## See also
 - [[memory-sightings]] - the mechanism.

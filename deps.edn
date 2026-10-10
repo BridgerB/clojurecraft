@@ -1,6 +1,7 @@
 {:paths ["src" "resources"]
  :deps {org.clojure/clojure {:mvn/version "1.12.1"}
-        org.clojure/core.async {:mvn/version "1.8.741"}}
+        org.clojure/core.async {:mvn/version "1.8.741"}
+        datascript/datascript {:mvn/version "1.8.1"}}
  :aliases
  {:run {:main-opts ["-m" "clojurecraft.main"]}
   :rcon {:main-opts ["-m" "clojurecraft.rcon"]}

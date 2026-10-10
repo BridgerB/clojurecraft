@@ -15,7 +15,7 @@ lastUpdated: 2026-10-10
 - **Phase**: the protocol state (`:handshake`, `:login`, `:configuration`, `:play`), advanced only by emitting a transition packet; see [[connection-phases]].
 - **Intent**: a value in `:plan/intent` (`{:intent/kind :dig ...}`) advanced one tick at a time by `intent/run`; see [[goals-and-intents]].
 - **Goal**: a row of data in `resources/clojurecraft/goals.edn` (`:goal/needs :goal/provides :goal/done? :goal/act`); `plan/done-by` and `plan/act` are the registries that give it meaning.
-- **Sighting**: a remembered block state with a timestamp in `:world/sightings`; see [[memory-sightings]].
+- **Sighting**: an observation fact `{:sight/pos :sight/state :sight/at}` in the DataScript value `:world/facts`; see [[memory-sightings]].
 - **Recording**: an EDN file of every event of a run, replayable with no server; see [[record-replay]].
 - **Sim**: the pure server model in `sim.clj` that tests run the whole bot against; see [[server-model]].
 - **Gym**: a run of one goal with prerequisites given over RCON and judged by `RESULT` plus an RCON truth read; see [[ci-wood-workflow]].

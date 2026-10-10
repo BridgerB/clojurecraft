@@ -73,7 +73,7 @@
     (is (some #(= :move-player-pos-rot (:packet/name %)) (packets fx)))))
 
 (deftest gives-up-without-logs
-  (let [w (assoc (world-state [0.5 64.0 0.5]) :world/sightings {})
+  (let [w (assoc (world-state [0.5 64.0 0.5]) :world/facts (memory/empty-facts))
         [w _] (run w (cons go (ticks 50 25000)))]
     (is (plan/failed? w))
     (is (= :no-log (:plan/reason w)))))

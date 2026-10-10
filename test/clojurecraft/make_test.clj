@@ -29,7 +29,7 @@
     (cond-> (-> (game/init fx/opts)
                 (assoc :bot/phase :play :player/pos [5.5 64.0 5.5] :player/loaded? true :player/on-ground? true
                        :player/inventory inv :world/chunks {[0 0] (world/column {})}))
-      table? (assoc-in [:world/sightings [7 64 5]] {:block/state memory/crafting-table :block/seen-at 0}))))
+      table? (memory/observe [7 64 5] memory/crafting-table))))
 
 (defn executable?
   "Is intent i something the world can do right now?"
@@ -41,7 +41,7 @@
                     (recipe/fits? r 2)
                     (some? (recipe/clicks (:player/inventory w) r 2))))
       :place (and (= :crafting_table (:intent/item i)) (pos? (get counts :crafting_table 0)))
-      :open-container (some? (get-in w [:world/sightings (:intent/target i)]))
+      :open-container (some? (memory/remembered w (:intent/target i)))
       nil (= :no-log (:plan/wait i))                            ; gathering with no tree known: wait
       false)))
 

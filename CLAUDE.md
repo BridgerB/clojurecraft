@@ -15,7 +15,7 @@ Read `docs/hickey.md` first; it is the design brief. In short:
 - **Effects are data** in `:bot/effects` (`{:effect/kind :send :effect/packet p}`, `{:effect/kind :log ...}`); the loop drains and performs them. The protocol phase advances only in `game/emit`, from `packet/transitions`.
 - **Packets are maps with a `:packet/name`**; specs are data (`packet/specs`), ids are generated from the vanilla reports. Unknown ids decode to `{:packet/name :unknown}` and are counted, never thrown.
 - **Dispatch is open**: multimethods for packets (`game/on-packet` on `[phase name]`), intents (`intent/run` on `:intent/kind`) and goal rows (`plan/done-by` on `:goal/done?`, `plan/act` on `:goal/act`, `plan/next-intent` on `:goal/plan`). A new packet, intent or goal is a `defmethod` in a new namespace; The goal table is data, `resources/clojurecraft/goals.edn`; recipes add generated rows (`make`).
-- **Memory is facts with time** (`memory`): sightings keyed by position with `:block/state` and `:block/seen-at`, kept after chunks unload.
+- **Memory is facts with time** (`memory`): `:world/facts` is a DataScript value of observation facts `{:sight/pos :sight/state :sight/at}`, appended when what is seen changes, never retracted, queried with Datalog, kept after chunks unload.
 - **Every run is a file**: `--record run.edn` writes each event; `clojure -M:replay run.edn` folds the reducer over it with no server. Keep this true (no hidden inputs).
 - **Specs** live in `spec.clj` and are instrumented in tests; properties in `props_test.clj`; the whole bot runs against the pure server model in `sim.clj` (`sim_test.clj`) with no Java process.
 - I/O lives in exactly four namespaces: `conn` (socket), `rcon`, `harness` (RCON fixture, an observer of the atom), `main`. Everything else is values in, values out.
@@ -31,7 +31,7 @@ src/clojurecraft/conn.clj     socket, framing, zlib, reader/writer threads → c
 src/clojurecraft/chunk.clj    paletted chunk sections as values, block-at, find-blocks
 src/clojurecraft/blocks.clj   generated block/item/entity tables, solid?, log?
 src/clojurecraft/physics.clj  vanilla land movement over :player/* attributes, look-at
-src/clojurecraft/memory.clj   sightings: what the bot has seen, with time, after chunks unload
+src/clojurecraft/memory.clj   observation facts in DataScript, with time, after chunks unload; Datalog queries
 src/clojurecraft/game.clj     the world reducer: handshake, keep-alive, teleports, chunks, inventory, ticks
 src/clojurecraft/intent.clj   open executors: :walk :dig :collect (multimethod on :intent/kind)
 src/clojurecraft/plan.clj     loads goals.edn; registries done-by, act, next-intent; the planner; :plan/*

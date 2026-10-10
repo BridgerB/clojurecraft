@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx :refer [fold names packets packet ticks]]
             [clojurecraft.game :as game]
+            [clojurecraft.memory :as memory]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -116,10 +117,12 @@
     (is (= {50 {:entity/type 71 :entity/pos [2.0 64.0 0.5] :entity/seen-at 0}} (:world/entities w)) "only items are tracked")
     (testing "sightings remember logs and their later states"
       (is (= {[3 64 0] {:block/state 136 :block/seen-at 0} [3 65 0] {:block/state 0 :block/seen-at 0}}
-             (:world/sightings w)))
+             (memory/latest w)))
+      (is (= [{:block/state 136 :block/seen-at 0} {:block/state 0 :block/seen-at 0}] (memory/history w [3 65 0]))
+          "facts are appended, never overwritten: the log, then the air that replaced it")
       (let [[w2 _] (run w [(packet {:packet/name :forget-level-chunk :pos 0})])]
         (is (nil? (game/block-at w2 [3 64 0])) "chunk gone")
-        (is (= 136 (get-in w2 [:world/sightings [3 64 0] :block/state])) "memory stays")))
+        (is (= 136 (memory/remembered w2 [3 64 0])) "memory stays")))
     (testing "a corrupt chunk is logged, not thrown"
       (let [[w2 fx] (run w [(packet {:packet/name :level-chunk-with-light :x 1 :z 1 :heightmaps [] :data (byte-array 3)})])]
         (is (= 1 (count (:world/chunks w2))))

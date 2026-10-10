@@ -5,6 +5,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.make]
+            [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -92,7 +93,7 @@
     (is (zero? (:plan/attempts w)))
     (testing "the table is remembered where the server put it"
       (let [[pos state] (first (:sim/placed sim))]
-        (is (= state (get-in w [:world/sightings pos :block/state])))))))
+        (is (= state (memory/remembered w pos)))))))
 
 (deftest a-low-canopy-is-cleared-to-reach-the-drop
   ;; the first CI failure: oak leaves one block above the ground between the bot and the trunk;

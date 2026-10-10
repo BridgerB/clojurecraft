@@ -66,4 +66,4 @@
             [w _] (fx/fold intent-step w [(packet {:packet/name :block-update :pos [7 64 5] :state memory/crafting-table})
                                           {:event/kind :tick :event/now 100 :event/rand 0.5}])]
         (is (intent/done? (:plan/intent w)))
-        (is (= memory/crafting-table (get-in w [:world/sightings [7 64 5] :block/state])) "remembered")))))
+        (is (= memory/crafting-table (memory/remembered w [7 64 5])) "remembered")))))
