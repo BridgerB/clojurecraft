@@ -5,11 +5,11 @@ type: decision
 tags: [bot, decision, replay]
 aliases: [event/rand, no rand in reducers, deterministic replay]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 60b624e
+lastUpdated: 2026-10-10
+verifiedAgainst: b08563f
 sourceRefs:
   - src/clojurecraft/main.clj#defn run-loop
-  - src/clojurecraft/intent.clj#defmethod run :walk
+  - src/clojurecraft/main.clj#:event/rand (rand)
 related:
   - "[[bot/decisions/_moc|Decisions]]"
   - "[[record-replay]]"
@@ -18,7 +18,7 @@ related:
 # Randomness on the tick
 
 ## The choice
-The loop puts `:event/rand` (a double) on every tick; the walk intent reads it to pick a detour direction.
+The loop puts `:event/rand` (a double) on every tick. The walk intent read it to pick a detour direction until the pathfinder replaced detours with a planned route ([[pathfinder]]); the field stays on every tick for the next intent that needs a coin.
 
 ## What was rejected
 Calling `rand-nth` inside the intent, as the first version did. It made two runs over the same event log diverge, which silently removed the record-and-replay guarantee; a replay that cannot reproduce a failure is worth nothing when debugging a two-hour race.
