@@ -11,6 +11,8 @@ sourceRefs:
   - src/clojurecraft/memory.clj#(def schema
   - src/clojurecraft/memory.clj#defn observation
   - deps.edn#datascript/datascript {:mvn/version "1.8.1"}
+  - src/clojurecraft/memory.clj#defn positions-now
+  - test/clojurecraft/memory_test.clj#positions-now-is-what-was-seen-and-not-seen-gone
   - docs/hickey.md#The version that wins the race is an append-only set of
 related:
   - "[[bot/decisions/_moc|Decisions]]"
@@ -28,6 +30,9 @@ related:
 
 ## What it costs
 - One dependency (`datascript/datascript`). The unit suite's wall time went from about 9 s to 19 s (the sim enumerations make many observations). Live runs are unaffected: a pickaxe run built 3,779 facts and answered every keep-alive.
+
+## The essay's query
+"The nearest log I have ever seen that I have not confirmed gone" is `memory/positions-now`: one Datalog query with a `not-join` (a log was seen at the place, and no later fact there has a state outside the set). It replaced a Datalog query followed by a per-position check in Clojure; on the final world of a recorded wood run (4,534 facts, 1,494 log positions) both give the same positions, in 3.9 ms instead of 80 ms per call. `memory_test` pins the meaning: dug logs drop out, a log seen as another log state stays, and the history still has every log ever seen.
 
 ## What would change the answer
 A query that DataScript cannot answer fast enough on the tick (measure before guessing), or the need for "as of" queries across a whole race, which would argue for storing the transaction time explicitly on every fact (it is already there as `:sight/at`).

@@ -43,8 +43,6 @@
 
 (defn watched? "Does seeing this state start a record?" [id] (or (blocks/log? id) (crafting-table? id)))
 
-(def log-states (vec (filter blocks/log? (range 0 30000))))
-
 ;; ---------------------------------------------------------------- reading
 
 (defn latest-entity
@@ -72,6 +70,18 @@
     (into {} (for [[pos e] (d/q '[:find ?pos (max ?e) :where [?e :sight/pos ?pos]] db)
                    :let [ent (d/entity db e)]]
                [pos {:block/state (:sight/state ent) :block/seen-at (:sight/at ent)}]))))
+
+(defn positions-now
+  "Positions where one of states was seen and nothing seen there since is outside states: the
+   essay's \"the nearest log I have ever seen that I have not confirmed gone\", as one Datalog
+   query over the facts (no later fact at the place with a state outside the set)."
+  [world states]
+  (d/q '[:find [?pos ...] :in $ [?s ...] ?all
+         :where [?e :sight/state ?s] [?e :sight/pos ?pos]
+         (not-join [?e ?pos ?all]
+                   [?later :sight/pos ?pos] [(> ?later ?e)] [?later :sight/state ?t]
+                   [(contains? ?all ?t) ?kept] [(false? ?kept)])]
+       (:world/facts world) states (set states)))
 
 (defn positions-ever
   "Positions where any of the states was ever observed (a Datalog query over the facts)."
@@ -175,23 +185,21 @@
 
 (defn nearest
   "Nearest position whose latest observed state satisfies pred, within radius of eye, or nil.
-   The common case, crafting tables, is answered from the state index; other predicates scan
-   the latest view."
+   Crafting tables are one Datalog query (positions-now); other predicates scan the latest view."
   [world eye radius pred]
   (nearest-of eye radius
               (if (= pred crafting-table?)
-                (filter #(crafting-table? (remembered world %)) (positions-ever world [crafting-table]))
+                (positions-now world [crafting-table])
                 (for [[p {:block/keys [state]}] (latest world) :when (pred state)] p))))
 
 (defn nearest-log
   "Nearest trunk-bottom log on record within radius of eye, skipping blacklisted positions and
-   logs more than 12 blocks above or below the eye. nil when none. Candidates come from a
-   Datalog query (positions where a log was ever seen); each is checked against its latest
-   observation, so a log since seen as air does not count."
+   logs more than 12 blocks above or below the eye. nil when none. Candidates come from one
+   Datalog query, positions-now: a log was seen there and nothing since says it is gone."
   [world eye radius blacklist]
   (let [ey (second eye)]
     (nearest-of eye radius
-                (->> (positions-ever world log-states)
+                (->> (positions-now world blocks/log-states)
                      (remove blacklist)
                      (filter (fn [[_ y _]] (<= (abs (- y ey)) 12)))
                      (filter #(trunk-bottom? world %))))))
