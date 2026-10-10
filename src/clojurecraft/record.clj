@@ -100,18 +100,24 @@
   [step world0 path]
   (reduce (fn [w e] (assoc (step w e) :bot/effects [])) world0 (events path)))
 
+(defn sent
+  "The effects the server saw: the :send ones. A log line reworded since the recording is not
+   a changed run, so a replay is held to what went down the wire."
+  [effects]
+  (filterv #(= :send (:effect/kind %)) effects))
+
 (defn verify
-  "Replay the recording and compare what each event makes the reducer ask for with what was
-   recorded. nil when every effect matches; {:record/mismatch {:index i :recorded r :replayed p}}
-   at the first difference; :record/no-effects for a recording without effects."
+  "Replay the recording and compare what each event makes the reducer send with what was
+   recorded. nil when every sent packet matches; {:record/mismatch {:index i :recorded r
+   :replayed p}} at the first difference; :record/no-effects for a recording without effects."
   [step world0 path]
   (if-let [recorded (effects path)]
     (let [end (reduce (fn [w [i e r]]
                         (let [w (step w e)
                               produced (:bot/effects w)]
-                          (if (= produced r)
+                          (if (= (sent produced) (sent r))
                             (assoc w :bot/effects [])
-                            (reduced {:record/mismatch {:index i :event e :recorded r :replayed produced}}))))
+                            (reduced {:record/mismatch {:index i :event e :recorded (sent r) :replayed (sent produced)}}))))
                       world0 (map vector (range) (events path) recorded))]
       (when (:record/mismatch end) end))
     :record/no-effects))

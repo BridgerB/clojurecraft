@@ -30,7 +30,11 @@
     :gym/truth [{:truth/cmd "clear {name} minecraft:crafting_table 0" :truth/re "Found [1-9]"}
                 {:truth/cmd "clear {name} minecraft:stick 0" :truth/re "Found ([4-9]|[1-9][0-9])"}]}
    {:gym/goal :pickaxe :gym/until "pickaxe" :gym/prereqs [] :gym/timeout-ms 300000
-    :gym/truth [{:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}])
+    :gym/truth [{:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}
+   ;; the pickaxe is given, so the row measures stone, not the wood and crafting it already measures
+   {:gym/goal :cobblestone :gym/until "cobblestone" :gym/prereqs ["minecraft:wooden_pickaxe 1"] :gym/timeout-ms 300000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0" :truth/re "Found ([3-9]|[1-9][0-9])"}
+                {:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."

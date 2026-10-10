@@ -5,6 +5,8 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blocks :as blocks]
+            [clojurecraft.dig :as dig]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -61,13 +63,14 @@
 (def leaves-id 252)
 
 (defn standing-by
-  "In play on a stone floor at [5.5 64 5.5], at rest, with block id at [7 64 5] and a dig of it
-   as the current intent."
-  [id]
-  (assoc (game/init fx/opts)
-         :bot/phase :play :player/pos [5.5 64.0 5.5] :player/vel [0.0 -0.078 0.0] :player/loaded? true
-         :player/on-ground? true :world/chunks {[0 0] (world/column {[7 64 5] id})}
-         :plan/intent {:intent/kind :dig :intent/target [7 64 5] :intent/status :active}))
+  "In play on a stone floor at [5.5 64 5.5], at rest, with block id at [7 64 5], inv as the
+   player inventory, and a dig of it as the current intent."
+  ([id] (standing-by id {}))
+  ([id inv]
+   (assoc (game/init fx/opts)
+          :bot/phase :play :player/pos [5.5 64.0 5.5] :player/vel [0.0 -0.078 0.0] :player/loaded? true
+          :player/on-ground? true :player/inventory inv :world/chunks {[0 0] (world/column {[7 64 5] id})}
+          :plan/intent {:intent/kind :dig :intent/target [7 64 5] :intent/status :active})))
 
 (defn dig-step
   "game/step, then one tick of the dig intent while it is active."
@@ -77,11 +80,13 @@
     (if (and (= :tick (:event/kind e)) (= :active (:intent/status i))) (intent/run w i e) w)))
 
 (defn uneven-ticks
-  "Ticks at the given gaps (ms), then steady 50 ms ticks to 10 s so every dig can finish."
-  [gaps]
-  (let [ts (reductions + 0 gaps)]
-    (for [t (concat ts (range (+ (last ts) 50) (+ (last ts) 10000) 50))]
-      {:event/kind :tick :event/now t :event/rand 0.5})))
+  "Ticks at the given gaps (ms), then steady 50 ms ticks for horizon ms (10 s by default) so
+   every dig can finish."
+  ([gaps] (uneven-ticks gaps 10000))
+  ([gaps horizon]
+   (let [ts (reductions + 0 gaps)]
+     (for [t (concat ts (range (+ (last ts) 50) (+ (last ts) horizon) 50))]
+       {:event/kind :tick :event/now t :event/rand 0.5}))))
 
 (deftest a-dig-never-finishes-before-its-deadline
   (check (prop/for-all [id (gen/elements [log-id leaves-id])
@@ -90,5 +95,36 @@
                              actions (for [[t p] (fx/sent fx) :when (= :player-action (:packet/name p))] [t (:status p)])
                              [[t0 s0] [t1 s1] :as all] actions]
                          (and (= 2 (count all)) (= [0 2] [s0 s1])
-                              (>= (- t1 t0) (intent/finish-delay id))
+                              (>= (- t1 t0) (intent/finish-delay (intent/dig-time id)))
                               (>= (- t1 t0) (intent/dig-time id)))))))
+
+(def breakable-states
+  "Every state id of a block with a hardness above zero: what a dig may be asked for."
+  (vec (for [[n _ lo _] blocks/table :let [h (blocks/hardness-by-name n)] :when (and h (pos? h))] lo)))
+
+(def holdable-items
+  "Every tool item id, and the hand."
+  (into [nil] (keys blocks/tools)))
+
+(deftest a-dig-with-any-tool-on-any-block-keeps-the-rules
+  ;; issue #9: for any breakable block, any held item and any tick sequence, FINISH is never
+  ;; before 1.35 x dig/ms + 200 after START; a block that needs a tier gets no START unless a
+  ;; held tool of its own kind reaches the tier (the game drops by tier alone, but the dig
+  ;; chooses only tools of the block's kind, so an off-kind tool is refused rather than spent on
+  ;; a slow dig); and FINISH's sequence is START's plus one
+  (check (prop/for-all [id (gen/elements breakable-states)
+                        held (gen/elements holdable-items)
+                        gaps (gen/vector (gen/choose 1 400) 0 40)]
+                       (let [inv (if held {3 {:item held :count 1}} {})
+                             tool (second (dig/best-tool id inv {}))             ; the dig's own choice: nil is the hand
+                             ms (or (dig/ms id tool {}) intent/dig-ms)
+                             [w fx] (fx/fold dig-step (standing-by id inv) (uneven-ticks gaps (+ (intent/finish-delay ms) 2000)))
+                             actions (for [[t p] (fx/sent fx) :when (= :player-action (:packet/name p))] [t p])
+                             [[t0 start] [t1 finish]] actions
+                             unreachable? (and (blocks/needs-tier id) (nil? tool) (not (dig/harvest? id nil)))]
+                         (cond
+                           (not (blocks/solid? id)) (and (empty? actions) (= :target-gone (:intent/reason (:plan/intent w))))
+                           unreachable? (and (empty? actions) (= :needs-tool (:intent/reason (:plan/intent w))))
+                           :else (and (= 2 (count actions)) (= 0 (:status start)) (= 2 (:status finish))
+                                      (>= (- t1 t0) (intent/finish-delay ms))
+                                      (= (:sequence finish) (inc (:sequence start)))))))))

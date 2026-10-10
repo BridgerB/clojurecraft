@@ -158,6 +158,7 @@
 (s/def ::need-key (s/or :named keyword? :set (s/coll-of keyword? :kind set?)))
 (s/def ::amount (s/or :count pos-int? :near #{:near}))
 (s/def :goal/needs (s/map-of ::need-key ::amount))
+(s/def :goal/holds (s/map-of ::need-key ::amount))    ; needs a row keeps rather than spends (a tool)
 (s/def :goal/provides (s/map-of ::need-key ::amount :min-count 1))
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
@@ -167,7 +168,7 @@
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
 (s/def ::goal (s/keys :req [:goal/id :goal/priority :goal/provides :goal/done?]
-                      :opt [:goal/needs :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by]))
+                      :opt [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
@@ -258,6 +259,18 @@
 (s/def :intent/face int?)
 (s/def :intent/next-swing number?)
 (s/def :intent/finish-at number?)
+(s/def :intent/slot (s/int-in 0 9))
+(s/def :intent/tool (s/nilable int?))
+(s/def :intent/dig-ms nat-int?)
+(s/def :intent/state int?)
+(s/def :intent/confirm-left nat-int?)
+(s/def :intent/to-y int?)
+(s/def :intent/dir (s/tuple int? int?))
+(s/def :intent/turns nat-int?)
+(s/def :intent/cells (s/coll-of ::block-pos :kind vector? :count 3))
+(s/def :intent/child (s/keys :req [:intent/kind]))
+(s/def :intent/started-y number?)
+(s/def :intent/started-tick int?)
 (s/def :intent/best-dist number?)
 (s/def :intent/best-tick int?)
 (s/def :intent/detour-until int?)

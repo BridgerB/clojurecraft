@@ -10,7 +10,7 @@ on:
     inputs:
       goal:
         type: choice
-        options: [wood, table, pickaxe]
+        options: [wood, table, pickaxe, cobblestone]
         default: wood
       runs:
         default: '6'
@@ -72,7 +72,7 @@ jobs:
       - id: plan
         name: The shard matrix
         run: |
-          if [ "${{ github.event_name }}" = push ]; then goals=wood,table,pickaxe; runs=1; else goals=${{ inputs.goal }}; runs=${{ inputs.runs }}; fi
+          if [ "${{ github.event_name }}" = push ]; then goals=wood,table,pickaxe,cobblestone; runs=1; else goals=${{ inputs.goal }}; runs=${{ inputs.runs }}; fi
           matrix=$(clojure -M:gym plan --goals "$goals" --runs "$runs")
           echo "$matrix"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"

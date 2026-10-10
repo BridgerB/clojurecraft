@@ -40,7 +40,7 @@ related:
 3. Penalties are part of the formula, and the water one is about the eyes.
 
 ## What it means here
-Our `dig-ms` is a constant 3000 (a log by hand) and the dig intent refuses non-logs ([[mc-dig-and-pickup]]). Issue 05 replaces it with a pure function over generated hardness and the jar's `mineable/*` and `needs_*_tool` tags rather than name heuristics; the late FINISH rule stays ([[sib-dig-stop-timing]]).
+Done (issue #9): `dig/ms` is a pure function over hardness and tool materials read from the game's own classes at datagen and the jar's `mineable/*` and `needs_*_tool` tags, no name heuristics; datagen throws rather than default a hardness. The late FINISH rule stays ([[sib-dig-stop-timing]]). See [[hardness-and-tools]].
 
 ## Limits
 typecraft's hardness source (its Java datagen mod) and the tag files in the server jar were not opened here; see docs/issues/05 for those claims.

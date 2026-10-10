@@ -4,7 +4,7 @@ type: moc
 tags: [bot, plan]
 status: verified
 lastUpdated: 2026-10-10
-verifiedAgainst: b08563f
+verifiedAgainst: 56441f5
 related:
   - "[[bot/_moc|Bot pillar]]"
 ---
@@ -12,7 +12,9 @@ related:
 # Plan
 
 - [[goals-and-intents]] - the goal table, the planner tick, and how intents advance, finish, fail and retry.
-- [[dig-timeline]] - settle, START, swings, FINISH: the absolute-time schedule of a dig.
+- [[dig-timeline]] - settle, choose the tool, START, swings, FINISH at the block's own time, confirm: the absolute-time schedule of a dig.
+- [[hardness-and-tools]] - hardness, harvest tags and tool materials read from the game at datagen; the break formula; choosing a tool.
+- [[stairs-down]] - a staircase cut one stair at a time, refusing water, lava and drops, never digging the support.
 - [[pathfinder]] - a route for the feet over the block grid: A* with a node budget, moves and goals as data, water and lava as walls.
 - [[walk-intent]] - plan a route on the first tick, follow it waypoint by waypoint, plan again when the world changes, fail :no-path after six plans.
 - [[collect-intent]] - walk onto the drop until any log is held; name a blocking leaf; 10 s timeout.

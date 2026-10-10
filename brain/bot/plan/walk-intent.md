@@ -6,7 +6,7 @@ tags: [bot, plan, intents, walk]
 aliases: [:walk, waypoints, follow, waypoint-reached?, route-stale?, :no-path, replans, reach 4.0]
 status: verified
 lastUpdated: 2026-10-10
-verifiedAgainst: b08563f
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/intent.clj#defmethod run :walk
   - src/clojurecraft/intent.clj#defn route!
@@ -18,7 +18,7 @@ sourceRefs:
   - src/clojurecraft/intent.clj#def max-replans 6
   - src/clojurecraft/intent.clj#def reach 4.0
   - test/clojurecraft/plan_test.clj#walks-to-a-far-log
-  - test/clojurecraft/plan_test.clj#a-walk-plans-again-when-a-chunk-arrives
+  - test/clojurecraft/plan_test.clj#a-walk-plans-again-only-when-its-route-breaks
   - test/clojurecraft/plan_test.clj#a-walk-with-no-way-on-fails-no-path
   - test/clojurecraft/sim_test.clj#a-log-across-a-cliff-and-a-pond-is-reached-by-a-route
 related:
@@ -37,14 +37,14 @@ related:
 - `intent.clj`, `route!` - plans from the feet cell toward `{:goal/kind :near :goal/pos target :goal/range 3}` and counts the plan.
 - `intent.clj`, `waypoint-reached?` - within `waypoint-reach` (0.35) of the waypoint's centre on the plane, and the feet within half a block of its height in both directions.
 - `intent.clj`, `follow` - `toward` the waypoint's centre, jumping when it is above the feet and within `jump-near` (1.3), or when blocked.
-- `intent.clj`, `route-stale?` - the four reasons to plan again.
+- `intent.clj`, `route-stale?` - the three reasons to plan again.
 - `intent.clj`, `arrived?` - within reach, and for a log, the feet no more than `pickup-rise` (2) below it.
 
 ## How it works
 1. Arrived (`arrived?`): set only `:control/look` at the target and finish, so the next intent starts already looking.
 2. More than `walk-timeout-ticks` (1200, 60 s) since the walk began: fail `:stuck`.
 3. No route yet: plan. A route that is `:none` with no waypoints at all fails `:no-path` at once.
-4. The route is stale: the next waypoint can no longer be stood on, a chunk arrived since planning (`:stats/chunks` moved), no waypoint was reached for `stuck-ticks` (40, 2 s), or the route ended short of the target (`:partial` or `:none`) with every waypoint behind. Plan again, unless `max-replans` (6) plans were already made: then fail `:no-path`.
+4. The route is stale: a waypoint still ahead can no longer be stood on, no waypoint was reached for `stuck-ticks` (40, 2 s), or the route ended short of the target (`:partial` or `:none`) with every waypoint behind. Plan again, unless `max-replans` (6) plans were already made: then fail `:no-path`. A chunk arriving is not by itself a reason: gym batch cobble-a1 run 7 saw six arrive in the first seconds after landing, each spending a plan on the same route, and the walk failed `:no-path` without a step taken.
 5. The route is walked to its end but the target is still out of reach (a `:found` route ends within 3 of the target; reach is 4): press straight toward the target.
 6. The next waypoint is reached: advance.
 7. Otherwise `follow` it.

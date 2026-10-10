@@ -3,8 +3,10 @@
    the small EDN tables the bot ships with. Run via scripts/datagen.sh (or
    `clojure -M:datagen <reports-dir> <resources-dir> [server-jar]`).
 
-   Recipes and item tags are not in the --reports output; they live in the inner jar
-   META-INF/versions/<v>/server-<v>.jar under data/minecraft/{recipe,tags/item}/."
+   Recipes, item tags and block tags are not in the --reports output; they live in the inner
+   jar META-INF/versions/<v>/server-<v>.jar under data/minecraft/{recipe,tags/item,tags/block}/.
+   Block hardness and tool materials are not data files at all: clojurecraft.jar-probe reads
+   them from the game's own classes (scripts/datagen.sh runs it) and hands them here as JSON."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
             [clojure.string :as str])
@@ -41,15 +43,17 @@
   (second (re-find #"/([^/]+)\.json$" path)))
 
 (defn tag-name
-  "The tag a data/minecraft/tags/item/*.json path defines (subfolders kept), or nil."
-  [path]
-  (second (re-find #"^data/minecraft/tags/item/(.+)\.json$" path)))
+  "The tag a data/minecraft/tags/<kind>/*.json path defines (subfolders kept), or nil."
+  [kind path]
+  (second (re-find (re-pattern (str "^data/minecraft/tags/" kind "/(.+)\\.json$")) path)))
 
-(defn item-tags
-  "{tag-kw #{item-kw}} with nested tags resolved."
-  [entries]
-  (let [raw (into {} (for [[p j] entries :when (str/starts-with? p "data/minecraft/tags/item/")]
-                       [(keyword (tag-name p)) (get (json/read-str j) "values")]))
+(defn tags-of
+  "{tag-kw #{name-kw}} for every tag of one kind (\"item\" or \"block\"), nested tags resolved,
+   cycles cut."
+  [entries kind]
+  (let [prefix (str "data/minecraft/tags/" kind "/")
+        raw (into {} (for [[p j] entries :when (str/starts-with? p prefix)]
+                       [(keyword (tag-name kind p)) (get (json/read-str j) "values")]))
         resolve (fn resolve [tag seen]
                   (into (sorted-set)
                         (mapcat (fn [v]
@@ -60,6 +64,56 @@
                                       [(name-kw v)])))
                                 (get raw tag))))]
     (into (sorted-map) (for [t (keys raw)] [t (resolve t #{t})]))))
+
+(defn item-tags
+  "{tag-kw #{item-kw}} with nested tags resolved."
+  [entries]
+  (tags-of entries "item"))
+
+(def harvest-tiers
+  "The needs_*_tool tags, lowest tier first: a block in a later one needs at least that tier."
+  [[:stone :needs_stone_tool] [:iron :needs_iron_tool] [:diamond :needs_diamond_tool]])
+
+(def mineable-kinds
+  "The mineable/* tags and the tool kind each names."
+  [[:pickaxe (keyword "mineable/pickaxe")] [:axe (keyword "mineable/axe")]
+   [:shovel (keyword "mineable/shovel")] [:hoe (keyword "mineable/hoe")]])
+
+(defn harvest
+  "{block-kw {:tool kind :needs tier}} from the block tags: which tool kind mines a block
+   faster and drops it, and the lowest tier that drops it when one is required. A block in
+   no mineable tag is absent (any tool, by hand)."
+  [block-tags]
+  (let [tool-of (into {} (for [[kind tag] mineable-kinds b (get block-tags tag)] [b kind]))
+        needs (into {} (for [[tier tag] harvest-tiers b (get block-tags tag)] [b tier]))]
+    (into (sorted-map)
+          (for [b (sort (set (concat (keys tool-of) (keys needs))))]
+            [b (cond-> {}
+                 (tool-of b) (assoc :tool (tool-of b))
+                 (needs b) (assoc :needs (needs b)))]))))
+
+(defn hardness
+  "{block-kw hardness} from the probe's JSON, keyed like blocks.edn; throws when a block of the
+   table has no hardness, so a version bump can never default one silently (ruststeve's
+   placeholder-hardness bug)."
+  [probe block-rows]
+  (let [h (into (sorted-map) (for [[n v] (get probe "hardness")] [(name-kw n) (double v)]))
+        missing (remove #(contains? h %) (map first block-rows))]
+    (when (seq missing)
+      (throw (ex-info "blocks with no hardness from the game" {:blocks (vec missing)})))
+    h))
+
+(defn materials
+  "{tier-kw {:speed s :durability d :incorrect tag-kw}} from the probe's JSON: the game's own
+   ToolMaterial constants. Tiers are named as the item names spell them (:wooden, not WOOD)."
+  [probe]
+  (let [tier {"WOOD" :wooden "STONE" :stone "COPPER" :copper "IRON" :iron "GOLD" :golden
+              "DIAMOND" :diamond "NETHERITE" :netherite}]
+    (into (sorted-map)
+          (for [[n m] (get probe "materials")]
+            [(get tier n (keyword (str/lower-case n)))
+             {:speed (double (get m "speed")) :durability (long (get m "durability"))
+              :incorrect (name-kw (get m "incorrect"))}]))))
 
 (defn ingredient
   "The sorted set of item keywords a recipe ingredient accepts: an id, a #tag looked up in tags
@@ -142,8 +196,8 @@
           (for [[n m] (get-in j [reg "entries"])] [(name-kw n) (get m "protocol_id")]))))
 
 (defn inner-jar-entries
-  "{path json-string} for version.json and every data/minecraft/{recipe,tags/item}/*.json in
-   the inner jar."
+  "{path json-string} for version.json and every data/minecraft/{recipe,tags/item,tags/block}/*.json
+   in the inner jar."
   [server-jar]
   (with-open [outer (ZipInputStream. (io/input-stream server-jar))]
     (let [inner (loop []
@@ -155,7 +209,7 @@
         (loop [acc {}]
           (if-let [e (.getNextEntry z)]
             (let [n (.getName e)]
-              (recur (if (or (= n "version.json") (re-matches #"data/minecraft/(recipe/[^/]+|tags/item/.+)\.json" n))
+              (recur (if (or (= n "version.json") (re-matches #"data/minecraft/(recipe/[^/]+|tags/(item|block)/.+)\.json" n))
                        (assoc acc n (String. (.readAllBytes z) "UTF-8"))
                        acc)))
             acc))))))
@@ -179,18 +233,26 @@
     (.write w "}\n")))
 
 (defn -main
-  "Write the --reports tables (blocks, packets, items, entity types) into out, and with a server
-   jar also the jar tables (version, item tags, recipes)."
-  [reports out & [server-jar]]
+  "Write the --reports tables (blocks, packets, items, entity types) into out; with a server
+   jar also the jar tables (version, item tags, recipes, harvest); with the probe's JSON too,
+   the tables read from the game's classes (hardness, materials)."
+  [reports out & [server-jar probe-json]]
   (let [hdr ";; generated by scripts/datagen.sh from vanilla 26.1.2 --reports; do not edit\n"
-        jar-hdr ";; generated by scripts/datagen.sh from the vanilla 26.1.2 server jar data; do not edit\n"]
+        jar-hdr ";; generated by scripts/datagen.sh from the vanilla 26.1.2 server jar data; do not edit\n"
+        probe-hdr ";; generated by scripts/datagen.sh by clojurecraft.jar-probe: reflection against the vanilla 26.1.2 server's own classes (BlockState.getDestroySpeed, ToolMaterial); not in --reports or any data file; do not edit\n"]
     (when server-jar
       (let [entries (inner-jar-entries server-jar)
             tags (item-tags entries)]
         (write-map (io/file out "version.edn") jar-hdr (version entries))
         (write-map (io/file out "item-tags.edn") jar-hdr tags)
         (write-rows (io/file out "recipes.edn") jar-hdr (recipes entries tags))
-        (println "wrote" (str out "/{version,item-tags,recipes}.edn"))))
+        (write-map (io/file out "harvest.edn") jar-hdr (harvest (tags-of entries "block")))
+        (println "wrote" (str out "/{version,item-tags,recipes,harvest}.edn"))))
+    (when probe-json
+      (let [probe (json/read-str (slurp probe-json))]
+        (write-map (io/file out "hardness.edn") probe-hdr (hardness probe (blocks reports)))
+        (write-map (io/file out "materials.edn") probe-hdr (materials probe))
+        (println "wrote" (str out "/{hardness,materials}.edn"))))
     (write-rows (io/file out "blocks.edn") hdr (blocks reports))
     (write-map (io/file out "packets.edn") hdr (packets reports))
     (write-map (io/file out "items.edn") hdr (registry reports "minecraft:item"))

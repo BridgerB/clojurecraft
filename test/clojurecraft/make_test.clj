@@ -11,6 +11,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.make :as make]
+            [clojurecraft.stone]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -45,6 +46,7 @@
                     (some? (recipe/clicks (:player/inventory w) r 2))))
       :place (and (= :crafting_table (:intent/item i)) (pos? (get counts :crafting_table 0)))
       :open-container (some? (memory/remembered w (:intent/target i)))
+      :stairs-down (pos? (get counts :wooden_pickaxe 0))         ; down to stone, with nothing remembered: only with a pickaxe
       nil (= :no-log (:plan/wait i))                            ; gathering with no tree known: wait
       false)))
 

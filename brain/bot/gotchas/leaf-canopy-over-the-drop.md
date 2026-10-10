@@ -12,7 +12,7 @@ sourceRefs:
   - test/clojurecraft/sim_test.clj#a-drop-on-a-ledge-under-leaves-is-reached
   - src/clojurecraft/intent.clj#defn blocker
   - test/clojurecraft/sim_test.clj#the first CI failure: oak leaves one block above the ground between the bot and the trunk;
-  - src/clojurecraft/intent.clj#Leaves: hardness 0.2 → 6 ticks.
+  - src/clojurecraft/dig.clj#defn ms
 related:
   - "[[bot/gotchas/_moc|Gotchas]]"
   - "[[collect-intent]]"
