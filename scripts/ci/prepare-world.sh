@@ -19,6 +19,8 @@ trap '"$ROOT/scripts/server.sh" stop' EXIT
 clojure -M:gym landings --set "$SET" --plan "$ROOT/ci/gym.edn" --rcon-port "$RCON_PORT" --rcon-pass "$RCON_PASS" \
   --out "$WORLD/landings.edn"
 echo "landings: $(cat "$WORLD/landings.edn")"
+dupes=$(grep -o '\[[-0-9]* [-0-9]* [-0-9]*\]' "$WORLD/landings.edn" | sort | uniq -d | wc -l)
+[ "$dupes" -eq 0 ] || { echo "landings repeat a spot" >&2; exit 1; }
 rcon save-all flush
 rcon forceload query | tee "$ROOT/forceload.txt"
 grep -q 'No force loaded' "$ROOT/forceload.txt" || { echo "a forceload was left behind" >&2; exit 1; }

@@ -88,15 +88,16 @@
          [reason (rcon/command rc (str "execute positioned " x " " y " " z " " test))])))
 
 (defn landing!
-  "The first fit surface near grid cell, after snapping it to the set's biome: [x z y], or nil."
-  [rc cell biome]
+  "The first fit surface near grid cell, after snapping it to the set's biome, that is not one
+   of taken (two cells can snap to the same biome point): [x z y], or nil."
+  [rc cell biome taken]
   (let [[cx cz] cell
         snapped (or (parse-located (rcon/command rc (str "execute positioned " cx " 64 " cz " run locate biome " biome)))
                     cell)]
     (some (fn [[ox oz]]
             (let [[x z] [(+ (first snapped) ox) (+ (second snapped) oz)]
                   pos (surface! rc [x z])]
-              (when (and pos (fit? pos (answers! rc pos)))
+              (when (and pos (not (taken [(first pos) (nth pos 2)])) (fit? pos (answers! rc pos)))
                 (let [[px py pz] pos] [px pz py]))))
           harness/landing-offsets)))
 
@@ -114,12 +115,13 @@
       (finally (rcon/command rc (str "forceload remove " x0 " " z0 " " x1 " " z1))))))
 
 (defn landings!
-  "Build a landing set against a running server: one landing per grid cell that has one, each
-   pregenerated. Returns [[x z y] ...]."
+  "Build a landing set against a running server: one distinct landing per grid cell that has one,
+   each pregenerated. Returns [[x z y] ...]."
   [rc {:keys [center n spacing biome pregen-r]}]
-  (vec (keep (fn [cell]
-               (when-let [l (landing! rc cell biome)]
-                 (harness/log "landing" l "for cell" cell)
-                 (pregenerate! rc l pregen-r)
-                 l))
-             (grid center n spacing))))
+  (reduce (fn [ls cell]
+            (if-let [l (landing! rc cell biome (set (map (fn [[x z]] [x z]) ls)))]
+              (do (harness/log "landing" l "for cell" cell)
+                  (pregenerate! rc l pregen-r)
+                  (conj ls l))
+              ls))
+          [] (grid center n spacing)))
