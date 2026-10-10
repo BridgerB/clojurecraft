@@ -15,7 +15,7 @@ sourceRefs:
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[harness-landing]]"
-  - "[[ci-wood-workflow]]"
+  - "[[gym-on-runners]]"
 ---
 
 # RCON client

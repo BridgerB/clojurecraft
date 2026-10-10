@@ -10,6 +10,9 @@ verifiedAgainst: b9e38a1
 sourceRefs:
   - src/clojurecraft/record.clj#defn tap
   - src/clojurecraft/record.clj#defn wire
+  - src/clojurecraft/record.clj#defn recorded-result
+  - src/clojurecraft/main.clj#defn replayed
+  - test/clojurecraft/record_test.clj#a-recording-carries-its-result-and-a-replay-reaches-it
   - src/clojurecraft/record.clj#defn replay
   - src/clojurecraft/record.clj#defn verify
   - src/clojurecraft/record.clj#defn effects
@@ -41,8 +44,8 @@ related:
 2. Because the clock, randomness and the connection are event fields, nothing diverges on replay, and `verify` proves it per event.
 
 ## Gotchas
-- A recording includes the hold period after RESULT, so counts in the replayed summary are slightly higher than the live RESULT.
+- A recording ends at RESULT: `main` writes the RESULT into the file (`{:record/result ...}`, read back by `recorded-result`) and closes the tap before any hold, so the hold for an outside judge is not recorded. `main/replayed` judges the fold with the run's own `--until` and the same `ok?` rule, and reports `:replay/result :identical` when it reaches exactly the RESULT the run printed (else the recorded one, to compare). Older recordings without a result report `:not-recorded`.
 - Harness `:go` is an external event and is recorded like any other.
 
 ## See also
-- [[ci-wood-workflow]]
+- [[gym-on-runners]]

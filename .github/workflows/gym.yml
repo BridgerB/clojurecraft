@@ -1,0 +1,201 @@
+name: gym
+
+# Real runs of a goal on real terrain, one runner each, judged by the bot's RESULT and by the
+# server's truth commands. On push: every goal once (the smoke test that wood.yml was). On
+# dispatch: one goal, N runs, paired landings (run k always lands on landing k of the set).
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      goal:
+        type: choice
+        options: [wood, table, pickaxe]
+        default: wood
+      runs:
+        default: '6'
+      landing-set:
+        default: A
+      label:
+        description: names this batch's artifacts and summary
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+concurrency:
+  group: gym-${{ inputs.label || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+env:
+  SET: ${{ inputs.landing-set || 'A' }}
+  LABEL: ${{ inputs.label || format('push{0}', github.run_number) }}
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Refuse when the runners are full
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          busy=0
+          for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=in_progress&per_page=100" --jq '.workflow_runs[].id'); do
+            n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100" --jq '[.jobs[] | select(.status == "in_progress")] | length')
+            busy=$((busy + n))
+          done
+          echo "jobs in progress across this repository: $busy"
+          if [ "$busy" -gt 20 ]; then echo "::error::more than 20 jobs already running"; exit 1; fi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clj-${{ hashFiles('deps.edn') }}
+      - id: plan
+        name: The shard matrix
+        run: |
+          if [ "${{ github.event_name }}" = push ]; then goals=wood,table,pickaxe; runs=1; else goals=${{ inputs.goal }}; runs=${{ inputs.runs }}; fi
+          matrix=$(clojure -M:gym plan --goals "$goals" --runs "$runs")
+          echo "$matrix"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  world:
+    uses: ./.github/workflows/gym-world.yml
+    with:
+      set: ${{ inputs.landing-set || 'A' }}
+
+  shard:
+    needs: [plan, world]
+    name: ${{ matrix.goal }}-${{ matrix.run }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ matrix.minutes }}
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: The pregenerated world (never built here)
+        uses: actions/cache/restore@v4
+        with:
+          path: cache/worlds/${{ env.SET }}
+          key: ${{ needs.world.outputs.key }}
+          fail-on-cache-miss: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clj-${{ hashFiles('deps.edn') }}
+      - uses: actions/cache@v4
+        with:
+          path: data/local-server/server-26.1.2.jar
+          key: server-jar-97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51
+      - name: Start the server on the pregenerated world
+        run: |
+          RCON_PASS=$(openssl rand -hex 16)
+          echo "::add-mask::$RCON_PASS"
+          echo "RCON_PASS=$RCON_PASS" >> "$GITHUB_ENV"
+          mkdir -p work
+          cp -r "cache/worlds/$SET" work/world
+          PORT=25565 RCON_PORT=25575 RCON_PASS=$RCON_PASS WORLD=$PWD/work/world HEAP_MB=6144 scripts/server.sh start
+          clojure -M:rcon --host 127.0.0.1 --port 25575 --pass "$RCON_PASS" forceload query | tee forceload-start.txt
+          grep -q 'No force loaded' forceload-start.txt || { echo "::error::the world starts with a forceload"; exit 1; }
+      - name: Run and judge
+        run: |
+          clojure -M:gym env --goal "${{ matrix.goal }}" > goal.env
+          set -a; . ./goal.env; set +a
+          GOAL=${{ matrix.goal }} RUN=${{ matrix.run }} BOT=Clj_g${{ matrix.run }} LANDINGS=work/world/landings.edn \
+          STRICT=${{ github.event_name == 'push' }} COMMIT=${{ github.sha }} scripts/ci/gym-run.sh
+      - name: Compress the recording
+        if: always()
+        run: if [ -f work/run.edn ]; then zstd -19 -q work/run.edn -o run.edn.zst; fi
+      - name: Stop the server
+        if: always()
+        run: |
+          clojure -M:rcon --host 127.0.0.1 --port 25575 --pass "$RCON_PASS" forceload query | tee forceload-stop.txt || true
+          WORLD=$PWD/work/world scripts/server.sh stop
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gym-${{ env.LABEL }}-${{ matrix.goal }}-${{ matrix.run }}
+          retention-days: 3
+          path: |
+            result.edn
+            run.edn.zst
+            landed.edn
+            bot.log
+            land.log
+            forceload-start.txt
+            forceload-stop.txt
+            work/world/server.log
+            work/world/logs/latest.log
+          if-no-files-found: ignore
+
+  aggregate:
+    needs: [plan, shard]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: gym-${{ env.LABEL }}-*
+          path: artifacts
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clj-${{ hashFiles('deps.edn') }}
+      - name: Report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "## gym $LABEL on landing set $SET at ${GITHUB_SHA::7}"
+            echo
+            clojure -M:gym report --dir artifacts
+          } > summary.md
+          cat summary.md
+          cat summary.md >> "$GITHUB_STEP_SUMMARY"
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$pr" ]; then gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body-file summary.md; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gym-${{ env.LABEL }}-summary
+          path: |
+            summary.md
+            artifacts/**/result.edn
