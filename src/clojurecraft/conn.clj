@@ -1,9 +1,12 @@
 (ns clojurecraft.conn
   "The socket. Frames in, frames out, compression, and which protocol state the wire is in.
    Decoded packets arrive on the :in channel; packet maps put on :out are encoded and sent.
+   Chunk columns are decoded here, on the reader thread (chunk/attach), so a burst of chunks
+   costs the reader, never the loop that answers keep-alives.
    This is one of the three namespaces that do I/O (with rcon and main)."
   (:require [clojure.core.async :as a]
             [clojurecraft.bytes :as b]
+            [clojurecraft.chunk :as chunk]
             [clojurecraft.packet :as p])
   (:import [java.io BufferedInputStream BufferedOutputStream ByteArrayOutputStream
             DataInputStream DataOutputStream]
@@ -82,7 +85,7 @@
         (loop []
           (let [frame (read-frame in (:threshold @proto))
                 state (:state @proto)
-                pkt (try (p/decode state :s2c frame)
+                pkt (try (chunk/attach (p/decode state :s2c frame))
                          (catch Exception e {:packet/name :decode-error :packet/state state
                                              :packet/error (str e) :packet/len (alength frame)}))]
             (when (and (= state :login) (= :login-compression (:packet/name pkt)))

@@ -17,12 +17,23 @@
 
 (def readers {'clojurecraft/bytes (fn [^String s] (.decode (Base64/getDecoder) s))})
 
+(def derived
+  "Packet keys that are pure functions of the wire bytes, added on the reader thread. A
+   recording keeps the bytes and drops these; the reducer derives them again on replay."
+  #{:chunk/column})
+
+(defn wire
+  "The event as it came off the wire: derived packet keys removed."
+  [event]
+  (if (:event/packet event) (update event :event/packet #(apply dissoc % derived)) event))
+
 (defn tap
   "A writer for a recording: {:write (fn [event]) :effects (fn [effects]) :close (fn [])}.
-   Call :write before applying an event and :effects with what applying it produced."
+   Call :write before applying an event and :effects with what applying it produced. Events are
+   written as they came off the wire (see wire)."
   [path]
   (let [w (io/writer path)]
-    {:write (fn [event] (binding [*out* w] (prn event)))
+    {:write (fn [event] (binding [*out* w] (prn (wire event))))
      :effects (fn [effects] (when (seq effects) (binding [*out* w] (prn {:record/effects effects}))))
      :close (fn [] (.close w))}))
 

@@ -1,8 +1,10 @@
 (ns clojurecraft.record-test
   (:require [clojure.test :refer [deftest is testing]]
+            [clojurecraft.chunk :as chunk]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
-            [clojurecraft.record :as record]))
+            [clojurecraft.record :as record]
+            [clojurecraft.world :as world]))
 
 (def events
   [{:event/kind :start :start/host "h" :start/port 25571 :start/name "Clj_rec"}
@@ -57,3 +59,26 @@
     (is (= 7 (count (record/events path))))
     (is (nil? (record/effects path)))
     (is (= :record/no-effects (record/verify game/step (game/init fx/opts) path)))))
+
+(deftest a-chunk-decoded-on-the-reader-thread-is-recorded-as-wire-bytes
+  (let [data (world/column-bytes {[3 64 3] 136})
+        wire (fx/packet {:packet/name :level-chunk-with-light :x 0 :z 0 :heightmaps [] :data data})
+        attached (update wire :event/packet chunk/attach)
+        in-play (first (fx/fold game/step (game/init fx/opts)
+                                (take 4 events)))
+        path (tmp "record-chunk")]
+    (testing "the reducer reaches the same world from the attached column or the raw bytes"
+      (let [a (first (fx/fold game/step in-play [attached]))
+            r (first (fx/fold game/step in-play [wire]))]
+        (is (= (dissoc a :world/chunks) (dissoc r :world/chunks)) "same facts, stats and everything else")
+        (is (= [136 136] [(game/block-at a [3 64 3]) (game/block-at r [3 64 3])]) "the same column")))
+    (testing "the recording keeps the bytes and drops the derived column, and replays identically"
+      (let [tap (record/tap path)]
+        (reduce (fn [w e] ((:write tap) e)
+                  (let [w (game/step w e)] ((:effects tap) (:bot/effects w)) (assoc w :bot/effects [])))
+                (game/init fx/opts) (concat (take 4 events) [attached]))
+        ((:close tap)))
+      (let [recorded (:event/packet (last (record/events path)))]
+        (is (not (contains? recorded :chunk/column)))
+        (is (= (seq data) (seq (:data recorded)))))
+      (is (nil? (record/verify game/step (game/init fx/opts) path))))))

@@ -5,14 +5,15 @@ type: reference
 tags: [bot, world, chunks]
 aliases: [chunk decode, paletted container, block-at, section]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 60b624e
+lastUpdated: 2026-10-10
+verifiedAgainst: 38bab1d
 sourceRefs:
   - src/clojurecraft/chunk.clj#defn decode
   - src/clojurecraft/chunk.clj#defn section-get
   - src/clojurecraft/chunk.clj#defn block-at
   - src/clojurecraft/chunk.clj#defn section-may-contain?
   - src/clojurecraft/game.clj#defn load-chunk
+  - src/clojurecraft/chunk.clj#defn attach
 related:
   - "[[bot/world/_moc|World]]"
   - "[[memory-sightings]]"
@@ -34,6 +35,7 @@ A column is `{:sections [s0 .. s23]}`; a section is the paletted container strai
 1. bits 0: one varint, no longs. 1..8: varint palette length, palette, longs. Above 8: direct global ids (15 bits for blocks).
 2. There is no long-count prefix on the wire in 26.x; the count is `ceil(4096 / (64 / bits))`.
 3. Index inside a section is `(y << 8) | (z << 4) | x`.
+4. Where: `chunk/attach` decodes on conn's reader thread and puts the column on the packet as `:chunk/column`; `game/load-chunk` uses it, or decodes the wire bytes itself when it is absent. Both paths give the same column, so live runs and replays agree.
 
 ## Gotchas
 - `nil` from `block-at` means unknown, not air; physics treats unknown as solid so the bot never falls out of the world.

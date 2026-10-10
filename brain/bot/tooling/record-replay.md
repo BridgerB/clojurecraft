@@ -9,6 +9,7 @@ lastUpdated: 2026-10-10
 verifiedAgainst: b9e38a1
 sourceRefs:
   - src/clojurecraft/record.clj#defn tap
+  - src/clojurecraft/record.clj#defn wire
   - src/clojurecraft/record.clj#defn replay
   - src/clojurecraft/record.clj#defn verify
   - src/clojurecraft/record.clj#defn effects
@@ -27,7 +28,7 @@ related:
 `--record path` makes the loop write every event (`:start`, packets, ticks with their `:event/now` and `:event/rand`, `:go`, `:closed`) as one EDN line each before applying it. `clojure -M:replay path` folds `main/step` over the file from `game/init` and prints a RESULT.
 
 ## Key files
-- `record.clj`, `tap` - the writer; byte arrays print as `#clojurecraft/bytes "base64"`.
+- `record.clj`, `tap` - the writer; byte arrays print as `#clojurecraft/bytes "base64"`. Events are written through `wire`, which drops `derived` packet keys (`:chunk/column`, decoded on the reader thread): the file keeps the wire bytes and the reducer derives the column again on replay.
 - `record.clj`, `replay` - `reduce` with effects cleared after each step.
 - `replay.clj`, `-main` - the CLI entry.
 - `main.clj`, `apply-event!` - the tap is called before the swap, so the file is exactly what the reducer saw.

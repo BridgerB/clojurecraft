@@ -98,3 +98,13 @@
         [si section] (map-indexed vector (:sections col))
         [lx ly lz id] (section-find section pred)]
     [(+ (* 16 cx) lx) (+ min-y (* 16 si) ly) (+ (* 16 cz) lz) id]))
+
+(defn attach
+  "The packet with its column decoded under :chunk/column (or {:chunk/error msg}), when it is a
+   level-chunk-with-light that has none yet; any other packet unchanged. Pure, so it can run on
+   the socket's reader thread (decoding is about bytes, not the game) and again on replay of the
+   wire bytes with the same result."
+  [pkt]
+  (if (or (not= :level-chunk-with-light (:packet/name pkt)) (contains? pkt :chunk/column))
+    pkt
+    (assoc pkt :chunk/column (try (decode (:data pkt)) (catch Exception e {:chunk/error (str e)})))))

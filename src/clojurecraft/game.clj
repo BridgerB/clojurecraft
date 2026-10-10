@@ -168,11 +168,12 @@
 (defn in-chunk? "Is block [x y z] inside chunk column key [cx cz]?" [key [bx _ bz]] (= key [(bit-shift-right bx 4) (bit-shift-right bz 4)]))
 
 (defn load-chunk
-  "Decode a chunk column into :world/chunks, drop overlay blocks it supersedes, and remember
-   what it holds. A column that fails to decode is logged and skipped, never thrown."
-  [world {:keys [x z data]}]
+  "Put a chunk column into :world/chunks, drop overlay blocks it supersedes, and remember what
+   it holds. The column is the one the reader thread attached, or decoded here from the wire
+   bytes (a replay, the sim); one that fails to decode is logged and skipped, never thrown."
+  [world {:keys [x z] :as pkt}]
   (let [key [x z]
-        column (try (chunk/decode data) (catch Exception e {:chunk/error (str e)}))]
+        column (:chunk/column (chunk/attach pkt))]
     (if (:chunk/error column)
       (say world (str "bad chunk " key ": " (:chunk/error column)))
       (-> world
