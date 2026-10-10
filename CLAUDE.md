@@ -37,7 +37,10 @@ src/clojurecraft/game.clj     the protocol reducer: handshake, keep-alive, telep
 src/clojurecraft/inventory.clj the player's items and screen as values: slot maps, window state, what is held
 src/clojurecraft/terrain.clj  the blocks around the bot: columns, the block overlay, block-at, solid-fn; feeds memory
 src/clojurecraft/path.clj     a route for the feet over the block grid: A* with a node budget, moves and goals as data
-src/clojurecraft/intent.clj   open executors (multimethod on :intent/kind): :walk (follows a route) :dig :collect, and the leaf blocker
+src/clojurecraft/dig.clj      a block's break time and drop as a pure function of block, held item and penalties, over the generated tables
+src/clojurecraft/intent.clj   open executors (multimethod on :intent/kind): :walk (follows a route) :dig (with the best tool) :collect, and the leaf blocker
+src/clojurecraft/stairs.clj   the :stairs-down executor: a staircase of child :dig intents, refusing water, lava and drops
+src/clojurecraft/stone.clj    the :mine act: the stone chain toward cobblestone, or stairs down to stone
 src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with clicks, verify, take
 src/clojurecraft/place.clj    the :place and :open-container executors: a spot, use-item-on, the server's answer
 src/clojurecraft/window.clj   window views (inventory or table) and the click that predicts nothing
@@ -56,7 +59,8 @@ src/clojurecraft/gym.clj      the gym: registry, land, judge, report (`clojure -
 src/clojurecraft/landings.clj landing sets: grid, biome snap, surface checks, pregeneration
 src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successive worlds, bounded, off-thread
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
-dev/clojurecraft/datagen.clj  vanilla --reports → resources/clojurecraft/*.edn
+dev/clojurecraft/datagen.clj  vanilla --reports and the inner jar's data → resources/clojurecraft/*.edn
+dev/clojurecraft/jar_probe.clj hardness and tool materials read from the game's own classes, for datagen
 dev/clojurecraft/brain.clj    the brain checker (clojure -M:brain)
 ```
 

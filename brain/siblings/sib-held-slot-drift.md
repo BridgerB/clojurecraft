@@ -11,7 +11,7 @@ sourceRefs:
   - "steve:src/lib/typecraft/bot/digging.ts#// Re-assert the held slot right before the dig. The server's SelectedItemSlot"
   - "steve:src/lib/steve/tasks/mining/main.ts#export const ensurePickaxe = async (bot: Bot): Promise<boolean> => {"
   - "ruststeve:src/bot_utils.rs#pub async fn select_item(bot: &mut Bot<'_>, name: &str) -> std::io::Result<bool> {"
-  - "src/clojurecraft/intent.clj#(game/emit {:packet/name :set-carried-item :slot 0})"
+  - "src/clojurecraft/intent.clj#(game/emit {:packet/name :set-carried-item :slot slot})"
 related:
   - "[[siblings/_moc|Siblings]]"
   - "[[sib-dig-hardness]]"
@@ -33,7 +33,7 @@ Symptom (typecraft): a bot digging "with a stone pickaxe" while the server had a
 3. A held tool that vanished from the inventory means it broke; re-select or re-craft.
 
 ## What it means here
-Our `:dig` sends `set-carried-item 0` before every START ([[dig-timeline]]), which is the typecraft re-assert, but hotbar slot 0 holds whatever it holds: with tools (issue 05) the dig must choose the slot of the best tool and confirm it against `:player/inventory` before START.
+Our `:dig` chooses the hotbar slot of the best tool for the block and sends `set-carried-item` for it before every START ([[dig-timeline]]), the typecraft re-assert; a tool gone from that slot mid-dig fails `:tool-broke` and the next dig chooses again (issue #9).
 
 ## Limits
 `set-held-slot` (server to client) is in our spec table but no handler records it yet, so a server-driven slot change is invisible to us.
