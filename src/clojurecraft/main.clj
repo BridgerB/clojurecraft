@@ -20,6 +20,7 @@
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs]
             [clojurecraft.watch :as watch]
             [clojurecraft.wood])
   (:gen-class))

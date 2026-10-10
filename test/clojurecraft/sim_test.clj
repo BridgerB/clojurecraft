@@ -10,6 +10,8 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
+            [clojurecraft.stairs]
             [clojurecraft.gym :as gym]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.inventory :as inventory]
@@ -430,3 +432,59 @@
       (is (plan/done? w) (pr-str (plan/summary w)))
       (is (= 1 (inventory/logs-held w)))
       (is (pos? (:stats/keep-alives w)) "the model's keep-alives arrived through the channel and were answered"))))
+
+;; ---------------------------------------------------------------- stairs down, on the model
+
+(defn stairs-run
+  "Run a :stairs-down intent alone against the model from a spawn over column blocks, the
+   feet at feet-y, with the item in hotbar slot 0, until it ends or max-ms. Returns [world sim]."
+  [blocks spawn-y item to-y max-ms]
+  (let [column (world/column-bytes blocks)
+        step (fn [w e]
+               (let [w (game/step w e)
+                     i (:plan/intent w)]
+                 (cond
+                   (and (= :go (:event/kind e)))
+                   (assoc w :plan/intent {:intent/kind :stairs-down :intent/to-y to-y :intent/status :active})
+                   (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
+                   (intent/run w i e)
+                   :else w)))
+        sim0 (sim/init {:column column :spawn [8.5 (double spawn-y) 8.5]
+                        :inventory (if item {36 {:item item :count 1}} {})})]
+    (sim/run step (game/init fx/opts) sim0
+             #(contains? #{:done :failed} (:intent/status (:plan/intent %))) max-ms)))
+
+(def deep-stone
+  "Stone from y 64 up to y 75 everywhere: a hill to descend into."
+  (into {} (for [x (range 16) y (range 64 76) z (range 16)] [[x y z] 1])))
+
+(deftest a-stone-hill-is-descended-five-stairs-with-a-pickaxe
+  (let [[w sim] (stairs-run deep-stone 76 (get blocks/items :wooden_pickaxe) 71 120000)]
+    (is (= :done (:intent/status (:plan/intent w))) (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (<= (second (:player/pos w)) 71.5) "the feet are five stairs down")
+    (is (every? #(not= [8 75 8] %) (:sim/broken sim)) "the block under the start was never dug")
+    (is (empty? (:sim/violations sim)))))
+
+(deftest lava-ahead-turns-the-stairs
+  ;; lava in the floor two cells along +x: the first heading is refused, the next taken
+  (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
+        blocks (assoc deep-stone [10 74 8] lava [10 73 8] lava)
+        [w sim] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 74 60000)]
+    (is (= :done (:intent/status (:plan/intent w))) (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (not= [1 0] (:intent/dir (:plan/intent w))) "it turned away from +x")
+    (is (not-any? #(= 10 (first %)) (:sim/broken sim)) "nothing was dug toward the lava")))
+
+(deftest a-water-floor-ahead-refuses-the-stair
+  (let [water 86
+        blocks (-> deep-stone (assoc [9 74 8] water))                       ; the first stair's new feet on +x would rest on water
+        [w _] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 74 60000)]
+    (is (= :done (:intent/status (:plan/intent w))))
+    (is (not= [1 0] (:intent/dir (:plan/intent w))) "turned")))
+
+(deftest boxed-in-by-lava-on-every-side-fails-boxed
+  (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
+        blocks (reduce (fn [b [x z]] (assoc b [x 74 z] lava)) deep-stone [[9 8] [7 8] [8 9] [8 7]])
+        [w sim] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 70 60000)]
+    (is (= :failed (:intent/status (:plan/intent w))))
+    (is (= :boxed (:intent/reason (:plan/intent w))))
+    (is (empty? (:sim/broken sim)) "nothing was dug at all")))
