@@ -15,10 +15,11 @@ Read `docs/hickey.md` first; it is the design brief. In short:
 - **Effects are data** in `:bot/effects` (`{:effect/kind :send :effect/packet p}`, `{:effect/kind :log ...}`); the loop drains and performs them. The protocol phase advances only in `game/emit`, from `packet/transitions`.
 - **Packets are maps with a `:packet/name`**; specs are data (`packet/specs`), ids are generated from the vanilla reports. Unknown ids decode to `{:packet/name :unknown}` and are counted, never thrown.
 - **Dispatch is open**: multimethods for packets (`game/on-packet` on `[phase name]`), intents (`intent/run` on `:intent/kind`) and goal rows (`plan/done-by` on `:goal/done?`, `plan/act` on `:goal/act`, `plan/next-intent` on `:goal/plan`). A new packet, intent or goal is a `defmethod` in a new namespace. The goal table is data, `resources/clojurecraft/goals.edn`; recipes add generated rows (`make`).
-- **Memory is facts with time** (`memory`): `:world/facts` is a DataScript value of observation facts `{:sight/pos :sight/state :sight/at}`, appended when what is seen changes, never retracted, queried with Datalog, kept after chunks unload.
-- **Every run is a file**: `--record run.edn` writes each event; `clojure -M:replay run.edn` folds the reducer over it with no server. Keep this true (no hidden inputs).
-- **Specs** live in `spec.clj` and are instrumented in tests; properties in `props_test.clj`; the whole bot runs against the pure server model in `sim.clj` (`sim_test.clj`) with no Java process.
-- I/O lives in exactly four namespaces: `conn` (socket), `rcon`, `main`, and `harness`, the RCON fixture, which is its own process (`clojure -M:harness`) and reaches the bot only as EDN events on its stdin (`--events stdin`). Everything else is values in, values out.
+- **Memory is facts with time** (`memory`): `:world/facts` is a DataScript value of append-only facts, never retracted, queried with Datalog: observations `{:sight/pos :sight/state :sight/at}` (kept after chunks unload), the bot's own intentions (`:intention/*`: started, done, failed, abandoned; `intention-as-of` answers what it was doing at any time) and the server's answers to its actions (`:answer/*`: acks, pickups).
+- **Every run is a file**: `--record run.edn` writes each event and the effects it produced, through a bounded channel tap with its own writer thread; `clojure -M:replay run.edn` folds the reducer over it with no server and verifies every effect. Keep this true (no hidden inputs). Observers watch the atom and never touch the reducers: `--telemetry` writes what changed, dropping rather than slowing the loop.
+- **Specs** live in `spec.clj` (every attribute in `model`, every packet derived from `packet/specs`) and are instrumented in tests; properties in `props_test.clj` and `make_test.clj`; the whole bot runs against the pure server model in `sim.clj` (`sim_test.clj`), including in 100 worlds test.check generates, with no Java process.
+- **The hammock**: every stage of the run has a problem statement in `resources/clojurecraft/problems.edn` (needs, risks, done in world terms, the last recorded failure), written before its goal; when a run fails in a new way, its row is updated.
+- I/O lives only below a `;;;; I/O ;;;;` fence, in `conn` (the socket and its threads), `rcon`, `main` (the loop, the clock, stderr), `record` (recording files), `watch` (telemetry), `replay`, and `harness`, the RCON fixture, which is its own process (`clojure -M:harness`) and reaches the bot only as EDN events on its stdin (`--events stdin`). Everything else is values in, values out.
 
 Every public function has a docstring stating what it returns and the invariant it relies on; `docs_test.clj` fails otherwise. Functions are public: `defn-` only for a one-line local alias (`now`, `set-intent`), never to hide a domain function from the REPL. A new attribute gets a row in `model/attributes` and a spec in the same change. A namespace runs top-down from data to helpers to its entry point; any I/O comes last, after a `;;;; I/O: ... ;;;;` fence. Walk a collection with `reduce` (with `reduced` to stop early), not `loop`, unless the loop is hot (the packet decoders) or iterates until a condition (the sim's driver). Prefer a new pure function over a flag; a map over a record; data over a protocol; a defmethod over an edit to a case. Never change the meaning of an attribute: add a new name beside it.
 
@@ -35,19 +36,25 @@ src/clojurecraft/memory.clj   observation facts in DataScript, with time, after 
 src/clojurecraft/game.clj     the protocol reducer: handshake, keep-alive, teleports, every packet's handler, ticks
 src/clojurecraft/inventory.clj the player's items and screen as values: slot maps, window state, what is held
 src/clojurecraft/terrain.clj  the blocks around the bot: columns, the block overlay, block-at, solid-fn; feeds memory
-src/clojurecraft/intent.clj   open executors: :walk :dig :collect (multimethod on :intent/kind)
+src/clojurecraft/intent.clj   open executors (multimethod on :intent/kind): :walk :dig :collect, and the leaf blocker
+src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with clicks, verify, take
+src/clojurecraft/place.clj    the :place and :open-container executors: a spot, use-item-on, the server's answer
+src/clojurecraft/window.clj   window views (inventory or table) and the click that predicts nothing
+src/clojurecraft/recipe.clj   the vanilla crafting table as data: match, clicks, needs
 src/clojurecraft/plan.clj     loads goals.edn; registries done-by, act, next-intent; the planner; :plan/*
 src/clojurecraft/make.clj     the needs planner: recipe rows, netting needs against inventory, the acts
 src/clojurecraft/wood.clj     the gather chain toward a log (walk → dig → collect)
 src/clojurecraft/model.clj    the information model: every attribute, its meaning, when it exists (model_test keeps it true)
 src/clojurecraft/spec.clj     specs for attributes, events, effects, intents, packets; fdefs on the reducers
-src/clojurecraft/record.clj   event recorder and replay
+src/clojurecraft/record.clj   the recording: a channel tap, reading it back, replay and verify
+src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server, print RESULT
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin
 src/clojurecraft/rcon.clj     RCON client (fixtures, CI judge); `clojure -M:rcon`
 src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successive worlds, bounded, off-thread
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
 dev/clojurecraft/datagen.clj  vanilla --reports → resources/clojurecraft/*.edn
+dev/clojurecraft/brain.clj    the brain checker (clojure -M:brain)
 ```
 
 ## Commands

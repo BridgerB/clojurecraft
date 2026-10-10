@@ -1,8 +1,8 @@
 # clojurecraft
 
-A Minecraft Java Edition bot written from scratch in Clojure, built to beat the Ender Dragon with no human input. The world is one immutable value, the protocol is a pure reducer over events, packets and their specs are plain data, and I/O is confined to the socket, RCON and the main loop. The test fixture is a separate process that speaks to the bot only through a pipe of EDN events.
+A Minecraft Java Edition bot written from scratch in Clojure, built to beat the Ender Dragon with no human input. The world is one immutable value, the protocol is a pure reducer over events, packets and their specs are plain data, memory is an append-only set of facts queried with Datalog, and I/O is fenced off at the edges (the socket, RCON, the loop, the recording and telemetry files). Every run can be recorded and replayed with no server. The test fixture is a separate process that speaks to the bot only through a pipe of EDN events.
 
-Current milestone: connect to a vanilla 26.1.2 server, find a natural tree, walk to it, break one log and pick it up.
+Current milestone: from a natural forest on a vanilla 26.1.2 server, gather logs, craft planks, sticks and a crafting table, place it, and craft a wooden pickaxe (`--until wood`, `table` or `pickaxe`). The goals ahead, each with a written problem statement, are in `resources/clojurecraft/problems.edn`.
 
 ```bash
 clojure -M:test                       # unit tests
@@ -11,4 +11,4 @@ clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.p
   | clojure -M:run --port 25571 --name Clj_wood --until wood --events stdin
 ```
 
-The bot prints `RESULT {:ok true ...}` and exits 0 when it holds a log. `.github/workflows/wood.yml` does the same on a GitHub runner with an independent RCON inventory check.
+The bot prints `RESULT {:ok true ...}` and exits 0 when the goal is met. `.github/workflows/wood.yml` runs each goal on a GitHub runner and judges it by that line plus an independent RCON inventory read. The design brief is `docs/hickey.md`.

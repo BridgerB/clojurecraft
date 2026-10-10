@@ -95,4 +95,15 @@ with `:goal/done?` naming a predicate in a registry, so the goal table is pure d
 
 ## Status
 
-The rewrite that followed this essay (same day) did the first five items on the list above: the world is flat and namespaced and specced (`spec.clj`); randomness rides on the tick event and every run can be recorded and replayed (`record.clj`, `--record`, `clojure -M:replay`); packets, intents and goals dispatch through multimethods, and the goal table is EDN data (`resources/clojurecraft/goals.edn`) in the essay's shape; sightings are timed, append-only facts in a DataScript value queried with Datalog (`memory.clj`) that outlive chunk unloads; and the whole bot runs against a pure server model in `sim.clj` with properties in `props_test.clj`. The harness has since become its own process (`clojure -M:harness`) that reaches the bot only as one EDN `:go` event piped into its stdin. Next is the second goal.
+The rewrite that followed this essay did the first five items on the list above, and a later alignment pass (2026-10-10) took the code the rest of the way the essay describes. What is true now:
+
+- **Information model in writing**: `model.clj` lists every attribute with its meaning and lifetime; a test fails if a running bot writes a key it does not list, or if a listed attribute has no spec.
+- **Facts with time**: memory is an append-only DataScript store of observations, of the bot's own intentions (started, done, failed, abandoned, why) and of the server's answers (acks, pickups). "The nearest log I have ever seen that I have not confirmed gone" is one Datalog query; "what was I trying to do at time t" is another.
+- **Goals are data**: `goals.edn` rows in this essay's shape, one needs planner, open registries; a wrong goal is superseded, never rewritten, so old recordings replay. Every stage of the run has a problem statement next to the goal table (`problems.edn`).
+- **Record everything, replay anything**: the recorder is a channel tap that writes each event and its effects; a replay verifies every effect. The protocol number comes from generated data.
+- **Let everyone watch**: telemetry is a watch on the atom that diffs successive values, bounded and off the loop.
+- **Spec the boundaries, then generate**: every packet map is specced from the packet table; the five properties named above hold; the whole bot runs against the server model in worlds test.check generates.
+- **Conveyance**: chunk decoding happens on the socket's reader thread; every channel is bounded; the test fixture is its own process speaking to the bot through a pipe.
+- **Style**: docstrings on every public function (a test holds it), `defn-` only for local aliases, constants with comments at the top, I/O fenced last, `reduce` over `loop`, no records, no macros, and no primitive arrays or hints that a measurement did not ask for.
+
+Not done: the multi-bot race (separate atoms sharing one channel for claimed landing cells), and a real pathfinder (issue #4). Next is the stone pickaxe, issue #9, whose problem statement is already written.
