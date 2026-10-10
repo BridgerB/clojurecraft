@@ -7,8 +7,8 @@
   (:require [clojurecraft.bytes :as b])
   (:import [java.nio ByteBuffer]))
 
-(def min-y -64)
-(def section-count 24)
+(def min-y -64)                       ; the lowest block y of an overworld column
+(def section-count 24)                ; 16-block sections per overworld column (y -64..319)
 
 (defn read-container
   "One paletted container: {:single id} for 0 bits, else {:bits :palette :longs}

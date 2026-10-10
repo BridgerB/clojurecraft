@@ -32,8 +32,9 @@
    a log by hand."
   [id]
   (if (blocks/leaves? id) leaf-dig-ms dig-ms))
-(def pickup-delay 500)
-(def keep-alive-every 15000)
+(def pickup-delay 500)                ; ms before a dropped item can be picked up (vanilla: 10 ticks)
+(def keep-alive-every 15000)          ; ms between the model's keep-alives (vanilla: 15 s)
+(def max-stack 64)                    ; items per slot
 
 (defn init
   "A fresh server before the handshake, from {:column bytes :spawn [x y z]} plus optional
@@ -118,8 +119,6 @@
     sim))
 
 ;; ---------------------------------------------------------------- windows
-
-(def max-stack 64)
 
 (def table-state (first (keep (fn [[n _ lo]] (when (= n :crafting_table) lo)) blocks/table)))
 

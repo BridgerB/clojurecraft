@@ -5,8 +5,8 @@
   (:require [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]))
 
-(def search-radius 48)
-(def max-trunk 8)
+(def search-radius 48)                ; blocks from the eye searched for a remembered log
+(def max-trunk 8)                     ; logs followed up one trunk column
 
 (defn trunk-target
   "Of the remembered logs stacked on bottom, the one whose height is closest to the player's

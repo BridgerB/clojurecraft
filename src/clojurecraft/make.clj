@@ -15,14 +15,13 @@
             [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
-            [clojurecraft.place]
+            [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.wood :as wood]))
 
 (def table-search 24)                 ; how far a remembered crafting table counts as :near
-(def open-reach 4.5)
-(def max-depth 8)
+(def max-depth 8)                     ; producer rows the needs planner may chain before it is :stuck
 
 ;; ---------------------------------------------------------------- needs as data
 
@@ -175,7 +174,7 @@
       (cond
         (= 12 (get-in world [:window/open :window/menu-type]))
         {:intent/kind :craft :intent/recipe recipe :intent/window :table}
-        (and table (<= (physics/distance eye (mapv #(+ % 0.5) table)) open-reach))
+        (and table (<= (physics/distance eye (mapv #(+ % 0.5) table)) place/open-reach))
         {:intent/kind :open-container :intent/target table}
         table {:intent/kind :walk :intent/target table}
         :else {:plan/wait :no-table}))))

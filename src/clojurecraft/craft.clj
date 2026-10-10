@@ -20,7 +20,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.window :as window]))
 
-(def stage-timeout 5000)
+(def stage-timeout 5000)              ; ms a craft stage waits on the server before it fails
 
 (defn- now [world] (:time/now world))
 (defn- set-intent [world & kvs] (apply update world :plan/intent assoc kvs))

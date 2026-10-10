@@ -5,15 +5,15 @@
    (step solid? world controls) → world'   where solid? is (fn [x y z] bool) over block
    coordinates and controls is {:control/forward? bool :control/jump? bool :control/yaw deg}.")
 
-(def gravity 0.08)
-(def vertical-drag 0.98)
-(def half-width 0.3)
-(def height 1.8)
-(def eye-height 1.62)
-(def jump-velocity 0.42)
+(def gravity 0.08)                    ; blocks per tick², subtracted from vy each tick
+(def vertical-drag 0.98)              ; vy is multiplied by this each tick
+(def half-width 0.3)                  ; the player box is 0.6 wide
+(def height 1.8)                      ; the player box height
+(def eye-height 1.62)                 ; eye above the feet
+(def jump-velocity 0.42)              ; vy given by a jump
 (def ground-inertia (* 0.6 0.91))                     ; slipperiness × 0.91
-(def air-inertia 0.91)
-(def air-acceleration 0.02)
+(def air-inertia 0.91)                ; horizontal velocity kept per tick in the air
+(def air-acceleration 0.02)           ; horizontal input acceleration in the air
 (def ground-acceleration (* 0.1 (/ 0.16277136 (Math/pow ground-inertia 3)))) ; ≈ 0.1
 (def negligible 0.003)                                ; velocities below this snap to zero
 

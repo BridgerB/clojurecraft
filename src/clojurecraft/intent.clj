@@ -11,8 +11,8 @@
 (def reach 4.0)                       ; eye → block centre; the server allows ~4.5
 (def walk-timeout-ticks 1200)         ; 60 s
 (def stuck-ticks 40)                  ; no progress for 2 s → detour
-(def detour-ticks 20)
-(def max-detours 4)
+(def detour-ticks 20)                 ; how long one detour lasts (1 s)
+(def max-detours 4)                   ; detours before a walk fails :stuck
 (def settle-ms 500)                   ; let the server catch up before START
 (def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks
 (def finish-after (+ (* dig-ms 1.35) 200)) ; an early FINISH aborts the break; a late one is accepted
@@ -28,8 +28,8 @@
    FINISH aborts the break and a late one is accepted."
   [id]
   (+ (* (dig-time id) 1.35) 200))
-(def swing-every 350)
-(def collect-timeout 10000)
+(def swing-every 350)                 ; ms between arm swings while digging
+(def collect-timeout 10000)           ; ms a collect may take before it fails
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
 
 (defn centre "The centre point of the block at integer position [x y z]." [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])

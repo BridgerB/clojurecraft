@@ -82,5 +82,5 @@
   [^long id] (and (<= 0 id max-state) (aget ^booleans leaf-flags id)))
 (defn log-item? "Is the item id any log item?" [id] (contains? log-items id))
 
-(def air 0)
+(def air 0)                           ; the state id of air
 (def item-entity-type (:item entity-types))

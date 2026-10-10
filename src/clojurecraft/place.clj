@@ -17,9 +17,9 @@
             [clojurecraft.window :as window]))
 
 (def place-reach 4.0)                 ; eye → target centre
-(def open-reach 4.5)
-(def settle-ms 300)
-(def answer-ms 3000)
+(def open-reach 4.5)                  ; eye → container centre for opening it; the server allows about 4.5
+(def settle-ms 300)                   ; standing still this long before using an item on a block
+(def answer-ms 3000)                  ; ms to wait for the server to answer a placement or an open
 
 (defn- set-intent [world & kvs] (apply update world :plan/intent assoc kvs))
 (defn- now [world] (:time/now world))
