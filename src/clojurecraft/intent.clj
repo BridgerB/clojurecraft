@@ -85,12 +85,13 @@
 
 (defn waypoint-reached?
   "Is the player at waypoint [x y z]: within waypoint-reach of its centre on the plane, and the
-   feet no lower than half a block under it (a climb counts only once the feet are up: a loose
-   gate let the siblings advance past a step they had not climbed)."
+   feet within half a block of its height. A climb counts only once the feet are up and a drop
+   only once they are down: a looser gate let the siblings advance past a step they had not
+   climbed, and let a bot stand on the lip of a ledge counting the cell below as reached."
   [world [wx wy wz]]
   (let [[px py pz] (:player/pos world)]
     (and (<= (physics/horizontal-distance [px 0 pz] [(+ wx 0.5) 0 (+ wz 0.5)]) waypoint-reach)
-         (>= py (- wy 0.5)))))
+         (<= (abs (- py wy)) 0.5))))
 
 (defn follow
   "Controls that walk to a waypoint: face its centre, forward, and jump only when it is above

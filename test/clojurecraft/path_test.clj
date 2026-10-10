@@ -3,10 +3,16 @@
    Every route it returns is checked the same way: no waypoint is water, lava, awkward or
    unknown, every waypoint is standable, and consecutive waypoints differ by exactly one move."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojure.test.check :as tc]
+            [clojure.test.check.generators :as gen]
+            [clojure.test.check.properties :as prop]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
             [clojurecraft.spec]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -214,3 +220,73 @@
         r (path/plan w [1 64 1] {:goal/kind :block :goal/pos [40 64 1]})]
     (is (= :none (:path/status r)) "the frontier ends at the chunk's edge")
     (is (= 15 (first (last (:path/waypoints r)))) "at the loaded edge nearest the goal")))
+
+;; ---------------------------------------------------------------- traversability, generated
+
+(def terrain-gen
+  "A 16x16 column: a random heightmap whose steps between neighbouring columns are -3..+1 (the
+   moves a route may take), with a few water pools one block deep, and two cells to route
+   between."
+  (gen/let [rows (gen/vector (gen/vector (gen/choose -3 1) 15) 16)
+            base (gen/choose 64 66)
+            pools (gen/vector (gen/tuple (gen/choose 0 15) (gen/choose 0 15)) 0 4)
+            from (gen/tuple (gen/choose 0 15) (gen/choose 0 15))
+            to (gen/tuple (gen/choose 0 15) (gen/choose 0 15))]
+    (let [heights (vec (for [row rows] (vec (reductions (fn [h d] (max 64 (min 72 (+ h d)))) base row))))
+          surface (fn [x z] (get-in heights [z x]))
+          blocks (into {} (for [x (range 16) z (range 16) y (range 64 (surface x z))] [[x y z] 1]))
+          blocks (reduce (fn [b [px pz]] (assoc b [px (dec (surface px pz)) pz] 86)) blocks pools)]
+      {:blocks blocks :surface surface :from from :to to})))
+
+(defn drive
+  "Walk the route with the walk intent's own controls over physics alone (no server): from the
+   feet at start, for each waypoint up to 80 ticks until it is reached. Returns the waypoints
+   reached, in order, and the final feet position."
+  [w start waypoints]
+  (let [solid? (terrain/solid-fn w)]
+    (reduce (fn [[reached pos vel og] wp]
+              (let [[hit? pos vel og]
+                    (reduce (fn [[_ pos vel og] _]
+                              (let [w (assoc w :player/pos pos :player/vel vel :player/on-ground? og)
+                                    w (physics/step solid? w (intent/follow w wp))
+                                    w (assoc w :player/horizontal-collision? (:player/horizontal-collision? w))]
+                                (if (intent/waypoint-reached? w wp)
+                                  (reduced [true (:player/pos w) (:player/vel w) (:player/on-ground? w)])
+                                  [false (:player/pos w) (:player/vel w) (:player/on-ground? w)])))
+                            [false pos vel og]
+                            (range 80))]
+                (if hit?
+                  [(conj reached wp) pos vel og]
+                  (reduced [reached pos vel og]))))
+            [[] [(+ (first start) 0.5) (double (second start)) (+ (nth start 2) 0.5)] [0.0 0.0 0.0] true]
+            waypoints)))
+
+(defn settle
+  "The feet position after up to 20 ticks of physics with no input from pos: where a bot that
+   just reached a waypoint mid-step comes to rest (a drop lands only after the fall)."
+  [w pos vel]
+  (let [solid? (terrain/solid-fn w)]
+    (:player/pos (reduce (fn [w _] (physics/step solid? w {}))
+                         (assoc w :player/pos pos :player/vel [0.0 (second vel) 0.0] :player/on-ground? false) ; the walk stops pressing forward at arrival
+                         (range 20)))))
+
+(deftest a-found-route-is-walked-by-the-physics-and-ends-in-the-goal
+  ;; issue #4's property: over generated terrain, when plan says :found, driving physics/step
+  ;; with the walk's follow controller reaches every waypoint in ≤ 80 ticks each and ends in
+  ;; the goal; and plan is deterministic. Worlds with no :found route only check determinism.
+  (let [r (tc/quick-check
+           200
+           (prop/for-all [{:keys [blocks surface from to]} terrain-gen]
+                         (let [[fx fz] from [tx tz] to
+                               start [fx (surface fx fz) fz]
+                               goal {:goal/kind :near :goal/pos [tx (surface tx tz) tz] :goal/range 1}
+                               w (world-of blocks [(+ fx 0.5) (double (second start)) (+ fz 0.5)])
+                               route (path/plan w start goal)]
+                           (and (= route (path/plan w start goal))
+                                (sound-route? w start route)
+                                (or (not= :found (:path/status route))
+                                    (not (path/standable? w start))
+                                    (let [[reached pos vel] (drive w start (:path/waypoints route))]
+                                      (and (= (count reached) (count (:path/waypoints route)))
+                                           (path/goal-done? goal (path/feet-cell (settle w pos vel))))))))))]
+    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed])))))
