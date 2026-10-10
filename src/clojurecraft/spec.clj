@@ -150,10 +150,11 @@
 (s/def :goal/act keyword?)
 (s/def :goal/target? boolean?)
 (s/def :goal/until string?)                ; the --until name that selects a target row
+(s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
 (s/def ::goal (s/keys :req [:goal/id :goal/priority :goal/provides :goal/done?]
-                      :opt [:goal/needs :goal/act :goal/target? :goal/until :goal/doc]))
+                      :opt [:goal/needs :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
@@ -169,7 +170,13 @@
 (s/fdef intent/run :args (s/cat :world ::world :intent ::intent :event ::event) :ret ::world)
 (s/fdef plan/choose :args (s/cat :world ::world) :ret (s/nilable ::goal))
 
-(def goals-valid? (every? #(s/valid? ::goal %) plan/goals))
+(def goals-valid?
+  "Every row of the goal table conforms, ids are unique, and every :goal/superseded-by names a
+   row that exists."
+  (let [ids (map :goal/id plan/goals)]
+    (and (every? #(s/valid? ::goal %) plan/goals)
+         (apply distinct? ids)
+         (every? (set ids) (keep :goal/superseded-by plan/goals)))))
 
 ;; recipes and clicks
 (s/def ::item-set (s/coll-of keyword? :kind set? :min-count 1))

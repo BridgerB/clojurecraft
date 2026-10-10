@@ -63,7 +63,7 @@
 
 (def producers
   "Every row that can provide something: the table's acting rows, then one per recipe."
-  (into (filterv :goal/act plan/goals) craft-rows))
+  (into (filterv #(and (:goal/act %) (plan/live? %)) plan/goals) craft-rows))
 
 (def by-item
   "item name → producer rows that provide it."

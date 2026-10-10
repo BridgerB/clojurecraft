@@ -4,6 +4,9 @@
 ;; Need and provide keys: :item/<name> n, :tag/<item-tag> n, :block/<name> :near.
 ;; Targets (:goal/target? true) are what a run is for; --until <:goal/until> puts one in play. Producers are
 ;; how a need is met; recipes add one generated producer row each (clojurecraft.make/craft-rows).
+;; A row is never edited into a different meaning or deleted: to fix one, add the fixed row under
+;; a new id (moving :goal/until to it) and mark the old one :goal/superseded-by <new id>. It stays
+;; here so a recording whose :go names it still replays; the planner follows the chain.
 [{:goal/id :wood :goal/priority 1 :goal/target? true :goal/until "wood" :goal/doc "hold one log"
   :goal/provides {:tag/logs 1} :goal/done? :provided?}
  {:goal/id :kit :goal/priority 2 :goal/target? true :goal/until "table" :goal/doc "a crafting table and four sticks, from logs"

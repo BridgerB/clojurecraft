@@ -20,10 +20,27 @@
   "The goal table, loaded from resources/clojurecraft/goals.edn."
   (edn/read-string (slurp (io/resource "clojurecraft/goals.edn"))))
 
-(def targets (filterv :goal/target? goals))
+(defn live?
+  "Is a row in force? A row that turned out wrong is not edited or deleted: it stays in the table
+   with :goal/superseded-by naming its replacement, so recordings that name it still replay."
+  [row]
+  (nil? (:goal/superseded-by row)))
+
+(defn current-id
+  "The id a goal id stands for today: itself, or the end of its :goal/superseded-by chain in
+   table (at most a table's length of hops, so a cycle cannot hang it)."
+  [table id]
+  (let [by-id (into {} (map (juxt :goal/id identity)) table)]
+    (loop [id id hops 0]
+      (let [next (:goal/superseded-by (by-id id))]
+        (if (and next (< hops (count table))) (recur next (inc hops)) id)))))
+
+(defn targets-of "The live target rows of a table." [table] (filterv #(and (:goal/target? %) (live? %)) table))
+
+(def targets (targets-of goals))
 
 (defn goals-for
-  "The goal ids a --until name puts in play (the target rows' :goal/until), or nil."
+  "The goal ids a --until name puts in play (the live target rows' :goal/until), or nil."
   [until]
   (some (fn [g] (when (= until (:goal/until g)) [(:goal/id g)])) targets))
 
@@ -68,7 +85,7 @@
   (-> world
       (cond-> (:plan/intent world) (memory/remember-intention (:plan/intent world) :abandoned))
       (assoc :plan/status (if at :landing :active) :plan/since (:time/now world) :plan/blacklist #{} :plan/attempts 0)
-      (cond-> goals (assoc :plan/goals (set goals)))
+      (cond-> goals (assoc :plan/goals (set (map #(current-id clojurecraft.plan/goals %) goals))))
       (cond-> at (assoc :plan/go-at at))
       (dissoc :plan/intent :plan/last :plan/waiting-since)))
 

@@ -42,6 +42,7 @@ The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id
 
 ## Gotchas
 - No goal needs a method of its own: wood, kit and pickaxe are rows that differ only in data, and `make_test` asserts `:needs` is the only `next-intent` registered.
+- Rows are retired, never rewritten: a superseded row (`:goal/superseded-by`) stays in the table and is never chosen, and a `:go` that names it is mapped to its replacement by `plan/current-id` ([[add-a-goal]]).
 - Completion is re-derived from the world each tick, so a lost log is simply planned for again; nothing remembers "done".
 - The planner never re-chooses while an intent is active; preemption (escape water) is a planner change, tracked in issue #5.
 

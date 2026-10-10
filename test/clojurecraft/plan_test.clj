@@ -6,6 +6,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.spec]
             [clojurecraft.make]
             [clojurecraft.wood]
             [clojurecraft.world :as world]))
@@ -129,3 +130,25 @@
   (is (= [:kit] (plan/goals-for "table")))
   (is (= [:pickaxe] (plan/goals-for "pickaxe")))
   (is (nil? (plan/goals-for "play"))))
+
+(def superseding-table
+  "A table where :wood was fixed as :wood-2 and :wood-2 again as :wood-3."
+  [{:goal/id :wood :goal/priority 1 :goal/target? true :goal/provides {:tag/logs 1} :goal/done? :provided?
+    :goal/superseded-by :wood-2}
+   {:goal/id :wood-2 :goal/priority 1 :goal/target? true :goal/provides {:tag/logs 1} :goal/done? :provided?
+    :goal/superseded-by :wood-3}
+   {:goal/id :wood-3 :goal/priority 1 :goal/target? true :goal/until "wood" :goal/provides {:tag/logs 1}
+    :goal/done? :provided?}])
+
+(deftest a-retired-goal-stays-and-points-at-its-replacement
+  (is (= :wood-3 (plan/current-id superseding-table :wood)) "the chain is followed to the row in force")
+  (is (= :wood-3 (plan/current-id superseding-table :wood-3)))
+  (is (= :other (plan/current-id superseding-table :other)) "an id the table does not know is itself")
+  (is (= [:wood-3] (map :goal/id (plan/targets-of superseding-table))) "only live rows are chosen")
+  (is (= :a (plan/current-id [{:goal/id :a :goal/superseded-by :b} {:goal/id :b :goal/superseded-by :a}] :a))
+      "a cycle ends instead of hanging")
+  (testing "a recorded :go naming the old id plans for the replacement"
+    (with-redefs [plan/goals superseding-table plan/targets (plan/targets-of superseding-table)]
+      (let [[w _] (run (world-state [0.5 64.0 0.5]) [{:event/kind :go :go/goals [:wood]}])]
+        (is (= #{:wood-3} (:plan/goals w))))))
+  (is (true? clojurecraft.spec/goals-valid?) "the real table's replacements all exist"))
