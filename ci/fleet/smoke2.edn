@@ -1,5 +1,6 @@
 ;; The fleet's first run: two bots to a server on real terrain, and the forest property sharded.
-;; Proves the planner, the worker, several bots per server, and the report end to end.
+;; Proves the planner, the worker, several bots per server, and the report end to end. A plan
+;; runs when its file is pushed, so a re-run is a new label.
 {:fleet/label "smoke2"
  :fleet/workers 4
  :fleet/issue 20

@@ -39,8 +39,8 @@ jobs:
           BEFORE: ${{ github.event.before }}
         run: |
           if [ -n "$INPUT" ]; then plan=$INPUT
-          elif git cat-file -e "$BEFORE" 2>/dev/null; then plan=$(git diff --name-only --diff-filter=AM "$BEFORE" HEAD -- 'ci/fleet/*.edn' | tail -n 1)
-          else plan=$(git diff --name-only --diff-filter=AM HEAD~1 HEAD -- 'ci/fleet/*.edn' | tail -n 1)
+          elif git cat-file -e "$BEFORE" 2>/dev/null; then plan=$(git diff --name-only --diff-filter=AMR "$BEFORE" HEAD -- 'ci/fleet/*.edn' | tail -n 1)
+          else plan=$(git diff --name-only --diff-filter=AMR HEAD~1 HEAD -- 'ci/fleet/*.edn' | tail -n 1)
           fi
           [ -f "$plan" ] || { echo "::error::no plan file ($plan)"; exit 1; }
           echo "plan: $plan"
