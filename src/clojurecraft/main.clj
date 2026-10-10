@@ -34,6 +34,17 @@
   [args]
   (into {} (map (fn [[k v]] [(keyword (subs k 2)) v]) (partition 2 args))))
 
+(defn goal-fn
+  "What counts as done for a --until name: the plan done when it names goals, else being loaded."
+  [until]
+  (if (plan/goals-for until) plan/done? :player/loaded?))
+
+(defn ok?
+  "Did a run that ended in world succeed, for --until until: its goal holds and the socket is
+   neither closed nor disconnected. The live run and its replay judge with this one rule."
+  [world until]
+  (boolean (and ((goal-fn until) world) (not (:bot/closed world)) (not (:bot/disconnected world)))))
+
 (defn result
   "The RESULT map: :ok, :until, the reason, the game summary, held items, the nearest
    remembered table and the plan summary (once a plan began)."
@@ -51,8 +62,8 @@
             :planks (recipe/have held (recipe/tags :planks))
             :sticks (get held :stick 0)
             :tables (get held :crafting_table 0)})
-         (when-let [t (memory/nearest world (game/eye world) 32 memory/crafting-table?)]
-           {:table/pos t})
+         (when-let [t (and (:player/pos world) (memory/nearest world (game/eye world) 32 memory/crafting-table?))]
+           {:table/pos t})                     ; no position yet (an early end): no table to speak of
          (when (:plan/status world) {:plan (plan/summary world)})))
 
 ;;;; I/O: the clock, stderr, the socket, the atom ;;;;
@@ -127,7 +138,7 @@
         deadline (+ (now) (Long/parseLong timeout-ms))
         hold (Long/parseLong hold-ms)
         planned (plan/goals-for until)
-        goal? (if planned plan/done? :player/loaded?)
+        goal? (goal-fn until)
         stop? (fn [w] (or (goal? w) (and planned (plan/failed? w)) (> (now) deadline)))
         tap (some-> record record/tap)
         c (conn/open opts)
@@ -140,26 +151,40 @@
       planned (go-when-loaded! world* queue {:event/kind :go :go/goals planned})) ; no fixture: start where we stand
     (apply-event! world* {:event/kind :start :start/host host :start/port (:port opts) :start/name name} (:out c) tap)
     (let [final (run-loop c queue world* stop? tap)
-          ok (boolean (and (goal? final) (not (:bot/closed final)) (not (:bot/disconnected final))))]
-      (prn 'RESULT (result final until ok))
+          ok (ok? final until)
+          r (result final until ok)]
+      (prn 'RESULT r)
       (flush)
+      (when tap ((:result tap) r) ((:close tap)))     ; the recording is the run: it ends at RESULT
       (when (and ok (pos? hold))
         (stamp "holding" hold "ms for an outside judge")
-        (let [until (+ (now) hold)] (run-loop c queue world* (fn [_] (> (now) until)) tap)))
-      (some-> tap :close (apply []))
+        (let [until (+ (now) hold)] (run-loop c queue world* (fn [_] (> (now) until)) nil)))
       (when watcher ((:close watcher)) (stamp "telemetry dropped" ((:dropped watcher)) "lines"))
       ((:close! c))
       (shutdown-agents)
       (System/exit (if ok 0 1)))))
 
-(defn replay
-  "clojure -M:replay run.edn → RESULT of folding the reducer over the recording."
-  [& [path]]
+(defn replayed
+  "The RESULT of folding the reducer over a recording, judged as the run judged itself (its
+   recorded --until), plus :replay/effects (every effect identical, or the first mismatch) and
+   :replay/result (:identical when the fold reaches exactly the RESULT the run printed)."
+  [path]
   (let [world0 (game/init {:host "replay" :port 0 :name "Clj_replay"})
         final (record/replay step world0 path)
-        check (record/verify step world0 path)]
-    (prn 'RESULT (assoc (result final "replay" (plan/done? final))
-                        :replay/effects (cond (nil? check) :identical
-                                              (= check :record/no-effects) :not-recorded
-                                              :else check)))
-    (shutdown-agents)))
+        check (record/verify step world0 path)
+        recorded (record/recorded-result path)
+        until (:until recorded "replay")
+        r (result final until (ok? final until))]
+    (assoc r
+           :replay/effects (cond (nil? check) :identical
+                                 (= check :record/no-effects) :not-recorded
+                                 :else check)
+           :replay/result (cond (nil? recorded) :not-recorded
+                                (= r recorded) :identical
+                                :else {:recorded recorded}))))
+
+(defn replay
+  "clojure -M:replay run.edn → print the replayed RESULT (see replayed)."
+  [& [path]]
+  (prn 'RESULT (replayed path))
+  (shutdown-agents))

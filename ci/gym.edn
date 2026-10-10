@@ -1,0 +1,5 @@
+;; The gym's plan file: landing sets. A set's centre sits far from world spawn so gym sites never
+;; meet a race region (steve's lesson: spawn gets polluted). n cells, spacing blocks apart, each
+;; snapped to the biome; pregen-r blocks are generated around each landing (13x13 = 169 chunks at
+;; 96, within one forceload). Changing this file rebuilds the cached world.
+{:landing-sets {"A" {:center [20000 20000] :n 20 :spacing 640 :biome "#minecraft:is_forest" :pregen-r 96}}}

@@ -34,7 +34,8 @@
 
 (defn tap
   "A recording as a channel tap: {:write (fn [event]) :effects (fn [effects]) :close (fn [])}.
-   Call :write before applying an event and :effects with what applying it produced; each puts
+   Call :write before applying an event, :effects with what applying it produced, and :result
+   with the RESULT the run printed (the recording ends there); each puts
    one value on a bounded channel and a thread of its own prints it, so the loop never does file
    I/O. The recording is the source of truth, so a full channel blocks the loop rather than
    dropping a line (unlike telemetry). Events are written as they came off the wire (see wire).
@@ -49,6 +50,7 @@
                                (recur))))))]
     {:write (fn [event] (a/>!! ch (wire event)))
      :effects (fn [effects] (when (seq effects) (a/>!! ch {:record/effects effects})))
+     :result (fn [r] (a/>!! ch {:record/result r}))
      :close (fn [] (a/close! ch) (a/<!! done))}))
 
 (defn entries
@@ -56,6 +58,12 @@
   [path]
   (with-open [r (PushbackReader. (io/reader path))]
     (into [] (take-while some? (repeatedly #(edn/read {:readers readers :eof nil} r))))))
+
+(defn recorded-result
+  "The RESULT a recording says its run printed, or nil for recordings made before results were
+   recorded."
+  [path]
+  (some :record/result (entries path)))
 
 (defn events
   "The events in a recording, in order."

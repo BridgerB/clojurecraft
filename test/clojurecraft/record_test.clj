@@ -3,6 +3,7 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.main :as main]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.record :as record]
             [clojurecraft.world :as world]))
@@ -83,3 +84,17 @@
         (is (not (contains? recorded :chunk/column)))
         (is (= (seq data) (seq (:data recorded)))))
       (is (nil? (record/verify game/step (game/init fx/opts) path))))))
+
+(deftest a-recording-carries-its-result-and-a-replay-reaches-it
+  (let [path (tmp "record-result")
+        tap (record/tap path)
+        w (reduce (fn [w e] ((:write tap) e)
+                    (let [w (main/step w e)] ((:effects tap) (:bot/effects w)) (assoc w :bot/effects [])))
+                  (game/init fx/opts) events)
+        r (main/result w "play" (main/ok? w "play"))]
+    ((:result tap) r)
+    ((:close tap))
+    (is (= r (record/recorded-result path)) "the file says what the run printed")
+    (let [replayed (main/replayed path)]
+      (is (= :identical (:replay/result replayed)) "folding the file reaches exactly that RESULT")
+      (is (= :identical (:replay/effects replayed))))))
