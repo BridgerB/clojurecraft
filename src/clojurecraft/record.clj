@@ -5,7 +5,8 @@
    no server; `verify` also checks that the reducer, given the same events, asks for exactly the
    same effects. Byte arrays print as #clojurecraft/bytes \"base64\". Recordings made before
    effects were recorded are read unchanged; they just have nothing to verify."
-  (:require [clojure.edn :as edn]
+  (:require [clojure.core.async :as a]
+            [clojure.edn :as edn]
             [clojure.java.io :as io])
   (:import [java.io PushbackReader Writer]
            [java.util Base64]))
@@ -16,6 +17,8 @@
   (.write w "\""))
 
 (def readers {'clojurecraft/bytes (fn [^String s] (.decode (Base64/getDecoder) s))})
+
+(def tap-buffer 4096)                 ; lines in flight to the recording's writer before the loop waits
 
 (def derived
   "Packet keys that are pure functions of the wire bytes, added on the reader thread. A
@@ -30,14 +33,23 @@
 ;;;; I/O: recording files ;;;;
 
 (defn tap
-  "A writer for a recording: {:write (fn [event]) :effects (fn [effects]) :close (fn [])}.
-   Call :write before applying an event and :effects with what applying it produced. Events are
-   written as they came off the wire (see wire)."
+  "A recording as a channel tap: {:write (fn [event]) :effects (fn [effects]) :close (fn [])}.
+   Call :write before applying an event and :effects with what applying it produced; each puts
+   one value on a bounded channel and a thread of its own prints it, so the loop never does file
+   I/O. The recording is the source of truth, so a full channel blocks the loop rather than
+   dropping a line (unlike telemetry). Events are written as they came off the wire (see wire).
+   :close waits until every line is on disk."
   [path]
-  (let [w (io/writer path)]
-    {:write (fn [event] (binding [*out* w] (prn (wire event))))
-     :effects (fn [effects] (when (seq effects) (binding [*out* w] (prn {:record/effects effects}))))
-     :close (fn [] (.close w))}))
+  (let [ch (a/chan tap-buffer)
+        done (a/thread (with-open [w (io/writer path)]
+                         (binding [*out* w]
+                           (loop []
+                             (when-let [line (a/<!! ch)]
+                               (prn line)
+                               (recur))))))]
+    {:write (fn [event] (a/>!! ch (wire event)))
+     :effects (fn [effects] (when (seq effects) (a/>!! ch {:record/effects effects})))
+     :close (fn [] (a/close! ch) (a/<!! done))}))
 
 (defn entries
   "Every line of a recording, in order: event maps and {:record/effects ...} maps."

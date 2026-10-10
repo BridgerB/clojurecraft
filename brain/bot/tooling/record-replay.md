@@ -28,10 +28,10 @@ related:
 `--record path` makes the loop write every event (`:start`, packets, ticks with their `:event/now` and `:event/rand`, `:go`, `:closed`) as one EDN line each before applying it. `clojure -M:replay path` folds `main/step` over the file from `game/init` and prints a RESULT.
 
 ## Key files
-- `record.clj`, `tap` - the writer; byte arrays print as `#clojurecraft/bytes "base64"`. Events are written through `wire`, which drops `derived` packet keys (`:chunk/column`, decoded on the reader thread): the file keeps the wire bytes and the reducer derives the column again on replay.
+- `record.clj`, `tap` - a channel tap, as `docs/hickey.md` describes the recorder: `:write` and `:effects` put one value on a bounded channel (`tap-buffer`, 4096) and a thread of its own prints it, so the loop does no file I/O. A full channel blocks the loop rather than dropping a line, because the recording is the source of truth (telemetry, a view, drops instead). `:close` waits until every line is on disk. Byte arrays print as `#clojurecraft/bytes "base64"`. Events are written through `wire`, which drops `derived` packet keys (`:chunk/column`, decoded on the reader thread): the file keeps the wire bytes and the reducer derives the column again on replay.
 - `record.clj`, `replay` - `reduce` with effects cleared after each step.
 - `replay.clj`, `-main` - the CLI entry.
-- `main.clj`, `apply-event!` - the tap is called before the swap, so the file is exactly what the reducer saw.
+- `main.clj`, `apply-event!` - the tap is called before the swap, so the file is exactly what the reducer saw; the channel keeps each event's effects line right after it.
 
 ## How it works
 - Each event is one EDN line; when applying it produced effects, the next line is `{:record/effects [...]}` (it prints as `#:record{:effects ...}`, so grep for that form). Recordings made before effects were recorded still read; `verify` reports `:record/no-effects` for them.
