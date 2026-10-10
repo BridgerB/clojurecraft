@@ -21,6 +21,6 @@
   (testing "the needs planner needs the inventory, the position and memory"
     (is (thrown? clojure.lang.ExceptionInfo
                  (make/decide (dissoc (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5]) :world/facts)
-                              (first clojurecraft.plan/targets)))))
+                              (first clojurecraft.plan/targets) clojurecraft.plan/goals))))
   (testing "selection says nothing about shapes: a well-shaped extra key never matters"
     (is (= 0 (inventory/item-count (assoc (game/init fx/opts) :anything/else 1) 134)))))

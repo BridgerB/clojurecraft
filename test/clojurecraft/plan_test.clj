@@ -149,9 +149,9 @@
   (is (= :a (plan/current-id [{:goal/id :a :goal/superseded-by :b} {:goal/id :b :goal/superseded-by :a}] :a))
       "a cycle ends instead of hanging")
   (testing "a recorded :go naming the old id plans for the replacement"
-    (with-redefs [plan/goals superseding-table plan/targets (plan/targets-of superseding-table)]
-      (let [[w _] (run (world-state [0.5 64.0 0.5]) [{:event/kind :go :go/goals [:wood]}])]
-        (is (= #{:wood-3} (:plan/goals w))))))
+    (let [[w _] (fold (game/compose game/step (partial plan/step-over superseding-table))
+                      (world-state [0.5 64.0 0.5]) [{:event/kind :go :go/goals [:wood]}])]
+      (is (= #{:wood-3} (:plan/goals w)) "no redefinition: the table is an argument")))
   (is (true? clojurecraft.spec/goals-valid?) "the real table's replacements all exist"))
 
 (deftest the-leaf-over-a-step-is-a-blocker

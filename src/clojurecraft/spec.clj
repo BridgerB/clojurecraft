@@ -178,7 +178,7 @@
 (s/fdef game/step :args (s/cat :world ::world :event ::event) :ret ::world)
 (s/fdef plan/step :args (s/cat :world ::world :event ::event) :ret ::world)
 (s/fdef intent/run :args (s/cat :world ::world :intent ::intent :event ::event) :ret ::world)
-(s/fdef plan/choose :args (s/cat :world ::world) :ret (s/nilable ::goal))
+(s/fdef plan/choose :args (s/cat :world ::world :table (s/coll-of ::goal)) :ret (s/nilable ::goal))
 
 (def goals-valid?
   "Every row of the goal table conforms, ids are unique, and every :goal/superseded-by names a
@@ -352,7 +352,7 @@
 (s/fdef memory/positions-now :args (s/cat :world (requires :world/facts) :states coll?))
 (s/fdef memory/nearest-log :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number? :blacklist any?))
 (s/fdef make/near :args (s/cat :world (requires :player/pos :world/facts) :block keyword?))
-(s/fdef make/decide :args (s/cat :world (requires :player/inventory :player/pos :world/facts) :goal map?))
+(s/fdef make/decide :args (s/cat :world (requires :player/inventory :player/pos :world/facts) :goal map? :table vector?))
 (s/fdef wood/gather-next :args (s/cat :world (requires :player/pos :world/facts)))
 (s/fdef place/spot :args (s/cat :world (requires :player/pos :world/chunks)))
 (s/fdef window/view :args (s/cat :world (requires :window/grid) :which #{:inventory :table}))

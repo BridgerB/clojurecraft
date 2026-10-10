@@ -15,6 +15,8 @@ sourceRefs:
   - src/clojurecraft/plan.clj#defmulti next-intent
   - src/clojurecraft/plan.clj#defn run-intent
   - src/clojurecraft/plan.clj#defn choose
+  - src/clojurecraft/plan.clj#defn step-over
+  - test/clojurecraft/make_test.clj#the-needs-planner-plans-over-the-table-it-is-given
   - src/clojurecraft/plan.clj#defn abandon-intent
   - test/clojurecraft/plan_test.clj#done-is-re-derived-every-tick-even-mid-intent
   - test/clojurecraft/plan_test.clj#a-regressed-target-preempts-the-running-intent
@@ -35,6 +37,7 @@ The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id
 - `plan.clj`, `done-by` - an open registry keyed by the row's `:goal/done?`, the name of a predicate (`:provided?` is registered by `make`).
 - `plan.clj`, `act` - an open registry keyed by `:goal/act`: what to do once a row's needs are met (`:gather`, `:place`, `:craft`).
 - `plan.clj`, `next-intent` - keyed by `:goal/plan` (default `:needs`); `make` registers the needs planner.
+- `plan.clj`, `step-over` - the planner over a goal table it is given, `(plan world goals) → intent` in the essay's words: `choose`, `begin`, `plan-tick` and `next-intent` take the table, and so does the needs planner (`make/decide`, whose producer rows are a memoized function of the table). `plan/step` is `step-over` over the shipped `goals.edn`; only `goals-for`, which maps the `--until` name at the program's edge, reads the shipped table directly. A test plans over a table without the gather-log row and gets `:stuck`.
 - `plan.clj`, `choose`, `run-intent` - the tick loop; `intent.clj`, `run` - the executors.
 
 ## How it works

@@ -61,18 +61,17 @@
 (def craft-rows (mapv craft-row recipe/recipes))
 
 (def producers
-  "Every row that can provide something: the table's acting rows, then one per recipe."
-  (into (filterv #(and (:goal/act %) (plan/live? %)) plan/goals) craft-rows))
+  "table → every row that can provide something: the table's live acting rows, then one per
+   recipe. Memoized: a table is a value, so its producers are too."
+  (memoize (fn [table] (into (filterv #(and (:goal/act %) (plan/live? %)) table) craft-rows))))
 
 (def by-item
-  "item name → producer rows that provide it."
-  (reduce (fn [m row]
-            (reduce (fn [m k] (reduce #(update %1 %2 (fnil conj []) row) m (or (need-set k) [])))
-                    m (keys (:goal/provides row))))
-          {} producers))
-
-(def by-block
-  (group-by identity (for [row producers k (keys (:goal/provides row)) :when (= "block" (namespace k))] k)))
+  "table → {item name → producer rows that provide it}. Memoized like producers."
+  (memoize (fn [table]
+             (reduce (fn [m row]
+                       (reduce (fn [m k] (reduce #(update %1 %2 (fnil conj []) row) m (or (need-set k) [])))
+                               m (keys (:goal/provides row))))
+                     {} (producers table)))))
 
 ;; ---------------------------------------------------------------- the world as needs see it
 
@@ -94,9 +93,9 @@
 (defn resolve-row
   "Try to get times × row done: [counts row-to-act-on] (a producer whose needs are met, maybe
    this row), or [counts :stuck]."
-  [world counts row times depth]
+  [world table counts row times depth]
   (let [result (reduce (fn [[c _] [k n]]
-                         (let [[c a] (resolve-need world c k (if (number? n) (* n times) n) (inc depth))]
+                         (let [[c a] (resolve-need world table c k (if (number? n) (* n times) n) (inc depth))]
                            (if a (reduced [c a]) [c nil])))
                        [counts nil] (:goal/needs row))
         [c a] result]
@@ -107,7 +106,7 @@
 (defn resolve-need
   "[counts' action] for a need: action nil when it is already met (counts' has it consumed), a
    producer row to act on, or :stuck when nothing in the table can provide it."
-  [world counts k n depth]
+  [world table counts k n depth]
   (let [block? (= "block" (namespace k))
         s (when-not block? (need-set k))
         h (when-not block? (recipe/have counts s))]
@@ -116,8 +115,8 @@
       [counts nil]
 
       block?
-      (or (some (fn [row] (let [[c a] (resolve-row world counts row 1 depth)] (when (not= a :stuck) [c a])))
-                (for [row producers :when (contains? (:goal/provides row) k)] row))
+      (or (some (fn [row] (let [[c a] (resolve-row world table counts row 1 depth)] (when (not= a :stuck) [c a])))
+                (for [row (producers table) :when (contains? (:goal/provides row) k)] row))
           [counts :stuck])
 
       (>= h n) [(recipe/consume counts s n) nil]
@@ -126,7 +125,7 @@
       :else
       (let [counts (recipe/consume counts s h)
             missing (- n h)
-            rows (->> (mapcat by-item s)
+            rows (->> (mapcat (by-item table) s)
                       distinct
                       (sort-by (fn [row] [(- (reduce + (for [[nk nn] (:goal/needs row) :when (number? nn)]
                                                          (recipe/have counts (need-set nk)))))
@@ -135,30 +134,31 @@
         (or (some (fn [row]
                     (let [per (val (first (:goal/provides row)))
                           times (long (Math/ceil (/ missing per)))
-                          [c a] (resolve-row world counts row times depth)]
+                          [c a] (resolve-row world table counts row times depth)]
                       (when (not= a :stuck) [c a])))
                   rows)
             [counts :stuck])))))
 
 (defn next-row
-  "The producer row to act on next for a goal, nil when its provides are all held, or :stuck."
-  [world goal]
+  "The producer row of table to act on next for a goal, nil when its provides are all held, or
+   :stuck."
+  [world goal table]
   (second (reduce (fn [[counts _] [k n]]
-                    (let [[counts a] (resolve-need world counts k n 0)]
+                    (let [[counts a] (resolve-need world table counts k n 0)]
                       (if a (reduced [counts a]) [counts nil])))
                   [(counts world) nil] (:goal/provides goal))))
 
 (defn decide
   "The next intent toward goal: continue a log chain in flight, else act on the row the needs
-   planner reaches."
-  [world goal]
+   planner reaches through table."
+  [world goal table]
   (or (wood/continue-gather world)
-      (let [row (next-row world goal)]
+      (let [row (next-row world goal table)]
         (cond (nil? row) nil
               (= :stuck row) {:plan/wait :stuck}
               :else (plan/act world row)))))
 
-(defmethod plan/next-intent :needs [world goal] (decide world goal))
+(defmethod plan/next-intent :needs [world goal table] (decide world goal table))
 
 (defmethod plan/done-by :provided? [world goal]
   (let [c (counts world)]

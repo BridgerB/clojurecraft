@@ -32,7 +32,7 @@ related:
 3. Only a new kind of action is code: `(defmethod plan/act :mine [world row] ...)` returning an intent map, and the intent itself as `(defmethod intent/run :mine [world intent event] ...)` (see `craft.clj` for a staged one). A new completion rule is `(defmethod plan/done-by :some-predicate [world goal] ...)` named by the row's `:goal/done?`.
 4. Give the target row a `:goal/until` name; `--until <name>` then selects it in the bot and the fixture alike.
 5. Extend `sim.clj` so `sim/run` can reach the goal; add a `sim_test` case, and a property when the goal has a rule worth generating against.
-6. To fix a goal that turned out wrong, never edit its meaning or delete it: add the fixed row under a new id, move `:goal/until` to it, and give the old row `:goal/superseded-by <new id>`. The planner chooses only live rows (`plan/live?`), and `plan/current-id` follows the chain, so a recorded `:go` naming the old id plans for the new one; `spec/goals-valid?` checks that every replacement exists.
+6. To fix a goal that turned out wrong, never edit its meaning or delete it: add the fixed row under a new id, move `:goal/until` to it, and give the old row `:goal/superseded-by <new id>`. The planner chooses only live rows (`plan/live?`), and `plan/current-id` follows the chain over the table the planner is given, so a recorded `:go` naming the old id plans for the new one (the test passes a table to `plan/step-over`, no redefinition); `spec/goals-valid?` checks that every replacement exists.
 7. Run `clojure -M:test` and `clojure -M:brain`; describe the new rows in [[make-goals]] if they change how needs resolve.
 
 ## See also

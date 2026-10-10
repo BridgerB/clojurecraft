@@ -19,6 +19,8 @@
 
 (def pickaxe (first (filter #(= :pickaxe (:goal/id %)) plan/goals)))
 
+(defn decide "The needs planner over the shipped goal table." [w goal] (make/decide w goal plan/goals))
+
 (def held-gen
   (gen/hash-map :oak_log (gen/choose 0 3) :oak_planks (gen/choose 0 9) :stick (gen/choose 0 5)
                 :crafting_table (gen/choose 0 1) :wooden_pickaxe (gen/frequency [[9 (gen/return 0)] [1 (gen/return 1)]])))
@@ -51,7 +53,7 @@
            400
            (prop/for-all [held held-gen table? gen/boolean goal (gen/elements plan/targets)]
                          (let [w (world-holding held table?)
-                               i (make/decide w goal)
+                               i (decide w goal)
                                counts (recipe/counts (:player/inventory w))]
                            (cond
                              (plan/done-by w goal) (nil? i)
@@ -82,8 +84,8 @@
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
 
 (defn intent-for [held goal]
-  (let [i (make/decide (world-holding (merge {:oak_log 0 :oak_planks 0 :stick 0 :crafting_table 0 :wooden_pickaxe 0} held) false)
-                       goal)]
+  (let [i (decide (world-holding (merge {:oak_log 0 :oak_planks 0 :stick 0 :crafting_table 0 :wooden_pickaxe 0} held) false)
+                  goal)]
     (or (:intent/recipe i) (:plan/wait i) (:intent/kind i))))
 
 (deftest the-needs-planner-walks-the-recipes
@@ -99,18 +101,25 @@
 (deftest the-needs-planner-uses-the-species-it-holds
   (let [w (-> (world-holding {} false)
               (assoc :player/inventory {0 {:item (recipe/item-id :birch_log) :count 1}}))]
-    (is (= :birch_planks (:intent/recipe (make/decide w kit))))))
+    (is (= :birch_planks (:intent/recipe (decide w kit))))))
 
 (deftest an-unreachable-table-is-replaced-not-walked-at
   ;; recorded live 2026-10-10: a remembered table 23 blocks away, a walk to it stuck three times,
   ;; the plan failed :stuck while the bot held planks enough for a new table
   (let [w (-> (world-holding {:oak_planks 6 :stick 4} false)
               (memory/observe [20 64 5] memory/crafting-table))]
-    (is (= {:intent/kind :walk :intent/target [20 64 5]} (make/decide w pickaxe)) "first, the table it remembers")
+    (is (= {:intent/kind :walk :intent/target [20 64 5]} (decide w pickaxe)) "first, the table it remembers")
     (testing "after the walk failed, the table no longer counts"
-      (is (= {:plan/wait :no-log} (make/decide (assoc w :plan/blacklist #{[20 64 5]}) pickaxe))
+      (is (= {:plan/wait :no-log} (decide (assoc w :plan/blacklist #{[20 64 5]}) pickaxe))
           "six planks are one short of a new table (4) and the pickaxe (3): get a log first")
-      (is (= :crafting_table (:intent/recipe (make/decide (-> w (assoc :plan/blacklist #{[20 64 5]})
-                                                              (assoc-in [:player/inventory 0 :count] 7))
-                                                          pickaxe)))
+      (is (= :crafting_table (:intent/recipe (decide (-> w (assoc :plan/blacklist #{[20 64 5]})
+                                                         (assoc-in [:player/inventory 0 :count] 7))
+                                                     pickaxe)))
           "with seven, craft the new table"))))
+
+(deftest the-needs-planner-plans-over-the-table-it-is-given
+  (let [w (world-holding {} false)
+        wood (first (filter #(= :wood (:goal/id %)) plan/goals))
+        without-gathering (vec (remove #(= :gather-log (:goal/id %)) plan/goals))]
+    (is (= {:plan/wait :no-log} (make/decide w wood plan/goals)) "the shipped table gathers: no tree known yet")
+    (is (= {:plan/wait :stuck} (make/decide w wood without-gathering)) "a table with no way to get a log is stuck")))

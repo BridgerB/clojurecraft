@@ -61,19 +61,20 @@
   (fn [_world goal] (:goal/act goal)))
 
 (defmulti next-intent
-  "The next intent toward a goal in play: an intent map, {:plan/wait reason}, or nil when there
-   is nothing to do. Keyed by :goal/plan (default :needs)."
-  (fn [_world goal] (:goal/plan goal :needs)))
+  "The next intent toward a goal in play, planned over the goal table: an intent map,
+   {:plan/wait reason}, or nil when there is nothing to do. Keyed by :goal/plan (default :needs)."
+  (fn [_world goal _table] (:goal/plan goal :needs)))
 
 (defmethod done-by :default [_ _] false)
 (defmethod act :default [_ goal] {:plan/wait [:no-act (:goal/act goal)]})
-(defmethod next-intent :default [_ _] nil)
+(defmethod next-intent :default [_ _ _] nil)
 
 (defn choose
-  "The highest-priority target in play (:plan/goals, or every target) the world does not satisfy."
-  [world]
+  "The highest-priority live target of table in play (:plan/goals, or every target) the world
+   does not satisfy."
+  [world table]
   (let [in-play (:plan/goals world)]
-    (->> targets
+    (->> (targets-of table)
          (filter #(or (nil? in-play) (contains? in-play (:goal/id %))))
          (sort-by :goal/priority)
          (remove #(done-by world %))
@@ -82,11 +83,11 @@
 (defn begin
   "Start planning. A :go that names a landing (:go/at, from the fixture) first waits in
    :landing until the bot is there with its chunk loaded; the wait is plan state, not a sleep."
-  [world {:go/keys [goals at]}]
+  [world {:go/keys [goals at]} table]
   (-> world
       (cond-> (:plan/intent world) (memory/remember-intention (:plan/intent world) :abandoned))
       (assoc :plan/status (if at :landing :active) :plan/since (:time/now world) :plan/blacklist #{} :plan/attempts 0)
-      (cond-> goals (assoc :plan/goals (set (map #(current-id clojurecraft.plan/goals %) goals))))
+      (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
       (dissoc :plan/intent :plan/last :plan/waiting-since)))
 
@@ -133,11 +134,11 @@
 (defn run-intent
   "Advance the intent; when it ends, plan again in the same tick so the next intent or the
    goal's completion is derived immediately."
-  [world i event]
+  [world i event table]
   (let [world (intent/run world i event)
         i (:plan/intent world)]
-    (cond (intent/done? i) (plan-tick (finish-intent world i) event)
-          (intent/failed? i) (plan-tick (fail-intent world i) event)
+    (cond (intent/done? i) (plan-tick (finish-intent world i) event table)
+          (intent/failed? i) (plan-tick (fail-intent world i) event table)
           :else world)))
 
 (defn start-intent
@@ -186,35 +187,41 @@
    :done, whatever is running; a running intent that serves another target than the one chosen
    now is preempted; either waits while the cursor holds an item. Otherwise the intent runs, or
    the chosen target's next intent starts."
-  [world event]
+  [world event table]
   (let [i (:plan/intent world)
         active? (= :active (:plan/status world))
-        goal (when active? (choose world))
+        goal (when active? (choose world table))
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)))
-        next (when (and goal (nil? i)) (next-intent world goal))]
+        next (when (and goal (nil? i)) (next-intent world goal table))]
     (cond
       (not active?) world
-      (and i (or (nil? goal) preempt?) (not (can-abandon? world))) (run-intent world i event)
+      (and i (or (nil? goal) preempt?) (not (can-abandon? world))) (run-intent world i event table)
       (nil? goal) (-> world
                       (cond-> i (abandon-intent i :goal-met))
                       (assoc :plan/status :done :player/controls {})
                       (dissoc :plan/intent))
-      preempt? (plan-tick (abandon-intent world i :preempted) event)
-      i (run-intent world i event)
+      preempt? (plan-tick (abandon-intent world i :preempted) event table)
+      i (run-intent world i event table)
       (nil? next) (wait world :nothing-to-do)
       (:plan/wait next) (wait world (:plan/wait next))
       :else (start-intent world (assoc next :intent/goal (:goal/id goal))))))
 
-(defn step
-  "The planner reducer, composed after game/step: :go begins a plan, :tick advances it."
-  [world {:event/keys [kind] :as event}]
+(defn step-over
+  "The planner over a goal table (docs/hickey.md: \"(plan world goals) → intent\"), as a reducer
+   composed after game/step: :go begins a plan, :tick advances it. Nothing here reads a table
+   from anywhere but its argument."
+  [table world {:event/keys [kind] :as event}]
   (case kind
-    :go (-> world (begin event) (game/say "go"))
+    :go (-> world (begin event table) (game/say "go"))
     :tick (case (:plan/status world)
-            :active (plan-tick world event)
+            :active (plan-tick world event table)
             :landing (landing-tick world)
             world)
     world))
+
+(def step
+  "The planner reducer over the shipped goal table (resources/clojurecraft/goals.edn)."
+  (partial step-over goals))
 
 (defn done? "Has the plan reached every target in play?" [world] (= :done (:plan/status world)))
 (defn failed? "Has the plan given up (see :plan/reason)?" [world] (= :failed (:plan/status world)))
