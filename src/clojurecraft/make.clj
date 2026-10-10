@@ -20,6 +20,8 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.wood :as wood]))
 
+;; the :mine act lives in clojurecraft.stone, required by main (and by tests that plan for stone)
+
 (def table-search 24)                 ; how far a remembered crafting table counts as :near
 (def max-depth 8)                     ; producer rows the needs planner may chain before it is :stuck
 
@@ -90,15 +92,30 @@
 
 (declare resolve-need)
 
+(declare resolve-need)
+
+(defn resolve-holds
+  "[counts action] for what a row must hold but does not spend (:goal/holds, a tool): each is
+   resolved once, however many times the row runs, and the count is handed back unconsumed,
+   so three cobblestone need one pickaxe, not three."
+  [world table counts row depth]
+  (reduce (fn [[c _] [k n]]
+            (let [[_ a] (resolve-need world table c k n (inc depth))]
+              (if a (reduced [c a]) [c nil])))
+          [counts nil] (:goal/holds row)))
+
 (defn resolve-row
   "Try to get times × row done: [counts row-to-act-on] (a producer whose needs are met, maybe
-   this row), or [counts :stuck]."
+   this row), or [counts :stuck]. What the row holds is resolved once; what it needs, times
+   over."
   [world table counts row times depth]
-  (let [result (reduce (fn [[c _] [k n]]
-                         (let [[c a] (resolve-need world table c k (if (number? n) (* n times) n) (inc depth))]
-                           (if a (reduced [c a]) [c nil])))
-                       [counts nil] (:goal/needs row))
-        [c a] result]
+  (let [[c a] (resolve-holds world table counts row depth)
+        [c a] (if a
+                [c a]
+                (reduce (fn [[c _] [k n]]
+                          (let [[c a] (resolve-need world table c k (if (number? n) (* n times) n) (inc depth))]
+                            (if a (reduced [c a]) [c nil])))
+                        [c nil] (:goal/needs row)))]
     (cond (= a :stuck) [counts :stuck]
           a [c a]
           :else [c row])))

@@ -41,7 +41,12 @@
   [item]
   (case item :crafting_table crafting-table nil))
 
-(defn watched? "Does seeing this state start a record?" [id] (or (blocks/log? id) (crafting-table? id)))
+(def stone-states "Every state of stone, watched so cobblestone can be planned for." (blocks/states-where (fn [[n]] (= n :stone))))
+
+(defn watched?
+  "Does seeing this state start a record? Logs, crafting tables and stone."
+  [id]
+  (or (blocks/log? id) (crafting-table? id) (contains? stone-states id)))
 
 ;; ---------------------------------------------------------------- reading
 

@@ -52,8 +52,9 @@
 
  {:problem/stage :stone-tools
   :problem/issue 9
+  :problem/goals [:cobblestone]
   :problem/statement "The bot can only dig a log by hand on a constant 3000 ms timer, so it cannot know how long stone takes, which tool to hold, that stone dug by hand drops nothing, or how to get down to stone without falling into a cave, lake or lava."
-  :problem/needs ["Real block hardness per block, generated from typecraft's datagen (the --reports output has none)"
+  :problem/needs ["Real block hardness per block, read from the game's own classes at datagen (the --reports output has none)"
                   "Harvest rules: the jar's mineable/* and needs_*_tool tags (which tool kind, which tier)"
                   "Which inventory slot holds the best tool, and the server-confirmed held slot"
                   "Whether the eyes are in water and whether the bot is on the ground (each a /5 dig penalty)"
@@ -66,7 +67,7 @@
                   "Digging under the feet drops the bot into lava, water or a deep shaft"
                   "Reporting a dig-down as success when the bot never actually fell, so the caller spins"]
   :problem/done "RCON Inventory shows at least 3 cobblestone with the wooden pickaxe still held, RESULT :ok true, and the recorded run replays to the same RESULT; crafting the stone pickaxe itself is left to the crafting issue."
-  :problem/last-failure "clojurecraft has never attempted this. ruststeve: placeholder hardness 1.0 made natural deepslate digs fail about half the time (the 1.35x+200 ms hold landed on the server's 70% threshold), and once both iron pickaxes wore out after ~550 digs, bare-hand descent ran ~44 s per block."
+  :problem/last-failure "Built 2026-10-10 (issue #9) against the model first: hardness, harvest tags and tool materials read from the game itself (stone has no tier, so a hand harvests it in 2300 ms, which the issue had wrong; a penalty divides the speed before ceil, 5650 ms not 5750); the dig chooses the fastest tool of the block's kind and refuses a tiered block no tool reaches; a refused break (the block restored after FINISH) fails :rejected; stairs down refuse water, lava and drops and never dig the support. The needs planner gained :goal/holds (a tool is required once, not per run) after it crafted three pickaxes for three cobblestone. No live run yet. ruststeve: placeholder hardness 1.0 made natural deepslate digs fail about half the time (the 1.35x+200 ms hold landed on the server's 70% threshold), and once both iron pickaxes wore out after ~550 digs, bare-hand descent ran ~44 s per block."
   :problem/sources ["docs/issues/05-dig-with-tools-stone-pickaxe.md"
                     "brain/bot/plan/roadmap-issues.md"
                     "brain/siblings/sib-dig-hardness.md"

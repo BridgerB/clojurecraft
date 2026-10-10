@@ -12,6 +12,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.stairs]
+            [clojurecraft.stone]
             [clojurecraft.gym :as gym]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.inventory :as inventory]
@@ -488,3 +489,35 @@
     (is (= :failed (:intent/status (:plan/intent w))))
     (is (= :boxed (:intent/reason (:plan/intent w))))
     (is (empty? (:sim/broken sim)) "nothing was dug at all")))
+
+;; ---------------------------------------------------------------- cobblestone, on the model
+
+(def forest-over-stone
+  "A tree beside the spawn and stone from y 60 to 63 under a dirt floor at 64, with one face of
+   stone exposed in a pit at x 12: the cobblestone goal either walks to the pit or cuts stairs."
+  (merge (into {} (for [x (range 16) y (range 60 64) z (range 16)] [[x y z] 1]))        ; stone
+         (into {} (for [x (range 16) z (range 16)] [[x 64 z] 10]))                         ; dirt on top (10 = dirt)
+         {[12 64 8] 0 [12 63 8] 0}                                                        ; a pit exposing stone at [12 62 8] and its walls
+         {[3 65 2] 136 [3 66 2] 136 [3 67 2] 136 [3 68 2] 252}))                         ; a tree
+
+(deftest three-cobblestone-with-a-wooden-pickaxe-and-it-is-kept
+  (let [[w sim] (sim/run step (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes forest-over-stone) :spawn [8.5 65.0 8.5]
+                                    :inventory {36 {:item (get blocks/items :wooden_pickaxe) :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %)) 240000 {:event/kind :go :go/goals [:cobblestone]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (>= (get (held w) :cobblestone 0) 3))
+    (is (= 1 (get (held w) :wooden_pickaxe 0)) "the pickaxe is still held")
+    (is (empty? (:sim/violations sim)))))
+
+(deftest bare-handed-the-cobblestone-goal-never-digs-stone
+  ;; with no pickaxe the needs planner plans for one (the tree beside the spawn gives it logs);
+  ;; what must never happen is a hand dig of stone, which drops cobblestone at 2300 ms a block
+  ;; but would cost a race its tool chain. The run ends when a pickaxe is in hand, or the plan
+  ;; gives up (:no-log once the one tree is spent)
+  (let [[w sim] (sim/run step (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes forest-over-stone) :spawn [8.5 65.0 8.5]})
+                         #(or (plan/done? %) (plan/failed? %) (pos? (get (held %) :wooden_pickaxe 0))) 120000
+                         {:event/kind :go :go/goals [:cobblestone]})]
+    (is (not-any? #(= 1 (sim/block-at (assoc sim :sim/broken #{}) %)) (:sim/broken sim)) "no stone was dug by hand")
+    (is (or (pos? (get (held w) :wooden_pickaxe 0)) (plan/failed? w)) (pr-str (plan/summary w)))))

@@ -158,6 +158,7 @@
 (s/def ::need-key (s/or :named keyword? :set (s/coll-of keyword? :kind set?)))
 (s/def ::amount (s/or :count pos-int? :near #{:near}))
 (s/def :goal/needs (s/map-of ::need-key ::amount))
+(s/def :goal/holds (s/map-of ::need-key ::amount))    ; needs a row keeps rather than spends (a tool)
 (s/def :goal/provides (s/map-of ::need-key ::amount :min-count 1))
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
@@ -167,7 +168,7 @@
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
 (s/def ::goal (s/keys :req [:goal/id :goal/priority :goal/provides :goal/done?]
-                      :opt [:goal/needs :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by]))
+                      :opt [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
