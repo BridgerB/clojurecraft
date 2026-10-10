@@ -83,7 +83,7 @@
                  :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/status :active
                                :intent/started 0 :intent/best-tick 0 :intent/detours 4})
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
-    (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/status :active} (:plan/intent w))
+    (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/status :active :intent/id 1} (:plan/intent w))
         "re-planned in the same tick toward the next log")
     (is (= #{[13 64 0]} (:plan/blacklist w)))
     (is (= 1 (:plan/attempts w)))))

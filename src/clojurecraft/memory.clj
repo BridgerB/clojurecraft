@@ -8,16 +8,22 @@
    (`history`). The latest observation at a position is the one with the highest entity id.
 
    Only block kinds that `watched?` accepts start a record (logs and crafting tables today); a
-   position already on record is followed through every change, so a dug log becomes air."
+   position already on record is followed through every change, so a dug log becomes air.
+
+   The bot's own intentions are facts in the same store: {:intention/id n :intention/event
+   :started|:done|:failed|:abandoned :intention/kind k :intention/at ms} plus the target, recipe
+   or reason when there is one. `intention-as-of` answers what the bot was trying to do at any time t."
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.physics :as physics]
             [datascript.core :as d]))
 
 (def schema
-  "Positions and states are indexed, so lookups by place and Datalog by kind are direct."
+  "Positions and states are indexed, so lookups by place and Datalog by kind are direct;
+   intention ids too, so an intention's story is one lookup."
   {:sight/pos {:db/index true}
-   :sight/state {:db/index true}})
+   :sight/state {:db/index true}
+   :intention/id {:db/index true}})
 
 (defn empty-facts "A store with nothing seen yet." [] (d/empty-db schema))
 
@@ -94,7 +100,43 @@
       (assoc world :world/facts (d/db-with db [fact]))
       world)))
 
+(defn intention
+  "The fact for intent i reaching event (:started :done :failed :abandoned) at now."
+  [i event now]
+  (cond-> {:intention/id (:intent/id i) :intention/event event :intention/kind (:intent/kind i) :intention/at now}
+    (:intent/target i) (assoc :intention/target (:intent/target i))
+    (:intent/recipe i) (assoc :intention/recipe (:intent/recipe i))
+    (:intent/reason i) (assoc :intention/reason (:intent/reason i))))
+
+(defn remember-intention
+  "Append what happened to intent i (event) as a fact; an intent with no id is not recorded."
+  [world i event]
+  (if (:intent/id i)
+    (update world :world/facts d/db-with [(intention i event (:time/now world))])
+    world))
+
 ;; ---------------------------------------------------------------- questions
+
+(defn intentions
+  "The story of every intention, oldest fact first."
+  [world]
+  (let [db (:world/facts world)]
+    (->> (d/datoms db :aevt :intention/id)
+         (map :e)
+         sort
+         (mapv #(into {} (d/touch (d/entity db %)))))))
+
+(defn intention-as-of
+  "What the bot was trying to do at time t: the newest intention whose latest fact by then is
+   :started, as that fact; nil when it was doing nothing. A Datalog over the facts, so the same
+   question works for any moment of a run, e.g. the tick before a death."
+  [world t]
+  (let [db (:world/facts world)
+        latest (d/q '[:find ?id (max ?e) :in $ ?t
+                      :where [?e :intention/id ?id] [?e :intention/at ?at] [(<= ?at ?t)]]
+                    db t)
+        open (for [[id e] latest :let [f (d/entity db e)] :when (= :started (:intention/event f))] [id f])]
+    (when (seq open) (into {} (d/touch (second (apply max-key first open)))))))
 
 (defn log-at? "Is the last thing seen at pos a log?" [world pos] (boolean (some-> (remembered world pos) blocks/log?)))
 

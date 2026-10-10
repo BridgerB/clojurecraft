@@ -13,6 +13,7 @@
             [clojure.java.io :as io]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]))
 
 (def goals
@@ -65,6 +66,7 @@
    :landing until the bot is there with its chunk loaded; the wait is plan state, not a sleep."
   [world {:go/keys [goals at]}]
   (-> world
+      (cond-> (:plan/intent world) (memory/remember-intention (:plan/intent world) :abandoned))
       (assoc :plan/status (if at :landing :active) :plan/since (:time/now world) :plan/blacklist #{} :plan/attempts 0)
       (cond-> goals (assoc :plan/goals (set goals)))
       (cond-> at (assoc :plan/go-at at))
@@ -92,7 +94,7 @@
   "An intent that succeeds ends any failure streak: attempts count consecutive failures, so a
    long goal is not killed by three unrelated hiccups an hour apart."
   [world i]
-  (-> world (assoc :plan/last i :plan/attempts 0) (dissoc :plan/intent)))
+  (-> world (memory/remember-intention i :done) (assoc :plan/last i :plan/attempts 0) (dissoc :plan/intent)))
 
 (defn fail-intent
   "An intent failed: stop moving, blacklist its target, count the attempt; max-attempts
@@ -100,6 +102,7 @@
   [world i]
   (let [attempts (inc (:plan/attempts world 0))]
     (-> world
+        (memory/remember-intention i :failed)
         (assoc :player/controls {})
         (cond-> (:intent/target i) (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (assoc :plan/attempts attempts)
@@ -119,11 +122,17 @@
           (intent/failed? i) (plan-tick (fail-intent world i) event)
           :else world)))
 
-(defn start-intent "Make i the active intent and stop waiting." [world i]
-  (-> world
-      (assoc :plan/intent (assoc i :intent/status :active))
-      (dissoc :plan/waiting-since)
-      (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i))))))
+(defn start-intent
+  "Make i the active intent, numbered from :plan/intents, remember that it started, and stop
+   waiting."
+  [world i]
+  (let [n (inc (:plan/intents world 0))
+        i (assoc i :intent/status :active :intent/id n)]
+    (-> world
+        (assoc :plan/intents n :plan/intent i)
+        (memory/remember-intention i :started)
+        (dissoc :plan/waiting-since)
+        (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i)))))))
 
 (defn wait
   "Nothing to do yet for reason; waiting longer than wait-timeout fails the plan with it."

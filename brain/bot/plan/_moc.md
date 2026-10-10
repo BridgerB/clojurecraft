@@ -18,6 +18,7 @@ related:
 - [[gather-chain]] - walk, dig, collect tagged for :log, continued from :plan/last, up to six leaf digs.
 - [[roadmap-issues]] - which GitHub issue number is which roadmap step and draft.
 
+- [[intentions-as-facts]] - every intent's story in memory; what the bot was doing at any moment is a query.
 ## See also
 - [[bot/_moc|Bot pillar]]
 - [[early-finish-aborts]] - why FINISH is late on purpose.

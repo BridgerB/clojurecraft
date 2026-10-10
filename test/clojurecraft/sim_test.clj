@@ -197,3 +197,33 @@
                                                 90000 {:event/kind :go :go/goals [:wood]})]
                            (and (plan/done? w) (= 1 (game/logs-held w)) (empty? (:sim/violations sim))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests])))))
+
+;; ---------------------------------------------------------------- intentions as facts
+
+(deftest what-the-bot-was-doing-is-a-query-as-of-any-moment
+  (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
+        [w _] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                       #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})
+        story (memory/intentions w)
+        started (filter #(= :started (:intention/event %)) story)]
+    (is (plan/done? w))
+    (testing "every intent that started has a fact for how it ended, in order"
+      (is (= [:walk :dig :collect] (mapv :intention/kind started)))
+      (is (= (mapv :intention/id started) (distinct (map :intention/id story))))
+      (is (every? (fn [{:intention/keys [id]}] (some #(and (= id (:intention/id %)) (= :done (:intention/event %))) story))
+                  started)))
+    (testing "as of each start, that intent is what the bot was doing; after the last end, nothing"
+      (doseq [s started]
+        (is (= [(:intention/id s) :started] ((juxt :intention/id :intention/event) (memory/intention-as-of w (:intention/at s))))))
+      (is (nil? (memory/intention-as-of w (:time/now w))))
+      (is (nil? (memory/intention-as-of w -1)) "before anything started"))))
+
+(deftest a-new-go-abandons-the-running-intent
+  (let [w (-> (game/init fx/opts)
+              (assoc :time/now 100 :plan/status :active)
+              (plan/start-intent {:intent/kind :walk :intent/target [3 64 0]}))
+        w (plan/step (assoc w :time/now 200) {:event/kind :go :go/goals [:kit]})]
+    (is (= [:started :abandoned] (mapv :intention/event (memory/intentions w))))
+    (is (= {:intention/kind :walk :intention/target [3 64 0]}
+           (select-keys (memory/intention-as-of w 150) [:intention/kind :intention/target])))
+    (is (nil? (memory/intention-as-of w 200)))))
