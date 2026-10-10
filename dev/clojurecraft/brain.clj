@@ -96,9 +96,18 @@
     (io/file (sibling-dirs prefix) rest)
     (io/file repo path)))
 
+(defn sibling-missing?
+  "Is path a sibling sourceRef (steve:, ruststeve:) whose checkout is not on this machine? Such a
+   ref cannot be checked here (a CI runner has no sibling checkouts), which is not the same as
+   being wrong; it is counted as unchecked instead of unresolved."
+  [path]
+  (when-let [[_ prefix] (re-matches #"(steve|ruststeve):.*" path)]
+    (not (.isDirectory (io/file (sibling-dirs prefix))))))
+
 (defn check
   "Check every note under brain-dir; returns {:notes n :broken :ambiguous :orphans :unresolved
-   :meta}, each a vector of offenders. The repo root is brain-dir's parent."
+   :meta}, each a vector of offenders, plus :unchecked, sibling refs whose checkout is absent.
+   The repo root is brain-dir's parent."
   [brain-dir]
   (let [root (io/file brain-dir)
         repo (.getParentFile (.getAbsoluteFile root))
@@ -106,7 +115,7 @@
         by-path (into {} (map (fn [n] [(:rel n) n]) ns*))
         by-stem (group-by #(last (str/split (:rel %) #"/")) ns*)
         inbound (atom (zipmap (map :rel ns*) (repeat 0)))
-        broken (atom []) ambiguous (atom []) unresolved (atom []) meta-errors (atom [])]
+        broken (atom []) ambiguous (atom []) unresolved (atom []) meta-errors (atom []) unchecked (atom [])]
     (doseq [n ns*]
       (doseq [[_ link] (re-seq #"\[\[([^\]]+)\]\]" (strip-code (:text n)))]
         (let [t (-> link (str/replace "\\|" "|") (str/split #"\|") first (str/split #"#") first str/trim)]
@@ -130,6 +139,7 @@
           (let [[path anchor] (let [i (str/index-of ref "#")] (if i [(subs ref 0 i) (subs ref (inc i))] [ref ""]))
                 f (resolve-path repo path)]
             (cond
+              (sibling-missing? path) (swap! unchecked conj [(:rel n) ref])
               (not (.exists f)) (swap! unresolved conj [(:rel n) ref "no such file"])
               (str/blank? anchor) (swap! unresolved conj [(:rel n) ref "no anchor"])
               :else (let [[flat line-of] (flatten-file (slurp f))
@@ -138,7 +148,7 @@
                             (> (count hits) 1) (swap! unresolved conj [(:rel n) ref (str "matches " (count hits) " at lines " (vec hits))]))))))))
     (let [orphans (vec (for [[rel c] @inbound :when (and (zero? c) (not (hub? rel)))] rel))]
       {:notes (count ns*) :broken @broken :ambiguous @ambiguous :orphans orphans
-       :unresolved @unresolved :meta @meta-errors})))
+       :unresolved @unresolved :meta @meta-errors :unchecked @unchecked})))
 
 (defn -main
   "Print the count and offenders for each invariant; exit 0 only when all are empty."
@@ -148,4 +158,5 @@
     (doseq [k [:broken :ambiguous :orphans :unresolved :meta]]
       (println (name k) (count (k r)))
       (doseq [x (k r)] (println "  " (pr-str x))))
+    (println "unchecked sibling refs (no checkout here)" (count (:unchecked r)))
     (System/exit (if (every? empty? (map r [:broken :ambiguous :orphans :unresolved :meta])) 0 1))))

@@ -12,7 +12,7 @@ lastUpdated: 2026-10-09
 A note is `status: verified` only if someone opened the source at the pinned version and read it. Every claim carries a sourceRef that names what it cites (a symbol, or the text itself), so a checker and a reader can refute it. Never a line number. Research delivered by an agent that read the sibling code is written as `draft` until a person or agent re-opens the anchors; the Limits section says what is unverified.
 
 ## The four invariants (hold at zero)
-0 broken links, 0 ambiguous links, 0 orphans, 0 unresolved sourceRefs. Run `clojure -M:brain` after every batch of edits. A resolving ref proves the cited text exists, not that it supports the claim; that judgment belongs to review.
+0 broken links, 0 ambiguous links, 0 orphans, 0 unresolved sourceRefs. Run `clojure -M:brain` after every batch of edits. Sibling refs (`steve:`, `ruststeve:`) are checked only where those checkouts exist; elsewhere (a CI runner) the checker counts them as unchecked rather than unresolved, so the invariants still hold at zero there. A resolving ref proves the cited text exists, not that it supports the claim; that judgment belongs to review.
 
 ## Maintenance
 - A change that touches a subsystem updates its note in the same change and bumps `lastUpdated` and the pin.
