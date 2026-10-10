@@ -96,9 +96,9 @@
 
 (deftest a-failed-intent-is-blacklisted-and-retried
   (let [w (world-state [0.5 64.0 0.5])
-        w (assoc w :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0
+        w (assoc w :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0 :time/tick 1300 ; past the walk's timeout
                  :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/status :active
-                               :intent/started 0 :intent/best-tick 0 :intent/detours 4})
+                               :intent/started 0 :intent/best-tick 0})
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/trunk [3 64 0] :intent/status :active
             :intent/id 1 :intent/goal :wood} (:plan/intent w))
@@ -108,9 +108,9 @@
 
 (deftest a-trunk-that-fails-twice-is-given-up-whole
   (let [failing {:intent/kind :walk :intent/target [13 65 0] :intent/for :log :intent/trunk [3 64 0]
-                 :intent/status :active :intent/started 0 :intent/best-tick 0 :intent/detours 4}
+                 :intent/status :active :intent/started 0 :intent/best-tick 0}
         w (assoc (world-state [0.5 64.0 0.5]) :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0
-                 :plan/intent failing)
+                 :time/tick 1300 :plan/intent failing)   ; past the walk's timeout: it fails at once
         [w1 _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (= {[3 0] 1} (:plan/trunk-failures w1)))
     (is (= [3 64 0] (:intent/trunk (:plan/intent w1))) "once is chance: the same trunk again")
