@@ -5,6 +5,7 @@
    new namespace. Every deadline is an absolute ms value compared against :time/now; the only
    randomness comes in on the tick event."
   (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.inventory :as inventory]
@@ -21,20 +22,28 @@
 (def pickup-rise 2)                   ; a drop resting more than 2 blocks above the feet is above
                                       ; the pickup box (1.8 tall, grown 0.5 up)
 (def settle-ms 500)                   ; let the server catch up before START
-(def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks
-(def finish-after (+ (* dig-ms 1.35) 200)) ; an early FINISH aborts the break; a late one is accepted
+(def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks (dig/ms derives it now)
+(def finish-margin 1.35)              ; FINISH is sent this late: an early one aborts the break
+(def finish-slack 200)                ; ms added to the margin
+(def finish-after (+ (* dig-ms finish-margin) finish-slack)) ; a log by hand, for the tests that pin it
+(def confirm-ticks 10)                ; after FINISH, ticks to wait for the server's ack or its refusal
+
+(defn penalties
+  "The dig penalties in force for the player: off the ground (the eyes in water is issue #5)."
+  [world]
+  {:off-ground? (not (:player/on-ground? world))})
 
 (defn dig-time
-  "ms to break a block by hand. Only the two kinds the bot digs today; real hardness and tools
-   are issue #9. Leaves: hardness 0.2 → 6 ticks."
-  [id]
-  (if (and id (blocks/leaves? id)) 300 dig-ms))
+  "ms to break block id with held (an item id, or nil for the hand) under the world's penalties:
+   dig/ms, with 3000 for an unknown block so a stale sighting is still dug at a log's pace."
+  ([id] (dig-time id nil {}))
+  ([id held pen] (or (dig/ms id held pen) dig-ms)))
 
 (defn finish-delay
-  "ms from START to FINISH when digging block id: its dig time with margin, since an early
-   FINISH aborts the break and a late one is accepted."
-  [id]
-  (+ (* (dig-time id) 1.35) 200))
+  "ms from START to FINISH when a dig takes ms: with margin, since an early FINISH aborts the
+   break and a late one is accepted."
+  [ms]
+  (+ (* ms finish-margin) finish-slack))
 (def swing-every 350)                 ; ms between arm swings while digging
 (def collect-timeout 10000)           ; ms a collect may take before it fails
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
@@ -165,8 +174,25 @@
   (let [[vx _ vz] (:player/vel world)]
     (and (:player/on-ground? world) (< (abs vx) 0.05) (< (abs vz) 0.05))))
 
+(defn hotbar
+  "The hotbar slots of the inventory, {slot item}: the only slots a dig can hold a tool from."
+  [world]
+  (into {} (filter (fn [[s _]] (<= 0 s 8)) (:player/inventory world))))
+
+(defn choose-tool
+  "[slot item-id] of the tool to dig block id with from the hotbar, [0 nil] for the hand, or
+   :needs-tool when the block needs a tier no held tool of its kind reaches: digging it would
+   break it and drop nothing, and the planner should plan for the tool instead."
+  [world id]
+  (let [best (dig/best-tool id (hotbar world) (penalties world))]
+    (cond
+      best best
+      (and (blocks/needs-tier id) (not (dig/harvest? id nil))) :needs-tool
+      :else [0 nil])))
+
 (defmethod run :dig
-  [world {:intent/keys [target stage since still next-swing finish-at face] :or {stage :settle still 0}} _]
+  [world {:intent/keys [target stage since still next-swing finish-at face slot tool state]
+          :or {stage :settle still 0}} _]
   (let [now (:time/now world)
         since (or since now)
         eye (game/eye world)
@@ -181,18 +207,24 @@
         (> (physics/distance eye (physics/centre target)) (+ reach 0.5))
         (fail world :out-of-reach)
 
+        (= :needs-tool (choose-tool world at-target))
+        (fail world :needs-tool)
+
         (and (>= still 3) (> (- now since) settle-ms))
         (let [seq (inc (:bot/sequence world))
-              face (face-toward eye target)]
+              face (face-toward eye target)
+              [slot tool] (choose-tool world at-target)
+              ms (dig-time at-target tool (penalties world))]
           (-> world
               (assoc :bot/sequence seq)
-              (assoc :player/held-slot 0)
-              (game/emit {:packet/name :set-carried-item :slot 0})
+              (assoc :player/held-slot slot)
+              (game/emit {:packet/name :set-carried-item :slot slot})
               (game/emit {:packet/name :player-action :status 0 :pos target :face face :sequence seq})
               (game/emit {:packet/name :swing :hand 0})
               (intent assoc :intent/stage :digging :intent/face face :intent/started now
-                      :intent/next-swing (+ now swing-every) :intent/finish-at (+ now (finish-delay at-target)))
-              (game/say (str "digging " target " face " face))))
+                      :intent/slot slot :intent/tool tool :intent/dig-ms ms :intent/state at-target
+                      :intent/next-swing (+ now swing-every) :intent/finish-at (+ now (finish-delay ms)))
+              (game/say (str "digging " target " face " face (when tool (str " with " (name (:kind (blocks/tool tool))) " in " slot)) " " ms "ms"))))
 
         :else
         (-> world
@@ -201,18 +233,30 @@
 
       :digging
       (cond
+        (and tool (not= tool (get-in world [:player/inventory slot :item])))
+        (fail world :tool-broke)                       ; the slot no longer holds it: the next dig chooses again
+
         (>= now finish-at)
         (let [seq (inc (:bot/sequence world))]
           (-> world
               (assoc :bot/sequence seq)
               (game/emit {:packet/name :player-action :status 2 :pos target :face face :sequence seq})
-              (terrain/set-block target blocks/air)   ; do not wait for the server's echo
-              done))
+              (terrain/set-block target blocks/air)   ; the server echoes a block-update and an ack; the overlay makes the bot independent of their timing
+              (intent assoc :intent/stage :confirm :intent/since now :intent/sequence seq :intent/confirm-left confirm-ticks)))
 
         (>= now next-swing)
         (-> world (game/emit {:packet/name :swing :hand 0}) (intent assoc :intent/next-swing (+ now swing-every)))
 
-        :else world))))
+        :else world)
+
+      :confirm
+      (let [left (:intent/confirm-left (:plan/intent world))
+            restored? (and at-target (= at-target state))]
+        (cond
+          restored? (fail world :rejected)             ; the server put the block back: the break was refused
+          (>= (:stats/last-ack world -1) (:intent/sequence (:plan/intent world))) (done world)
+          (zero? left) (done world)                    ; no word either way in time: trust the overlay
+          :else (intent world assoc :intent/confirm-left (dec left)))))))
 
 ;; ---------------------------------------------------------------- collect
 

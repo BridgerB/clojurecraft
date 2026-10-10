@@ -266,3 +266,64 @@
     (is (= :no-path (:intent/reason (first (filter #(= :failed (:intention/event %)) (memory/intentions w)))
                                     (:intention/reason (first (filter #(= :failed (:intention/event %)) (memory/intentions w))))))
         "for :no-path")))
+
+;; ---------------------------------------------------------------- digging with tools
+
+(defn digging
+  "In play at [0.5 64 0.5] over stone, with block id at [3 64 0] (and a floor under it), inv
+   as the player inventory, and a dig of it as the current intent, already numbered."
+  [id inv]
+  (let [col (world/column {[3 64 0] id [3 63 0] 1})]
+    (-> (game/init fx/opts)
+        (assoc :bot/phase :play :player/pos [0.5 64.0 0.5] :player/vel [0.0 -0.078 0.0] :player/loaded? true
+               :player/on-ground? true :player/inventory inv :world/chunks {[0 0] col})
+        (memory/remember-column [0 0] col)
+        (assoc :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0 :plan/goals #{:wood}
+               :plan/intents 1
+               :plan/intent {:intent/kind :dig :intent/target [3 64 0] :intent/status :active :intent/id 1 :intent/goal :wood}))))
+
+(def wooden-pickaxe (get clojurecraft.blocks/items :wooden_pickaxe))
+(def stone-pickaxe (get clojurecraft.blocks/items :stone_pickaxe))
+(def iron-ore (first (clojurecraft.blocks/states-where (fn [[n]] (= n :iron_ore)))))
+
+(deftest stone-is-dug-with-the-pickaxe-in-its-slot
+  (let [[w fx] (run (digging 1 {3 {:item wooden-pickaxe :count 1} 0 {:item 1 :count 2}}) (ticks 50 4000))   ; slot 0 holds stone, not a log: :wood stays wanted
+        carried (filter #(= :set-carried-item (:packet/name (second %))) (sent fx))
+        actions (filter #(= :player-action (:packet/name (second %))) (sent fx))
+        [[t-start start] [t-finish finish]] actions]
+    (is (= 3 (:slot (second (first carried)))) "the pickaxe's hotbar slot, not 0")
+    (is (= 3 (:player/held-slot w)))
+    (is (= 0 (:status start)))
+    (is (= 2 (:status finish)))
+    (is (>= (- t-finish t-start) (+ (* 1150 1.35) 200)) "stone with a wooden pickaxe is 1150 ms")
+    (is (< (- t-finish t-start) (+ (* 3000 1.35) 200)) "and not a log's 3000")
+    (is (= (:sequence finish) (inc (:sequence start))))
+    (is (= [3 wooden-pickaxe 1150] ((juxt :intent/slot :intent/tool :intent/dig-ms) (:plan/last w))))))
+
+(deftest a-restored-block-after-finish-is-a-refused-break
+  (let [[w _] (run (digging 1 {3 {:item wooden-pickaxe :count 1}}) (ticks 50 2500))
+        i (:plan/intent w)]
+    (is (= :confirm (:intent/stage i)) "FINISH sent, waiting for the server")
+    (is (= 0 (terrain/block-at w [3 64 0])) "air locally meanwhile")
+    (let [[w2 _] (run w [(packet {:packet/name :block-update :pos [3 64 0] :state 1})
+                         {:event/kind :tick :event/now 2550 :event/rand 0.5}])]
+      (is (= 1 (:plan/attempts w2)) "the dig failed")
+      (is (= :rejected (:intention/reason (last (filter #(= :failed (:intention/event %)) (memory/intentions w2)))))))
+    (let [[w3 _] (run w [(packet {:packet/name :block-changed-ack :sequence (:intent/sequence i)})
+                         {:event/kind :tick :event/now 2550 :event/rand 0.5}])]
+      (is (= :done (:intent/status (:plan/last w3))) "the ack confirms it"))))
+
+(deftest a-tiered-block-with-no-reaching-tool-is-refused-before-start
+  (let [[w fx] (run (digging iron-ore {3 {:item wooden-pickaxe :count 1}}) (ticks 50 1000))]
+    (is (empty? (filter #(= :player-action (:packet/name (second %))) (sent fx))) "no START: it would drop nothing")
+    (is (= :needs-tool (:intention/reason (last (filter #(= :failed (:intention/event %)) (memory/intentions w)))))))
+  (let [[w fx] (run (digging iron-ore {3 {:item stone-pickaxe :count 1}}) (ticks 50 1000))]
+    (is (seq (filter #(= :player-action (:packet/name (second %))) (sent fx))) "a stone pickaxe reaches it")
+    (is (= 1150 (:intent/dig-ms (:plan/intent w))))))
+
+(deftest a-tool-that-vanishes-mid-dig-fails-tool-broke
+  (let [[w _] (run (digging 1 {3 {:item wooden-pickaxe :count 1}}) (ticks 50 1200))]
+    (is (= :digging (:intent/stage (:plan/intent w))))
+    (let [[w2 _] (run w [(packet {:packet/name :set-player-inventory :slot 3 :item nil})
+                         {:event/kind :tick :event/now 1250 :event/rand 0.5}])]
+      (is (= :tool-broke (:intention/reason (last (filter #(= :failed (:intention/event %)) (memory/intentions w2)))))))))
