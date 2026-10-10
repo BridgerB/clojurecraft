@@ -3,12 +3,13 @@
    external events, feeds the reducer, drains :bot/effects, prints RESULT.
 
      clojure -M:run --port 25571 [--name N] [--until play|wood|table|pickaxe] [--events stdin]
-                    [--timeout-ms 120000] [--hold-ms 0] [--record run.edn]
+                    [--timeout-ms 120000] [--hold-ms 0] [--record run.edn] [--telemetry t.edn]
      clojure -M:replay run.edn
 
    With --events stdin the bot reads EDN events (one per line) from stdin: that is how the
    fixture (clojure -M:harness, its own process) tells it to go. Without it, a planned --until
-   starts where the bot stands, once it is loaded."
+   starts where the bot stands, once it is loaded. --telemetry writes one EDN line per change of
+   the world, from a watch on the atom (clojurecraft.watch) that never slows the loop."
   (:require [clojure.core.async :as a]
             [clojure.edn :as edn]
             [clojure.string :as str]
@@ -19,6 +20,7 @@
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.watch :as watch]
             [clojurecraft.wood])
   (:gen-class))
 
@@ -116,7 +118,7 @@
   "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,
    hold for an outside judge when ok, and exit 0 when ok else 1."
   [& args]
-  (let [{:keys [host port name until timeout-ms hold-ms events record]
+  (let [{:keys [host port name until timeout-ms hold-ms events record telemetry]
          :or {host "127.0.0.1" port "25571" name "Clj_wood" until "wood" timeout-ms "120000" hold-ms "0"}}
         (parse-args args)
         opts {:host host :port (Long/parseLong port) :name name}
@@ -128,7 +130,8 @@
         tap (some-> record record/tap)
         c (conn/open opts)
         queue (a/chan 16)
-        world* (atom (game/init opts))]
+        world* (atom (game/init opts))
+        watcher (some->> telemetry (watch/telemetry! world*))]
     (stamp "connected to" host port "as" name)
     (cond
       (= events "stdin") (read-events! *in* queue)                     ; a fixture speaks through the pipe
@@ -142,6 +145,7 @@
         (stamp "holding" hold "ms for an outside judge")
         (let [until (+ (now) hold)] (run-loop c queue world* (fn [_] (> (now) until)) tap)))
       (some-> tap :close (apply []))
+      (when watcher ((:close watcher)) (stamp "telemetry dropped" ((:dropped watcher)) "lines"))
       ((:close! c))
       (shutdown-agents)
       (System/exit (if ok 0 1)))))

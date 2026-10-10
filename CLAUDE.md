@@ -43,7 +43,8 @@ src/clojurecraft/record.clj   event recorder and replay
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin
 src/clojurecraft/rcon.clj     RCON client (fixtures, CI judge); `clojure -M:rcon`
-src/clojurecraft/main.clj     loop, effects, RESULT line, --record, replay
+src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successive worlds, bounded, off-thread
+src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
 dev/clojurecraft/datagen.clj  vanilla --reports → resources/clojurecraft/*.edn
 ```
 
@@ -58,6 +59,7 @@ clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.p
 clojure -M:run --port 25571 --until play --hold-ms 20000     # just connect and stay in-world
 clojure -M:run ... --record data/runs/x.edn                   # record every event
 clojure -M:replay data/runs/x.edn                             # replay it with no server
+clojure -M:run ... --telemetry data/runs/t.edn                # one EDN line per change of the world
 clojure -M:fmt fix src test dev                               # format (cljfmt)
 clojure -M:brain                                              # brain checker (must be zero)
 clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data get entity Clj_wood Inventory
