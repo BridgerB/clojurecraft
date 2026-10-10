@@ -166,11 +166,21 @@
       (shutdown-agents)
       (System/exit (if ok 0 1)))))
 
+(defn outcome
+  "A RESULT as a replay is held to it: everything but the last intent (an executor's internals
+   caught mid-tick) and the position (where the last tick's physics happened to leave the
+   feet). A dig that gained a :confirm stage since the recording ends a tick later, and the
+   same run then stands a fraction of a block elsewhere when its goal is met. What the run
+   held, reached and reported is the outcome."
+  [result]
+  (-> result (update :plan dissoc :plan/last) (dissoc :pos)))
+
 (defn replayed
   "The RESULT of folding the reducer over a recording, judged as the run judged itself (its
    recorded --until), plus :replay/effects (every effect identical, or the first mismatch) and
    :replay/result (:identical when the fold reaches the RESULT the run printed: every attribute
-   it printed, with the same value; attributes the model gained since are accretion, not change)."
+   of its outcome (see outcome), with the same value; attributes the model gained since are
+   accretion, not change)."
   [path]
   (let [world0 (game/init {:host "replay" :port 0 :name "Clj_replay"})
         final (record/replay step world0 path)
@@ -183,7 +193,7 @@
                                  (= check :record/no-effects) :not-recorded
                                  :else check)
            :replay/result (cond (nil? recorded) :not-recorded
-                                (record/accretes? recorded r) :identical
+                                (record/accretes? (outcome recorded) (outcome r)) :identical
                                 :else {:recorded recorded}))))
 
 (defn replay
