@@ -12,19 +12,6 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]))
 
-(def sibling-dirs
-  {"steve" (or (System/getenv "STEVE_DIR") "/Users/bridger/Developer/mc/upstream/steve")
-   "ruststeve" (or (System/getenv "RUSTSTEVE_DIR") "/Users/bridger/Developer/mc/upstream/ruststeve")})
-
-(defn notes
-  "Every .md file under root as {:file :rel :text}; :rel is the path from root without .md."
-  [root]
-  (->> (file-seq (io/file root))
-       (filter #(and (.isFile ^java.io.File %) (str/ends-with? (.getName ^java.io.File %) ".md")))
-       (map (fn [^java.io.File f]
-              (let [rel (subs (.getPath f) (inc (count (.getPath (io/file root)))))]
-                {:file f :rel (str/replace rel #"\.md$" "") :text (slurp f)})))))
-
 (defn frontmatter
   "The YAML between the opening \"---\" line and the next \"---\", or nil when the note has none."
   [text]
@@ -79,6 +66,28 @@
     (let [i (str/index-of hay needle from)]
       (if (nil? i) acc (recur (inc i) (conj acc i))))))
 
+(defn hub?
+  "Is the note a hub (an _moc, the _index, or a top-level manual note)? Hubs need no inbound link
+   and no sourceRefs."
+  [rel]
+  (or (str/ends-with? rel "_moc") (str/ends-with? rel "_index")
+      (contains? #{"operating-manual" "conventions" "rules" "glossary" "questions"} (last (str/split rel #"/")))))
+
+;;;; I/O: the note files, the sources, the report ;;;;
+
+(def sibling-dirs
+  {"steve" (or (System/getenv "STEVE_DIR") "/Users/bridger/Developer/mc/upstream/steve")
+   "ruststeve" (or (System/getenv "RUSTSTEVE_DIR") "/Users/bridger/Developer/mc/upstream/ruststeve")})
+
+(defn notes
+  "Every .md file under root as {:file :rel :text}; :rel is the path from root without .md."
+  [root]
+  (->> (file-seq (io/file root))
+       (filter #(and (.isFile ^java.io.File %) (str/ends-with? (.getName ^java.io.File %) ".md")))
+       (map (fn [^java.io.File f]
+              (let [rel (subs (.getPath f) (inc (count (.getPath (io/file root)))))]
+                {:file f :rel (str/replace rel #"\.md$" "") :text (slurp f)})))))
+
 (defn resolve-path
   "The file a sourceRef path names: under a sibling checkout for a steve: or ruststeve: prefix,
    else relative to the repo root."
@@ -86,13 +95,6 @@
   (if-let [[_ prefix rest] (re-matches #"(steve|ruststeve):(.*)" path)]
     (io/file (sibling-dirs prefix) rest)
     (io/file repo path)))
-
-(defn hub?
-  "Is the note a hub (an _moc, the _index, or a top-level manual note)? Hubs need no inbound link
-   and no sourceRefs."
-  [rel]
-  (or (str/ends-with? rel "_moc") (str/ends-with? rel "_index")
-      (contains? #{"operating-manual" "conventions" "rules" "glossary" "questions"} (last (str/split rel #"/")))))
 
 (defn check
   "Check every note under brain-dir; returns {:notes n :broken :ambiguous :orphans :unresolved

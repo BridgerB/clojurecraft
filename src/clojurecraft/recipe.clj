@@ -125,11 +125,12 @@
   "counts with n items taken from the names in set s, in name order; takes what there is when
    counts hold fewer than n."
   [counts s n]
-  (loop [counts counts [item & more] (sort s) n n]
-    (if (or (zero? n) (nil? item))
-      counts
-      (let [k (min n (get counts item 0))]
-        (recur (update counts item (fnil - 0) k) more (- n k))))))
+  (first (reduce (fn [[counts n] item]
+                   (if (zero? n)
+                     (reduced [counts n])
+                     (let [k (min n (get counts item 0))]
+                       [(update counts item (fnil - 0) k) (- n k)])))
+                 [counts n] (sort s))))
 
 ;; ---------------------------------------------------------------- clicks
 
@@ -141,25 +142,25 @@
    the window being clicked (window 0 by default)."
   ([inventory r size] (clicks inventory r size player->container-slot))
   ([inventory r size slot-of]
-   (let [groups (group-by val (placement r size))]
-     (loop [[[s cells] & more] (seq groups) used {} acc []]
-       (if (nil? s)
-         acc
-         (let [n (count cells)
-               source (->> (sort-by key inventory)
-                           (filter (fn [[slot {:keys [item count]}]]
-                                     (and (slot-of slot)
-                                          (contains? s (item-name item))
-                                          (>= (- count (get used slot 0)) n))))
-                           ffirst)]
-           (when source
-             (let [cs (slot-of source)
-                   left (- (get-in inventory [source :count]) (get used source 0) n)]
-               (recur more (update used source (fnil + 0) n)
-                      (-> acc
-                          (conj {:click/slot cs :click/button 0 :click/mode 0})
-                          (into (for [[g _] (sort-by key cells)] {:click/slot g :click/button 1 :click/mode 0}))
-                          (cond-> (pos? left) (conj {:click/slot cs :click/button 0 :click/mode 0}))))))))))))
+   (some-> (reduce (fn [[used acc] [s cells]]
+                     (let [n (count cells)
+                           source (->> (sort-by key inventory)
+                                       (filter (fn [[slot {:keys [item count]}]]
+                                                 (and (slot-of slot)
+                                                      (contains? s (item-name item))
+                                                      (>= (- count (get used slot 0)) n))))
+                                       ffirst)]
+                       (if-not source
+                         (reduced nil)
+                         (let [cs (slot-of source)
+                               left (- (get-in inventory [source :count]) (get used source 0) n)]
+                           [(update used source (fnil + 0) n)
+                            (-> acc
+                                (conj {:click/slot cs :click/button 0 :click/mode 0})
+                                (into (for [[g _] (sort-by key cells)] {:click/slot g :click/button 1 :click/mode 0}))
+                                (cond-> (pos? left) (conj {:click/slot cs :click/button 0 :click/mode 0})))]))))
+                   [{} []] (group-by val (placement r size)))
+           second)))
 
 ;; ---------------------------------------------------------------- the graph
 
@@ -199,8 +200,7 @@
    a size×size grid: {:action :craft :recipe id}, {:action :gather :want :logs}, :stuck, or nil
    when every want is already held."
   [counts wants size]
-  (loop [counts counts [[item n] & more] wants]
-    (if (nil? item)
-      nil
-      (let [[counts a] (resolve-want counts #{item} n size 0)]
-        (if a a (recur counts more))))))
+  (second (reduce (fn [[counts _] [item n]]
+                    (let [[counts a] (resolve-want counts #{item} n size 0)]
+                      (if a (reduced [counts a]) [counts nil])))
+                  [counts nil] wants)))

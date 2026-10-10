@@ -30,6 +30,8 @@
           (.get bb) (.get bb)
           {:id id :type type :body (String. body StandardCharsets/UTF_8)})))))
 
+;;;; I/O: the socket ;;;;
+
 (defn read-response "Block for one whole response packet and decode it." [^DataInputStream in]
   (let [head (byte-array 4)]
     (.readFully in head)

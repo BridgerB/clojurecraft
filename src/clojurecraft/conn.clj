@@ -13,16 +13,6 @@
            [java.net InetSocketAddress Socket]
            [java.util.zip Deflater Inflater]))
 
-(defn read-varint-stream
-  "A varint from the socket, blocking until its bytes arrive (frame lengths)."
-  ^long [^DataInputStream in]
-  (loop [result 0 shift 0]
-    (let [x (.readUnsignedByte in)
-          result (bit-or result (bit-shift-left (bit-and x 0x7F) shift))]
-      (if (zero? (bit-and x 0x80))
-        result
-        (recur result (+ shift 7))))))
-
 (defn inflate
   "zlib-decompress data into exactly size bytes, the uncompressed length the frame
    declared."
@@ -41,6 +31,18 @@
       (.write baos buf 0 (.deflate d buf)))
     (.end d)
     (.toByteArray baos)))
+
+;;;; I/O: the socket and its threads ;;;;
+
+(defn read-varint-stream
+  "A varint from the socket, blocking until its bytes arrive (frame lengths)."
+  ^long [^DataInputStream in]
+  (loop [result 0 shift 0]
+    (let [x (.readUnsignedByte in)
+          result (bit-or result (bit-shift-left (bit-and x 0x7F) shift))]
+      (if (zero? (bit-and x 0x80))
+        result
+        (recur result (+ shift 7))))))
 
 (defn read-frame
   "One frame's packet bytes (id + body), decompressed when a threshold is in force."

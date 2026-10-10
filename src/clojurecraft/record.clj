@@ -27,6 +27,8 @@
   [event]
   (if (:event/packet event) (update event :event/packet #(apply dissoc % derived)) event))
 
+;;;; I/O: recording files ;;;;
+
 (defn tap
   "A writer for a recording: {:write (fn [event]) :effects (fn [effects]) :close (fn [])}.
    Call :write before applying an event and :effects with what applying it produced. Events are
@@ -54,11 +56,11 @@
   [path]
   (let [es (entries path)]
     (when (some :record/effects es)
-      (loop [[e & more] es acc []]
-        (cond (nil? e) acc
-              (:event/kind e) (let [fx (:record/effects (first more))]
-                                (recur (if fx (rest more) more) (conj acc (or fx []))))
-              :else (recur more acc))))))
+      (reduce (fn [acc e]
+                (cond (:event/kind e) (conj acc [])                              ; an event: no effects yet
+                      (:record/effects e) (conj (pop acc) (:record/effects e))   ; its effects follow it
+                      :else acc))
+              [] es))))
 
 (defn replay
   "Fold step over the recorded events from world0; returns the final world."
@@ -71,12 +73,12 @@
    at the first difference; :record/no-effects for a recording without effects."
   [step world0 path]
   (if-let [recorded (effects path)]
-    (loop [w world0 [e & more] (events path) [r & rs] recorded i 0]
-      (if (nil? e)
-        nil
-        (let [w (step w e)
-              produced (:bot/effects w)]
-          (if (= produced r)
-            (recur (assoc w :bot/effects []) more rs (inc i))
-            {:record/mismatch {:index i :event e :recorded r :replayed produced}}))))
+    (let [end (reduce (fn [w [i e r]]
+                        (let [w (step w e)
+                              produced (:bot/effects w)]
+                          (if (= produced r)
+                            (assoc w :bot/effects [])
+                            (reduced {:record/mismatch {:index i :event e :recorded r :replayed produced}}))))
+                      world0 (map vector (range) (events path) recorded))]
+      (when (:record/mismatch end) end))
     :record/no-effects))

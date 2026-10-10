@@ -85,16 +85,6 @@
   (when (= block :crafting_table)
     (memory/nearest world (game/eye world) table-search memory/crafting-table?)))
 
-(defn consume
-  "Take up to n items from counts, drawing from the items of set s in sorted order; never
-   below zero."
-  [counts s n]
-  (loop [counts counts [item & more] (sort s) n n]
-    (if (or (zero? n) (nil? item))
-      counts
-      (let [k (min n (get counts item 0))]
-        (recur (update counts item (fnil - 0) k) more (- n k))))))
-
 ;; ---------------------------------------------------------------- the planner
 
 (declare resolve-need)
@@ -125,10 +115,10 @@
     (let [s (need-set k)
           h (recipe/have counts s)]
       (cond
-        (>= h n) [(consume counts s n) nil]
+        (>= h n) [(recipe/consume counts s n) nil]
         (> depth max-depth) [counts :stuck]
         :else
-        (let [counts (consume counts s h)
+        (let [counts (recipe/consume counts s h)
               missing (- n h)
               rows (->> (mapcat by-item s)
                         distinct
@@ -147,11 +137,10 @@
 (defn next-row
   "The producer row to act on next for a goal, nil when its provides are all held, or :stuck."
   [world goal]
-  (loop [counts (counts world) [[k n] & more] (seq (:goal/provides goal))]
-    (if (nil? k)
-      nil
-      (let [[counts a] (resolve-need world counts k n 0)]
-        (if a a (recur counts more))))))
+  (second (reduce (fn [[counts _] [k n]]
+                    (let [[counts a] (resolve-need world counts k n 0)]
+                      (if a (reduced [counts a]) [counts nil])))
+                  [(counts world) nil] (:goal/provides goal))))
 
 (defn decide
   "The next intent toward goal: continue a log chain in flight, else act on the row the needs

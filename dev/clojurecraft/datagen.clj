@@ -14,67 +14,16 @@
   "s without a leading \"minecraft:\"."
   [s]
   (str/replace s #"^minecraft:" ""))
+
 (defn kebab-kw
   "A vanilla id as a kebab-case keyword: \"minecraft:keep_alive\" → :keep-alive."
   [s]
   (keyword (str/replace (strip-ns s) "_" "-")))
+
 (defn name-kw
   "A vanilla id as a keyword that keeps its underscores: \"minecraft:oak_log\" → :oak_log."
   [s]
   (keyword (strip-ns s)))
-
-(defn packets
-  "{state {:s2c {name id} :c2s {name id}}} from reports/packets.json."
-  [reports]
-  (let [j (json/read-str (slurp (io/file reports "packets.json")))
-        dir {"clientbound" :s2c "serverbound" :c2s}]
-    (into (sorted-map)
-          (for [[state dirs] j]
-            [(keyword state)
-             (into (sorted-map)
-                   (for [[d ps] dirs]
-                     [(dir d) (into (sorted-map)
-                                    (for [[n m] ps] [(kebab-kw n) (get m "protocol_id")]))]))]))))
-
-(defn blocks
-  "[[name type min-state max-state] ...] sorted by state id, from reports/blocks.json."
-  [reports]
-  (let [j (json/read-str (slurp (io/file reports "blocks.json")))]
-    (->> j
-         (map (fn [[n m]]
-                (let [ids (map #(get % "id") (get m "states"))]
-                  [(name-kw n) (name-kw (get-in m ["definition" "type"])) (apply min ids) (apply max ids)])))
-         (sort-by #(nth % 2))
-         vec)))
-
-(defn registry
-  "{name-kw protocol-id} for the entries of registry reg (e.g. \"minecraft:item\") in
-   reports/registries.json, sorted by name."
-  [reports reg]
-  (let [j (json/read-str (slurp (io/file reports "registries.json")))]
-    (into (sorted-map)
-          (for [[n m] (get-in j [reg "entries"])] [(name-kw n) (get m "protocol_id")]))))
-
-;; ---------------------------------------------------------------- jar data
-
-(defn inner-jar-entries
-  "{path json-string} for version.json and every data/minecraft/{recipe,tags/item}/*.json in
-   the inner jar."
-  [server-jar]
-  (with-open [outer (ZipInputStream. (io/input-stream server-jar))]
-    (let [inner (loop []
-                  (let [e (.getNextEntry outer)]
-                    (cond (nil? e) (throw (ex-info "no inner server jar" {:jar server-jar}))
-                          (re-matches #"META-INF/versions/.*/server-.*\.jar" (.getName e)) (.readAllBytes outer)
-                          :else (recur))))]
-      (with-open [z (ZipInputStream. (java.io.ByteArrayInputStream. inner))]
-        (loop [acc {}]
-          (if-let [e (.getNextEntry z)]
-            (let [n (.getName e)]
-              (recur (if (or (= n "version.json") (re-matches #"data/minecraft/(recipe/[^/]+|tags/item/.+)\.json" n))
-                       (assoc acc n (String. (.readAllBytes z) "UTF-8"))
-                       acc)))
-            acc))))))
 
 (defn version
   "The server's own version facts from the inner jar's version.json: the protocol number is
@@ -90,6 +39,7 @@
   "The file name of a .json path without directory or extension, or nil."
   [path]
   (second (re-find #"/([^/]+)\.json$" path)))
+
 (defn tag-name
   "The tag a data/minecraft/tags/item/*.json path defines (subfolders kept), or nil."
   [path]
@@ -156,6 +106,59 @@
                   :recipe/ingredients (mapv #(ingredient tags %) (get r "ingredients")))))
        (sort-by :recipe/id)
        vec))
+
+;;;; I/O: reports, the server jar, the EDN files ;;;;
+
+(defn packets
+  "{state {:s2c {name id} :c2s {name id}}} from reports/packets.json."
+  [reports]
+  (let [j (json/read-str (slurp (io/file reports "packets.json")))
+        dir {"clientbound" :s2c "serverbound" :c2s}]
+    (into (sorted-map)
+          (for [[state dirs] j]
+            [(keyword state)
+             (into (sorted-map)
+                   (for [[d ps] dirs]
+                     [(dir d) (into (sorted-map)
+                                    (for [[n m] ps] [(kebab-kw n) (get m "protocol_id")]))]))]))))
+
+(defn blocks
+  "[[name type min-state max-state] ...] sorted by state id, from reports/blocks.json."
+  [reports]
+  (let [j (json/read-str (slurp (io/file reports "blocks.json")))]
+    (->> j
+         (map (fn [[n m]]
+                (let [ids (map #(get % "id") (get m "states"))]
+                  [(name-kw n) (name-kw (get-in m ["definition" "type"])) (apply min ids) (apply max ids)])))
+         (sort-by #(nth % 2))
+         vec)))
+
+(defn registry
+  "{name-kw protocol-id} for the entries of registry reg (e.g. \"minecraft:item\") in
+   reports/registries.json, sorted by name."
+  [reports reg]
+  (let [j (json/read-str (slurp (io/file reports "registries.json")))]
+    (into (sorted-map)
+          (for [[n m] (get-in j [reg "entries"])] [(name-kw n) (get m "protocol_id")]))))
+
+(defn inner-jar-entries
+  "{path json-string} for version.json and every data/minecraft/{recipe,tags/item}/*.json in
+   the inner jar."
+  [server-jar]
+  (with-open [outer (ZipInputStream. (io/input-stream server-jar))]
+    (let [inner (loop []
+                  (let [e (.getNextEntry outer)]
+                    (cond (nil? e) (throw (ex-info "no inner server jar" {:jar server-jar}))
+                          (re-matches #"META-INF/versions/.*/server-.*\.jar" (.getName e)) (.readAllBytes outer)
+                          :else (recur))))]
+      (with-open [z (ZipInputStream. (java.io.ByteArrayInputStream. inner))]
+        (loop [acc {}]
+          (if-let [e (.getNextEntry z)]
+            (let [n (.getName e)]
+              (recur (if (or (= n "version.json") (re-matches #"data/minecraft/(recipe/[^/]+|tags/item/.+)\.json" n))
+                       (assoc acc n (String. (.readAllBytes z) "UTF-8"))
+                       acc)))
+            acc))))))
 
 (defn write-rows
   "Write rows to file f as an EDN vector, one row per line, after the header comment."

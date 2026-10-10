@@ -34,6 +34,29 @@
   [args]
   (into {} (map (fn [[k v]] [(keyword (subs k 2)) v]) (partition 2 args))))
 
+(defn result
+  "The RESULT map: :ok, :until, the reason, the game summary, held items, the nearest
+   remembered table and the plan summary (once a plan began)."
+  [world until ok]
+  (merge {:ok ok
+          :until until
+          :reason (cond ok :goal
+                        (:bot/disconnected world) :disconnected
+                        (:bot/closed world) :closed
+                        (plan/failed? world) (:plan/reason world)
+                        :else :timeout)}
+         (game/summary world)
+         (let [held (recipe/counts (:player/inventory world))]
+           {:held held
+            :planks (recipe/have held (recipe/tags :planks))
+            :sticks (get held :stick 0)
+            :tables (get held :crafting_table 0)})
+         (when-let [t (memory/nearest world (game/eye world) 32 memory/crafting-table?)]
+           {:table/pos t})
+         (when (:plan/status world) {:plan (plan/summary world)})))
+
+;;;; I/O: the clock, stderr, the socket, the atom ;;;;
+
 (defn- now [] (System/currentTimeMillis))
 
 (defn stamp "One timestamped line on stderr; stdout carries only RESULT." [& xs]
@@ -72,27 +95,6 @@
         (if (or (stop? w) (:bot/closed w) (:bot/disconnected w))
           w
           (recur (if (= :tick (:event/kind event)) (+ next-tick 50) next-tick)))))))
-
-(defn result
-  "The RESULT map: :ok, :until, the reason, the game summary, held items, the nearest
-   remembered table and the plan summary (once a plan began)."
-  [world until ok]
-  (merge {:ok ok
-          :until until
-          :reason (cond ok :goal
-                        (:bot/disconnected world) :disconnected
-                        (:bot/closed world) :closed
-                        (plan/failed? world) (:plan/reason world)
-                        :else :timeout)}
-         (game/summary world)
-         (let [held (recipe/counts (:player/inventory world))]
-           {:held held
-            :planks (recipe/have held (recipe/tags :planks))
-            :sticks (get held :stick 0)
-            :tables (get held :crafting_table 0)})
-         (when-let [t (memory/nearest world (game/eye world) 32 memory/crafting-table?)]
-           {:table/pos t})
-         (when (:plan/status world) {:plan (plan/summary world)})))
 
 (defn read-events!
   "Feed EDN events from a reader (the fixture's stdout, piped in) onto the events channel until
