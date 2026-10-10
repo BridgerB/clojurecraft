@@ -12,7 +12,7 @@ sourceRefs:
   - "ruststeve:src/bot/crafting.rs#fn find_ingredient_slot(window: &Window, ingredient: &RecipeItem) -> Option<usize> {"
   - "ruststeve:src/bot/crafting.rs#/// result or grid slots (cycle 6): searching the whole window found the plank just placed in the grid once"
   - src/clojurecraft/recipe.clj#defn clicks
-  - src/clojurecraft/recipe.clj#defn- resolve-want
+  - src/clojurecraft/recipe.clj#defn resolve-want
 related:
   - "[[siblings/_moc|Siblings]]"
   - "[[recipe-clicks]]"

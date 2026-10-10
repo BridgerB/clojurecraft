@@ -9,7 +9,7 @@ lastUpdated: 2026-10-10
 verifiedAgainst: 96ac5ed
 sourceRefs:
   - src/clojurecraft/plan.clj#defn choose
-  - src/clojurecraft/plan.clj#defn- begin
+  - src/clojurecraft/plan.clj#defn begin
   - src/clojurecraft/plan.clj#defn goals-for
   - resources/clojurecraft/goals.edn#:goal/until "wood"
   - src/clojurecraft/spec.clj#(s/def :go/goals (s/coll-of keyword?))

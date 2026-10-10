@@ -45,7 +45,7 @@
 (defn done? [i] (= :done (:intent/status i)))
 (defn failed? [i] (= :failed (:intent/status i)))
 
-(defn- toward
+(defn toward
   "Controls that walk toward a point, jumping when blocked."
   [world point yaw-offset]
   (let [[yaw pitch] (physics/look-at (game/eye world) point)
@@ -152,7 +152,7 @@
 
 ;; ---------------------------------------------------------------- collect
 
-(defn- nearest-item [world near]
+(defn nearest-item [world near]
   (->> (:world/entities world)
        vals
        (map (fn [e] [(physics/distance near (:entity/pos e)) e]))

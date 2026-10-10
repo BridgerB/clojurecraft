@@ -13,7 +13,7 @@ sourceRefs:
   - src/clojurecraft/plan.clj#defmulti done-by
   - src/clojurecraft/plan.clj#defmulti act
   - src/clojurecraft/plan.clj#defmulti next-intent
-  - src/clojurecraft/plan.clj#defn- run-intent
+  - src/clojurecraft/plan.clj#defn run-intent
   - src/clojurecraft/plan.clj#defn choose
   - src/clojurecraft/intent.clj#defmulti run
 related:

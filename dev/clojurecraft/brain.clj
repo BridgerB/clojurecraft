@@ -16,32 +16,32 @@
   {"steve" (or (System/getenv "STEVE_DIR") "/Users/bridger/Developer/mc/upstream/steve")
    "ruststeve" (or (System/getenv "RUSTSTEVE_DIR") "/Users/bridger/Developer/mc/upstream/ruststeve")})
 
-(defn- notes [root]
+(defn notes [root]
   (->> (file-seq (io/file root))
        (filter #(and (.isFile ^java.io.File %) (str/ends-with? (.getName ^java.io.File %) ".md")))
        (map (fn [^java.io.File f]
               (let [rel (subs (.getPath f) (inc (count (.getPath (io/file root)))))]
                 {:file f :rel (str/replace rel #"\.md$" "") :text (slurp f)})))))
 
-(defn- frontmatter [text]
+(defn frontmatter [text]
   (when (str/starts-with? text "---\n")
     (let [end (str/index-of text "\n---" 4)]
       (subs text 4 end))))
 
-(defn- fm-field [fm k]
+(defn fm-field [fm k]
   (some->> (re-find (re-pattern (str "(?m)^" k ":\\s*(.*)$")) fm) second str/trim))
 
-(defn- fm-list [fm k]
+(defn fm-list [fm k]
   (let [m (re-find (re-pattern (str "(?m)^" k ":\\s*\\n((?:\\s+- .*\\n?)*)")) fm)]
     (when m (->> (str/split-lines (second m)) (map str/trim) (filter #(str/starts-with? % "- ")) (map #(subs % 2)) (map str/trim) (map #(str/replace % #"^\"|\"$" "")) vec))))
 
-(defn- strip-code [text]
+(defn strip-code [text]
   (-> text (str/replace #"(?s)```.*?```" "") (str/replace #"`[^`\n]*`" "")))
 
-(defn- plain [s]
+(defn plain [s]
   (-> s (str/replace #"^\s*([-*+]|\d+\.)\s+" "") (str/replace #"[*_`#]" "") (str/replace #"\s+" " ") str/trim))
 
-(defn- flatten-file [text]
+(defn flatten-file [text]
   (let [lines (str/split-lines text)
         sb (StringBuilder.)
         line-of (java.util.ArrayList.)]
@@ -54,17 +54,17 @@
           (.append sb s))))
     [(str sb) line-of]))
 
-(defn- occurrences [^String hay ^String needle]
+(defn occurrences [^String hay ^String needle]
   (loop [from 0 acc []]
     (let [i (str/index-of hay needle from)]
       (if (nil? i) acc (recur (inc i) (conj acc i))))))
 
-(defn- resolve-path [repo path]
+(defn resolve-path [repo path]
   (if-let [[_ prefix rest] (re-matches #"(steve|ruststeve):(.*)" path)]
     (io/file (sibling-dirs prefix) rest)
     (io/file repo path)))
 
-(defn- hub? [rel]
+(defn hub? [rel]
   (or (str/ends-with? rel "_moc") (str/ends-with? rel "_index")
       (contains? #{"operating-manual" "conventions" "rules" "glossary" "questions"} (last (str/split rel #"/")))))
 

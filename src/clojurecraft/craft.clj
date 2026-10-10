@@ -25,7 +25,7 @@
 (defn- now [world] (:time/now world))
 (defn- set-intent [world & kvs] (apply update world :plan/intent assoc kvs))
 
-(defn- dirty-grid-slot [{:view/keys [size grid]}]
+(defn dirty-grid-slot [{:view/keys [size grid]}]
   (first (filter #(get grid %) (range 1 (inc (* size size))))))
 
 (defmulti stage (fn [_world i _view] (:intent/stage i)))

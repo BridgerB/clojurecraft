@@ -27,7 +27,7 @@
           (.get bb) (.get bb)
           {:id id :type type :body (String. body StandardCharsets/UTF_8)})))))
 
-(defn- read-response [^DataInputStream in]
+(defn read-response [^DataInputStream in]
   (let [head (byte-array 4)]
     (.readFully in head)
     (let [len (.getInt (.order (ByteBuffer/wrap head) ByteOrder/LITTLE_ENDIAN))

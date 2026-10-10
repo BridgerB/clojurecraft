@@ -9,7 +9,7 @@ lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :use-item-on]
-  - src/clojurecraft/sim.clj#defn- overlaps-player?
+  - src/clojurecraft/sim.clj#defn overlaps-player?
   - src/clojurecraft/sim.clj#defn block-at
   - test/clojurecraft/sim_test.clj#places-a-table-and-crafts-a-wooden-pickaxe
 related:

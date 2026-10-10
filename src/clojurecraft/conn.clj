@@ -10,7 +10,7 @@
            [java.net InetSocketAddress Socket]
            [java.util.zip Deflater Inflater]))
 
-(defn- read-varint-stream ^long [^DataInputStream in]
+(defn read-varint-stream ^long [^DataInputStream in]
   (loop [result 0 shift 0]
     (let [x (.readUnsignedByte in)
           result (bit-or result (bit-shift-left (bit-and x 0x7F) shift))]
@@ -18,14 +18,14 @@
         result
         (recur result (+ shift 7))))))
 
-(defn- inflate ^bytes [^bytes data ^long size]
+(defn inflate ^bytes [^bytes data ^long size]
   (let [inf (Inflater.) out (byte-array size)]
     (.setInput inf data)
     (.inflate inf out)
     (.end inf)
     out))
 
-(defn- deflate ^bytes [^bytes data]
+(defn deflate ^bytes [^bytes data]
   (let [d (doto (Deflater.) (.setInput data) (.finish))
         buf (byte-array 8192)
         baos (ByteArrayOutputStream.)]

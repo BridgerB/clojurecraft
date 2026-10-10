@@ -9,9 +9,9 @@ lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
   - src/clojurecraft/recipe.clj#defn next-action
-  - src/clojurecraft/recipe.clj#defn- resolve-want
+  - src/clojurecraft/recipe.clj#defn resolve-want
   - src/clojurecraft/recipe.clj#def max-depth 6
-  - src/clojurecraft/recipe.clj#defn- consume
+  - src/clojurecraft/recipe.clj#defn consume
   - test/clojurecraft/recipe_test.clj#the-graph-walks-to-the-next-action
 related:
   - "[[bot/crafting/_moc|Crafting]]"

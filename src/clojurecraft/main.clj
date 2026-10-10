@@ -32,10 +32,10 @@
 
 (defn- now [] (System/currentTimeMillis))
 
-(defn- stamp [& xs]
+(defn stamp [& xs]
   (binding [*out* *err*] (println (str (java.time.LocalTime/now)) (str/join " " xs)) (flush)))
 
-(defn- perform [{:effect/keys [kind packet message]} out]
+(defn perform [{:effect/keys [kind packet message]} out]
   (case kind
     :send (a/>!! out packet)
     :log (stamp message)))

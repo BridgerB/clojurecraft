@@ -11,7 +11,7 @@ sourceRefs:
   - src/clojurecraft/memory.clj#defn watched?
   - src/clojurecraft/memory.clj#defn observe
   - src/clojurecraft/memory.clj#defn nearest-log
-  - src/clojurecraft/game.clj#defn- load-chunk
+  - src/clojurecraft/game.clj#defn load-chunk
   - test/clojurecraft/game_test.clj#sightings remember logs and their later states
 related:
   - "[[bot/world/_moc|World]]"

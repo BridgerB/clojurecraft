@@ -9,7 +9,7 @@ lastUpdated: 2026-10-10
 verifiedAgainst: 9c46e4b
 sourceRefs:
   - src/clojurecraft/memory.clj#(def schema
-  - src/clojurecraft/memory.clj#defn- observation
+  - src/clojurecraft/memory.clj#defn observation
   - deps.edn#datascript/datascript {:mvn/version "1.8.1"}
   - docs/hickey.md#The version that wins the race is an append-only set of
 related:

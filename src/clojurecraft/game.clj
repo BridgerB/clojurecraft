@@ -113,22 +113,22 @@
         (= s 45) 40
         :else nil))
 
-(defn- set-slot [world slot item]
+(defn set-slot [world slot item]
   (if item (assoc-in world [:player/inventory slot] item) (update world :player/inventory dissoc slot)))
 
 ;; ---------------------------------------------------------------- packets
 
-(defn- on-ground-flag [world] (if (:player/on-ground? world) 1 0))
+(defn on-ground-flag [world] (if (:player/on-ground? world) 1 0))
 
-(defn- send-position [world]
+(defn send-position [world]
   (let [[x y z] (:player/pos world) [yaw pitch] (:player/look world)]
     (-> world
         (emit {:packet/name :move-player-pos-rot :x x :y y :z z :yaw yaw :pitch pitch :flags (on-ground-flag world)})
         (assoc :net/sent-pos (:player/pos world) :net/sent-look (:player/look world) :net/sent-tick (:time/tick world)))))
 
-(defn- relative [flags bit old new] (if (pos? (bit-and flags bit)) (+ old new) new))
+(defn relative [flags bit old new] (if (pos? (bit-and flags bit)) (+ old new) new))
 
-(defn- apply-teleport [world {:keys [teleport-id x y z yaw pitch flags]}]
+(defn apply-teleport [world {:keys [teleport-id x y z yaw pitch flags]}]
   (let [[ox oy oz] (or (:player/pos world) [0.0 0.0 0.0])
         [oyaw opitch] (:player/look world)
         loaded? (:player/loaded? world)]
@@ -145,11 +145,11 @@
         (cond-> (not loaded?) (-> (emit {:packet/name :player-loaded})
                                   (assoc :player/loaded? true))))))
 
-(defn- chunk-key [v] [(long (unchecked-int v)) (long (unchecked-int (bit-shift-right v 32)))])
+(defn chunk-key [v] [(long (unchecked-int v)) (long (unchecked-int (bit-shift-right v 32)))])
 
-(defn- in-chunk? [key [bx _ bz]] (= key [(bit-shift-right bx 4) (bit-shift-right bz 4)]))
+(defn in-chunk? [key [bx _ bz]] (= key [(bit-shift-right bx 4) (bit-shift-right bz 4)]))
 
-(defn- load-chunk [world {:keys [x z data]}]
+(defn load-chunk [world {:keys [x z data]}]
   (let [key [x z]
         column (try (chunk/decode data) (catch Exception e {:chunk/error (str e)}))]
     (if (:chunk/error column)
@@ -165,7 +165,7 @@
   [world pos id]
   (-> world (assoc-in [:world/blocks pos] id) (memory/observe pos id)))
 
-(defn- section-update [world {:keys [section blocks]}]
+(defn section-update [world {:keys [section blocks]}]
   (let [sx (bit-shift-right section 42)
         sz (bit-shift-right (bit-shift-left section 22) 42)
         sy (bit-shift-right (bit-shift-left section 44) 44)]
@@ -177,7 +177,7 @@
                 (set-block world [(+ (* 16 sx) lx) (+ (* 16 sy) ly) (+ (* 16 sz) lz)] id)))
             world blocks)))
 
-(defn- move-entity [world eid dx dy dz]
+(defn move-entity [world eid dx dy dz]
   (if (get-in world [:world/entities eid])
     (update-in world [:world/entities eid :entity/pos]
                (fn [[x y z]] [(+ x (/ dx 4096.0)) (+ y (/ dy 4096.0)) (+ z (/ dz 4096.0))]))
@@ -208,7 +208,7 @@
 (defmethod on-packet [:configuration :disconnect] [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
 
-(defn- fresh-menus
+(defn fresh-menus
   "A login or respawn gives the player a fresh menu: nothing open, an empty cursor, and a grid
    the server empties back into the inventory (it then sends the window's contents)."
   [w]
@@ -249,7 +249,7 @@
             (<= 27 i 35) (- i 27)
             :else nil))))
 
-(defn- set-open-window-slot
+(defn set-open-window-slot
   "An open container: its own slots live in :window/open's :window/slots; slots that are the
    player's inventory update :player/inventory, so items are never counted in two places."
   [w s item]
@@ -260,9 +260,9 @@
         (assoc-in w [:window/open :window/slots s] item)
         (update-in w [:window/open :window/slots] dissoc s)))))
 
-(defn- open? [w window-id] (= window-id (get-in w [:window/open :window/id])))
+(defn open? [w window-id] (= window-id (get-in w [:window/open :window/id])))
 
-(defn- set-window-0-slot
+(defn set-window-0-slot
   "Window 0 is the player's own screen: slots 0-4 are the crafting grid (0 is the result) and
    are kept verbatim in :window/grid, so nothing in the grid is ever invisible; the rest map to
    :player/inventory."
@@ -310,13 +310,13 @@
 
 ;; ---------------------------------------------------------------- ticks
 
-(defn- physics-ready? [world]
+(defn physics-ready? [world]
   (and (= :play (:bot/phase world))
        (:player/pos world)
        (:player/loaded? world)
        (chunk-loaded? world (:player/pos world))))
 
-(defn- movement-packets
+(defn movement-packets
   "pos-rot when something changed, status-only once a second otherwise (vanilla's rule)."
   [world]
   (cond
@@ -331,7 +331,7 @@
 
     :else world))
 
-(defn- on-tick [world {:event/keys [now]}]
+(defn on-tick [world {:event/keys [now]}]
   (let [world (-> world (assoc :time/now now) (update :time/tick inc))]
     (if (physics-ready? world)
       (let [controls (:player/controls world)]
@@ -346,7 +346,7 @@
 
 (defmethod on-event :default [world _] world)
 
-(defn- connection
+(defn connection
   "The :start event may carry the connection it starts (:start/host :start/port :start/name);
    then it, not init's arguments, decides them. That makes the connection an input in the
    recording, so a replay rebuilds the same handshake (and the same offline UUID)."

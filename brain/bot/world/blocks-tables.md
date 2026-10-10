@@ -10,7 +10,7 @@ verifiedAgainst: 5c7d6c1
 sourceRefs:
   - src/clojurecraft/blocks.clj#def passable-types
   - src/clojurecraft/blocks.clj#defn solid?
-  - src/clojurecraft/blocks.clj#defn- log-name?
+  - src/clojurecraft/blocks.clj#defn log-name?
   - src/clojurecraft/blocks.clj#def log-items
   - src/clojurecraft/blocks.clj#defn leaves?
   - test/clojurecraft/blocks_test.clj#deftest solidity

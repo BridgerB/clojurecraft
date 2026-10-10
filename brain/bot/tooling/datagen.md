@@ -8,7 +8,7 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
-  - dev/clojurecraft/datagen.clj#defn- inner-jar-entries
+  - dev/clojurecraft/datagen.clj#defn inner-jar-entries
   - dev/clojurecraft/datagen.clj#defn item-tags
   - dev/clojurecraft/datagen.clj#defn recipes
   - dev/clojurecraft/datagen.clj#defn blocks

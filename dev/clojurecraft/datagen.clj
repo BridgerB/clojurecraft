@@ -10,9 +10,9 @@
             [clojure.string :as str])
   (:import [java.util.zip ZipInputStream]))
 
-(defn- strip-ns [s] (str/replace s #"^minecraft:" ""))
-(defn- kebab-kw [s] (keyword (str/replace (strip-ns s) "_" "-")))
-(defn- name-kw [s] (keyword (strip-ns s)))
+(defn strip-ns [s] (str/replace s #"^minecraft:" ""))
+(defn kebab-kw [s] (keyword (str/replace (strip-ns s) "_" "-")))
+(defn name-kw [s] (keyword (strip-ns s)))
 
 (defn packets
   "{state {:s2c {name id} :c2s {name id}}} from reports/packets.json."
@@ -45,7 +45,7 @@
 
 ;; ---------------------------------------------------------------- jar data
 
-(defn- inner-jar-entries
+(defn inner-jar-entries
   "{path json-string} for every data/minecraft/{recipe,tags/item}/*.json in the inner jar."
   [server-jar]
   (with-open [outer (ZipInputStream. (io/input-stream server-jar))]
@@ -73,8 +73,8 @@
                 :version/world (get v "world_version")
                 :version/java (get v "java_version"))))
 
-(defn- file-stem [path] (second (re-find #"/([^/]+)\.json$" path)))
-(defn- tag-name [path] (second (re-find #"^data/minecraft/tags/item/(.+)\.json$" path)))
+(defn file-stem [path] (second (re-find #"/([^/]+)\.json$" path)))
+(defn tag-name [path] (second (re-find #"^data/minecraft/tags/item/(.+)\.json$" path)))
 
 (defn item-tags
   "{tag-kw #{item-kw}} with nested tags resolved."
@@ -92,7 +92,7 @@
                                 (get raw tag))))]
     (into (sorted-map) (for [t (keys raw)] [t (resolve t #{t})]))))
 
-(defn- ingredient [tags v]
+(defn ingredient [tags v]
   (cond
     (sequential? v) (into (sorted-set) (mapcat #(ingredient tags %) v))
     (str/starts-with? v "#") (get tags (keyword (strip-ns (subs v 1))) (sorted-set))
@@ -135,14 +135,14 @@
        (sort-by :recipe/id)
        vec))
 
-(defn- write-rows [f header rows]
+(defn write-rows [f header rows]
   (with-open [w (io/writer f)]
     (.write w header)
     (.write w "[\n")
     (doseq [r rows] (.write w (str " " (pr-str r) "\n")))
     (.write w "]\n")))
 
-(defn- write-map [f header m]
+(defn write-map [f header m]
   (with-open [w (io/writer f)]
     (.write w header)
     (.write w "{\n")

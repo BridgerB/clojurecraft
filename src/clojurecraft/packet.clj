@@ -108,15 +108,15 @@
 
 ;; ---------------------------------------------------------------- reading
 
-(defn- struct? [t] (and (vector? t) (vector? (first t))))
+(defn struct? [t] (and (vector? t) (vector? (first t))))
 
-(defn- truncating?
+(defn truncating?
   "A slot with components ends what we can parse of a frame."
   [v]
   (boolean (or (and (map? v) (:components? v))
                (and (vector? v) (some truncating? v)))))
 
-(defn- read-hashed-slot
+(defn read-hashed-slot
   "option(item varint, count varint, [type varint, hash i32]..., [type varint]...)."
   [buf]
   (when (b/read-bool buf)
@@ -125,13 +125,13 @@
           removed (b/read-varint buf) _ (dotimes [_ removed] (b/read-varint buf))]
       {:item item :count n})))
 
-(defn- write-hashed-slot [out v]
+(defn write-hashed-slot [out v]
   (b/write-bool out (some? v))
   (when v
     (b/write-varint out (:item v)) (b/write-varint out (:count v))
     (b/write-varint out 0) (b/write-varint out 0)))
 
-(defn- read-slot [buf]
+(defn read-slot [buf]
   (let [n (b/read-varint buf)]
     (when (pos? n)
       (let [item (b/read-varint buf) added (b/read-varint buf) removed (b/read-varint buf)]

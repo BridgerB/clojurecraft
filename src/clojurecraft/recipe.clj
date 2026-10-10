@@ -60,7 +60,7 @@
 
 ;; ---------------------------------------------------------------- match
 
-(defn- shaped-match? [r grid size]
+(defn shaped-match? [r grid size]
   (let [occupied (keep (fn [[slot item]] (when item [(quot (dec slot) size) (rem (dec slot) size)])) grid)
         rows (map first occupied) cols (map second occupied)
         r0 (apply min rows) c0 (apply min cols)
@@ -75,7 +75,7 @@
                            (if (= ch \space) (nil? item) (contains? (key (str ch)) item))))))]
     (and (= [h w] [height width]) (or (fits false) (fits true)))))
 
-(defn- shapeless-match? [r grid]
+(defn shapeless-match? [r grid]
   (let [items (vec (keep val grid))
         sets (:recipe/ingredients r)]
     (and (= (count items) (count sets))
@@ -110,7 +110,7 @@
 
 (defn have [counts s] (reduce + 0 (map #(get counts % 0) s)))
 
-(defn- consume [counts s n]
+(defn consume [counts s n]
   (loop [counts counts [item & more] (sort s) n n]
     (if (or (zero? n) (nil? item))
       counts
@@ -151,7 +151,7 @@
 
 (def max-depth 6)
 
-(defn- resolve-want
+(defn resolve-want
   "[counts' action] for wanting n of any item in set s. action nil means satisfied."
   [counts s n size depth]
   (let [h (have counts s)]

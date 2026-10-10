@@ -12,7 +12,7 @@ sourceRefs:
   - src/clojurecraft/place.clj#defmethod place-stage :equip
   - src/clojurecraft/place.clj#defmethod place-stage :sent
   - src/clojurecraft/place.clj#defn spot
-  - src/clojurecraft/place.clj#defn- use-item-on
+  - src/clojurecraft/place.clj#defn use-item-on
   - test/clojurecraft/place_test.clj#a-rejected-placement-fails-instead-of-believing
 related:
   - "[[bot/crafting/_moc|Crafting]]"

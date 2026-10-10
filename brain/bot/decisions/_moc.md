@@ -23,6 +23,7 @@ related:
 - [[goals-in-play-from-go]] - which goals run arrives on the :go event, so replays match.
 - [[placement-judged-by-server]] - a placed block exists only when the server says so.
 - [[spot-two-blocks-away]] - where a table goes: rings 1-3 around the feet, ±1 in height, never inside the player (and why the first design failed in CI).
+- [[public-by-default]] - defn everywhere; defn- only for one-line local aliases, so the REPL reaches everything.
 - [[any-log-species]] - gather the nearest log of any kind; the next plan picks the planks recipe.
 
 ## See also

@@ -24,7 +24,7 @@
 (defn- set-intent [world & kvs] (apply update world :plan/intent assoc kvs))
 (defn- now [world] (:time/now world))
 
-(def ^:private around
+(def around
   "Candidate cells around the feet, nearest ring first, at feet level then one down then one
    up (an uneven forest floor): a CI run found no spot when only feet-level cells two away
    were tried."
@@ -35,7 +35,7 @@
         :when (= r (max (abs dx) (abs dz)))]
     [dx dy dz]))
 
-(defn- inside-player?
+(defn inside-player?
   "Would a block at cell intersect the player's box? The server rejects such a placement."
   [world [x y z]]
   (let [[x0 y0 z0 x1 y1 z1] (physics/aabb (:player/pos world))]
@@ -61,7 +61,7 @@
                             (<= (physics/distance eye (intent/centre target)) place-reach))]
              [target support]))))
 
-(defn- use-item-on [world pos face [cx cy cz]]
+(defn use-item-on [world pos face [cx cy cz]]
   (let [seq (inc (:bot/sequence world))]
     (-> world
         (assoc :bot/sequence seq)
@@ -70,7 +70,7 @@
         (game/emit {:packet/name :swing :hand 0})
         (set-intent :intent/sequence seq :intent/sent-at (now world)))))
 
-(defn- held-slot-of [world item-id]
+(defn held-slot-of [world item-id]
   (some (fn [[p {:keys [item]}]] (when (= item item-id) p)) (sort-by key (:player/inventory world))))
 
 ;; ---------------------------------------------------------------- place

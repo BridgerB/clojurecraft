@@ -31,9 +31,9 @@
     :wall_sign :ceiling_hanging_sign :wall_hanging_sign :ladder :snow_layer :web :fire :soul_fire
     :lily_pad :small_dripleaf :moving_piston})
 
-(def ^:private max-state (long (apply max (map #(nth % 3) table))))
+(def max-state (long (apply max (map #(nth % 3) table))))
 
-(def ^:private rows
+(def rows
   (let [arr (object-array (inc max-state))]
     (doseq [[_ _ lo hi :as row] table, s (range lo (inc hi))] (aset arr s row))
     arr))
@@ -42,7 +42,7 @@
 (defn name-of [id] (some-> (row id) (nth 0)))
 (defn type-of [id] (some-> (row id) (nth 1)))
 
-(def ^:private solid-flags
+(def solid-flags
   (let [arr (boolean-array (inc max-state))]
     (doseq [[_ type lo hi] table, s (range lo (inc hi))]
       (aset arr s (not (contains? passable-types type))))
@@ -53,9 +53,9 @@
   [^long id]
   (and (<= 0 id max-state) (aget ^booleans solid-flags id)))
 
-(defn- log-name? [n] (str/ends-with? (name n) "_log"))
+(defn log-name? [n] (str/ends-with? (name n) "_log"))
 
-(def ^:private log-flags
+(def log-flags
   (let [arr (boolean-array (inc max-state))]
     (doseq [[n _ lo hi] table :when (log-name? n), s (range lo (inc hi))] (aset arr s true))
     arr))
@@ -64,7 +64,7 @@
 
 (def log-items (set (for [[n id] items :when (log-name? n)] id)))
 
-(def ^:private leaf-flags
+(def leaf-flags
   (let [arr (boolean-array (inc max-state))]
     (doseq [[n _ lo hi] table :when (str/ends-with? (name n) "_leaves"), s (range lo (inc hi))] (aset arr s true))
     arr))

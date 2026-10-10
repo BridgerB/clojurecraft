@@ -8,8 +8,8 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
-  - src/clojurecraft/game.clj#defn- set-window-0-slot
-  - src/clojurecraft/game.clj#defn- set-open-window-slot
+  - src/clojurecraft/game.clj#defn set-window-0-slot
+  - src/clojurecraft/game.clj#defn set-open-window-slot
   - src/clojurecraft/game.clj#def menus
   - src/clojurecraft/game.clj#defn window->player-slot
   - src/clojurecraft/game.clj#defmethod on-packet [:play :container-set-content]

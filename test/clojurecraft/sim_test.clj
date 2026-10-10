@@ -46,7 +46,7 @@
 
 (def kit-items #{:oak_log :oak_planks :stick :crafting_table})
 
-(defn- kit-run [lag drop]
+(defn kit-run [lag drop]
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})]
     (sim/run step (game/init fx/opts)
              (sim/init {:column column :spawn [0.5 64.0 0.5] :lag-ticks lag :drop-clicks (if drop #{drop} #{})})

@@ -13,7 +13,7 @@
 
 (def answer-timeout 3000)             ; a click the server never answers fails the intent
 
-(defn- table-slot [^long p] (cond (<= 0 p 8) (+ 37 p) (<= 9 p 35) (inc p) :else nil))
+(defn table-slot [^long p] (cond (<= 0 p 8) (+ 37 p) (<= 9 p 35) (inc p) :else nil))
 
 (defn view
   "The window an intent clicks in: :inventory (window 0, 2x2 grid) or :table (the open
@@ -37,7 +37,7 @@
       (update :plan/intent assoc :intent/awaiting state-id :intent/awaiting-window id
               :intent/sent-at (:time/now world))))
 
-(defn- state-id-of [world window-id]
+(defn state-id-of [world window-id]
   (if (zero? window-id)
     (:window/state-id world)
     (when (= window-id (get-in world [:window/open :window/id])) (get-in world [:window/open :window/state-id]))))

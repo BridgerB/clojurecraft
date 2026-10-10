@@ -11,7 +11,7 @@ sourceRefs:
   - src/clojurecraft/conn.clj#defn read-frame
   - src/clojurecraft/conn.clj#defn write-frame
   - src/clojurecraft/conn.clj#defn open
-  - src/clojurecraft/conn.clj#defn- inflate
+  - src/clojurecraft/conn.clj#defn inflate
 related:
   - "[[bot/protocol/_moc|Protocol]]"
   - "[[connection-phases]]"

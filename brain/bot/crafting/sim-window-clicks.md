@@ -8,11 +8,11 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
-  - src/clojurecraft/sim.clj#defn- click-view
+  - src/clojurecraft/sim.clj#defn click-view
   - src/clojurecraft/sim.clj#def layouts
-  - src/clojurecraft/sim.clj#defn- result-of
-  - src/clojurecraft/sim.clj#defn- insert
-  - src/clojurecraft/sim.clj#defn- view-of
+  - src/clojurecraft/sim.clj#defn result-of
+  - src/clojurecraft/sim.clj#defn insert
+  - src/clojurecraft/sim.clj#defn view-of
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[server-model]]"

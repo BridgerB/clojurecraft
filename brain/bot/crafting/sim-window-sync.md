@@ -8,9 +8,9 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
-  - src/clojurecraft/sim.clj#defn- sync-window
+  - src/clojurecraft/sim.clj#defn sync-window
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :container-click]
-  - src/clojurecraft/sim.clj#defn- give
+  - src/clojurecraft/sim.clj#defn give
   - src/clojurecraft/packet.clj#775 clicks carry the client's prediction as hashed slots
 related:
   - "[[bot/crafting/_moc|Crafting]]"

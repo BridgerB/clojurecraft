@@ -11,7 +11,7 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defmethod run :collect
   - src/clojurecraft/intent.clj#defn blocker
   - src/clojurecraft/intent.clj#def collect-stall-ticks 20
-  - src/clojurecraft/intent.clj#defn- nearest-item
+  - src/clojurecraft/intent.clj#defn nearest-item
   - src/clojurecraft/game.clj#defmethod on-packet [:play :add-entity]
 related:
   - "[[bot/plan/_moc|Plan]]"

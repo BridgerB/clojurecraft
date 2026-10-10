@@ -13,9 +13,9 @@
    (fx/packet {:packet/name :disconnect :reason (byte-array [1 2 3])})
    {:event/kind :tick :event/now 50 :event/rand 0.25}])
 
-(defn- tmp [n] (str (System/getProperty "java.io.tmpdir") "/clojurecraft-" n ".edn"))
+(defn tmp [n] (str (System/getProperty "java.io.tmpdir") "/clojurecraft-" n ".edn"))
 
-(defn- record!
+(defn record!
   "Write a recording the way the loop does: the event, then what applying it produced."
   [path evs]
   (let [tap (record/tap path)]

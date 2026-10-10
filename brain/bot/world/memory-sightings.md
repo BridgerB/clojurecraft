@@ -13,7 +13,7 @@ sourceRefs:
   - src/clojurecraft/memory.clj#defn nearest-log
   - src/clojurecraft/memory.clj#defn trunk-bottom?
   - src/clojurecraft/memory.clj#defn history
-  - src/clojurecraft/memory.clj#defn latest
+  - "src/clojurecraft/memory.clj#The latest observation at every position on record: {pos {:block/state id :block/seen-at ms}}."
   - src/clojurecraft/wood.clj#defn trunk-target
 related:
   - "[[bot/world/_moc|World]]"

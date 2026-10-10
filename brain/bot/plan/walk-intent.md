@@ -11,7 +11,7 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defmethod run :walk
   - src/clojurecraft/intent.clj#def stuck-ticks 40
   - src/clojurecraft/intent.clj#def reach 4.0
-  - src/clojurecraft/intent.clj#defn- toward
+  - src/clojurecraft/intent.clj#defn toward
   - test/clojurecraft/plan_test.clj#walks-to-a-far-log
 related:
   - "[[bot/plan/_moc|Plan]]"

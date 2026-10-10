@@ -26,7 +26,7 @@
 
 ;; ---------------------------------------------------------------- needs as data
 
-(def ^:private tag-named
+(def tag-named
   "An item set → the shortest tag name with exactly that set, so rows read :tag/planks."
   (reduce (fn [m [t s]] (if (and (contains? m s) (<= (count (name (m s))) (count (name t)))) m (assoc m s t)))
           {} recipe/tags))
@@ -65,14 +65,14 @@
   "Every row that can provide something: the table's acting rows, then one per recipe."
   (into (filterv :goal/act plan/goals) craft-rows))
 
-(def ^:private by-item
+(def by-item
   "item name → producer rows that provide it."
   (reduce (fn [m row]
             (reduce (fn [m k] (reduce #(update %1 %2 (fnil conj []) row) m (or (need-set k) [])))
                     m (keys (:goal/provides row))))
           {} producers))
 
-(def ^:private by-block
+(def by-block
   (group-by identity (for [row producers k (keys (:goal/provides row)) :when (= "block" (namespace k))] k)))
 
 ;; ---------------------------------------------------------------- the world as needs see it
@@ -85,7 +85,7 @@
   (when (= block :crafting_table)
     (memory/nearest world (game/eye world) table-search memory/crafting-table?)))
 
-(defn- consume [counts s n]
+(defn consume [counts s n]
   (loop [counts counts [item & more] (sort s) n n]
     (if (or (zero? n) (nil? item))
       counts
@@ -96,7 +96,7 @@
 
 (declare resolve-need)
 
-(defn- resolve-row
+(defn resolve-row
   "Try to get times × row done: [counts row-to-act-on] (a producer whose needs are met, maybe
    this row), or [counts :stuck]."
   [world counts row times depth]

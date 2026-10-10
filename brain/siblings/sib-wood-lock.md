@@ -11,7 +11,7 @@ sourceRefs:
   - "steve:src/lib/steve/lib/bot-utils.ts#export const reclaimCraftingGrid = async (bot: Bot): Promise<void> => {"
   - "steve:src/lib/steve/lib/bot-utils.ts#left in the grid is INVISIBLE to windowItems() — which only reads the"
   - "steve:src/lib/steve/lib/run-loop.ts#forever (the wood-lock). Regressions are handled when the running step"
-  - src/clojurecraft/game.clj#defn- set-window-0-slot
+  - src/clojurecraft/game.clj#defn set-window-0-slot
 related:
   - "[[siblings/_moc|Siblings]]"
   - "[[window-zero-model]]"

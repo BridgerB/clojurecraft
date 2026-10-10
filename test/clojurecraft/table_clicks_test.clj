@@ -6,15 +6,15 @@
             [clojurecraft.sim :as sim]
             [clojurecraft.world :as world]))
 
-(defn- table-slot [p] (cond (<= 0 p 8) (+ 37 p) (<= 9 p 35) (inc p)))
+(defn table-slot [p] (cond (<= 0 p 8) (+ 37 p) (<= 9 p 35) (inc p)))
 
-(defn- stock
+(defn stock
   "One stack per ingredient set, enough for one craft, in main-inventory slots 9.."
   [r]
   (into {} (map-indexed (fn [i [s n]] [(+ 9 i) {:item (recipe/item-id (first (sort s))) :count (+ n 3)}])
                         (recipe/needs r))))
 
-(defn- craft-in-table
+(defn craft-in-table
   "Apply the click plan for r inside an open table window of the sim; returns the last item the
    server reported for slot 0 (the result), or :no-plan."
   [r]

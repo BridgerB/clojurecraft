@@ -36,7 +36,7 @@
 
 ;; ---------------------------------------------------------------- reading
 
-(defn- latest-entity
+(defn latest-entity
   "The newest observation at pos, as a DataScript entity, or nil."
   [db pos]
   (when-let [datoms (seq (d/datoms db :avet :sight/pos pos))]
@@ -62,7 +62,7 @@
                    :let [ent (d/entity db e)]]
                [pos {:block/state (:sight/state ent) :block/seen-at (:sight/at ent)}]))))
 
-(defn- positions-ever
+(defn positions-ever
   "Positions where any of the states was ever observed (a Datalog query over the facts)."
   [world states]
   (d/q '[:find [?pos ...] :in $ [?s ...] :where [?e :sight/state ?s] [?e :sight/pos ?pos]]
@@ -70,7 +70,7 @@
 
 ;; ---------------------------------------------------------------- writing
 
-(defn- observation
+(defn observation
   "The fact to append for seeing id at pos, or nil when it adds nothing (same as the last)."
   [db pos id now]
   (let [last (latest-entity db pos)]
@@ -105,7 +105,7 @@
 
 (defn centre "The centre of a block position." [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
 
-(defn- nearest-of
+(defn nearest-of
   "Nearest of positions within radius of eye, or nil."
   [eye radius positions]
   (->> positions

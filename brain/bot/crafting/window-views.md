@@ -12,7 +12,7 @@ sourceRefs:
   - src/clojurecraft/window.clj#defn click
   - src/clojurecraft/window.clj#defn waiting
   - src/clojurecraft/window.clj#defn free-slot
-  - src/clojurecraft/window.clj#defn- table-slot
+  - src/clojurecraft/window.clj#defn table-slot
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[craft-intent]]"

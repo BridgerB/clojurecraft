@@ -10,7 +10,7 @@
 (def min-y -64)
 (def section-count 24)
 
-(defn- read-container [^ByteBuffer buf ^long max-bits ^long entries]
+(defn read-container [^ByteBuffer buf ^long max-bits ^long entries]
   (let [bits (b/read-u8 buf)]
     (if (zero? bits)
       {:single (b/read-varint buf)}

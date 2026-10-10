@@ -9,7 +9,7 @@ lastUpdated: 2026-10-09
 verifiedAgainst: 26.1.2
 sourceRefs:
   - src/clojurecraft/game.clj#{12 {:menu/name :crafting :menu/size 3 :menu/grid (range 0 10) :menu/inventory 10}}
-  - src/clojurecraft/window.clj#defn- table-slot
+  - src/clojurecraft/window.clj#defn table-slot
   - src/clojurecraft/sim.clj#a crafting table has a 3x3 grid and the
 related:
   - "[[game/windows/_moc|Windows]]"

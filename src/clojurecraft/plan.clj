@@ -60,7 +60,7 @@
          (remove #(done-by world %))
          first)))
 
-(defn- begin
+(defn begin
   "Start planning. A :go that names a landing (:go/at, from the fixture) first waits in
    :landing until the bot is there with its chunk loaded; the wait is plan state, not a sleep."
   [world {:go/keys [goals at]}]
@@ -88,13 +88,13 @@
     (assoc world :plan/status :failed :plan/reason :no-landing)
     :else world))
 
-(defn- finish-intent
+(defn finish-intent
   "An intent that succeeds ends any failure streak: attempts count consecutive failures, so a
    long goal is not killed by three unrelated hiccups an hour apart."
   [world i]
   (-> world (assoc :plan/last i :plan/attempts 0) (dissoc :plan/intent)))
 
-(defn- fail-intent [world i]
+(defn fail-intent [world i]
   (let [attempts (inc (:plan/attempts world 0))]
     (-> world
         (assoc :player/controls {})
@@ -106,7 +106,7 @@
 
 (declare plan-tick)
 
-(defn- run-intent
+(defn run-intent
   "Advance the intent; when it ends, plan again in the same tick so the next intent or the
    goal's completion is derived immediately."
   [world i event]
@@ -116,19 +116,19 @@
           (intent/failed? i) (plan-tick (fail-intent world i) event)
           :else world)))
 
-(defn- start-intent [world i]
+(defn start-intent [world i]
   (-> world
       (assoc :plan/intent (assoc i :intent/status :active))
       (dissoc :plan/waiting-since)
       (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i))))))
 
-(defn- wait [world reason]
+(defn wait [world reason]
   (let [since (or (:plan/waiting-since world) (:time/now world))]
     (if (> (- (:time/now world) since) wait-timeout)
       (assoc world :plan/status :failed :plan/reason reason)
       (assoc world :plan/waiting-since since :plan/waiting reason))))
 
-(defn- plan-tick [world event]
+(defn plan-tick [world event]
   (if-let [i (:plan/intent world)]
     (run-intent world i event)
     (if (not= :active (:plan/status world))

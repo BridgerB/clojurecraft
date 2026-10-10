@@ -18,7 +18,7 @@
       (assoc :bot/phase :play :player/pos pos :player/loaded? true :player/on-ground? true)
       (assoc :world/chunks {[0 0] (world/column {})})))
 
-(defn- overlaps? [[px py pz] [x y z]]
+(defn overlaps? [[px py pz] [x y z]]
   (and (< (- px 0.3) (inc x)) (> (+ px 0.3) x) (< py (inc y)) (> (+ py 1.8) y) (< (- pz 0.3) (inc z)) (> (+ pz 0.3) z)))
 
 (deftest a-placement-spot-is-never-inside-the-player
@@ -35,7 +35,7 @@
                                 (<= (physics/distance (game/eye w) (intent/centre target)) place/place-reach)))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
 
-(defn- intent-step
+(defn intent-step
   "The world reducer plus one run of the current intent per tick (no planner)."
   [w e]
   (let [w (game/step w e)]

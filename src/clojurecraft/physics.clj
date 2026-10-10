@@ -24,11 +24,11 @@
 
 (defn eye [[x y z]] [x (+ y eye-height) z])
 
-(defn- expand [[x0 y0 z0 x1 y1 z1] [vx vy vz]]
+(defn expand [[x0 y0 z0 x1 y1 z1] [vx vy vz]]
   [(+ x0 (min 0.0 vx)) (+ y0 (min 0.0 vy)) (+ z0 (min 0.0 vz))
    (+ x1 (max 0.0 vx)) (+ y1 (max 0.0 vy)) (+ z1 (max 0.0 vz))])
 
-(defn- solid-boxes
+(defn solid-boxes
   "Unit boxes of every solid block touching the region."
   [solid? [x0 y0 z0 x1 y1 z1]]
   (for [x (range (long (Math/floor x0)) (inc (long (Math/floor x1))))
@@ -37,11 +37,11 @@
         :when (solid? x y z)]
     [(double x) (double y) (double z) (+ x 1.0) (+ y 1.0) (+ z 1.0)]))
 
-(defn- overlaps? [a b axis]
+(defn overlaps? [a b axis]
   (and (< (double (a axis)) (double (b (+ axis 3))))
        (> (double (a (+ axis 3))) (double (b axis)))))
 
-(defn- clip
+(defn clip
   "Shrink the move d along axis so box does not enter any of boxes."
   ^double [box boxes axis ^double d]
   (let [others (remove #{axis} [0 1 2])]
@@ -56,10 +56,10 @@
                 d))
             d boxes)))
 
-(defn- shift [box axis d]
+(defn shift [box axis d]
   (-> box (update axis + d) (update (+ axis 3) + d)))
 
-(defn- squash ^double [^double v] (if (< (Math/abs v) negligible) 0.0 v))
+(defn squash ^double [^double v] (if (< (Math/abs v) negligible) 0.0 v))
 
 (defn step
   "One tick of movement. Reads :player/pos :player/vel :player/on-ground? :player/jump-ticks and

@@ -12,7 +12,7 @@ sourceRefs:
   - src/clojurecraft/chunk.clj#defn section-get
   - src/clojurecraft/chunk.clj#defn block-at
   - src/clojurecraft/chunk.clj#defn section-may-contain?
-  - src/clojurecraft/game.clj#defn- load-chunk
+  - src/clojurecraft/game.clj#defn load-chunk
 related:
   - "[[bot/world/_moc|World]]"
   - "[[memory-sightings]]"

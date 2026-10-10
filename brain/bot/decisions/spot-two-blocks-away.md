@@ -9,10 +9,10 @@ lastUpdated: 2026-10-09
 verifiedAgainst: 85e133d
 sourceRefs:
   - src/clojurecraft/place.clj#Candidate cells around the feet, nearest ring first, at feet level then one down then one
-  - src/clojurecraft/place.clj#defn- inside-player?
+  - src/clojurecraft/place.clj#defn inside-player?
   - test/clojurecraft/place_test.clj#a-spot-is-found-on-an-uneven-floor
   - test/clojurecraft/place_test.clj#a-placement-spot-is-never-inside-the-player
-  - src/clojurecraft/sim.clj#defn- overlaps-player?
+  - src/clojurecraft/sim.clj#defn overlaps-player?
 related:
   - "[[bot/decisions/_moc|Decisions]]"
   - "[[place-intent]]"

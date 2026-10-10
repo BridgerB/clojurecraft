@@ -8,7 +8,7 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
-  - src/clojurecraft/game.clj#defn- set-window-0-slot
+  - src/clojurecraft/game.clj#defn set-window-0-slot
   - src/clojurecraft/game.clj#How many of an item (by id) the player holds; the crafting grid is not the inventory.
   - test/clojurecraft/game_test.clj#grid items are in the grid, not double-counted
 related:

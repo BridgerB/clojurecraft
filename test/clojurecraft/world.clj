@@ -4,7 +4,7 @@
   (:require [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]))
 
-(defn- direct-section [o cells]
+(defn direct-section [o cells]
   (b/write-i16 o (count cells)) (b/write-i16 o 0)
   (b/write-u8 o 15)
   (let [longs (long-array 1024)]
@@ -15,7 +15,7 @@
     (dotimes [i 1024] (b/write-i64 o (aget longs i))))
   (b/write-u8 o 0) (b/write-varint o 0))
 
-(defn- single-section [o id]
+(defn single-section [o id]
   (b/write-i16 o 0) (b/write-i16 o 0)
   (b/write-u8 o 0) (b/write-varint o id)
   (b/write-u8 o 0) (b/write-varint o 0))

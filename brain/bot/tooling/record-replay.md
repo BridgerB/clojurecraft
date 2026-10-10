@@ -12,7 +12,7 @@ sourceRefs:
   - src/clojurecraft/record.clj#defn replay
   - src/clojurecraft/record.clj#defn verify
   - src/clojurecraft/record.clj#defn effects
-  - src/clojurecraft/game.clj#defn- connection
+  - src/clojurecraft/game.clj#defn connection
   - test/clojurecraft/record_test.clj#effects-are-recorded-and-verified
   - src/clojurecraft/replay.clj#defn -main
   - src/clojurecraft/main.clj#defn apply-event!
