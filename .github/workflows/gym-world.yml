@@ -1,0 +1,81 @@
+name: gym-world
+
+# Builds a gym landing set's pregenerated world once and caches it. gym.yml calls this before its
+# shards, which restore the cache and are never allowed to build. The weekly run restores the
+# entry, which keeps it from the 7-day eviction.
+
+on:
+  workflow_call:
+    inputs:
+      set:
+        type: string
+        default: A
+    outputs:
+      key:
+        description: the cache key of the world
+        value: ${{ jobs.world.outputs.key }}
+  workflow_dispatch:
+    inputs:
+      set:
+        default: A
+  schedule:
+    - cron: '17 6 * * 1'
+
+jobs:
+  world:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    env:
+      SET: ${{ inputs.set || 'A' }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: key
+        name: The world's cache key
+        run: echo "key=gym-world-$SET-${{ hashFiles('ci/gym.edn', 'scripts/server.sh', 'scripts/ci/prepare-world.sh', 'src/clojurecraft/landings.clj', 'src/clojurecraft/harness.clj') }}" >> "$GITHUB_OUTPUT"
+      - id: have
+        uses: actions/cache/restore@v4
+        with:
+          path: cache/worlds/${{ env.SET }}
+          key: ${{ steps.key.outputs.key }}
+      - uses: actions/setup-java@v4
+        if: steps.have.outputs.cache-hit != 'true'
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI
+        if: steps.have.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+      - uses: actions/cache@v4
+        if: steps.have.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clj-${{ hashFiles('deps.edn') }}
+      - uses: actions/cache@v4
+        if: steps.have.outputs.cache-hit != 'true'
+        with:
+          path: data/local-server/server-26.1.2.jar
+          key: server-jar-97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51
+      - name: Build the world
+        if: steps.have.outputs.cache-hit != 'true'
+        run: |
+          RCON_PASS=$(openssl rand -hex 16)
+          echo "::add-mask::$RCON_PASS"
+          SET=$SET RCON_PASS=$RCON_PASS scripts/ci/prepare-world.sh
+      - uses: actions/cache/save@v4
+        if: steps.have.outputs.cache-hit != 'true'
+        with:
+          path: cache/worlds/${{ env.SET }}
+          key: ${{ steps.key.outputs.key }}
+      - name: Summary
+        run: |
+          {
+            echo "### gym world $SET"
+            echo "cache key \`${{ steps.key.outputs.key }}\`, restored from cache: ${{ steps.have.outputs.cache-hit || 'false' }}"
+            echo "landings: $(grep -o '\[[-0-9]* [-0-9]* [-0-9]*\]' cache/worlds/$SET/landings.edn | wc -l), size $(du -sh cache/worlds/$SET | cut -f1)"
+          } >> "$GITHUB_STEP_SUMMARY"

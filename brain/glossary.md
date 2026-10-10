@@ -18,7 +18,7 @@ lastUpdated: 2026-10-10
 - **Sighting**: an observation fact `{:sight/pos :sight/state :sight/at}` in the DataScript value `:world/facts`; see [[memory-sightings]].
 - **Recording**: an EDN file of every event of a run, replayable with no server; see [[record-replay]].
 - **Sim**: the pure server model in `sim.clj` that tests run the whole bot against; see [[server-model]].
-- **Gym**: a run of one goal with prerequisites given over RCON and judged by `RESULT` plus an RCON truth read; see [[ci-wood-workflow]].
+- **Gym**: a run of one goal with prerequisites given over RCON and judged by `RESULT` plus an RCON truth read; see [[gym-on-runners]].
 - **Trunk bottom**: a remembered log with no log below it; the walk target for the wood goal.
 - **Window 0**: the player's own inventory screen; slots 0-4 are the 2x2 crafting grid (0 = result) kept in `:window/grid`; see [[window-zero-model]], [[mc-window-zero-slots]].
 - **State id**: the counter the server stamps on every window update and the client echoes in each click; an unanswered click is one whose state id never moves; see [[mc-state-ids-prediction]].

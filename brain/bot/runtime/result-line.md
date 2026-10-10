@@ -15,7 +15,7 @@ sourceRefs:
 related:
   - "[[bot/runtime/_moc|Runtime]]"
   - "[[main-loop]]"
-  - "[[ci-wood-workflow]]"
+  - "[[gym-on-runners]]"
   - "[[goals-in-play-from-go]]"
 ---
 
@@ -41,7 +41,8 @@ The bot prints exactly one line `RESULT {...}` on stdout (everything else goes t
 
 ## Gotchas
 - Map key order is arbitrary; CI greps for `:ok true` anywhere on a line starting with `RESULT {`.
-- A recording includes the hold period, so a replayed RESULT can show slightly higher counts than the live one ([[record-replay]]).
+- A recording ends at RESULT and holds a copy of it, so a replay reaches exactly the live RESULT (`:replay/result :identical`, [[record-replay]]).
+- With no position yet (a run that ended before its first teleport) there is no `:table/pos`; RESULT is still printed, which the gym's judge depends on.
 
 ## See also
-- [[ci-wood-workflow]] - the judge that reads it.
+- [[gym-on-runners]] - the judge that reads it.

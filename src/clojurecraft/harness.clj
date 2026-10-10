@@ -85,15 +85,20 @@
     (log "locate:" r)
     (when fx [(Long/parseLong fx) (Long/parseLong fz)])))
 
+(defn wait-loaded!
+  "Block until the server reports the column at x z loaded, polling every 200 ms, up to 30 s;
+   true when it loaded."
+  [rc x z]
+  (loop [i 0]
+    (cond (passed? (rcon/command rc (str "execute if loaded " x " 0 " z))) true
+          (>= i 150) false
+          :else (do (Thread/sleep 200) (recur (inc i))))))
+
 (defn teleport!
   "Load the column at x z and teleport the bot onto its surface."
   [rc name [x z]]
   (rcon/command rc (str "forceload add " x " " z))
-  (loop [i 0]
-    (let [r (rcon/command rc (str "execute if loaded " x " 0 " z))]
-      (when (and (not (passed? r)) (< i 150))
-        (Thread/sleep 200)
-        (recur (inc i)))))
+  (wait-loaded! rc x z)
   (log "tp:" (rcon/command rc (str "execute positioned " x " 0 " z
                                    " positioned over motion_blocking_no_leaves run tp " name " ~0.5 ~ ~0.5")))
   (rcon/command rc (str "forceload remove " x " " z)))

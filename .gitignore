@@ -3,3 +3,4 @@ data/
 .nrepl-port
 *.log
 work/
+cache/

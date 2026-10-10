@@ -12,7 +12,7 @@ related:
 # Tooling
 
 - [[local-server]] - the Mac's own vanilla server: ports, password, properties that matter.
-- [[ci-wood-workflow]] - the one-job CI: server boot, bot, RESULT, RCON judge, artifacts.
+- [[gym-on-runners]] - test.yml, and gym.yml: a goal on real terrain, one runner per run, judged by RESULT and the server, reported with an interval.
 - [[record-replay]] - every run is a file; replay it with no server.
 - [[server-model]] - the pure vanilla-server model tests run the whole bot against.
 - [[datagen]] - six EDN tables: four from --reports, recipes and tags from the inner jar.

@@ -11,4 +11,4 @@ clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.p
   | clojure -M:run --port 25571 --name Clj_wood --until wood --events stdin
 ```
 
-The bot prints `RESULT {:ok true ...}` and exits 0 when the goal is met. `.github/workflows/wood.yml` runs each goal on a GitHub runner and judges it by that line plus an independent RCON inventory read. The design brief is `docs/hickey.md`.
+The bot prints `RESULT {:ok true ...}` and exits 0 when the goal is met. `.github/workflows/gym.yml` runs each goal on GitHub runners, one server and one pregenerated landing per run, and judges it by that line plus the server's own truth commands. The design brief is `docs/hickey.md`.

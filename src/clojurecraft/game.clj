@@ -184,7 +184,9 @@
 (defmethod on-packet [:play :forget-level-chunk] [w p] (update w :world/chunks dissoc (terrain/chunk-key (:pos p))))
 (defmethod on-packet [:play :block-update] [w p] (terrain/set-block w (:pos p) (:state p)))
 (defmethod on-packet [:play :section-blocks-update] [w p] (terrain/section-update w p))
-(defmethod on-packet [:play :set-health] [w p] (assoc w :player/health (:health p)))
+(defmethod on-packet [:play :set-health] [w p]
+  (cond-> (assoc w :player/health (:health p))
+    (and (<= (:health p) 0) (pos? (:player/health w 20))) (update :stats/deaths (fnil inc 0))))
 
 (defmethod on-packet [:play :container-set-content] [w {:keys [window-id state-id items carried]}]
   (let [w (cond-> w carried (assoc :window/cursor carried) (nil? carried) (dissoc :window/cursor))]

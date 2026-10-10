@@ -51,6 +51,8 @@ src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin
 src/clojurecraft/rcon.clj     RCON client (fixtures, CI judge); `clojure -M:rcon`
+src/clojurecraft/gym.clj      the gym: registry, land, judge, report (`clojure -M:gym`)
+src/clojurecraft/landings.clj landing sets: grid, biome snap, surface checks, pregeneration
 src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successive worlds, bounded, off-thread
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
 dev/clojurecraft/datagen.clj  vanilla --reports → resources/clojurecraft/*.edn
@@ -75,7 +77,7 @@ clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data ge
 scripts/datagen.sh                            # regenerate the EDN tables (needs the jar)
 ```
 
-The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI (`.github/workflows/wood.yml`) boots a vanilla server on one runner, pipes the harness into the bot, and judges by that line plus an independent RCON inventory read.
+The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI: `test.yml` runs the tests and the brain checker on every push; `gym.yml` runs every goal once on push and N runs of one goal on dispatch, one runner and one pregenerated landing per run, judged by RESULT plus the server's truth commands and reported with a 95% interval (`clojure -M:gym`, `brain/bot/tooling/gym-on-runners.md`). Write code, push, and read the runs: the runners do the compute.
 
 ## Server facts
 

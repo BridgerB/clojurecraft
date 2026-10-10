@@ -6,6 +6,7 @@
             [clojure.string :as str]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.gym :as gym]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
@@ -362,3 +363,27 @@
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `memory/positions-now `memory/nearest-log `make/near `make/decide
    `wood/gather-next `place/spot `window/view])
+(s/def :stats/deaths pos-int?)
+
+;; ---------------------------------------------------------------- the gym
+(s/def :gym/goal keyword?)
+(s/def :gym/until string?)
+(s/def :gym/prereqs (s/coll-of string? :kind vector?))
+(s/def :gym/timeout-ms pos-int?)
+(s/def :truth/cmd string?)
+(s/def :truth/re string?)
+(s/def :truth/reply string?)
+(s/def :truth/ok? boolean?)
+(s/def :gym/truth (s/coll-of (s/keys :req [:truth/cmd :truth/re]) :kind vector? :min-count 1))
+(s/def ::gym (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]))
+(s/def :gym/run pos-int?)
+(s/def :gym/landing (s/coll-of int? :kind vector? :count 3))
+(s/def :gym/landed? boolean?)
+(s/def :gym/outcome #{:pass :fail :timeout :death :disconnect :harness})
+(s/def :gym/ms int?)
+(s/def :gym/reason (s/nilable keyword?))
+(s/def :gym/truths (s/coll-of (s/keys :req [:truth/cmd :truth/reply :truth/ok?]) :kind vector?))
+(s/def :gym/commit (s/nilable string?))
+(s/def :gym/result (s/nilable map?))
+(s/def ::gym-result (s/keys :req [:gym/goal :gym/run :gym/landed? :gym/outcome :gym/truths]
+                            :opt [:gym/landing :gym/ms :gym/reason :gym/commit :gym/result]))

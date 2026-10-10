@@ -30,7 +30,7 @@ Each target row in `goals.edn` names the `--until` value that selects it (`:goal
 - A CLI flag read inside the planner or a dynamic var: a hidden input that a recording would not contain. On the `:go` event the choice is in the recording, so `clojure -M:replay` re-runs the same goals ([[record-replay]]).
 
 ## What would change the answer
-Nothing for the mechanism. A full race simply sends every goal id; a gym matrix ([[ci-wood-workflow]]) sends one row's.
+Nothing for the mechanism. A full race simply sends every goal id; a gym matrix ([[gym-on-runners]]) sends one row's.
 
 ## See also
 - [[randomness-on-the-tick]] - the same rule for another input.

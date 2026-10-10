@@ -13,7 +13,7 @@ sourceRefs:
 related:
   - "[[bot/gotchas/_moc|Gotchas]]"
   - "[[memory-sightings]]"
-  - "[[ci-wood-workflow]]"
+  - "[[gym-on-runners]]"
 ---
 
 # Drop under the trunk

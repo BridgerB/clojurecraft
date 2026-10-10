@@ -12,7 +12,7 @@ sourceRefs:
   - scripts/server.sh#level-type=minecraft:normal
 related:
   - "[[bot/decisions/_moc|Decisions]]"
-  - "[[ci-wood-workflow]]"
+  - "[[gym-on-runners]]"
 ---
 
 # Natural tree, not a fixture
@@ -27,4 +27,4 @@ A flat world with `setblock` placing a log next to a stationary bot. It would ha
 Nothing for the goal itself; a fixture world may return as an additional fast gym for isolated mechanics (crafting windows), never as the only judge.
 
 ## See also
-- [[ci-wood-workflow]]
+- [[gym-on-runners]]

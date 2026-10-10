@@ -15,7 +15,7 @@ sourceRefs:
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[run-locally]]"
-  - "[[ci-wood-workflow]]"
+  - "[[gym-on-runners]]"
 ---
 
 # Local server
