@@ -262,7 +262,7 @@
   (let [world (-> world (assoc :time/now now) (update :time/tick inc))]
     (if (physics-ready? world)
       (let [controls (:player/controls world)]
-        (-> (physics/step (terrain/solid-fn world) world controls)
+        (-> (physics/step (terrain/solid-fn world) (terrain/fluid-fn world) world controls)
             (cond-> (:control/look controls) (assoc :player/look (:control/look controls)))
             movement-packets))
       world)))

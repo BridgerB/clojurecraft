@@ -116,5 +116,29 @@
   [item-id]
   (get tools item-id))
 
+;; ---------------------------------------------------------------- fluids
+
+(def water-states "Every state of water." (states-where (fn [[n]] (= n :water))))
+(def lava-states "Every state of lava." (states-where (fn [[n]] (= n :lava))))
+(def waterlogged-types
+  "Definition types whose blocks are always waterlogged: full water to the physics."
+  #{:waterlogged_transparent :bubble_column :kelp :kelp_plant :seagrass :tall_seagrass})
+(def water-base (apply min water-states))   ; the state of a water source (level 0)
+(def lava-base (apply min lava-states))
+
+(defn fluid
+  "{:fluid/kind :water|:lava :fluid/level 0-15} for a block state that is a fluid, nil for any
+   other. Level 0 is a source; 1-7 flow away from it; 8-15 are falling. A waterlogged block
+   is a water source."
+  [id]
+  (cond
+    (nil? id) nil
+    (contains? water-states id) {:fluid/kind :water :fluid/level (- id water-base)}
+    (contains? lava-states id) {:fluid/kind :lava :fluid/level (- id lava-base)}
+    (contains? waterlogged-types (type-of id)) {:fluid/kind :water :fluid/level 0}
+    :else nil))
+
+(defn source? "Is the block state a fluid source (level 0), the kind a bucket scoops?" [id] (= 0 (:fluid/level (fluid id))))
+
 (def air 0)                           ; the state id of air
 (def item-entity-type (:item entity-types))

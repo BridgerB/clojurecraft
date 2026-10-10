@@ -28,6 +28,10 @@
    [:player/on-ground? "last vertical move hit ground while falling" "always"]
    [:player/horizontal-collision? "last horizontal move was blocked" "always"]
    [:player/jump-ticks "ticks until a jump is allowed again" "always"]
+   [:player/fall-distance "blocks fallen since the last landing or liquid; vanilla hurts past 3" "after the first physics tick"]
+   [:player/in-water? "the body (contracted) overlaps water, by the physics this tick" "after the first physics tick"]
+   [:player/in-lava? "the body (contracted) overlaps lava, by the physics this tick" "after the first physics tick"]
+   [:player/eye-in-water? "the eye (y + 1.62) is inside water, by the physics this tick" "after the first physics tick"]
    [:player/loaded? "player_loaded was sent: the server lets the bot act" "always"]
    [:player/controls "what the planner wants physics to do next tick (:control/*)" "always"]
    [:player/inventory "{player-slot {:item id :count n}}: the server's word, slots 0-40" "always"]
@@ -40,6 +44,7 @@
    [:control/jump? "jump when allowed" "inside :player/controls"]
    [:control/yaw "heading to walk on" "inside :player/controls"]
    [:control/look "[yaw pitch] to face" "inside :player/controls"]
+   [:control/sneak? "sneak: in a liquid, swim down" "inside :player/controls"]
    ;; ---- the player's screen
    [:window/grid "the 2x2 crafting grid of window 0: {cell item}, never inventory" "always"]
    [:window/cursor "the item on the cursor" "while something is carried"]
