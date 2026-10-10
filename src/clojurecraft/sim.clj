@@ -11,9 +11,14 @@
    Fault knobs are inputs, not hidden state: :sim/drop-clicks is a set of click ordinals
    (0-based) the server silently loses. :sim/violations records anything a real server would
    punish or a careful client must never do: a click on an empty result slot, a close with a
-   loaded cursor."
+   loaded cursor.
+
+   Two ways to drive it: run folds bot and model together, deterministic and fast (generated
+   worlds); connect puts the model on a thread behind a channel pair shaped like conn/open's,
+   so main's own loop (its clock, its effects, its tap) runs against it with no Java process."
   (:refer-clojure :exclude [send])
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.core.async :as a]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.recipe :as recipe]))
 
@@ -433,3 +438,33 @@
         (if (or (stop? world) (> t max-ms))
           [world (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out)]   ; deliver the last tick's packets
           (recur world sim out (+ t 50) (or went? go?) inflight))))))
+
+;;;; I/O: the model behind a channel pair, on a thread of its own ;;;;
+
+(def tick-ms 50)                        ; the model's tick, as the vanilla server's
+
+(defn connect
+  "The model behind a channel pair shaped like conn/open's: {:in chan :out chan :close! fn}.
+   Packet maps the client puts on :out are stepped into the model; every tick-ms of wall time
+   the model ticks; whatever it says for the client goes onto :in, in order. Both channels are
+   bounded, as conn's are. :in closes when the client closes :out or calls :close!, which the
+   loop reads as the socket closing."
+  [sim0]
+  (let [in (a/chan 1024)
+        out (a/chan 256)
+        stop (a/chan)
+        t0 (System/currentTimeMillis)]
+    (a/thread
+      (loop [sim sim0 next-tick tick-ms]
+        (let [wait (max 0 (- next-tick (- (System/currentTimeMillis) t0)))
+              [v ch] (a/alts!! [stop out (a/timeout wait)] :priority true)
+              closed? (or (= ch stop) (and (= ch out) (nil? v)))
+              sim (cond closed? sim
+                        (= ch out) (step sim {:sim/kind :packet :sim/packet v})
+                        :else (step sim {:sim/kind :tick :sim/now next-tick}))
+              [sim said] (drain sim)]
+          (doseq [p said] (a/>!! in p))
+          (cond closed? (a/close! in)
+                (= ch out) (recur sim next-tick)
+                :else (recur sim (+ next-tick tick-ms))))))
+    {:in in :out out :close! (fn [] (a/close! stop) (a/close! out))}))

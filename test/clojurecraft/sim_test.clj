@@ -1,7 +1,8 @@
 (ns clojurecraft.sim-test
   "The whole bot against the pure server model: handshake → spawn → chunk → find → walk → dig →
    drop → pickup → done, with no socket and no Java process."
-  (:require [clojure.spec.alpha]
+  (:require [clojure.core.async :as a]
+            [clojure.spec.alpha]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
@@ -10,6 +11,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.main :as main]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
@@ -274,3 +276,22 @@
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (inventory/logs-held w)))
     (is (some (:sim/broken sim) (keys ceiling)) "it broke a leaf over the ledge")))
+
+;; ---------------------------------------------------------------- through a channel pair
+
+(deftest main's-own-loop-against-the-model-through-channels
+  ;; docs/hickey.md: "Bot and server model composed through a channel pair are a complete
+  ;; simulation with no Java process." The loop here is main's: wall-clock ticks, effects
+  ;; drained onto :out, packets read from :in, :go put on the events channel once loaded.
+  (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
+        c (sim/connect (sim/init {:column column :spawn [0.5 64.0 0.5] :keep-alive-every 1000}))
+        events (a/chan 16)
+        world* (atom (game/init fx/opts))
+        deadline (+ (System/currentTimeMillis) 30000)]
+    (main/apply-event! world* {:event/kind :start :start/host "sim" :start/port 0 :start/name "Clj_test"} (:out c) nil)
+    (main/go-when-loaded! world* events {:event/kind :go :go/goals [:wood]})
+    (let [w (main/run-loop c events world* #(or (plan/done? %) (plan/failed? %) (> (System/currentTimeMillis) deadline)) nil)]
+      ((:close! c))
+      (is (plan/done? w) (pr-str (plan/summary w)))
+      (is (= 1 (inventory/logs-held w)))
+      (is (pos? (:stats/keep-alives w)) "the model's keep-alives arrived through the channel and were answered"))))
