@@ -43,7 +43,8 @@ jobs:
           if [ "$free" -lt "$MIN_FREE" ]; then echo "fewer than $MIN_FREE runners free; nothing launched"; exit 0; fi
           ran=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow fleet.yml --limit 1000 --json displayTitle --jq '.[].displayTitle')
           next=""
-          for p in $(ls ci/fleet/queue/*.edn 2>/dev/null | sort); do
+          for p in ci/fleet/queue/*.edn; do   # a glob expands sorted
+            [ -f "$p" ] || continue
             if ! grep -qxF "fleet $p" <<< "$ran"; then next=$p; break; fi
           done
           if [ -n "$next" ]; then

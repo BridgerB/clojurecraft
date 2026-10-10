@@ -1,5 +1,5 @@
 name: fleet
-run-name: fleet ${{ inputs.plan || 'push' }}${{ inputs.salt && format(' #{0}', inputs.salt) || '' }}
+run-name: "fleet ${{ inputs.plan || 'push' }}${{ inputs.salt && format(' salt {0}', inputs.salt) || '' }}"
 
 # Many runners kept busy from one plan file (ci/fleet/<label>.edn). The plan job reads the plan,
 # counts the jobs already running and emits only worker numbers; each worker recomputes its own

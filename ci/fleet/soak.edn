@@ -2,7 +2,7 @@
 ;; sims sample new worlds every run. Sims are the bug finders (about 50 worlds a second on one
 ;; runner, measured in smoke2); the gym walks landing set A once per goal to catch what only real
 ;; terrain shows. No issue: the report lands in the run's summary, and failures are pulled with
-;; clojure -M:fleet pull --run <id>.
+;; clojure -M:fleet pull --run <id>. Pushed (rather than launched) it runs unsalted.
 {:fleet/label "soak"
  :fleet/workers 16
  :fleet/experiments
