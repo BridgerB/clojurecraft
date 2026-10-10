@@ -197,12 +197,15 @@
               :else (do (Thread/sleep (long judge-poll-ms)) (recur)))))))
 
 (defn judge!
-  "Judge one run: wait for the bot's RESULT, ask the server each truth command while the bot
+  "Judge one run: wait for the bot's RESULT, then read what the fixture left (a missing landed
+   file is a landing that never happened), ask the server each truth command while the bot
    still holds, write the result row and print it as one GYMRESULT line. Returns the row."
   [{:keys [goal run name host rcon-port rcon-pass bot-log landed out wait-ms commit]}]
   (let [row (gym goal)
-        left (edn/read-string (slurp landed))
         result (wait-result! bot-log (if wait-ms (parse-long wait-ms) (+ (:gym/timeout-ms row) judge-grace-ms)))
+        left (if (.exists (io/file landed))
+               (edn/read-string (slurp landed))
+               {:gym/landed? false :gym/error "no landed file"})
         truths (when result
                  (try (rcon/with-rcon (or host "127.0.0.1") (parse-long rcon-port) rcon-pass
                         (fn [rc] (mapv #(truth % name (rcon/command rc (truth-cmd % name))) (:gym/truth row))))
