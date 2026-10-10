@@ -1,4 +1,5 @@
 name: fleet
+run-name: fleet ${{ inputs.plan || 'push' }}${{ inputs.salt && format(' #{0}', inputs.salt) || '' }}
 
 # Many runners kept busy from one plan file (ci/fleet/<label>.edn). The plan job reads the plan,
 # counts the jobs already running and emits only worker numbers; each worker recomputes its own
@@ -13,6 +14,9 @@ on:
       plan:
         description: the plan file, e.g. ci/fleet/smoke1.edn
         required: true
+      salt:
+        description: makes a repeated plan (the soak) sample fresh sim worlds
+        default: ''
 
 permissions:
   contents: read
@@ -72,8 +76,10 @@ jobs:
           key: clj-${{ hashFiles('deps.edn') }}
       - id: plan
         name: The worker matrix
+        env:
+          SALT: ${{ inputs.salt }}
         run: |
-          clojure -M:fleet plan --plan "${{ steps.pick.outputs.plan }}" --busy "$BUSY" | tee plan.out
+          clojure -M:fleet plan --plan "${{ steps.pick.outputs.plan }}" --busy "$BUSY" ${SALT:+--salt "$SALT"} | tee plan.out
           cat plan.out >> "$GITHUB_OUTPUT"
 
   world:
@@ -117,7 +123,9 @@ jobs:
           path: data/local-server/server-26.1.2.jar
           key: server-jar-97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51
       - name: Work
-        run: clojure -M:fleet work --plan "${{ needs.plan.outputs.plan }}" --worker "${{ matrix.worker }}" --out out --worlds cache/worlds
+        env:
+          SALT: ${{ inputs.salt }}
+        run: clojure -M:fleet work --plan "${{ needs.plan.outputs.plan }}" --worker "${{ matrix.worker }}" --out out --worlds cache/worlds ${SALT:+--salt "$SALT"}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
