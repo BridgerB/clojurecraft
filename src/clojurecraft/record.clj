@@ -64,6 +64,14 @@
                                               path)))]
     (into [] (take-while some? (repeatedly #(edn/read {:readers readers :eof nil} r))))))
 
+(defn accretes?
+  "Does later hold every fact earlier holds? Maps compare key by key, so attributes added since
+   (accretion) are allowed; a value that changed or an attribute that went missing is not."
+  [earlier later]
+  (cond
+    (and (map? earlier) (map? later)) (every? (fn [[k v]] (and (contains? later k) (accretes? v (get later k)))) earlier)
+    :else (= earlier later)))
+
 (defn recorded-result
   "The RESULT a recording says its run printed, or nil for recordings made before results were
    recorded."

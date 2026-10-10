@@ -167,7 +167,8 @@
 (defn replayed
   "The RESULT of folding the reducer over a recording, judged as the run judged itself (its
    recorded --until), plus :replay/effects (every effect identical, or the first mismatch) and
-   :replay/result (:identical when the fold reaches exactly the RESULT the run printed)."
+   :replay/result (:identical when the fold reaches the RESULT the run printed: every attribute
+   it printed, with the same value; attributes the model gained since are accretion, not change)."
   [path]
   (let [world0 (game/init {:host "replay" :port 0 :name "Clj_replay"})
         final (record/replay step world0 path)
@@ -180,7 +181,7 @@
                                  (= check :record/no-effects) :not-recorded
                                  :else check)
            :replay/result (cond (nil? recorded) :not-recorded
-                                (= r recorded) :identical
+                                (record/accretes? recorded r) :identical
                                 :else {:recorded recorded}))))
 
 (defn replay
