@@ -7,6 +7,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.gym :as gym]
@@ -149,13 +150,69 @@
     (is (= [] (:sim/out sim)) "vanilla ignores it: no answer")))
 
 (deftest an-early-finish-does-not-break-the-block
-  (let [sim0 (assoc (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]}) :sim/phase :play :sim/now 1000)
+  (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] 1}) :spawn [0.5 64.0 0.5]}) :sim/phase :play :sim/now 1000)
         sim (-> sim0
                 (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
                 (sim/step {:sim/kind :tick :sim/now 2000})
                 (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))]
     (is (empty? (:sim/broken sim)))
-    (is (= [:block-changed-ack] (mapv :packet/name (:sim/out sim))))))
+    (is (= [:block-update :block-changed-ack] (mapv :packet/name (:sim/out sim)))
+        "the real server restores the client's view of the block, then acks")
+    (is (= 1 (:state (first (:sim/out sim)))) "restored to stone")))
+
+;; ---------------------------------------------------------------- digging with tools, on the model
+
+(def wooden-pickaxe (get blocks/items :wooden_pickaxe))
+(def stone-id 1)
+(def iron-ore-id (first (blocks/states-where (fn [[n]] (= n :iron_ore)))))
+
+(defn dig-on-model
+  "Start a dig of [1 64 0] (block id) at sim time 1000 with the item in hotbar slot 0 held,
+   FINISH after wait-ms; returns the sim."
+  [id item wait-ms]
+  (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] id})
+                               :spawn [0.5 64.0 0.5]
+                               :inventory (if item {36 {:item item :count 1}} {})})
+                    :sim/phase :play :sim/now 1000 :sim/player-pos [0.5 64.0 0.5])]
+    (-> sim0
+        (sim/step {:sim/kind :packet :sim/packet {:packet/name :set-carried-item :slot 0}})
+        (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
+        (sim/step {:sim/kind :tick :sim/now (+ 1000 wait-ms)})
+        (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))))
+
+(deftest stone-by-hand-breaks-and-drops-cobblestone
+  ;; the game's tags: stone needs no tier, so a hand harvests it, in 2300 ms
+  (let [sim (dig-on-model stone-id nil 2300)]
+    (is (contains? (:sim/broken sim) [1 64 0]))
+    (is (= {:item (get blocks/items :cobblestone) :count 1} (:item (first (vals (:sim/items sim))))) "cobblestone, not stone")))
+
+(deftest stone-with-a-wooden-pickaxe-breaks-sooner-and-wears-the-pickaxe
+  ;; with the pickaxe held the block's time is 1150 ms, and the server breaks at 70% of it,
+  ;; 805 ms: a FINISH at 700 ms is refused, one at 1000 ms (long before the hand's 2300) accepted
+  (let [early (dig-on-model stone-id wooden-pickaxe 700)
+        sim (dig-on-model stone-id wooden-pickaxe 1000)]
+    (is (empty? (:sim/broken early)))
+    (is (contains? (:sim/broken sim) [1 64 0]))
+    (is (= 58 (get-in sim [:sim/inv 36 :durability])) "one use off 59")))
+
+(deftest iron-ore-with-a-wooden-pickaxe-breaks-but-drops-nothing
+  (let [sim (dig-on-model iron-ore-id wooden-pickaxe 7500)]
+    (is (contains? (:sim/broken sim) [1 64 0]))
+    (is (empty? (:sim/items sim)) "the wrong tier: no drop")))
+
+(deftest a-worn-out-tool-leaves-its-slot
+  (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] stone-id}) :spawn [0.5 64.0 0.5]
+                               :inventory {36 {:item wooden-pickaxe :count 1 :durability 1}}})
+                    :sim/phase :play :sim/now 1000 :sim/player-pos [0.5 64.0 0.5])
+        sim (-> sim0
+                (sim/step {:sim/kind :packet :sim/packet {:packet/name :set-carried-item :slot 0}})
+                (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
+                (sim/step {:sim/kind :tick :sim/now 2200})
+                (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))]
+    (is (contains? (:sim/broken sim) [1 64 0]))
+    (is (nil? (get-in sim [:sim/inv 36])) "the last use broke it")
+    (is (some #(and (= :container-set-slot (:packet/name %)) (= 36 (:slot %)) (nil? (:item %))) (:sim/out sim))
+        "and the client is told the slot is empty")))
 
 (deftest every-packet-the-bot-sends-fits-the-table
   ;; instrumentation checks what a reducer is given; this checks what the bot says, over a whole
