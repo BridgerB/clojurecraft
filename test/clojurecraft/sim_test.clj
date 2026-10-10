@@ -330,6 +330,31 @@
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (inventory/logs-held w)))))
 
+(def cliff-and-pond
+  "The only log stands on a plateau two blocks up (x 9..15), with a pond (water two deep) across
+   the whole of x 4..6 but for a dry strip at z 15, and the plateau's edge is a two-block wall
+   except for a one-block step at z 14: the straight line from the spawn ends in the pond or
+   against the wall; the route goes along the strip and up the step."
+  (merge (into {} (for [x (range 9 16) y [64 65] z (range 0 16)] [[x y z] 1]))        ; the plateau
+         (into {} (for [x (range 4 7) y [62 63] z (range 0 15)] [[x y z] 86]))        ; the pond, two deep
+         (into {} (for [x (range 4 7) y [64] z (range 0 15)] [[x y z] 86]))           ; its surface
+         {[8 64 14] 1}                                                                ; the step
+         {[12 66 2] 136 [12 67 2] 136 [12 68 2] 136 [12 69 2] 252}))                  ; the tree
+
+(deftest a-log-across-a-cliff-and-a-pond-is-reached-by-a-route
+  ;; issue #4: a pond between the bot and the trunk, and a two-block ledge, each ended in :stuck
+  ;; before the pathfinder; now the walk plans a route and nothing is blacklisted
+  (let [[w sim] (sim/run step (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes cliff-and-pond) :spawn [1.5 64.0 1.5]})
+                         #(or (plan/done? %) (plan/failed? %)) 90000 {:event/kind :go :go/goals [:wood]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (inventory/logs-held w)))
+    (is (zero? (:plan/attempts w)) "no intent failed")
+    (is (empty? (:plan/blacklist w)))
+    (is (not-any? #(= :stuck (:intention/reason %)) (memory/intentions w)) "never :stuck")
+    (is (empty? (:sim/violations sim)))
+    (is (>= (second (:player/pos w)) 66.0) "it climbed the plateau")))
+
 ;; ---------------------------------------------------------------- through a channel pair
 
 (deftest main's-own-loop-against-the-model-through-channels
