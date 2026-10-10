@@ -3,6 +3,7 @@
    lives here (what an attribute is); what a function requires is stated by that function. Load
    this namespace and `instrument` in tests; nothing here runs in the hot loop."
   (:require [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.packet :as p]
@@ -277,3 +278,18 @@
 (s/def :answer/sequence int?)
 (s/def :answer/entity int?)
 (s/def :answer/count int?)
+
+;; problem statements (resources/clojurecraft/problems.edn), written before each stage is built
+(s/def :problem/stage keyword?)
+(s/def :problem/issue pos-int?)
+(s/def :problem/goals (s/coll-of keyword? :kind vector?))
+(s/def ::text (s/and string? #(not (str/blank? %))))
+(s/def :problem/statement ::text)
+(s/def :problem/needs (s/coll-of ::text :kind vector? :min-count 1))
+(s/def :problem/risks (s/coll-of ::text :kind vector? :min-count 1))
+(s/def :problem/done ::text)
+(s/def :problem/last-failure ::text)
+(s/def :problem/sources (s/coll-of ::text :kind vector? :min-count 1))
+(s/def ::problem (s/keys :req [:problem/stage :problem/statement :problem/needs :problem/risks :problem/done
+                               :problem/last-failure :problem/sources]
+                         :opt [:problem/issue :problem/goals]))

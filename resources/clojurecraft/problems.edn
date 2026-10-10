@@ -1,0 +1,181 @@
+;; Problem statements, one per stage of the run, written before the stage is built (docs/hickey.md,
+;; "And the hammock."): the problem, the information it needs that the bot does not yet gather, what
+;; can go wrong, what done means in world terms, and what the last recorded failure showed. Hand-written
+;; data next to goals.edn; problems_test requires a statement for every target goal and checks every
+;; source exists. Stages already built cite our own recorded failures; stages ahead cite the siblings
+;; (steve, ruststeve), whose notes in brain/siblings are research drafts until re-verified.
+;; Update a row when a run of that stage fails in a new way: the failure is the most valuable line here.
+[{:problem/stage :wood
+  :problem/goals [:wood]
+  :problem/statement "Hold one log from a natural tree, starting wherever the bot lands, with only what the server has sent it."
+  :problem/needs ["Which loaded blocks are logs, and which log of a trunk is at feet height."
+                  "Where its own drop is, and whether a leaf covers it."
+                  "Whether the landing itself is usable: not water, not inside a canopy, not buried."]
+  :problem/risks ["A drop lands under the trunk, out of a 1.8-tall player's reach."
+                  "A leaf at head height hides the drop and walking cannot pass it."
+                  "The fixture lands the bot on a pond, in a canopy or in stone."
+                  "An early FINISH aborts the break."]
+  :problem/done "The server's inventory read for the bot shows any *_log."
+  :problem/last-failure "Recorded in CI and replayed: collect failed :not-picked-up when the bot dug the base log from two blocks above (fixed by trunk-target), and again when a low oak leaf covered the drop (fixed by digging the blocker)."
+  :problem/sources ["brain/bot/gotchas/drop-under-the-trunk.md" "brain/bot/gotchas/leaf-canopy-over-the-drop.md"
+                    "brain/bot/tooling/harness-landing.md" "brain/bot/gotchas/early-finish-aborts.md"]}
+ {:problem/stage :kit
+  :problem/issue 2
+  :problem/goals [:kit]
+  :problem/statement "Turn logs into a crafting table and four sticks through the 2x2 grid, believing only what the server says the window holds."
+  :problem/needs ["The recipes, as data from the server jar."
+                  "Window 0 as the server sees it: grid, cursor and state id, separate from the inventory."
+                  "Which stack each ingredient comes from, chosen before the first click."]
+  :problem/risks ["Leftover planks in the grid craft a button or pressure plate."
+                  "A no-op click gets no answer and the craft stalls."
+                  "The cursor model and the server's record of it disagree."
+                  "A lost or lagged click leaves the grid dirty."]
+  :problem/done "The server's inventory read shows a crafting_table and four sticks; the grid and cursor are empty."
+  :problem/last-failure "Verified live on 26.1.2: after the put-back click the bot still believed a stack was on the cursor, clicked an empty slot to drop it, got no answer and failed :stale-window (fixed by dropping the cursor on every click, as the 775 server does)."
+  :problem/sources ["docs/issues/01-crafting-as-data.md" "brain/bot/crafting/phantom-cursor-stale-window.md"
+                    "brain/bot/crafting/junk-crafts.md" "brain/bot/crafting/sim-faults.md"]}
+ {:problem/stage :pickaxe
+  :problem/issue 7
+  :problem/goals [:pickaxe]
+  :problem/statement "Make a wooden pickaxe, which needs a 3x3 grid: place a crafting table where the server will accept it, open it, and craft through its window."
+  :problem/needs ["A cell near the feet that is loaded, empty, supported and outside the player's box."
+                  "Whether the server accepted the placement (the block update), not the bot's own guess."
+                  "The table window's slots and state id once it opens."]
+  :problem/risks ["No usable cell on uneven ground: placement fails :no-spot."
+                  "Placing into the player's own box is rejected."
+                  "A placement the server refused looks placed if predicted locally."]
+  :problem/done "The server's inventory read shows a wooden_pickaxe and an execute if block at the table's position finds a crafting_table."
+  :problem/last-failure "Recorded in CI: a pickaxe run on an uneven forest floor failed :no-spot because none of the twelve cells two blocks away was usable (fixed by searching rings 1 to 3, one up and one down, with an explicit body test)."
+  :problem/sources ["docs/issues/02-place-block-and-3x3-crafting.md" "brain/bot/decisions/spot-two-blocks-away.md"
+                    "brain/bot/decisions/placement-judged-by-server.md"]}
+
+ {:problem/stage :stone-tools
+  :problem/issue 9
+  :problem/statement "The bot can only dig a log by hand on a constant 3000 ms timer, so it cannot know how long stone takes, which tool to hold, that stone dug by hand drops nothing, or how to get down to stone without falling into a cave, lake or lava."
+  :problem/needs ["Real block hardness per block, generated from typecraft's datagen (the --reports output has none)"
+                  "Harvest rules: the jar's mineable/* and needs_*_tool tags (which tool kind, which tier)"
+                  "Which inventory slot holds the best tool, and the server-confirmed held slot"
+                  "Whether the eyes are in water and whether the bot is on the ground (each a /5 dig penalty)"
+                  "Liquid and air-column contents of every cell a stair-down step would open"
+                  "Remembered stone positions to walk to (memory watches logs only today)"]
+  :problem/risks ["Dig time too short: client predicts air, server restores the block with a block-update"
+                  "Held slot drifts from the server's, so the bot digs with the wrong item and the break is rejected"
+                  "Stone dug by hand or iron ore with a wooden pickaxe takes 7.5 s and drops nothing"
+                  "Tool breaks mid-run and later digs fall back to bare hand"
+                  "Digging under the feet drops the bot into lava, water or a deep shaft"
+                  "Reporting a dig-down as success when the bot never actually fell, so the caller spins"]
+  :problem/done "RCON Inventory shows at least 3 cobblestone with the wooden pickaxe still held, RESULT :ok true, and the recorded run replays to the same RESULT; crafting the stone pickaxe itself is left to the crafting issue."
+  :problem/last-failure "clojurecraft has never attempted this. ruststeve: placeholder hardness 1.0 made natural deepslate digs fail about half the time (the 1.35x+200 ms hold landed on the server's 70% threshold), and once both iron pickaxes wore out after ~550 digs, bare-hand descent ran ~44 s per block."
+  :problem/sources ["docs/issues/05-dig-with-tools-stone-pickaxe.md"
+                    "brain/bot/plan/roadmap-issues.md"
+                    "brain/siblings/sib-dig-hardness.md"
+                    "brain/siblings/sib-dig-stop-timing.md"
+                    "brain/siblings/sib-held-slot-drift.md"
+                    "brain/siblings/sib-dig-down-safety.md"]}
+
+ {:problem/stage :water-and-lava
+  :problem/issue 5
+  :problem/statement "The bot cannot tell it is in water or lava: liquids are passable air to the physics, nothing tracks breath, health or death, and the planner cannot interrupt a running intent, so a bot that walks into a pond sinks, walks the bottom and drowns without noticing."
+  :problem/needs ["In-water, in-lava and eye-in-water flags written by the physics step every tick (eye at y+1.62, not feet+1)"
+                  "Fluid kind and level per block, from the block state ids"
+                  "Estimated air, fall distance, health-zero death and the respawn packet"
+                  "A bank to swim to: nearest column with air at eye height and solid support"
+                  "Water and lava sightings in memory, plus water-trap facts left behind after an escape"]
+  :problem/risks ["Jump in water gives almost no lift; only pressing into a bank fires the 0.3 wall impulse"
+                  "Swimming in an arbitrary heading goes deeper and drowns"
+                  "Head goes under mid-intent and the bot drowns inside the step"
+                  "A one-tick bob to dry Y reads as escaped, then the next step shoves it back in"
+                  "Roofed aquifer: every move goes up into stone while air is sideways and down"
+                  "Standing beside or over lava; a lily pad lid stops the rise"]
+  :problem/done "From a shore landing the bot walks into water and back out: RESULT reports :escaped true, RCON confirms no water at the feet or head cell and OnGround 1b, with at least 9 of 10 CI trials passing and zero deaths."
+  :problem/last-failure "clojurecraft has never attempted this. steve: the bot dove into cave water found 23 blocks down and was hard water-trapped in a 1-wide flooded pocket, losing the run (race81/192). ruststeve: rust-race-003 drowned in a water column under solid stone, every escape move going up while air was one block west and one down."
+  :problem/sources ["docs/issues/06-water-and-lava-survival.md"
+                    "brain/bot/plan/roadmap-issues.md"
+                    "brain/siblings/sib-water-traps.md"
+                    "brain/siblings/sib-water-escape.md"
+                    "brain/siblings/sib-lava-safety.md"]}
+
+ {:problem/stage :iron-kit
+  :problem/issue 6
+  :problem/statement "Between the stone pickaxe and the portal the bot must turn ore into ingots, buckets, a filled water bucket and flint and steel, and both siblings stalled here because fuel was never planned, furnace-window items went uncounted, and scoopable water was not found."
+  :problem/needs ["Furnace window state: slots, state id, carried item, fuel and cook progress properties"
+                  "Fuel as a planned need: burn values per item summed over the inventory"
+                  "Sightings of coal ore, iron ore, gravel and surface water sources (air above, near the column surface)"
+                  "Iron already invested in buckets and flint and steel, so it is not re-mined"
+                  "Proof of a scoop: water_bucket appearing in the inventory"]
+  :problem/risks ["Planks burned as fuel run dry after about 3 ingots and starve the wood chain"
+                  "Items in the furnace or grid are invisible to the inventory count, so steps flicker"
+                  "Closing the window with a loaded cursor drops the item on the ground"
+                  "No reachable surface water in a dry biome; the bot hangs at fill-water"
+                  "Cave or aquifer water is chosen and the bot drowns at the scoop"
+                  "Scoop echo lags, so an empty bucket is reported though the source was there"]
+  :problem/done "RCON Inventory shows a filled water_bucket and flint_and_steel after a live run on the local server, with RESULT :ok true."
+  :problem/last-failure "clojurecraft has never attempted this. steve: no race passed 3 ingots because the smelt burned planks as fuel and no bot mined coal; later its two deepest runs (498, 518) reached two buckets and a full kit and then hung at Fill Water Buckets in a dry jungle and a savanna."
+  :problem/sources ["docs/issues/07-furnace-iron-bucket-flint-and-steel.md"
+                    "brain/bot/plan/roadmap-issues.md"
+                    "brain/siblings/sib-smelt-fuel-deadlock.md"
+                    "brain/siblings/sib-bucket-water-find.md"]}
+
+ {:problem/stage :portal
+  :problem/issue 8
+  :problem/statement "The bot must cast ten obsidian blocks from lava and water into a nether portal frame, light it and stand in it, which can only be done by following a fixed template mold, not by mining obsidian or improvising per cell."
+  :problem/needs ["A site with no lava under the mold footprint (dx -2..6, dy -1..1, dz -2..3)"
+                  "Remembered lava sources within reach of the site, and water and lava as watched sightings"
+                  "The server's block-update for every place and pour, never a local prediction"
+                  "Which ops of the build plan are already satisfied, so a resume skips them"
+                  "The current dimension, from the respawn packet"]
+  :problem/risks ["Lava pour lands on the bot's own feet (lidded cup or floor aim)"
+                  "Water aimed at the floor replaces the lava source instead of making obsidian"
+                  "Scooping late lets water spread and convert the lava pool"
+                  "Placing into a lava source destroys it; casting over a lava sea has no stance"
+                  "A rejected placement left as a ghost block; the pathfinder digs finished obsidian"
+                  "Lighting with the hitbox in the fire cell burns the bot"]
+  :problem/done "Ten obsidian frame blocks and nether_portal blocks inside exist (RCON execute if block), and after standing in the portal RCON data get entity Dimension reads the Nether."
+  :problem/last-failure "clojurecraft has never attempted this. ruststeve: the remaining blocker was casting over a lava sea, and lidded cups bent lava pours onto the bot's feet; its mold then passed 7 of 8 pool gyms and one natural cast in 1374 s. steve: natural 0/63 versus arena 66/72, the wall being lava refill reachability."
+  :problem/sources ["docs/issues/08-portal-cast.md"
+                    "brain/bot/plan/roadmap-issues.md"
+                    "brain/siblings/sib-portal-mold.md"
+                    "brain/siblings/sib-steve-portal-cast.md"
+                    "brain/siblings/sib-lava-safety.md"]}
+
+ {:problem/stage :nether-and-fortress
+  :problem/issue 11
+  :problem/statement "The world value is overworld-only, so after a portal the bot cannot tell which dimension it is in, decodes Nether chunks with the wrong height, and has no safe way to reach a fortress across the lava sea."
+  :problem/needs ["The dimension from login and respawn (sent as a registry index, 3 = the_nether)"
+                  "Per-dimension chunk height: Nether is min-y 0, 16 sections; overworld -64, 24 sections"
+                  "Sightings keyed by dimension, watching nether_bricks, spawner, portal, obsidian and lava"
+                  "Real chunk data after arrival before any step runs, not a timer"
+                  "Lava next to each tunnel step and missing floors ahead"]
+  :problem/risks ["Stale overworld columns answer Nether lookups (a brick reported exactly 64 blocks off)"
+                  "Parsing a Nether chunk as 24 sections runs off the buffer"
+                  "Overworld goals (mine iron) run in the Nether"
+                  "Falling into the lava sea on an open approach to the fortress"
+                  "Fortress brick picked below the lava sea surface"]
+  :problem/done "RCON confirms the bot is in minecraft:the_nether with nether_bricks under its feet or within 6 blocks, RESULT :ok true, and zero deaths counted."
+  :problem/last-failure "clojurecraft has never attempted this. ruststeve: after entering the Nether its overworld columns answered Nether lookups (fortress brick reported 64 blocks too low) and the parser panicked on the shorter Nether chunk; finding the fortress was solved, but reaching it alive was not, with 9+ falls into the lava sea at one spot."
+  :problem/sources ["docs/issues/09-nether-and-fortress.md"
+                    "brain/bot/plan/roadmap-issues.md"
+                    "brain/siblings/sib-dimension-change.md"]}
+
+ {:problem/stage :end-and-dragon
+  :problem/issue 10
+  :problem/statement "Everything after the Nether (blaze rods, pearls, eyes, stronghold, End portal, dragon) has never been crossed naturally by any bot, and the world value has no mob model, no combat packets and no way to follow a thrown eye."
+  :problem/needs ["Every mob in the entity map with velocity and health (health from set-entity-data)"
+                  "The 775 attack packet spec and the pose synced one tick before attacking"
+                  "Eye of ender flight positions after each throw, to triangulate the stronghold"
+                  "Which end portal frames still lack an eye"
+                  "Server-side win signal: dragon entity removed, advancement, or credits game event"
+                  "Server difficulty: Peaceful has no blazes, piglins, endermen or dragon fight"]
+  :problem/risks ["Attacking via interact deals no damage, or a hand-less interact gets the bot kicked"
+                  "Swings inside the 10-tick hurt invulnerability do nothing"
+                  "Wither skeletons or fireballs kill the bot mid-fight"
+                  "Looking at an enderman turns it hostile"
+                  "Kit given before the cross-dimension teleport is missing server-side"
+                  "Dragon not in view mistaken for a win"]
+  :problem/done "RESULT :ok true on the dragon being dead, confirmed by RCON execute in minecraft:the_end if entity @e[type=minecraft:ender_dragon] failing."
+  :problem/last-failure "clojurecraft has never attempted this. ruststeve solved blaze combat in an arena after sessions of zero damage (interact instead of attack, 40 swings in 66 ms); steve's stronghold finder is a stub, its dragon attempts f7 1/3/5 were slain by endermen before a single bed, and RCON showed no beds on the bot in the End. No sibling has located a stronghold by eyes."
+  :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
+                    "brain/bot/plan/roadmap-issues.md"
+                    "brain/siblings/sib-775-attack-packet.md"
+                    "brain/siblings/sib-blaze-combat.md"
+                    "brain/siblings/sib-end-and-dragon.md"]}]

@@ -13,6 +13,8 @@ sourceRefs:
   - src/clojurecraft/plan.clj#defmulti done-by
   - src/clojurecraft/intent.clj#defmulti run
   - src/clojurecraft/plan.clj#defn goals-for
+  - test/clojurecraft/problems_test.clj#every-target-goal-was-stated-first
+  - "docs/hickey.md#**And the hammock.**"
   - src/clojurecraft/plan.clj#defn current-id
   - test/clojurecraft/plan_test.clj#a-retired-goal-stays-and-points-at-its-replacement
 related:
@@ -24,6 +26,7 @@ related:
 # Add a goal
 
 ## Steps
+0. Write the problem statement first: a row in `resources/clojurecraft/problems.edn` with the problem, the information the bot does not yet gather, what can go wrong, what done means in world terms, and the last recorded failure (ours or a sibling's), with its sources. `problems_test` fails while a target goal has no statement (`docs/hickey.md`, "And the hammock.").
 1. If the goal is "hold these items", it is one row: add `{:goal/id :stone-pickaxe :goal/priority 4 :goal/target? true :goal/until "stone-pickaxe" :goal/provides {:item/stone_pickaxe 1} :goal/done? :provided?}` to `resources/clojurecraft/goals.edn`. The needs planner finds the recipe row and everything under it ([[make-goals]]).
 2. If something it needs has no producer (cobblestone is mined, not crafted), add a producer row that states its needs, its provides and its `:goal/act`, e.g. `{:goal/id :mine-stone :goal/needs {:item/wooden_pickaxe 1} :goal/provides {:item/cobblestone 1} :goal/act :mine :goal/done? :provided?}`.
 3. Only a new kind of action is code: `(defmethod plan/act :mine [world row] ...)` returning an intent map, and the intent itself as `(defmethod intent/run :mine [world intent event] ...)` (see `craft.clj` for a staged one). A new completion rule is `(defmethod plan/done-by :some-predicate [world goal] ...)` named by the row's `:goal/done?`.
