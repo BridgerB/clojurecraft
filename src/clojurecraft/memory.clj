@@ -163,13 +163,11 @@
   [world [x y z]]
   (and (log-at? world [x y z]) (not (log-at? world [x (dec y) z]))))
 
-(defn centre "The centre of a block position." [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
-
 (defn nearest-of
   "Nearest of positions within radius of eye, or nil."
   [eye radius positions]
   (->> positions
-       (map (fn [p] [(physics/distance eye (centre p)) p]))
+       (map (fn [p] [(physics/distance eye (physics/centre p)) p]))
        (filter (fn [[d _]] (<= d radius)))
        (sort-by first)
        first

@@ -24,6 +24,8 @@
 
 (defn eye "Eye position of a player whose feet centre is [x y z]." [[x y z]] [x (+ y eye-height) z])
 
+(defn centre "The centre point of the block at integer position [x y z]." [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
+
 (defn expand
   "The box grown along a velocity: the region a move may sweep through this tick."
   [[x0 y0 z0 x1 y1 z1] [vx vy vz]]

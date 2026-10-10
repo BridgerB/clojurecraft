@@ -32,12 +32,10 @@
 (def collect-timeout 10000)           ; ms a collect may take before it fails
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
 
-(defn centre "The centre point of the block at integer position [x y z]." [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
-
 (defn face-toward
   "Block face nearest the eye: 0 down 1 up 2 north 3 south 4 west 5 east."
   [eye target]
-  (let [[dx dy dz] (map - eye (centre target))
+  (let [[dx dy dz] (map - eye (physics/centre target))
         ax (abs dx) ay (abs dy) az (abs dz)]
     (cond (and (>= ay ax) (>= ay az)) (if (pos? dy) 1 0)
           (>= ax az) (if (pos? dx) 5 4)
@@ -76,7 +74,7 @@
   (let [tick (:time/tick world)
         started (or started tick)
         best-tick (or best-tick tick)
-        d (physics/distance (game/eye world) (centre target))
+        d (physics/distance (game/eye world) (physics/centre target))
         progressed? (< d (- best-dist 0.25))
         best-dist (if progressed? d best-dist)
         best-tick (if progressed? tick best-tick)
@@ -85,7 +83,7 @@
         world (intent world assoc :intent/started started :intent/best-dist best-dist :intent/best-tick best-tick)]
     (cond
       (<= d reach)
-      (-> world (assoc :player/controls {:control/look (physics/look-at (game/eye world) (centre target))}) done)
+      (-> world (assoc :player/controls {:control/look (physics/look-at (game/eye world) (physics/centre target))}) done)
 
       (or (> (- tick started) walk-timeout-ticks) (>= detours max-detours))
       (-> world (assoc :player/controls {}) (fail :stuck))
@@ -95,10 +93,10 @@
         (-> world
             (intent assoc :intent/detour-until (+ tick detour-ticks) :intent/detour-yaw yaw
                     :intent/detours (inc detours) :intent/best-tick tick)
-            (assoc :player/controls (assoc (toward world (centre target) yaw) :control/jump? true))))
+            (assoc :player/controls (assoc (toward world (physics/centre target) yaw) :control/jump? true))))
 
       :else
-      (assoc world :player/controls (toward world (centre target) (if detouring? detour-yaw 0.0))))))
+      (assoc world :player/controls (toward world (physics/centre target) (if detouring? detour-yaw 0.0))))))
 
 ;; ---------------------------------------------------------------- dig
 
@@ -121,7 +119,7 @@
         (and at-target (not (blocks/solid? at-target)))
         (fail world :target-gone)
 
-        (> (physics/distance eye (centre target)) (+ reach 0.5))
+        (> (physics/distance eye (physics/centre target)) (+ reach 0.5))
         (fail world :out-of-reach)
 
         (and (>= still 3) (> (- now since) settle-ms))
@@ -139,7 +137,7 @@
 
         :else
         (-> world
-            (assoc :player/controls {:control/look (physics/look-at eye (centre target))})
+            (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
             (intent assoc :intent/still (if (still? world) (inc still) 0))))
 
       :digging
@@ -191,7 +189,7 @@
   (let [now (:time/now world)
         tick (:time/tick world)
         since (or since now)
-        goal (or (:entity/pos (nearest-item world (centre target))) (centre target))
+        goal (or (:entity/pos (nearest-item world (physics/centre target))) (physics/centre target))
         d (physics/horizontal-distance (:player/pos world) goal)
         progressed? (< d (- best-dist 0.1))
         best-tick (if (or progressed? (nil? best-tick)) tick best-tick)

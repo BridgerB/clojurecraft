@@ -32,7 +32,7 @@
                                 (not (overlaps? (:player/pos w) target))
                                 (= support (update target 1 dec))
                                 (<= (abs (- (second target) 64)) 1)
-                                (<= (physics/distance (game/eye w) (intent/centre target)) place/place-reach)))))]
+                                (<= (physics/distance (game/eye w) (physics/centre target)) place/place-reach)))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
 
 (defn intent-step

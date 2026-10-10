@@ -58,7 +58,7 @@
                             (not= :liquid (blocks/type-of t))
                             (blocks/solid? s)
                             (not (inside-player? world target))
-                            (<= (physics/distance eye (intent/centre target)) place-reach))]
+                            (<= (physics/distance eye (physics/centre target)) place-reach))]
              [target support]))))
 
 (defn use-item-on
@@ -107,7 +107,7 @@
     (intent/fail world :no-spot)))
 
 (defmethod place-stage :settle [world {:intent/keys [target against since still]}]
-  (let [look (physics/look-at (game/eye world) (intent/centre target))
+  (let [look (physics/look-at (game/eye world) (physics/centre target))
         still (if (intent/still? world) (inc still) 0)
         world (assoc world :player/controls {:control/look look})]
     (if (and (>= still 3) (> (- (now world) since) settle-ms))
@@ -140,8 +140,8 @@
     (cond
       (and open (:window/state-id open)) (intent/done world)
       (= stage :sent) (if (> (- (now world) sent-at) answer-ms) (intent/fail world :no-window) world)
-      (> (physics/distance eye (intent/centre target)) open-reach) (intent/fail world :out-of-reach)
+      (> (physics/distance eye (physics/centre target)) open-reach) (intent/fail world :out-of-reach)
       :else (-> world
-                (assoc :player/controls {:control/look (physics/look-at eye (intent/centre target))})
+                (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
                 (use-item-on target (intent/face-toward eye target) [0.5 0.5 0.5])
                 (set-intent :intent/stage :sent)))))
