@@ -153,3 +153,22 @@
       (let [[w _] (run (world-state [0.5 64.0 0.5]) [{:event/kind :go :go/goals [:wood]}])]
         (is (= #{:wood-3} (:plan/goals w))))))
   (is (true? clojurecraft.spec/goals-valid?) "the real table's replacements all exist"))
+
+(deftest the-leaf-over-a-step-is-a-blocker
+  (let [col (world/column {[0 64 1] 1 [0 66 1] 252})
+        w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
+    (is (= [0 66 1] (clojurecraft.intent/blocker w [0.5 65.0 3.5])) "a step at the feet, leaves where the jump goes"))
+  (let [col (world/column {[0 66 1] 252})
+        w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
+    (is (nil? (clojurecraft.intent/blocker w [0.5 64.0 3.5])) "no step: a leaf above the head is not in the way")))
+
+(deftest a-wall-is-not-a-step
+  (let [col (world/column {[0 64 1] 136 [0 65 1] 136 [0 66 1] 252})
+        w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
+    (is (not (clojurecraft.intent/step? w [0 64 1])) "a trunk is a wall")
+    (is (nil? (clojurecraft.intent/blocker w [0.5 64.0 3.5])) "so the leaf on top of it is not in the way")))
+
+(deftest a-jump-onto-a-step-needs-headroom-over-the-player-too
+  (let [col (world/column {[0 64 1] 1 [0 66 0] 252})
+        w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
+    (is (= [0 66 0] (clojurecraft.intent/blocker w [0.5 65.0 3.5])) "the leaf over the bot caps the jump")))

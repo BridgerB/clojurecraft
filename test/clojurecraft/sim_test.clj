@@ -242,3 +242,16 @@
     (is (= 1 (:answer/count (first pickups))))
     (testing "the pickup came after the dig was acknowledged"
       (is (<= (:answer/at (last acks)) (:answer/at (first pickups)))))))
+
+(deftest a-drop-on-a-ledge-under-leaves-is-reached
+  ;; recorded live 2026-10-10 and replayed: the drop lay one block up a ledge whose edge had
+  ;; leaves at the height a jump needs, and over the bot too, so no jump rose a full block; the
+  ;; bot jumped against them for 11 s, three times over
+  (let [ledge (into {} (for [x [3 4 5 6] z [0 1]] [[x 64 z] 1]))
+        ceiling (into {} (for [x [1 2 3 4] z [0 1]] [[x 66 z] 252]))
+        column (world/column-bytes (merge ledge ceiling {[5 65 0] 136 [5 66 0] 136 [5 67 0] 136 [5 68 0] 252}))
+        [w sim] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                         #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (inventory/logs-held w)))
+    (is (some (:sim/broken sim) (keys ceiling)) "it broke a leaf over the ledge")))

@@ -170,21 +170,31 @@
        first
        second))
 
+(defn step?
+  "Is the block at pos a one-block step: solid, with no solid block on top of it? A wall (two
+   solid blocks, e.g. a trunk) is not a step."
+  [world [x y z]]
+  (boolean (and (some-> (terrain/block-at world [x y z]) blocks/solid?)
+                (not (some-> (terrain/block-at world [x (inc y) z]) blocks/solid?)))))
+
 (defn blocker
   "The leaf block in the way of walking from the player toward goal, at head or feet height,
-   or nil. Only leaves: anything else is a job for the pathfinder (#4)."
+   or, where the way steps up one block (step?), one above the head over the step and over the
+   player: a jump onto a step needs headroom in both columns (recorded live 2026-10-10: a drop
+   on a ledge under a canopy edge, leaves over the bot too). nil when none. Only leaves:
+   anything else is a job for the pathfinder (#4)."
   [world goal]
   (let [[px py pz] (:player/pos world)
         [gx _ gz] goal
         fx (long (Math/floor px)) fz (long (Math/floor pz)) feet (long (Math/floor py))
         cx (long (Math/floor (+ px (* 0.8 (Math/signum (double (- gx px)))))))
         cz (long (Math/floor (+ pz (* 0.8 (Math/signum (double (- gz pz)))))))]
-    (first (for [[x z] (distinct [[cx fz] [fx cz] [cx cz]])
-                 :when (not= [x z] [fx fz])
-                 y [(inc feet) feet]
-                 :let [id (terrain/block-at world [x y z])]
-                 :when (and id (blocks/leaves? id))]
-             [x y z]))))
+    (let [ahead (remove #{[fx fz]} (distinct [[cx fz] [fx cz] [cx cz]]))
+          steps (filter (fn [[x z]] (step? world [x feet z])) ahead)
+          spots (concat (for [[x z] ahead, y [(inc feet) feet]] [x y z])
+                        (for [[x z] steps] [x (+ feet 2) z])
+                        (when (seq steps) [[fx (+ feet 2) fz]]))]
+      (first (filter #(some-> (terrain/block-at world %) blocks/leaves?) spots)))))
 
 (defmethod run :collect
   [world {:intent/keys [target since best-dist best-tick logs-before] :or {best-dist Double/MAX_VALUE}} _]
