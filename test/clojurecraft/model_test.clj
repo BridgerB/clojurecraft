@@ -48,7 +48,7 @@
 
 (deftest memory-facts-are-in-the-model
   (testing "facts live in the DataScript value, which the key walk does not enter"
-    (is (every? model/by-attribute [:sight/pos :sight/state :sight/at :intention/id :intention/event
+    (is (every? model/by-attribute [:sight/pos :sight/state :sight/at :pool/chunk :pool/kind :pool/pos :pool/at :intention/id :intention/event
                                     :intention/kind :intention/at :intention/target :intention/recipe
                                     :intention/reason :answer/kind :answer/at :answer/sequence :answer/entity
                                     :answer/count]))))

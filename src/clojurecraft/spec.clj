@@ -240,6 +240,10 @@
 (s/def :sight/pos ::block-pos)
 (s/def :sight/state int?)
 (s/def :sight/at int?)
+(s/def :pool/chunk (s/coll-of int? :kind vector? :count 2))
+(s/def :pool/kind #{:water :lava})
+(s/def :pool/pos ::block-pos)
+(s/def :pool/at int?)
 (s/def :stats/keep-alives nat-int?)
 (s/def :stats/teleports nat-int?)
 (s/def :stats/chunks nat-int?)
@@ -390,6 +394,7 @@
 (s/fdef terrain/block-at :args (s/cat :world (requires :world/chunks) :pos (s/coll-of number? :count 3)))
 (s/fdef terrain/solid-fn :args (s/cat :world (requires :world/chunks)))
 (s/fdef memory/positions-now :args (s/cat :world (requires :world/facts) :states coll?))
+(s/fdef memory/nearest-surface-water :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number?))
 (s/fdef memory/nearest-log :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number? :blacklist any?
                                         :bottom? (s/? ifn?)))
 (s/fdef make/near :args (s/cat :world (requires :player/pos :world/facts) :block keyword?))
@@ -404,7 +409,7 @@
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
-   `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-log `make/near `make/decide
+   `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water `memory/nearest-log `make/near `make/decide
    `wood/gather-next `place/spot `window/view `path/plan `path/classify])
 (s/def :stats/deaths pos-int?)
 

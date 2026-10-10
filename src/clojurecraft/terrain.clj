@@ -63,4 +63,5 @@
   (-> world
       (assoc-in [:world/chunks key] column)
       (update :world/blocks (fn [m] (into {} (remove (fn [[pos _]] (in-chunk? key pos)) m))))
-      (memory/remember-column key column)))
+      (memory/remember-column key column)
+      (memory/remember-pools key column)))
