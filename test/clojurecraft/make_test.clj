@@ -1,6 +1,7 @@
 (ns clojurecraft.make-test
-  "The planner never asks for something the world cannot do: over generated inventories, the
-   intent it picks for the :pickaxe goal is always executable from what is held and known."
+  "The planner never asks for something the world cannot do: over generated inventories and
+   every target in the goal table, the intent it picks is always executable from what is held
+   and known (the essay's \"never selects a goal whose needs are unmet\")."
   (:require [clojure.edn]
             [clojure.spec.alpha]
             [clojure.test :refer [deftest is testing]]
@@ -48,12 +49,12 @@
 (deftest the-planner-only-picks-executable-intents
   (let [r (tc/quick-check
            400
-           (prop/for-all [held held-gen table? gen/boolean]
+           (prop/for-all [held held-gen table? gen/boolean goal (gen/elements plan/targets)]
                          (let [w (world-holding held table?)
-                               i (make/decide w pickaxe)
+                               i (make/decide w goal)
                                counts (recipe/counts (:player/inventory w))]
                            (cond
-                             (pos? (get counts :wooden_pickaxe 0)) (nil? i)
+                             (plan/done-by w goal) (nil? i)
                              (nil? i) false
                              :else (and (executable? w i)
                             ;; gather (wait :no-log) only when no craft could make progress

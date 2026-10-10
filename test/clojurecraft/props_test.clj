@@ -7,8 +7,10 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.packet :as p]
-            [clojurecraft.spec]))
+            [clojurecraft.spec]
+            [clojurecraft.world :as world]))
 
 (defn in-play []
   (first (fx/fold game/step (game/init fx/opts)
@@ -54,3 +56,39 @@
                              phases (reductions p/next-state :play (fx/names fx))]
                          (and (every? #{:play :configuration} phases)
                               (= (:bot/phase w) (last phases)))))))
+
+(def log-id 136)
+(def leaves-id 252)
+
+(defn standing-by
+  "In play on a stone floor at [5.5 64 5.5], at rest, with block id at [7 64 5] and a dig of it
+   as the current intent."
+  [id]
+  (assoc (game/init fx/opts)
+         :bot/phase :play :player/pos [5.5 64.0 5.5] :player/vel [0.0 -0.078 0.0] :player/loaded? true
+         :player/on-ground? true :world/chunks {[0 0] (world/column {[7 64 5] id})}
+         :plan/intent {:intent/kind :dig :intent/target [7 64 5] :intent/status :active}))
+
+(defn dig-step
+  "game/step, then one tick of the dig intent while it is active."
+  [w e]
+  (let [w (game/step w e)
+        i (:plan/intent w)]
+    (if (and (= :tick (:event/kind e)) (= :active (:intent/status i))) (intent/run w i e) w)))
+
+(defn uneven-ticks
+  "Ticks at the given gaps (ms), then steady 50 ms ticks to 10 s so every dig can finish."
+  [gaps]
+  (let [ts (reductions + 0 gaps)]
+    (for [t (concat ts (range (+ (last ts) 50) (+ (last ts) 10000) 50))]
+      {:event/kind :tick :event/now t :event/rand 0.5})))
+
+(deftest a-dig-never-finishes-before-its-deadline
+  (check (prop/for-all [id (gen/elements [log-id leaves-id])
+                        gaps (gen/vector (gen/choose 1 400) 0 60)]
+                       (let [[_ fx] (fx/fold dig-step (standing-by id) (uneven-ticks gaps))
+                             actions (for [[t p] (fx/sent fx) :when (= :player-action (:packet/name p))] [t (:status p)])
+                             [[t0 s0] [t1 s1] :as all] actions]
+                         (and (= 2 (count all)) (= [0 2] [s0 s1])
+                              (>= (- t1 t0) (intent/finish-delay id))
+                              (>= (- t1 t0) (intent/dig-time id)))))))
