@@ -30,7 +30,7 @@ related:
 1. **`:equip`**: find the lowest player slot holding the item (none fails `:not-held`). Already the held slot → `:spot`. In the hotbar → `set-carried-item` to it, set `:player/held-slot`, `:spot`. In the main inventory → a mode-2 click on that slot with `button` = the held slot (swap into the hand), and stay in `:equip` until the answer arrives.
 2. **`:spot`**: `spot` picks `[target support]` (none fails `:no-spot`).
 3. **`:settle`**: look at the target's centre; after 3 still ticks and 300 ms, send `use-item-on` against the **support** block, face 1 (top), cursor `[0.5 1.0 0.5]`, with the next `:bot/sequence`, plus a swing; → `:sent`.
-4. **`:sent`**: done when `game/block-at` at the target equals `memory/placed-state` of the item (the server's `block-update` wrote it). Fails `:rejected` once `:stats/last-ack` has reached our sequence and 500 ms have passed without the block. Fails `:no-answer` after 3000 ms.
+4. **`:sent`**: done when `terrain/block-at` at the target equals `memory/placed-state` of the item (the server's `block-update` wrote it). Fails `:rejected` once `:stats/last-ack` has reached our sequence and 500 ms have passed without the block. Fails `:no-answer` after 3000 ms.
 
 ## Key files
 - `place.clj`, `spot` - pure: the first cell of `around` (rings 1-3, feet level then one down then one up) whose target is loaded, not solid and not liquid, whose support below is solid, which does not intersect the player (`inside-player?`), and whose centre is within `place-reach` (4.0) of the eye ([[spot-two-blocks-away]]).

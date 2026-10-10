@@ -36,7 +36,7 @@ related:
 ## Gotchas
 - `grass` (grass_block's type) must stay out of `passable-types` ([[grass-type-is-grass]]).
 - `solid?` is an approximation: slabs, stairs, fences, walls, doors, leaves and snow blocks are full cubes; `snow_layer` is passable whatever its height.
-- `solid?` of an unknown id (-1, beyond the table) is false, but `game/solid-fn` treats an *unloaded* block (nil) as solid; the two are different questions.
+- `solid?` of an unknown id (-1, beyond the table) is false, but `terrain/solid-fn` treats an *unloaded* block (nil) as solid; the two are different questions.
 - `_log` includes `stripped_*_log` but not `*_wood`, `crimson_stem` or `warped_stem`, unlike the `#logs` item tag the recipes use ([[any-log-species]]).
 - `air` is 0 and `item-entity-type` is the `:item` entity id (71 at 26.1.2).
 

@@ -25,7 +25,8 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
-            [clojurecraft.physics :as physics]))
+            [clojurecraft.physics :as physics]
+            [clojurecraft.terrain :as terrain]))
 
 (def version
   "The server version the generated tables describe (resources/clojurecraft/version.edn)."
@@ -82,25 +83,7 @@
 
 ;; ---------------------------------------------------------------- queries
 
-(defn block-at
-  "State id at [x y z]: local overlay first, then the chunk; nil when unloaded."
-  [world pos]
-  (or (get (:world/blocks world) pos) (chunk/block-at (:world/chunks world) pos)))
-
-(defn solid-fn
-  "Solidity oracle for physics. Unloaded counts as solid so the bot never falls out of the world."
-  [world]
-  (fn [x y z]
-    (let [id (block-at world [x y z])]
-      (if (nil? id) true (blocks/solid? id)))))
-
 (defn eye "The player's eye position; :player/pos must be known." [world] (physics/eye (:player/pos world)))
-
-(defn chunk-loaded?
-  "Is the chunk column holding block or feet position [x y z] in :world/chunks?"
-  [world [x _ z]]
-  (contains? (:world/chunks world)
-             [(bit-shift-right (long (Math/floor x)) 4) (bit-shift-right (long (Math/floor z)) 4)]))
 
 ;; ---------------------------------------------------------------- packets
 
@@ -138,46 +121,16 @@
         (cond-> (not loaded?) (-> (emit {:packet/name :player-loaded})
                                   (assoc :player/loaded? true))))))
 
-(defn chunk-key
-  "[cx cz] from a packed chunk position (x in the low 32 bits, z in the high 32)."
-  [v] [(long (unchecked-int v)) (long (unchecked-int (bit-shift-right v 32)))])
-
-(defn in-chunk? "Is block [x y z] inside chunk column key [cx cz]?" [key [bx _ bz]] (= key [(bit-shift-right bx 4) (bit-shift-right bz 4)]))
-
 (defn load-chunk
-  "Put a chunk column into :world/chunks, drop overlay blocks it supersedes, and remember what
-   it holds. The column is the one the reader thread attached, or decoded here from the wire
-   bytes (a replay, the sim); one that fails to decode is logged and skipped, never thrown."
+  "A level-chunk packet: the column the reader thread attached, or decoded here from the wire
+   bytes (a replay, the sim), goes into the terrain; one that fails to decode is logged and
+   skipped, never thrown."
   [world {:keys [x z] :as pkt}]
   (let [key [x z]
         column (:chunk/column (chunk/attach pkt))]
     (if (:chunk/error column)
       (say world (str "bad chunk " key ": " (:chunk/error column)))
-      (-> world
-          (assoc-in [:world/chunks key] column)
-          (update :world/blocks (fn [m] (into {} (remove (fn [[pos _]] (in-chunk? key pos)) m))))
-          (update :stats/chunks inc)
-          (memory/remember-column key column)))))
-
-(defn set-block
-  "A block is known to be id now: overlay the chunk and keep the sighting."
-  [world pos id]
-  (-> world (assoc-in [:world/blocks pos] id) (memory/observe pos id)))
-
-(defn section-update
-  "Apply a section-blocks-update: unpack the section coords and each packed (state, local
-   x y z) and set every block."
-  [world {:keys [section blocks]}]
-  (let [sx (bit-shift-right section 42)
-        sz (bit-shift-right (bit-shift-left section 22) 42)
-        sy (bit-shift-right (bit-shift-left section 44) 44)]
-    (reduce (fn [world v]
-              (let [id (unsigned-bit-shift-right v 12)
-                    lx (bit-and (bit-shift-right v 8) 15)
-                    lz (bit-and (bit-shift-right v 4) 15)
-                    ly (bit-and v 15)]
-                (set-block world [(+ (* 16 sx) lx) (+ (* 16 sy) ly) (+ (* 16 sz) lz)] id)))
-            world blocks)))
+      (-> world (terrain/put-column key column) (update :stats/chunks inc)))))
 
 (defn move-entity
   "Shift a tracked entity by a delta in 1/4096 blocks; untracked entities are ignored."
@@ -228,9 +181,9 @@
 (defmethod on-packet [:play :chunk-batch-finished] [w _]
   (emit w {:packet/name :chunk-batch-received :chunks-per-tick 20.0}))
 (defmethod on-packet [:play :level-chunk-with-light] [w p] (load-chunk w p))
-(defmethod on-packet [:play :forget-level-chunk] [w p] (update w :world/chunks dissoc (chunk-key (:pos p))))
-(defmethod on-packet [:play :block-update] [w p] (set-block w (:pos p) (:state p)))
-(defmethod on-packet [:play :section-blocks-update] [w p] (section-update w p))
+(defmethod on-packet [:play :forget-level-chunk] [w p] (update w :world/chunks dissoc (terrain/chunk-key (:pos p))))
+(defmethod on-packet [:play :block-update] [w p] (terrain/set-block w (:pos p) (:state p)))
+(defmethod on-packet [:play :section-blocks-update] [w p] (terrain/section-update w p))
 (defmethod on-packet [:play :set-health] [w p] (assoc w :player/health (:health p)))
 
 (defmethod on-packet [:play :container-set-content] [w {:keys [window-id state-id items carried]}]
@@ -283,7 +236,7 @@
   (and (= :play (:bot/phase world))
        (:player/pos world)
        (:player/loaded? world)
-       (chunk-loaded? world (:player/pos world))))
+       (terrain/chunk-loaded? world (:player/pos world))))
 
 (defn movement-packets
   "pos-rot when something changed, status-only once a second otherwise (vanilla's rule)."
@@ -307,7 +260,7 @@
   (let [world (-> world (assoc :time/now now) (update :time/tick inc))]
     (if (physics-ready? world)
       (let [controls (:player/controls world)]
-        (-> (physics/step (solid-fn world) world controls)
+        (-> (physics/step (terrain/solid-fn world) world controls)
             (cond-> (:control/look controls) (assoc :player/look (:control/look controls)))
             movement-packets))
       world)))

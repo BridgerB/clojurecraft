@@ -34,7 +34,7 @@ related:
 
 ## How it works
 1. The wood goal searches memory, not chunks, so a tree seen before a chunk unloaded is still a target.
-2. After a dig, `game/set-block` records air at the target, so the next search picks the log above it.
+2. After a dig, `terrain/set-block` records air at the target, so the next search picks the log above it.
 
 ## Gotchas
 - `seen-at` is `:time/now`, which is 0 until the first tick; sightings made on the first chunk packets carry 0.

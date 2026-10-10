@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx :refer [fold packets sent packet ticks]]
             [clojurecraft.game :as game]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
@@ -58,7 +59,7 @@
     (testing "swings every 350 ms while digging"
       (is (<= 11 (count swings) 14)))
     (testing "the broken block is air locally and in memory"
-      (is (= 0 (game/block-at w [3 64 0])))
+      (is (= 0 (terrain/block-at w [3 64 0])))
       (is (= 0 (memory/remembered w [3 64 0]))))
     (testing "done once the inventory shows a log"
       (let [[w2 _] (run w [(packet {:packet/name :set-player-inventory :slot 0 :item {:item 134 :count 1}})

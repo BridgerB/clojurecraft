@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx :refer [fold names packets packet ticks]]
             [clojurecraft.game :as game]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.world :as world]))
@@ -110,11 +111,11 @@
                               (packet {:packet/name :add-entity :entity-id 50 :uuid nil :type 71 :x 1.0 :y 64.0 :z 1.0})
                               (packet {:packet/name :add-entity :entity-id 51 :uuid nil :type 5 :x 1.0 :y 64.0 :z 1.0})
                               (packet {:packet/name :move-entity-pos :entity-id 50 :dx 4096 :dy 0 :dz -2048 :on-ground true})])]
-    (is (= 136 (game/block-at w [3 64 0])))
-    (is (= 0 (game/block-at w [3 65 0])) "overlay wins")
-    (is (= 1 (game/block-at w [0 63 0])) "stone floor")
-    (is (nil? (game/block-at w [16 64 0])) "unloaded")
-    (is (= 2 (game/block-at w [17 133 0])) "section update: chunk x=1 z=0 section y=8, local (1,5,0)")
+    (is (= 136 (terrain/block-at w [3 64 0])))
+    (is (= 0 (terrain/block-at w [3 65 0])) "overlay wins")
+    (is (= 1 (terrain/block-at w [0 63 0])) "stone floor")
+    (is (nil? (terrain/block-at w [16 64 0])) "unloaded")
+    (is (= 2 (terrain/block-at w [17 133 0])) "section update: chunk x=1 z=0 section y=8, local (1,5,0)")
     (is (= {50 {:entity/type 71 :entity/pos [2.0 64.0 0.5] :entity/seen-at 0}} (:world/entities w)) "only items are tracked")
     (testing "sightings remember logs and their later states"
       (is (= {[3 64 0] {:block/state 136 :block/seen-at 0} [3 65 0] {:block/state 0 :block/seen-at 0}}
@@ -122,7 +123,7 @@
       (is (= [{:block/state 136 :block/seen-at 0} {:block/state 0 :block/seen-at 0}] (memory/history w [3 65 0]))
           "facts are appended, never overwritten: the log, then the air that replaced it")
       (let [[w2 _] (run w [(packet {:packet/name :forget-level-chunk :pos 0})])]
-        (is (nil? (game/block-at w2 [3 64 0])) "chunk gone")
+        (is (nil? (terrain/block-at w2 [3 64 0])) "chunk gone")
         (is (= 136 (memory/remembered w2 [3 64 0])) "memory stays")))
     (testing "a corrupt chunk is logged, not thrown"
       (let [[w2 fx] (run w [(packet {:packet/name :level-chunk-with-light :x 1 :z 1 :heightmaps [] :data (byte-array 3)})])]

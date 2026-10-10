@@ -3,6 +3,7 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.record :as record]
             [clojurecraft.world :as world]))
 
@@ -71,7 +72,7 @@
       (let [a (first (fx/fold game/step in-play [attached]))
             r (first (fx/fold game/step in-play [wire]))]
         (is (= (dissoc a :world/chunks) (dissoc r :world/chunks)) "same facts, stats and everything else")
-        (is (= [136 136] [(game/block-at a [3 64 3]) (game/block-at r [3 64 3])]) "the same column")))
+        (is (= [136 136] [(terrain/block-at a [3 64 3]) (terrain/block-at r [3 64 3])]) "the same column")))
     (testing "the recording keeps the bytes and drops the derived column, and replays identically"
       (let [tap (record/tap path)]
         (reduce (fn [w e] ((:write tap) e)

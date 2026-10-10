@@ -6,6 +6,7 @@
    randomness comes in on the tick event."
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.physics :as physics]))
 
@@ -113,7 +114,7 @@
         since (or since now)
         eye (game/eye world)
         world (intent world assoc :intent/stage stage :intent/since since)
-        at-target (game/block-at world target)]
+        at-target (terrain/block-at world target)]
     (case stage
       :settle
       (cond
@@ -148,7 +149,7 @@
           (-> world
               (assoc :bot/sequence seq)
               (game/emit {:packet/name :player-action :status 2 :pos target :face face :sequence seq})
-              (game/set-block target blocks/air)   ; do not wait for the server's echo
+              (terrain/set-block target blocks/air)   ; do not wait for the server's echo
               done))
 
         (>= now next-swing)
@@ -181,7 +182,7 @@
     (first (for [[x z] (distinct [[cx fz] [fx cz] [cx cz]])
                  :when (not= [x z] [fx fz])
                  y [(inc feet) feet]
-                 :let [id (game/block-at world [x y z])]
+                 :let [id (terrain/block-at world [x y z])]
                  :when (and id (blocks/leaves? id))]
              [x y z]))))
 

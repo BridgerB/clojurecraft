@@ -12,6 +12,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojurecraft.game :as game]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]))
@@ -95,7 +96,7 @@
   (let [pos (:player/pos world)]
     (boolean (and pos (:player/loaded? world)
                   (<= (physics/horizontal-distance pos at) landing-reach)
-                  (game/chunk-loaded? world pos)))))
+                  (terrain/chunk-loaded? world pos)))))
 
 (defn landing-tick
   "While :landing, wait for the bot to be at :plan/go-at; then plan, or fail after landing-timeout."

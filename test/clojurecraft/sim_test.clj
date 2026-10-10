@@ -8,6 +8,7 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
@@ -30,7 +31,7 @@
     (is (= 1 (inventory/logs-held w)))
     (is (= :play (:bot/phase w)))
     (is (pos? (:stats/keep-alives w)) "the model's keep-alives were answered")
-    (is (= 0 (game/block-at w [6 64 0])))))
+    (is (= 0 (terrain/block-at w [6 64 0])))))
 
 (defn held [w] (recipe/counts (:player/inventory w)))
 

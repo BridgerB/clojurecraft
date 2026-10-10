@@ -10,6 +10,7 @@
    and an ack, and the intent fails rather than believing the block is there."
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
@@ -51,8 +52,8 @@
     (first (for [[dx dy dz] around
                  :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
                        support [(+ fx dx) (+ fy dy -1) (+ fz dz)]
-                       t (game/block-at world target)
-                       s (game/block-at world support)]
+                       t (terrain/block-at world target)
+                       s (terrain/block-at world support)]
                  :when (and t s
                             (not (blocks/solid? t))
                             (not= :liquid (blocks/type-of t))
@@ -115,7 +116,7 @@
       (set-intent world :intent/still still))))
 
 (defmethod place-stage :sent [world {:intent/keys [item target sequence sent-at]}]
-  (let [placed (game/block-at world target)]
+  (let [placed (terrain/block-at world target)]
     (cond
       (= placed (memory/placed-state item)) (intent/done world)
       (and (>= (or (:stats/last-ack world) -1) sequence) (> (- (now world) sent-at) 500))
