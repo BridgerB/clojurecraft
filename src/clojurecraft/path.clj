@@ -257,12 +257,29 @@
   [[x y z]]
   [(long (Math/floor x)) (long (Math/floor y)) (long (Math/floor z))])
 
+(defn start-cell
+  "Where a search from the feet at cell from begins: from itself when it is standable, else the
+   nearest standable cell within one block on the plane and one up or down. A player whose feet
+   sit on a block edge floors into the neighbouring column, which on a hillside is inside the
+   hill (recorded by the gym at landing 21280,18720: the feet at x 21281.0 on a stone edge, the
+   cell they floor into solid, every plan :none); the box rests on the cell beside it. nil when
+   nothing near can be stood on."
+  [world [x y z :as from]]
+  (if (standable? world from)
+    from
+    (->> (for [dy [0 -1 1] dx [0 -1 1] dz [0 -1 1]] [(+ x dx) (+ y dy) (+ z dz)])
+         (filter #(standable? world %))
+         first)))
+
 (defn plan
   "A route for the feet from the cell `from` toward goal: {:path/waypoints [[x y z] ...]
-   :path/cost n :path/status :found|:partial|:none}. opts: {:path/max-nodes n} (default
-   default-max-nodes). Pure and deterministic: equal inputs, equal output. A start that is not
-   standable (the bot is mid-jump, or in a plant) is searched from anyway; a goal in an unloaded
-   chunk comes back :partial toward it, which is the walker's cue to move and plan again."
+   :path/cost n :path/status :found|:partial|:none :path/from start}. opts: {:path/max-nodes n} (default
+   default-max-nodes). Pure and deterministic: equal inputs, equal output. The search begins at
+   start-cell (from, or the standable cell beside it the player's box rests on); with none, the
+   answer is :none with no waypoints. A goal in an unloaded chunk comes back :partial or :none
+   toward it, which is the walker's cue to move and plan again."
   ([world from goal] (plan world from goal {}))
   ([world from goal {:path/keys [max-nodes] :or {max-nodes default-max-nodes}}]
-   (search world from goal max-nodes)))
+   (if-let [start (start-cell world from)]
+     (assoc (search world start goal max-nodes) :path/from start)
+     {:path/waypoints [] :path/cost 0.0 :path/status :none})))

@@ -45,11 +45,12 @@
          (or (= dy 1) (= dy 0) (<= (- path/max-fall) dy -1)))))
 
 (defn sound-route?
-  "Every waypoint standable and sound, consecutive waypoints one move apart."
-  [w from {:path/keys [waypoints]}]
+  "Every waypoint standable and sound, consecutive waypoints one move apart from where the
+   plan began (:path/from when it snapped the start, else from)."
+  [w from {:path/keys [waypoints] :as route}]
   (and (every? #(path/standable? w %) waypoints)
        (every? #(not (#{:water :lava :awkward :unknown} (path/classify w %))) waypoints)
-       (every? (fn [[a b]] (one-move-apart? a b)) (partition 2 1 (cons from waypoints)))))
+       (every? (fn [[a b]] (one-move-apart? a b)) (partition 2 1 (cons (:path/from route from) waypoints)))))
 
 ;; ---------------------------------------------------------------- cells
 
@@ -273,7 +274,8 @@
 (deftest a-found-route-is-walked-by-the-physics-and-ends-in-the-goal
   ;; issue #4's property: over generated terrain, when plan says :found, driving physics/step
   ;; with the walk's follow controller reaches every waypoint in ≤ 80 ticks each and ends in
-  ;; the goal; and plan is deterministic. Worlds with no :found route only check determinism.
+  ;; the goal; and plan is deterministic. The drive starts where the plan did (:path/from: the
+  ;; start, or the standable cell beside it). Worlds with no :found route only check determinism.
   (let [r (tc/quick-check
            200
            (prop/for-all [{:keys [blocks surface from to]} terrain-gen]
@@ -285,8 +287,24 @@
                            (and (= route (path/plan w start goal))
                                 (sound-route? w start route)
                                 (or (not= :found (:path/status route))
-                                    (not (path/standable? w start))
-                                    (let [[reached pos vel] (drive w start (:path/waypoints route))]
+                                    (let [[reached pos vel] (drive w (:path/from route) (:path/waypoints route))]
                                       (and (= (count reached) (count (:path/waypoints route)))
                                            (path/goal-done? goal (path/feet-cell (settle w pos vel))))))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed])))))
+
+(deftest a-start-on-a-block-edge-searches-from-the-cell-the-box-rests-on
+  ;; gym landing 21280,18720: the feet at x 21281.0 on the edge of a stone step, flooring into
+  ;; the step itself; the standable cell is the one beside it. Before this the walk failed
+  ;; :no-path three times in half a second and the plan died
+  (let [hill (merge (fill stone (range 8 16) [64 65] (range 0 16)))          ; a two-high step from x 8
+        w (world-of hill [8.0 64.0 5.5])                                      ; feet on the step's edge
+        from (path/feet-cell [8.0 64.0 5.5])]
+    (is (= [8 64 5] from) "the coordinates floor into the step")
+    (is (not (path/standable? w from)))
+    (is (= [7 64 5] (path/start-cell w from)) "the box rests on the ground beside it")
+    (let [r (path/plan w from {:goal/kind :block :goal/pos [2 64 5]})]
+      (is (= :found (:path/status r)))
+      (is (sound-route? w [7 64 5] r))))
+  (let [w (world-of (fill stone (range 0 16) [64 65 66] (range 0 16)) [5.5 64.0 5.5])]   ; buried: nothing near stands
+    (is (nil? (path/start-cell w [5 64 5])))
+    (is (= {:path/waypoints [] :path/cost 0.0 :path/status :none} (path/plan w [5 64 5] {:goal/kind :block :goal/pos [2 70 5]})))))
