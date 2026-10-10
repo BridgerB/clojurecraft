@@ -15,6 +15,7 @@ sourceRefs:
   - src/clojurecraft/spec.clj#def wire-types
   - test/clojurecraft/sim_test.clj#every-packet-the-bot-sends-fits-the-table
   - test/clojurecraft/fixtures.clj#defn instrumented
+  - src/clojurecraft/spec.clj#(s/fdef sim/step
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[world-value]]"
@@ -36,13 +37,13 @@ related:
 - `::world` requires only `:bot/phase :bot/effects :time/now :time/tick`; everything else is optional, matching "absent, never nil-filled".
 
 ## Instrumented functions
-`fdef`s exist for `game/step`, `plan/step`, `intent/run` (world, event, intent in; world out) and `plan/choose`. `fixtures/instrumented` instruments the first three for a whole test namespace; game, plan and sim tests use it. `goals-valid?` is a def evaluated at load: every row of `plan/goals` conforms to `::goal`.
+`fdef`s exist for `game/step`, `plan/step`, `intent/run` (world, event, intent in; world out), `plan/choose`, and the server model's reducer `sim/step` (`::sim`, `::sim-event`; every packet in `:sim/out` must fit the packet table). `fixtures/instrumented` instruments the four reducers for a whole test namespace; game, plan and sim tests use it. Making the model send a `login-finished` without its username fails the sim tests. `goals-valid?` is a def evaluated at load: every row of `plan/goals` conforms to `::goal`.
 
 ## Gotchas
 - `instrument` checks args only; the `:ret` specs are documentation unless a test calls `s/valid?` (the totality property does).
 - Instrumentation sees what a reducer is given, not the effects it returns (the fold clears them first), so `sim_test`'s `every-packet-the-bot-sends-fits-the-table` checks every packet the bot sends over a whole pickaxe run; dropping one field from the dig's START packet fails it.
 - The packet spec caught hand-built test packets the decoder can never produce (a bare `{:packet/name :login-finished}`); `fixtures/login-finished` is the real shape.
-- Not specced: chunk column internals (`map?`), `:plan/intent` stage keys, `:sim/*`. Accretion is free: an extra key never fails a spec.
+- Not specced: chunk column internals (`map?`) and a few server-model internals kept as plain maps (`:sim/window`, `:sim/dig`, `:sim/cursor`). Accretion is free: an extra key never fails a spec.
 
 ## See also
 - [[property-tests]] - generators over these shapes.

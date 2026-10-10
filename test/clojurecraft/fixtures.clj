@@ -5,9 +5,10 @@
             [clojurecraft.spec]))
 
 (defn instrumented
-  "clojure.test fixture: instrument the reducers for the duration of the namespace."
+  "clojure.test fixture: instrument the reducers (the bot's and the server model's) for the
+   duration of the namespace."
   [f]
-  (stest/instrument [`game/step `clojurecraft.plan/step `clojurecraft.intent/run])
+  (stest/instrument [`game/step `clojurecraft.plan/step `clojurecraft.intent/run `clojurecraft.sim/step])
   (try (f) (finally (stest/unstrument))))
 
 (def opts {:host "h" :port 1 :name "Clj_test"})

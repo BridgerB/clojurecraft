@@ -8,7 +8,8 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.packet :as p]
             [clojurecraft.plan :as plan]
-            [clojurecraft.recipe :as recipe]))
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.sim :as sim]))
 
 (s/def ::vec3 (s/coll-of double? :kind vector? :count 3))
 (s/def ::block-pos (s/coll-of int? :kind vector? :count 3))
@@ -294,3 +295,31 @@
                                :problem/last-failure :problem/sources]
                          :opt [:problem/issue :problem/goals]))
 (s/def :intent/goal keyword?)
+
+;; the server model (sim): a reducer too, so it is specced and instrumented like the bot's
+(s/def :sim/kind #{:packet :tick})
+(s/def :sim/packet ::packet)
+(s/def :sim/now int?)
+(s/def ::sim-event (s/keys :req [:sim/kind] :opt [:sim/packet :sim/now]))
+(s/def :sim/phase #{:handshake :login :configuration :play})
+(s/def :sim/out (s/coll-of ::packet :kind vector?))   ; what the model says is held to the packet table
+(s/def :sim/inv (s/map-of int? slot?))
+(s/def :sim/state-id int?)
+(s/def :sim/held int?)
+(s/def :sim/placed map?)
+(s/def :sim/next-window int?)
+(s/def :sim/clicks nat-int?)
+(s/def :sim/drop-clicks set?)
+(s/def :sim/violations vector?)
+(s/def :sim/keep-alive-every pos-int?)
+(s/def :sim/lag-ticks nat-int?)
+(s/def :sim/column bytes?)
+(s/def :sim/chunk map?)
+(s/def :sim/spawn ::vec3)
+(s/def :sim/broken (s/coll-of ::block-pos :kind set?))
+(s/def :sim/items (s/map-of int? map?))
+(s/def :sim/next-eid int?)
+(s/def :sim/next-keep-alive int?)
+(s/def :sim/keep-alives-pending set?)
+(s/def ::sim (s/keys :req [:sim/phase :sim/now :sim/out]))
+(s/fdef sim/step :args (s/cat :sim ::sim :event ::sim-event) :ret ::sim)
