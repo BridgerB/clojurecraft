@@ -4,8 +4,7 @@
 
    - `match`: what a grid crafts (the server's rule, used by the sim).
    - `clicks`: the container clicks that lay one craft into the grid, from the inventory value.
-   - `next-action`: walk the recipe graph from what is wanted to the first thing to do now
-     ({:action :craft :recipe r}, {:action :gather :want :logs}, :stuck, or nil when satisfied).
+   - `needs`: what one craft consumes; clojurecraft.make turns every recipe into a goal row from it.
 
    Grids are {slot item-name} with slot 1..size² in reading order (slot 0 is the result); the
    2x2 inventory grid is size 2, a crafting table is size 3."
@@ -23,10 +22,6 @@
 (def item-names (into {} (map (fn [[n id]] [id n]) blocks/items)))
 (defn item-name "The item keyword for a numeric item id, or nil." [id] (item-names id))
 (defn item-id "The numeric item id for an item keyword, or nil." [name] (blocks/items name))
-
-(def raw?
-  "Ingredient sets we gather rather than craft."
-  (let [logs (tags :logs)] (fn [s] (every? logs s))))
 
 ;; ---------------------------------------------------------------- shape
 
@@ -161,46 +156,3 @@
                                 (cond-> (pos? left) (conj {:click/slot cs :click/button 0 :click/mode 0})))]))))
                    [{} []] (group-by val (placement r size)))
            second)))
-
-;; ---------------------------------------------------------------- the graph
-
-(def max-depth 6)
-
-(defn resolve-want
-  "[counts' action] for wanting n of any item in set s. action nil means satisfied."
-  [counts s n size depth]
-  (let [h (have counts s)]
-    (cond
-      (>= h n) [(consume counts s n) nil]
-      (> depth max-depth) [counts :stuck]
-      :else
-      (let [counts (consume counts s h)
-            missing (- n h)]
-        (if (raw? s)
-          [counts {:action :gather :want :logs}]   ; any species: the next plan picks its recipe
-          (let [candidates (->> (mapcat by-result s)
-                                (filter #(fits? % size))
-                                (sort-by (fn [r] [(- (reduce + (map (fn [[ns _]] (have counts ns)) (needs r))))
-                                                  (- (:recipe/count r))])))]
-            (or (some (fn [r]
-                        (let [crafts (long (Math/ceil (/ missing (:recipe/count r))))
-                              result (reduce (fn [[c _] [ns k]]
-                                               (let [[c a] (resolve-want c ns (* k crafts) size (inc depth))]
-                                                 (if a (reduced [c a]) [c nil])))
-                                             [counts nil] (needs r))
-                              [_ a] result]
-                          (cond (= a :stuck) nil
-                                a result
-                                :else [counts {:action :craft :recipe (:recipe/id r)}])))
-                      candidates)
-                [counts :stuck])))))))
-
-(defn next-action
-  "The first thing to do toward wants ([[item-name n] ...], in order) given counts, crafting in
-   a size×size grid: {:action :craft :recipe id}, {:action :gather :want :logs}, :stuck, or nil
-   when every want is already held."
-  [counts wants size]
-  (second (reduce (fn [[counts _] [item n]]
-                    (let [[counts a] (resolve-want counts #{item} n size 0)]
-                      (if a (reduced [counts a]) [counts nil])))
-                  [counts nil] wants)))

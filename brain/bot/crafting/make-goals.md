@@ -19,7 +19,6 @@ sourceRefs:
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[goals-and-intents]]"
-  - "[[recipe-graph]]"
   - "[[goals-in-play-from-go]]"
 ---
 
@@ -42,5 +41,5 @@ related:
 - The planner property in `make_test` (400 generated inventories) checks that every chosen intent is executable; it was mutation-checked against a planner that places without a table.
 
 ## See also
-- [[recipe-graph]] - the older recipe-only walk that this generalises.
+- [[one-planner]] - why the older recipe-only walk was removed.
 - [[goals-and-intents]]

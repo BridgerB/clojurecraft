@@ -12,11 +12,11 @@ sourceRefs:
   - "ruststeve:src/bot/crafting.rs#fn find_ingredient_slot(window: &Window, ingredient: &RecipeItem) -> Option<usize> {"
   - "ruststeve:src/bot/crafting.rs#/// result or grid slots (cycle 6): searching the whole window found the plank just placed in the grid once"
   - src/clojurecraft/recipe.clj#defn clicks
-  - src/clojurecraft/recipe.clj#defn resolve-want
+  - src/clojurecraft/make.clj#defn resolve-need
 related:
   - "[[siblings/_moc|Siblings]]"
   - "[[recipe-clicks]]"
-  - "[[recipe-graph]]"
+  - "[[make-goals]]"
   - "[[sib-craft-result-take]]"
 ---
 
@@ -34,7 +34,7 @@ Two ruststeve failures that are about choosing, not clicking.
 3. A cell-by-cell "any plank" fill mixes stacks and can run one stack dry mid-pattern.
 
 ## What it means here
-`recipe/clicks` is a pure function of the inventory value: one source stack per ingredient group that covers every cell of that group, from window-0 inventory slots only, chosen before any click ([[recipe-clicks]]). `resolve-want` sorts candidate recipes by how much of their needs the inventory already covers, so bamboo sticks are never chosen without bamboo; the recipe test pins "never the bamboo stick" ([[recipe-graph]]).
+`recipe/clicks` is a pure function of the inventory value: one source stack per ingredient group that covers every cell of that group, from window-0 inventory slots only, chosen before any click ([[recipe-clicks]]). `make/resolve-need` sorts candidate rows by how much of their needs the inventory already covers, and the bamboo stick's row is never reachable because nothing provides bamboo; `make_test` pins "never the bamboo stick" ([[make-goals]]).
 
 ## Limits
 The covering-recipe fix's code in `src/bot_utils.rs` was not opened; the fix is cited from CHANGES.md only.

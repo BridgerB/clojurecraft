@@ -78,3 +78,25 @@
   (testing "no target needs a per-goal method: wood, kit and pickaxe all plan through the same registries"
     (is (every? #(= :provided? (:goal/done? %)) plan/targets))
     (is (= #{:needs} (set (keys (dissoc (methods plan/next-intent) :default)))))))
+
+(def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
+
+(defn intent-for [held goal]
+  (let [i (make/decide (world-holding (merge {:oak_log 0 :oak_planks 0 :stick 0 :crafting_table 0 :wooden_pickaxe 0} held) false)
+                       goal)]
+    (or (:intent/recipe i) (:plan/wait i) (:intent/kind i))))
+
+(deftest the-needs-planner-walks-the-recipes
+  (is (= :no-log (intent-for {} kit)) "nothing held and no tree known: wait for a log")
+  (is (= :oak_planks (intent-for {:oak_log 1} kit)))
+  (is (= :crafting_table (intent-for {:oak_planks 4} kit)))
+  (is (= :stick (intent-for {:crafting_table 1 :oak_planks 2} kit)))
+  (is (= :no-log (intent-for {:crafting_table 1} kit)) "the table is kept; sticks need another log")
+  (is (nil? (intent-for {:crafting_table 1 :stick 4} kit)))
+  (is (= :stick (intent-for {:oak_planks 2 :crafting_table 1 :stick 0} {:goal/id :sticks :goal/provides {:item/stick 4}}))
+      "sticks from planks, never the bamboo stick"))
+
+(deftest the-needs-planner-uses-the-species-it-holds
+  (let [w (-> (world-holding {} false)
+              (assoc :player/inventory {0 {:item (recipe/item-id :birch_log) :count 1}}))]
+    (is (= :birch_planks (:intent/recipe (make/decide w kit))))))

@@ -19,7 +19,6 @@ related:
   - "[[siblings/_moc|Siblings]]"
   - "[[goals-and-intents]]"
   - "[[make-goals]]"
-  - "[[recipe-graph]]"
 ---
 
 # steve's steps mapped to our goals
@@ -29,7 +28,7 @@ steve's chain is a vector of step objects (`id`, `priority`, `canExecute`, `isCo
 ## Key files
 - steve `src/lib/steve/steps.ts` - `steps` and `getNextStep`.
 - `resources/clojurecraft/goals.edn` - targets `:wood` (priority 1, provides a log), `:kit` (priority 2, provides a crafting table and four sticks) and `:pickaxe` (priority 3, a wooden pickaxe via a placed table).
-- `src/clojurecraft/make.clj`, `next-intent :needs` - the needs planner picks gather, craft or place for every target ([[make-goals]], [[recipe-graph]]).
+- `src/clojurecraft/make.clj`, `next-intent :needs` - the needs planner picks gather, craft or place for every target ([[make-goals]]).
 
 ## The map
 | steve step (priority) | ours today | issue draft |

@@ -17,7 +17,6 @@ Crafting as data (issues #2 and #7): the recipe table, the graph from wants to t
 - [[recipe-table]] - what recipes.edn holds, the shape of a recipe, the lookups.
 - [[recipe-match]] - what a grid crafts: shaped at any offset and mirrored, shapeless by assignment.
 - [[recipe-clicks]] - one craft as window-0 clicks from the inventory value, or nil.
-- [[recipe-graph]] - from wanted items to craft / gather / stuck / nothing, and how a recipe is chosen.
 - [[make-goals]] - the needs planner: provides traced back through producer rows (gather, place a table, one row per recipe) to the row to act on.
 
 ## Executing

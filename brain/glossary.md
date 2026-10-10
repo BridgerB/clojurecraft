@@ -23,7 +23,7 @@ lastUpdated: 2026-10-10
 - **Window 0**: the player's own inventory screen; slots 0-4 are the 2x2 crafting grid (0 = result) kept in `:window/grid`; see [[window-zero-model]], [[mc-window-zero-slots]].
 - **State id**: the counter the server stamps on every window update and the client echoes in each click; an unanswered click is one whose state id never moves; see [[mc-state-ids-prediction]].
 - **Prediction**: the `changed` slots and `cursor` a 775 click claims; we always claim nothing ([[predict-nothing]]), and the server adopts the cursor claim ([[phantom-cursor-stale-window]]).
-- **Recipe graph**: `recipe/next-action`, the walk from wanted items to one next action (craft, gather, stuck); see [[recipe-graph]].
+- **Needs planner**: `make/next-intent :needs`, the walk from a target's provides through producer and recipe rows to one row whose needs are met; see [[make-goals]].
 - **Needs / provides**: a goal row's maps of `:item/<name> n`, `:tag/<tag> n` or `:block/<name> :near`; the needs planner traces provides back through producer rows; see [[make-goals]].
 - **View**: a map describing one window for the click rules (`:view/id :view/state-id :view/size :view/grid :view/slot-of`); see [[window-views]].
 - **Menu type**: the registry index an `open-screen` names; 12 is the crafting table ([[mc-crafting-table-window]]).
