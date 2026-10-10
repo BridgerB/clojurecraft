@@ -20,7 +20,7 @@ Read `docs/hickey.md` first; it is the design brief. In short:
 - **Specs** live in `spec.clj` and are instrumented in tests; properties in `props_test.clj`; the whole bot runs against the pure server model in `sim.clj` (`sim_test.clj`) with no Java process.
 - I/O lives in exactly four namespaces: `conn` (socket), `rcon`, `main`, and `harness`, the RCON fixture, which is its own process (`clojure -M:harness`) and reaches the bot only as EDN events on its stdin (`--events stdin`). Everything else is values in, values out.
 
-Every public function has a docstring stating what it returns and the invariant it relies on; `docs_test.clj` fails otherwise. Functions are public: `defn-` only for a one-line local alias (`now`, `set-intent`), never to hide a domain function from the REPL. Prefer a new pure function over a flag; a map over a record; data over a protocol; a defmethod over an edit to a case. Never change the meaning of an attribute: add a new name beside it.
+Every public function has a docstring stating what it returns and the invariant it relies on; `docs_test.clj` fails otherwise. Functions are public: `defn-` only for a one-line local alias (`now`, `set-intent`), never to hide a domain function from the REPL. A new attribute gets a row in `model/attributes` and a spec in the same change. Prefer a new pure function over a flag; a map over a record; data over a protocol; a defmethod over an edit to a case. Never change the meaning of an attribute: add a new name beside it.
 
 ## Layout
 
@@ -37,7 +37,8 @@ src/clojurecraft/intent.clj   open executors: :walk :dig :collect (multimethod o
 src/clojurecraft/plan.clj     loads goals.edn; registries done-by, act, next-intent; the planner; :plan/*
 src/clojurecraft/make.clj     the needs planner: recipe rows, netting needs against inventory, the acts
 src/clojurecraft/wood.clj     the gather chain toward a log (walk → dig → collect)
-src/clojurecraft/spec.clj     specs for attributes, events, effects, intents; fdefs on the reducers
+src/clojurecraft/model.clj    the information model: every attribute, its meaning, when it exists (model_test keeps it true)
+src/clojurecraft/spec.clj     specs for attributes, events, effects, intents, packets; fdefs on the reducers
 src/clojurecraft/record.clj   event recorder and replay
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin

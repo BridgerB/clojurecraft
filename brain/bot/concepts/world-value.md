@@ -40,4 +40,5 @@ Everything the bot knows is one immutable map held in one atom, written only by 
 Does not cover the plan keys in depth; see [[goals-and-intents]].
 
 ## See also
+- [[information-model]] - every attribute with its meaning and when it exists.
 - [[reducer-and-effects]] - how the value changes.
