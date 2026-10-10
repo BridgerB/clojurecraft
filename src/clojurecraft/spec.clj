@@ -394,6 +394,7 @@
 (s/def :fleet/max-parallel (s/int-in 1 21))
 (s/def :fleet/max-worker-s pos-int?)
 (s/def :fleet/issue pos-int?)
+(s/def :fleet/salt string?)                         ; a repeated plan's run, so its sims sample fresh worlds
 (s/def :exp/name string?)
 (s/def :exp/kind #{:gym :sim})
 (s/def :exp/goal string?)
@@ -415,4 +416,4 @@
             :sim (and (:exp/property %) (:exp/shards %) (:exp/worlds %)))))
 (s/def :fleet/experiments (s/coll-of ::experiment :kind vector? :min-count 1))
 (s/def ::fleet-plan (s/keys :req [:fleet/label :fleet/workers :fleet/experiments]
-                            :opt [:fleet/max-parallel :fleet/max-worker-s :fleet/issue]))
+                            :opt [:fleet/max-parallel :fleet/max-worker-s :fleet/issue :fleet/salt]))

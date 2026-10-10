@@ -58,3 +58,23 @@
     (is (str/includes? md "pass 1/1"))
     (is (str/includes? md "worlds 346 in 2 shards; failing shards 1"))
     (is (str/includes? md "- seed 7: smallest failing input"))))
+
+(deftest a-salt-gives-a-repeated-plan-fresh-seeds-and-nothing-else
+  (let [seeds (fn [p] (map :unit/seed (filter :unit/seed (fleet/units p))))
+        salted (assoc plan :fleet/salt "run-7")]
+    (is (s/valid? :clojurecraft.spec/fleet-plan salted))
+    (is (not-any? (set (seeds plan)) (seeds salted)))
+    (is (= (seeds salted) (seeds (assoc plan :fleet/salt "run-7"))) "the same salt, the same seeds")
+    (is (= (map :unit/id (fleet/units plan)) (map :unit/id (fleet/units salted))))))
+
+(deftest failures-are-every-row-that-did-not-pass-with-its-directory
+  (let [located [{:row {:fleet/exp "wood" :fleet/arm "head" :gym/run 1 :gym/outcome :pass} :path "a"}
+                 {:row {:fleet/exp "wood" :fleet/arm "head" :gym/run 2 :gym/outcome :fail :gym/reason :stuck
+                        :gym/landing [1 70 2]} :path "b"}
+                 {:row {:fleet/exp "forests" :pass? true :seed 1} :path "c"}
+                 {:row {:fleet/exp "forests" :pass? false :seed 9 :smallest [[{:x 1}] 0 1]} :path "d"}]
+        fs (fleet/failures located)]
+    (is (= #{"b" "d"} (set (map :path fs))))
+    (is (= #{"- wood (head) run 2 :fail :stuck at [1 70 2]: b"
+             "- sim forests seed 9 smallest [[{:x 1}] 0 1]: d"}
+           (set (map fleet/failure-line fs))))))

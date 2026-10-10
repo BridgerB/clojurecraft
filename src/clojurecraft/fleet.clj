@@ -46,7 +46,8 @@
             :unit/est-s (+ est-s server-overhead-s)}))))
 
 (defn sim-units
-  "A sim experiment's units: shards of the property, worlds split evenly, each seeded."
+  "A sim experiment's units: shards of the property, worlds split evenly, each seeded from the
+   label (and the salt a repeated plan carries, so each repeat samples fresh worlds)."
   [label {:exp/keys [name property shards worlds est-s]}]
   (vec (for [s (range 1 (inc shards))]
          {:unit/id (str name "-" s)
@@ -59,11 +60,11 @@
 
 (defn units
   "Every unit a plan asks for, in plan order."
-  [{:fleet/keys [label experiments]}]
+  [{:fleet/keys [label salt experiments]}]
   (vec (mapcat (fn [exp]
                  (case (:exp/kind exp)
                    :gym (gym-units exp)
-                   :sim (sim-units label exp)))
+                   :sim (sim-units (str label salt) exp)))
                experiments)))
 
 (defn schedule
@@ -129,6 +130,21 @@
       (str "## " exp " (" arm ")\n\n" (gym/report rows)))
     (for [[exp rows] (sort-by key (group-by :fleet/exp sim-rows))]
       (sim-line exp rows)))))
+
+(defn failures
+  "The trials and shards a person should look at: every row that is not a pass, with where it
+   lives on disk, gym rows by outcome first."
+  [located]
+  (sort-by (juxt (comp str :gym/outcome :row) :path)
+           (remove (fn [{:keys [row]}] (or (= :pass (:gym/outcome row)) (true? (:pass? row)))) located)))
+
+(defn failure-line
+  "One failure as a line: what failed, why, and the directory holding its recording and logs."
+  [{:keys [row path]}]
+  (if (contains? row :gym/outcome)
+    (str "- " (:fleet/exp row) " (" (:fleet/arm row) ") run " (:gym/run row) " " (:gym/outcome row)
+         " " (:gym/reason row) " at " (pr-str (:gym/landing row)) ": " path)
+    (str "- sim " (:fleet/exp row) " seed " (:seed row) " smallest " (pr-str (:smallest row)) ": " path)))
 
 (def properties
   "Sim properties a fleet can shard, by name: the test var that runs one."
@@ -273,28 +289,54 @@
         (harness/log "unit failed:" (:unit/id unit) e)
         (spit (io/file (:out opts) (:unit/id unit) "unit-error.txt") (str e))))))
 
+(defn located-in
+  "Every result row under dir with the directory it came from: [{:row :path}]. A retried trial
+   keeps only its retry."
+  [dir]
+  (let [files (filter #(#{"result.edn" "sim.edn"} (.getName ^java.io.File %)) (file-seq (io/file dir)))
+        retried (set (for [^java.io.File f files :when (= "retry" (.getName (.getParentFile f)))]
+                       (str (.getParentFile (.getParentFile f)))))]
+    (vec (for [^java.io.File f files
+               :let [d (str (.getParentFile f))]
+               :when (not (retried d))]
+           {:row (edn/read-string (slurp f)) :path d}))))
+
 (defn rows-in
   "Every result row under dir, gym rows (result.edn) and sim rows (sim.edn) apart."
   [dir]
-  (let [read-all (fn [n] (->> (file-seq (io/file dir))
-                              (filter #(= n (.getName ^java.io.File %)))
-                              (mapv #(edn/read-string (slurp %)))))]
-    [(read-all "result.edn") (read-all "sim.edn")]))
+  (let [rows (map :row (located-in dir))]
+    [(vec (filter :gym/outcome rows)) (vec (remove :gym/outcome rows))]))
+
+(defn pull!
+  "Download a fleet run's artifacts into data/runs/<run-id>/ (gh run download), print its report
+   and every failure with the directory that holds its recording."
+  [run-id]
+  (let [dir (io/file "data" "runs" (str run-id))]
+    (.mkdirs dir)
+    (exec! ["gh" "run" "download" (str run-id) "--dir" (str dir)] {})
+    (let [[g s] (rows-in dir)
+          fs (failures (located-in dir))]
+      (println (report g s))
+      (println (str "### failures (" (count fs) ")\n"))
+      (doseq [f fs] (println (failure-line f))))))
 
 (defn -main
   "clojure -M:fleet <command> --key value ...
-     plan   --plan ci/fleet/x.edn [--busy N]   matrix=..., width=..., label=... lines for $GITHUB_OUTPUT
-     work   --plan ci/fleet/x.edn --worker N --out dir [--worlds cache/worlds]
-     report --dir artifacts"
+     plan   --plan ci/fleet/x.edn [--busy N] [--salt s]   matrix=..., width=..., label=... for $GITHUB_OUTPUT
+     work   --plan ci/fleet/x.edn --worker N --out dir [--worlds cache/worlds] [--salt s]
+     report --dir artifacts
+     pull   --run <run id>   download into data/runs/<id>/, print the report and every failure"
   [command & args]
-  (let [{:keys [plan worker out worlds dir busy]} (gym/args->map args)]
+  (let [{:keys [plan worker out worlds dir busy salt run]} (gym/args->map args)
+        read (fn [p] (cond-> (read-plan p) salt (assoc :fleet/salt salt)))]
     (case command
-      "plan" (let [p (read-plan plan)]
+      "plan" (let [p (read plan)]
                (println (str "matrix=" (matrix p)))
                (println (str "width=" (width p 20 (parse-long (or busy "0")))))
                (println (str "label=" (:fleet/label p))))
-      "work" (work! (read-plan plan) (parse-long worker)
+      "work" (work! (read plan) (parse-long worker)
                     {:out out :worlds (or worlds "cache/worlds") :bot-dir "." :cp (classpath! ".")
                      :commit (System/getenv "GITHUB_SHA")})
-      "report" (let [[g s] (rows-in dir)] (println (report g s))))
+      "report" (let [[g s] (rows-in dir)] (println (report g s)))
+      "pull" (pull! run))
     (shutdown-agents)))
