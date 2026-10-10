@@ -100,3 +100,17 @@
   (let [w (-> (world-holding {} false)
               (assoc :player/inventory {0 {:item (recipe/item-id :birch_log) :count 1}}))]
     (is (= :birch_planks (:intent/recipe (make/decide w kit))))))
+
+(deftest an-unreachable-table-is-replaced-not-walked-at
+  ;; recorded live 2026-10-10: a remembered table 23 blocks away, a walk to it stuck three times,
+  ;; the plan failed :stuck while the bot held planks enough for a new table
+  (let [w (-> (world-holding {:oak_planks 6 :stick 4} false)
+              (memory/observe [20 64 5] memory/crafting-table))]
+    (is (= {:intent/kind :walk :intent/target [20 64 5]} (make/decide w pickaxe)) "first, the table it remembers")
+    (testing "after the walk failed, the table no longer counts"
+      (is (= {:plan/wait :no-log} (make/decide (assoc w :plan/blacklist #{[20 64 5]}) pickaxe))
+          "six planks are one short of a new table (4) and the pickaxe (3): get a log first")
+      (is (= :crafting_table (:intent/recipe (make/decide (-> w (assoc :plan/blacklist #{[20 64 5]})
+                                                              (assoc-in [:player/inventory 0 :count] 7))
+                                                          pickaxe)))
+          "with seven, craft the new table"))))

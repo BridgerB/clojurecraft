@@ -16,7 +16,7 @@
                   "The fixture lands the bot on a pond, in a canopy or in stone."
                   "An early FINISH aborts the break."]
   :problem/done "The server's inventory read for the bot shows any *_log."
-  :problem/last-failure "Recorded in CI and replayed: collect failed :not-picked-up when the bot dug the base log from two blocks above (fixed by trunk-target), and again when a low oak leaf covered the drop (fixed by digging the blocker)."
+  :problem/last-failure "Recorded in CI and replayed: collect failed :not-picked-up when the bot dug the base log from two blocks above (fixed by trunk-target), and again when a low oak leaf covered the drop (fixed by digging the blocker). Open, recorded live 2026-10-10 on a pickaxe run: three collects in a row at one trunk failed :not-picked-up after about 11 s each, and the fourth log was picked up; not yet diagnosed."
   :problem/sources ["brain/bot/gotchas/drop-under-the-trunk.md" "brain/bot/gotchas/leaf-canopy-over-the-drop.md"
                     "brain/bot/tooling/harness-landing.md" "brain/bot/gotchas/early-finish-aborts.md"]}
  {:problem/stage :kit
@@ -45,7 +45,7 @@
                   "Placing into the player's own box is rejected."
                   "A placement the server refused looks placed if predicted locally."]
   :problem/done "The server's inventory read shows a wooden_pickaxe and an execute if block at the table's position finds a crafting_table."
-  :problem/last-failure "Recorded in CI: a pickaxe run on an uneven forest floor failed :no-spot because none of the twelve cells two blocks away was usable (fixed by searching rings 1 to 3, one up and one down, with an explicit body test)."
+  :problem/last-failure "Recorded in CI: a pickaxe run on an uneven forest floor failed :no-spot because none of the twelve cells two blocks away was usable (fixed by searching rings 1 to 3, one up and one down, with an explicit body test). Recorded live 2026-10-10 and replayed: a table remembered 23 blocks away could not be walked to; three stuck walks failed the plan while the bot held planks for a new one (fixed: a blacklisted table no longer counts as near)."
   :problem/sources ["docs/issues/02-place-block-and-3x3-crafting.md" "brain/bot/decisions/spot-two-blocks-away.md"
                     "brain/bot/decisions/placement-judged-by-server.md"]}
 
