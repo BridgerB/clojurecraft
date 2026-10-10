@@ -5,15 +5,15 @@
    (step solid? world controls) → world'   where solid? is (fn [x y z] bool) over block
    coordinates and controls is {:control/forward? bool :control/jump? bool :control/yaw deg}.")
 
-(def gravity 0.08)
-(def vertical-drag 0.98)
-(def half-width 0.3)
-(def height 1.8)
-(def eye-height 1.62)
-(def jump-velocity 0.42)
+(def gravity 0.08)                    ; blocks per tick², subtracted from vy each tick
+(def vertical-drag 0.98)              ; vy is multiplied by this each tick
+(def half-width 0.3)                  ; the player box is 0.6 wide
+(def height 1.8)                      ; the player box height
+(def eye-height 1.62)                 ; eye above the feet
+(def jump-velocity 0.42)              ; vy given by a jump
 (def ground-inertia (* 0.6 0.91))                     ; slipperiness × 0.91
-(def air-inertia 0.91)
-(def air-acceleration 0.02)
+(def air-inertia 0.91)                ; horizontal velocity kept per tick in the air
+(def air-acceleration 0.02)           ; horizontal input acceleration in the air
 (def ground-acceleration (* 0.1 (/ 0.16277136 (Math/pow ground-inertia 3)))) ; ≈ 0.1
 (def negligible 0.003)                                ; velocities below this snap to zero
 
@@ -22,13 +22,17 @@
   [[x y z]]
   [(- x half-width) y (- z half-width) (+ x half-width) (+ y height) (+ z half-width)])
 
-(defn eye [[x y z]] [x (+ y eye-height) z])
+(defn eye "Eye position of a player whose feet centre is [x y z]." [[x y z]] [x (+ y eye-height) z])
 
-(defn- expand [[x0 y0 z0 x1 y1 z1] [vx vy vz]]
+(defn centre "The centre point of the block at integer position [x y z]." [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
+
+(defn expand
+  "The box grown along a velocity: the region a move may sweep through this tick."
+  [[x0 y0 z0 x1 y1 z1] [vx vy vz]]
   [(+ x0 (min 0.0 vx)) (+ y0 (min 0.0 vy)) (+ z0 (min 0.0 vz))
    (+ x1 (max 0.0 vx)) (+ y1 (max 0.0 vy)) (+ z1 (max 0.0 vz))])
 
-(defn- solid-boxes
+(defn solid-boxes
   "Unit boxes of every solid block touching the region."
   [solid? [x0 y0 z0 x1 y1 z1]]
   (for [x (range (long (Math/floor x0)) (inc (long (Math/floor x1))))
@@ -37,15 +41,17 @@
         :when (solid? x y z)]
     [(double x) (double y) (double z) (+ x 1.0) (+ y 1.0) (+ z 1.0)]))
 
-(defn- overlaps? [a b axis]
+(defn overlaps?
+  "Do boxes a and b overlap strictly along axis (0 x, 1 y, 2 z)? Touching faces do not."
+  [a b axis]
   (and (< (double (a axis)) (double (b (+ axis 3))))
        (> (double (a (+ axis 3))) (double (b axis)))))
 
-(defn- clip
+(defn clip
   "Shrink the move d along axis so box does not enter any of boxes."
-  ^double [box boxes axis ^double d]
+  [box boxes axis d]
   (let [others (remove #{axis} [0 1 2])]
-    (reduce (fn [^double d c]
+    (reduce (fn [d c]
               (if (every? #(overlaps? box c %) others)
                 (cond
                   (and (pos? d) (>= (double (c axis)) (double (box (+ axis 3)))))
@@ -56,10 +62,10 @@
                 d))
             d boxes)))
 
-(defn- shift [box axis d]
+(defn shift "The box moved d along axis." [box axis d]
   (-> box (update axis + d) (update (+ axis 3) + d)))
 
-(defn- squash ^double [^double v] (if (< (Math/abs v) negligible) 0.0 v))
+(defn squash "v, or 0.0 when it is below negligible (vanilla's velocity snap)." [v] (if (< (Math/abs (double v)) negligible) 0.0 v))
 
 (defn step
   "One tick of movement. Reads :player/pos :player/vel :player/on-ground? :player/jump-ticks and
@@ -103,8 +109,8 @@
     [(Math/toDegrees (Math/atan2 (- dx) dz))
      (Math/toDegrees (- (Math/atan2 dy horiz)))]))
 
-(defn distance [[ax ay az] [bx by bz]]
+(defn distance "Euclidean distance between two points." [[ax ay az] [bx by bz]]
   (Math/sqrt (+ (Math/pow (- ax bx) 2) (Math/pow (- ay by) 2) (Math/pow (- az bz) 2))))
 
-(defn horizontal-distance [[ax _ az] [bx _ bz]]
+(defn horizontal-distance "Distance between two points ignoring y." [[ax _ az] [bx _ bz]]
   (Math/sqrt (+ (Math/pow (- ax bx) 2) (Math/pow (- az bz) 2))))

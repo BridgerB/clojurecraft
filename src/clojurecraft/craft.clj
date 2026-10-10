@@ -16,19 +16,26 @@
    while the previous one is unanswered; slot 0 is never clicked unless it holds what the recipe
    makes (a stray plank turns a take into a button); every deadline is an absolute time."
   (:require [clojurecraft.game :as game]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.intent :as intent]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.window :as window]))
 
-(def stage-timeout 5000)
+(def stage-timeout 5000)              ; ms a craft stage waits on the server before it fails
 
 (defn- now [world] (:time/now world))
 (defn- set-intent [world & kvs] (apply update world :plan/intent assoc kvs))
 
-(defn- dirty-grid-slot [{:view/keys [size grid]}]
+(defn dirty-grid-slot
+  "The first crafting-grid slot (1..size²) of the view that still holds an item, or nil when
+   the grid is clean. A craft lays its ingredients only into a clean grid."
+  [{:view/keys [size grid]}]
   (first (filter #(get grid %) (range 1 (inc (* size size))))))
 
-(defmulti stage (fn [_world i _view] (:intent/stage i)))
+(defmulti stage
+  "Advance a :craft intent one tick in its current :intent/stage (:settle :click :verify :take)
+   against view v. Called only when no click is unanswered."
+  (fn [_world i _view] (:intent/stage i)))
 
 (defmethod stage :settle [world {:intent/keys [recipe since window]} v]
   (let [r (recipe/by-id recipe)]
@@ -50,7 +57,7 @@
       (if-let [cs (recipe/clicks (:player/inventory world) r (:view/size v) (:view/slot-of v))]
         (set-intent world :intent/stage :click :intent/clicks cs :intent/since (now world)
                     :intent/result (recipe/item-id (:recipe/result r)) :intent/makes (:recipe/count r)
-                    :intent/before (game/item-count world (recipe/item-id (:recipe/result r))))
+                    :intent/before (inventory/item-count world (recipe/item-id (:recipe/result r))))
         (intent/fail world :no-ingredient)))))
 
 (defmethod stage :click [world {:intent/keys [clicks]} v]
@@ -70,7 +77,7 @@
 
 (defmethod stage :take [world {:intent/keys [result makes before since window]} v]
   (cond
-    (>= (game/item-count world result) (+ before makes))
+    (>= (inventory/item-count world result) (+ before makes))
     (cond-> (intent/done world)
       (= window :table) (-> (game/emit {:packet/name :container-close :window-id (:view/id v)})
                             (dissoc :window/open)))

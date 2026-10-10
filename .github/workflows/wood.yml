@@ -54,7 +54,7 @@ jobs:
           key: server-jar-97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51
 
       - name: Fetch deps
-        run: clojure -P -M:run:rcon:test
+        run: clojure -P -M:run:rcon:harness:test
 
       - name: Unit tests
         run: clojure -M:test
@@ -68,15 +68,18 @@ jobs:
 
       - name: Run the bot
         run: |
-          clojure -M:run --host 127.0.0.1 --port 25565 --name ${{ matrix.bot }} --until ${{ matrix.until }} \
-            --rcon-port 25575 --rcon-pass "$RCON_PASS" \
-            --timeout-ms 200000 --hold-ms 30000 --record run.edn > bot.log 2>&1 &
+          # The fixture is its own process; it speaks to the bot through a queue (the pipe).
+          clojure -M:harness --host 127.0.0.1 --rcon-port 25575 --rcon-pass "$RCON_PASS" \
+            --name ${{ matrix.bot }} --until ${{ matrix.until }} 2> harness.log \
+          | clojure -M:run --host 127.0.0.1 --port 25565 --name ${{ matrix.bot }} --until ${{ matrix.until }} \
+            --events stdin --timeout-ms 200000 --hold-ms 30000 --record run.edn > bot.log 2>&1 &
           echo $! > bot.pid
           for i in $(seq 1 210); do
             grep -q '^RESULT' bot.log && break
             kill -0 "$(cat bot.pid)" 2>/dev/null || break
             sleep 1
           done
+          cat harness.log
           cat bot.log
           grep -q '^RESULT {.*:ok true' bot.log
 
@@ -98,6 +101,7 @@ jobs:
         with:
           name: ${{ matrix.until }}-logs
           path: |
+            harness.log
             bot.log
             run.edn
             inventory.txt

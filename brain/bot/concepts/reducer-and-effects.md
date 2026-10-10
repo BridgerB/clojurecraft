@@ -5,8 +5,8 @@ type: explanation
 tags: [bot, concepts, reducer, effects]
 aliases: [step function, event loop, pure reducer, effects as data]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 60b624e
+lastUpdated: 2026-10-10
+verifiedAgainst: b9e38a1
 sourceRefs:
   - src/clojurecraft/game.clj#defn step
   - src/clojurecraft/game.clj#defn emit
@@ -20,7 +20,7 @@ related:
 
 # Reducer and effects
 
-`(step world event)` returns the next world. Events are maps: `{:event/kind :start}`, `{:event/kind :packet :event/packet p}`, `{:event/kind :tick :event/now ms :event/rand r}`, `{:event/kind :go}`, `{:event/kind :closed :event/reason s}`. Nothing inside a reducer reads a clock or calls `rand`; both arrive on the tick event, which is what makes a run replayable.
+`(step world event)` returns the next world. Events are maps: `{:event/kind :start}` (optionally carrying `:start/host :start/port :start/name`, the connection), `{:event/kind :packet :event/packet p}`, `{:event/kind :tick :event/now ms :event/rand r}`, `{:event/kind :go}`, `{:event/kind :closed :event/reason s}`. Nothing inside a reducer reads a clock or calls `rand`; both arrive on the tick event, which is what makes a run replayable.
 
 ## Key files
 - `game.clj`, `step` - dispatches on `:event/kind` through the `on-event` multimethod.

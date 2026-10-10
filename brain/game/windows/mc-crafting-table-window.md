@@ -8,8 +8,8 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 26.1.2
 sourceRefs:
-  - src/clojurecraft/game.clj#{12 {:menu/name :crafting :menu/size 3 :menu/grid (range 0 10) :menu/inventory 10}}
-  - src/clojurecraft/window.clj#defn- table-slot
+  - src/clojurecraft/inventory.clj#{12 {:menu/name :crafting :menu/size 3 :menu/grid (range 0 10) :menu/inventory 10}}
+  - src/clojurecraft/window.clj#defn table-slot
   - src/clojurecraft/sim.clj#a crafting table has a 3x3 grid and the
 related:
   - "[[game/windows/_moc|Windows]]"
@@ -28,7 +28,7 @@ related:
 
 ## Gotchas
 - The armour and offhand slots are not part of a container window.
-- Menu type ids are registry indexes and change between versions; `game/menus` is keyed by the 26.1.2 number.
+- Menu type ids are registry indexes and change between versions; `inventory/menus` is keyed by the 26.1.2 number.
 
 ## See also
 - [[window-zero-model]] - how the bot stores the open window.

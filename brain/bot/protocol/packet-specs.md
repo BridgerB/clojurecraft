@@ -8,6 +8,7 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 60b624e
 sourceRefs:
+  - test/clojurecraft/packet_test.clj#packet-specs-only-grow
   - src/clojurecraft/packet.clj#def specs
   - src/clojurecraft/packet.clj#defn decode
   - src/clojurecraft/packet.clj#defn encode
@@ -34,6 +35,9 @@ A packet is a flat map with `:packet/name`; its other keys are the wire's own fi
 1. Types are keywords for primitives (`:varint :f64 :string :uuid :position :bytes :rest :slot` ...), `[:vec T]` for a varint-counted sequence, or a vector of pairs for a struct.
 2. A `:slot` with components stops the decode of that packet and marks it `:truncated`; item id and count are still read.
 3. An id with no spec decodes to `{:packet/name :unknown :packet/id n :packet/known name-if-any}`; the reducer counts it under `:stats/unknown` and never throws.
+
+## Specs only grow
+`docs/hickey.md` (Accrete): "A packet spec only ever gains fields." `test/clojurecraft/packet_specs_ever.edn` holds every spec as it has ever been committed, and `packet-specs-only-grow` checks that each is still there with its recorded fields an unchanged prefix of today's (the decoder reads fields in wire order, so growing means appending), and that every spec today is in the history. Removing a field or changing its type fails it; appending one passes. To add a field, append it to the spec and to the history; to add a packet, add it to both.
 
 ## Gotchas
 - Field keys must not be `:name`; see [[packet-name-collision]].

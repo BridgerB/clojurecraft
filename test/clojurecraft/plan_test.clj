@@ -2,11 +2,13 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx :refer [fold packets sent packet ticks]]
             [clojurecraft.game :as game]
-            [clojurecraft.harness]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.spec]
+            [clojurecraft.make]
             [clojurecraft.wood]
             [clojurecraft.world :as world]))
 
@@ -57,7 +59,7 @@
     (testing "swings every 350 ms while digging"
       (is (<= 11 (count swings) 14)))
     (testing "the broken block is air locally and in memory"
-      (is (= 0 (game/block-at w [3 64 0])))
+      (is (= 0 (terrain/block-at w [3 64 0])))
       (is (= 0 (memory/remembered w [3 64 0]))))
     (testing "done once the inventory shows a log"
       (let [[w2 _] (run w [(packet {:packet/name :set-player-inventory :slot 0 :item {:item 134 :count 1}})
@@ -72,7 +74,7 @@
     (is (some #(= :move-player-pos-rot (:packet/name %)) (packets fx)))))
 
 (deftest gives-up-without-logs
-  (let [w (assoc (world-state [0.5 64.0 0.5]) :world/sightings {})
+  (let [w (assoc (world-state [0.5 64.0 0.5]) :world/facts (memory/empty-facts))
         [w _] (run w (cons go (ticks 50 25000)))]
     (is (plan/failed? w))
     (is (= :no-log (:plan/reason w)))))
@@ -83,7 +85,7 @@
                  :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/status :active
                                :intent/started 0 :intent/best-tick 0 :intent/detours 4})
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
-    (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/status :active} (:plan/intent w))
+    (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/status :active :intent/id 1 :intent/goal :wood} (:plan/intent w))
         "re-planned in the same tick toward the next log")
     (is (= #{[13 64 0]} (:plan/blacklist w)))
     (is (= 1 (:plan/attempts w)))))
@@ -104,24 +106,98 @@
     (is (= 0 (:plan/attempts w)) "the walk succeeded, so two earlier failures no longer count")
     (is (= :dig (get-in w [:plan/intent :intent/kind])))))
 
-(deftest the-harness-notices-a-landing-in-a-tree
-  (let [tree (world/column {[0 63 0] 136 [0 64 0] 252 [3 63 3] 1})
-        w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] tree}))]
-    (is (clojurecraft.harness/perched? (w [0.5 64.0 0.5])) "standing on a log, in leaves")
-    (is (clojurecraft.harness/perched? (w [0.5 65.0 0.5])) "standing on leaves")
-    (is (not (clojurecraft.harness/perched? (w [3.5 64.0 3.5]))) "on stone")))
+(deftest a-go-with-a-landing-waits-until-the-bot-is-there
+  (let [w (assoc (world-state [12.5 64.0 12.5]) :time/now 0)            ; same loaded chunk, 17 blocks away
+        go-at (assoc go :go/at [0.5 64.0 0.5])
+        [w _] (run w [go-at])]
+    (is (= :landing (:plan/status w)) "the fixture's :go names a landing")
+    (is (= [0.5 64.0 0.5] (:plan/go-at w)))
+    (let [[w' _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+      (is (= :landing (:plan/status w')) "in a loaded chunk but far from the landing: no planning yet")
+      (is (nil? (:plan/intent w'))))
+    (let [[w' _] (run (assoc w :player/pos [0.5 64.0 0.5]) [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+      (is (= :active (:plan/status w')) "at the landing with the chunk loaded: planning starts"))
+    (let [[w' _] (run (assoc w :player/pos [0.5 64.0 200.5]) [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+      (is (= :landing (:plan/status w')) "far away in an unloaded chunk: still waiting"))
+    (let [[w' _] (run w [{:event/kind :tick :event/now (+ 50 plan/landing-timeout) :event/rand 0.5}])]
+      (is (= [:failed :no-landing] [(:plan/status w') (:plan/reason w')]) "never arrived"))))
 
-(deftest the-harness-names-a-bad-landing
-  (let [col (world/column {[0 63 0] 86 [0 64 0] 86 [2 63 2] 136 [2 64 2] 252 [4 64 4] 1 [4 65 4] 1})
-        w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] col}))]
-    (is (= :water (clojurecraft.harness/bad-landing (w [0.5 64.0 0.5]))))
-    (is (= :tree (clojurecraft.harness/bad-landing (w [2.5 64.0 2.5]))))
-    (is (= :buried (clojurecraft.harness/bad-landing (w [4.5 64.0 4.5]))) "stone at the feet and head")
-    (is (nil? (clojurecraft.harness/bad-landing (w [8.5 64.0 8.5]))) "air on stone ground")))
+(deftest a-go-without-a-landing-starts-where-the-bot-stands
+  (let [[w _] (run (world-state [0.5 64.0 0.5]) [go])]
+    (is (= :active (:plan/status w)))))
 
-(deftest the-harness-notices-a-wet-landing
-  (let [pond (world/column {[0 63 0] 86 [0 64 0] 86})
-        w (fn [pos] (assoc (game/init fx/opts) :player/pos pos :world/chunks {[0 0] pond}))]
-    (is (clojurecraft.harness/wet? (w [0.5 64.0 0.5])) "in water")
-    (is (clojurecraft.harness/wet? (w [0.5 65.0 0.5])) "standing on the water surface")
-    (is (not (clojurecraft.harness/wet? (w [3.5 64.0 3.5]))) "dry ground")))
+(deftest until-names-come-from-the-goal-table
+  (is (= [:wood] (plan/goals-for "wood")))
+  (is (= [:kit] (plan/goals-for "table")))
+  (is (= [:pickaxe] (plan/goals-for "pickaxe")))
+  (is (nil? (plan/goals-for "play"))))
+
+(def superseding-table
+  "A table where :wood was fixed as :wood-2 and :wood-2 again as :wood-3."
+  [{:goal/id :wood :goal/priority 1 :goal/target? true :goal/provides {:tag/logs 1} :goal/done? :provided?
+    :goal/superseded-by :wood-2}
+   {:goal/id :wood-2 :goal/priority 1 :goal/target? true :goal/provides {:tag/logs 1} :goal/done? :provided?
+    :goal/superseded-by :wood-3}
+   {:goal/id :wood-3 :goal/priority 1 :goal/target? true :goal/until "wood" :goal/provides {:tag/logs 1}
+    :goal/done? :provided?}])
+
+(deftest a-retired-goal-stays-and-points-at-its-replacement
+  (is (= :wood-3 (plan/current-id superseding-table :wood)) "the chain is followed to the row in force")
+  (is (= :wood-3 (plan/current-id superseding-table :wood-3)))
+  (is (= :other (plan/current-id superseding-table :other)) "an id the table does not know is itself")
+  (is (= [:wood-3] (map :goal/id (plan/targets-of superseding-table))) "only live rows are chosen")
+  (is (= :a (plan/current-id [{:goal/id :a :goal/superseded-by :b} {:goal/id :b :goal/superseded-by :a}] :a))
+      "a cycle ends instead of hanging")
+  (testing "a recorded :go naming the old id plans for the replacement"
+    (let [[w _] (fold (game/compose game/step (partial plan/step-over superseding-table))
+                      (world-state [0.5 64.0 0.5]) [{:event/kind :go :go/goals [:wood]}])]
+      (is (= #{:wood-3} (:plan/goals w)) "no redefinition: the table is an argument")))
+  (is (true? clojurecraft.spec/goals-valid?) "the real table's replacements all exist"))
+
+(deftest the-leaf-over-a-step-is-a-blocker
+  (let [col (world/column {[0 64 1] 1 [0 66 1] 252})
+        w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
+    (is (= [0 66 1] (clojurecraft.intent/blocker w [0.5 65.0 3.5])) "a step at the feet, leaves where the jump goes"))
+  (let [col (world/column {[0 66 1] 252})
+        w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
+    (is (nil? (clojurecraft.intent/blocker w [0.5 64.0 3.5])) "no step: a leaf above the head is not in the way")))
+
+(deftest a-wall-is-not-a-step
+  (let [col (world/column {[0 64 1] 136 [0 65 1] 136 [0 66 1] 252})
+        w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
+    (is (not (clojurecraft.intent/step? w [0 64 1])) "a trunk is a wall")
+    (is (nil? (clojurecraft.intent/blocker w [0.5 64.0 3.5])) "so the leaf on top of it is not in the way")))
+
+(deftest a-jump-onto-a-step-needs-headroom-over-the-player-too
+  (let [col (world/column {[0 64 1] 1 [0 66 0] 252})
+        w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
+    (is (= [0 66 0] (clojurecraft.intent/blocker w [0.5 65.0 3.5])) "the leaf over the bot caps the jump")))
+
+(defn walking
+  "Active plan over goals, mid-walk toward a point out of reach, the walk serving goal."
+  [goals goal]
+  (assoc (world-state [0.5 64.0 0.5]) :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0
+         :plan/goals goals :plan/intents 1
+         :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/for :log :intent/status :active
+                       :intent/id 1 :intent/goal goal :intent/started 0 :intent/best-tick 0}))
+
+(deftest done-is-re-derived-every-tick-even-mid-intent
+  (let [w (assoc (walking #{:wood} :wood) :player/inventory {0 {:item 134 :count 1}})   ; a log arrived
+        [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (plan/done? w) "the world says the goal is met, so the plan is done this tick")
+    (is (nil? (:plan/intent w)) "the walk is dropped")
+    (is (= [:abandoned :goal-met] ((juxt :intention/event :intention/reason) (last (memory/intentions w)))))))
+
+(deftest a-regressed-target-preempts-the-running-intent
+  ;; the walk serves :kit, but :wood (priority 1) is in play and no log is held: :wood comes first
+  (let [[w _] (run (walking #{:wood :kit} :kit) [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (= [:abandoned :preempted] ((juxt :intention/event :intention/reason)
+                                    (first (filter #(= 1 (:intention/id %)) (reverse (memory/intentions w)))))))
+    (is (= :wood (get-in w [:plan/intent :intent/goal])) "the next intent serves the regressed target")))
+
+(deftest nothing-is-dropped-with-an-item-on-the-cursor
+  (let [w (-> (walking #{:wood} :wood)
+              (assoc :player/inventory {0 {:item 134 :count 1}} :window/cursor {:item 36 :count 1}))
+        [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (not (plan/done? w)) "the plan waits until the hand is empty")
+    (is (= 1 (get-in w [:plan/intent :intent/id])))))

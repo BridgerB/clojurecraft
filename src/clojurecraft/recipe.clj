@@ -4,8 +4,7 @@
 
    - `match`: what a grid crafts (the server's rule, used by the sim).
    - `clicks`: the container clicks that lay one craft into the grid, from the inventory value.
-   - `next-action`: walk the recipe graph from what is wanted to the first thing to do now
-     ({:action :craft :recipe r}, {:action :gather :want :logs}, :stuck, or nil when satisfied).
+   - `needs`: what one craft consumes; clojurecraft.make turns every recipe into a goal row from it.
 
    Grids are {slot item-name} with slot 1..size² in reading order (slot 0 is the result); the
    2x2 inventory grid is size 2, a crafting table is size 3."
@@ -21,12 +20,8 @@
 (def by-id (into {} (map (juxt :recipe/id identity) recipes)))
 
 (def item-names (into {} (map (fn [[n id]] [id n]) blocks/items)))
-(defn item-name [id] (item-names id))
-(defn item-id [name] (blocks/items name))
-
-(def raw?
-  "Ingredient sets we gather rather than craft."
-  (let [logs (tags :logs)] (fn [s] (every? logs s))))
+(defn item-name "The item keyword for a numeric item id, or nil." [id] (item-names id))
+(defn item-id "The numeric item id for an item keyword, or nil." [name] (blocks/items name))
 
 ;; ---------------------------------------------------------------- shape
 
@@ -39,7 +34,10 @@
           :when (not= ch \space)]
       [[r c] (key (str ch))])))
 
-(defn fits? [{:recipe/keys [kind width height ingredients]} size]
+(defn fits?
+  "Can recipe r be crafted in a size×size grid? Shaped: its pattern fits; shapeless: it has no
+   more ingredients than cells."
+  [{:recipe/keys [kind width height ingredients]} size]
   (if (= kind :shaped)
     (and (<= width size) (<= height size))
     (<= (count ingredients) (* size size))))
@@ -60,7 +58,10 @@
 
 ;; ---------------------------------------------------------------- match
 
-(defn- shaped-match? [r grid size]
+(defn shaped-match?
+  "Does the occupied part of grid (non-empty, {slot item-name}) equal r's pattern, as drawn or
+   mirrored left to right? The pattern may sit anywhere in the grid, as in vanilla."
+  [r grid size]
   (let [occupied (keep (fn [[slot item]] (when item [(quot (dec slot) size) (rem (dec slot) size)])) grid)
         rows (map first occupied) cols (map second occupied)
         r0 (apply min rows) c0 (apply min cols)
@@ -75,7 +76,9 @@
                            (if (= ch \space) (nil? item) (contains? (key (str ch)) item))))))]
     (and (= [h w] [height width]) (or (fits false) (fits true)))))
 
-(defn- shapeless-match? [r grid]
+(defn shapeless-match?
+  "Can the grid's items be paired one-to-one with r's ingredient sets, in any order?"
+  [r grid]
   (let [items (vec (keep val grid))
         sets (:recipe/ingredients r)]
     (and (= (count items) (count sets))
@@ -108,14 +111,21 @@
   [inventory]
   (reduce (fn [m {:keys [item count]}] (update m (item-name item) (fnil + 0) count)) {} (vals inventory)))
 
-(defn have [counts s] (reduce + 0 (map #(get counts % 0) s)))
+(defn have
+  "How many items of any name in set s the counts hold."
+  [counts s]
+  (reduce + 0 (map #(get counts % 0) s)))
 
-(defn- consume [counts s n]
-  (loop [counts counts [item & more] (sort s) n n]
-    (if (or (zero? n) (nil? item))
-      counts
-      (let [k (min n (get counts item 0))]
-        (recur (update counts item (fnil - 0) k) more (- n k))))))
+(defn consume
+  "counts with n items taken from the names in set s, in name order; takes what there is when
+   counts hold fewer than n."
+  [counts s n]
+  (first (reduce (fn [[counts n] item]
+                   (if (zero? n)
+                     (reduced [counts n])
+                     (let [k (min n (get counts item 0))]
+                       [(update counts item (fnil - 0) k) (- n k)])))
+                 [counts n] (sort s))))
 
 ;; ---------------------------------------------------------------- clicks
 
@@ -127,66 +137,22 @@
    the window being clicked (window 0 by default)."
   ([inventory r size] (clicks inventory r size player->container-slot))
   ([inventory r size slot-of]
-   (let [groups (group-by val (placement r size))]
-     (loop [[[s cells] & more] (seq groups) used {} acc []]
-       (if (nil? s)
-         acc
-         (let [n (count cells)
-               source (->> (sort-by key inventory)
-                           (filter (fn [[slot {:keys [item count]}]]
-                                     (and (slot-of slot)
-                                          (contains? s (item-name item))
-                                          (>= (- count (get used slot 0)) n))))
-                           ffirst)]
-           (when source
-             (let [cs (slot-of source)
-                   left (- (get-in inventory [source :count]) (get used source 0) n)]
-               (recur more (update used source (fnil + 0) n)
-                      (-> acc
-                          (conj {:click/slot cs :click/button 0 :click/mode 0})
-                          (into (for [[g _] (sort-by key cells)] {:click/slot g :click/button 1 :click/mode 0}))
-                          (cond-> (pos? left) (conj {:click/slot cs :click/button 0 :click/mode 0}))))))))))))
-
-;; ---------------------------------------------------------------- the graph
-
-(def max-depth 6)
-
-(defn- resolve-want
-  "[counts' action] for wanting n of any item in set s. action nil means satisfied."
-  [counts s n size depth]
-  (let [h (have counts s)]
-    (cond
-      (>= h n) [(consume counts s n) nil]
-      (> depth max-depth) [counts :stuck]
-      :else
-      (let [counts (consume counts s h)
-            missing (- n h)]
-        (if (raw? s)
-          [counts {:action :gather :want :logs}]   ; any species: the next plan picks its recipe
-          (let [candidates (->> (mapcat by-result s)
-                                (filter #(fits? % size))
-                                (sort-by (fn [r] [(- (reduce + (map (fn [[ns _]] (have counts ns)) (needs r))))
-                                                  (- (:recipe/count r))])))]
-            (or (some (fn [r]
-                        (let [crafts (long (Math/ceil (/ missing (:recipe/count r))))
-                              result (reduce (fn [[c _] [ns k]]
-                                               (let [[c a] (resolve-want c ns (* k crafts) size (inc depth))]
-                                                 (if a (reduced [c a]) [c nil])))
-                                             [counts nil] (needs r))
-                              [_ a] result]
-                          (cond (= a :stuck) nil
-                                a result
-                                :else [counts {:action :craft :recipe (:recipe/id r)}])))
-                      candidates)
-                [counts :stuck])))))))
-
-(defn next-action
-  "The first thing to do toward wants ([[item-name n] ...], in order) given counts, crafting in
-   a size×size grid: {:action :craft :recipe id}, {:action :gather :want :logs}, :stuck, or nil
-   when every want is already held."
-  [counts wants size]
-  (loop [counts counts [[item n] & more] wants]
-    (if (nil? item)
-      nil
-      (let [[counts a] (resolve-want counts #{item} n size 0)]
-        (if a a (recur counts more))))))
+   (some-> (reduce (fn [[used acc] [s cells]]
+                     (let [n (count cells)
+                           source (->> (sort-by key inventory)
+                                       (filter (fn [[slot {:keys [item count]}]]
+                                                 (and (slot-of slot)
+                                                      (contains? s (item-name item))
+                                                      (>= (- count (get used slot 0)) n))))
+                                       ffirst)]
+                       (if-not source
+                         (reduced nil)
+                         (let [cs (slot-of source)
+                               left (- (get-in inventory [source :count]) (get used source 0) n)]
+                           [(update used source (fnil + 0) n)
+                            (-> acc
+                                (conj {:click/slot cs :click/button 0 :click/mode 0})
+                                (into (for [[g _] (sort-by key cells)] {:click/slot g :click/button 1 :click/mode 0}))
+                                (cond-> (pos? left) (conj {:click/slot cs :click/button 0 :click/mode 0})))]))))
+                   [{} []] (group-by val (placement r size)))
+           second)))

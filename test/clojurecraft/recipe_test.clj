@@ -48,21 +48,6 @@
   (is (nil? (recipe/clicks (inv 0 :oak_planks 3) (recipe/by-id :crafting_table) 2)))
   (is (nil? (recipe/clicks {} (recipe/by-id :oak_planks) 2))))
 
-(def kit [[:crafting_table 1] [:stick 4]])
-
-(deftest the-graph-walks-to-the-next-action
-  (is (= {:action :gather :want :logs} (recipe/next-action {} kit 2)))
-  (is (= {:action :craft :recipe :oak_planks} (recipe/next-action {:oak_log 1} kit 2)))
-  (is (= {:action :craft :recipe :birch_planks} (recipe/next-action {:birch_log 1} kit 2)) "the species it holds")
-  (is (= {:action :craft :recipe :crafting_table} (recipe/next-action {:oak_planks 4} kit 2)))
-  (is (= {:action :craft :recipe :stick} (recipe/next-action {:crafting_table 1 :oak_planks 2} kit 2)))
-  (is (= {:action :gather :want :logs} (recipe/next-action {:crafting_table 1} kit 2))
-      "the table is kept; sticks need another log")
-  (is (nil? (recipe/next-action {:crafting_table 1 :stick 4} kit 2)))
-  (testing "never the bamboo stick, never a 3x3 recipe in the 2x2"
-    (is (= {:action :craft :recipe :stick} (recipe/next-action {:oak_planks 2} [[:stick 4]] 2)))
-    (is (= :stuck (recipe/next-action {:oak_planks 3 :stick 2} [[:wooden_pickaxe 1]] 2)))))
-
 (def two-by-two (filter #(recipe/fits? % 2) recipe/recipes))
 
 (deftest clicks-then-match-round-trip

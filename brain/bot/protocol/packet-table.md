@@ -11,7 +11,7 @@ sourceRefs:
   - src/clojurecraft/packet.clj#def specs
   - src/clojurecraft/game.clj#defmulti on-packet
   - src/clojurecraft/window.clj#defn click
-  - src/clojurecraft/place.clj#defn- use-item-on
+  - src/clojurecraft/place.clj#defn use-item-on
   - src/clojurecraft/intent.clj#defmethod run :dig
 related:
   - "[[bot/protocol/_moc|Protocol]]"

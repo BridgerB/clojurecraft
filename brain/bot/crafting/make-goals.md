@@ -1,52 +1,45 @@
 ---
 title: Make goals
-description: How goals with :goal/wants (:kit, :pickaxe) are satisfied by re-deriving the next recipe-graph action every tick, and how a 3x3 recipe chooses between crafting in an open table, opening, walking to, placing or making one.
+description: The needs planner - how a target's provides are traced back through producer rows (gather a log, place a table, one generated row per recipe) to the row whose needs are met, with one netted inventory - and the :gather, :place and :craft acts.
 type: reference
 tags: [bot, crafting, plan, goals]
-aliases: [:kit, :pickaxe, make.clj, goal/wants, table goal, with-table, decide]
+aliases: [needs planner, make.clj, craft-rows, producers, next-row, resolve-need, provided?, table ladder, decide]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-10
+verifiedAgainst: 3452f18
 sourceRefs:
+  - src/clojurecraft/make.clj#defn craft-row
+  - src/clojurecraft/make.clj#defn resolve-need
+  - src/clojurecraft/make.clj#defn next-row
   - src/clojurecraft/make.clj#defn decide
-  - src/clojurecraft/make.clj#defn- with-table
-  - src/clojurecraft/make.clj#defn- step-for
-  - src/clojurecraft/make.clj#defmethod plan/next-intent :pickaxe
-  - src/clojurecraft/plan.clj#a wooden pickaxe, placing a crafting table to make it
+  - src/clojurecraft/make.clj#defmethod plan/done-by :provided?
+  - src/clojurecraft/make.clj#defmethod plan/act :craft
+  - test/clojurecraft/make_test.clj#goals-are-data
   - test/clojurecraft/sim_test.clj#places-a-table-and-crafts-a-wooden-pickaxe
 related:
   - "[[bot/crafting/_moc|Crafting]]"
-  - "[[recipe-graph]]"
   - "[[goals-and-intents]]"
   - "[[goals-in-play-from-go]]"
 ---
 
 # Make goals
 
-A goal row may carry `:goal/wants [[item-name n] ...]`. Two do: `:kit` (priority 2, `[[:crafting_table 1] [:stick 4]]`) and `:pickaxe` (priority 3, `[[:wooden_pickaxe 1]]`). `make.clj` answers both goals' multimethods with the same functions, asking [[recipe-graph]] for the next action over the current inventory with grid size **3**; nothing is stored, so a consumed or lost item is planned for again next tick.
+`make.clj` gives the goal table its meaning. A target is met when its provides are held (`done-by :provided?`). When it is not, `next-row` resolves each provide in order against one working copy of the inventory: a need already held is consumed from the copy, so two needs never count the same item; an unmet need is looked up among producer rows, and the first producer whose own needs resolve is the row to act on.
 
 ## Key files
-- `make.clj`, `action` - `(recipe/next-action counts wants 3)`; `goal-done?` is "action is nil".
-- `make.clj`, `decide` - the next intent.
-- `make.clj`, `step-for` - `:gather` → `wood/gather-next`; `:craft` → `{:intent/kind :craft :intent/recipe id :intent/window :inventory}`.
-- `make.clj`, `with-table` - the ladder for a recipe that does not fit 2x2.
+- `make.clj`, `craft-row` - a recipe as a goal row: ingredients become needs (named `:tag/planks`, `:item/stick`, or the item set when no tag matches), the result becomes what it provides, and a recipe that does not fit the 2x2 grid also needs `{:block/crafting_table :near}`. All 1,030 recipes become rows (`craft-rows`).
+- `make.clj`, `resolve-need` - counted needs are netted in the working inventory; candidate producers are ordered by how much of their own needs is held, then by not needing a table, then by yield; `:block/... :near` is met by a remembered placed block within 24 blocks, else by the `:place-table` row.
+- `make.clj`, `decide` - a log chain in flight first ([[gather-chain]]), else `plan/act` on the row `next-row` reaches; `:stuck` becomes `{:plan/wait :stuck}`.
+- `make.clj`, the acts - `:gather` runs the log chain, `:place` puts the held table down ([[place-intent]]), `:craft` crafts in the 2x2 grid, or for a table recipe: in the open table window, else open the table in reach ([[open-container-intent]]), else walk to it.
 
-## How it works
-1. A log-gathering chain in flight continues first (`wood/continue-gather`, [[gather-chain]]).
-2. Then the action: nil → nothing; `:stuck` → `{:plan/wait :stuck}` (the planner fails it after 20 s); `:gather`, or a `:craft` whose recipe fits 2x2 → `step-for`.
-3. A recipe that needs 3x3 goes to `with-table`, first match wins:
-   - a remembered crafting table within 24 blocks (`memory/nearest`) **and** an open window of menu type 12 → `:craft` with `:intent/window :table`;
-   - a remembered table within `open-reach` (4.5) of the eye → `:open-container` it;
-   - a remembered table → `:walk` to it;
-   - a table held → `:place` it;
-   - else ask the graph for `[[:crafting_table 1]]` in size 2 and take that step (gather or craft), or wait `:stuck`.
-4. In the sim, the pickaxe runs from one four-log tree through planks, sticks and a placed, opened table to the pickaxe, and the table window is closed at the end; no failed attempts and no violations.
+## Example: the pickaxe
+`:pickaxe` provides `{:item/wooden_pickaxe 1}`. Its producer is the generated row `:craft/wooden_pickaxe` with needs `{:tag/planks 3 :item/stick 2 :block/crafting_table :near}`. Planks come from `:craft/oak_planks` (or the species held), whose need `:tag/oak_logs` comes from `:gather-log`; the table need comes from `:place-table`, whose need `:item/crafting_table` comes from `:craft/crafting_table`. In the sim this runs from one tree to a held pickaxe with no failed attempts and no violations.
 
 ## Gotchas
-- `make.clj` must be required for the methods to register (`main.clj` and the sim test do); otherwise `goal-done?` hits `:default` (true) and the goal silently counts as done.
-- The size-3 graph means "needs a table" is decided per recipe by `recipe/fits?` 2, not by the graph.
-- A walk to a table is not tagged `:intent/for :log`, so the gather chain never mistakes it for a log walk.
-- The table goal still reuses `:collect`, whose done test is "any log held" ([[collect-intent]]).
+- Provides are resolved in the order written (EDN array maps keep it), so `:kit` reserves planks for the table before the sticks.
+- The bamboo stick and other dead ends lose because nothing provides their needs (`:stuck` for that branch), not because they are filtered out.
+- The planner property in `make_test` (400 generated inventories) checks that every chosen intent is executable; it was mutation-checked against a planner that places without a table.
 
 ## See also
-- [[craft-intent]], [[place-intent]], [[open-container-intent]] - the intents it chooses.
+- [[one-planner]] - why the older recipe-only walk was removed.
+- [[goals-and-intents]]

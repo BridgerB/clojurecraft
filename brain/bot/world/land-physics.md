@@ -10,7 +10,7 @@ verifiedAgainst: 60b624e
 sourceRefs:
   - src/clojurecraft/physics.clj#defn step
   - src/clojurecraft/physics.clj#def ground-acceleration
-  - src/clojurecraft/game.clj#defn solid-fn
+  - src/clojurecraft/terrain.clj#defn solid-fn
   - src/clojurecraft/blocks.clj#def passable-types
 related:
   - "[[bot/world/_moc|World]]"
@@ -25,7 +25,7 @@ related:
 ## Key files
 - `physics.clj`, `step` - the tick; writes `:player/pos :player/vel :player/on-ground? :player/horizontal-collision? :player/jump-ticks`.
 - `physics.clj`, constants - gravity 0.08, vertical drag 0.98, ground inertia 0.546, air 0.91, jump 0.42, AABB 0.6 by 1.8, eye 1.62; `ground-acceleration` is 0.1 times 0.16277136 over inertia cubed.
-- `game.clj`, `solid-fn` - unknown (unloaded) blocks are solid.
+- `terrain.clj`, `solid-fn` - unknown (unloaded) blocks are solid.
 - `blocks.clj`, `passable-types` - block definition types with no full-cube collision; everything else is solid.
 
 ## How it works

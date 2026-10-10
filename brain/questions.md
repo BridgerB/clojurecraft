@@ -26,7 +26,7 @@ Real questions, the traversal that answers each, and how many notes it took. Re-
 | How does a bucket pour in 775? | [[mc-bucket-use-item]] | 1 |
 | A craft failed `:stale-window` on a click that should have been a no-op. Why? | [[bot/gotchas/_moc]] → [[phantom-cursor-stale-window]] → [[mc-state-ids-prediction]] | 2 |
 | Why did the bot craft a button / pressure plate? | [[junk-crafts]] → [[craft-intent]] | 2 |
-| How does the bot decide whether to gather a log or craft planks next? | [[bot/crafting/_moc]] → [[recipe-graph]] → [[make-goals]] | 2 |
+| How does the bot decide whether to gather a log or craft planks next? | [[bot/crafting/_moc]] → [[make-goals]] | 1 |
 | Which window-0 slot is the hotbar, and how does it map to `set-player-inventory`? | [[game/windows/_moc]] → [[mc-window-zero-slots]] | 1 |
 | Why not use the recipe book (`place-recipe`) instead of clicks? | [[bot/decisions/_moc]] → [[manual-clicks-not-place-recipe]] | 1 |
 | How do I make the sim lose a click, and what does a test then expect? | [[sim-faults]] → [[craft-intent]] | 2 |

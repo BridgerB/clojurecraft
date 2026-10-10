@@ -5,13 +5,14 @@ type: reference
 tags: [bot, tooling, ci]
 aliases: [wood.yml, gym job, RESULT line, RCON judge]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-10
+verifiedAgainst: 96ac5ed
 sourceRefs:
   - .github/workflows/wood.yml#name: Independent judge over RCON
   - .github/workflows/wood.yml#grep -q '^RESULT {.*:ok true' bot.log
   - src/clojurecraft/main.clj#defn result
   - ".github/workflows/wood.yml#max-parallel: 3"
+  - ".github/workflows/wood.yml#--events stdin --timeout-ms 200000 --hold-ms 30000 --record run.edn > bot.log 2>&1 &"
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[local-server]]"
@@ -20,7 +21,7 @@ related:
 
 # CI wood workflow
 
-`.github/workflows/wood.yml` runs on every push (and by hand) as a matrix of three gym rows, at most three in parallel: `wood` (bot `Clj_wood`, judge string `_log`), `table` (bot `Clj_table`, judge `minecraft:crafting_table`) and `pickaxe` (bot `Clj_pickaxe`, judge `minecraft:wooden_pickaxe`). Each row: Temurin 25, the Clojure CLI from the official installer, cached deps and server jar, `clojure -M:test`, `scripts/server.sh start` on 25565/25575 with a masked random RCON password, the bot in the background with `--until <row> --timeout-ms 200000 --hold-ms 30000 --record run.edn`, a poll (210 s) for the `RESULT` line, `grep` for `:ok true`, then `clojure -M:rcon ... data get entity <bot> Inventory` must contain the row's judge string. `bot.log`, `run.edn`, the inventory read and the server logs are artifacts; the server is stopped in `always()`. A newer push cancels a running one (concurrency group per ref).
+`.github/workflows/wood.yml` runs on every push (and by hand) as a matrix of three gym rows, at most three in parallel: `wood` (bot `Clj_wood`, judge string `_log`), `table` (bot `Clj_table`, judge `minecraft:crafting_table`) and `pickaxe` (bot `Clj_pickaxe`, judge `minecraft:wooden_pickaxe`). Each row: Temurin 25, the Clojure CLI from the official installer, cached deps and server jar, `clojure -M:test`, `scripts/server.sh start` on 25565/25575 with a masked random RCON password, the harness process piped into the bot in the background (`clojure -M:harness ... | clojure -M:run ... --until <row> --events stdin --timeout-ms 200000 --hold-ms 30000 --record run.edn`, [[harness-landing]]), a poll (210 s) for the `RESULT` line, `grep` for `:ok true`, then `clojure -M:rcon ... data get entity <bot> Inventory` must contain the row's judge string. `harness.log`, `bot.log`, `run.edn`, the inventory read and the server logs are artifacts; the server is stopped in `always()`. A newer push cancels a running one (concurrency group per ref).
 
 ## Key files
 - `wood.yml` - the job and its matrix.

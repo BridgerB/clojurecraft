@@ -11,7 +11,7 @@ sourceRefs:
   - src/clojurecraft/conn.clj#defn read-frame
   - src/clojurecraft/conn.clj#defn write-frame
   - src/clojurecraft/conn.clj#defn open
-  - src/clojurecraft/conn.clj#defn- inflate
+  - src/clojurecraft/conn.clj#defn inflate
 related:
   - "[[bot/protocol/_moc|Protocol]]"
   - "[[connection-phases]]"
@@ -29,7 +29,7 @@ related:
 - `conn.clj`, `inflate`, `deflate` - JDK `java.util.zip`, one Inflater/Deflater per frame.
 
 ## How it works
-1. Reader thread: `read-frame` with the current threshold, decode with the current state (`packet/decode`, a decode exception becomes `{:packet/name :decode-error ...}`), and if the packet is `login-compression` in the login state, set the threshold before the next frame is read. Then put the packet on `:in`.
+1. Reader thread: `read-frame` with the current threshold, decode with the current state (`packet/decode`, a decode exception becomes `{:packet/name :decode-error ...}`), decode a chunk column there too (`chunk/attach` adds `:chunk/column`, so a burst of chunks costs the reader, not the loop that answers keep-alives, as `docs/hickey.md` asks), and if the packet is `login-compression` in the login state, set the threshold before the next frame is read. Then put the packet on `:in`.
 2. Writer thread: take a packet, encode with the current state, flip the state through `packet/next-state`, write the frame. Flipping after encode and before the write means the server's reply is decoded in the new state.
 3. Any exception in either thread puts `{:packet/name :closed :packet/reason s}` on `:in` and closes it; `run-loop` turns a nil from `:in` into a `:closed` event.
 4. Socket: 10 s connect timeout, TCP_NODELAY, 64 KB buffered streams.
@@ -37,6 +37,7 @@ related:
 ## Gotchas
 - `login-compression` is consumed in `conn` and still forwarded to the reducer, which ignores it (no `on-packet` method); the game never needs the threshold.
 - Bounded channels mean a slow reducer back-pressures the reader thread and therefore TCP; nothing is dropped.
+- `:chunk/column` is derived from the packet's own bytes, so the recorder drops it and a replay derives it again ([[record-replay]]); the reducer decodes the bytes itself when a packet arrives without it (the sim, old recordings).
 - Encryption is not implemented (offline servers only); see [[connection-phases]].
 
 ## See also

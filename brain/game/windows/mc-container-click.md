@@ -9,7 +9,7 @@ lastUpdated: 2026-10-09
 verifiedAgainst: 26.1.2
 sourceRefs:
   - src/clojurecraft/packet.clj#[:play :c2s :container-click]
-  - src/clojurecraft/packet.clj#defn- write-hashed-slot
+  - src/clojurecraft/packet.clj#defn write-hashed-slot
   - test/clojurecraft/packet_test.clj#775 layout: window, state id, slot, button, mode, changed slots, cursor
   - resources/clojurecraft/packets.edn#:container-click 18
   - steve:src/lib/typecraft/bot/inventory.ts#await bot.clickWindow(i, 0, 4, bot.inventory); // mode 4 = drop

@@ -10,6 +10,7 @@
    and an ack, and the intent fails rather than believing the block is there."
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
@@ -17,14 +18,14 @@
             [clojurecraft.window :as window]))
 
 (def place-reach 4.0)                 ; eye → target centre
-(def open-reach 4.5)
-(def settle-ms 300)
-(def answer-ms 3000)
+(def open-reach 4.5)                  ; eye → container centre for opening it; the server allows about 4.5
+(def settle-ms 300)                   ; standing still this long before using an item on a block
+(def answer-ms 3000)                  ; ms to wait for the server to answer a placement or an open
 
 (defn- set-intent [world & kvs] (apply update world :plan/intent assoc kvs))
 (defn- now [world] (:time/now world))
 
-(def ^:private around
+(def around
   "Candidate cells around the feet, nearest ring first, at feet level then one down then one
    up (an uneven forest floor): a CI run found no spot when only feet-level cells two away
    were tried."
@@ -35,7 +36,7 @@
         :when (= r (max (abs dx) (abs dz)))]
     [dx dy dz]))
 
-(defn- inside-player?
+(defn inside-player?
   "Would a block at cell intersect the player's box? The server rejects such a placement."
   [world [x y z]]
   (let [[x0 y0 z0 x1 y1 z1] (physics/aabb (:player/pos world))]
@@ -51,17 +52,21 @@
     (first (for [[dx dy dz] around
                  :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
                        support [(+ fx dx) (+ fy dy -1) (+ fz dz)]
-                       t (game/block-at world target)
-                       s (game/block-at world support)]
+                       t (terrain/block-at world target)
+                       s (terrain/block-at world support)]
                  :when (and t s
                             (not (blocks/solid? t))
                             (not= :liquid (blocks/type-of t))
                             (blocks/solid? s)
                             (not (inside-player? world target))
-                            (<= (physics/distance eye (intent/centre target)) place-reach))]
+                            (<= (physics/distance eye (physics/centre target)) place-reach))]
              [target support]))))
 
-(defn- use-item-on [world pos face [cx cy cz]]
+(defn use-item-on
+  "Right-click face of the block at pos with the held item: emit use-item-on with a fresh
+   :bot/sequence and a swing, and record the sequence and send time on the intent so the
+   answer can be judged by the server's ack."
+  [world pos face [cx cy cz]]
   (let [seq (inc (:bot/sequence world))]
     (-> world
         (assoc :bot/sequence seq)
@@ -70,12 +75,17 @@
         (game/emit {:packet/name :swing :hand 0})
         (set-intent :intent/sequence seq :intent/sent-at (now world)))))
 
-(defn- held-slot-of [world item-id]
+(defn held-slot-of
+  "The lowest player-inventory slot holding item-id, or nil."
+  [world item-id]
   (some (fn [[p {:keys [item]}]] (when (= item item-id) p)) (sort-by key (:player/inventory world))))
 
 ;; ---------------------------------------------------------------- place
 
-(defmulti place-stage (fn [_world i] (:intent/stage i)))
+(defmulti place-stage
+  "Advance a :place intent one tick in its :intent/stage (:equip :spot :settle :sent). Called
+   only when no inventory click is unanswered."
+  (fn [_world i] (:intent/stage i)))
 
 (defmethod place-stage :equip [world {:intent/keys [item]}]
   (let [id (recipe/item-id item)
@@ -98,7 +108,7 @@
     (intent/fail world :no-spot)))
 
 (defmethod place-stage :settle [world {:intent/keys [target against since still]}]
-  (let [look (physics/look-at (game/eye world) (intent/centre target))
+  (let [look (physics/look-at (game/eye world) (physics/centre target))
         still (if (intent/still? world) (inc still) 0)
         world (assoc world :player/controls {:control/look look})]
     (if (and (>= still 3) (> (- (now world) since) settle-ms))
@@ -106,7 +116,7 @@
       (set-intent world :intent/still still))))
 
 (defmethod place-stage :sent [world {:intent/keys [item target sequence sent-at]}]
-  (let [placed (game/block-at world target)]
+  (let [placed (terrain/block-at world target)]
     (cond
       (= placed (memory/placed-state item)) (intent/done world)
       (and (>= (or (:stats/last-ack world) -1) sequence) (> (- (now world) sent-at) 500))
@@ -131,8 +141,8 @@
     (cond
       (and open (:window/state-id open)) (intent/done world)
       (= stage :sent) (if (> (- (now world) sent-at) answer-ms) (intent/fail world :no-window) world)
-      (> (physics/distance eye (intent/centre target)) open-reach) (intent/fail world :out-of-reach)
+      (> (physics/distance eye (physics/centre target)) open-reach) (intent/fail world :out-of-reach)
       :else (-> world
-                (assoc :player/controls {:control/look (physics/look-at eye (intent/centre target))})
+                (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
                 (use-item-on target (intent/face-toward eye target) [0.5 0.5 0.5])
                 (set-intent :intent/stage :sent)))))

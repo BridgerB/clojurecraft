@@ -6,7 +6,7 @@
    The world is a flat map of namespaced attributes (:player/pos, :world/chunks, :bot/phase ...),
    open and sparse: an attribute the bot does not know yet is simply absent. Events are maps:
 
-     {:event/kind :start}
+     {:event/kind :start :start/host h :start/port p :start/name n}   ; connection, all optional
      {:event/kind :packet :event/packet pkt}
      {:event/kind :tick :event/now ms :event/rand r}   ; the clock and randomness are inputs
      {:event/kind :go}
@@ -17,16 +17,29 @@
    Packet handling is a multimethod on [phase name], so a new namespace can handle a packet
    without editing this one. The protocol phase changes only when a transition packet is
    emitted, so it has one source of truth: clojurecraft.packet/transitions."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
-            [clojurecraft.physics :as physics]))
+            [clojurecraft.physics :as physics]
+            [clojurecraft.terrain :as terrain]))
 
-(def protocol-version 775)
+(def version
+  "The server version the generated tables describe (resources/clojurecraft/version.edn)."
+  (edn/read-string (slurp (io/resource "clojurecraft/version.edn"))))
 
-(defn init [{:keys [host port name]}]
+(def protocol-version
+  "The protocol number the handshake announces, read from the server's version data."
+  (:version/protocol version))
+
+(defn init
+  "The world before any event: handshake phase, no position, empty inventory, chunks and facts.
+   Attributes the bot cannot know yet (:player/pos, :player/entity-id ...) are absent."
+  [{:keys [host port name]}]
   {:bot/phase :handshake
    :bot/name name
    :bot/uuid (b/offline-uuid name)
@@ -49,7 +62,7 @@
    :world/chunks {}
    :world/blocks {}
    :world/entities {}
-   :world/sightings {}
+   :world/facts (memory/empty-facts)
    :stats/unknown {}
    :stats/keep-alives 0
    :stats/teleports 0
@@ -57,7 +70,7 @@
 
 ;; ---------------------------------------------------------------- effects
 
-(defn effect [world e] (update world :bot/effects conj e))
+(defn effect "Append one effect map to :bot/effects for the loop to perform." [world e] (update world :bot/effects conj e))
 
 (defn emit
   "Queue a packet to send; this is the only place the protocol phase advances."
@@ -66,61 +79,32 @@
       (effect {:effect/kind :send :effect/packet pkt})
       (update :bot/phase p/next-state (:packet/name pkt))))
 
-(defn say [world message] (effect world {:effect/kind :log :effect/message message}))
+(defn say "Queue a log line; the loop prints it to stderr." [world message] (effect world {:effect/kind :log :effect/message message}))
 
 ;; ---------------------------------------------------------------- queries
 
-(defn block-at
-  "State id at [x y z]: local overlay first, then the chunk; nil when unloaded."
-  [world pos]
-  (or (get (:world/blocks world) pos) (chunk/block-at (:world/chunks world) pos)))
-
-(defn solid-fn
-  "Solidity oracle for physics. Unloaded counts as solid so the bot never falls out of the world."
-  [world]
-  (fn [x y z]
-    (let [id (block-at world [x y z])]
-      (if (nil? id) true (blocks/solid? id)))))
-
-(defn eye [world] (physics/eye (:player/pos world)))
-
-(defn item-count
-  "How many of an item (by id) the player holds; the crafting grid is not the inventory."
-  [world id]
-  (reduce + 0 (for [[_ {:keys [item count]}] (:player/inventory world) :when (= item id)] count)))
-
-(defn logs-held [world]
-  (reduce + 0 (for [[_ {:keys [item count]}] (:player/inventory world) :when (blocks/log-item? item)] count)))
-
-(defn chunk-loaded? [world [x _ z]]
-  (contains? (:world/chunks world)
-             [(bit-shift-right (long (Math/floor x)) 4) (bit-shift-right (long (Math/floor z)) 4)]))
-
-(defn container->player-slot
-  "Window-0 slot → player-inventory slot (the key space of :player/inventory), or nil."
-  [^long s]
-  (cond (<= 36 s 44) (- s 36)
-        (<= 9 s 35) s
-        (<= 5 s 8) (- 44 s)                ; window 5-8 are head..feet; player 36-39 are feet..head
-        (= s 45) 40
-        :else nil))
-
-(defn- set-slot [world slot item]
-  (if item (assoc-in world [:player/inventory slot] item) (update world :player/inventory dissoc slot)))
+(defn eye "The player's eye position; :player/pos must be known." [world] (physics/eye (:player/pos world)))
 
 ;; ---------------------------------------------------------------- packets
 
-(defn- on-ground-flag [world] (if (:player/on-ground? world) 1 0))
+(defn on-ground-flag "The movement packets' flags byte: 1 when on the ground, else 0." [world] (if (:player/on-ground? world) 1 0))
 
-(defn- send-position [world]
+(defn send-position
+  "Emit move-player-pos-rot with the current pos and look, and remember what was sent."
+  [world]
   (let [[x y z] (:player/pos world) [yaw pitch] (:player/look world)]
     (-> world
         (emit {:packet/name :move-player-pos-rot :x x :y y :z z :yaw yaw :pitch pitch :flags (on-ground-flag world)})
         (assoc :net/sent-pos (:player/pos world) :net/sent-look (:player/look world) :net/sent-tick (:time/tick world)))))
 
-(defn- relative [flags bit old new] (if (pos? (bit-and flags bit)) (+ old new) new))
+(defn relative
+  "One teleport coordinate: old + new when the flag bit says relative, else new."
+  [flags bit old new] (if (pos? (bit-and flags bit)) (+ old new) new))
 
-(defn- apply-teleport [world {:keys [teleport-id x y z yaw pitch flags]}]
+(defn apply-teleport
+  "The server moved the player: set pos and look (relative per flags), stop, accept the
+   teleport and echo the position. The first teleport also sends player-loaded."
+  [world {:keys [teleport-id x y z yaw pitch flags]}]
   (let [[ox oy oz] (or (:player/pos world) [0.0 0.0 0.0])
         [oyaw opitch] (:player/look world)
         loaded? (:player/loaded? world)]
@@ -137,39 +121,20 @@
         (cond-> (not loaded?) (-> (emit {:packet/name :player-loaded})
                                   (assoc :player/loaded? true))))))
 
-(defn- chunk-key [v] [(long (unchecked-int v)) (long (unchecked-int (bit-shift-right v 32)))])
-
-(defn- in-chunk? [key [bx _ bz]] (= key [(bit-shift-right bx 4) (bit-shift-right bz 4)]))
-
-(defn- load-chunk [world {:keys [x z data]}]
+(defn load-chunk
+  "A level-chunk packet: the column the reader thread attached, or decoded here from the wire
+   bytes (a replay, the sim), goes into the terrain; one that fails to decode is logged and
+   skipped, never thrown."
+  [world {:keys [x z] :as pkt}]
   (let [key [x z]
-        column (try (chunk/decode data) (catch Exception e {:chunk/error (str e)}))]
+        column (:chunk/column (chunk/attach pkt))]
     (if (:chunk/error column)
       (say world (str "bad chunk " key ": " (:chunk/error column)))
-      (-> world
-          (assoc-in [:world/chunks key] column)
-          (update :world/blocks (fn [m] (into {} (remove (fn [[pos _]] (in-chunk? key pos)) m))))
-          (update :stats/chunks inc)
-          (memory/remember-column key column)))))
+      (-> world (terrain/put-column key column) (update :stats/chunks inc)))))
 
-(defn set-block
-  "A block is known to be id now: overlay the chunk and keep the sighting."
-  [world pos id]
-  (-> world (assoc-in [:world/blocks pos] id) (memory/observe pos id)))
-
-(defn- section-update [world {:keys [section blocks]}]
-  (let [sx (bit-shift-right section 42)
-        sz (bit-shift-right (bit-shift-left section 22) 42)
-        sy (bit-shift-right (bit-shift-left section 44) 44)]
-    (reduce (fn [world v]
-              (let [id (unsigned-bit-shift-right v 12)
-                    lx (bit-and (bit-shift-right v 8) 15)
-                    lz (bit-and (bit-shift-right v 4) 15)
-                    ly (bit-and v 15)]
-                (set-block world [(+ (* 16 sx) lx) (+ (* 16 sy) ly) (+ (* 16 sz) lz)] id)))
-            world blocks)))
-
-(defn- move-entity [world eid dx dy dz]
+(defn move-entity
+  "Shift a tracked entity by a delta in 1/4096 blocks; untracked entities are ignored."
+  [world eid dx dy dz]
   (if (get-in world [:world/entities eid])
     (update-in world [:world/entities eid :entity/pos]
                (fn [[x y z]] [(+ x (/ dx 4096.0)) (+ y (/ dy 4096.0)) (+ z (/ dz 4096.0))]))
@@ -200,17 +165,11 @@
 (defmethod on-packet [:configuration :disconnect] [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
 
-(defn- fresh-menus
-  "A login or respawn gives the player a fresh menu: nothing open, an empty cursor, and a grid
-   the server empties back into the inventory (it then sends the window's contents)."
-  [w]
-  (-> w (dissoc :window/open :window/cursor) (assoc :window/grid {})))
-
-(defmethod on-packet [:play :respawn] [w _] (fresh-menus w))
+(defmethod on-packet [:play :respawn] [w _] (inventory/fresh-menus w))
 
 (defmethod on-packet [:play :login] [w p]
   (-> w
-      fresh-menus
+      inventory/fresh-menus
       (assoc :player/entity-id (:entity-id p))
       (emit {:packet/name :client-information :locale "en_US" :view-distance 6 :chat-mode 0
              :chat-colors true :skin-parts 0x7f :main-hand 1 :text-filtering false
@@ -222,61 +181,24 @@
 (defmethod on-packet [:play :chunk-batch-finished] [w _]
   (emit w {:packet/name :chunk-batch-received :chunks-per-tick 20.0}))
 (defmethod on-packet [:play :level-chunk-with-light] [w p] (load-chunk w p))
-(defmethod on-packet [:play :forget-level-chunk] [w p] (update w :world/chunks dissoc (chunk-key (:pos p))))
-(defmethod on-packet [:play :block-update] [w p] (set-block w (:pos p) (:state p)))
-(defmethod on-packet [:play :section-blocks-update] [w p] (section-update w p))
+(defmethod on-packet [:play :forget-level-chunk] [w p] (update w :world/chunks dissoc (terrain/chunk-key (:pos p))))
+(defmethod on-packet [:play :block-update] [w p] (terrain/set-block w (:pos p) (:state p)))
+(defmethod on-packet [:play :section-blocks-update] [w p] (terrain/section-update w p))
 (defmethod on-packet [:play :set-health] [w p] (assoc w :player/health (:health p)))
-(def menus
-  "Container layouts by menu type id (registry minecraft:menu). :menu/grid are the crafting
-   slots (0 is the result); :menu/inventory is the first of the 36 player-inventory slots,
-   27 main then 9 hotbar, as every vanilla container appends them."
-  {12 {:menu/name :crafting :menu/size 3 :menu/grid (range 0 10) :menu/inventory 10}})
-
-(defn window->player-slot
-  "A slot of an open container → player-inventory slot, or nil when it is the container's own."
-  [menu-type ^long s]
-  (when-let [start (:menu/inventory (menus menu-type))]
-    (let [i (- s start)]
-      (cond (<= 0 i 26) (+ i 9)
-            (<= 27 i 35) (- i 27)
-            :else nil))))
-
-(defn- set-open-window-slot
-  "An open container: its own slots live in :window/open's :window/slots; slots that are the
-   player's inventory update :player/inventory, so items are never counted in two places."
-  [w s item]
-  (let [menu-type (get-in w [:window/open :window/menu-type])]
-    (if-let [p (window->player-slot menu-type s)]
-      (set-slot w p item)
-      (if item
-        (assoc-in w [:window/open :window/slots s] item)
-        (update-in w [:window/open :window/slots] dissoc s)))))
-
-(defn- open? [w window-id] (= window-id (get-in w [:window/open :window/id])))
-
-(defn- set-window-0-slot
-  "Window 0 is the player's own screen: slots 0-4 are the crafting grid (0 is the result) and
-   are kept verbatim in :window/grid, so nothing in the grid is ever invisible; the rest map to
-   :player/inventory."
-  [w i item]
-  (cond
-    (<= 0 i 4) (if item (assoc-in w [:window/grid i] item) (update w :window/grid dissoc i))
-    (container->player-slot i) (set-slot w (container->player-slot i) item)
-    :else w))
 
 (defmethod on-packet [:play :container-set-content] [w {:keys [window-id state-id items carried]}]
   (let [w (cond-> w carried (assoc :window/cursor carried) (nil? carried) (dissoc :window/cursor))]
     (cond
       (zero? window-id)
-      (reduce (fn [w [i item]] (set-window-0-slot w i item)) (assoc w :window/state-id state-id) (map-indexed vector items))
-      (open? w window-id)
-      (reduce (fn [w [i item]] (set-open-window-slot w i item))
+      (reduce (fn [w [i item]] (inventory/set-window-0-slot w i item)) (assoc w :window/state-id state-id) (map-indexed vector items))
+      (inventory/open? w window-id)
+      (reduce (fn [w [i item]] (inventory/set-open-window-slot w i item))
               (assoc-in w [:window/open :window/state-id] state-id) (map-indexed vector items))
       :else w)))
 (defmethod on-packet [:play :container-set-slot] [w {:keys [window-id state-id slot item]}]
   (cond
-    (zero? window-id) (-> w (assoc :window/state-id state-id) (set-window-0-slot slot item))
-    (open? w window-id) (-> w (assoc-in [:window/open :window/state-id] state-id) (set-open-window-slot slot item))
+    (zero? window-id) (-> w (assoc :window/state-id state-id) (inventory/set-window-0-slot slot item))
+    (inventory/open? w window-id) (-> w (assoc-in [:window/open :window/state-id] state-id) (inventory/set-open-window-slot slot item))
     :else w))
 (defmethod on-packet [:play :set-held-slot] [w {:keys [slot]}] (if (<= 0 slot 8) (assoc w :player/held-slot slot) w))
 (defmethod on-packet [:play :set-cursor-item] [w {:keys [item]}]
@@ -284,7 +206,7 @@
 (defmethod on-packet [:play :open-screen] [w {:keys [window-id menu-type]}]
   (assoc w :window/open {:window/id window-id :window/menu-type menu-type :window/slots {}}))
 (defmethod on-packet [:play :container-close] [w _] (dissoc w :window/open))
-(defmethod on-packet [:play :set-player-inventory] [w {:keys [slot item]}] (set-slot w slot item))
+(defmethod on-packet [:play :set-player-inventory] [w {:keys [slot item]}] (inventory/set-slot w slot item))
 (defmethod on-packet [:play :add-entity] [w {:keys [entity-id type x y z]}]
   (if (= type blocks/item-entity-type)
     (assoc-in w [:world/entities entity-id] {:entity/type type :entity/pos [x y z] :entity/seen-at (:time/now w)})
@@ -294,21 +216,29 @@
 (defmethod on-packet [:play :entity-position-sync] [w {:keys [entity-id x y z]}]
   (if (get-in w [:world/entities entity-id]) (assoc-in w [:world/entities entity-id :entity/pos] [x y z]) w))
 (defmethod on-packet [:play :remove-entities] [w {:keys [ids]}] (update w :world/entities #(apply dissoc % ids)))
-(defmethod on-packet [:play :take-item-entity] [w p] (update w :stats/pickups (fnil conj []) p))
-(defmethod on-packet [:play :block-changed-ack] [w p] (assoc w :stats/last-ack (:sequence p)))
+(defmethod on-packet [:play :take-item-entity] [w {:keys [collected collector count] :as p}]
+  (cond-> (update w :stats/pickups (fnil conj []) p)
+    (= collector (:player/entity-id w))
+    (memory/remember-answer {:answer/kind :pickup :answer/entity collected :answer/count count})))
+(defmethod on-packet [:play :block-changed-ack] [w p]
+  (-> w
+      (assoc :stats/last-ack (:sequence p))
+      (memory/remember-answer {:answer/kind :ack :answer/sequence (:sequence p)})))
 (defmethod on-packet [:play :start-configuration] [w _] (emit w {:packet/name :configuration-acknowledged}))
 (defmethod on-packet [:play :disconnect] [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
 
 ;; ---------------------------------------------------------------- ticks
 
-(defn- physics-ready? [world]
+(defn physics-ready?
+  "May physics run this tick: in play, positioned, loaded, and standing in a loaded chunk."
+  [world]
   (and (= :play (:bot/phase world))
        (:player/pos world)
        (:player/loaded? world)
-       (chunk-loaded? world (:player/pos world))))
+       (terrain/chunk-loaded? world (:player/pos world))))
 
-(defn- movement-packets
+(defn movement-packets
   "pos-rot when something changed, status-only once a second otherwise (vanilla's rule)."
   [world]
   (cond
@@ -323,46 +253,67 @@
 
     :else world))
 
-(defn- on-tick [world {:event/keys [now]}]
+(defn on-tick
+  "Advance the clock; when physics-ready?, move the player under :player/controls and emit
+   the movement packet vanilla would."
+  [world {:event/keys [now]}]
   (let [world (-> world (assoc :time/now now) (update :time/tick inc))]
     (if (physics-ready? world)
       (let [controls (:player/controls world)]
-        (-> (physics/step (solid-fn world) world controls)
+        (-> (physics/step (terrain/solid-fn world) world controls)
             (cond-> (:control/look controls) (assoc :player/look (:control/look controls)))
             movement-packets))
       world)))
 
 ;; ---------------------------------------------------------------- step
 
-(defmulti on-event (fn [_world event] (:event/kind event)))
+(defmulti on-event
+  "Dispatch on :event/kind; kinds with no method leave the world unchanged."
+  (fn [_world event] (:event/kind event)))
 
 (defmethod on-event :default [world _] world)
 
-(defmethod on-event :start [world _]
-  (-> world
-      (emit {:packet/name :intention :protocol-version protocol-version
-             :host (:conn/host world) :port (:conn/port world) :next-state 2})
-      (emit {:packet/name :hello :username (:bot/name world) :uuid (:bot/uuid world)})))
+(defn connection
+  "The :start event may carry the connection it starts (:start/host :start/port :start/name);
+   then it, not init's arguments, decides them. That makes the connection an input in the
+   recording, so a replay rebuilds the same handshake (and the same offline UUID)."
+  [world {:start/keys [host port name]}]
+  (cond-> world
+    host (assoc :conn/host host)
+    port (assoc :conn/port port)
+    name (assoc :bot/name name :bot/uuid (b/offline-uuid name))))
+
+(defmethod on-event :start [world event]
+  (let [world (connection world event)]
+    (-> world
+        (emit {:packet/name :intention :protocol-version protocol-version
+               :host (:conn/host world) :port (:conn/port world) :next-state 2})
+        (emit {:packet/name :hello :username (:bot/name world) :uuid (:bot/uuid world)}))))
 
 (defmethod on-event :packet [world {:event/keys [packet]}] (on-packet world packet))
 (defmethod on-event :tick [world event] (on-tick world event))
 (defmethod on-event :closed [world {:event/keys [reason]}] (assoc world :bot/closed reason))
 
-(defn step [world event] (on-event world event))
+(defn step
+  "The protocol reducer: (step world event) → world'. Pure; the clock and randomness come in
+   on the event."
+  [world event] (on-event world event))
 
 (defn compose
   "Several reducers with the step signature into one, applied left to right."
   [& steps]
   (fn [world event] (reduce (fn [w f] (f w event)) world steps)))
 
-(defn summary [world]
+(defn summary
+  "The game part of the RESULT line: phase, position, counts and every :stats/* attribute."
+  [world]
   {:phase (:bot/phase world)
    :pos (:player/pos world)
    :on-ground? (:player/on-ground? world)
    :loaded? (:player/loaded? world)
    :chunks (count (:world/chunks world))
-   :sightings (count (:world/sightings world))
-   :logs (logs-held world)
+   :sightings (count (memory/latest world))
+   :logs (inventory/logs-held world)
    :inventory (count (:player/inventory world))
    :entities (count (:world/entities world))
    :stats (into {} (filter (fn [[k _]] (= "stats" (namespace k))) world))

@@ -33,9 +33,13 @@ The ten drafts in `docs/issues/` were filed as GitHub issues #2-#11, but not in 
 | #9 | `05-dig-with-tools-stone-pickaxe.md` | hardness, tools, stairs-down, stone pickaxe |
 | #10 | `10-blazes-pearls-stronghold-end.md` | blazes, pearls, eyes, stronghold, End, dragon |
 | #11 | `09-nether-and-fortress.md` | dimension-aware world, respawn, Nether memory, fortress search |
+| #17 | (none) | multi-bot race: each bot its own atom and loop, one bounded channel for claimed landing cells; after #6 or #8 |
 
 ## Gotchas
 - The GitHub numbers are an external fact (not anchored in the repo); the draft titles are. Re-check with `gh issue list --state all` if a number looks wrong.
+
+## Problem statements
+Each roadmap stage also has a problem statement in `resources/clojurecraft/problems.edn` (the problem, the information it needs, the risks, done in world terms, the last recorded failure, sources), distilled from these drafts and the sibling notes; [[add-a-goal]] says to write it before the goal.
 
 ## See also
 - [[sib-steve-steps-to-goals]] - steve's 31 steps mapped onto these.

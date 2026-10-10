@@ -5,8 +5,8 @@ type: reference
 tags: [siblings, steve, correspondence, plan, goals]
 aliases: [steps.ts mapping, steve steps vs goals, which goal is gather_wood, correspondence table]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: steve c28028b
+lastUpdated: 2026-10-10
+verifiedAgainst: 3452f18 c28028b
 sourceRefs:
   - steve:src/lib/steve/steps.ts#export const steps: readonly Step[] = [
   - steve:src/lib/steve/steps.ts#id: "gather_wood",
@@ -14,12 +14,11 @@ sourceRefs:
   - steve:src/lib/steve/steps.ts#id: "kill_dragon",
   - steve:src/lib/steve/steps.ts#export const getNextStep = (
   - src/clojurecraft/plan.clj#def goals
-  - src/clojurecraft/make.clj#defmethod plan/next-intent :kit
+  - src/clojurecraft/make.clj#defmethod plan/next-intent :needs
 related:
   - "[[siblings/_moc|Siblings]]"
   - "[[goals-and-intents]]"
   - "[[make-goals]]"
-  - "[[recipe-graph]]"
 ---
 
 # steve's steps mapped to our goals
@@ -28,8 +27,8 @@ steve's chain is a vector of step objects (`id`, `priority`, `canExecute`, `isCo
 
 ## Key files
 - steve `src/lib/steve/steps.ts` - `steps` and `getNextStep`.
-- `src/clojurecraft/plan.clj`, `goals` - `:wood` (priority 1, hold one log), `:kit` (priority 2, `:goal/wants [[:crafting_table 1] [:stick 4]]`) and `:pickaxe` (priority 3, a wooden pickaxe via a placed table).
-- `src/clojurecraft/make.clj`, `next-intent :kit` - the recipe graph picks gather or craft ([[make-goals]], [[recipe-graph]]).
+- `resources/clojurecraft/goals.edn` - targets `:wood` (priority 1, provides a log), `:kit` (priority 2, provides a crafting table and four sticks) and `:pickaxe` (priority 3, a wooden pickaxe via a placed table).
+- `src/clojurecraft/make.clj`, `next-intent :needs` - the needs planner picks gather, craft or place for every target ([[make-goals]]).
 
 ## The map
 | steve step (priority) | ours today | issue draft |
@@ -39,7 +38,7 @@ steve's chain is a vector of step objects (`id`, `priority`, `canExecute`, `isCo
 | `craft_planks` (2) | `:kit` → recipe graph → `:craft` (any `*_planks` recipe for the log held) | 01 |
 | `craft_crafting_table` (3) | `:kit` want `[:crafting_table 1]` → `:craft` in the 2x2 | 01 |
 | `craft_sticks` (4) | `:kit` want `[:stick 4]` (steve keeps 8) | 01 |
-| `craft_wooden_pickaxe` (5) | `:pickaxe` goal (priority 3): the graph in size 3, then place, open and craft in a table (`make/with-table`) | 02 |
+| `craft_wooden_pickaxe` (5) | `:pickaxe` goal (priority 3): the graph in size 3, then place, open and craft in a table (the `:place-table` row and the `:craft` act) | 02 |
 | `mine_stone` (6), `craft_stone_pickaxe` (7), `craft_stone_sword` (8) | none | 05 |
 | `craft_furnace` (9), `mine_coal` (10), `mine_iron` (11), `smelt_iron` (12) | none | 05, 07 |
 | `craft_iron_pickaxe` (13), `craft_bucket` (14), `get_water_buckets` (15) | none | 07 |

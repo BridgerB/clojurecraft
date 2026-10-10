@@ -5,12 +5,18 @@
             [clojurecraft.spec]))
 
 (defn instrumented
-  "clojure.test fixture: instrument the reducers for the duration of the namespace."
+  "clojure.test fixture: instrument the reducers (the bot's and the server model's) and every
+   function with a stated selection (spec/selected) for the duration of the namespace."
   [f]
-  (stest/instrument [`game/step `clojurecraft.plan/step `clojurecraft.intent/run])
+  (stest/instrument (into [`game/step `clojurecraft.plan/step `clojurecraft.intent/run `clojurecraft.sim/step]
+                          clojurecraft.spec/selected))
   (try (f) (finally (stest/unstrument))))
 
 (def opts {:host "h" :port 1 :name "Clj_test"})
+
+(def login-finished
+  "The login-finished packet as the decoder produces it: every field its spec lists."
+  {:packet/name :login-finished :uuid #uuid "00000000-0000-3000-8000-000000000000" :username "Clj_test"})
 
 (defn fold
   "Fold events through step; returns [final-world [[now effect] ...]] with effects cleared

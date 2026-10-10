@@ -2,6 +2,9 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx :refer [fold names packets packet ticks]]
             [clojurecraft.game :as game]
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.inventory :as inventory]
+            [clojurecraft.memory :as memory]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -12,7 +15,7 @@
   (let [[w fx] (run (game/init fx/opts)
                     [{:event/kind :start}
                      (packet {:packet/name :login-compression :threshold 256})
-                     (packet {:packet/name :login-finished})
+                     (packet fx/login-finished)
                      (packet {:packet/name :select-known-packs})
                      (packet {:packet/name :keep-alive :id 5})
                      (packet {:packet/name :finish-configuration})
@@ -23,11 +26,12 @@
     (is (= 7 (:player/entity-id w)))
     (is (= [] (:packs (nth (packets fx) 3))))
     (is (= 5 (:id (nth (packets fx) 4))))
-    (is (= 775 (:protocol-version (first (packets fx)))))))
+    (is (= 775 (:protocol-version (first (packets fx)))) "from version.edn, not a constant")
+    (is (= 775 (:version/protocol game/version)))))
 
 (defn in-play []
   (first (run (game/init fx/opts)
-              [{:event/kind :start} (packet {:packet/name :login-finished})
+              [{:event/kind :start} (packet fx/login-finished)
                (packet {:packet/name :finish-configuration}) (packet {:packet/name :login :entity-id 7})])))
 
 (deftest teleports
@@ -65,12 +69,12 @@
                               (packet {:packet/name :container-set-slot :window-id 3 :state-id 2 :slot 9 :item {:item 134 :count 64}})])]
     (is (= {0 log 5 {:item 134 :count 2} 9 {:item 1 :count 3}} (:player/inventory w)))
     (is (= 2 (:window/state-id w)) "window 0's latest state id is kept")
-    (is (= 3 (game/logs-held w)))
-    (is (= 0 (game/container->player-slot 36)))
-    (is (= 40 (game/container->player-slot 45)))
-    (is (= 39 (game/container->player-slot 5)) "window 5 is the helmet, player slot 39")
-    (is (= 36 (game/container->player-slot 8)) "window 8 is the boots, player slot 36")
-    (is (nil? (game/container->player-slot 2)))))
+    (is (= 3 (inventory/logs-held w)))
+    (is (= 0 (inventory/container->player-slot 36)))
+    (is (= 40 (inventory/container->player-slot 45)))
+    (is (= 39 (inventory/container->player-slot 5)) "window 5 is the helmet, player slot 39")
+    (is (= 36 (inventory/container->player-slot 8)) "window 8 is the boots, player slot 36")
+    (is (nil? (inventory/container->player-slot 2)))))
 
 (deftest the-crafting-grid-is-never-invisible
   (let [items (vec (concat [{:item 30 :count 1} {:item 36 :count 1} nil {:item 36 :count 1} nil] (repeat 41 nil)))
@@ -107,18 +111,20 @@
                               (packet {:packet/name :add-entity :entity-id 50 :uuid nil :type 71 :x 1.0 :y 64.0 :z 1.0})
                               (packet {:packet/name :add-entity :entity-id 51 :uuid nil :type 5 :x 1.0 :y 64.0 :z 1.0})
                               (packet {:packet/name :move-entity-pos :entity-id 50 :dx 4096 :dy 0 :dz -2048 :on-ground true})])]
-    (is (= 136 (game/block-at w [3 64 0])))
-    (is (= 0 (game/block-at w [3 65 0])) "overlay wins")
-    (is (= 1 (game/block-at w [0 63 0])) "stone floor")
-    (is (nil? (game/block-at w [16 64 0])) "unloaded")
-    (is (= 2 (game/block-at w [17 133 0])) "section update: chunk x=1 z=0 section y=8, local (1,5,0)")
+    (is (= 136 (terrain/block-at w [3 64 0])))
+    (is (= 0 (terrain/block-at w [3 65 0])) "overlay wins")
+    (is (= 1 (terrain/block-at w [0 63 0])) "stone floor")
+    (is (nil? (terrain/block-at w [16 64 0])) "unloaded")
+    (is (= 2 (terrain/block-at w [17 133 0])) "section update: chunk x=1 z=0 section y=8, local (1,5,0)")
     (is (= {50 {:entity/type 71 :entity/pos [2.0 64.0 0.5] :entity/seen-at 0}} (:world/entities w)) "only items are tracked")
     (testing "sightings remember logs and their later states"
       (is (= {[3 64 0] {:block/state 136 :block/seen-at 0} [3 65 0] {:block/state 0 :block/seen-at 0}}
-             (:world/sightings w)))
+             (memory/latest w)))
+      (is (= [{:block/state 136 :block/seen-at 0} {:block/state 0 :block/seen-at 0}] (memory/history w [3 65 0]))
+          "facts are appended, never overwritten: the log, then the air that replaced it")
       (let [[w2 _] (run w [(packet {:packet/name :forget-level-chunk :pos 0})])]
-        (is (nil? (game/block-at w2 [3 64 0])) "chunk gone")
-        (is (= 136 (get-in w2 [:world/sightings [3 64 0] :block/state])) "memory stays")))
+        (is (nil? (terrain/block-at w2 [3 64 0])) "chunk gone")
+        (is (= 136 (memory/remembered w2 [3 64 0])) "memory stays")))
     (testing "a corrupt chunk is logged, not thrown"
       (let [[w2 fx] (run w [(packet {:packet/name :level-chunk-with-light :x 1 :z 1 :heightmaps [] :data (byte-array 3)})])]
         (is (= 1 (count (:world/chunks w2))))

@@ -10,7 +10,7 @@ verifiedAgainst: 5c7d6c1
 sourceRefs:
   - src/clojurecraft/window.clj#defn click
   - src/clojurecraft/window.clj#an empty cursor, so the world drops :window/cursor on every click and the server corrects it only when it is not empty.
-  - src/clojurecraft/sim.clj#defn- sync-window
+  - src/clojurecraft/sim.clj#defn sync-window
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[bot/gotchas/_moc|Gotchas]]"

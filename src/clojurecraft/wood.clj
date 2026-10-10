@@ -1,13 +1,12 @@
 (ns clojurecraft.wood
-  "The first goal: hold one log. Walk to the nearest remembered trunk, dig the log nearest the
-   bot's own feet height (so the drop lands where the bot can stand, not in a hole under the
-   rest of the trunk), pick up the drop. Requiring this namespace registers the goal."
+  "Getting a log: walk to the nearest remembered trunk, dig the log nearest the bot's own feet
+   height (so the drop lands where the bot can stand, not in a hole under the rest of the
+   trunk), pick up the drop. The :gather act of the goal table (clojurecraft.make) runs this."
   (:require [clojurecraft.game :as game]
-            [clojurecraft.memory :as memory]
-            [clojurecraft.plan :as plan]))
+            [clojurecraft.memory :as memory]))
 
-(def search-radius 48)
-(def max-trunk 8)
+(def search-radius 48)                ; blocks from the eye searched for a remembered log
+(def max-trunk 8)                     ; logs followed up one trunk column
 
 (defn trunk-target
   "Of the remembered logs stacked on bottom, the one whose height is closest to the player's
@@ -44,6 +43,4 @@
         {:intent/kind :walk :intent/target (trunk-target world bottom) :intent/for :log}
         {:plan/wait :no-log})))
 
-(defmethod plan/goal-done? :wood [world _] (pos? (game/logs-held world)))
 
-(defmethod plan/next-intent :wood [world _] (gather-next world))

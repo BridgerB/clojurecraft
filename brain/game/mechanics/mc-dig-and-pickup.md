@@ -9,7 +9,7 @@ lastUpdated: 2026-10-09
 verifiedAgainst: 26.1.2
 sourceRefs:
   - src/clojurecraft/intent.clj#def dig-ms
-  - src/clojurecraft/sim.clj#defn- within-pickup?
+  - src/clojurecraft/sim.clj#defn within-pickup?
   - src/clojurecraft/game.clj#defmethod on-packet [:play :take-item-entity]
 related:
   - "[[game/mechanics/_moc|Mechanics]]"

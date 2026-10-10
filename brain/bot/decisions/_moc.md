@@ -3,8 +3,8 @@ title: Decisions
 type: moc
 tags: [bot, decisions]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-10
+verifiedAgainst: 9c46e4b
 related:
   - "[[bot/_moc|Bot pillar]]"
 ---
@@ -13,7 +13,7 @@ related:
 
 - [[from-scratch-protocol]] - no MCProtocolLib; packets as data instead.
 - [[natural-tree-not-fixture]] - CI chops a real tree in a normal world, not a setblock on a flat world.
-- [[map-memory-not-datalog]] - sightings are a plain map until a query needs a join.
+- [[facts-in-datascript]] - memory is append-only observation facts in a DataScript value, queried with Datalog (replacing the plain map).
 - [[randomness-on-the-tick]] - why `rand` is an event field and not a call.
 - [[manual-clicks-not-place-recipe]] - clicks we compute, not the recipe book; needs a decoder we lack.
 - [[predict-nothing]] - clicks claim no changes and an empty cursor; the server stays the only truth.
@@ -23,6 +23,9 @@ related:
 - [[goals-in-play-from-go]] - which goals run arrives on the :go event, so replays match.
 - [[placement-judged-by-server]] - a placed block exists only when the server says so.
 - [[spot-two-blocks-away]] - where a table goes: rings 1-3 around the feet, ±1 in height, never inside the player (and why the first design failed in CI).
+- [[public-by-default]] - defn everywhere; defn- only for one-line local aliases, so the REPL reaches everything.
+- [[sets-over-arrays]] - block predicates are sets; primitive arrays and hints went when a replay measured no difference.
+- [[one-planner]] - the recipe-only walk was removed once the needs planner covered it.
 - [[any-log-species]] - gather the nearest log of any kind; the next plan picks the planks recipe.
 
 ## See also

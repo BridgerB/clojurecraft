@@ -16,7 +16,7 @@ sourceRefs:
   - ruststeve:src/tasks/smelt.rs#fn win_inv_count(bot: &Bot, name: &str) -> i32 {
 related:
   - "[[siblings/_moc|Siblings]]"
-  - "[[recipe-graph]]"
+  - "[[make-goals]]"
   - "[[craft-intent]]"
 ---
 
@@ -38,7 +38,7 @@ Symptom in steve races: a bot smelts cleanly to about 3 iron ingots and stalls f
 7. **Count in the open window.** ruststeve's `win_inv_count` counts the open window's inventory section, because while a furnace is open the player inventory model is stale; counting there made the loop finish instead of burning its 220 s deadline.
 
 ## What it means here
-Fuel is an explicit want in the recipe graph, not a side effect: smelting n items needs ceil(n / 8) coal, and coal is gathered like logs ([[recipe-graph]]). The furnace window uses the same rules as window 0 in [[craft-intent]]: one click per round trip against the state id, verify before taking, and the cursor is never left loaded.
+Fuel should be an explicit need in the goal table, not a side effect: smelting n items needs ceil(n / 8) coal, and coal is gathered like logs, by a producer row ([[make-goals]]). The furnace window uses the same rules as window 0 in [[craft-intent]]: one click per round trip against the state id, verify before taking, and the cursor is never left loaded.
 
 ## Limits
 The "about 3 ingots" cap is steve's race record, cited in the code comment and the operator notes, not reproduced here. ruststeve's top-up and grace-tick loop was read only through its comments.

@@ -18,7 +18,7 @@
       (assoc :bot/phase :play :player/pos pos :player/loaded? true :player/on-ground? true)
       (assoc :world/chunks {[0 0] (world/column {})})))
 
-(defn- overlaps? [[px py pz] [x y z]]
+(defn overlaps? [[px py pz] [x y z]]
   (and (< (- px 0.3) (inc x)) (> (+ px 0.3) x) (< py (inc y)) (> (+ py 1.8) y) (< (- pz 0.3) (inc z)) (> (+ pz 0.3) z)))
 
 (deftest a-placement-spot-is-never-inside-the-player
@@ -32,10 +32,10 @@
                                 (not (overlaps? (:player/pos w) target))
                                 (= support (update target 1 dec))
                                 (<= (abs (- (second target) 64)) 1)
-                                (<= (physics/distance (game/eye w) (intent/centre target)) place/place-reach)))))]
+                                (<= (physics/distance (game/eye w) (physics/centre target)) place/place-reach)))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
 
-(defn- intent-step
+(defn intent-step
   "The world reducer plus one run of the current intent per tick (no planner)."
   [w e]
   (let [w (game/step w e)]
@@ -66,4 +66,4 @@
             [w _] (fx/fold intent-step w [(packet {:packet/name :block-update :pos [7 64 5] :state memory/crafting-table})
                                           {:event/kind :tick :event/now 100 :event/rand 0.5}])]
         (is (intent/done? (:plan/intent w)))
-        (is (= memory/crafting-table (get-in w [:world/sightings [7 64 5] :block/state])) "remembered")))))
+        (is (= memory/crafting-table (memory/remembered w [7 64 5])) "remembered")))))

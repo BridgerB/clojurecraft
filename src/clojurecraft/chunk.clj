@@ -7,10 +7,14 @@
   (:require [clojurecraft.bytes :as b])
   (:import [java.nio ByteBuffer]))
 
-(def min-y -64)
-(def section-count 24)
+(def min-y -64)                       ; the lowest block y of an overworld column
+(def section-count 24)                ; 16-block sections per overworld column (y -64..319)
 
-(defn- read-container [^ByteBuffer buf ^long max-bits ^long entries]
+(defn read-container
+  "One paletted container: {:single id} for 0 bits, else {:bits :palette :longs}
+   with palette nil above max-bits (direct ids). 26.1 sends no long count; it is
+   ceil(entries / floor(64 / bits))."
+  [^ByteBuffer buf ^long max-bits ^long entries]
   (let [bits (b/read-u8 buf)]
     (if (zero? bits)
       {:single (b/read-varint buf)}
@@ -38,7 +42,10 @@
   (let [buf (b/buffer data)]
     {:sections (vec (repeatedly section-count #(read-section buf)))}))
 
-(defn section-get ^long [section ^long idx]
+(defn section-get
+  "The id at index idx (0-4095 for blocks) of a section, through the palette when
+   there is one. Entries never straddle longs."
+  ^long [section ^long idx]
   (if-let [s (:single section)]
     s
     (let [bits (long (:bits section))
@@ -49,10 +56,14 @@
                      (dec (bit-shift-left 1 bits)))]
       (if-let [p (:palette section)] (nth p v) v))))
 
-(defn block-index ^long [^long lx ^long ly ^long lz]
+(defn block-index
+  "Index of local cell (lx ly lz), each 0-15, inside a section: y, then z, then x."
+  ^long [^long lx ^long ly ^long lz]
   (bit-or (bit-shift-left ly 8) (bit-shift-left lz 4) lx))
 
-(defn section-index ^long [^long y] (bit-shift-right (- y min-y) 4))
+(defn section-index
+  "Which of the 24 sections holds world y; outside 0-23 when y is out of the world."
+  ^long [^long y] (bit-shift-right (- y min-y) 4))
 
 (defn block-at
   "State id at world [x y z] from a {[cx cz] column} map, or nil when the chunk is not loaded."
@@ -67,9 +78,10 @@
 (defn section-may-contain?
   "Cheap palette test before scanning 4096 cells."
   [section pred]
-  (if-let [s (:single section)]
-    (boolean (pred s))
-    (if-let [p (:palette section)] (boolean (some pred p)) true)))
+  (let [{:keys [single palette]} section]
+    (cond single (boolean (pred single))
+          palette (boolean (some pred palette))
+          :else true)))
 
 (defn section-find
   "Seq of [lx ly lz id] for cells whose id satisfies pred."
@@ -87,3 +99,13 @@
         [si section] (map-indexed vector (:sections col))
         [lx ly lz id] (section-find section pred)]
     [(+ (* 16 cx) lx) (+ min-y (* 16 si) ly) (+ (* 16 cz) lz) id]))
+
+(defn attach
+  "The packet with its column decoded under :chunk/column (or {:chunk/error msg}), when it is a
+   level-chunk-with-light that has none yet; any other packet unchanged. Pure, so it can run on
+   the socket's reader thread (decoding is about bytes, not the game) and again on replay of the
+   wire bytes with the same result."
+  [pkt]
+  (if (or (not= :level-chunk-with-light (:packet/name pkt)) (contains? pkt :chunk/column))
+    pkt
+    (assoc pkt :chunk/column (try (decode (:data pkt)) (catch Exception e {:chunk/error (str e)})))))

@@ -8,8 +8,8 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
-  - src/clojurecraft/recipe.clj#defn- shaped-match?
-  - src/clojurecraft/recipe.clj#defn- shapeless-match?
+  - src/clojurecraft/recipe.clj#defn shaped-match?
+  - src/clojurecraft/recipe.clj#defn shapeless-match?
   - src/clojurecraft/recipe.clj#defn match
   - src/clojurecraft/recipe.clj#defn fits?
   - test/clojurecraft/recipe_test.clj#match-is-the-servers-rule

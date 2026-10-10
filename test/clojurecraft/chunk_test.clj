@@ -61,3 +61,12 @@
     (is (nil? (chunk/section-find {:single 1} blocks/log?)))
     (is (false? (chunk/section-may-contain? {:bits 4 :palette [0 1 2] :longs (long-array 256)} blocks/log?)))
     (is (true? (chunk/section-may-contain? {:bits 15 :palette nil :longs (long-array 1024)} blocks/log?)))))
+
+(deftest attach-decodes-chunk-packets-once
+  (let [data (b/with-out (fn [o] (dotimes [_ 24] (single-section o 1))))
+        pkt {:packet/name :level-chunk-with-light :x 0 :z 0 :data data}
+        once (chunk/attach pkt)]
+    (is (= 1 (chunk/block-at {[0 0] (:chunk/column once)} [0 0 0])))
+    (is (identical? once (chunk/attach once)) "an attached column is kept, not decoded again")
+    (is (= {:packet/name :keep-alive :id 1} (chunk/attach {:packet/name :keep-alive :id 1})))
+    (is (:chunk/error (:chunk/column (chunk/attach (assoc pkt :data (byte-array 3))))) "bad bytes become an error value")))

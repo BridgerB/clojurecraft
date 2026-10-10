@@ -13,7 +13,10 @@
 
 (def answer-timeout 3000)             ; a click the server never answers fails the intent
 
-(defn- table-slot [^long p] (cond (<= 0 p 8) (+ 37 p) (<= 9 p 35) (inc p) :else nil))
+(defn table-slot
+  "Player-inventory slot → crafting-table window slot (hotbar 0-8 → 37-45, store 9-35 → 10-36),
+   or nil for armor and offhand, which the table window does not show."
+  [p] (cond (<= 0 p 8) (+ 37 p) (<= 9 p 35) (inc p) :else nil))
 
 (defn view
   "The window an intent clicks in: :inventory (window 0, 2x2 grid) or :table (the open
@@ -37,7 +40,10 @@
       (update :plan/intent assoc :intent/awaiting state-id :intent/awaiting-window id
               :intent/sent-at (:time/now world))))
 
-(defn- state-id-of [world window-id]
+(defn state-id-of
+  "The latest state id the server sent for window-id: window 0's, or the open container's
+   when it is that window. nil for a window that is not open."
+  [world window-id]
   (if (zero? window-id)
     (:window/state-id world)
     (when (= window-id (get-in world [:window/open :window/id])) (get-in world [:window/open :window/state-id]))))

@@ -1,31 +1,29 @@
 (ns clojurecraft.conn
   "The socket. Frames in, frames out, compression, and which protocol state the wire is in.
    Decoded packets arrive on the :in channel; packet maps put on :out are encoded and sent.
+   Chunk columns are decoded here, on the reader thread (chunk/attach), so a burst of chunks
+   costs the reader, never the loop that answers keep-alives.
    This is one of the three namespaces that do I/O (with rcon and main)."
   (:require [clojure.core.async :as a]
             [clojurecraft.bytes :as b]
+            [clojurecraft.chunk :as chunk]
             [clojurecraft.packet :as p])
   (:import [java.io BufferedInputStream BufferedOutputStream ByteArrayOutputStream
             DataInputStream DataOutputStream]
            [java.net InetSocketAddress Socket]
            [java.util.zip Deflater Inflater]))
 
-(defn- read-varint-stream ^long [^DataInputStream in]
-  (loop [result 0 shift 0]
-    (let [x (.readUnsignedByte in)
-          result (bit-or result (bit-shift-left (bit-and x 0x7F) shift))]
-      (if (zero? (bit-and x 0x80))
-        result
-        (recur result (+ shift 7))))))
-
-(defn- inflate ^bytes [^bytes data ^long size]
+(defn inflate
+  "zlib-decompress data into exactly size bytes, the uncompressed length the frame
+   declared."
+  ^bytes [^bytes data ^long size]
   (let [inf (Inflater.) out (byte-array size)]
     (.setInput inf data)
     (.inflate inf out)
     (.end inf)
     out))
 
-(defn- deflate ^bytes [^bytes data]
+(defn deflate "zlib-compress data, all of it." ^bytes [^bytes data]
   (let [d (doto (Deflater.) (.setInput data) (.finish))
         buf (byte-array 8192)
         baos (ByteArrayOutputStream.)]
@@ -33,6 +31,18 @@
       (.write baos buf 0 (.deflate d buf)))
     (.end d)
     (.toByteArray baos)))
+
+;;;; I/O: the socket and its threads ;;;;
+
+(defn read-varint-stream
+  "A varint from the socket, blocking until its bytes arrive (frame lengths)."
+  ^long [^DataInputStream in]
+  (loop [result 0 shift 0]
+    (let [x (.readUnsignedByte in)
+          result (bit-or result (bit-shift-left (bit-and x 0x7F) shift))]
+      (if (zero? (bit-and x 0x80))
+        result
+        (recur result (+ shift 7))))))
 
 (defn read-frame
   "One frame's packet bytes (id + body), decompressed when a threshold is in force."
@@ -46,7 +56,10 @@
             body (b/read-rest buf)]
         (if (zero? size) body (inflate body size))))))
 
-(defn write-frame [^DataOutputStream out ^bytes payload ^long threshold]
+(defn write-frame
+  "Frame and flush one packet: raw when no threshold (negative), else a data-length
+   prefix, with zlib only when the payload reaches the threshold."
+  [^DataOutputStream out ^bytes payload ^long threshold]
   (let [body (cond
                (neg? threshold) payload
                (< (alength payload) threshold)
@@ -74,9 +87,9 @@
         (loop []
           (let [frame (read-frame in (:threshold @proto))
                 state (:state @proto)
-                pkt (try (p/decode state :s2c frame)
+                pkt (try (chunk/attach (p/decode state :s2c frame))
                          (catch Exception e {:packet/name :decode-error :packet/state state
-                                             :packet/error (str e) :packet/len (alength frame)}))]
+                                             :packet/error (str e) :packet/len (alength ^bytes frame)}))]
             (when (and (= state :login) (= :login-compression (:packet/name pkt)))
               (swap! proto assoc :threshold (:threshold pkt)))
             (a/>!! inbox pkt)
