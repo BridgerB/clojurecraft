@@ -23,7 +23,8 @@
     (is (= 7 (:player/entity-id w)))
     (is (= [] (:packs (nth (packets fx) 3))))
     (is (= 5 (:id (nth (packets fx) 4))))
-    (is (= 775 (:protocol-version (first (packets fx)))))))
+    (is (= 775 (:protocol-version (first (packets fx)))) "from version.edn, not a constant")
+    (is (= 775 (:version/protocol game/version)))))
 
 (defn in-play []
   (first (run (game/init fx/opts)

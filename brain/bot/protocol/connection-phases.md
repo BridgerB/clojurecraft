@@ -12,6 +12,9 @@ sourceRefs:
   - src/clojurecraft/conn.clj#defn open
   - src/clojurecraft/conn.clj#defn read-frame
   - src/clojurecraft/game.clj#defmulti on-packet
+  - src/clojurecraft/game.clj#(def protocol-version
+  - resources/clojurecraft/version.edn#:version/protocol 775
+  - dev/clojurecraft/datagen.clj#defn version
 related:
   - "[[bot/protocol/_moc|Protocol]]"
   - "[[packet-specs]]"
@@ -30,6 +33,7 @@ Phases are `:handshake → :login → :configuration → :play` (and back to `:c
 
 ## Gotchas
 - `player-loaded` is sent after the first accepted teleport; without it the server never finishes loading the player and nothing (pickup included) ticks.
+- The protocol number in the handshake is data, not a constant: datagen reads the inner jar's `version.json` into `resources/clojurecraft/version.edn` and `game/protocol-version` reads `:version/protocol` from it, so a server upgrade is a regeneration, not a code edit.
 - Offline UUID is MD5 name-UUID of `OfflinePlayer:<name>`; the server kicks on a mismatch.
 - The server's compression threshold is 256 by default, so compression is not optional.
 

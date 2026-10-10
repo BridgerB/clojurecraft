@@ -58,10 +58,20 @@
         (loop [acc {}]
           (if-let [e (.getNextEntry z)]
             (let [n (.getName e)]
-              (recur (if (re-matches #"data/minecraft/(recipe/[^/]+|tags/item/.+)\.json" n)
+              (recur (if (or (= n "version.json") (re-matches #"data/minecraft/(recipe/[^/]+|tags/item/.+)\.json" n))
                        (assoc acc n (String. (.readAllBytes z) "UTF-8"))
                        acc)))
             acc))))))
+
+(defn version
+  "The server's own version facts from the inner jar's version.json: the protocol number is
+   data that changes with the server, not a constant in the code."
+  [entries]
+  (let [v (json/read-str (get entries "version.json"))]
+    (sorted-map :version/id (get v "id")
+                :version/protocol (get v "protocol_version")
+                :version/world (get v "world_version")
+                :version/java (get v "java_version"))))
 
 (defn- file-stem [path] (second (re-find #"/([^/]+)\.json$" path)))
 (defn- tag-name [path] (second (re-find #"^data/minecraft/tags/item/(.+)\.json$" path)))
@@ -145,9 +155,10 @@
     (when server-jar
       (let [entries (inner-jar-entries server-jar)
             tags (item-tags entries)]
+        (write-map (io/file out "version.edn") jar-hdr (version entries))
         (write-map (io/file out "item-tags.edn") jar-hdr tags)
         (write-rows (io/file out "recipes.edn") jar-hdr (recipes entries tags))
-        (println "wrote" (str out "/{item-tags,recipes}.edn"))))
+        (println "wrote" (str out "/{version,item-tags,recipes}.edn"))))
     (write-rows (io/file out "blocks.edn") hdr (blocks reports))
     (write-map (io/file out "packets.edn") hdr (packets reports))
     (write-map (io/file out "items.edn") hdr (registry reports "minecraft:item"))

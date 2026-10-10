@@ -17,14 +17,22 @@
    Packet handling is a multimethod on [phase name], so a new namespace can handle a packet
    without editing this one. The protocol phase changes only when a transition packet is
    emitted, so it has one source of truth: clojurecraft.packet/transitions."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
             [clojurecraft.physics :as physics]))
 
-(def protocol-version 775)
+(def version
+  "The server version the generated tables describe (resources/clojurecraft/version.edn)."
+  (edn/read-string (slurp (io/resource "clojurecraft/version.edn"))))
+
+(def protocol-version
+  "The protocol number the handshake announces, read from the server's version data."
+  (:version/protocol version))
 
 (defn init [{:keys [host port name]}]
   {:bot/phase :handshake
