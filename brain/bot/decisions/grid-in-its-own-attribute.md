@@ -8,8 +8,8 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
-  - src/clojurecraft/game.clj#defn set-window-0-slot
-  - src/clojurecraft/game.clj#How many of an item (by id) the player holds; the crafting grid is not the inventory.
+  - src/clojurecraft/inventory.clj#defn set-window-0-slot
+  - src/clojurecraft/inventory.clj#How many of an item (by id) the player holds; the crafting grid is not the inventory.
   - test/clojurecraft/game_test.clj#grid items are in the grid, not double-counted
 related:
   - "[[bot/decisions/_moc|Decisions]]"
@@ -20,7 +20,7 @@ related:
 # Grid in its own attribute
 
 ## The choice
-Window-0 slots 0-4 are kept verbatim in `:window/grid`; `:player/inventory` holds only slots the player keeps (hotbar, main, armour, offhand). Inventory counts (`game/item-count`, `recipe/counts`) read only `:player/inventory`.
+Window-0 slots 0-4 are kept verbatim in `:window/grid`; `:player/inventory` holds only slots the player keeps (hotbar, main, armour, offhand). Inventory counts (`inventory/item-count`, `recipe/counts`) read only `:player/inventory`.
 
 ## What was rejected
 - Dropping slots 0-4 (the first version: `container->player-slot` returned nil and the packet was ignored). Items in the grid then vanished from the world, which is exactly steve's wood-lock: a result or ingredient stranded in the grid was invisible, completion checks flickered, and two steps oscillated forever ([[sib-wood-lock]]).

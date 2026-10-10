@@ -11,7 +11,7 @@ sourceRefs:
   - "steve:src/lib/steve/lib/bot-utils.ts#export const reclaimCraftingGrid = async (bot: Bot): Promise<void> => {"
   - "steve:src/lib/steve/lib/bot-utils.ts#left in the grid is INVISIBLE to windowItems() — which only reads the"
   - "steve:src/lib/steve/lib/run-loop.ts#forever (the wood-lock). Regressions are handled when the running step"
-  - src/clojurecraft/game.clj#defn set-window-0-slot
+  - src/clojurecraft/inventory.clj#defn set-window-0-slot
 related:
   - "[[siblings/_moc|Siblings]]"
   - "[[window-zero-model]]"
@@ -33,7 +33,7 @@ Symptom in steve: `Craft Planks` and `Gather Wood` alternate for the rest of the
 3. `reclaimCraftingGrid` resyncs from the server, then shift-clicks grid slots high to low and never the result slot (see [[sib-craft-result-take]] for why).
 
 ## What it means here
-`set-window-0-slot` in `game.clj` keeps window-0 slots 0-4 verbatim in `:window/grid` (0 is the result) and the rest in `:player/inventory`, and `:window/state-id` is kept on every `container-set-content`/`container-set-slot`. Nothing in the grid is invisible: a goal can see "a table is in the grid" rather than "no table" ([[window-zero-model]]). `game/item-count` deliberately reads the inventory only, and the `:craft` intent's `:settle` stage shift-clicks any dirty grid cell back before planning ([[craft-intent]]). Our planner also never preempts an active intent.
+`set-window-0-slot` in `inventory.clj` keeps window-0 slots 0-4 verbatim in `:window/grid` (0 is the result) and the rest in `:player/inventory`, and `:window/state-id` is kept on every `container-set-content`/`container-set-slot`. Nothing in the grid is invisible: a goal can see "a table is in the grid" rather than "no table" ([[window-zero-model]]). `inventory/item-count` deliberately reads the inventory only, and the `:craft` intent's `:settle` stage shift-clicks any dirty grid cell back before planning ([[craft-intent]]). Our planner also never preempts an active intent.
 
 ## Limits
 steve's LOOP.md race narrative (how many runs it cost) was not re-read; this note covers the mechanism only.

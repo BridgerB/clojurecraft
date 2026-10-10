@@ -4,6 +4,7 @@
             [clojurecraft.craft]
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.intent :as intent]
             [clojurecraft.recipe :as recipe]))
 
@@ -53,7 +54,7 @@
           (let [[w _] (fx/fold step w [(slot 11 0 nil) (slot 12 1 nil) (slot 13 3 nil) (slot 14 37 {:item stick :count 4})
                                        (tick 650)])]
             (is (intent/done? (:plan/intent w)))
-            (is (= 4 (game/item-count w stick)))))))))
+            (is (= 4 (inventory/item-count w stick)))))))))
 
 (deftest a-wrong-result-is-never-taken
   (let [w (-> (in-play)

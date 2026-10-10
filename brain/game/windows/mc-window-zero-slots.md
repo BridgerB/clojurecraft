@@ -8,10 +8,10 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 26.1.2
 sourceRefs:
-  - src/clojurecraft/game.clj#defn container->player-slot
+  - src/clojurecraft/inventory.clj#defn container->player-slot
   - test/clojurecraft/game_test.clj#window 5 is the helmet, player slot 39
   - src/clojurecraft/recipe.clj#defn player->container-slot
-  - src/clojurecraft/game.clj#Window 0 is the player's own screen: slots 0-4 are the crafting grid (0 is the result)
+  - src/clojurecraft/inventory.clj#Window 0 is the player's own screen: slots 0-4 are the crafting grid (0 is the result)
   - src/clojurecraft/sim.clj#:items (mapv #(get-in sim [:sim/inv %]) (range 46)) :carried nil})
 related:
   - "[[game/windows/_moc|Windows]]"
@@ -34,7 +34,7 @@ Window 0 (the player's inventory screen, always open, never announced by `open-s
 
 ## Facts
 - `container-set-content` for window 0 carries exactly 46 slots; the sim sends `(range 46)`.
-- The player-inventory numbering (hotbar 0-8, main 9-35, armour 36-39, offhand 40) is what `set-player-inventory` uses; `game/container->player-slot` and `recipe/player->container-slot` are the two directions of the map.
+- The player-inventory numbering (hotbar 0-8, main 9-35, armour 36-39, offhand 40) is what `set-player-inventory` uses; `inventory/container->player-slot` and `recipe/player->container-slot` are the two directions of the map.
 - `set-carried-item` (held slot) takes a hotbar index 0-8, i.e. window slots 36-44.
 
 ## Gotchas

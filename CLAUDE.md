@@ -32,7 +32,8 @@ src/clojurecraft/chunk.clj    paletted chunk sections as values, block-at, find-
 src/clojurecraft/blocks.clj   generated block/item/entity tables, solid?, log?
 src/clojurecraft/physics.clj  vanilla land movement over :player/* attributes, look-at
 src/clojurecraft/memory.clj   observation facts in DataScript, with time, after chunks unload; Datalog queries
-src/clojurecraft/game.clj     the world reducer: handshake, keep-alive, teleports, chunks, inventory, ticks
+src/clojurecraft/game.clj     the protocol reducer: handshake, keep-alive, teleports, chunks, packet handlers, ticks
+src/clojurecraft/inventory.clj the player's items and screen as values: slot maps, window state, what is held
 src/clojurecraft/intent.clj   open executors: :walk :dig :collect (multimethod on :intent/kind)
 src/clojurecraft/plan.clj     loads goals.edn; registries done-by, act, next-intent; the planner; :plan/*
 src/clojurecraft/make.clj     the needs planner: recipe rows, netting needs against inventory, the acts

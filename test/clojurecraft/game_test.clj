@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx :refer [fold names packets packet ticks]]
             [clojurecraft.game :as game]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.world :as world]))
 
@@ -67,12 +68,12 @@
                               (packet {:packet/name :container-set-slot :window-id 3 :state-id 2 :slot 9 :item {:item 134 :count 64}})])]
     (is (= {0 log 5 {:item 134 :count 2} 9 {:item 1 :count 3}} (:player/inventory w)))
     (is (= 2 (:window/state-id w)) "window 0's latest state id is kept")
-    (is (= 3 (game/logs-held w)))
-    (is (= 0 (game/container->player-slot 36)))
-    (is (= 40 (game/container->player-slot 45)))
-    (is (= 39 (game/container->player-slot 5)) "window 5 is the helmet, player slot 39")
-    (is (= 36 (game/container->player-slot 8)) "window 8 is the boots, player slot 36")
-    (is (nil? (game/container->player-slot 2)))))
+    (is (= 3 (inventory/logs-held w)))
+    (is (= 0 (inventory/container->player-slot 36)))
+    (is (= 40 (inventory/container->player-slot 45)))
+    (is (= 39 (inventory/container->player-slot 5)) "window 5 is the helmet, player slot 39")
+    (is (= 36 (inventory/container->player-slot 8)) "window 8 is the boots, player slot 36")
+    (is (nil? (inventory/container->player-slot 2)))))
 
 (deftest the-crafting-grid-is-never-invisible
   (let [items (vec (concat [{:item 30 :count 1} {:item 36 :count 1} nil {:item 36 :count 1} nil] (repeat 41 nil)))

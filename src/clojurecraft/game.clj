@@ -22,6 +22,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
             [clojurecraft.physics :as physics]))
@@ -95,35 +96,11 @@
 
 (defn eye "The player's eye position; :player/pos must be known." [world] (physics/eye (:player/pos world)))
 
-(defn item-count
-  "How many of an item (by id) the player holds; the crafting grid is not the inventory."
-  [world id]
-  (reduce + 0 (for [[_ {:keys [item count]}] (:player/inventory world) :when (= item id)] count)))
-
-(defn logs-held
-  "How many logs of any species the player holds (inventory only, never the grid)."
-  [world]
-  (reduce + 0 (for [[_ {:keys [item count]}] (:player/inventory world) :when (blocks/log-item? item)] count)))
-
 (defn chunk-loaded?
   "Is the chunk column holding block or feet position [x y z] in :world/chunks?"
   [world [x _ z]]
   (contains? (:world/chunks world)
              [(bit-shift-right (long (Math/floor x)) 4) (bit-shift-right (long (Math/floor z)) 4)]))
-
-(defn container->player-slot
-  "Window-0 slot → player-inventory slot (the key space of :player/inventory), or nil."
-  [^long s]
-  (cond (<= 36 s 44) (- s 36)
-        (<= 9 s 35) s
-        (<= 5 s 8) (- 44 s)                ; window 5-8 are head..feet; player 36-39 are feet..head
-        (= s 45) 40
-        :else nil))
-
-(defn set-slot
-  "Put item in a player-inventory slot; a nil item empties it (the key is removed, never nil)."
-  [world slot item]
-  (if item (assoc-in world [:player/inventory slot] item) (update world :player/inventory dissoc slot)))
 
 ;; ---------------------------------------------------------------- packets
 
@@ -235,17 +212,11 @@
 (defmethod on-packet [:configuration :disconnect] [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
 
-(defn fresh-menus
-  "A login or respawn gives the player a fresh menu: nothing open, an empty cursor, and a grid
-   the server empties back into the inventory (it then sends the window's contents)."
-  [w]
-  (-> w (dissoc :window/open :window/cursor) (assoc :window/grid {})))
-
-(defmethod on-packet [:play :respawn] [w _] (fresh-menus w))
+(defmethod on-packet [:play :respawn] [w _] (inventory/fresh-menus w))
 
 (defmethod on-packet [:play :login] [w p]
   (-> w
-      fresh-menus
+      inventory/fresh-menus
       (assoc :player/entity-id (:entity-id p))
       (emit {:packet/name :client-information :locale "en_US" :view-distance 6 :chat-mode 0
              :chat-colors true :skin-parts 0x7f :main-hand 1 :text-filtering false
@@ -261,57 +232,20 @@
 (defmethod on-packet [:play :block-update] [w p] (set-block w (:pos p) (:state p)))
 (defmethod on-packet [:play :section-blocks-update] [w p] (section-update w p))
 (defmethod on-packet [:play :set-health] [w p] (assoc w :player/health (:health p)))
-(def menus
-  "Container layouts by menu type id (registry minecraft:menu). :menu/grid are the crafting
-   slots (0 is the result); :menu/inventory is the first of the 36 player-inventory slots,
-   27 main then 9 hotbar, as every vanilla container appends them."
-  {12 {:menu/name :crafting :menu/size 3 :menu/grid (range 0 10) :menu/inventory 10}})
-
-(defn window->player-slot
-  "A slot of an open container → player-inventory slot, or nil when it is the container's own."
-  [menu-type ^long s]
-  (when-let [start (:menu/inventory (menus menu-type))]
-    (let [i (- s start)]
-      (cond (<= 0 i 26) (+ i 9)
-            (<= 27 i 35) (- i 27)
-            :else nil))))
-
-(defn set-open-window-slot
-  "An open container: its own slots live in :window/open's :window/slots; slots that are the
-   player's inventory update :player/inventory, so items are never counted in two places."
-  [w s item]
-  (let [menu-type (get-in w [:window/open :window/menu-type])]
-    (if-let [p (window->player-slot menu-type s)]
-      (set-slot w p item)
-      (if item
-        (assoc-in w [:window/open :window/slots s] item)
-        (update-in w [:window/open :window/slots] dissoc s)))))
-
-(defn open? "Is window-id the container the player has open?" [w window-id] (= window-id (get-in w [:window/open :window/id])))
-
-(defn set-window-0-slot
-  "Window 0 is the player's own screen: slots 0-4 are the crafting grid (0 is the result) and
-   are kept verbatim in :window/grid, so nothing in the grid is ever invisible; the rest map to
-   :player/inventory."
-  [w i item]
-  (cond
-    (<= 0 i 4) (if item (assoc-in w [:window/grid i] item) (update w :window/grid dissoc i))
-    (container->player-slot i) (set-slot w (container->player-slot i) item)
-    :else w))
 
 (defmethod on-packet [:play :container-set-content] [w {:keys [window-id state-id items carried]}]
   (let [w (cond-> w carried (assoc :window/cursor carried) (nil? carried) (dissoc :window/cursor))]
     (cond
       (zero? window-id)
-      (reduce (fn [w [i item]] (set-window-0-slot w i item)) (assoc w :window/state-id state-id) (map-indexed vector items))
-      (open? w window-id)
-      (reduce (fn [w [i item]] (set-open-window-slot w i item))
+      (reduce (fn [w [i item]] (inventory/set-window-0-slot w i item)) (assoc w :window/state-id state-id) (map-indexed vector items))
+      (inventory/open? w window-id)
+      (reduce (fn [w [i item]] (inventory/set-open-window-slot w i item))
               (assoc-in w [:window/open :window/state-id] state-id) (map-indexed vector items))
       :else w)))
 (defmethod on-packet [:play :container-set-slot] [w {:keys [window-id state-id slot item]}]
   (cond
-    (zero? window-id) (-> w (assoc :window/state-id state-id) (set-window-0-slot slot item))
-    (open? w window-id) (-> w (assoc-in [:window/open :window/state-id] state-id) (set-open-window-slot slot item))
+    (zero? window-id) (-> w (assoc :window/state-id state-id) (inventory/set-window-0-slot slot item))
+    (inventory/open? w window-id) (-> w (assoc-in [:window/open :window/state-id] state-id) (inventory/set-open-window-slot slot item))
     :else w))
 (defmethod on-packet [:play :set-held-slot] [w {:keys [slot]}] (if (<= 0 slot 8) (assoc w :player/held-slot slot) w))
 (defmethod on-packet [:play :set-cursor-item] [w {:keys [item]}]
@@ -319,7 +253,7 @@
 (defmethod on-packet [:play :open-screen] [w {:keys [window-id menu-type]}]
   (assoc w :window/open {:window/id window-id :window/menu-type menu-type :window/slots {}}))
 (defmethod on-packet [:play :container-close] [w _] (dissoc w :window/open))
-(defmethod on-packet [:play :set-player-inventory] [w {:keys [slot item]}] (set-slot w slot item))
+(defmethod on-packet [:play :set-player-inventory] [w {:keys [slot item]}] (inventory/set-slot w slot item))
 (defmethod on-packet [:play :add-entity] [w {:keys [entity-id type x y z]}]
   (if (= type blocks/item-entity-type)
     (assoc-in w [:world/entities entity-id] {:entity/type type :entity/pos [x y z] :entity/seen-at (:time/now w)})
@@ -426,7 +360,7 @@
    :loaded? (:player/loaded? world)
    :chunks (count (:world/chunks world))
    :sightings (count (memory/latest world))
-   :logs (logs-held world)
+   :logs (inventory/logs-held world)
    :inventory (count (:player/inventory world))
    :entities (count (:world/entities world))
    :stats (into {} (filter (fn [[k _]] (= "stats" (namespace k))) world))

@@ -8,6 +8,7 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
@@ -26,7 +27,7 @@
         [w _] (sim/run step (game/init fx/opts) sim0 #(or (plan/done? %) (plan/failed? %)) 60000
                        {:event/kind :go :go/goals [:wood]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
-    (is (= 1 (game/logs-held w)))
+    (is (= 1 (inventory/logs-held w)))
     (is (= :play (:bot/phase w)))
     (is (pos? (:stats/keep-alives w)) "the model's keep-alives were answered")
     (is (= 0 (game/block-at w [6 64 0])))))
@@ -45,7 +46,7 @@
     (is (nil? (:window/cursor w)))
     (is (= [] (:sim/violations sim)))
     (testing "the bot's inventory is the server's"
-      (is (= (into {} (for [[s it] (:sim/inv sim) :when (<= 9 s 44)] [(game/container->player-slot s) it]))
+      (is (= (into {} (for [[s it] (:sim/inv sim) :when (<= 9 s 44)] [(inventory/container->player-slot s) it]))
              (:player/inventory w))))))
 
 (def kit-items #{:oak_log :oak_planks :stick :crafting_table})
@@ -107,7 +108,7 @@
         [w sim] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
                          #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
-    (is (= 1 (game/logs-held w)))
+    (is (= 1 (inventory/logs-held w)))
     (is (contains? (:sim/broken sim) [3 65 0]) "it broke the leaf in its way")
     (is (zero? (:plan/attempts w)) "no failed attempts")))
 
@@ -195,7 +196,7 @@
                          (let [sim0 (sim/init {:column (world/column-bytes (forest trees)) :spawn [0.5 64.0 0.5]})
                                [w sim] (sim/run step (game/init fx/opts) sim0 #(or (plan/done? %) (plan/failed? %))
                                                 90000 {:event/kind :go :go/goals [:wood]})]
-                           (and (plan/done? w) (= 1 (game/logs-held w)) (empty? (:sim/violations sim))))))]
+                           (and (plan/done? w) (= 1 (inventory/logs-held w)) (empty? (:sim/violations sim))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests])))))
 
 ;; ---------------------------------------------------------------- intentions as facts

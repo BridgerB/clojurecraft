@@ -8,10 +8,10 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
-  - src/clojurecraft/game.clj#defn set-window-0-slot
-  - src/clojurecraft/game.clj#defn set-open-window-slot
-  - src/clojurecraft/game.clj#def menus
-  - src/clojurecraft/game.clj#defn window->player-slot
+  - src/clojurecraft/inventory.clj#defn set-window-0-slot
+  - src/clojurecraft/inventory.clj#defn set-open-window-slot
+  - src/clojurecraft/inventory.clj#def menus
+  - src/clojurecraft/inventory.clj#defn window->player-slot
   - src/clojurecraft/game.clj#defmethod on-packet [:play :container-set-content]
   - src/clojurecraft/game.clj#defmethod on-packet [:play :set-held-slot]
   - test/clojurecraft/game_test.clj#the-crafting-grid-is-never-invisible
@@ -34,14 +34,14 @@ related:
 | `:player/held-slot` | selected hotbar slot 0-8, starts 0 | `set-held-slot` (ignored outside 0-8), and the bot's own `set-carried-item` |
 
 ## Key files
-- `game.clj`, `set-window-0-slot` - slots 0-4 to `:window/grid`, others via `container->player-slot` to `:player/inventory`.
-- `game.clj`, `menus` - container layouts by menu type: only 12 (`:crafting`, size 3, grid slots 0-9, player inventory from slot 10).
-- `game.clj`, `window->player-slot` - for an open container: from `:menu/inventory` on, 27 main slots then 9 hotbar map to player slots 9-35 then 0-8; anything before is the container's own.
-- `game.clj`, `set-open-window-slot` - the container's own slots go to `:window/open`'s `:window/slots`; slots that are the player's inventory update `:player/inventory`.
+- `inventory.clj`, `set-window-0-slot` - slots 0-4 to `:window/grid`, others via `container->player-slot` to `:player/inventory`.
+- `inventory.clj`, `menus` - container layouts by menu type: only 12 (`:crafting`, size 3, grid slots 0-9, player inventory from slot 10).
+- `inventory.clj`, `window->player-slot` - for an open container: from `:menu/inventory` on, 27 main slots then 9 hotbar map to player slots 9-35 then 0-8; anything before is the container's own.
+- `inventory.clj`, `set-open-window-slot` - the container's own slots go to `:window/open`'s `:window/slots`; slots that are the player's inventory update `:player/inventory`.
 - `game.clj`, `on-packet` for `container-set-content` / `container-set-slot` - dispatch on window id: 0, the open window's id, or ignored.
 
 ## Gotchas
-- Each item lives in exactly one attribute: grid items in `:window/grid` or `:window/slots`, never in `:player/inventory` too; `game/item-count` reads the inventory only. This is the answer to steve's wood-lock ([[sib-wood-lock]]).
+- Each item lives in exactly one attribute: grid items in `:window/grid` or `:window/slots`, never in `:player/inventory` too; `inventory/item-count` reads the inventory only. This is the answer to steve's wood-lock ([[sib-wood-lock]]).
 - An unknown menu type has no `:menu/inventory`, so every slot of it is stored as the container's own and the player's inventory is not updated from it.
 - `set-held-slot` outside 0-8 used to break the world spec; the totality property found it ([[property-tests]]).
 - The cursor is not authoritative after our own click: see [[phantom-cursor-stale-window]].

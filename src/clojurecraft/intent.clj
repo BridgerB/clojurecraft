@@ -6,6 +6,7 @@
    randomness comes in on the tick event."
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.physics :as physics]))
 
 (def reach 4.0)                       ; eye → block centre; the server allows ~4.5
@@ -193,12 +194,12 @@
         d (physics/horizontal-distance (:player/pos world) goal)
         progressed? (< d (- best-dist 0.1))
         best-tick (if (or progressed? (nil? best-tick)) tick best-tick)
-        logs-before (or logs-before (game/logs-held world))
+        logs-before (or logs-before (inventory/logs-held world))
         world (intent world assoc :intent/since since :intent/best-tick best-tick :intent/logs-before logs-before
                       :intent/best-dist (if progressed? d best-dist))
         stalled? (and (:player/horizontal-collision? world) (> (- tick best-tick) collect-stall-ticks))]
     (cond
-      (> (game/logs-held world) logs-before)          ; one more log than when the collect began
+      (> (inventory/logs-held world) logs-before)          ; one more log than when the collect began
       (-> world (assoc :player/controls {}) done)
 
       (and stalled? (blocker world goal))
