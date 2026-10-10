@@ -9,7 +9,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.spec]
             [clojurecraft.make]
-            [clojurecraft.wood]
+            [clojurecraft.wood :as wood]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -37,6 +37,21 @@
     (is (= [3 65 0] (memory/nearest-log (memory/observe w [3 64 0] 0) (game/eye w) 48 #{}))
         "once the bottom is observed as air, the log above is the trunk bottom")
     (is (= 4 (intent/face-toward (game/eye w) [3 64 0])) "eye is west of the block, so its west face")))
+
+(deftest a-branch-is-not-a-trunk-bottom
+  ;; recorded by the gym and the fleet at landing 21280,18720 (wood-a2 run 5, smoke2 run 5): a
+  ;; branch log with air under it passed for a trunk bottom, and its drop came to rest on the
+  ;; trunk below it, out of reach. A trunk bottom stands on ground, or over its own dug base.
+  (let [col (world/column {[3 64 0] 136 [3 65 0] 136 [3 66 0] 136 [3 67 0] 136 [2 67 0] 136 [3 68 0] 252})
+        w (-> (game/init fx/opts)
+              (assoc :bot/phase :play :player/pos [0.5 70.0 0.5] :player/loaded? true :player/on-ground? true)
+              (assoc :world/chunks {[0 0] col})
+              (memory/remember-column [0 0] col))
+        eye (game/eye w)]
+    (is (= [2 67 0] (memory/nearest-log w eye 48 #{} memory/trunk-bottom?)) "the old rule takes the branch")
+    (is (= [3 64 0] (memory/nearest-log w eye 48 #{} wood/standing-trunk?)))
+    (is (= [3 65 0] (memory/nearest-log (memory/observe w [3 64 0] 0) eye 48 #{} wood/standing-trunk?))
+        "over its own dug base a trunk still stands: the drop falls to where the base was")))
 
 (deftest face-is-the-side-nearest-the-eye
   (is (= 1 (intent/face-toward [3.5 70.0 0.5] [3 64 0])) "eye above → top")
@@ -85,10 +100,23 @@
                  :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/status :active
                                :intent/started 0 :intent/best-tick 0 :intent/detours 4})
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
-    (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/status :active :intent/id 1 :intent/goal :wood} (:plan/intent w))
+    (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/trunk [3 64 0] :intent/status :active
+            :intent/id 1 :intent/goal :wood} (:plan/intent w))
         "re-planned in the same tick toward the next log")
     (is (= #{[13 64 0]} (:plan/blacklist w)))
     (is (= 1 (:plan/attempts w)))))
+
+(deftest a-trunk-that-fails-twice-is-given-up-whole
+  (let [failing {:intent/kind :walk :intent/target [13 65 0] :intent/for :log :intent/trunk [3 64 0]
+                 :intent/status :active :intent/started 0 :intent/best-tick 0 :intent/detours 4}
+        w (assoc (world-state [0.5 64.0 0.5]) :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0
+                 :plan/intent failing)
+        [w1 _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (= {[3 0] 1} (:plan/trunk-failures w1)))
+    (is (= [3 64 0] (:intent/trunk (:plan/intent w1))) "once is chance: the same trunk again")
+    (let [[w2 _] (run (assoc w1 :plan/intent (assoc failing :intent/target [13 66 0])) [{:event/kind :tick :event/now 100 :event/rand 0.5}])]
+      (is (= {[3 0] 2} (:plan/trunk-failures w2)) "counted by column, whichever log of it the chain was at")
+      (is (nil? (:plan/intent w2)) "twice: given up, and there is no other trunk"))))
 
 (deftest digs-the-log-at-feet-height
   (testing "standing level with the trunk base: the bottom log"

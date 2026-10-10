@@ -149,6 +149,7 @@
 (s/def :plan/go-at ::vec3)
 (s/def :go/at ::vec3)
 (s/def :plan/blacklist (s/coll-of ::block-pos :kind set?))
+(s/def :plan/trunk-failures (s/map-of (s/tuple int? int?) pos-int?))
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :intent/recipe keyword?)
 (s/def :intent/window #{:inventory :table})
@@ -174,7 +175,7 @@
                 :player/jump-ticks :player/loaded? :player/entity-id :player/inventory :player/controls
                 :world/chunks :world/blocks :world/facts :world/entities
                 :window/state-id :window/grid :window/cursor :window/open :player/held-slot
-                :plan/intent :plan/status :plan/blacklist]))
+                :plan/intent :plan/status :plan/blacklist :plan/trunk-failures]))
 
 (s/fdef game/step :args (s/cat :world ::world :event ::event) :ret ::world)
 (s/fdef plan/step :args (s/cat :world ::world :event ::event) :ret ::world)
@@ -248,6 +249,7 @@
 (s/def :plan/wait some?)
 (s/def :intent/reason some?)
 (s/def :intent/for keyword?)
+(s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
 (s/def :intent/started int?)
@@ -351,7 +353,8 @@
 (s/fdef terrain/block-at :args (s/cat :world (requires :world/chunks) :pos (s/coll-of number? :count 3)))
 (s/fdef terrain/solid-fn :args (s/cat :world (requires :world/chunks)))
 (s/fdef memory/positions-now :args (s/cat :world (requires :world/facts) :states coll?))
-(s/fdef memory/nearest-log :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number? :blacklist any?))
+(s/fdef memory/nearest-log :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number? :blacklist any?
+                                        :bottom? (s/? ifn?)))
 (s/fdef make/near :args (s/cat :world (requires :player/pos :world/facts) :block keyword?))
 (s/fdef make/decide :args (s/cat :world (requires :player/inventory :player/pos :world/facts) :goal map? :table vector?))
 (s/fdef wood/gather-next :args (s/cat :world (requires :player/pos :world/facts)))

@@ -193,13 +193,15 @@
                 (for [[p {:block/keys [state]}] (latest world) :when (pred state)] p))))
 
 (defn nearest-log
-  "Nearest trunk-bottom log on record within radius of eye, skipping blacklisted positions and
-   logs more than 12 blocks above or below the eye. nil when none. Candidates come from one
-   Datalog query, positions-now: a log was seen there and nothing since says it is gone."
-  [world eye radius blacklist]
-  (let [ey (second eye)]
-    (nearest-of eye radius
-                (->> (positions-now world blocks/log-states)
-                     (remove blacklist)
-                     (filter (fn [[_ y _]] (<= (abs (- y ey)) 12)))
-                     (filter #(trunk-bottom? world %))))))
+  "Nearest bottom log on record within radius of eye, skipping blacklisted positions and logs
+   more than 12 blocks above or below the eye; bottom? (world pos → bool, trunk-bottom? by
+   default) says which logs count. nil when none. Candidates come from one Datalog query,
+   positions-now: a log was seen there and nothing since says it is gone."
+  ([world eye radius blacklist] (nearest-log world eye radius blacklist trunk-bottom?))
+  ([world eye radius blacklist bottom?]
+   (let [ey (second eye)]
+     (nearest-of eye radius
+                 (->> (positions-now world blocks/log-states)
+                      (remove blacklist)
+                      (filter (fn [[_ y _]] (<= (abs (- y ey)) 12)))
+                      (filter #(bottom? world %)))))))
