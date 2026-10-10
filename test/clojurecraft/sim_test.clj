@@ -227,3 +227,16 @@
     (is (= {:intention/kind :walk :intention/target [3 64 0]}
            (select-keys (memory/intention-as-of w 150) [:intention/kind :intention/target])))
     (is (nil? (memory/intention-as-of w 200)))))
+
+(deftest the-servers-answers-are-facts
+  (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
+        [w _] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                       #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})
+        acks (memory/answers w :ack)
+        pickups (memory/answers w :pickup)]
+    (is (plan/done? w))
+    (is (= [(:stats/last-ack w)] (map :answer/sequence (take-last 1 acks))) "the dig's FINISH was acknowledged")
+    (is (= 1 (count pickups)))
+    (is (= 1 (:answer/count (first pickups))))
+    (testing "the pickup came after the dig was acknowledged"
+      (is (<= (:answer/at (last acks)) (:answer/at (first pickups)))))))

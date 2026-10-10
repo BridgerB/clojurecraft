@@ -12,7 +12,11 @@
 
    The bot's own intentions are facts in the same store: {:intention/id n :intention/event
    :started|:done|:failed|:abandoned :intention/kind k :intention/at ms} plus the target, recipe
-   or reason when there is one. `intention-as-of` answers what the bot was trying to do at any time t."
+   or reason when there is one. `intention-as-of` answers what the bot was trying to do at any time t.
+
+   The server's answers to the bot's own actions are facts too: {:answer/kind :ack|:pickup
+   :answer/at ms} with the acknowledged :answer/sequence, or the picked-up :answer/entity and
+   :answer/count. A broken block needs no answer fact: it is a sighting of air where it stood."
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.physics :as physics]
@@ -23,7 +27,8 @@
    intention ids too, so an intention's story is one lookup."
   {:sight/pos {:db/index true}
    :sight/state {:db/index true}
-   :intention/id {:db/index true}})
+   :intention/id {:db/index true}
+   :answer/kind {:db/index true}})
 
 (defn empty-facts "A store with nothing seen yet." [] (d/empty-db schema))
 
@@ -115,7 +120,20 @@
     (update world :world/facts d/db-with [(intention i event (:time/now world))])
     world))
 
+(defn remember-answer
+  "Append a server answer (a map of :answer/* keys) stamped with now."
+  [world answer]
+  (update world :world/facts d/db-with [(assoc answer :answer/at (:time/now world))]))
+
 ;; ---------------------------------------------------------------- questions
+
+(defn answers
+  "The server's answers of a kind (:ack, :pickup), oldest first."
+  [world kind]
+  (let [db (:world/facts world)]
+    (->> (d/q '[:find [?e ...] :in $ ?k :where [?e :answer/kind ?k]] db kind)
+         sort
+         (mapv #(into {} (d/touch (d/entity db %)))))))
 
 (defn intentions
   "The story of every intention, oldest fact first."

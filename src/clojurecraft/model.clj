@@ -66,6 +66,11 @@
    [:intention/target "the intent's target" "a fact, when the intent had one"]
    [:intention/recipe "the intent's recipe" "a fact, when the intent had one"]
    [:intention/reason "why it failed" "a :failed fact"]
+   [:answer/kind "which server answer to the bot's own action: :ack or :pickup" "a fact in :world/facts"]
+   [:answer/at "ms the answer arrived" "a fact in :world/facts"]
+   [:answer/sequence "the block-interaction sequence the server acknowledged" "an :ack fact"]
+   [:answer/entity "the item entity the bot picked up" "a :pickup fact"]
+   [:answer/count "how many items that pickup gave" "a :pickup fact"]
    ;; ---- the server's answers to the bot's own actions, and counts
    [:stats/keep-alives "keep-alives answered" "always"]
    [:stats/teleports "teleports accepted" "always"]

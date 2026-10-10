@@ -265,3 +265,8 @@
 (s/def :intention/target ::block-pos)
 (s/def :intention/recipe keyword?)
 (s/def :intention/reason some?)
+(s/def :answer/kind #{:ack :pickup})
+(s/def :answer/at int?)
+(s/def :answer/sequence int?)
+(s/def :answer/entity int?)
+(s/def :answer/count int?)

@@ -329,8 +329,14 @@
 (defmethod on-packet [:play :entity-position-sync] [w {:keys [entity-id x y z]}]
   (if (get-in w [:world/entities entity-id]) (assoc-in w [:world/entities entity-id :entity/pos] [x y z]) w))
 (defmethod on-packet [:play :remove-entities] [w {:keys [ids]}] (update w :world/entities #(apply dissoc % ids)))
-(defmethod on-packet [:play :take-item-entity] [w p] (update w :stats/pickups (fnil conj []) p))
-(defmethod on-packet [:play :block-changed-ack] [w p] (assoc w :stats/last-ack (:sequence p)))
+(defmethod on-packet [:play :take-item-entity] [w {:keys [collected collector count] :as p}]
+  (cond-> (update w :stats/pickups (fnil conj []) p)
+    (= collector (:player/entity-id w))
+    (memory/remember-answer {:answer/kind :pickup :answer/entity collected :answer/count count})))
+(defmethod on-packet [:play :block-changed-ack] [w p]
+  (-> w
+      (assoc :stats/last-ack (:sequence p))
+      (memory/remember-answer {:answer/kind :ack :answer/sequence (:sequence p)})))
 (defmethod on-packet [:play :start-configuration] [w _] (emit w {:packet/name :configuration-acknowledged}))
 (defmethod on-packet [:play :disconnect] [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
