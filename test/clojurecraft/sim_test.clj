@@ -19,6 +19,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.record :as record]
             [clojurecraft.scoop]
             [clojurecraft.sim :as sim]
             [clojurecraft.stairs]
@@ -1067,6 +1068,65 @@
     (is (not (:player/in-water? w)) "never in the pond")
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
     (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- the iron kit, end to end
+
+(def kit-column
+  "Everything the iron kit is made from, on one stone floor: two coal ores, four iron ores and a
+   gravel standing on it, each with a cell beside it at its own level, and a pond of nine water
+   sources sunk in it, open to the sky."
+  (merge {[3 64 3] (blocks/default-state :coal_ore)
+          [5 64 3] (blocks/default-state :coal_ore)
+          [3 64 12] (blocks/default-state :iron_ore)
+          [5 64 12] (blocks/default-state :iron_ore)
+          [7 64 12] (blocks/default-state :iron_ore)
+          [9 64 12] (blocks/default-state :iron_ore)
+          [12 64 3] (blocks/default-state :gravel)}
+         (into {} (for [x (range 11 14) z (range 10 13)] [[x 63 z] blocks/water-base]))))
+
+(def kit-start
+  "What the kit starts from: the stone pickaxe, a crafting table, the furnace's eight
+   cobblestone and four logs."
+  {36 {:item (item :stone_pickaxe) :count 1}
+   37 {:item (item :crafting_table) :count 1}
+   9 {:item (item :cobblestone) :count 8}
+   10 {:item (item :oak_log) :count 4}})
+
+(defn recording
+  "step, with every event written to tap before it is applied and only the effects that event
+   added written after (sim/run clears effects once a tick, after several events)."
+  [step tap]
+  (fn [w e]
+    ((:write tap) e)
+    (let [w' (step w e)]
+      ((:effects tap) (subvec (:bot/effects w') (count (:bot/effects w))))
+      w')))
+
+(deftest the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays
+  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-iron-kit.edn")
+        tap (record/tap! path)
+        [w sim] (sim/run (recording step tap)
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes kit-column)
+                                    :spawn [8.5 64.0 8.5]
+                                    :inventory kit-start
+                                    :seed 4})
+                         #(or (plan/done? %) (plan/failed? %))
+                         900000
+                         {:event/kind :go :go/goals [:iron-kit]})]
+    ((:close tap))
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= 1 (:water_bucket (held w))))
+    (is (= 1 (:flint_and_steel (held w))))
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))
+    (is (< (:time/now w) 600000) "under ten simulated minutes")
+    (testing "the recording replays: every packet the bot sent, sent again, and the same world"
+      (is (nil? (record/verify step (game/init fx/opts) path)))
+      (let [replayed (record/replay step (game/init fx/opts) path)]
+        (is (= (:player/inventory w) (:player/inventory replayed)))
+        (is (= (:time/now w) (:time/now replayed)))
+        (is (= (memory/intentions w) (memory/intentions replayed)))))))
 
 (def walled-ledge
   "Gym batch push70 (landing 18648,18464): the nearest stone's only cell at its own level was

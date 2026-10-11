@@ -18,6 +18,7 @@ sourceRefs:
   - src/clojurecraft/sim.clj#observed live on 26.1.2: the breaker gets the block update, then the ack
   - test/clojurecraft/sim_test.clj#collects-one-log-against-the-model
   - test/clojurecraft/sim_test.clj#the-wood-goal-holds-in-generated-forests
+  - test/clojurecraft/sim_test.clj#the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[early-finish-aborts]]"
@@ -36,7 +37,7 @@ related:
 - `sim.clj`, `init` - takes `{:column bytes :spawn [x y z] :keep-alive-every ms :drop-clicks #{n} :inventory {slot item} :respawn [x y z]}`.
 - `sim.clj`, `run` - drives a bot reducer against the model 50 ms per tick, sends `:go` once loaded, stops on a predicate.
 - `sim_test.clj`, `the-wood-goal-holds-in-generated-forests` - test.check builds 2,000 worlds (`docs/hickey.md`: "thousands of generated worlds in the time one real run takes"): 1-3 trees of oak, spruce or birch, 3-6 logs high, anywhere in the column; each maybe on a one-block stone mound and maybe under low leaves over every cell within two steps; the spawn varies. The whole bot runs against the instrumented model in each and must end holding a log with no violation. About 16 ms a world; `FOREST_TRIALS=n` overrides the count and `FOREST_SEED=s` the seed, which is how `test.yml` runs it as eight shards of 250 ([[test-fixtures]]). Treating only oak as a log fails it (shrunk to one spruce), and so does removing the blocker's headroom check over a step: the mounds under canopies reproduce the ledge a live run failed on.
-- `sim_test.clj` - end-to-end tests: one log held (`:wood`), a low canopy cleared, a table and four sticks (`:kit`), a placed table and a wooden pickaxe (`:pickaxe`), and recovery from a lost click.
+- `sim_test.clj` - end-to-end tests: one log held (`:wood`), a low canopy cleared, a table and four sticks (`:kit`), a placed table and a wooden pickaxe (`:pickaxe`), recovery from a lost click, and the iron kit (`the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays`): from a stone pickaxe, a table, eight cobblestone and four logs on one column with coal, iron, gravel and a pond, to a filled water bucket and flint and steel in 87 simulated seconds (three ores and a coal, the furnace, three ingots, the bucket filled from the bank, a fourth ore and a second coal when the first fire had burned out, gravel dug again four times to flint with seed 4). The run is recorded through `record/tap!` (each event, then only the effects it added: `sim/run` clears effects once a tick) and `record/verify` replays it with every sent packet the same.
 
 ## Gotchas
 - The model knows window 0, the crafting table and the furnace, and fills an empty bucket with water: no other containers, no pouring, no lava, no dimensions yet; every roadmap issue extends it first.
