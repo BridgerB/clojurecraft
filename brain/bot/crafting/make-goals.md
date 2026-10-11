@@ -5,11 +5,14 @@ type: reference
 tags: [bot, crafting, plan, goals]
 aliases: [needs planner, make.clj, craft-rows, producers, next-row, resolve-need, provided?, table ladder, decide]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 3452f18
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/make.clj#defn craft-row
   - src/clojurecraft/make.clj#defn resolve-need
+  - src/clojurecraft/make.clj#defn resolve-item-need
+  - src/clojurecraft/make.clj#defn resolve-block-need
+  - src/clojurecraft/make.clj#defn producer-order
   - src/clojurecraft/make.clj#defn next-row
   - src/clojurecraft/make.clj#defn decide
   - src/clojurecraft/make.clj#defmethod plan/done-by :provided?
@@ -28,7 +31,7 @@ related:
 
 ## Key files
 - `make.clj`, `craft-row` - a recipe as a goal row: ingredients become needs (named `:tag/planks`, `:item/stick`, or the item set when no tag matches), the result becomes what it provides, and a recipe that does not fit the 2x2 grid also needs `{:block/crafting_table :near}`. All 1,030 recipes become rows (`craft-rows`).
-- `make.clj`, `resolve-need` - counted needs are netted in the working inventory; candidate producers are ordered by how much of their own needs is held, then by not needing a table, then by yield; `:block/... :near` is met by a remembered placed block within 24 blocks, else by the `:place-table` row.
+- `make.clj`, `resolve-need` - one need, by its kind: `resolve-item-need` nets a counted need in the working inventory and tries its producers in `producer-order` (most of their own needs held, then no table needed, then the larger yield); `resolve-block-need` meets `:block/... :near` with a remembered placed block within 24 blocks, else the `:place-table` row. Both try candidates through `first-resolved`.
 - `make.clj`, `decide` - a log chain in flight first ([[gather-chain]]), else `plan/act` on the row `next-row` reaches; `:stuck` becomes `{:plan/wait :stuck}`.
 - `make.clj`, the acts - `:gather` runs the log chain, `:place` puts the held table down ([[place-intent]]), `:craft` crafts in the 2x2 grid, or for a table recipe: in the open table window, else open the table in reach ([[open-container-intent]]), else walk to it.
 

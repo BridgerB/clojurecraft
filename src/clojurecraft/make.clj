@@ -130,40 +130,70 @@
           a [c a]
           :else [c row])))
 
+(defn first-resolved
+  "[counts action] for the first of rows that can be done (times-of row) times, trying them in
+   order, or [counts :stuck] when none can."
+  [world table counts rows times-of depth]
+  (or (some (fn [row]
+              (let [[c a] (resolve-row world table counts row (times-of row) depth)]
+                (when (not= a :stuck) [c a])))
+            rows)
+      [counts :stuck]))
+
+(defn yield
+  "How many items one run of a producer row provides."
+  [row]
+  (val (first (:goal/provides row))))
+
+(defn producer-order
+  "How the producers of an item are tried: the one whose own needs the working counts already
+   cover most first, then one that needs no crafting table, then the larger yield."
+  [counts row]
+  [(- (reduce +
+              (for [[k n] (:goal/needs row) :when (number? n)] (recipe/have counts (need-set k)))))
+   (contains? (:goal/needs row) :block/crafting_table) (- (yield row))])
+
+(defn resolve-block-need
+  "[counts action] for a :block/<name> :near need: met (nil) when such a block is remembered
+   near, else the first producer row that provides it and can be done once, or :stuck."
+  [world table counts k depth]
+  (if (near world (keyword (name k)))
+    [counts nil]
+    (first-resolved world
+                    table
+                    counts
+                    (for [row (producers table) :when (contains? (:goal/provides row) k)] row)
+                    (constantly 1)
+                    depth)))
+
+(defn resolve-item-need
+  "[counts action] for a counted need (:item/<name> n or :tag/<tag> n): met (nil, the items
+   consumed from counts) when counts hold n, else what is held is consumed and the producers
+   of the rest are tried in producer-order, each for as many runs as the rest needs; :stuck
+   past max-depth or when no producer can be done."
+  [world table counts k n depth]
+  (let [s (need-set k)
+        h (recipe/have counts s)]
+    (cond (>= h n) [(recipe/consume counts s n) nil]
+          (> depth max-depth) [counts :stuck]
+          :else
+          (let [counts (recipe/consume counts s h)
+                missing (- n h)]
+            (first-resolved world
+                            table
+                            counts
+                            (sort-by #(producer-order counts %)
+                                     (distinct (mapcat (by-item table) s)))
+                            (fn [row] (long (math/ceil (/ missing (yield row)))))
+                            depth)))))
+
 (defn resolve-need
   "[counts' action] for a need: action nil when it is already met (counts' has it consumed), a
    producer row to act on, or :stuck when nothing in the table can provide it."
   [world table counts k n depth]
-  (let [block? (= "block" (namespace k))
-        s (when-not block? (need-set k))
-        h (when-not block? (recipe/have counts s))]
-    (cond (and block? (near world (keyword (name k)))) [counts nil]
-          block?
-          (or (some (fn [row]
-                      (let [[c a] (resolve-row world table counts row 1 depth)]
-                        (when (not= a :stuck) [c a])))
-                    (for [row (producers table) :when (contains? (:goal/provides row) k)] row))
-              [counts :stuck])
-          (>= h n) [(recipe/consume counts s n) nil]
-          (> depth max-depth) [counts :stuck]
-          :else
-          (let [counts (recipe/consume counts s h)
-                missing (- n h)
-                rows (->> (mapcat (by-item table) s)
-                          distinct
-                          (sort-by (fn [row] [(- (reduce +
-                                                         (for [[nk nn] (:goal/needs row)
-                                                               :when (number? nn)]
-                                                           (recipe/have counts (need-set nk)))))
-                                              (contains? (:goal/needs row) :block/crafting_table)
-                                              (- (val (first (:goal/provides row))))])))]
-            (or (some (fn [row]
-                        (let [per (val (first (:goal/provides row)))
-                              times (long (math/ceil (/ missing per)))
-                              [c a] (resolve-row world table counts row times depth)]
-                          (when (not= a :stuck) [c a])))
-                      rows)
-                [counts :stuck])))))
+  (if (= "block" (namespace k))
+    (resolve-block-need world table counts k depth)
+    (resolve-item-need world table counts k n depth)))
 
 (defn next-row
   "The producer row of table to act on next for a goal, nil when its provides are all held, or
