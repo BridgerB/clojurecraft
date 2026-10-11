@@ -119,22 +119,47 @@
         to (cond-> (- feet stair-depth) depth (max depth))]
     (when (< to feet) {:intent/kind :stairs-down :intent/to-y to})))
 
-(defn outward
-  "The heading that leads farthest from the landing (:plan/go-at), so a tunnel never doubles
-   back toward where the bot came down; +x without a landing."
+(def floor-margin 8)                  ; blocks above the bottom of the world a staircase deeper stops
+
+(defn tunnel-heading
+  "The heading a new tunnel takes: of the four, farthest from the landing (:plan/go-at) first
+   (+x first without one), the first whose first level step is allowed (stairs/level-safe?) and
+   has rock to cut, so never back along an open tunnel nor straight at what refused the last;
+   nil when none. With the heading fixed, gym batches iron-a3 and iron-a4 retried tunnels
+   :boxed by an aquifer three times in a second and failed."
   [world]
-  (let [[x _ z] (:player/pos world)]
-    (if-let [home (:plan/go-at world)]
-      (apply max-key
-             (fn [[dx dz]] (physics/horizontal-distance [(+ x dx) 0 (+ z dz)] home))
-             stairs/directions)
-      (first stairs/directions))))
+  (let [[x _ z] (:player/pos world)
+        feet (intent/feet world)
+        home (:plan/go-at world)
+        ranked (if home
+                 (sort-by (fn [[dx dz]]
+                            (- (physics/horizontal-distance [(+ x dx) 0 (+ z dz)] home)))
+                          stairs/directions)
+                 stairs/directions)]
+    (first (filter (fn [d]
+                     (let [cells (stairs/level-cells feet d)]
+                       (and (stairs/level-safe? world cells)
+                            (some #(some-> (terrain/block-at world %)
+                                           blocks/solid?)
+                                  cells))))
+                   ranked))))
+
+(defn deeper
+  "Stairs stair-depth below the feet when no tunnel can be cut here, the row's depth notwithstanding
+   (ore lies below it too), or a wait :boxed near the bottom of the world."
+  [world]
+  (let [feet (second (intent/feet world))
+        to (- feet stair-depth)]
+    (if (> to (+ chunk/min-y floor-margin))
+      {:intent/kind :stairs-down :intent/to-y to}
+      {:plan/wait :boxed})))
 
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
    (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
    ends where the drop lands in reach, :intent/pickup?), or cut stairs down toward them, or at
-   the row's depth a tunnel outward; wait for the tool. The live runs that waited at the depth
+   the row's depth a tunnel (tunnel-heading), or deeper stairs when none can be cut; wait for the
+   tool. The live runs that waited at the depth
    with nothing in sight failed there; a tunnel's walls are where the ore shows."
   [world row]
   (or (continue-mine world row)
@@ -153,9 +178,10 @@
               stowed {:intent/kind :equip :intent/item (recipe/item-name (second stowed))}
               walk walk
               :else
-              (or
-               (stairs world row)
-               {:intent/kind :tunnel :intent/dir (outward world) :intent/length tunnel-length})))))
+              (or (stairs world row)
+                  (when-let [d (tunnel-heading world)]
+                    {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
+                  (deeper world))))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
 

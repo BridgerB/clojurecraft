@@ -55,6 +55,22 @@
                          (assoc (standing 16 :stone_pickaxe) :plan/go-at [40.5 70.0 5.5])
                          (row :mine-iron))))
         "outward: away from the landing"))
+  (testing "a heading refused, or with no rock left to cut, is not taken; with none, deeper"
+    (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
+          w (assoc (standing 16 :stone_pickaxe)
+                   :plan/go-at [5.5 70.0 40.5] ; south: north leads farthest from it
+                   :world/chunks
+                   {[0 0] (world/column {[7 16 5] lava [5 16 6] lava [5 16 4] 0 [5 17 4] 0})})]
+      (is (= [-1 0] (stone/tunnel-heading w))
+          "north is an open tunnel, east borders lava, so west (south is lava itself)")
+      (is (= {:intent/kind :stairs-down :intent/to-y 10}
+             (stone/mine-next (assoc w
+                                     :world/chunks
+                                     {[0 0]
+                                      (world/column
+                                       {[7 16 5] lava [5 16 6] lava [3 16 5] lava [5 16 3] lava})})
+                              (row :mine-iron)))
+          "lava two along every heading: stairs six deeper")))
   (testing "stone has no depth: always down"
     (is (= {:intent/kind :stairs-down :intent/to-y -40}
            (stone/mine-next (standing -34 :wooden_pickaxe) (row :mine-stone))))))

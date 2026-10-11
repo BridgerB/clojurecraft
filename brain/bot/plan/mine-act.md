@@ -17,7 +17,8 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn routable?
   - test/clojurecraft/stone_test.clj#an-ore-no-route-reaches-is-passed-over
   - src/clojurecraft/stone.clj#defn stairs
-  - src/clojurecraft/stone.clj#defn outward
+  - src/clojurecraft/stone.clj#defn tunnel-heading
+  - src/clojurecraft/stone.clj#defn deeper
   - test/clojurecraft/sim_test.clj#at-the-rows-depth-a-tunnel-finds-the-ore-its-walls-show
   - src/clojurecraft/intent.clj#defn arrived?
   - resources/clojurecraft/goals.edn#{:goal/id :mine-iron
@@ -50,7 +51,7 @@ A mining row is data: `:goal/act :mine`, the blocks it digs (`:goal/blocks`) and
 1. A chain in flight continues: walk → dig → collect via `intent/chain-next`, tagged `:intent/for` the row's id, so another row's chain (a coal walk when iron is now wanted) is never continued as this one's dig.
 2. A tool the row needs that only the main inventory holds is put in hand first, with an `:equip` intent (`intent/stowed-tool`). `tool-missing`: a block that drops only to its tool (`blocks/drops-need-tool?`, [[hardness-and-tools]]) with no such tool held waits `:no-pickaxe`; gravel drops to a hand and never waits.
 3. `exposed-of-states`: the blocks of the row within 24 of the eye and 12 of its height, read from the loaded chunks through the block overlay, that the bot can dig from a cell it can stand in (`beside`: a horizontal neighbour at the block's level or a block lower, the block then at the head, or the cell under it, the block overhead; never from above, where the drop would lie under the feet), nearest first (never memory: stone is most of the world and ore is in every chunk; [[memory-edge-cases]]). Of the three nearest, the first a route reaches (`intent/routable?`: the planner's route is not `:none`) is walked to (`:found`, or `:partial` only toward an unloaded chunk); one in a cave below with no way down is passed over. The fourth live iron-kit run walked at three such ores, each failing `:no-path` at once, and the third failure ended the plan. The walk carries `:intent/pickup? true`: it ends where the dug block's drop lands in the pickup box (`intent/arrived?`, the path's `:pickup` goal; [[walk-intent]]).
-4. With none in sight, `stairs`: a staircase six down from the feet, never below the row's depth ([[stairs-down]]); at the depth, a `:tunnel` of `tunnel-length` (12) level steps along `outward`, the heading that leads farthest from the landing, so tunnels never double back. A staircase shows little rock: the live runs that waited at the depth with nothing in sight failed there. The tunnel's walls are where the ore shows; the next pass sees it (`at-the-rows-depth-a-tunnel-finds-the-ore-its-walls-show`).
+4. With none in sight, `stairs`: a staircase six down from the feet, never below the row's depth ([[stairs-down]]); at the depth, a `:tunnel` of `tunnel-length` (12) level steps along `tunnel-heading`: of the four, the one leading farthest from the landing first, the first whose first level step is allowed and has rock to cut, so never back along an open tunnel nor straight at what refused the last. With none, `deeper`: stairs six more down, the row's depth notwithstanding (ore lies below it too). With the heading fixed to the farthest, gym batches iron-a3 and iron-a4 retried tunnels boxed in by an aquifer three times in a second and failed `:boxed`. A staircase shows little rock: the live runs that waited at the depth with nothing in sight failed there. The tunnel's walls are where the ore shows; the next pass sees it (`at-the-rows-depth-a-tunnel-finds-the-ore-its-walls-show`).
 5. The collect waits for one more of any item the row's blocks can drop (`drops-of-row`, every try of their loot tables: flint and gravel both for gravel).
 
 ## Flint: dig a held gravel again (`:redig`)
