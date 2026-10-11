@@ -172,19 +172,29 @@
        first))
 
 (defn climb
-  "A walk back to the landing (:plan/go-at) when the feet are more than underground-depth under
-   it and a route reaches it, or nil. A bot that needs water deep in its mine sees none and its
-   hunt looks for ground near its own height, underground: gym batch iron-a1 runs 3 and 5 got
-   the bucket down there and failed :no-water. The siblings climbed out first too."
+  "Out of the ground when the feet are more than underground-depth under the landing
+   (:plan/go-at) and the sky is not open over them: a walk back to the landing when a route
+   reaches it, else stairs cut up to its height; nil when not underground. A bot that needs water
+   deep in its mine sees none and its hunt looks for ground near its own height, underground: gym
+   batch iron-a1 runs 3 and 5 got the bucket down there and failed :no-water. The way it came
+   down is often no way back up: batch iron-a2 runs 2 and 5 had mined an ore out of the floor of
+   a stair, or dug a niche under one, and waited :no-water at y 18 and 24 with no route out. The
+   siblings climbed out first too."
   [world]
-  (let [home (:plan/go-at world)]
-    (when (and home (< (second (:player/pos world)) (- (second home) underground-depth)))
-      (first-walk world :surface [(mapv #(long (math/floor %)) home)]))))
+  (let [home (:plan/go-at world)
+        feet (intent/feet world)]
+    (when (and home
+               (< (second feet) (- (second home) underground-depth))
+               (not (terrain/under-sky? world feet)))
+      (or (first-walk world :surface [(mapv #(long (math/floor %)) home)])
+          {:intent/kind :stairs-up
+           :intent/to-y (long (math/floor (second home)))
+           :intent/for :surface}))))
 
 (defn scoop-next
   "The next step toward a filled bucket: scoop the nearest surface source when it is in reach,
    else walk to the nearest one in sight a route reaches, or to such a remembered pool, or climb
-   out to the landing when deep under it, or hunt for one (hunt-targets); else wait :no-water."
+   out (to the landing, or by stairs cut up) when deep under it, or hunt for one (hunt-targets); else wait :no-water."
   [world]
   (let [srcs (sources world)
         src (first srcs)]

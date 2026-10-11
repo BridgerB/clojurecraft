@@ -21,6 +21,13 @@
    A tunnel is level steps alone, length of them along its heading, turning where one is
    refused: where a mining row has reached its depth with nothing in sight, the walls of a
    tunnel are where the ore shows.
+
+     {:intent/kind :stairs-up :intent/to-y 64}
+
+   Stairs up are the same staircase climbed: each opens the cell over the head (the jump needs
+   it), then the new head and feet a block up and ahead, with the same refusals, and none under
+   gravel or sand that would fall onto the bot. Done standing at to-y or under the open sky: the
+   way out of a mine whose way down no longer leads back up.
    Each dig is a child :dig intent run by the dig
    executor itself (intents composing intents: no second rule for breaking blocks), and the
    descent is judged by the feet having actually gone down, never by a packet having been
@@ -49,6 +56,13 @@
   [[x y z] [dx dz]]
   [[(+ x dx) (inc y) (+ z dz)] [(+ x dx) y (+ z dz)] [(+ x dx) (dec y) (+ z dz)]])
 
+(defn up-cells
+  "The three cells a stair up ahead of feet [x y z] in direction [dx dz] opens, top first: the one
+   over the head, which the jump needs, then the new head and the new feet a block up and ahead.
+   The block ahead at the feet's height is the step it climbs onto."
+  [[x y z] [dx dz]]
+  [[x (+ y 2) z] [(+ x dx) (+ y 2) (+ z dz)] [(+ x dx) (inc y) (+ z dz)]])
+
 (defn level-cells
   "The two cells a level step ahead of feet [x y z] in direction [dx dz] opens, top first: head
    and feet, at the same height."
@@ -75,6 +89,21 @@
     (and (every? #(not (#{:water :lava :unknown} (kind %))) cells)
          (every? #(not= :lava (kind %)) (exposed cells))
          (= :solid (kind [fx (dec fy) fz])))))
+
+(defn up-safe?
+  "May a stair up be cut: what any stair needs (safe?), and no gravel or sand over the cell above
+   the head, which would fall through it onto the bot."
+  [world cells]
+  (let [[x y z] (first cells)]
+    (and (safe? world cells)
+         (not (some-> (terrain/block-at world [x (inc y) z])
+                      blocks/falls?)))))
+
+(def shapes
+  "How each kind of staircase is cut: the cells a stair opens (top first, the new feet last), the
+   rule that lets it be cut, and which way the feet go when it is taken."
+  {:stairs-down {:cells stair-cells :safe? safe? :rise -1}
+   :stairs-up {:cells up-cells :safe? up-safe? :rise 1}})
 
 (defn level-safe?
   "May a level step be taken: what a stair needs (safe?), and no cell it opens borders water or
@@ -136,15 +165,17 @@
 (def refusals #{:needs-tool :unsafe})  ; a child dig failing for these turns the stairs
 
 (defmulti stairs-stage
-  "Advance a :stairs-down intent one tick in its :intent/stage: :plan (choose a safe stair or
-   turn), :open (dig its cells, one child :dig at a time) or :step (walk down onto it)."
+  "Advance a staircase (:stairs-down, :stairs-up, or a :tunnel's level step) one tick in its
+   :intent/stage: :plan (choose a safe stair or turn), :open (dig its cells, one child :dig at a
+   time), :step (walk down or jump up onto it) or :level (a level step)."
   {:arglists '([world intent event])}
   (fn [_world i _event] (:intent/stage i :plan)))
 
 (defmethod stairs-stage :plan
-  [world {:intent/keys [dir turns] :or {turns 0} :as i} _]
+  [world {:intent/keys [kind dir turns] :or {turns 0} :as i} _]
   (let [dir (or dir (first directions))
-        cells (stair-cells (intent/feet world) dir)]
+        {:keys [safe?] cells-of :cells} (shapes kind)
+        cells (cells-of (intent/feet world) dir)]
     (cond (safe? world cells)
           (intent/assoc-intent world
                                :intent/dir dir
@@ -189,11 +220,19 @@
      event)
     :else (intent/assoc-intent world :intent/stage :step :intent/started-tick (:time/tick world))))
 
+(defn taken?
+  "Has the stair been taken: the feet half a block past where it began, the way the staircase
+   goes (rise -1 down, 1 up), the only proof the server broke what the bot asked for; going up,
+   also on the ground again, since halfway up a jump the step is not yet stood on."
+  [world rise started-y]
+  (and (>= (* rise (- (second (:player/pos world)) started-y)) 0.5)
+       (or (neg? rise) (boolean (:player/on-ground? world)))))
+
 (defmethod stairs-stage :step
-  [world {:intent/keys [cells started-y started-tick]} _]
-  (let [[_ _ [fx fy fz]] cells
+  [world {:intent/keys [kind cells started-y started-tick]} _]
+  (let [[fx fy fz] (last cells)
         target [(+ fx 0.5) (double fy) (+ fz 0.5)]]
-    (cond (<= (second (:player/pos world)) (- started-y 0.5)) ; the feet went down: the stair is cut and taken
+    (cond (taken? world (:rise (shapes kind)) started-y)
           (-> world
               (assoc :player/controls {})
               (intent/assoc-intent :intent/stage :plan)
@@ -263,6 +302,17 @@
             intent/done)
         (= :level stage) (stairs-stage world i event)
         :else (tunnel-plan world i)))
+
+(defmethod intent/run :stairs-up
+  ;; done standing at to-y, or out under the open sky, whichever comes first
+  [world {:intent/keys [to-y] :as i} event]
+  (if (and (:player/on-ground? world)
+           (or (>= (second (intent/feet world)) to-y)
+               (terrain/under-sky? world (intent/feet world))))
+    (-> world
+        (assoc :player/controls {})
+        intent/done)
+    (stairs-stage world i event)))
 
 (defmethod intent/run :stairs-down
   [world {:intent/keys [to-y] :as i} event]

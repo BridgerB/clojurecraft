@@ -129,3 +129,14 @@
   (is (= {:plan/wait :no-water}
          (scoop/scoop-next (assoc (standing mine [14.5 8.5]) :player/pos [14.5 66.0 8.5])))
       "no landing to climb to"))
+
+(deftest with-no-way-back-up-the-bot-cuts-stairs-up
+  ;; batch iron-a2 run 2 mined an iron ore out of the floor under one of its stairs, run 5 dug a
+  ;; niche under one: the staircase down was no way back up
+  (let [broken (assoc mine [10 69 8] blocks/air) ; the floor under the stair at [10 70 8]
+        w
+        (assoc (standing broken [14.5 8.5]) :player/pos [14.5 66.0 8.5] :plan/go-at [4.5 76.0 8.5])]
+    (is (= {:intent/kind :stairs-up :intent/to-y 76 :intent/for :surface} (scoop/scoop-next w))))
+  (testing "under the open sky the bot is out, however low: it hunts instead"
+    (let [w (assoc (standing {} [8.5 8.5]) :plan/go-at [8.5 80.0 8.5])]
+      (is (nil? (scoop/climb w))))))

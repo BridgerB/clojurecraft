@@ -104,6 +104,11 @@
   [id]
   (contains? solid-states id))
 
+(defn falls?
+  "Is block state id of a type that falls when the cell under it is free (falling-types)?"
+  [id]
+  (contains? falling-types (type-of id)))
+
 (defn log-name?
   "Does a block or item name end in _log (every species, stripped ones too)?"
   [n]

@@ -873,11 +873,6 @@
 (def fall-gravity 0.04)               ; blocks per tick a falling block gains each tick (FallingBlockEntity.getDefaultGravity)
 (def fall-drag 0.98)                  ; the share of its speed it keeps each tick
 
-(defn falls?
-  "Is block state id of a type that falls (blocks/falling-types)?"
-  [id]
-  (contains? blocks/falling-types (blocks/type-of id)))
-
 (defn free?
   "Is the cell holding state id nothing a falling block rests on (FallingBlock.isFree: air, a
    liquid, fire, a plant)? An unloaded cell is not."
@@ -889,7 +884,7 @@
    as vanilla schedules its tick on the neighbour update."
   [sim [x y z]]
   (let [above [x (inc y) z]]
-    (if (falls? (block-at sim above))
+    (if (blocks/falls? (block-at sim above))
       (assoc-in sim [:sim/falls above] (+ (:sim/now sim) fall-delay-ms))
       sim)))
 
@@ -905,7 +900,7 @@
    cell (FallingBlockEntity.fall), keyed by where it fell from."
   [sim [x y z :as pos]]
   (let [state (block-at sim pos)]
-    (if (and (falls? state) (free? (block-at sim [x (dec y) z])))
+    (if (and (blocks/falls? state) (free? (block-at sim [x (dec y) z])))
       (-> sim
           (assoc-in [:sim/placed pos] blocks/air)
           (send {:packet/name :block-update :pos pos :state blocks/air})

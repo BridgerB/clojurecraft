@@ -41,6 +41,17 @@
   (contains? (:world/chunks world)
              [(bit-shift-right (long (math/floor x)) 4) (bit-shift-right (long (math/floor z)) 4)]))
 
+(def top-y (+ chunk/min-y (* 16 chunk/section-count) -1)) ; the highest block y of an overworld column
+
+(defn under-sky?
+  "Is nothing over pos up to the top of the world but air, plants or leaves: the open air a climb
+   out of the ground ends in? An unloaded column is not."
+  [world [x y z :as pos]]
+  (and (chunk-loaded? world pos)
+       (not-any? #(when-let [id (block-at world [x % z])]
+                    (and (blocks/solid? id) (not (blocks/leaves? id))))
+                 (range (inc y) (inc top-y)))))
+
 (defn chunk-key
   "[cx cz] from a packed chunk position (x in the low 32 bits, z in the high 32)."
   [v]

@@ -601,10 +601,11 @@
 
 ;; ---------------------------------------------------------------- stairs down, on the model
 
-(defn stairs-run
-  "Run a :stairs-down intent alone against the model from a spawn over column blocks, the
-   feet at feet-y, with the item in hotbar slot 0, until it ends or max-ms. Returns [world sim]."
-  [blocks spawn-y item to-y max-ms]
+(defn staircase-run
+  "Run a staircase intent of kind (:stairs-down, :stairs-up) alone against the model from a spawn
+   over column blocks, the feet at feet-y, with the item in hotbar slot 0, until it ends or
+   max-ms. Returns [world sim]."
+  [kind blocks spawn-y item to-y max-ms]
   (let [column (world/column-bytes blocks)
         step
         (fn [w e]
@@ -613,7 +614,7 @@
             (cond (= :go (:event/kind e))
                   (assoc w
                          :plan/intent
-                         {:intent/kind :stairs-down :intent/to-y to-y :intent/status :active})
+                         {:intent/kind kind :intent/to-y to-y :intent/status :active})
                   (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
                   (intent/run w i e)
                   :else w)))
@@ -625,6 +626,11 @@
              sim0
              #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
              max-ms)))
+
+(defn stairs-run
+  "A :stairs-down run (staircase-run)."
+  [blocks spawn-y item to-y max-ms]
+  (staircase-run :stairs-down blocks spawn-y item to-y max-ms))
 
 (def deep-stone
   "Stone from y 64 up to y 75 everywhere: a hill to descend into."
@@ -1188,6 +1194,36 @@
                              [:intent/status :intent/reason :intent/stage :intent/turns])))
     (is (<= (second (:player/pos w)) 74.5) "two stairs down, through the gravel")
     (is (empty? (:sim/falling sim)) "nothing left in the air")
+    (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- out of the ground
+
+(def pocket
+  "deep-stone with a pocket two high at [8 66 8] to stand in, nine blocks under the hilltop."
+  (assoc deep-stone [8 66 8] blocks/air [8 67 8] blocks/air))
+
+(deftest stairs-up-cut-a-way-out-of-the-rock
+  ;; batch iron-a2 runs 2 and 5 waited :no-water at y 18 and 24: the stairs they came down by had
+  ;; lost a floor to an ore or a niche, and no route led back up
+  (let [[w sim] (staircase-run :stairs-up pocket 66 (get blocks/items :wooden_pickaxe) 72 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (<= 72.0 (second (:player/pos w))) "six stairs up")
+    (is (:player/on-ground? w))
+    (is (empty? (:sim/violations sim)))))
+
+(deftest gravel-over-the-head-is-never-dug-under
+  ;; a stair up opens the cell over the head first; gravel over that cell would fall through it
+  ;; onto the bot, so every stair from here is refused and a level step leads out from under it
+  (let [blocks (assoc pocket [8 69 8] gravel-state)
+        [w sim] (staircase-run :stairs-up blocks 66 (get blocks/items :wooden_pickaxe) 70 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/level-steps])))
+    (is (<= 70.0 (second (:player/pos w))))
+    (is (not (contains? (:sim/broken sim) [8 68 8])) "the cell under the gravel was never opened")
+    (is (= :gravel (blocks/name-of (sim/block-at sim [8 69 8]))) "the gravel never fell")
     (is (empty? (:sim/violations sim)))))
 
 ;; ---------------------------------------------------------------- a bucket of water

@@ -1,9 +1,9 @@
 ---
 title: Stairs down
-description: How :stairs-down cuts a staircase toward a height one stair at a time, which cells each stair opens and exposes, the refusal rules (water, lava, unloaded, a drop), the quarter turns and :boxed, the child :dig intents, and why a stair counts only when the feet went down.
+description: How :stairs-down (and :stairs-up) cuts a staircase toward a height one stair at a time, which cells each stair opens and exposes, the refusal rules (water, lava, unloaded, a drop), the quarter turns and :boxed, the child :dig intents, and why a stair counts only when the feet went down.
 type: reference
 tags: [bot, plan, dig, mining, safety]
-aliases: [:stairs-down, descend, child intent, :boxed, stair-cells, safe?, intents composing intents]
+aliases: [:stairs-down, :stairs-up, up-cells, under-sky?, descend, climb out, child intent, :boxed, stair-cells, safe?, intents composing intents]
 status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
@@ -24,6 +24,13 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn level-safe?
   - test/clojurecraft/sim_test.clj#water-under-every-stair-is-stepped-around
   - src/clojurecraft/stairs.clj#defn fell?
+  - src/clojurecraft/stairs.clj#defn up-cells
+  - src/clojurecraft/stairs.clj#defn up-safe?
+  - src/clojurecraft/stairs.clj#def shapes
+  - src/clojurecraft/stairs.clj#defn taken?
+  - src/clojurecraft/terrain.clj#defn under-sky?
+  - test/clojurecraft/sim_test.clj#stairs-up-cut-a-way-out-of-the-rock
+  - test/clojurecraft/sim_test.clj#gravel-over-the-head-is-never-dug-under
   - test/clojurecraft/sim_test.clj#gravel-that-refills-a-stair-is-dug-again
 related:
   - "[[bot/plan/_moc|Plan]]"
@@ -51,6 +58,9 @@ Each stage is a method of `stairs-stage`; `run :stairs-down` only checks whether
 3. `:level`: dig the level step's cells with child digs, then walk until the feet are in its feet cell; 10 s from the step's start without that fails `:stair-not-taken`.
 4. `:step`: walk toward the new feet cell; done with the stair when the feet are half a block below where it began, which is the only proof the server broke what the bot asked for. A stair cell solid again (gravel fell into it) goes back to `:open`; 10 s without either fails `:stair-not-taken`.
 5. Done when the feet are at or below `to-y`.
+
+## Stairs up
+`{:intent/kind :stairs-up :intent/to-y n}` is the same staircase climbed (`shapes`: each kind's cells, rule and rise). A stair up opens `up-cells`: the cell over the head, which the jump needs, then the new head and the new feet one block up and ahead; the block ahead at the feet's height is the step. It is cut under `up-safe?`: `safe?`'s rules, and no gravel or sand over the cell above the head, which would fall through it onto the bot (`gravel-over-the-head-is-never-dug-under`: every heading refused, a level step out from under it). `:step` walks into the step, which jumps; `taken?` going up also needs the feet on the ground, since halfway up a jump the feet are already half a block higher and the next stair was once planned from the air. Done standing at `to-y`, or under the open sky (`terrain/under-sky?`: nothing but air, plants or leaves over the feet to the top of the world). The scoop's `climb` cuts these when no route leads back to the landing ([[scoop-intent]]).
 
 ## Tunnels
 `{:intent/kind :tunnel :intent/dir d :intent/length n}` is level steps alone: `tunnel-plan` takes the next along its heading when `level-safe?`, else turns a quarter, `:boxed` after a full turn; the `:level` stage is the staircase's own. Done after n steps. The mine act cuts one at a row's depth ([[mine-act]]).
