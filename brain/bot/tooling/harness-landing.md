@@ -9,14 +9,15 @@ lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/harness.clj#defn -main
-  - src/clojurecraft/harness.clj#defn wait-online
+  - src/clojurecraft/fixture.clj#defn wait-online
   - src/clojurecraft/harness.clj#defn locate-forest
-  - src/clojurecraft/harness.clj#defn teleport!
-  - src/clojurecraft/harness.clj#def checks
-  - src/clojurecraft/harness.clj#defn bad-landing
-  - src/clojurecraft/harness.clj#def landing-offsets
+  - src/clojurecraft/fixture.clj#defn teleport!
+  - src/clojurecraft/fixture.clj#defn with-forceload
+  - src/clojurecraft/fixture.clj#def checks
+  - src/clojurecraft/fixture.clj#defn bad-landing
+  - src/clojurecraft/fixture.clj#def landing-offsets
   - src/clojurecraft/harness.clj#defn land!
-  - src/clojurecraft/harness.clj#defn go-event
+  - src/clojurecraft/fixture.clj#defn go-event
   - src/clojurecraft/main.clj#defn read-events!
   - src/clojurecraft/plan.clj#defn landed?
   - src/clojurecraft/plan.clj#defn landing-tick
@@ -39,10 +40,11 @@ clojure -M:harness --rcon-port 25581 --rcon-pass "$P" --name Clj_wood --until wo
 ```
 
 ## Key files
-- `harness.clj`, `-main` - the sequence below; logs go to stderr because stdout is the queue.
-- `harness.clj`, `checks` - the landing tests as data: `[reason "if|unless block ..."]`, each run as `execute at <bot> <test>`; `bad-landing` names the first that passed.
-- `harness.clj`, `landing-offsets` - 17 points: the located point, then rings of eight at 24 and 48 blocks.
-- `harness.clj`, `go-event` - `{:event/kind :go :go/goals (plan/goals-for until) :go/at [x y z]}`.
+- `harness.clj`, `-main` - the sequence below; logs go to stderr because stdout is the queue. `locate-forest` and `land!` are the forest search; everything it asks the server is `fixture.clj`'s, shared with the gym's `land` and the landing-set builder.
+- `fixture.clj`, `checks` - the landing tests as data: `[reason "if|unless block ..."]`, each run as `execute at <bot> <test>`; `bad-landing` names the first that passed.
+- `fixture.clj`, `landing-offsets` - 17 points: the located point, then rings of eight at 24 and 48 blocks.
+- `fixture.clj`, `with-forceload` - every column a fixture loads is released in a `finally`.
+- `fixture.clj`, `go-event` - `{:event/kind :go :go/goals (plan/goals-for until) :go/at [x y z]}`.
 - `main.clj`, `read-events!` - reads EDN lines from stdin onto the events channel until end of input.
 - `plan.clj`, `landed?` and `landing-tick` - the bot side of the wait.
 

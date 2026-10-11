@@ -15,8 +15,8 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.cli :as cli]
+            [clojurecraft.fixture :as fixture]
             [clojurecraft.gym :as gym]
-            [clojurecraft.harness :as harness]
             [clojurecraft.rcon :as rcon]
             [clojurecraft.spec]))
 
@@ -230,7 +230,7 @@
         landed-file (io/file dir "landed.edn")]
     (spit landed-file (pr-str landed))
     (with-open [w (io/writer (.getOutputStream p))]
-      (.write w (str (pr-str (harness/go-event (:gym/until row) (:gym/at landed))) "\n")))
+      (.write w (str (pr-str (fixture/go-event (:gym/until row) (:gym/at landed))) "\n")))
     (let [judged (gym/judge! {:goal (:unit/goal unit)
                               :run run
                               :name name

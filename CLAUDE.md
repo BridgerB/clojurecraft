@@ -56,6 +56,7 @@ src/clojurecraft/record.clj   the recording: a channel tap, reading it back, rep
 src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server, print RESULT
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin
+src/clojurecraft/fixture.clj  what every fixture asks the server over RCON: wait, load, teleport, judge a landing; the :go event
 src/clojurecraft/rcon.clj     RCON client (fixtures, CI judge); `clojure -M:rcon`
 src/clojurecraft/gym.clj      the gym: registry, land, judge, report (`clojure -M:gym`)
 src/clojurecraft/landings.clj landing sets: grid, biome snap, surface checks, pregeneration

@@ -6,14 +6,14 @@
    biome each cell snaps to, and the radius pregenerated around each landing. landings! builds
    the set against a running server over RCON: each cell snaps to the nearest biome match, the
    surface there is found with a marker entity, and the spot is kept only when it is high
-   enough and none of the harness's landing checks (water, lava, tree, buried) passes; otherwise
-   the harness's nearby offsets are tried. The chunks around each landing are then generated and
+   enough and none of the fixture's landing checks (water, lava, tree, buried) passes; otherwise
+   the fixture's nearby offsets are tried. The chunks around each landing are then generated and
    released. The result is [[x z y] ...], saved with the world in the gym's cache."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.math :as math]
             [clojurecraft.cli :as cli]
-            [clojurecraft.harness :as harness]
+            [clojurecraft.fixture :as fixture]
             [clojurecraft.rcon :as rcon]))
 
 (def min-y 55)                          ; lower surfaces are ravines and caves, not ground
@@ -30,12 +30,6 @@
                      col (range side)]
                  [(+ cx (* spacing (- col half))) (+ cz (* spacing (- row half)))])))))
 
-(defn parse-located
-  "[x z] from a `locate` reply, or nil when nothing was found."
-  [reply]
-  (when-let [[_ x z] (re-find #"\[(-?\d+), (?:~|-?\d+), (-?\d+)\]" (str reply))]
-    [(parse-long x) (parse-long z)]))
-
 (defn square
   "[x0 z0 x1 z1]: the block square of radius r around [x z]."
   [[x z] r]
@@ -49,9 +43,9 @@
 
 (defn fit?
   "Is a surface position a landing? High enough, and no landing check (answers to
-   harness/checks, [[reason reply] ...]) passed."
+   fixture/checks, [[reason reply] ...]) passed."
   [[_ y _] answers]
-  (and (>= y min-y) (nil? (harness/bad-landing answers))))
+  (and (>= y min-y) (nil? (fixture/bad-landing answers))))
 
 (defn read-set
   "The landing-set definition named set-name in a plan file (ci/gym.edn), or nil."
@@ -75,20 +69,14 @@
   "[x y z] of the ground at column x z (the highest motion-blocking block that is not leaves),
    read with a marker entity that is removed again; nil when the column would not load."
   [rc [x z]]
-  (harness/with-forceload
+  (fixture/with-forceload
    rc
    [x z]
-   #(when (harness/wait-loaded! rc x z)
-      (rcon/command rc
-                    (str "execute positioned "
-                         x
-                         " 0 "
-                         z
-                         " positioned over motion_blocking_no_leaves"
-                         " run summon minecraft:marker ~ ~ ~ {Tags:[\""
-                         marker-tag
-                         "\"]}"))
-      (let [pos (harness/parse-pos (rcon/command rc
+   #(when (fixture/wait-loaded! rc x z)
+      (rcon/command
+       rc
+       (fixture/on-surface x z (str "summon minecraft:marker ~ ~ ~ {Tags:[\"" marker-tag "\"]}")))
+      (let [pos (fixture/parse-pos (rcon/command rc
                                                  (str
                                                   "data get entity @e[type=minecraft:marker,tag="
                                                   marker-tag
@@ -101,12 +89,12 @@
    is asked: [[reason reply] ...]. On an unloaded column every `if block` test fails, which
    reads as a landing with nothing wrong with it (gym shore-w2: two landings in the open sea)."
   [rc [x y z]]
-  (harness/with-forceload
+  (fixture/with-forceload
    rc
    [x z]
    (fn []
-     (harness/wait-loaded! rc x z)
-     (vec (for [[reason test] harness/checks]
+     (fixture/wait-loaded! rc x z)
+     (vec (for [[reason test] fixture/checks]
             [reason (rcon/command rc (str "execute positioned " x " " y " " z " " test))])))))
 
 (defn landing!
@@ -115,7 +103,7 @@
   [rc cell biome taken]
   (let [[cx cz] cell
         snapped
-        (or (parse-located
+        (or (fixture/parse-located
              (rcon/command rc (str "execute positioned " cx " 64 " cz " run locate biome " biome)))
             cell)]
     (some (fn [[ox oz]]
@@ -123,7 +111,7 @@
                   pos (surface! rc [x z])]
               (when (and pos (not (taken [(first pos) (nth pos 2)])) (fit? pos (answers! rc pos)))
                 (let [[px py pz] pos] [px pz py]))))
-          harness/landing-offsets)))
+          fixture/landing-offsets)))
 
 (defn pregenerate!
   "Generate every chunk within r blocks of a landing, then release them: forceload the square,
@@ -134,10 +122,10 @@
     (when (> (chunk-count sq) max-forceload-chunks)
       (throw (ex-info "pregen square too large for one forceload"
                       {:square sq :chunks (chunk-count sq)})))
-    (harness/with-forceload rc
+    (fixture/with-forceload rc
                             sq
                             #(doseq [[cx cz] [[x0 z0] [x1 z0] [x0 z1] [x1 z1]]]
-                               (harness/wait-loaded! rc cx cz)))))
+                               (fixture/wait-loaded! rc cx cz)))))
 
 (defn landings!
   "Build a landing set against a running server: one distinct landing per grid cell that has one,

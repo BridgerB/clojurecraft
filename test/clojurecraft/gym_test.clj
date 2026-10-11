@@ -3,6 +3,7 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [clojurecraft.fixture :as fixture]
             [clojurecraft.gym :as gym]
             [clojurecraft.landings :as landings]
             [clojurecraft.plan :as plan]
@@ -96,7 +97,7 @@
     (is (= [1 2 70] (landings/landing-for ls 1)) "run 1 lands on the first")
     (is (= [1 2 70] (landings/landing-for ls 4)) "runs past the end wrap"))
   (is (= [2000 3000]
-         (landings/parse-located
+         (fixture/parse-located
           "The nearest #minecraft:is_forest is at [2000, ~, 3000] (12 blocks away)")))
   (is (= 169 (landings/chunk-count (landings/square [100 100] 96))) "13x13 chunks at radius 96")
   (is (<= (landings/chunk-count (landings/square [-8 -8] 96)) landings/max-forceload-chunks))

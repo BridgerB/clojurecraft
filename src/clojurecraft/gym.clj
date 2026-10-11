@@ -17,7 +17,7 @@
             [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.cli :as cli]
-            [clojurecraft.harness :as harness]
+            [clojurecraft.fixture :as fixture]
             [clojurecraft.landings :as landings]
             [clojurecraft.rcon :as rcon])
   (:gen-class))
@@ -229,17 +229,17 @@
                          (parse-long (str rcon-port))
                          rcon-pass
                          (fn [rc]
-                           (when-not (harness/wait-online rc name harness/online-timeout)
+                           (when-not (fixture/wait-online rc name fixture/online-timeout)
                              (throw (ex-info "bot never came online" {:name name})))
                            (rcon/command rc (str "gamemode survival " name))
                            (rcon/command rc (str "clear " name))
                            (doseq [p (:gym/prereqs row)] (rcon/command rc (str "give " name " " p)))
-                           (harness/teleport! rc name [x z])
+                           (fixture/teleport! rc name [x z])
                            (rcon/command rc (str "spawnpoint " name " " x " " y " " z))
-                           (Thread/sleep (long harness/settle-ms))
+                           (Thread/sleep (long fixture/settle-ms))
                            {:gym/landed? true
                             :gym/landing landing
-                            :gym/at (harness/position rc name)
+                            :gym/at (fixture/position rc name)
                             :gym/started started}))
          (catch Throwable e
            (cli/log "landing failed:" e)
@@ -253,7 +253,7 @@
   (let [landed (landing! opts)]
     (spit out (pr-str landed))
     (cli/log "landed" (pr-str landed))
-    (prn (harness/go-event (:gym/until (gym goal)) (:gym/at landed)))
+    (prn (fixture/go-event (:gym/until (gym goal)) (:gym/at landed)))
     (flush)))
 
 (defn wait-result!
