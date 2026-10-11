@@ -26,7 +26,7 @@
                 [[1 64 0] oak-x])]
     (is (= #{[1 64 0] [2 64 0]} (set (memory/positions-now w blocks/log-states))))
     (testing "the history is still there: it was a log once"
-      (is (= #{[0 64 0] [1 64 0] [2 64 0]} (set (memory/positions-ever w blocks/log-states)))))
+      (is (= [oak-y blocks/air] (mapv :block/state (memory/history w [0 64 0])))))
     (testing "a place seen gone and then a log again counts"
       (let [w (memory/observe (assoc w :time/now 9) [0 64 0] oak-y)]
         (is (contains? (set (memory/positions-now w blocks/log-states)) [0 64 0]))))))

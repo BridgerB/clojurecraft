@@ -110,13 +110,6 @@
        states
        (set states)))
 
-(defn positions-ever
-  "Positions where any of the states was ever observed (a Datalog query over the facts)."
-  [world states]
-  (d/q '[:find [?pos ...] :in $ [?s ...] :where [?e :sight/state ?s] [?e :sight/pos ?pos]]
-       (:world/facts world)
-       states))
-
 ;; ---------------------------------------------------------------- writing
 
 (defn observation
