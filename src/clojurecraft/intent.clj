@@ -249,31 +249,30 @@
           (and (blocks/needs-tier id) (not (dig/harvest? id nil))) :needs-tool
           :else [0 nil])))
 
-(defmethod run :dig
-  [world
-   {:intent/keys [target stage since still next-swing finish-at face slot tool state exposes-ok?]
-    :or {stage :settle still 0}} _]
+(defmulti dig-stage
+  "Advance a :dig intent one tick in its :intent/stage (:settle :digging :confirm), the stage and
+   its start already on the intent."
+  {:arglists '([world intent])}
+  (fn [_world i] (:intent/stage i)))
+
+(defmethod dig-stage :settle
+  [world {:intent/keys [target since still exposes-ok?] :or {still 0}}]
   (let [now (:time/now world)
-        since (or since now)
         eye (game/eye world)
-        world (assoc-intent world :intent/stage stage :intent/since since)
         at-target (terrain/block-at world target)]
-    (case stage
-      :settle
-      (cond
-        (and at-target (not (blocks/solid? at-target))) (fail world :target-gone)
-        (> (physics/distance eye (physics/centre target)) (+ reach 0.5)) (fail world :out-of-reach)
-        (= :needs-tool (choose-tool world at-target)) (fail world :needs-tool)
-        (or (contains? never-dug (blocks/name-of at-target))
-            (and (not exposes-ok?) (exposes-fluid? world target)))
-        (fail world :unsafe)
-        (and (>= still 3) (> (- now since) settle-ms))
-        (let [seq (inc (:bot/sequence world))
-              face (face-toward eye target)
-              [slot tool] (choose-tool world at-target)
-              ms (dig-time at-target tool (penalties world))]
-          (->
-            world
+    (cond
+      (and at-target (not (blocks/solid? at-target))) (fail world :target-gone)
+      (> (physics/distance eye (physics/centre target)) (+ reach 0.5)) (fail world :out-of-reach)
+      (= :needs-tool (choose-tool world at-target)) (fail world :needs-tool)
+      (or (contains? never-dug (blocks/name-of at-target))
+          (and (not exposes-ok?) (exposes-fluid? world target)))
+      (fail world :unsafe)
+      (and (>= still 3) (> (- now since) settle-ms))
+      (let [seq (inc (:bot/sequence world))
+            face (face-toward eye target)
+            [slot tool] (choose-tool world at-target)
+            ms (dig-time at-target tool (penalties world))]
+        (-> world
             (assoc :bot/sequence seq)
             (assoc :player/held-slot slot)
             (game/emit {:packet/name :set-carried-item :slot slot})
@@ -296,38 +295,45 @@
                            " "
                            ms
                            "ms"))))
-        :else
-        (-> world
-            (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
-            (assoc-intent :intent/still (if (still? world) (inc still) 0))))
-      :digging
-      (cond (and tool (not= tool (get-in world [:player/inventory slot :item])))
-            (fail world :tool-broke) ; the slot no longer holds it: the next dig chooses again
-            (>= now finish-at)
-            (let [seq (inc (:bot/sequence world))]
-              (-> world
-                  (assoc :bot/sequence seq)
-                  (game/emit
-                   {:packet/name :player-action :status 2 :pos target :face face :sequence seq})
-                  (terrain/set-block target blocks/air) ; the server echoes a block-update and an ack; the overlay makes the bot independent of their timing
-                  (assoc-intent :intent/stage :confirm
-                                :intent/since now
-                                :intent/sequence seq
-                                :intent/confirm-left confirm-ticks)))
-            (>= now next-swing)
+      :else
+      (-> world
+          (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
+          (assoc-intent :intent/still (if (still? world) (inc still) 0))))))
+
+(defmethod dig-stage :digging
+  [world {:intent/keys [target face slot tool next-swing finish-at]}]
+  (let [now (:time/now world)]
+    (cond (and tool (not= tool (get-in world [:player/inventory slot :item])))
+          (fail world :tool-broke) ; the slot no longer holds it: the next dig chooses again
+          (>= now finish-at)
+          (let [seq (inc (:bot/sequence world))]
             (-> world
-                (game/emit {:packet/name :swing :hand 0})
-                (assoc-intent :intent/next-swing (+ now swing-every)))
-            :else world)
-      :confirm
-      (let [left (:intent/confirm-left (:plan/intent world))
-            restored? (and at-target (= at-target state))]
-        (cond restored? (fail world :rejected) ; the server put the block back: the break was refused
-              ;; the server acknowledged, or no word either way in time: trust the overlay
-              (or (>= (:stats/last-ack world -1) (:intent/sequence (:plan/intent world)))
-                  (zero? left))
-              (done world)
-              :else (assoc-intent world :intent/confirm-left (dec left)))))))
+                (assoc :bot/sequence seq)
+                (game/emit
+                 {:packet/name :player-action :status 2 :pos target :face face :sequence seq})
+                (terrain/set-block target blocks/air) ; the server echoes a block-update and an ack; the overlay makes the bot independent of their timing
+                (assoc-intent :intent/stage :confirm
+                              :intent/since now
+                              :intent/sequence seq
+                              :intent/confirm-left confirm-ticks)))
+          (>= now next-swing)
+          (-> world
+              (game/emit {:packet/name :swing :hand 0})
+              (assoc-intent :intent/next-swing (+ now swing-every)))
+          :else world)))
+
+(defmethod dig-stage :confirm
+  [world {:intent/keys [target state sequence confirm-left]}]
+  (let [at-target (terrain/block-at world target)]
+    (cond (and at-target (= at-target state)) (fail world :rejected) ; the server put the block back: the break was refused
+          ;; the server acknowledged, or no word either way in time: trust the overlay
+          (or (>= (:stats/last-ack world -1) sequence) (zero? confirm-left)) (done world)
+          :else (assoc-intent world :intent/confirm-left (dec confirm-left)))))
+
+(defmethod run :dig
+  [world {:intent/keys [stage since] :or {stage :settle}} _]
+  (let [world (assoc-intent world :intent/stage stage :intent/since (or since (:time/now world)))]
+    (dig-stage world (:plan/intent world))))
 
 ;; ---------------------------------------------------------------- collect
 
