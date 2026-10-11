@@ -36,6 +36,8 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
+            [clojurecraft.place]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -198,7 +200,7 @@
 
 (defn tool-missing
   "The reason to stop when the block at cell would be dug by hand for nothing (no-<tool>, as
-   :no-pickaxe): it drops only to a tool and no tool of its kind is in the hotbar at all, which
+   :no-pickaxe): it drops only to a tool and no tool of its kind is held at all, which
    happens when the pickaxe breaks on the way. Stone by hand takes 7500 ms a block; batch iron-a2
    runs went on that way, a stair at a time, until a step timed out. A tool of the kind too weak
    for the block is the child dig's :needs-tool instead, which turns the stairs. nil when it can
@@ -210,18 +212,27 @@
     (when (and id
                (blocks/drops-need-tool? id)
                (not-any? (fn [[_ {:keys [item]}]] (= kind (:kind (blocks/tool item))))
-                         (intent/hotbar world)))
+                         (:player/inventory world)))
       (keyword (str "no-" (name (or kind :tool)))))))
 
 (defn dig-next
-  "Start a child :dig of cell, the next of a stair's to open, or fail with tool-missing's reason,
-   so the planner makes the tool again."
+  "Start a child for cell, the next of a stair's to open: a :dig, or first an :equip of the tool
+   when it is only in the main inventory (intent/stowed-tool); or fail with tool-missing's
+   reason, so the planner makes the tool again."
   [world cell event]
-  (if-let [missing (tool-missing world cell)]
-    (-> world
-        (assoc :player/controls {})
-        (intent/fail missing))
-    (intent/run-child (intent/assoc-intent world :intent/child (intent/child-dig cell)) event)))
+  (let [stowed (some->> (terrain/block-at world cell)
+                        (intent/stowed-tool world))
+        missing (tool-missing world cell)
+        child (if stowed
+                {:intent/kind :equip
+                 :intent/item (recipe/item-name (second stowed))
+                 :intent/status :active}
+                (intent/child-dig cell))]
+    (if missing
+      (-> world
+          (assoc :player/controls {})
+          (intent/fail missing))
+      (intent/run-child (intent/assoc-intent world :intent/child child) event))))
 
 (defmethod stairs-stage :open
   [world {:intent/keys [dir turns child cells] :or {turns 0} :as i} event]

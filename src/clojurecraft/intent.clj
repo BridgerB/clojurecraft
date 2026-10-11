@@ -288,6 +288,16 @@
   [world]
   (into {} (filter (fn [[s _]] (<= 0 s 8)) (:player/inventory world))))
 
+(defn stowed-tool
+  "[slot item-id] of the tool to dig block id with when it is only in the main inventory, nil
+   when the hotbar holds one or none is held. A dig chooses from the hotbar, and with the hotbar
+   full of what mining picked up, a crafted pickaxe lands in the main inventory: gym batch
+   iron-a3 runs 1 and 3 held a stone pickaxe there and stopped for want of one."
+  [world id]
+  (when-not (dig/best-tool id (hotbar world) (penalties world))
+    (when-let [[slot _ :as t] (dig/best-tool id (:player/inventory world) (penalties world))]
+      (when (> slot 8) t))))
+
 (defn choose-tool
   "[slot item-id] of the tool to dig block id with from the hotbar, [0 nil] for the hand, or
    :needs-tool when the block needs a tier no held tool of its kind reaches: digging it would

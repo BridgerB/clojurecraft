@@ -108,7 +108,7 @@
     :gym/truth [{:truth/cmd "clear {name} minecraft:bucket 0" :truth/re "Found [1-9]"}]}
    {:gym/goal :water-bucket
     :gym/until "water-bucket"
-    :gym/prereqs ["minecraft:bucket 1"]
+    :gym/prereqs ["minecraft:bucket 1" "minecraft:stone_pickaxe 1"]
     :gym/timeout-ms 300000
     :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}]}
    ;; a gravel is given, so the row measures digging it again for flint, not finding gravel

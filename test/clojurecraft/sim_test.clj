@@ -1113,6 +1113,32 @@
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
     (is (empty? (:sim/violations sim)))))
 
+(deftest ore-is-mined-with-a-pickaxe-from-the-main-inventory
+  ;; the mine act puts a stowed pickaxe in hand before it walks to the ore (iron ore by hand drops
+  ;; nothing, and the dig chooses from the hotbar)
+  (let [table (conj plan/goals
+                    {:goal/id :ore-test
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:item/raw_iron 1}
+                     :goal/done? :provided?})
+        junk {:item (item :dirt) :count 1}
+        inv
+        (assoc (into {} (for [s (range 36 45)] [s junk])) 9 {:item (item :stone_pickaxe) :count 1})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes ore-field)
+                                    :spawn [8.5 64.0 8.5]
+                                    :inventory inv})
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         {:event/kind :go :go/goals [:ore-test]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (get (held w) :raw_iron 0)))
+    (is (some #(= :equip (:intention/kind %)) (memory/intentions w)) "put in hand first")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- flint, by the loot table's luck
 
 (def gravel-state (blocks/default-state :gravel))
@@ -1291,6 +1317,38 @@
         "no water came down")
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-pickaxe-in-the-main-inventory-is-put-in-hand
+  ;; gym batch iron-a3 runs 1 and 3 held a stone pickaxe in the main inventory (the hotbar was full
+  ;; of what mining picked up) and their stairs stopped :no-pickaxe; the dig chooses from the
+  ;; hotbar, so the pickaxe is swapped into the hand first
+  (let [junk {:item (item :dirt) :count 1}
+        inv
+        (assoc (into {} (for [s (range 36 45)] [s junk])) 9 {:item (item :stone_pickaxe) :count 1})
+        [w sim]
+        (sim/run
+         (fn [w e]
+           (let [w (game/step w e)
+                 i (:plan/intent w)]
+             (cond (= :go (:event/kind e))
+                   (assoc w
+                          :plan/intent
+                          {:intent/kind :stairs-down :intent/to-y 74 :intent/status :active})
+                   (and (= :tick (:event/kind e))
+                        (= :active (:intent/status i))
+                        (:player/loaded? w))
+                   (intent/run w i e)
+                   :else w)))
+         (game/init fx/opts)
+         (sim/init {:column (world/column-bytes deep-stone) :spawn [8.5 76.0 8.5] :inventory inv})
+         #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
+         60000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage])))
+    (is (= (item :stone_pickaxe) (get-in w [:player/inventory (:player/held-slot w) :item]))
+        "the pickaxe is in the hand")
+    (is (< (:time/now w) 20000) "dug with it, not by hand")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest gravel-over-the-head-is-never-dug-under
   ;; a stair up opens the cell over the head first; gravel over that cell would fall through it
   ;; onto the bot, so every stair from here is refused and a level step leads out from under it
@@ -1322,13 +1380,15 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes bank-pond)
                                     :spawn [5.5 64.0 8.5]
-                                    :inventory {40 {:item (item :bucket) :count 1}}})
+                                    :inventory {36 {:item (item :wooden_pickaxe) :count 1}
+                                                40 {:item (item :bucket) :count 1}}})
                          ;; a step into the pond ends the run, so done means never in it
                          #(or (plan/done? %) (plan/failed? %) (:player/in-water? %))
                          60000
                          {:event/kind :go :go/goals [:bucket-test]})]
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
-    (is (= {:water_bucket 1} (held w)) "the bucket in hotbar slot 4 was selected and filled")
+    (is (= {:water_bucket 1 :wooden_pickaxe 1} (held w))
+        "the bucket in hotbar slot 4 was selected and filled")
     (is (= 1 (count (filter #(= blocks/air %) (vals (:sim/placed sim))))) "one source taken")
     (is (not (:player/in-water? w)) "never in the pond")
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))

@@ -152,7 +152,9 @@
   :goal/done? :provided?}
  {:goal/id :dig-gravel
   :goal/priority 10
-  :goal/doc "dig the nearest exposed gravel, by hand or with a shovel"
+  :goal/doc
+  "dig the nearest exposed gravel, by hand or with a shovel; a pickaxe is held for the stairs down when none is in sight"
+  :goal/holds {:tag/pickaxes 1}
   :goal/provides {:item/gravel 1}
   :goal/act :mine
   :goal/blocks [:gravel]
@@ -171,7 +173,8 @@
  {:goal/id :fill-bucket
   :goal/priority 10
   :goal/doc
-  "scoop a surface water source with an empty bucket, walking to the nearest one in sight or remembered"
+  "scoop a surface water source with an empty bucket, walking to the nearest one in sight or remembered; a pickaxe is held for the stairs up out of a mine"
+  :goal/holds {:tag/pickaxes 1}
   :goal/needs {:item/bucket 1}
   :goal/provides {:item/water_bucket 1}
   :goal/act :scoop

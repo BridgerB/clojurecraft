@@ -150,7 +150,9 @@
 
 (defn niche
   "A cell beside the feet at their level that, dug out, is a spot no way runs through: solid,
-   with solid under and over it, no fluid beside it (the dig would refuse it), neither a block
+   with solid under and over it, no fluid beside it (the dig would refuse it), not a block the
+   held tools cannot drop (batch iron-a3 run 5 failed placing its furnace :needs-tool three
+   times on one), neither a block
    that is never dug nor one the bot placed (a table in the last niche); nil when none. Where a
    staircase has no spot, the wall gives one: the side nearest the landing (:plan/go-at), never
    the wall ahead, where the way goes on (batch iron-a2 run 1 put its table there, and its
@@ -168,6 +170,7 @@
                             (solid-at? world (update c 1 dec))
                             (solid-at? world (update c 1 inc))
                             (not (intent/exposes-fluid? world c))
+                            (not= :needs-tool (intent/choose-tool world (terrain/block-at world c)))
                             (not (contains? (into intent/never-dug memory/placed-kinds)
                                             (blocks/name-of (terrain/block-at world c)))))]
              c))))
@@ -227,6 +230,20 @@
             :overdue (intent/fail world :stale-window)
             :waiting world
             (place-stage world i)))))
+
+;; ---------------------------------------------------------------- equip
+
+(defmethod intent/run :equip
+  ;; {:intent/kind :equip :intent/item :stone_pickaxe}: put the item in the hand (equip), done
+  ;; once it is there; a tool in the main inventory is swapped into the held slot with a click
+  [world {:intent/keys [item stage] :as i} _]
+  (let [world (assoc world :plan/intent i)]
+    (cond (= :held stage) (intent/done world)
+          :else
+          (case (window/waiting world i)
+            :overdue (intent/fail world :stale-window)
+            :waiting world
+            (equip world item :held)))))
 
 ;; ---------------------------------------------------------------- open
 

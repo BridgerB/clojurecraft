@@ -33,7 +33,7 @@ related:
 
 # Scoop intent
 
-The `:fill-bucket` row needs an empty bucket and provides a water bucket; its act is `:scoop`.
+The `:fill-bucket` row needs an empty bucket, holds a pickaxe (`:tag/pickaxes`, for the stairs up out of a mine) and provides a water bucket; its act is `:scoop`. Without the hold, a pickaxe broken on the way down was never made again: gym batch iron-a3 run 2 failed its stairs up `:no-pickaxe` three times.
 
 ## Where the water is (`scoop-next`)
 1. `sources`: the plain water sources (`blocks/water-base`: not a waterlogged block) open to the air above it (`surface-source?`) in the loaded terrain, within 24 of the eye, no more than `memory/surface-water-below` (5) under it, not blacklisted, and when in reach, in sight (`sees?`: no solid or unloaded cell on the ray from the eye to its surface before it). nearest first. The nearest in reach (4 blocks, eye to centre): `{:intent/kind :scoop :intent/target src}`; else a walk to the first of the three nearest that a route reaches (`first-walk`, `intent/routable?`), which the pathfinder ends on the bank, since water is a wall to it ([[pathfinder]]).

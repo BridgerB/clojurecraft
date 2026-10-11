@@ -16,6 +16,8 @@ sourceRefs:
   - src/clojurecraft/place.clj#defn niche
   - test/clojurecraft/sim_test.clj#a-table-and-a-furnace-placed-in-a-staircase-never-plug-it
   - test/clojurecraft/place_test.clj#a-niche-is-cut-in-the-side-wall-not-ahead
+  - src/clojurecraft/place.clj#defmethod intent/run :equip
+  - test/clojurecraft/place_test.clj#no-niche-where-the-tools-cannot-drop
   - src/clojurecraft/place.clj#defn use-item-on
   - test/clojurecraft/place_test.clj#a-rejected-placement-fails-instead-of-believing
 related:
@@ -35,6 +37,9 @@ related:
 2. **`:spot`**: `spot` picks `[target support]`, never a `passage?` (a cell the feet could stand in with two or more solid horizontal neighbours: a staircase or tunnel, the way the bot came). With none, `niche`: a cell beside the feet at their level, solid with solid under and over it, no fluid beside it, not a block the bot placed, the one nearest the landing first (a side wall, never the wall ahead where a tunnel goes on: batch iron-a2 run 1 put its table there and its tunnel dug through it, `a-niche-is-cut-in-the-side-wall-not-ahead`); it is dug with a child `:dig` (stage `:niche`), then the item is equipped again and the spot sought again. Neither: `:no-spot`. Gym batch iron-a1 run 2 put its table on the stair behind it at the bottom of its staircase, then found no spot for the furnace (`a-table-and-a-furnace-placed-in-a-staircase-never-plug-it`).
 3. **`:settle`**: look at the target's centre; after 3 still ticks and 300 ms, send `use-item-on` against the **support** block, face 1 (top), cursor `[0.5 1.0 0.5]`, with the next `:bot/sequence`, plus a swing; → `:sent`.
 4. **`:sent`**: done when `terrain/block-at` at the target is a state of the item's block, by name (the server's `block-update` wrote it; a furnace's state depends on which way the server faced it). Fails `:rejected` once `:stats/last-ack` has reached our sequence and 500 ms have passed without the block. Fails `:no-answer` after 3000 ms.
+
+## Equip
+`{:intent/kind :equip :intent/item :stone_pickaxe}` is `equip` alone: the item into the held slot (a hotbar select, or a window-0 swap from the main inventory), done once it is there. Staircases and the mine act start one when the tool a dig needs is only in the main inventory ([[dig-timeline]]).
 
 ## Key files
 - `place.clj`, `spot` - pure: the first cell of `around` (rings 1-3, feet level then one down then one up) whose target is loaded, not solid and not liquid, whose support below is solid, which does not intersect the player (`inside-player?`), and whose centre is within `place-reach` (4.0) of the eye ([[spot-two-blocks-away]]).

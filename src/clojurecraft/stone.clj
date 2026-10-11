@@ -19,6 +19,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.place]
             [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
@@ -130,14 +131,15 @@
       (first stairs/directions))))
 
 (defn mine-next
-  "The next step of mining a row: continue its chain; else, holding the tool its blocks need,
-   walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
+  "The next step of mining a row: continue its chain; else, holding the tool its blocks need
+   (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
    ends where the drop lands in reach, :intent/pickup?), or cut stairs down toward them, or at
    the row's depth a tunnel outward; wait for the tool. The live runs that waited at the depth
    with nothing in sight failed there; a tunnel's walls are where the ore shows."
   [world row]
   (or (continue-mine world row)
       (let [missing (tool-missing world row)
+            stowed (intent/stowed-tool world (first (states-of-row row)))
             walk-to
             (fn [t]
               {:intent/kind :walk :intent/target t :intent/for (:goal/id row) :intent/pickup? true})
@@ -148,6 +150,7 @@
                         (filter #(intent/routable? world %))
                         first))]
         (cond missing {:plan/wait missing}
+              stowed {:intent/kind :equip :intent/item (recipe/item-name (second stowed))}
               walk walk
               :else
               (or

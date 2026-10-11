@@ -3,6 +3,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -104,3 +105,14 @@
                  :plan/go-at [2.5 64.0 8.0])]
     (is (not= [9 64 8] (place/niche w)) "not the wall ahead, away from the landing")
     (is (#{[8 64 9] [8 64 7]} (place/niche w)) "a side wall")))
+
+(deftest no-niche-where-the-tools-cannot-drop
+  ;; gym batch iron-a3 run 5 failed placing its furnace :needs-tool three times: its niche was a
+  ;; block the held tools cannot drop
+  (let [iron (blocks/default-state :iron_ore)
+        rock (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] iron]))
+                    (into {} (for [x (range 2 9) y [64 65]] [[x y 8] 0])))
+        w (assoc (standing [8.5 64.0 8.5])
+                 :world/chunks {[0 0] (world/column rock)}
+                 :player/inventory {0 {:item (blocks/items :wooden_pickaxe) :count 1}})]
+    (is (nil? (place/niche w)) "iron ore all round, and only a wooden pickaxe")))
