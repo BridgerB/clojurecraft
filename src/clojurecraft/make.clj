@@ -249,10 +249,21 @@
                               (smelt/fuels counts nil))]
     [counts (max 0 left)]))
 
+(def planks-per-log 4)                ; a log crafts into four planks
+
+(defn wood-covers?
+  "Do the logs in counts make the planks that burn ticks? Then they are the fuel to use before
+   any coal is mined: the twelfth live run held two logs, eight planks' worth of fire, and
+   tunnelled thirteen minutes at y 0 for coal until the trial timed out."
+  [counts ticks]
+  (let [planks (long (math/ceil (/ ticks (second (second fuel-sources)))))]
+    (>= (recipe/have counts (recipe/tags :logs)) (long (math/ceil (/ planks planks-per-log))))))
+
 (defn resolve-fuel-need
   "[counts action] for a :fuel/ticks n need: met (nil) when the fuel in counts burns n ticks,
    taken out as the smelt will burn it; else what is held is taken and the rest is planned from
-   the first of fuel-sources that can be done, or :stuck."
+   the first of fuel-sources that can be done (planks first when held logs make them,
+   wood-covers?), or :stuck."
   [world table counts n path]
   (let [[counts left] (burn counts n)]
     (if (<= left 0)
@@ -261,7 +272,7 @@
                   (let [[c a]
                         (resolve-item-need world table counts k (long (math/ceil (/ left b))) path)]
                     (when (not= a :stuck) [c a])))
-                fuel-sources)
+                (cond-> fuel-sources (wood-covers? counts left) reverse))
           [counts :stuck]))))
 
 (defn resolve-need

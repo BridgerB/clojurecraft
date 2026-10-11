@@ -196,7 +196,15 @@
         "two planks burn 600 ticks, the 400 two ingots need")
     (is (= :craft/oak_planks (row {:raw_iron 2 :oak_planks 1 :oak_log 1}))
         "one plank is short: the log becomes planks to burn")
-    (is (= :gather-log (row {:raw_iron 2})) "nothing to burn: wood, until coal can be mined"))
+    (is (= :gather-log (row {:raw_iron 2})) "nothing to burn: wood, until coal can be mined")
+    (is (= :craft/oak_planks (row {:raw_iron 2 :oak_log 1 :stone_pickaxe 1}))
+        "a held log burns before coal is mined for")
+    (is (= :mine-coal
+           (:goal/id (make/next-row
+                      (with-furnace (world-holding {:raw_iron 9 :oak_log 1 :stone_pickaxe 1} false))
+                      (ingots 9)
+                      plan/goals)))
+        "nine ingots need more than a log's four planks: coal"))
   (testing "fuel is netted after the row's other needs and the target's earlier provides"
     (is (= [{:coal 0 :oak_planks 1} 0] (make/burn {:coal 1 :oak_planks 1} 1600)) "coal first")
     (is (= [{:oak_planks 0 :stick 1} 0] (make/burn {:oak_planks 2 :stick 1} 500))

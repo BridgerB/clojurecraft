@@ -133,12 +133,12 @@
  {:goal/id :mine-coal
   :goal/priority 10
   :goal/doc
-  "dig the nearest exposed coal ore with any pickaxe, or cut stairs down toward it (coal is common down to y 0)"
+  "dig the nearest exposed coal ore with any pickaxe, or cut stairs down toward it, no deeper than y 40 (the game makes coal densest high up, around y 96, and none below y 0)"
   :goal/holds {:tag/pickaxes 1}
   :goal/provides {:item/coal 1}
   :goal/act :mine
   :goal/blocks [:coal_ore :deepslate_coal_ore]
-  :goal/depth 0
+  :goal/depth 40
   :goal/done? :provided?}
  {:goal/id :mine-iron
   :goal/priority 10

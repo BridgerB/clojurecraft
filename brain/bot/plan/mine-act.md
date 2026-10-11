@@ -43,7 +43,7 @@ A mining row is data: `:goal/act :mine`, the blocks it digs (`:goal/blocks`) and
 | Row | Blocks | Holds | Provides | Depth |
 |---|---|---|---|---|
 | `:mine-stone` | stone | a wooden pickaxe | cobblestone | none |
-| `:mine-coal` | coal ore, deepslate coal ore | any pickaxe (`:tag/pickaxes`) | coal | 0 |
+| `:mine-coal` | coal ore, deepslate coal ore | any pickaxe (`:tag/pickaxes`) | coal | 40 |
 | `:mine-iron` | iron ore, deepslate iron ore | a stone pickaxe | raw iron | 16 |
 | `:dig-gravel` | gravel | any pickaxe, for the stairs down | gravel | 40 |
 
@@ -59,7 +59,7 @@ Gravel's loot table drops flint one time in ten, else the gravel itself. The `:f
 
 ## Gotchas
 - **A tunnel shows its head and its ceiling too.** Until a block at the head or overhead counted, a two-high tunnel showed ore only in the walls at its feet: batch iron-a2 run 4 tunnelled over a hundred blocks at y 16 without seeing an iron ore (`a-tunnel-shows-ore-at-the-head-and-overhead`).
-- The depths are where the game makes each ore densest (iron peaks at y 16; coal runs down to y 0): where a tunnel is cut. Iron's went 16, then 0 (the second live run waited at 16 with the only iron in sight out of reach), then back to 16 when tunnels came, since a tunnel at the peak shows the most.
+- The depths are where the game makes each ore densest (iron peaks at y 16; coal is densest high up, around y 96, and absent below y 0, so its stairs stop at 40: at 0, the twelfth live run tunnelled thirteen minutes in deepslate for coal it never found): where a tunnel is cut. Iron's went 16, then 0 (the second live run waited at 16 with the only iron in sight out of reach), then back to 16 when tunnels came, since a tunnel at the peak shows the most.
 - `:mine-stone` holds a wooden pickaxe by item, not by tag, as it always has: a bot that has only a stone pickaxe plans a wooden one before more cobblestone.
 - Before rows named their blocks, the chain was tagged `:intent/for :stone` and the walk keyed its arrival off that; it is now the row's id and `:intent/pickup?`.
 
