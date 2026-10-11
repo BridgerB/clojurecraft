@@ -92,3 +92,16 @@
           [x _ _] (scoop/hunt-target w)]
       (is (<= 8 x) "the low ground to the west is behind the bot: the hunt never goes back west")))
   (is (nil? (scoop/hunt-target (standing {} [8.5 8.5]))) "nothing loaded out there: no hunt"))
+
+(deftest water-the-eyes-cannot-reach-is-no-target
+  ;; live iron-kit run 3 (local landing 2360,2360): three scoops at aquifer sources with stone
+  ;; over them, beside the bot at y 23, each acked by the server and none filling the bucket
+  (is (= {:plan/wait :no-water}
+         (scoop/scoop-next (standing {[10 64 8] water [10 65 8] 1} [8.5 8.5])))
+      "a pocket under stone: no surface to look into")
+  (is (= {:plan/wait :no-water}
+         (scoop/scoop-next (standing {[10 63 8] water [9 64 8] 1 [9 65 8] 1 [9 66 8] 1} [8.5 8.5])))
+      "open to the sky, in reach, behind a wall: the ray meets the wall first")
+  (is (= {:intent/kind :scoop :intent/target [10 63 8]}
+         (scoop/scoop-next (standing {[10 63 8] water} [8.5 8.5])))
+      "the same source with the wall gone"))

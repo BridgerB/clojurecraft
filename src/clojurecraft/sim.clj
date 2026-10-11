@@ -820,12 +820,8 @@
   "The cells a ray from the player's eye (its last reported position) along look [yaw pitch]
    passes through within use-range, in order, without repeats."
   [sim look]
-  (let [[px py pz] (:sim/player-pos sim)
-        eye [px (+ py 1.62) pz]
-        dir (physics/direction look)]
-    (dedupe (for [k (range 0 (/ use-range ray-step))
-                  :let [d (* k ray-step)]]
-              (mapv #(long (math/floor (+ %1 (* d %2)))) eye dir)))))
+  (let [[px py pz] (:sim/player-pos sim)]
+    (physics/cells-along [px (+ py 1.62) pz] (physics/direction look) use-range ray-step)))
 
 (defn scooped
   "The water source a bucket used along look takes: the first water source on the ray, unless a

@@ -244,6 +244,14 @@
         p (math/to-radians pitch)]
     [(- (* (math/sin y) (math/cos p))) (- (math/sin p)) (* (math/cos y) (math/cos p))]))
 
+(defn cells-along
+  "The block cells a ray from point from along unit vector dir passes through within length,
+   in order and without repeats, sampled every step."
+  [from dir length step]
+  (dedupe (for [k (range 0 (/ length step))
+                :let [d (* k step)]]
+            (mapv #(long (math/floor (+ %1 (* d %2)))) from dir))))
+
 (defn distance
   "Euclidean distance between two points."
   [[ax ay az] [bx by bz]]

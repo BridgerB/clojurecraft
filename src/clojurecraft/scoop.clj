@@ -39,6 +39,7 @@
 (def answer-ms 3000)                  ; ms a scoop waits for the water bucket before it is tried again
 (def max-tries 3)                     ; scoops sent at one source before it fails :no-scoop
 (def surface-height 0.85)             ; where a source's surface is aimed at: a source stands 8/9 of a block
+(def ray-step 0.05)                   ; the length of one step along the eyes' ray to a source
 (def hunt-distance 40)                ; blocks a water hunt walks along a bearing before looking again
 (def surface-above 16)                ; how far above the eye a hunt looks for the ground to stand on
 (def surface-below 24)                ; and how far below it
@@ -50,16 +51,46 @@
 ;; ---------------------------------------------------------------- where the water is
 
 (defn surface-source?
-  "Is pos a water source block (plain water at level 0, not a waterlogged block) with no water
-   above it?"
+  "Is pos a water source block (plain water at level 0, not a waterlogged block) open to the
+   air above it, a surface the eyes can look down into? A source under stone is a pocket in an
+   aquifer wall: the live run that scooped at three of them got nothing from any."
   [world [x y z :as pos]]
-  (and (= blocks/water-base (terrain/block-at world pos))
-       (not= :water (terrain/fluid-kind world [x (inc y) z]))))
+  (let [above (terrain/block-at world [x (inc y) z])]
+    (and (= blocks/water-base (terrain/block-at world pos))
+         (some? above)
+         (not (blocks/solid? above))
+         (nil? (blocks/fluid above)))))
+
+(defn aim-point
+  "Where the eyes look to scoop the source at [x y z]: its surface's centre. Aimed at the block's
+   centre from the bank, the ray clipped the corner of the bank block first (the sim's pond test)."
+  [[x y z]]
+  [(+ x 0.5) (+ y surface-height) (+ z 0.5)])
+
+(defn sees?
+  "Would the eyes reach the surface of the source at src: no solid or unloaded cell on the ray
+   from the eye to its aim-point before the source itself?"
+  [world src]
+  (let [eye (game/eye world)
+        aim (aim-point src)
+        d (physics/distance eye aim)
+        dir (mapv #(/ (- %2 %1) d) eye aim)]
+    (every? #(some-> (terrain/block-at world %)
+                     blocks/solid?
+                     not)
+            (take-while #(not= src %) (physics/cells-along eye dir d ray-step)))))
+
+(defn in-reach?
+  "Is src within the eyes' reach, eye to centre?"
+  [world src]
+  (<= (physics/distance (game/eye world) (physics/centre src)) intent/reach))
 
 (defn nearest-source
   "The nearest surface water source in the loaded terrain within search-radius of the eye, no
-   more than memory/surface-water-below under it, not blacklisted; nil when none. Asked of the
-   terrain through the block overlay, so a source just scooped is air."
+   more than memory/surface-water-below under it, not blacklisted, and, when in reach, in
+   sight (sees?: one in reach but hidden is no target, or the walk to it would end at once);
+   nil when none. Asked of the terrain through the block overlay, so a source just scooped is
+   air."
   [world]
   (let [eye (game/eye world)
         lo (- (second eye) memory/surface-water-below)
@@ -70,7 +101,8 @@
                             (map (fn [[x y z _]] [x y z]))
                             (filter (fn [[_ y _]] (>= y lo)))
                             (remove blacklist)
-                            (filter #(surface-source? world %))))))
+                            (filter #(surface-source? world %))
+                            (remove #(and (in-reach? world %) (not (sees? world %))))))))
 
 (defn nearest-pool
   "The nearest remembered water pool within pool-radius, no deeper than surface water, not
@@ -129,8 +161,7 @@
   (let [src (nearest-source world)
         pool (when-not src (nearest-pool world))
         hunt (when-not (or src pool) (hunt-target world))]
-    (cond (and src (<= (physics/distance (game/eye world) (physics/centre src)) intent/reach))
-          {:intent/kind :scoop :intent/target src}
+    (cond (and src (in-reach? world src)) {:intent/kind :scoop :intent/target src}
           src {:intent/kind :walk :intent/target src :intent/for :scoop}
           pool {:intent/kind :walk :intent/target pool :intent/for :scoop}
           hunt {:intent/kind :walk :intent/target hunt :intent/for :water-hunt}
@@ -158,12 +189,6 @@
         (game/emit {:packet/name :use-item :hand 0 :sequence seq :y-rot yaw :x-rot pitch})
         (game/emit {:packet/name :swing :hand 0})
         (intent/assoc-intent :intent/sequence seq :intent/sent-at (now world)))))
-
-(defn aim-point
-  "Where the eyes look to scoop the source at [x y z]: its surface's centre. Aimed at the block's
-   centre from the bank, the ray clipped the corner of the bank block first (the sim's pond test)."
-  [[x y z]]
-  [(+ x 0.5) (+ y surface-height) (+ z 0.5)])
 
 (defmethod scoop-stage :aim
   [world {:intent/keys [target since still] :or {still 0}}]
