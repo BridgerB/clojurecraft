@@ -258,11 +258,13 @@
 
 (defn entries
   "Where the bot could walk into the water of chunk key: [bank water] pairs, the bank a cell
-   the feet can stand in beside a surface source of the column, nearest the feet first."
-  [world key feet]
+   the feet can stand in beside a surface source of the column no more than wade-below under
+   the feet (cave water under a beach is not the sea: gym shore-w2 runs 1, 3, 5, 7), nearest
+   the feet first."
+  [world key [_ fy _ :as feet]]
   (let [column (get-in world [:world/chunks key])
         sources (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)
-                      :when (water-source? world [x y z])]
+                      :when (and (>= y (- fy wade-below)) (water-source? world [x y z]))]
                   [x y z])]
     (->> (for [[x y z :as water] sources
                [dx _ dz] path/around
@@ -328,7 +330,11 @@
   (boolean (some #(= :water (:trap/kind %)) (:world/traps world))))
 
 (defmethod plan/next-intent :wade [world _ _]
-  ;; a wade needs a way into water it remembers; with none it waits, as a gather with no tree does
-  (if (entry world (stairs/feet world))
-    {:intent/kind :wade}
-    {:plan/wait :no-water}))
+  ;; already in the water (a landing in the sea): wait, the trap and the escape are a second
+  ;; away, and a wade that fails three routes first would end the plan (gym shore-w2 runs 6, 9);
+  ;; otherwise a wade needs a way into water it remembers, and with none it waits, as a gather
+  ;; with no tree does
+  (cond
+    (:player/in-water? world) {:plan/wait :in-water}
+    (entry world (stairs/feet world)) {:intent/kind :wade}
+    :else {:plan/wait :no-water}))

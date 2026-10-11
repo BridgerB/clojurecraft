@@ -54,7 +54,7 @@
       :open-container (some? (memory/remembered w (:intent/target i)))
       :stairs-down (pos? (get counts :wooden_pickaxe 0))         ; down to stone, with nothing remembered: only with a pickaxe
       :wade (some? (swim/entry w (stairs/feet w)))             ; into water the bot remembers, from a bank it can stand on
-      nil (contains? #{:no-log :no-water} (:plan/wait i))       ; gathering with no tree known, wading with no water: wait
+      nil (contains? #{:no-log :no-water :in-water} (:plan/wait i))   ; gathering with no tree known, wading with no water or from inside it: wait
       false)))
 
 (deftest the-planner-only-picks-executable-intents
