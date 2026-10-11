@@ -297,13 +297,19 @@
     [(+ px (* wade-beyond dx)) (+ wy 0.5) (+ pz (* wade-beyond dz))]))
 
 (defmethod intent/run :wade
-  [world {:intent/keys [target water started child]} event]
+  [world {:intent/keys [target water started child wet?]} event]
   (let [tick (:time/tick world)
         started (or started tick)
-        world (update world :plan/intent assoc :intent/started started)]
+        wet? (or wet? (boolean (:player/in-water? world)))
+        world (update world :plan/intent assoc :intent/started started :intent/wet? wet?)]
     (cond
       (> (- tick started) wade-timeout-ticks)
       (-> world (assoc :player/controls {}) (intent/fail :no-water))
+
+      ;; was in the water and walked out the far side on land: a puddle, not a pool (gym
+      ;; shore-w4 run 9); the bank is blacklisted by the failure and the next entry is tried
+      (and wet? (not (:player/in-water? world)) (:player/on-ground? world) (nil? child))
+      (-> world (assoc :player/controls {}) (intent/fail :shallow))
 
       (nil? target)
       (if-let [[bank w] (entry world (stairs/feet world))]
@@ -322,20 +328,20 @@
       child
       (stairs/run-child world event)
 
-      ;; on the bank: straight in and on past the entry with jump off, sinking as it deepens;
-      ;; the planner's trap takes over
+      ;; on the bank: straight in and on past the entry, jumping only when blocked (a seabed
+      ;; step, shore-w4 runs 1 and 6), sinking as it deepens; the planner's trap takes over
       :else
-      (assoc world :player/controls (assoc (intent/toward world (beyond target water (:player/pos world)) 0.0) :control/jump? false)))))
+      (assoc world :player/controls (intent/toward world (beyond target water (:player/pos world)) 0.0)))))
 
 (defmethod plan/done-by :escaped-water? [world _]
   (boolean (some #(= :water (:trap/kind %)) (:world/traps world))))
 
 (defmethod plan/next-intent :wade [world _ _]
-  ;; already in the water (a landing in the sea): wait, the trap and the escape are a second
+  ;; already under the water (a landing in the sea): wait, the trap and the escape are a second
   ;; away, and a wade that fails three routes first would end the plan (gym shore-w2 runs 6, 9);
   ;; otherwise a wade needs a way into water it remembers, and with none it waits, as a gather
   ;; with no tree does
   (cond
-    (:player/in-water? world) {:plan/wait :in-water}
+    (:player/eye-in-water? world) {:plan/wait :in-water}
     (entry world (stairs/feet world)) {:intent/kind :wade}
     :else {:plan/wait :no-water}))

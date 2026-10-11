@@ -4,13 +4,20 @@
             [clojurecraft.game :as game]
             [clojurecraft.spec]))
 
-(defn instrumented
-  "clojure.test fixture: instrument the reducers (the bot's and the server model's) and every
-   function with a stated selection (spec/selected) for the duration of the namespace."
-  [f]
+(defn instrument!
+  "Instrument the reducers (the bot's and the server model's) and every function with a stated
+   selection (spec/selected). Idempotent, and never undone: namespaces run side by side, so an
+   unstrument at one namespace's end would strip the checks from another mid-test."
+  []
   (stest/instrument (into [`game/step `clojurecraft.plan/step `clojurecraft.intent/run `clojurecraft.sim/step]
-                          clojurecraft.spec/selected))
-  (try (f) (finally (stest/unstrument))))
+                          clojurecraft.spec/selected)))
+
+(defn instrumented
+  "clojure.test fixture: the reducers and selections instrumented for the namespace (and after
+   it; see instrument!)."
+  [f]
+  (instrument!)
+  (f))
 
 (def opts {:host "h" :port 1 :name "Clj_test"})
 

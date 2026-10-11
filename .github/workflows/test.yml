@@ -1,5 +1,10 @@
 name: test
 
+# The suite on every push, spread over the runners: one job runs every test but the forest
+# property, all namespaces and vars in parallel on the runner's cores (clojurecraft.runner,
+# eftest); four more each run a quarter of the 2,000 generated forests with their own seed.
+# The serial suite on one runner took nine minutes, most of it the sim namespace.
+
 on:
   push:
   workflow_dispatch:
@@ -11,7 +16,9 @@ concurrency:
 jobs:
   unit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 15
+    env:
+      FOREST_TRIALS: '0'               # the forests job runs them
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -32,6 +39,35 @@ jobs:
         run: clojure -M:test
       - name: Brain checker
         run: clojure -M:brain
+
+  forests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      FOREST_TRIALS: '500'
+      FOREST_SEED: ${{ github.run_id }}${{ matrix.shard }}   # a fresh seed every push, printed on failure so it replays
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clj-${{ hashFiles('deps.edn') }}
+      - name: 500 generated forests
+        run: clojure -M:test -v clojurecraft.sim-test/the-wood-goal-holds-in-generated-forests
 
   workflows:
     # A workflow GitHub cannot parse runs no jobs and says little; lint every one on push.
