@@ -326,6 +326,8 @@
 (s/def :intent/dir (s/tuple int? int?))
 (s/def :intent/turns nat-int?)
 (s/def :intent/cells (s/coll-of ::block-pos :kind vector? :count 3))
+(s/def :intent/level-cells (s/coll-of ::block-pos :kind vector? :count 2))
+(s/def :intent/level-steps pos-int?)
 (s/def :intent/child (s/keys :req [:intent/kind]))
 (s/def :intent/started-y number?)
 (s/def :intent/started-tick int?)

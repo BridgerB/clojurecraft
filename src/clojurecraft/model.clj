@@ -180,6 +180,12 @@
     "stairs-down, after a refusal"]
    [:intent/cells "the three cells the current stair opens, top first"
     "stairs-down, while a stair is cut"]
+   [:intent/level-cells
+    "the two cells a level step opens, head then feet, when every stair down was refused"
+    "stairs-down, during a level step"]
+   [:intent/level-steps
+    "level steps this staircase has taken; past stairs/max-level-steps it fails :boxed"
+    "stairs-down, after a level step"]
    [:intent/child
     "the child intent run in the intent's place by its own executor (stairs: the :dig cutting one cell; redig: the place, dig or collect it is on)"
     "stairs-down, while digging; redig"]

@@ -684,9 +684,31 @@
     (is (not= [1 0] (:intent/dir (:plan/intent w))) "it turned away from the water")
     (is (not (contains? (:sim/broken sim) [9 75 8])) "the cell beside the water was never dug")))
 
+(deftest water-under-every-stair-is-stepped-around
+  ;; live iron-kit run 5 (local landing 3024,2360): an underground lake lay under the floor of
+  ;; every stair the bot could cut, and the staircase failed :boxed three times in a moment. A
+  ;; level step along a heading that allows one, then stairs again from there
+  (let [blocks (reduce (fn [b [x z]] (assoc b [x 74 z] blocks/water-base))
+                       deep-stone
+                       [[9 8] [7 8] [8 9] [8 7]]) ; the floor under each first stair's new feet
+        [w sim] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 74 60000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns
+                              :intent/level-steps])))
+    (is (<= (second (:player/pos w)) 74.5) "two stairs down, past the water")
+    (is (= 1 (:intent/level-steps (:plan/intent w))) "one level step around it")
+    (is (not-any? #(contains? (:sim/broken sim) %) [[9 75 8] [7 75 8] [8 75 9] [8 75 7]])
+        "no stair was cut over the water")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest boxed-in-by-lava-on-every-side-fails-boxed
+  ;; lava under every first stair, and beside the feet on all four sides, so no level step is
+  ;; allowed either (lava under the stairs alone is now stepped around)
   (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
-        blocks (reduce (fn [b [x z]] (assoc b [x 74 z] lava)) deep-stone [[9 8] [7 8] [8 9] [8 7]])
+        blocks (reduce (fn [b [x z]] (assoc b [x 74 z] lava [x 76 z] lava))
+                       deep-stone
+                       [[9 8] [7 8] [8 9] [8 7]])
         [w sim] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 70 60000)]
     (is (= :failed (:intent/status (:plan/intent w))))
     (is (= :boxed (:intent/reason (:plan/intent w))))
