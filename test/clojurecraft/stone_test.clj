@@ -53,3 +53,24 @@
   (testing "stone has no depth: always down"
     (is (= {:intent/kind :stairs-down :intent/to-y -40}
            (stone/mine-next (standing -34 :wooden_pickaxe) (row :mine-stone))))))
+
+(def sealed-ore
+  "Iron ore buried in the floor at [8 61 8], with a two-cell pocket beside it to stand in
+   ([9 61 8] and [9 62 8]) and stone all round: exposed, and no route from the surface reaches
+   it, as the live run's ore down in a cave. Another iron ore stands in the open at
+   [14 64 14], farther off."
+  {[8 61 8] (blocks/default-state :iron_ore)
+   [9 61 8] blocks/air
+   [9 62 8] blocks/air
+   [14 64 14] (blocks/default-state :iron_ore)})
+
+(deftest an-ore-no-route-reaches-is-passed-over
+  ;; live iron-kit run 4: three walks to iron in an old excavation below, each failing :no-path
+  ;; at once, and the third ended the plan
+  (let [w (assoc (standing 64 :stone_pickaxe) :world/chunks {[0 0] (world/column sealed-ore)})]
+    (is (= [8 61 8] (first (stone/exposed-of-states w (stone/states-of-row (row :mine-iron)))))
+        "the sealed ore is the nearest exposed one")
+    (is (=
+         {:intent/kind :walk :intent/target [14 64 14] :intent/for :mine-iron :intent/pickup? true}
+         (stone/mine-next w (row :mine-iron)))
+        "the open one, farther, is the one walked to")))

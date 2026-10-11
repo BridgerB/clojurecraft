@@ -85,37 +85,36 @@
   [world src]
   (<= (physics/distance (game/eye world) (physics/centre src)) intent/reach))
 
-(defn nearest-source
-  "The nearest surface water source in the loaded terrain within search-radius of the eye, no
-   more than memory/surface-water-below under it, not blacklisted, and, when in reach, in
-   sight (sees?: one in reach but hidden is no target, or the walk to it would end at once);
-   nil when none. Asked of the terrain through the block overlay, so a source just scooped is
-   air."
+(defn sources
+  "The surface water sources in the loaded terrain within search-radius of the eye, no more than
+   memory/surface-water-below under it, not blacklisted, and, when in reach, in sight (sees?:
+   one in reach but hidden is no target, or the walk to it would end at once), nearest first.
+   Asked of the terrain through the block overlay, so a source just scooped is air."
   [world]
   (let [eye (game/eye world)
         lo (- (second eye) memory/surface-water-below)
         blacklist (:plan/blacklist world #{})]
-    (memory/nearest-of eye
-                       search-radius
-                       (->> (chunk/find-blocks (stone/near-chunks world) #{blocks/water-base})
-                            (map (fn [[x y z _]] [x y z]))
-                            (filter (fn [[_ y _]] (>= y lo)))
-                            (remove blacklist)
-                            (filter #(surface-source? world %))
-                            (remove #(and (in-reach? world %) (not (sees? world %))))))))
+    (memory/nearest-first eye
+                          search-radius
+                          (->> (chunk/find-blocks (stone/near-chunks world) #{blocks/water-base})
+                               (map (fn [[x y z _]] [x y z]))
+                               (filter (fn [[_ y _]] (>= y lo)))
+                               (remove blacklist)
+                               (filter #(surface-source? world %))
+                               (remove #(and (in-reach? world %) (not (sees? world %))))))))
 
-(defn nearest-pool
-  "The nearest remembered water pool within pool-radius, no deeper than surface water, not
-   blacklisted; nil when none."
+(defn pools-near
+  "The remembered water pools within pool-radius, no deeper than surface water, not blacklisted,
+   nearest first."
   [world]
   (let [eye (game/eye world)
         lo (- (second eye) memory/surface-water-below)
         blacklist (:plan/blacklist world #{})]
-    (memory/nearest-of eye
-                       pool-radius
-                       (->> (vals (memory/pools world :water))
-                            (filter (fn [[_ y _]] (>= y lo)))
-                            (remove blacklist)))))
+    (memory/nearest-first eye
+                          pool-radius
+                          (->> (vals (memory/pools world :water))
+                               (filter (fn [[_ y _]] (>= y lo)))
+                               (remove blacklist)))))
 
 (defn ground
   "The highest cell of column [x z] the feet could stand in, from surface-above over the eye down
@@ -130,10 +129,10 @@
   "The eight directions a water hunt can take, as unit [dx dz]."
   (for [k (range 8) :let [a (* k (/ math/PI 4))]] [(math/cos a) (math/sin a)]))
 
-(defn hunt-target
-  "Where a water hunt walks next: the ground hunt-distance along one of the eight bearings, the
-   lowest first (water lies low), leaving out any that is nearer the landing (:plan/go-at) than
-   the bot is now, so a hunt goes out and never doubles back. nil when no bearing has ground."
+(defn hunt-targets
+  "Where a water hunt may walk next: the ground hunt-distance along each of the eight bearings
+   that has some, lowest first (water lies low), leaving out any nearer the landing
+   (:plan/go-at) than the bot is now, so a hunt goes out and never doubles back."
   [world]
   (let [[px _ pz] (:player/pos world)
         ey (second (game/eye world))
@@ -150,22 +149,32 @@
                          ey)))
          (filter out?)
          (remove (:plan/blacklist world #{}))
-         (sort-by second)
-         first)))
+         (sort-by second))))
+
+(def max-candidates 3)                ; the nearest of each kind a route is planned to
+
+(defn first-walk
+  "A walk tagged for to the first of targets (the max-candidates first) a route reaches
+   (intent/routable?), or nil."
+  [world for targets]
+  (->> (take max-candidates targets)
+       (map (fn [t] {:intent/kind :walk :intent/target t :intent/for for}))
+       (filter #(intent/routable? world %))
+       first))
 
 (defn scoop-next
-  "The next step toward a filled bucket: scoop the nearest surface source in reach, walk to the
-   nearest one in sight, or to the nearest remembered pool, or hunt for one (hunt-target); else
-   wait :no-water."
+  "The next step toward a filled bucket: scoop the nearest surface source when it is in reach,
+   else walk to the nearest one in sight a route reaches, or to such a remembered pool, or hunt
+   for one (hunt-targets); else wait :no-water."
   [world]
-  (let [src (nearest-source world)
-        pool (when-not src (nearest-pool world))
-        hunt (when-not (or src pool) (hunt-target world))]
+  (let [srcs (sources world)
+        src (first srcs)]
     (cond (and src (in-reach? world src)) {:intent/kind :scoop :intent/target src}
-          src {:intent/kind :walk :intent/target src :intent/for :scoop}
-          pool {:intent/kind :walk :intent/target pool :intent/for :scoop}
-          hunt {:intent/kind :walk :intent/target hunt :intent/for :water-hunt}
-          :else {:plan/wait :no-water})))
+          :else
+          (or (first-walk world :scoop srcs)
+              (first-walk world :scoop (pools-near world))
+              (first-walk world :water-hunt (hunt-targets world))
+              {:plan/wait :no-water}))))
 
 (defmethod plan/act :scoop [world _] (scoop-next world))
 

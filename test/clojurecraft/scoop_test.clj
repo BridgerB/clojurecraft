@@ -89,9 +89,9 @@
         "the lower ground, forty blocks east"))
   (testing "never back toward the landing"
     (let [w (wide [8.5 8.5] #{[-2 0]} [-31.5 64.0 8.5])
-          [x _ _] (scoop/hunt-target w)]
+          [x _ _] (first (scoop/hunt-targets w))]
       (is (<= 8 x) "the low ground to the west is behind the bot: the hunt never goes back west")))
-  (is (nil? (scoop/hunt-target (standing {} [8.5 8.5]))) "nothing loaded out there: no hunt"))
+  (is (empty? (scoop/hunt-targets (standing {} [8.5 8.5]))) "nothing loaded out there: no hunt"))
 
 (deftest water-the-eyes-cannot-reach-is-no-target
   ;; live iron-kit run 3 (local landing 2360,2360): three scoops at aquifer sources with stone

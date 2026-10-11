@@ -250,15 +250,19 @@
   [world [x y z]]
   (and (log-at? world [x y z]) (not (log-at? world [x (dec y) z]))))
 
-(defn nearest-of
-  "Nearest of positions within radius of eye, or nil."
+(defn nearest-first
+  "The positions within radius of eye, nearest first."
   [eye radius positions]
   (->> positions
        (map (fn [p] [(physics/distance eye (physics/centre p)) p]))
        (filter (fn [[d _]] (<= d radius)))
        (sort-by first)
-       first
-       second))
+       (map second)))
+
+(defn nearest-of
+  "Nearest of positions within radius of eye, or nil."
+  [eye radius positions]
+  (first (nearest-first eye radius positions)))
 
 (defn nearest
   "Nearest position whose latest observed state satisfies pred, within radius of eye, or nil.

@@ -171,6 +171,16 @@
     {:goal/kind :pickup :goal/pos target :goal/range goal-range :goal/rise pickup-rise}
     {:goal/kind :near :goal/pos target :goal/range goal-range}))
 
+(defn routable?
+  "Is there a way to walk intent i's goal from the feet: the planner's route is :found, or
+   :partial (its budget ran out, or the goal is in a chunk not loaded), but not :none, the
+   search exhausted with the goal never reached (its waypoints then only approach it). An act
+   asks before it chooses a target, so one with no way to it is passed over, not walked at:
+   three such walks in a row, each failing :no-path, ended live runs among ore and water in
+   caves."
+  [world i]
+  (not= :none (:path/status (path/plan world (path/feet-cell (:player/pos world)) (walk-goal i)))))
+
 (defn waypoint-reached?
   "Is the player at waypoint [x y z]: within waypoint-reach of its centre on the plane, and the
    feet within half a block of its height. A climb counts only once the feet are up and a drop

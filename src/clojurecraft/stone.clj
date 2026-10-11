@@ -27,6 +27,7 @@
 (def search-height 12)                ; blocks above or below the eye searched
 (def stair-depth 6)                   ; stairs cut when no target is in sight, before looking again
 (def default-blocks [:stone])         ; a :mine row that names no blocks mines stone, as the first one did
+(def max-candidates 3)                ; the nearest targets a route is planned to before none counts as in sight
 
 (def states-of-row
   "row → every state id of the blocks it mines. Memoized: a row is a value."
@@ -73,9 +74,9 @@
           (filter (fn [[[kx kz] _]] (and (<= (abs (- kx cx)) r) (<= (abs (- kz cz)) r)))
                   (:world/chunks world)))))
 
-(defn nearest-of-states
-  "The nearest block of states within search-radius of the eye and search-height of its height
-   that the bot can stand beside, not blacklisted; nil when none. Read from the loaded terrain
+(defn exposed-of-states
+  "The blocks of states within search-radius of the eye and search-height of its height that
+   the bot can stand beside, not blacklisted, nearest first. Read from the loaded terrain
    (the live view), not memory: stone is most of the world and ore is in every chunk, and only
    what is exposed now is worth a route. The chunks are scanned as they arrived, so each
    candidate is asked again through the overlay of block updates and the bot's own breaks: a
@@ -86,14 +87,14 @@
         blacklist (:plan/blacklist world #{})
         lo (- ey search-height)
         hi (+ ey search-height)]
-    (memory/nearest-of eye
-                       search-radius
-                       (->> (chunk/find-blocks (near-chunks world) #(contains? states %))
-                            (map (fn [[x y z _]] [x y z]))
-                            (filter (fn [[_ y _]] (<= lo y hi)))
-                            (remove blacklist)
-                            (filter #(contains? states (terrain/block-at world %)))
-                            (filter #(exposed? world %))))))
+    (memory/nearest-first eye
+                          search-radius
+                          (->> (chunk/find-blocks (near-chunks world) #(contains? states %))
+                               (map (fn [[x y z _]] [x y z]))
+                               (filter (fn [[_ y _]] (<= lo y hi)))
+                               (remove blacklist)
+                               (filter #(contains? states (terrain/block-at world %)))
+                               (filter #(exposed? world %))))))
 
 (defn continue-mine
   "The next intent of the row's chain in flight, or nil: walk → dig → collect, tagged
@@ -112,18 +113,24 @@
 
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need,
-   walk to the nearest exposed one (a walk that ends where the drop lands in reach,
-   :intent/pickup?), or cut stairs down toward them; wait for the tool, or :none-in-sight at
-   the row's depth."
+   walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
+   ends where the drop lands in reach, :intent/pickup?), or cut stairs down toward them; wait
+   for the tool, or :none-in-sight at the row's depth."
   [world row]
   (or (continue-mine world row)
       (let [missing (tool-missing world row)
-            target (when-not missing (nearest-of-states world (states-of-row row)))]
-        (cond
-          missing {:plan/wait missing}
-          target
-          {:intent/kind :walk :intent/target target :intent/for (:goal/id row) :intent/pickup? true}
-          :else (or (stairs world row) {:plan/wait :none-in-sight})))))
+            walk-to
+            (fn [t]
+              {:intent/kind :walk :intent/target t :intent/for (:goal/id row) :intent/pickup? true})
+            walk (when-not missing
+                   (->> (exposed-of-states world (states-of-row row))
+                        (take max-candidates)
+                        (map walk-to)
+                        (filter #(intent/routable? world %))
+                        first))]
+        (cond missing {:plan/wait missing}
+              walk walk
+              :else (or (stairs world row) {:plan/wait :none-in-sight})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
 
