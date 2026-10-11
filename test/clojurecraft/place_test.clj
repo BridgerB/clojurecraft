@@ -93,3 +93,14 @@
                     {:event/kind :tick :event/now 100 :event/rand 0.5}])]
         (is (intent/done? (:plan/intent w)))
         (is (= memory/crafting-table (memory/remembered w [7 64 5])) "remembered")))))
+
+(deftest a-niche-is-cut-in-the-side-wall-not-ahead
+  ;; batch iron-a2 run 1: at the end of a tunnel east of its landing the bot dug its niche in the
+  ;; wall ahead, put the table there, and the tunnel went on through it
+  (let [rock (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 2 9) y [64 65]] [[x y 8] 0])))
+        w (assoc (standing [8.5 64.0 8.5])
+                 :world/chunks {[0 0] (world/column rock)}
+                 :plan/go-at [2.5 64.0 8.0])]
+    (is (not= [9 64 8] (place/niche w)) "not the wall ahead, away from the landing")
+    (is (#{[8 64 9] [8 64 7]} (place/niche w)) "a side wall")))

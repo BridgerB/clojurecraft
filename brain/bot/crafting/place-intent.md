@@ -15,6 +15,7 @@ sourceRefs:
   - src/clojurecraft/place.clj#defn passage?
   - src/clojurecraft/place.clj#defn niche
   - test/clojurecraft/sim_test.clj#a-table-and-a-furnace-placed-in-a-staircase-never-plug-it
+  - test/clojurecraft/place_test.clj#a-niche-is-cut-in-the-side-wall-not-ahead
   - src/clojurecraft/place.clj#defn use-item-on
   - test/clojurecraft/place_test.clj#a-rejected-placement-fails-instead-of-believing
 related:
@@ -31,7 +32,7 @@ related:
 
 ## Stages
 1. **`:equip`** (`place/equip`, shared with the scoop): find the lowest player slot holding the item (none fails `:not-held`). Already the held slot → `:spot`. In the hotbar → `set-carried-item` to it, set `:player/held-slot`, `:spot`. In the main inventory → a mode-2 click on that slot with `button` = the held slot (swap into the hand), and stay in `:equip` until the answer arrives.
-2. **`:spot`**: `spot` picks `[target support]`, never a `passage?` (a cell the feet could stand in with two or more solid horizontal neighbours: a staircase or tunnel, the way the bot came). With none, `niche`: a cell beside the feet at their level, solid with solid under and over it, no fluid beside it, not a block the bot placed; it is dug with a child `:dig` (stage `:niche`), then the item is equipped again and the spot sought again. Neither: `:no-spot`. Gym batch iron-a1 run 2 put its table on the stair behind it at the bottom of its staircase, then found no spot for the furnace (`a-table-and-a-furnace-placed-in-a-staircase-never-plug-it`).
+2. **`:spot`**: `spot` picks `[target support]`, never a `passage?` (a cell the feet could stand in with two or more solid horizontal neighbours: a staircase or tunnel, the way the bot came). With none, `niche`: a cell beside the feet at their level, solid with solid under and over it, no fluid beside it, not a block the bot placed, the one nearest the landing first (a side wall, never the wall ahead where a tunnel goes on: batch iron-a2 run 1 put its table there and its tunnel dug through it, `a-niche-is-cut-in-the-side-wall-not-ahead`); it is dug with a child `:dig` (stage `:niche`), then the item is equipped again and the spot sought again. Neither: `:no-spot`. Gym batch iron-a1 run 2 put its table on the stair behind it at the bottom of its staircase, then found no spot for the furnace (`a-table-and-a-furnace-placed-in-a-staircase-never-plug-it`).
 3. **`:settle`**: look at the target's centre; after 3 still ticks and 300 ms, send `use-item-on` against the **support** block, face 1 (top), cursor `[0.5 1.0 0.5]`, with the next `:bot/sequence`, plus a swing; → `:sent`.
 4. **`:sent`**: done when `terrain/block-at` at the target is a state of the item's block, by name (the server's `block-update` wrote it; a furnace's state depends on which way the server faced it). Fails `:rejected` once `:stats/last-ack` has reached our sequence and 500 ms have passed without the block. Fails `:no-answer` after 3000 ms.
 

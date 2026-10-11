@@ -152,10 +152,17 @@
   "A cell beside the feet at their level that, dug out, is a spot no way runs through: solid,
    with solid under and over it, no fluid beside it (the dig would refuse it), neither a block
    that is never dug nor one the bot placed (a table in the last niche); nil when none. Where a
-   staircase has no spot, the wall gives one."
+   staircase has no spot, the wall gives one: the side nearest the landing (:plan/go-at), never
+   the wall ahead, where the way goes on (batch iron-a2 run 1 put its table there, and its
+   tunnel dug through it)."
   [world]
-  (let [[fx fy fz] (intent/feet world)]
-    (first (for [[dx dz] sides
+  (let [[fx fy fz] (intent/feet world)
+        home (:plan/go-at world)]
+    (first (for [[dx dz] (cond->> sides
+                           home
+                           (sort-by (fn [[dx dz]]
+                                      (physics/horizontal-distance [(+ fx dx 0.5) 0 (+ fz dz 0.5)]
+                                                                   home))))
                  :let [c [(+ fx dx) fy (+ fz dz)]]
                  :when (and (solid-at? world c)
                             (solid-at? world (update c 1 dec))
