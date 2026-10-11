@@ -63,70 +63,86 @@
                           blocks/solid?)
                  cells)))
 
-(defmethod intent/run :stairs-down
-  [world
-   {:intent/keys [to-y dir turns stage child cells started-y started-tick]
-    :or {turns 0 stage :plan}} event]
-  (let [tick (:time/tick world)
-        y-now (second (:player/pos world))]
-    (cond (<= (second (intent/feet world)) to-y)
+(defn boxed?
+  "Has the staircase turned as often as it may: one more refusal fails it :boxed."
+  [turns]
+  (>= (inc turns) max-turns))
+
+(defn turned
+  "The staircase a quarter turn from dir, the turn counted, and why said."
+  [world dir turns why]
+  (-> world
+      (intent/assoc-intent :intent/dir (turn dir) :intent/turns (inc turns))
+      (game/say why)))
+
+(defn box
+  "Fail the staircase :boxed: every heading was refused."
+  [world]
+  (-> world
+      (assoc :player/controls {})
+      (intent/fail :boxed)))
+
+(defmulti stairs-stage
+  "Advance a :stairs-down intent one tick in its :intent/stage: :plan (choose a safe stair or
+   turn), :open (dig its cells, one child :dig at a time) or :step (walk down onto it)."
+  {:arglists '([world intent event])}
+  (fn [_world i _event] (:intent/stage i :plan)))
+
+(defmethod stairs-stage :plan
+  [world {:intent/keys [dir turns] :or {turns 0}} _]
+  (let [dir (or dir (first directions))
+        cells (stair-cells (intent/feet world) dir)]
+    (cond (safe? world cells)
+          (intent/assoc-intent world
+                               :intent/dir dir
+                               :intent/cells cells
+                               :intent/stage :open
+                               :intent/started-y (second (:player/pos world))
+                               :intent/started-tick (:time/tick world))
+          (boxed? turns) (box world)
+          :else (turned world dir turns (str "stairs: refused toward " dir ", turning")))))
+
+(defmethod stairs-stage :open
+  [world {:intent/keys [dir turns child cells] :or {turns 0}} event]
+  (cond
+    (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
+    (and child (= :needs-tool (:intent/reason child))) ; ore the pickaxe cannot drop: this way is refused, turn
+    (if (boxed? turns)
+      (box world)
+      (-> world
+          (turned dir turns (str "stairs: " (:intent/target child) " needs a better tool, turning"))
+          (intent/assoc-intent :intent/stage :plan)
+          (intent/dissoc-intent :intent/child :intent/cells)))
+    (and child (intent/failed? child))
+    (-> world
+        (assoc :player/controls {})
+        (intent/fail (:intent/reason child)))
+    child (intent/run-child world event)
+    (next-to-open world cells)
+    (intent/run-child
+     (intent/assoc-intent world :intent/child (intent/child-dig (next-to-open world cells)))
+     event)
+    :else (intent/assoc-intent world :intent/stage :step :intent/started-tick (:time/tick world))))
+
+(defmethod stairs-stage :step
+  [world {:intent/keys [cells started-y started-tick]} _]
+  (let [[_ _ [fx fy fz]] cells
+        target [(+ fx 0.5) (double fy) (+ fz 0.5)]]
+    (cond (<= (second (:player/pos world)) (- started-y 0.5)) ; the feet went down: the stair is cut and taken
           (-> world
               (assoc :player/controls {})
-              intent/done)
-          (= stage :plan)
-          (let [dir (or dir (first directions))
-                cells (stair-cells (intent/feet world) dir)]
-            (cond (safe? world cells)
-                  (intent/assoc-intent world
-                                       :intent/dir dir
-                                       :intent/cells cells
-                                       :intent/stage :open
-                                       :intent/started-y y-now
-                                       :intent/started-tick tick)
-                  (>= (inc turns) max-turns)
-                  (-> world
-                      (assoc :player/controls {})
-                      (intent/fail :boxed))
-                  :else
-                  (-> world
-                      (intent/assoc-intent :intent/dir (turn dir) :intent/turns (inc turns))
-                      (game/say (str "stairs: refused toward " dir ", turning")))))
-          (= stage :open)
-          (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
-                (and child (= :needs-tool (:intent/reason child))) ; ore the pickaxe cannot drop: this way is refused, turn
-                (if (>= (inc turns) max-turns)
-                  (-> world
-                      (assoc :player/controls {})
-                      (intent/fail :boxed))
-                  (-> world
-                      (intent/assoc-intent :intent/dir (turn dir)
-                                           :intent/turns (inc turns)
-                                           :intent/stage :plan)
-                      (intent/dissoc-intent :intent/child :intent/cells)
-                      (game/say
-                       (str "stairs: " (:intent/target child) " needs a better tool, turning"))))
-                (and child (intent/failed? child))
-                (-> world
-                    (assoc :player/controls {})
-                    (intent/fail (:intent/reason child)))
-                child (intent/run-child world event)
-                (next-to-open world cells)
-                (intent/run-child (intent/assoc-intent world
-                                                       :intent/child
-                                                       (intent/child-dig (next-to-open world
-                                                                                       cells)))
-                                  event)
-                :else (intent/assoc-intent world :intent/stage :step :intent/started-tick tick))
-          (= stage :step)
-          (let [[_ _ [fx fy fz]] cells
-                target [(+ fx 0.5) (double fy) (+ fz 0.5)]]
-            (cond (<= y-now (- started-y 0.5)) ; the feet went down: the stair is cut and taken
-                  (-> world
-                      (assoc :player/controls {})
-                      (intent/assoc-intent :intent/stage :plan)
-                      (intent/dissoc-intent :intent/child :intent/cells))
-                  (> (- tick started-tick) step-timeout-ticks)
-                  (-> world
-                      (assoc :player/controls {})
-                      (intent/fail :stair-not-taken))
-                  :else (assoc world :player/controls (intent/toward world target 0.0)))))))
+              (intent/assoc-intent :intent/stage :plan)
+              (intent/dissoc-intent :intent/child :intent/cells))
+          (> (- (:time/tick world) started-tick) step-timeout-ticks)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :stair-not-taken))
+          :else (assoc world :player/controls (intent/toward world target 0.0)))))
+
+(defmethod intent/run :stairs-down
+  [world {:intent/keys [to-y] :as i} event]
+  (if (<= (second (intent/feet world)) to-y)
+    (-> world
+        (assoc :player/controls {})
+        intent/done)
+    (stairs-stage world i event)))

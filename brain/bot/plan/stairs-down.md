@@ -15,6 +15,7 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn feet
   - src/clojurecraft/stairs.clj#def max-turns
   - src/clojurecraft/stairs.clj#defmethod intent/run :stairs-down
+  - src/clojurecraft/stairs.clj#defmulti stairs-stage
   - test/clojurecraft/sim_test.clj#a-stone-hill-is-descended-five-stairs-with-a-pickaxe
   - test/clojurecraft/sim_test.clj#boxed-in-by-lava-on-every-side-fails-boxed
 related:
@@ -37,6 +38,7 @@ related:
 - `stairs.clj`, `max-turns` 4, `step-timeout-ticks` 200.
 
 ## How it works
+Each stage is a method of `stairs-stage`; `run :stairs-down` only checks whether the feet are down far enough.
 1. `:plan`: with the current heading (`+x` first), compute the stair; `safe?` → `:open`; else turn a quarter and count; four refusals → fail `:boxed`.
 2. `:open`: while any of the three cells is solid, run a child dig of the topmost; a failed child fails the stair with its reason.
 3. `:step`: walk toward the new feet cell; done with the stair when the feet are half a block below where it began, which is the only proof the server broke what the bot asked for; 10 s without that fails `:stair-not-taken`.
