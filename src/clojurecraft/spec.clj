@@ -204,10 +204,10 @@
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
 (s/def :goal/target? boolean?)
-(s/def :goal/until string?)
+(s/def :goal/until string?)                ; the --until name that selects a target row
 (s/def :goal/always? boolean?)
 (s/def :goal/trap #{:water :lava})
-(s/def :goal/plan keyword?)                ; the --until name that selects a target row
+(s/def :goal/plan keyword?)                ; which next-intent planner the row uses (default :needs)
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
