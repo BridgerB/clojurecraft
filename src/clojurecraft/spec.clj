@@ -100,35 +100,6 @@
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
-(defn int-in? "Is x an integer in [lo, hi]?" [lo hi x] (and (int? x) (<= lo x hi)))
-
-(defn slot?
-  "A decoded slot: nil when empty, else at least {:item id :count n}."
-  [x]
-  (or (nil? x) (and (map? x) (int? (:item x)) (int? (:count x)))))
-
-(def wire-types
-  "What a value of each wire type in packet/specs must be, with the wire's own range."
-  {:bool boolean?
-   :i8 (partial int-in? -128 127)
-   :u8 (partial int-in? 0 255)
-   :i16 (partial int-in? -32768 32767)
-   :u16 (partial int-in? 0 65535)
-   :i32 (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE)
-   :u32 (partial int-in? 0 4294967295)
-   :i64 int?
-   :varint (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE)
-   :varlong int?
-   :f32 number?
-   :f64 number?
-   :string string?
-   :uuid #(or (nil? %) (uuid? %))
-   :position #(and (vector? %) (= 3 (count %)) (every? int? %))
-   :bytes bytes?
-   :rest bytes?
-   :slot slot?
-   :hashed-slot slot?})
-
 (declare fields-ok?)
 
 (defn value-ok?
@@ -137,7 +108,7 @@
   (cond (and (vector? t) (vector? (first t))) (and (map? v) (fields-ok? t v))
         (vector? t) (and (sequential? v) (every? #(value-ok? (second t) %) v))
         (empty? (str t)) false
-        :else ((wire-types t) v)))
+        :else ((:valid? (p/wire-types t)) v)))
 
 (defn fields-ok?
   "Does map m carry every field of a spec, each fitting its type? Extra keys are fine."
@@ -420,7 +391,7 @@
 (s/def ::sim-event (s/keys :req [:sim/kind] :opt [:sim/packet :sim/now]))
 (s/def :sim/phase #{:handshake :login :configuration :play})
 (s/def :sim/out (s/coll-of ::packet :kind vector?))   ; what the model says is held to the packet table
-(s/def :sim/inv (s/map-of int? slot?))
+(s/def :sim/inv (s/map-of int? p/slot?))
 (s/def :sim/state-id int?)
 (s/def :sim/held int?)
 (s/def :sim/placed map?)

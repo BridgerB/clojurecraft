@@ -12,7 +12,7 @@ sourceRefs:
   - src/clojurecraft/spec.clj#(s/fdef game/step
   - src/clojurecraft/spec.clj#def goals-valid?
   - src/clojurecraft/spec.clj#defn packet-ok?
-  - src/clojurecraft/spec.clj#def wire-types
+  - src/clojurecraft/packet.clj#def wire-types
   - test/clojurecraft/sim_test.clj#every-packet-the-bot-sends-fits-the-table
   - test/clojurecraft/fixtures.clj#defn instrumented
   - src/clojurecraft/spec.clj#(s/fdef sim/step
@@ -35,7 +35,7 @@ related:
 - **window**: `:window/state-id`, `:window/grid` (`{#{0..4} slot-item}`), `:window/cursor`, `:window/open` (`{:window/id :window/menu-type}` plus optional `:window/state-id` and `:window/slots`), `:player/held-slot` (0-8).
 - **world**: chunks, the block overlay (`{[int int int] int}`), sightings, entities.
 - **events/effects/packets**: `:event/kind` in `#{:start :packet :tick :go :closed}`, `:event/rand` a double in [0, 1], `:go/goals`, `:go/at`; `:effect/kind` in `#{:send :log}`.
-- **packets, from the table**: `::packet` is derived from `packet/specs`, so it can never drift from what the codec reads and writes. A packet whose name the table models must carry every field of one of that name's shapes (`shapes`), each fitting its wire type in range (`wire-types`: an `:i8` is -128..127, a `:varint` an int32, a `:slot` nil or `{:item :count}`); extra keys are fine. Names the table does not model (`:closed`, `:unknown`, `:decode-error`) need only the name.
+- **packets, from the table**: `::packet` is derived from `packet/specs`, so it can never drift from what the codec reads and writes. A packet whose name the table models must carry every field of one of that name's shapes (`shapes`), each fitting its wire type in range (`packet/wire-types`, the same table the codec reads and writes with: an `:i8` is -128..127, a `:varint` an int32, a `:slot` nil or `{:item :count}`); extra keys are fine. Names the table does not model (`:closed`, `:unknown`, `:decode-error`) need only the name.
 - **plan**: intents (`:intent/kind` required; status, target, recipe optional; `:intent/window` in `#{:inventory :table}`, `:intent/item`), `:plan/status`, `:plan/blacklist`, `:plan/goals`, and goal rows (`::goal` requires `:goal/id :goal/priority :goal/provides :goal/done?`; needs, act, target? optional; need keys are keywords or item sets, amounts a count or `:near`).
 - `::world` requires only `:bot/phase :bot/effects :time/now :time/tick`; everything else is optional, matching "absent, never nil-filled".
 

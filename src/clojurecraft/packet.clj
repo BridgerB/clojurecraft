@@ -175,6 +175,52 @@
             removed (b/read-varint buf)]
         (cond-> {:item item :count n} (pos? (+ added removed)) (assoc :components? true))))))
 
+(defn int-in? "Is x an integer in [lo, hi]?" [lo hi x] (and (int? x) (<= lo x hi)))
+
+(defn slot?
+  "A decoded slot: nil when empty, else at least {:item id :count n}."
+  [x]
+  (or (nil? x) (and (map? x) (int? (:item x)) (int? (:count x)))))
+
+(def wire-types
+  "Every primitive wire type the specs use: how to read one from a buffer, how to write one to a
+   stream, and what a value of it must be (with the wire's own range). :slot is read-only; a
+   click writes :hashed-slot. One table, so the codec and the packet spec cannot disagree."
+  {:bool {:read b/read-bool :write b/write-bool :valid? boolean?}
+   :i8 {:read b/read-i8 :write b/write-i8 :valid? (partial int-in? -128 127)}
+   :u8 {:read b/read-u8 :write b/write-u8 :valid? (partial int-in? 0 255)}
+   :i16 {:read b/read-i16 :write b/write-i16 :valid? (partial int-in? -32768 32767)}
+   :u16 {:read b/read-u16 :write b/write-u16 :valid? (partial int-in? 0 65535)}
+   :i32 {:read b/read-i32
+         :write b/write-i32
+         :valid? (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE)}
+   :u32 {:read b/read-u32 :write b/write-u32 :valid? (partial int-in? 0 4294967295)}
+   :i64 {:read b/read-i64 :write b/write-i64 :valid? int?}
+   :varint {:read b/read-varint
+            :write b/write-varint
+            :valid? (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE)}
+   :varlong {:read b/read-varlong :write b/write-varlong :valid? int?}
+   :f32 {:read b/read-f32 :write b/write-f32 :valid? number?}
+   :f64 {:read b/read-f64 :write b/write-f64 :valid? number?}
+   :string {:read b/read-string :write b/write-string :valid? string?}
+   :uuid {:read b/read-uuid :write b/write-uuid :valid? #(or (nil? %) (uuid? %))}
+   :position {:read b/read-position
+              :write b/write-position
+              :valid? #(and (vector? %) (= 3 (count %)) (every? int? %))}
+   :bytes {:read #(b/read-bytes % (b/read-varint %)) ; a varint length, then the bytes
+           :write (fn [out ^bytes v] (b/write-varint out (alength v)) (b/write-bytes out v))
+           :valid? bytes?}
+   :rest {:read b/read-rest :write b/write-bytes :valid? bytes?}
+   :slot {:read read-slot :valid? slot?}
+   :hashed-slot {:read read-hashed-slot :write write-hashed-slot :valid? slot?}})
+
+(defn type-fn
+  "The :read or :write function of primitive wire type t; throws for a type the table lacks
+   (or a direction it has none for, writing a :slot)."
+  [t which]
+  (or (get-in wire-types [t which])
+      (throw (ex-info "no such wire type" {:type t :direction which}))))
+
 (declare read-fields)
 
 (defn read-field
@@ -192,27 +238,7 @@
               (let [v (read-field et buf)
                     acc (conj! acc v)]
                 (if (truncating? v) (persistent! acc) (recur (inc i) acc))))))
-        :else
-        (case t
-          :bool (b/read-bool buf)
-          :i8 (b/read-i8 buf)
-          :u8 (b/read-u8 buf)
-          :i16 (b/read-i16 buf)
-          :u16 (b/read-u16 buf)
-          :i32 (b/read-i32 buf)
-          :u32 (b/read-u32 buf)
-          :i64 (b/read-i64 buf)
-          :f32 (b/read-f32 buf)
-          :f64 (b/read-f64 buf)
-          :varint (b/read-varint buf)
-          :varlong (b/read-varlong buf)
-          :string (b/read-string buf)
-          :uuid (b/read-uuid buf)
-          :position (b/read-position buf)
-          :bytes (b/read-bytes buf (b/read-varint buf))
-          :rest (b/read-rest buf)
-          :slot (read-slot buf)
-          :hashed-slot (read-hashed-slot buf))))
+        :else ((type-fn t :read) buf)))
 
 (defn read-fields
   "The struct's fields in order into a map; stops at a truncating value and marks
@@ -246,26 +272,7 @@
   [t out v]
   (cond (struct? t) (write-fields out t v)
         (vector? t) (do (b/write-varint out (count v)) (doseq [x v] (write-field (second t) out x)))
-        :else
-        (case t
-          :bool (b/write-bool out v)
-          :i8 (b/write-i8 out v)
-          :u8 (b/write-u8 out v)
-          :i16 (b/write-i16 out v)
-          :u16 (b/write-u16 out v)
-          :i32 (b/write-i32 out v)
-          :u32 (b/write-u32 out v)
-          :i64 (b/write-i64 out v)
-          :f32 (b/write-f32 out v)
-          :f64 (b/write-f64 out v)
-          :varint (b/write-varint out v)
-          :varlong (b/write-varlong out v)
-          :string (b/write-string out v)
-          :uuid (b/write-uuid out v)
-          :position (b/write-position out v)
-          :bytes (do (b/write-varint out (alength ^bytes v)) (b/write-bytes out v))
-          :rest (b/write-bytes out v)
-          :hashed-slot (write-hashed-slot out v))))
+        :else ((type-fn t :write) out v)))
 
 (defn write-fields
   "Each field of the struct from m, in spec order; throws when m lacks one."
