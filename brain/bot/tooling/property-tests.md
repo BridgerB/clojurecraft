@@ -5,8 +5,8 @@ type: reference
 tags: [bot, tooling, tests, properties]
 aliases: [props_test, test.check, generative tests, field-gen, quick-check]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 38bab1d
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - test/clojurecraft/props_test.clj#defn field-gen
   - test/clojurecraft/props_test.clj#every-keep-alive-is-answered-once
@@ -14,6 +14,8 @@ sourceRefs:
   - test/clojurecraft/props_test.clj#the-phase-only-moves-along-the-transition-table
   - test/clojurecraft/recipe_test.clj#clicks-then-match-round-trip
   - test/clojurecraft/props_test.clj#a-dig-never-finishes-before-its-deadline
+  - test/clojurecraft/props_test.clj#step-is-total-after-a-death
+  - test/clojurecraft/props_test.clj#water-over-the-eye-preempts-whatever-runs
   - test/clojurecraft/make_test.clj#the-planner-only-picks-executable-intents
 related:
   - "[[bot/tooling/_moc|Tooling]]"
@@ -39,6 +41,8 @@ related:
 | `a-dig-never-finishes-before-its-deadline` | over uneven tick gaps (1-400 ms) and both diggable kinds, a dig sends exactly one START and one FINISH, and FINISH comes no sooner than `intent/finish-delay` (and so the vanilla break time) after START |
 | `the-planner-only-picks-executable-intents` (make_test) | over generated inventories, a remembered table or none, and every target in the goal table: a done target plans nothing, and any other intent is executable from what is held and known (the essay's "never selects a goal whose needs are unmet") |
 | `the-wood-goal-holds-in-generated-forests` (sim_test) | the whole bot against the server model, in 2,000 generated forests with mounds, low canopies and varied spawns, always ends holding a log with no violation ([[server-model]]) |
+| `step-is-total-after-a-death` | a set-health of 0 followed by 0-20 arbitrary play packets never throws, leaves a valid world with no `:plan/intent` or `:plan/last`, and asked to respawn ([[death-and-respawn]]) |
+| `water-over-the-eye-preempts-whatever-runs` | for a running walk or dig to any target, one tick with the eye under water at the trap's edge yields a `:swim-out`, the old intent abandoned `:preempted`, `:plan/last` gone and the old look gone from the controls ([[water-escape]]) |
 | `clicks-then-match-round-trip` (recipe_test) | for every recipe that fits 2x2, a stock of one species per ingredient yields clicks whose right-clicked cells are exactly `placement`'s, and `match` on that grid gives the recipe's result |
 
 ## Gotchas

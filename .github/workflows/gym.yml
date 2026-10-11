@@ -10,7 +10,7 @@ on:
     inputs:
       goal:
         type: choice
-        options: [wood, table, pickaxe, cobblestone]
+        options: [wood, table, pickaxe, cobblestone, shore]
         default: wood
       runs:
         default: '6'

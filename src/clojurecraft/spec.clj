@@ -42,6 +42,28 @@
 (s/def :player/look (s/coll-of double? :kind vector? :count 2))
 (s/def :player/on-ground? boolean?)
 (s/def :player/horizontal-collision? boolean?)
+(s/def :player/fall-distance (s/double-in :min 0.0 :NaN? false :infinite? false))
+(s/def :player/in-water? boolean?)
+(s/def :player/air (s/int-in 0 301))
+(s/def :plan/wet-ticks nat-int?)
+(s/def :plan/dry-ticks nat-int?)
+(s/def :plan/trap #{:water :lava})
+(s/def :plan/trap-at (s/tuple int? int?))
+(s/def :trap/pos (s/tuple int? int?))
+(s/def :trap/kind #{:water :lava})
+(s/def :trap/at int?)
+(s/def ::trap (s/keys :req [:trap/pos :trap/kind :trap/at]))
+(s/def :world/traps (s/coll-of ::trap :kind vector?))
+(s/def :intent/bank ::block-pos)
+(s/def :intent/next-search int?)
+(s/def :intent/dig-when-down ::block-pos)
+(s/def :intent/water ::block-pos)
+(s/def :intent/wet? boolean?)
+(s/def :intent/exposes-ok? boolean?)
+(s/def :player/dead? boolean?)
+(s/def :player/in-lava? boolean?)
+(s/def :player/eye-in-water? boolean?)
+(s/def :control/sneak? boolean?)
 (s/def :player/jump-ticks int?)
 (s/def :player/loaded? boolean?)
 (s/def :player/entity-id int?)
@@ -52,7 +74,7 @@
 (s/def :control/jump? boolean?)
 (s/def :control/yaw double?)
 (s/def :control/look :player/look)
-(s/def :player/controls (s/keys :opt [:control/forward? :control/jump? :control/yaw :control/look]))
+(s/def :player/controls (s/keys :opt [:control/forward? :control/jump? :control/sneak? :control/yaw :control/look]))
 
 ;; window 0 (the player's own screen) and any open container
 (s/def ::slot-item (s/keys :req-un [::item ::count]))
@@ -163,12 +185,16 @@
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
 (s/def :goal/target? boolean?)
-(s/def :goal/until string?)                ; the --until name that selects a target row
+(s/def :goal/until string?)
+(s/def :goal/always? boolean?)
+(s/def :goal/trap #{:water :lava})
+(s/def :goal/plan keyword?)                ; the --until name that selects a target row
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
-(s/def ::goal (s/keys :req [:goal/id :goal/priority :goal/provides :goal/done?]
-                      :opt [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by]))
+(s/def ::goal (s/keys :req [:goal/id :goal/priority :goal/done?]
+                      :opt [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by
+                            :goal/always? :goal/trap :goal/plan]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
@@ -233,6 +259,10 @@
 (s/def :sight/pos ::block-pos)
 (s/def :sight/state int?)
 (s/def :sight/at int?)
+(s/def :pool/chunk (s/coll-of int? :kind vector? :count 2))
+(s/def :pool/kind #{:water :lava})
+(s/def :pool/pos ::block-pos)
+(s/def :pool/at int?)
 (s/def :stats/keep-alives nat-int?)
 (s/def :stats/teleports nat-int?)
 (s/def :stats/chunks nat-int?)
@@ -314,7 +344,7 @@
 (s/def :intention/target ::block-pos)
 (s/def :intention/recipe keyword?)
 (s/def :intention/reason some?)
-(s/def :answer/kind #{:ack :pickup})
+(s/def :answer/kind #{:ack :pickup :death})
 (s/def :answer/at int?)
 (s/def :answer/sequence int?)
 (s/def :answer/entity int?)
@@ -376,12 +406,14 @@
   (s/and map? (fn has-every-key [m] (every? #(contains? m %) ks))))
 
 (s/fdef game/eye :args (s/cat :world (requires :player/pos)))
-(s/fdef physics/step :args (s/cat :solid? fn? :world (requires :player/pos) :controls map?))
+(s/fdef physics/step :args (s/cat :solid? fn? :fluid-at (s/? fn?) :world (requires :player/pos) :controls map?))
+(s/fdef terrain/fluid-fn :args (s/cat :world (requires :world/chunks)))
 (s/fdef inventory/item-count :args (s/cat :world (requires :player/inventory) :id int?))
 (s/fdef inventory/logs-held :args (s/cat :world (requires :player/inventory)))
 (s/fdef terrain/block-at :args (s/cat :world (requires :world/chunks) :pos (s/coll-of number? :count 3)))
 (s/fdef terrain/solid-fn :args (s/cat :world (requires :world/chunks)))
 (s/fdef memory/positions-now :args (s/cat :world (requires :world/facts) :states coll?))
+(s/fdef memory/nearest-surface-water :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number?))
 (s/fdef memory/nearest-log :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number? :blacklist any?
                                         :bottom? (s/? ifn?)))
 (s/fdef make/near :args (s/cat :world (requires :player/pos :world/facts) :block keyword?))
@@ -396,7 +428,7 @@
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
-   `terrain/solid-fn `memory/positions-now `memory/nearest-log `make/near `make/decide
+   `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water `memory/nearest-log `make/near `make/decide
    `wood/gather-next `place/spot `window/view `path/plan `path/classify])
 (s/def :stats/deaths pos-int?)
 

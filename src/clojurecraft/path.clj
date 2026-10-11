@@ -211,6 +211,22 @@
   [parents node]
   (vec (reverse (take-while some? (iterate parents node)))))
 
+(def trap-cost 10.0)                  ; a move into a column where the bot was trapped costs this much more
+(def trap-ttl 600000)                 ; ms a trap keeps its cost: ten minutes
+(def trap-reach 2)                    ; cells within this of the trap's column on the plane are its
+
+(defn trap-factor
+  "The cost multiplier for entering node: trap-cost near a trap in :world/traps younger than
+   trap-ttl, else 1.0."
+  [world [x _ z]]
+  (let [now (:time/now world 0)]
+    (if (some (fn [{:trap/keys [pos at]}]
+                (let [[tx tz] pos]
+                  (and (<= (- now at) trap-ttl) (<= (abs (- x tx)) trap-reach) (<= (abs (- z tz)) trap-reach))))
+              (:world/traps world))
+      trap-cost
+      1.0)))
+
 (defn search
   "A* from start over the world toward goal, spending at most max-nodes expansions. Returns
    {:path/waypoints :path/cost :path/status}: :found when a node satisfies the goal, else
@@ -244,7 +260,7 @@
                   [best best-h] (if (< hn best-h) [node hn] [best best-h])
                   [open g parents]
                   (reduce (fn [[open g parents] {next :node cost :cost}]
-                            (let [g' (+ gn cost)]
+                            (let [g' (+ gn (* cost (trap-factor world next)))]
                               (if (and (not (closed next)) (< g' (get g next Double/MAX_VALUE)))
                                 [(conj open [(+ g' (heuristic goal next)) g' next]) (assoc g next g') (assoc parents next node)]
                                 [open g parents])))

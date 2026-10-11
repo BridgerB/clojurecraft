@@ -21,6 +21,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs]
+            [clojurecraft.swim]
             [clojurecraft.stone]
             [clojurecraft.watch :as watch]
             [clojurecraft.wood])
@@ -66,6 +67,7 @@
             :tables (get held :crafting_table 0)})
          (when-let [t (and (:player/pos world) (memory/nearest world (game/eye world) 32 memory/crafting-table?))]
            {:table/pos t})                     ; no position yet (an early end): no table to speak of
+         (when (seq (:world/traps world)) {:escaped true})   ; only once a trap was escaped, so older recordings' RESULTs are unchanged
          (when (:plan/status world) {:plan (plan/summary world)})))
 
 ;;;; I/O: the clock, stderr, the socket, the atom ;;;;

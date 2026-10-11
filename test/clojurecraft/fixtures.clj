@@ -4,19 +4,31 @@
             [clojurecraft.game :as game]
             [clojurecraft.spec]))
 
-(defn instrumented
-  "clojure.test fixture: instrument the reducers (the bot's and the server model's) and every
-   function with a stated selection (spec/selected) for the duration of the namespace."
-  [f]
+(defn instrument!
+  "Instrument the reducers (the bot's and the server model's) and every function with a stated
+   selection (spec/selected). Idempotent, and never undone: namespaces run side by side, so an
+   unstrument at one namespace's end would strip the checks from another mid-test."
+  []
   (stest/instrument (into [`game/step `clojurecraft.plan/step `clojurecraft.intent/run `clojurecraft.sim/step]
-                          clojurecraft.spec/selected))
-  (try (f) (finally (stest/unstrument))))
+                          clojurecraft.spec/selected)))
+
+(defn instrumented
+  "clojure.test fixture: the reducers and selections instrumented for the namespace (and after
+   it; see instrument!)."
+  [f]
+  (instrument!)
+  (f))
 
 (def opts {:host "h" :port 1 :name "Clj_test"})
 
 (def login-finished
   "The login-finished packet as the decoder produces it: every field its spec lists."
   {:packet/name :login-finished :uuid #uuid "00000000-0000-3000-8000-000000000000" :username "Clj_test"})
+
+(def respawn
+  "A respawn as the decoder produces it (the spec's fields, issue #5), into the overworld."
+  {:packet/name :respawn :dimension-type 0 :dimension "minecraft:overworld" :seed 0 :game-type 0
+   :previous-game-type -1 :debug? false :flat? false})
 
 (defn fold
   "Fold events through step; returns [final-world [[now effect] ...]] with effects cleared

@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, intents, walk]
 aliases: [:walk, waypoints, follow, waypoint-reached?, route-stale?, :no-path, replans, reach 4.0]
 status: verified
-lastUpdated: 2026-10-10
+lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/intent.clj#defmethod run :walk
@@ -55,7 +55,7 @@ related:
 - A walk started by the gather chain carries `:intent/for :log`, which is what lets the chain continue it into a dig ([[gather-chain]]).
 - A failed walk blacklists its target via the planner (`:no-path` and `:stuck` alike), so the next search picks another trunk ([[goals-and-intents]]).
 - The sim scenario with the only log on a plateau behind a pond ends `:stuck` at the bottom of the pond on the old walk and holding the log with no failed intent on this one.
-- Water, lava and awkward shapes are the route's business, not the walk's: the walk follows what it is given. The physics still has no fluid model ([[land-physics]]).
+- Water, lava and awkward shapes are the route's business, not the walk's: the walk follows what it is given. A walk that ends in water anyway is preempted by the escape ([[water-escape]]).
 
 ## See also
 - [[pathfinder]] - how the route is made.

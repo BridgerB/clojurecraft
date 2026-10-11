@@ -82,10 +82,16 @@
     (finally (rcon/command rc (str "forceload remove " x " " z)))))
 
 (defn answers!
-  "The landing checks run at a surface position: [[reason reply] ...]."
+  "The landing checks run at a surface position, with its column held loaded while the server
+   is asked: [[reason reply] ...]. On an unloaded column every `if block` test fails, which
+   reads as a landing with nothing wrong with it (gym shore-w2: two landings in the open sea)."
   [rc [x y z]]
-  (vec (for [[reason test] harness/checks]
-         [reason (rcon/command rc (str "execute positioned " x " " y " " z " " test))])))
+  (rcon/command rc (str "forceload add " x " " z))
+  (try
+    (harness/wait-loaded! rc x z)
+    (vec (for [[reason test] harness/checks]
+           [reason (rcon/command rc (str "execute positioned " x " " y " " z " " test))]))
+    (finally (rcon/command rc (str "forceload remove " x " " z)))))
 
 (defn landing!
   "The first fit surface near grid cell, after snapping it to the set's biome, that is not one

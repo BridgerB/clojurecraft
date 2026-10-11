@@ -29,3 +29,15 @@
   (is (blocks/log-item? (:oak_log blocks/items)))
   (is (= 134 (:oak_log blocks/items)))
   (is (= 71 blocks/item-entity-type)))
+
+(deftest fluids
+  (is (= {:fluid/kind :water :fluid/level 0} (blocks/fluid 86)) "a water source")
+  (is (= {:fluid/kind :water :fluid/level 7} (blocks/fluid 93)) "flowing water")
+  (is (= {:fluid/kind :water :fluid/level 15} (blocks/fluid 101)))
+  (is (= {:fluid/kind :lava :fluid/level 0} (blocks/fluid 102)) "a lava source")
+  (is (= {:fluid/kind :water :fluid/level 0} (blocks/fluid 27055)) "a waterlogged copper grate is a water source")
+  (is (nil? (blocks/fluid 1)) "stone")
+  (is (nil? (blocks/fluid nil)))
+  (is (blocks/source? 86))
+  (is (not (blocks/source? 93)))
+  (is (not (blocks/source? 1))))

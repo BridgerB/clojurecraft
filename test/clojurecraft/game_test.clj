@@ -96,7 +96,7 @@
 (deftest a-login-or-respawn-gives-fresh-menus
   (let [w (assoc (in-play) :window/open {:window/id 3 :window/menu-type 12 :window/slots {}}
                  :window/cursor {:item 36 :count 2} :window/grid {1 {:item 36 :count 1}})]
-    (doseq [p [{:packet/name :respawn} {:packet/name :login :entity-id 9}]]
+    (doseq [p [fx/respawn {:packet/name :login :entity-id 9}]]
       (let [[w _] (run w [(packet p)])]
         (is (nil? (:window/open w)) (str (:packet/name p)))
         (is (nil? (:window/cursor w)))

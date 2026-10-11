@@ -2,4 +2,6 @@
 ;; meet a race region (steve's lesson: spawn gets polluted). n cells, spacing blocks apart, each
 ;; snapped to the biome; pregen-r blocks are generated around each landing (13x13 = 169 chunks at
 ;; 96, within one forceload). Changing this file rebuilds the cached world.
-{:landing-sets {"A" {:center [20000 20000] :n 20 :spacing 640 :biome "#minecraft:is_forest" :pregen-r 96}}}
+{:landing-sets {"A" {:center [20000 20000] :n 20 :spacing 640 :biome "#minecraft:is_forest" :pregen-r 96}
+                ;; W: shores (issue #5), after steve's landing set W: a bank with swimmable water near it
+                "W" {:center [26000 20000] :n 20 :spacing 640 :biome "#minecraft:is_beach" :pregen-r 96}}}

@@ -68,7 +68,7 @@ dev/clojurecraft/brain.clj    the brain checker (clojure -M:brain)
 
 ```bash
 nix shell nixpkgs#jdk25 nixpkgs#clojure      # this Mac has neither on PATH
-clojure -M:test                               # unit tests, no server needed
+clojure -M:test                               # every test, namespaces and vars in parallel (eftest); -n ns, -v ns/var, -x ns
 ./local-server.sh start|stop                  # vanilla 26.1.2 on game 25571 / RCON 25581
 clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)" --name Clj_wood --until wood \
   | clojure -M:run --port 25571 --name Clj_wood --until wood --events stdin   # land in a forest, then run

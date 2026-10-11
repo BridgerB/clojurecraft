@@ -14,7 +14,14 @@
    :started|:done|:failed|:abandoned :intention/kind k :intention/at ms} plus the target, recipe
    or reason when there is one. `intention-as-of` answers what the bot was trying to do at any time t.
 
-   The server's answers to the bot's own actions are facts too: {:answer/kind :ack|:pickup
+   Water and lava are remembered as pools, one fact per chunk and fluid kind: {:pool/chunk
+   [cx cz] :pool/kind :water|:lava :pool/pos [x y z] :pool/at ms}, the highest surface source
+   nearest the chunk's centre (a real forest recording held 600,000 water cells and 65,000 at the
+   surface in 213 chunks; a fact per cell would be the stone freeze again, see watched?). A
+   pool fact is appended only when the chunk's answer changes. Where water or lava is beside
+   the body right now is the terrain's question, never memory's.
+
+   The server's answers to the bot's own actions are facts too: {:answer/kind :ack|:pickup|:death
    :answer/at ms} with the acknowledged :answer/sequence, or the picked-up :answer/entity and
    :answer/count. A broken block needs no answer fact: it is a sighting of air where it stood."
   (:require [clojurecraft.blocks :as blocks]
@@ -28,7 +35,9 @@
   {:sight/pos {:db/index true}
    :sight/state {:db/index true}
    :intention/id {:db/index true}
-   :answer/kind {:db/index true}})
+   :answer/kind {:db/index true}
+   :pool/chunk {:db/index true}
+   :pool/kind {:db/index true}})
 
 (defn empty-facts "A store with nothing seen yet." [] (d/empty-db schema))
 
@@ -112,6 +121,41 @@
   (let [db (:world/facts world)
         now (:time/now world)
         tx (keep (fn [[x y z id]] (observation db [x y z] id now)) (chunk/find-blocks {key column} watched?))]
+    (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))
+
+(defn surface-fluid?
+  "Is the fluid at [x y z] of column (the fluid map of one chunk, {[x y z] fluid}) exposed:
+   nothing of its kind directly above it?"
+  [fluids [x y z] kind]
+  (not= kind (:fluid/kind (get fluids [x (inc y) z]))))
+
+(defn pool-of
+  "The pool fact for one fluid kind in a freshly loaded column: its highest surface source,
+   nearest the chunk's centre among those, or nil when the chunk holds none. Highest first
+   because the pool under the sky is the one to walk to; cave water is the aquifer trap."
+  [[cx cz] fluids kind now]
+  (let [[mx mz] [(+ (* 16 cx) 8) (+ (* 16 cz) 8)]
+        cells (for [[[x y z :as pos] f] fluids
+                    :when (and (= kind (:fluid/kind f)) (= 0 (:fluid/level f)) (surface-fluid? fluids pos kind))]
+                [[(- y) (+ (abs (- x mx)) (abs (- z mz)))] pos])]
+    (when (seq cells)
+      {:pool/chunk [cx cz] :pool/kind kind :pool/pos (second (first (sort-by first cells))) :pool/at now})))
+
+(defn latest-pool
+  "The newest pool fact for a chunk and kind, as an entity, or nil."
+  [db key kind]
+  (let [es (d/q '[:find [?e ...] :in $ ?c ?k :where [?e :pool/chunk ?c] [?e :pool/kind ?k]] db key kind)]
+    (when (seq es) (d/entity db (apply max es)))))
+
+(defn remember-pools
+  "Append a pool fact per fluid kind the loaded column holds, when the chunk's pool changed."
+  [world key column]
+  (let [db (:world/facts world)
+        fluids (into {} (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)] [[x y z] (blocks/fluid id)]))
+        tx (for [kind [:water :lava]
+                 :let [pool (pool-of key fluids kind (:time/now world))]
+                 :when (and pool (not= (:pool/pos pool) (:pool/pos (latest-pool db key kind))))]
+             pool)]
     (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))
 
 (defn observe
@@ -198,6 +242,22 @@
               (if (= pred crafting-table?)
                 (positions-now world [crafting-table])
                 (for [[p {:block/keys [state]}] (latest world) :when (pred state)] p))))
+
+(defn pools
+  "Every chunk's latest pool of a kind: {[cx cz] [x y z]}."
+  [world kind]
+  (let [db (:world/facts world)]
+    (into {} (for [[c e] (d/q '[:find ?c (max ?e) :in $ ?k :where [?e :pool/kind ?k] [?e :pool/chunk ?c]] db kind)]
+               [c (:pool/pos (d/entity db e))]))))
+
+(def surface-water-below 5)           ; a pool deeper under the eye than this is cave water: never dive for it (steve's aquifer trap)
+
+(defn nearest-surface-water
+  "The nearest remembered water pool within radius of eye and no more than surface-water-below
+   under it, or nil: where a bucket could be filled without diving for it."
+  [world eye radius]
+  (let [ey (second eye)]
+    (nearest-of eye radius (filter (fn [[_ y _]] (>= y (- ey surface-water-below))) (vals (pools world :water))))))
 
 (defn nearest-log
   "Nearest bottom log on record within radius of eye, skipping blacklisted positions and logs

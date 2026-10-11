@@ -36,37 +36,41 @@
   "The protocol number the handshake announces, read from the server's version data."
   (:version/protocol version))
 
+(def max-air 300)                     ; a full breath, in ticks (vanilla's 15 s)
+(def air-lost-per-tick 1)             ; while the eye is under water
+(def air-gained-per-tick 4)           ; while it is not
+
 (defn init
   "The world before any event: handshake phase, no position, empty inventory, chunks and facts.
-   Attributes the bot cannot know yet (:player/pos, :player/entity-id ...) are absent."
+   Attributes the bot cannot know yet (:player/pos, :player/entity-id ...) are absent, and so
+   are the connection and the name when they are not given: the :start event carries them."
   [{:keys [host port name]}]
-  {:bot/phase :handshake
-   :bot/name name
-   :bot/uuid (b/offline-uuid name)
-   :bot/effects []
-   :bot/sequence 0
-   :conn/host host
-   :conn/port port
-   :time/now 0
-   :time/tick 0
-   :player/vel [0.0 0.0 0.0]
-   :player/look [0.0 0.0]
-   :player/on-ground? false
-   :player/horizontal-collision? false
-   :player/jump-ticks 0
-   :player/loaded? false
-   :player/controls {}
-   :player/inventory {}
-   :window/grid {}
-   :player/held-slot 0
-   :world/chunks {}
-   :world/blocks {}
-   :world/entities {}
-   :world/facts (memory/empty-facts)
-   :stats/unknown {}
-   :stats/keep-alives 0
-   :stats/teleports 0
-   :stats/chunks 0})
+  (cond-> {:bot/phase :handshake
+           :bot/effects []
+           :bot/sequence 0
+           :time/now 0
+           :time/tick 0
+           :player/vel [0.0 0.0 0.0]
+           :player/look [0.0 0.0]
+           :player/on-ground? false
+           :player/horizontal-collision? false
+           :player/jump-ticks 0
+           :player/loaded? false
+           :player/controls {}
+           :player/inventory {}
+           :window/grid {}
+           :player/held-slot 0
+           :world/chunks {}
+           :world/blocks {}
+           :world/entities {}
+           :world/facts (memory/empty-facts)
+           :stats/unknown {}
+           :stats/keep-alives 0
+           :stats/teleports 0
+           :stats/chunks 0}
+    name (assoc :bot/name name :bot/uuid (b/offline-uuid name))
+    host (assoc :conn/host host)
+    port (assoc :conn/port port)))
 
 ;; ---------------------------------------------------------------- effects
 
@@ -165,7 +169,12 @@
 (defmethod on-packet [:configuration :disconnect] [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
 
-(defmethod on-packet [:play :respawn] [w _] (inventory/fresh-menus w))
+(defmethod on-packet [:play :respawn] [w _]
+  ;; a new life: fresh menus, no entities, at rest, lungs full; the teleport that follows places it
+  (-> w
+      inventory/fresh-menus
+      (dissoc :player/dead?)
+      (assoc :world/entities {} :player/vel [0.0 0.0 0.0] :player/fall-distance 0.0 :player/air max-air)))
 
 (defmethod on-packet [:play :login] [w p]
   (-> w
@@ -184,9 +193,20 @@
 (defmethod on-packet [:play :forget-level-chunk] [w p] (update w :world/chunks dissoc (terrain/chunk-key (:pos p))))
 (defmethod on-packet [:play :block-update] [w p] (terrain/set-block w (:pos p) (:state p)))
 (defmethod on-packet [:play :section-blocks-update] [w p] (terrain/section-update w p))
+(defn die
+  "Health reached zero: the bot is dead until the server respawns it. Count the death, drop the
+   running intent and the last one (a new life plans afresh), stop moving, and ask to respawn."
+  [w]
+  (-> w
+      (assoc :player/dead? true :player/controls {})
+      (memory/remember-answer {:answer/kind :death})
+      (update :stats/deaths (fnil inc 0))
+      (dissoc :plan/intent :plan/last)
+      (emit {:packet/name :client-command :action 0})))
+
 (defmethod on-packet [:play :set-health] [w p]
   (cond-> (assoc w :player/health (:health p))
-    (and (<= (:health p) 0) (pos? (:player/health w 20))) (update :stats/deaths (fnil inc 0))))
+    (and (<= (:health p) 0) (not (:player/dead? w))) die))
 
 (defmethod on-packet [:play :container-set-content] [w {:keys [window-id state-id items carried]}]
   (let [w (cond-> w carried (assoc :window/cursor carried) (nil? carried) (dissoc :window/cursor))]
@@ -255,14 +275,25 @@
 
     :else world))
 
+(defn breathe
+  "The air estimate after one tick: down one while the eye is in water, up four otherwise,
+   within 0-300. An estimate, since the server does not send the own player's air except as
+   entity metadata; the escape goal keys off time under, never off this reaching zero."
+  [world]
+  (let [air (:player/air world max-air)]
+    (assoc world :player/air (if (:player/eye-in-water? world)
+                               (max 0 (- air air-lost-per-tick))
+                               (min max-air (+ air air-gained-per-tick))))))
+
 (defn on-tick
-  "Advance the clock; when physics-ready?, move the player under :player/controls and emit
-   the movement packet vanilla would."
+  "Advance the clock; when physics-ready?, move the player under :player/controls, breathe,
+   and emit the movement packet vanilla would. A dead player does not move."
   [world {:event/keys [now]}]
   (let [world (-> world (assoc :time/now now) (update :time/tick inc))]
-    (if (physics-ready? world)
+    (if (and (physics-ready? world) (not (:player/dead? world)))
       (let [controls (:player/controls world)]
-        (-> (physics/step (terrain/solid-fn world) world controls)
+        (-> (physics/step (terrain/solid-fn world) (terrain/fluid-fn world) world controls)
+            breathe
             (cond-> (:control/look controls) (assoc :player/look (:control/look controls)))
             movement-packets))
       world)))

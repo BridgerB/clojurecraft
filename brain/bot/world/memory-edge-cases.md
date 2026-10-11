@@ -5,8 +5,8 @@ type: reference
 tags: [bot, world, memory, gotcha]
 aliases: [sightings edge cases, watched?, seen-at 0, forgotten logs, height window]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 9c46e4b
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/memory.clj#defn watched?
   - src/clojurecraft/memory.clj#defn observe
@@ -24,7 +24,7 @@ related:
 The mechanism is in [[memory-sightings]]; this note lists the edges.
 
 ## Edges
-- **Only logs and crafting tables are watched.** `watched?` is `blocks/log?` or `crafting-table?`; `nearest` finds the closest remembered state matching any predicate (used for tables). Ores, water and lava seen in a chunk are not remembered; a block update to a non-log position not already on record is dropped.
+- **Only logs and crafting tables are watched per cell.** `watched?` is `blocks/log?` or `crafting-table?`; `nearest` finds the closest remembered state matching any predicate (used for tables). Ores seen in a chunk are not remembered; water and lava are, but as one pool fact per chunk and kind, never per cell ([[memory-sightings]]); a block update to a non-log position not already on record is dropped.
 - **Air is sticky.** Once a log position is on record, every later update there is kept, including air; nothing removes a position. A re-grown or re-placed log is picked up by the next update or chunk load.
 - **A chunk load overwrites only logs.** `remember-column` records the logs it finds and does not record air for positions on record that are no longer logs in the new data. A log broken by someone else while the chunk was unloaded stays a log in memory until a block update or the bot's own dig says otherwise.
 - **Chunk load clears the overlay, not memory.** `load-chunk` drops `:world/blocks` entries inside the chunk (the fresh column is authoritative) but sightings stay.

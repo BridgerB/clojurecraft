@@ -5,8 +5,8 @@ type: reference
 tags: [bot, plan, dig]
 aliases: [dig intent, player-action, swing cadence, finish-delay, :confirm, :rejected, :needs-tool, :tool-broke]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 56441f5
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/intent.clj#def finish-margin
   - src/clojurecraft/intent.clj#def swing-every
@@ -15,7 +15,8 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn finish-delay
   - src/clojurecraft/intent.clj#defn choose-tool
   - src/clojurecraft/intent.clj#defn penalties
-  - src/clojurecraft/intent.clj#(and (:player/on-ground? world) (< (abs vx) 0.05) (< (abs vz) 0.05))
+  - src/clojurecraft/intent.clj#defn still?
+  - src/clojurecraft/intent.clj#defn exposes-fluid?
   - src/clojurecraft/intent.clj#defmethod run :dig
   - test/clojurecraft/plan_test.clj#stone-is-dug-with-the-pickaxe-in-its-slot
   - test/clojurecraft/plan_test.clj#a-restored-block-after-finish-is-a-refused-break
@@ -29,15 +30,15 @@ related:
 
 # Dig timeline
 
-The `:dig` intent has three stages. `:settle`: look at the block, refuse at once if it is gone, out of reach or a tiered block no held tool of its kind reaches (`:needs-tool`); require three consecutive still ticks (horizontal velocity under 0.05, on ground) and 500 ms since the stage began; then choose the tool (`choose-tool`), send `set-carried-item` for its hotbar slot (0 for the hand), `player-action` status 0 (START) with the face nearest the eye, and a `swing`. `:digging`: swing every 350 ms; at `finish-at` (START + `finish-delay` of the block's own time with that tool) send `player-action` status 2 (FINISH) with the next sequence number and overlay the target as air locally. `:confirm`: up to ten ticks for the server's answer; a `block-changed-ack` for the FINISH sequence ends the dig, the block back at its START state fails it `:rejected`, and silence after ten ticks trusts the overlay.
+The `:dig` intent has three stages. `:settle`: look at the block, refuse at once if it is gone, out of reach, a tiered block no held tool of its kind reaches (`:needs-tool`), obsidian, or a block with water or lava in any of its six neighbours unless the intent says `:intent/exposes-ok?` (`:unsafe`, [[water-escape]]); require three consecutive still ticks (horizontal velocity under 0.05, on ground) and 500 ms since the stage began; then choose the tool (`choose-tool`), send `set-carried-item` for its hotbar slot (0 for the hand), `player-action` status 0 (START) with the face nearest the eye, and a `swing`. `:digging`: swing every 350 ms; at `finish-at` (START + `finish-delay` of the block's own time with that tool) send `player-action` status 2 (FINISH) with the next sequence number and overlay the target as air locally. `:confirm`: up to ten ticks for the server's answer; a `block-changed-ack` for the FINISH sequence ends the dig, the block back at its START state fails it `:rejected`, and silence after ten ticks trusts the overlay.
 
 ## Key files
 - `intent.clj`, `dig-time` - `dig/ms` for the block, the held item and the penalties in force; 3000 (a log by hand) for a block the tables do not know ([[hardness-and-tools]]).
-- `intent.clj`, `penalties` - `{:off-ground? ...}` from `:player/on-ground?`; the eyes in water is issue #5.
+- `intent.clj`, `penalties` - `{:off-ground? :eyes-in-water?}` from `:player/on-ground?` and `:player/eye-in-water?`; each divides the speed by five ([[hardness-and-tools]]).
 - `intent.clj`, `finish-delay` - `ms * 1.35 + 200`: 4250 for a log by hand, 1752 for stone with a wooden pickaxe.
 - `intent.clj`, `choose-tool` - `dig/best-tool` over the hotbar; `[0 nil]` for the hand; `:needs-tool` when the block needs a tier no held tool of its kind reaches.
 - `intent.clj`, `swing-every` 350 ms, `confirm-ticks` 10.
-- `intent.clj`, `still?` - horizontal-only stillness; see [[resting-vertical-velocity]].
+- `intent.clj`, `still?` - horizontal-only stillness, on the ground or afloat in a liquid; see [[resting-vertical-velocity]].
 - `intent.clj`, `run :dig` - the stages.
 
 ## Gotchas

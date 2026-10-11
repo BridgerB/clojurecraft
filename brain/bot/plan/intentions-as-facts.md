@@ -5,8 +5,8 @@ type: reference
 tags: [bot, plan, memory, intents]
 aliases: [answers, answer/kind, remember-answer, intention-as-of, intentions, remember-intention, intention/event, intent/id, what was I doing, as-of query]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 5e319e2
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/memory.clj#defn remember-intention
   - src/clojurecraft/memory.clj#defn intention-as-of
@@ -38,7 +38,7 @@ The essay's model also has "facts about the server's responses to its own action
 ## Gotchas
 - The facts carry the clock from the tick (`:time/now`), so a replay builds the same story; nothing about them is an effect, so effect verification is unchanged and older recordings still replay `:identical`.
 - An intent without `:intent/id` (one put in place by hand, as some tests do) is not recorded.
-- Death is not modelled yet; when it is, "what was I doing when I died" is `intention-as-of` at the tick before the death fact.
+- A death is a fact too, `{:answer/kind :death :answer/at ms}` ([[death-and-respawn]]): "what was I doing when I died" is `intention-as-of` at the tick before it.
 
 ## See also
 - [[goals-and-intents]] - where intents start and end.

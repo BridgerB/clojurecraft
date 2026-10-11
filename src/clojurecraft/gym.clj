@@ -34,7 +34,11 @@
    ;; the pickaxe is given, so the row measures stone, not the wood and crafting it already measures
    {:gym/goal :cobblestone :gym/until "cobblestone" :gym/prereqs ["minecraft:wooden_pickaxe 1"] :gym/timeout-ms 300000
     :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0" :truth/re "Found ([3-9]|[1-9][0-9])"}
-                {:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}])
+                {:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}
+   ;; issue #5: wade in, get out; the server must see the bot on dry land (steve's onDryLand judge)
+   {:gym/goal :shore :gym/until "shore" :gym/prereqs [] :gym/timeout-ms 180000
+    :gym/truth [{:truth/cmd "execute as {name} at @s unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water" :truth/re "Test passed"}
+                {:truth/cmd "data get entity {name} OnGround" :truth/re "1b"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."

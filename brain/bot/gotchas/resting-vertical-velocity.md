@@ -5,11 +5,11 @@ type: reference
 tags: [bot, gotcha, physics]
 aliases: [vy never zero, settle never fires, stillness check]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/physics.clj#defn step
-  - src/clojurecraft/intent.clj#(and (:player/on-ground? world) (< (abs vx) 0.05) (< (abs vz) 0.05))
+  - src/clojurecraft/intent.clj#defn still?
   - test/clojurecraft/physics_test.clj#vanilla keeps a resting vy of -0.0784
 related:
   - "[[bot/gotchas/_moc|Gotchas]]"
@@ -25,7 +25,7 @@ Symptom: the bot reaches a tree, looks at the log, and never starts digging; the
 Each tick applies gravity and drag after the move: `vy = (vy - 0.08) * 0.98`. On the ground the sweep clips vy to zero, then gravity makes it -0.0784 again, every tick, forever. A stillness check over all three velocity components can never pass.
 
 ## Fix
-`still?` checks horizontal components only plus `:player/on-ground?`. The physics test pins the resting value.
+`still?` checks horizontal components only plus `:player/on-ground?` (or the body afloat in a liquid, for an escape dig). The physics test pins the resting value.
 
 ## See also
 - [[dig-timeline]]

@@ -77,6 +77,7 @@
 
  {:problem/stage :water-and-lava
   :problem/issue 5
+  :problem/goals [:escape-water :escape-lava :shore]
   :problem/statement "The bot cannot tell it is in water or lava: liquids are passable air to the physics, nothing tracks breath, health or death, and the planner cannot interrupt a running intent, so a bot that walks into a pond sinks, walks the bottom and drowns without noticing."
   :problem/needs ["In-water, in-lava and eye-in-water flags written by the physics step every tick (eye at y+1.62, not feet+1)"
                   "Fluid kind and level per block, from the block state ids"
