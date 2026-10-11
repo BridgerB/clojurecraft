@@ -705,6 +705,29 @@
         "three cobblestone in well under the 30 s three collect timeouts used to cost")
     (is (empty? (:sim/violations sim)))))
 
+(def walled-ledge
+  "Gym batch push70 (landing 18648,18464): the nearest stone's only cell at its own level was
+   walled in, so no route reached it, while a cell one block below it was reachable. Here: stone
+   S at [10 65 8] on [10 64 8], its one standable side cell [11 65 8] closed in by two-high walls,
+   and the open floor at y 64 west of it."
+  (merge {[10 64 8] 1 [10 65 8] 1 [10 66 8] 1 [11 64 8] 1}
+         (into {} (for [y [65 66] c [[12 y 8] [11 y 7] [11 y 9]]] [c 1]))))
+
+(deftest a-stone-is-dug-from-wherever-its-drop-lands-in-reach
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes walled-ledge)
+                                    :spawn [5.5 64.0 8.5]
+                                    :inventory {36 {:item (get blocks/items :wooden_pickaxe)
+                                                    :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         240000
+                         {:event/kind :go :go/goals [:cobblestone]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w))
+        (pr-str (filter #(= :failed (:intention/event %)) (memory/intentions w))))
+    (is (empty? (:sim/violations sim)))))
+
 (deftest bare-handed-the-cobblestone-goal-never-digs-stone
   ;; with no pickaxe the needs planner plans for one (the tree beside the spawn gives it logs);
   ;; what must never happen is a hand dig of stone, which drops cobblestone at 2300 ms a block

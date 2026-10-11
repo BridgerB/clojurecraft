@@ -220,6 +220,19 @@
   [{:goal/keys [pos range]} node]
   (max 0.0 (- range (flat-distance node pos))))
 
+(defmethod goal-done? :pickup
+  ;; where a block dug at pos drops within the pickup box: within range on the plane, with pos at
+  ;; the feet's height or up to rise above it
+  [{:goal/keys [pos range rise]} [_ ny _ :as node]]
+  (and (<= (octile node pos) range) (<= ny (second pos) (+ ny rise))))
+(defmethod heuristic :pickup
+  [{:goal/keys [pos range rise]} [_ ny _ :as node]]
+  (let [py (second pos)]
+    (+ (max 0.0 (- (octile node pos) range))
+       (cond (< py ny) (- ny py)
+             (> py (+ ny rise)) (- py ny rise)
+             :else 0))))
+
 ;; ---------------------------------------------------------------- the search
 
 (defn route

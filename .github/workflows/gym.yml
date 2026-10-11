@@ -138,7 +138,7 @@ jobs:
             --strict "${{ github.event_name == 'push' }}" --commit "${{ github.sha }}"
       - name: Compress the recordings
         if: always()
-        run: if [ -d trial ]; then find trial -name run.edn -exec zstd -19 -q --rm {} ;; fi
+        run: if [ -d trial ]; then find trial -name run.edn -exec zstd -19 -q --rm {} +; fi
       - name: Stop the server
         if: always()
         run: |

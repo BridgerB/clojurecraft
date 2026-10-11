@@ -190,8 +190,6 @@
     "chunk columns loaded when the route was made (kept for the record; a new chunk no longer replans by itself)"
     "walk, once planned"]
    [:intent/logs-before "logs held when collecting began" "collect, before :intent/drops"]
-   [:intent/stand "the cell a walk must end in, when it names one (stone: beside it, at its level)"
-    "a walk to stone"]
    [:intent/drops
     "the item ids a collect is for: one more of any of them than it began with ends it" "collect"]
    [:intent/drops-before "items of :intent/drops held when collecting began" "collect"]

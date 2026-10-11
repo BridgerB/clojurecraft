@@ -89,10 +89,7 @@
       (cond (nil? (pickaxe world)) {:plan/wait :no-pickaxe}
             :else
             (if-let [stone (nearest-stone world)]
-              {:intent/kind :walk
-               :intent/target stone
-               :intent/stand (beside world stone)
-               :intent/for :stone}
+              {:intent/kind :walk :intent/target stone :intent/for :stone}
               {:intent/kind :stairs-down
                :intent/to-y (- (long (math/floor (second (:player/pos world)))) stair-depth)}))))
 

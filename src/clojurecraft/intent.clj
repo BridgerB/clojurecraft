@@ -148,22 +148,25 @@
 ;; ---------------------------------------------------------------- walk
 
 (defn arrived?
-  "Is a walk over: the target within reach, and the feet where the drop will be within the
-   pickup box: in the cell the walk names to stand in (:intent/stand), or, for a log, no more
-   than pickup-rise below it (so the drop does not come to rest on a bank above the box)."
-  [world {:intent/keys [target for stand]} d]
-  (and (<= d reach)
-       (cond stand (= stand (feet world))
-             (= :log for)
-             (<= (- (second target) (long (math/floor (second (:player/pos world))))) pickup-rise)
-             :else true)))
+  "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
+   the pickup box: for a log, no more than pickup-rise below it (not on a bank above the box);
+   for stone, neither above it (the drop would lie under the box) nor more than pickup-rise
+   below it."
+  [world {:intent/keys [target for]} d]
+  (let [rise (- (second target) (long (math/floor (second (:player/pos world)))))]
+    (and (<= d reach)
+         (case for
+           :log (<= rise pickup-rise)
+           :stone (<= 0 rise pickup-rise)
+           true))))
 
 (defn walk-goal
-  "Where a walk's route ends: exactly the cell it names to stand in (:intent/stand), else
-   anywhere within goal-range of its target."
-  [{:intent/keys [target stand]}]
-  (if stand
-    {:goal/kind :block :goal/pos stand}
+  "Where a walk's route may end: for stone, any cell within goal-range whose feet are where the
+   drop lands in reach (path's :pickup goal: the stone at or up to pickup-rise above them; no
+   single cell beside it, which a wall may close off); else anywhere within goal-range."
+  [{:intent/keys [target for]}]
+  (if (= :stone for)
+    {:goal/kind :pickup :goal/pos target :goal/range goal-range :goal/rise pickup-rise}
     {:goal/kind :near :goal/pos target :goal/range goal-range}))
 
 (defn waypoint-reached?
