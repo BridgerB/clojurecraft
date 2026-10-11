@@ -86,6 +86,45 @@
     :gym/prereqs ["minecraft:wooden_pickaxe 1" "minecraft:stick 2" "minecraft:crafting_table 1"]
     :gym/timeout-ms 300000
     :gym/truth [{:truth/cmd "clear {name} minecraft:stone_pickaxe 0" :truth/re "Found [1-9]"}]}
+   ;; issue #6, one row per stage of the iron kit, each given what the stages before it make.
+   ;; The furnace: a placed block is not in the inventory, so the server's word is that the
+   ;; cobblestone was spent and no furnace is held; the bot's RESULT needs the placed block seen.
+   {:gym/goal :furnace
+    :gym/until "furnace"
+    :gym/prereqs ["minecraft:cobblestone 8" "minecraft:crafting_table 1"]
+    :gym/timeout-ms 180000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0" :truth/re "No items were found"}
+                {:truth/cmd "clear {name} minecraft:furnace 0" :truth/re "No items were found"}]}
+   {:gym/goal :ingots
+    :gym/until "ingots"
+    :gym/prereqs ["minecraft:furnace 1" "minecraft:raw_iron 4" "minecraft:coal 1"]
+    :gym/timeout-ms 240000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:iron_ingot 0"
+                 :truth/re "Found ([4-9]|[1-9][0-9])"}]}
+   {:gym/goal :bucket
+    :gym/until "bucket"
+    :gym/prereqs ["minecraft:iron_ingot 3" "minecraft:crafting_table 1"]
+    :gym/timeout-ms 180000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:bucket 0" :truth/re "Found [1-9]"}]}
+   {:gym/goal :water-bucket
+    :gym/until "water-bucket"
+    :gym/prereqs ["minecraft:bucket 1"]
+    :gym/timeout-ms 300000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}]}
+   ;; a gravel is given, so the row measures digging it again for flint, not finding gravel
+   {:gym/goal :flint-and-steel
+    :gym/until "flint-and-steel"
+    :gym/prereqs ["minecraft:iron_ingot 1" "minecraft:gravel 1"]
+    :gym/timeout-ms 300000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
+   ;; the whole stage from what #9 ends with, as the sim's end-to-end run starts
+   {:gym/goal :iron-kit
+    :gym/until "iron-kit"
+    :gym/prereqs ["minecraft:stone_pickaxe 1" "minecraft:crafting_table 1" "minecraft:cobblestone 8"
+                  "minecraft:oak_log 4"]
+    :gym/timeout-ms 1200000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}
+                {:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
    ;; issue #5: wade in, get out; the server must see the bot on dry land (steve's onDryLand judge)
    {:gym/goal :shore
     :gym/until "shore"
