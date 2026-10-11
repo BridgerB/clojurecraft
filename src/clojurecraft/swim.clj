@@ -246,7 +246,7 @@
 
 (def wade-radius 64)                  ; how far a remembered pool may be to wade into
 (def wade-below 16)                   ; a pool this far under the eye is still waded to (the bucket's 5 is for scooping; a dune over the sea is fine)
-(def wade-beyond 8)                   ; blocks past the entry the wade keeps heading: a one-deep shelf never puts the eye under
+(def wade-beyond 4)                   ; blocks ahead of the feet the wade keeps heading, away from its bank: a shelf is crossed into depth however wide (shore-w3: 8 past the entry was not enough)
 (def wade-timeout-ticks 2400)         ; 120 s to find water and get the eye under it
 
 (defn water-source?
@@ -260,8 +260,9 @@
   "Where the bot could walk into the water of chunk key: [bank water] pairs, the bank a cell
    the feet can stand in beside a surface source of the column no more than wade-below under
    the feet (cave water under a beach is not the sea: gym shore-w2 runs 1, 3, 5, 7), nearest
-   the feet first."
-  [world key [_ fy _ :as feet]]
+   the feet first; blacklist removes banks a wade failed to reach (shore-w3 run 5: the nearest
+   bank lay under a cliff and was chosen three times)."
+  [world key [_ fy _ :as feet] blacklist]
   (let [column (get-in world [:world/chunks key])
         sources (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)
                       :when (and (>= y (- fy wade-below)) (water-source? world [x y z]))]
@@ -270,7 +271,7 @@
                [dx _ dz] path/around
                by [(inc y) y]
                :let [bank [(+ x dx) by (+ z dz)]]
-               :when (path/standable? world bank)]
+               :when (and (not (blacklist bank)) (path/standable? world bank))]
            [bank water])
          (sort-by (fn [[bank _]] (physics/horizontal-distance (physics/centre feet) (physics/centre bank))))
          distinct)))
@@ -286,14 +287,14 @@
          (filter (fn [[_ [_ y _]]] (>= y (- ey wade-below))))
          (filter (fn [[_ pos]] (<= (physics/distance eye (physics/centre pos)) wade-radius)))
          (sort-by (fn [[_ pos]] (physics/distance eye (physics/centre pos))))
-         (some (fn [[key _]] (first (entries world key feet)))))))
+         (some (fn [[key _]] (first (entries world key feet (:plan/blacklist world #{}))))))))
 
 (defn beyond
-  "A point wade-beyond blocks past water, away from bank on the plane: where the wade heads
-   so a shallow shelf is crossed into depth."
-  [[bx _ bz] [wx wy wz]]
+  "A point wade-beyond blocks ahead of pos on the plane, in the direction from bank to water:
+   where the wade heads, so a shallow shelf is crossed into depth however wide it is."
+  [[bx _ bz] [wx wy wz] [px _ pz]]
   (let [dx (- wx bx) dz (- wz bz)]
-    [(+ wx 0.5 (* wade-beyond dx)) (+ wy 0.5) (+ wz 0.5 (* wade-beyond dz))]))
+    [(+ px (* wade-beyond dx)) (+ wy 0.5) (+ pz (* wade-beyond dz))]))
 
 (defmethod intent/run :wade
   [world {:intent/keys [target water started child]} event]
@@ -324,7 +325,7 @@
       ;; on the bank: straight in and on past the entry with jump off, sinking as it deepens;
       ;; the planner's trap takes over
       :else
-      (assoc world :player/controls (assoc (intent/toward world (beyond target water) 0.0) :control/jump? false)))))
+      (assoc world :player/controls (assoc (intent/toward world (beyond target water (:player/pos world)) 0.0) :control/jump? false)))))
 
 (defmethod plan/done-by :escaped-water? [world _]
   (boolean (some #(= :water (:trap/kind %)) (:world/traps world))))
