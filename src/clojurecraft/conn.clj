@@ -103,6 +103,7 @@
                              (swap! proto assoc :threshold (:threshold pkt)))
                            (async/>!! inbox pkt)
                            (recur)))
+                       ;; an Error too: a thread that dies silently leaves the loop on a dead wire
                        (catch Throwable e (closed (str e)))))
     (async/thread (try (loop []
                          (when-let [pkt (async/<!! outbox)]

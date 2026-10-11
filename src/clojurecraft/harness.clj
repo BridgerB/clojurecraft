@@ -59,6 +59,6 @@
                                     (land! rc bot)))]
            (cli/log "landed at" at)
            (prn (fixture/go-event until at)))
-         (catch Throwable e (cli/log "harness failed:" e) (prn (fixture/go-event until nil))))
+         (catch Exception e (cli/log "harness failed:" e) (prn (fixture/go-event until nil))))
     (flush)
     (shutdown-agents)))

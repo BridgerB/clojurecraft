@@ -288,7 +288,7 @@
     (try (case (:unit/kind unit)
            :gym (gym-unit! unit (inc i) opts)
            :sim (sim-unit! unit opts))
-         (catch Throwable e
+         (catch Exception e
            (cli/log "unit failed:" (:unit/id unit) e)
            (spit (io/file (:out opts) (:unit/id unit) "unit-error.txt") (str e))))))
 

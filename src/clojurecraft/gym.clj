@@ -275,7 +275,7 @@
                             :gym/landing landing
                             :gym/at (fixture/position rc name)
                             :gym/started started}))
-         (catch Throwable e
+         (catch Exception e
            (cli/log "landing failed:" e)
            {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
 
@@ -308,7 +308,7 @@
                                       (fn [rc]
                                         (mapv #(truth % name (rcon/command rc (truth-cmd % name)))
                                               (:gym/truth row))))
-                      (catch Throwable e (cli/log "truth failed:" e) [])))
+                      (catch Exception e (cli/log "truth failed:" e) [])))
         judged-row (judged (assoc left
                                   :gym/goal (:gym/goal row)
                                   :gym/run (parse-long (str run))
@@ -371,7 +371,7 @@
   (try
     (let [row (attempt! t)]
       (if (= :disconnect (:gym/outcome row)) (attempt! (assoc t :dir (io/file dir "retry"))) row))
-    (catch Throwable e
+    (catch Exception e
       (cli/log "trial failed:" e)
       (let [row (merge {:gym/goal (:gym/goal (gym goal))
                         :gym/run run
