@@ -163,13 +163,23 @@
           a [c a]
           :else [c row])))
 
+(defn craft-now
+  "[counts row] when a craft row asked for n runs (n > 1) would first send the bot elsewhere
+   (action, a producer further down) but one run of it can be made from what is held: craft what
+   can be crafted now, then fetch the rest. nil otherwise. Only crafts: a smelt is batched on
+   purpose, one trip to the furnace for all the ore."
+  [world table counts row n action path]
+  (when (and (= :craft (:goal/act row)) (> n 1) (map? action) (not= action row))
+    (let [[c a] (resolve-row world table counts row 1 path)] (when (= a row) [c a]))))
+
 (defn first-resolved
   "[counts action] for the first of rows that can be done (times-of row) times, trying them in
-   order, or [counts :stuck] when none can."
+   order (a craft that can run once now goes first, craft-now), or [counts :stuck] when none can."
   [world table counts rows times-of path]
   (or (some (fn [row]
-              (let [[c a] (resolve-row world table counts row (times-of row) path)]
-                (when (not= a :stuck) [c a])))
+              (let [n (times-of row)
+                    [c a] (resolve-row world table counts row n path)]
+                (when (not= a :stuck) (or (craft-now world table counts row n a path) [c a]))))
             rows)
       [counts :stuck]))
 
@@ -250,14 +260,18 @@
     [counts (max 0 left)]))
 
 (def planks-per-log 4)                ; a log crafts into four planks
+(def log-reserve 1)                   ; logs never counted as fuel: the sticks and table a new pickaxe needs
 
 (defn wood-covers?
-  "Do the logs in counts make the planks that burn ticks? Then they are the fuel to use before
-   any coal is mined: the twelfth live run held two logs, eight planks' worth of fire, and
-   tunnelled thirteen minutes at y 0 for coal until the trial timed out."
+  "Do the logs in counts, but log-reserve, make the planks that burn ticks? Then they are the fuel
+   to use before any coal is mined: the twelfth live run held two logs, eight planks' worth of
+   fire, and tunnelled thirteen minutes at y 0 for coal until the trial timed out. The reserve
+   is wood for a new pickaxe: gym batch iron-a6 runs 2 and 5 broke theirs climbing out with no
+   wood left."
   [counts ticks]
   (let [planks (long (math/ceil (/ ticks (second (second fuel-sources)))))]
-    (>= (recipe/have counts (recipe/tags :logs)) (long (math/ceil (/ planks planks-per-log))))))
+    (>= (- (recipe/have counts (recipe/tags :logs)) log-reserve)
+        (long (math/ceil (/ planks planks-per-log))))))
 
 (defn resolve-fuel-need
   "[counts action] for a :fuel/ticks n need: met (nil) when the fuel in counts burns n ticks,

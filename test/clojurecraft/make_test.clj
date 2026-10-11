@@ -197,8 +197,10 @@
     (is (= :craft/oak_planks (row {:raw_iron 2 :oak_planks 1 :oak_log 1}))
         "one plank is short: the log becomes planks to burn")
     (is (= :gather-log (row {:raw_iron 2})) "nothing to burn: wood, until coal can be mined")
-    (is (= :craft/oak_planks (row {:raw_iron 2 :oak_log 1 :stone_pickaxe 1}))
-        "a held log burns before coal is mined for")
+    (is (= :craft/oak_planks (row {:raw_iron 2 :oak_log 2 :stone_pickaxe 1}))
+        "a held log burns before coal is mined for, one kept back for a new pickaxe")
+    (is (= :mine-coal (row {:raw_iron 2 :oak_log 1 :stone_pickaxe 1}))
+        "the last log is kept back: coal")
     (is (= :mine-coal
            (:goal/id (make/next-row
                       (with-furnace (world-holding {:raw_iron 9 :oak_log 1 :stone_pickaxe 1} false))
@@ -263,7 +265,7 @@
     (is (= :dig-gravel (row {:stone_pickaxe 1 :iron_ingot 4})) "all four ingots held, still below")
     (is (= :gather-log (row {:iron_ingot 4}))
         "gravel may lie below: no pickaxe, and one is made first")
-    (is (= :craft/bucket (row {:stone_pickaxe 1 :iron_ingot 3 :flint_and_steel 1} :table? true)))
-    (is (= :fill-bucket (row {:stone_pickaxe 1 :bucket 1 :flint_and_steel 1}))
+    (is (= :craft/bucket (row {:stone_pickaxe 2 :iron_ingot 3 :flint_and_steel 1} :table? true)))
+    (is (= :fill-bucket (row {:stone_pickaxe 2 :bucket 1 :flint_and_steel 1}))
         "the bucket is iron spent")
     (is (nil? (row {:water_bucket 1 :flint_and_steel 1})) "the kit held: nothing to do")))

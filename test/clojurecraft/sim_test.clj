@@ -1421,13 +1421,14 @@
                          (sim/init {:column (world/column-bytes bank-pond)
                                     :spawn [5.5 64.0 8.5]
                                     :inventory {36 {:item (item :wooden_pickaxe) :count 1}
+                                                37 {:item (item :wooden_pickaxe) :count 1}
                                                 40 {:item (item :bucket) :count 1}}})
                          ;; a step into the pond ends the run, so done means never in it
                          #(or (plan/done? %) (plan/failed? %) (:player/in-water? %))
                          60000
                          {:event/kind :go :go/goals [:bucket-test]})]
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
-    (is (= {:water_bucket 1 :wooden_pickaxe 1} (held w))
+    (is (= {:water_bucket 1 :wooden_pickaxe 2} (held w))
         "the bucket in hotbar slot 4 was selected and filled")
     (is (= 1 (count (filter #(= blocks/air %) (vals (:sim/placed sim))))) "one source taken")
     (is (not (:player/in-water? w)) "never in the pond")
@@ -1453,6 +1454,7 @@
                          (sim/init {:column (world/column-bytes pit)
                                     :spawn [9.5 62.0 8.5]
                                     :inventory {36 {:item (item :wooden_pickaxe) :count 1}
+                                                37 {:item (item :wooden_pickaxe) :count 1}
                                                 40 {:item (item :bucket) :count 1}}})
                          #(or (plan/done? %) (plan/failed? %) (:player/in-water? %))
                          60000
