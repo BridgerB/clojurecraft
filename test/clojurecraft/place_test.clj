@@ -128,3 +128,14 @@
                  {[0 0] (world/column
                          (assoc walls [7 64 7] (blocks/default-state :crafting_table)))})]
     (is (= [[7 65 8] [7 64 8]] (place/spot w)) "on the wall beside the table, not on the table")))
+
+(deftest a-block-dug-again-at-once-may-go-in-a-passage
+  ;; gym batch iron-a6 run 1: at the foot of its stairs, between its table and furnace, the only
+  ;; spot for the gravel it meant to dig again for flint was the stair behind it
+  (let [rock (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] 1]))
+                    {[8 64 8] 0 [8 65 8] 0 [7 65 8] 0 [7 66 8] 0}
+                    {[9 64 8] (blocks/default-state :furnace)
+                     [8 64 9] (blocks/default-state :crafting_table)})
+        w (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column rock)})]
+    (is (nil? (place/spot w)) "the stair behind is a passage: no block stays there")
+    (is (= [[7 65 8] [7 64 8]] (place/spot w true)) "but one dug again at once may")))

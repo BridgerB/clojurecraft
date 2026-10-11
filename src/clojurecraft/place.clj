@@ -68,28 +68,32 @@
    liquid) and no passage, support solid and not a block a click opens (a table, a furnace:
    right-clicked, it opens instead of taking the block; gym batch iron-a5 run 4 clicked its
    table three times to place a gravel and failed :rejected), not inside the player, within
-   reach. Pure; nil when there is none."
-  [world]
-  (let [[px py pz] (:player/pos world)
-        fx (long (math/floor px))
-        fy (long (math/floor py))
-        fz (long (math/floor pz))
-        eye (game/eye world)]
-    (first (for [[dx dy dz] around
-                 :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
-                       support [(+ fx dx) (+ fy dy -1) (+ fz dz)]
-                       t (terrain/block-at world target)
-                       s (terrain/block-at world support)]
-                 :when (and t
-                            s
-                            (not (blocks/solid? t))
-                            (not= :liquid (blocks/type-of t))
-                            (blocks/solid? s)
-                            (not (contains? memory/placed-kinds (blocks/name-of s)))
-                            (not (passage? world target))
-                            (not (inside-player? world target))
-                            (<= (physics/distance eye (physics/centre target)) place-reach))]
-             [target support]))))
+   reach. A passage is allowed when passage-ok? (a block placed only to be dug again at once,
+   which leaves the way open: gym batch iron-a6 run 1, at the foot of its stairs between its
+   table and furnace, found no spot for a gravel but the stair behind it). Pure; nil when there
+   is none."
+  ([world] (spot world false))
+  ([world passage-ok?]
+   (let [[px py pz] (:player/pos world)
+         fx (long (math/floor px))
+         fy (long (math/floor py))
+         fz (long (math/floor pz))
+         eye (game/eye world)]
+     (first (for [[dx dy dz] around
+                  :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
+                        support [(+ fx dx) (+ fy dy -1) (+ fz dz)]
+                        t (terrain/block-at world target)
+                        s (terrain/block-at world support)]
+                  :when (and t
+                             s
+                             (not (blocks/solid? t))
+                             (not= :liquid (blocks/type-of t))
+                             (blocks/solid? s)
+                             (not (contains? memory/placed-kinds (blocks/name-of s)))
+                             (or passage-ok? (not (passage? world target)))
+                             (not (inside-player? world target))
+                             (<= (physics/distance eye (physics/centre target)) place-reach))]
+              [target support])))))
 
 (defn use-item-on
   "Right-click face of the block at pos with the held item: emit use-item-on with a fresh
@@ -179,8 +183,8 @@
              c))))
 
 (defmethod place-stage :spot
-  [world _]
-  (let [[target support :as found] (spot world)
+  [world {:intent/keys [passage-ok?]}]
+  (let [[target support :as found] (spot world (boolean passage-ok?))
         n (when-not found (niche world))]
     (cond found
           (intent/assoc-intent world

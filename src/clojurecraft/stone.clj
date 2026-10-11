@@ -219,7 +219,7 @@
   (link world
         i
         event
-        {:intent/kind :place :intent/item item}
+        {:intent/kind :place :intent/item item :intent/passage-ok? true}
         (fn [w placed]
           (intent/assoc-intent w :intent/stage :dig :intent/target (:intent/target placed)))))
 

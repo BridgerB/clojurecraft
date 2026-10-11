@@ -58,6 +58,9 @@
    [:intent/exposes-ok?
     "a :dig that may open a cell beside water or lava (an escape digs beside the water it is in)"
     "on an escape's child dig"]
+   [:intent/passage-ok?
+    "a :place that may put its block in a passage, since it is dug again at once (a gravel for flint)"
+    "on a redig's child place"]
    [:player/air "breath left, 0-300 ticks: an estimate, down 1 under water, up 4 out"
     "after the first physics tick"]
    [:player/dead? "health reached zero; cleared by the server's respawn" "while dead"]

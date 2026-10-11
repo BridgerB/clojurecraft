@@ -61,6 +61,7 @@
 (s/def :intent/water ::block-pos)
 (s/def :intent/wet? boolean?)
 (s/def :intent/exposes-ok? boolean?)
+(s/def :intent/passage-ok? boolean?)
 (s/def :player/dead? boolean?)
 (s/def :player/in-lava? boolean?)
 (s/def :player/eye-in-water? boolean?)
@@ -507,7 +508,8 @@
   (s/cat :world (requires :player/pos :world/facts)))
 (s/fdef place/spot
   :args
-  (s/cat :world (requires :player/pos :world/chunks)))
+  (s/cat :world (requires :player/pos :world/chunks)
+         :passage-ok? (s/? boolean?)))
 (s/fdef path/plan
   :args
   (s/cat :world (requires :world/chunks)
