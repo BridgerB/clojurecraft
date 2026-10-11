@@ -104,8 +104,8 @@
   :goal/target? true
   :goal/until "iron-kit"
   :goal/doc
-  "the iron kit the portal needs: a filled water bucket and flint and steel (four ingots in all: three in the bucket, one in the flint and steel)"
-  :goal/provides {:item/water_bucket 1 :item/flint_and_steel 1}
+  "the iron kit the portal needs: flint and steel and a filled water bucket (four ingots in all: one in the flint and steel, three in the bucket), the flint and steel first so all the iron is mined in one trip down and the climb out ends at the water"
+  :goal/provides {:item/flint_and_steel 1 :item/water_bucket 1}
   :goal/done? :provided?}
  {:goal/id :shore
   :goal/priority 5
