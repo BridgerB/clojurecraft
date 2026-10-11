@@ -267,7 +267,7 @@
   [world [x y z :as cell]]
   (let [kind (fn [c] (:fluid/kind (blocks/fluid (terrain/block-at world c))))]
     (and (= :water (kind cell))
-         (= 0 (:fluid/level (blocks/fluid (terrain/block-at world cell))))
+         (blocks/source? (terrain/block-at world cell))
          (= :water (kind [x (dec y) z]))
          (not= :water (kind [x (inc y) z])))))
 
