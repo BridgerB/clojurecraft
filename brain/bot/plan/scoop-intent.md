@@ -61,7 +61,7 @@ No flag stands for "the bucket is in use" (steve's `usingHeldItem`): only the in
 - **Water under stone is no target.** The third live iron-kit run (local landing 2360,2360) reached the bucket and then scooped three times at aquifer sources beside it at y 23, each with stone directly above: the server acked every `use-item` and filled nothing, since the ray met the wall before any water. The rule had been "no water above"; it is now air above, and a source in reach must be in sight.
 
 ## Limits
-The sim treats a water cell as wholly water; the game clips the ray against the fluid's 8/9 shape. A scoop on the real server has not been run yet ([[mc-bucket-use-item]]).
+The sim treats a water cell as wholly water; the game clips the ray against the fluid's 8/9 shape. Scoops on the real server have filled the bucket (gym batch iron-a3 run 3, live run 13; [[mc-bucket-use-item]]).
 
 ## See also
 - [[sib-bucket-water-find]] - the rules this follows.
