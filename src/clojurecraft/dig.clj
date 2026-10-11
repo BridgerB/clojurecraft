@@ -48,6 +48,19 @@
             damage (/ s h (if (harvest? id held) harvest-divisor no-harvest-divisor))]
         (if (>= damage 1.0) 0 (long (* tick-ms (math/ceil (/ 1.0 damage)))))))))
 
+(defn drop-tries
+  "[[item-name chance] ...]: what block id drops when it is harvested, in the order the game's
+   loot table tries them (the first that rolls under its chance drops; 1.0 always does)."
+  [id]
+  (get blocks/drops-by-name (blocks/name-of id)))
+
+(defn drop-item
+  "The item name block id surely drops when harvested (its one try of chance 1.0: cobblestone
+   for stone, raw_iron for iron ore, dirt for grass), or nil when it drops nothing for sure
+   (leaves: a sapling only by chance; gravel's flint comes before its sure gravel)."
+  [id]
+  (some (fn [[item chance]] (when (= 1.0 chance) item)) (drop-tries id)))
+
 (defn best-tool
   "The player-inventory slot holding the tool to dig block id with, among {slot {:item id ...}}:
    the fastest tool of the block's own kind that harvests it, as [slot item-id]. nil when no

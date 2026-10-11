@@ -82,3 +82,8 @@
                    (= (set (keys grid)) (set (keys laid)))
                    (= (:recipe/result (recipe/match laid 2)) (:recipe/result r))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
+
+(deftest the-furnace-recipes-are-vanilla
+  (let [iron (first (filter #(= :iron_ingot_from_smelting_raw_iron (:smelt/id %)) recipe/smelting))]
+    (is (= #{:raw_iron} (:smelt/input iron)))
+    (is (= [:iron_ingot 1 200] ((juxt :smelt/result :smelt/count :smelt/ticks) iron)))))

@@ -3,9 +3,10 @@
    the small EDN tables the bot ships with. Run via bb datagen (or
    `clojure -M:datagen <reports-dir> <resources-dir> [server-jar]`).
 
-   Recipes, item tags and block tags are not in the --reports output; they live in the inner
-   jar META-INF/versions/<v>/server-<v>.jar under data/minecraft/{recipe,tags/item,tags/block}/.
-   Block hardness and tool materials are not data files at all: clojurecraft.jar-probe reads
+   Recipes, loot tables, item tags and block tags are not in the --reports output; they live in
+   the inner jar META-INF/versions/<v>/server-<v>.jar under
+   data/minecraft/{recipe,loot_table/blocks,tags/item,tags/block}/. Block hardness, tool
+   materials and fuel burn times are not data files at all: clojurecraft.jar-probe reads
    them from the game's own classes (bb datagen runs it) and hands them here as JSON."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
@@ -174,6 +175,79 @@
        (sort-by :recipe/id)
        vec))
 
+(defn smelting
+  "[{:smelt/id ...}] for every furnace (minecraft:smelting) recipe: the item set it takes, its
+   result and count, and the ticks it cooks (cookingtime, 200 when absent), tags resolved."
+  [entries tags]
+  (->> (for [[p j] entries
+             :when (str/starts-with? p "data/minecraft/recipe/")
+             :let [r (json/read-str j)]
+             :when (= "minecraft:smelting" (get r "type"))]
+         {:smelt/id (keyword (file-stem p))
+          :smelt/input (ingredient tags (get r "ingredient"))
+          :smelt/result (name-kw (get-in r ["result" "id"]))
+          :smelt/count (get-in r ["result" "count"] 1)
+          :smelt/ticks (get r "cookingtime" 200)})
+       (sort-by :smelt/id)
+       vec))
+
+(defn tool-gated?
+  "Does a loot condition ask for a particular tool (silk touch, shears): a match_tool, or an
+   any_of / all_of holding one? An inverted one (no silk touch) asks for nothing a plain tool
+   lacks."
+  [c]
+  (case (get c "condition")
+    "minecraft:match_tool" true
+    ("minecraft:any_of" "minecraft:all_of") (boolean (some tool-gated? (get c "terms")))
+    false))
+
+(defn entry-chance
+  "The chance a loot entry drops for a breaker with no enchanted tool, from its conditions: nil
+   when it needs a tool (tool-gated?), the table_bonus chance at fortune 0 or a random_chance,
+   else 1.0."
+  [conditions]
+  (reduce (fn [chance c]
+            (case (get c "condition")
+              ("minecraft:match_tool" "minecraft:any_of" "minecraft:all_of")
+              (if (tool-gated? c) (reduced nil) chance)
+              "minecraft:table_bonus" (* chance (double (first (get c "chances"))))
+              "minecraft:random_chance" (* chance (double (get c "chance")))
+              chance))
+          1.0
+          conditions))
+
+(defn loot-tries
+  "[[item-kw chance] ...] in the order a block's first loot pool tries them for a breaker with
+   no enchanted tool; the first that rolls under its chance drops (1.0 always does). Alternatives
+   are walked in order; entries gated on a tool are skipped, and so is the whole pool when the
+   pool itself is (glass drops only to silk touch)."
+  [table]
+  (letfn [(walk [e]
+            (case (get e "type")
+              "minecraft:item"
+              (when-let [c (entry-chance (get e "conditions"))] [[(name-kw (get e "name")) c]])
+              "minecraft:alternatives"
+              (when (entry-chance (get e "conditions")) (vec (mapcat walk (get e "children"))))
+              nil))]
+    (let [pool (first (get table "pools"))]
+      (if (entry-chance (get pool "conditions")) (vec (mapcat walk (get pool "entries"))) []))))
+
+(defn drops
+  "{block-kw [[item-kw chance] ...]} from the inner jar's loot_table/blocks/*.json, for every
+   block whose first pool drops something to a bare hand or a plain tool."
+  [entries]
+  (into (sorted-map)
+        (for [[p j] entries
+              :when (str/starts-with? p "data/minecraft/loot_table/blocks/")
+              :let [tries (loot-tries (json/read-str j))]
+              :when (seq tries)]
+          [(keyword (file-stem p)) tries])))
+
+(defn fuel
+  "{item-kw burn-ticks} from the probe's JSON: the game's own FuelValues."
+  [probe]
+  (into (sorted-map) (for [[n v] (get probe "fuel")] [(name-kw n) (long v)])))
+
 ;;;; I/O: reports, the server jar, the EDN files ;;;;
 
 (defn packets
@@ -225,11 +299,15 @@
         (loop [acc {}]
           (if-let [e (.getNextEntry z)]
             (let [n (.getName e)]
-              (recur (if (or (= n "version.json")
-                             (re-matches #"data/minecraft/(recipe/[^/]+|tags/(item|block)/.+)\.json"
-                                         n))
-                       (assoc acc n (String. (.readAllBytes z) "UTF-8"))
-                       acc)))
+              (recur
+               (if
+                 (or
+                  (= n "version.json")
+                  (re-matches
+                   #"data/minecraft/(recipe/[^/]+|loot_table/blocks/[^/]+|tags/(item|block)/.+)\.json"
+                   n))
+                 (assoc acc n (String. (.readAllBytes z) "UTF-8"))
+                 acc)))
             acc))))))
 
 (defn write-rows
@@ -252,8 +330,8 @@
 
 (defn -main
   "Write the --reports tables (blocks, packets, items, entity types) into out; with a server
-   jar also the jar tables (version, item tags, recipes, harvest); with the probe's JSON too,
-   the tables read from the game's classes (hardness, materials)."
+   jar also the jar tables (version, item tags, recipes, harvest, smelting, drops); with the probe's JSON too,
+   the tables read from the game's classes (hardness, materials, fuel)."
   [reports out & [server-jar probe-json]]
   (let
     [hdr ";; generated by bb datagen from vanilla 26.1.2 --reports; do not edit\n"
@@ -267,14 +345,18 @@
         (write-map (io/file out "item-tags.edn") jar-hdr tags)
         (write-rows (io/file out "recipes.edn") jar-hdr (recipes entries tags))
         (write-map (io/file out "harvest.edn") jar-hdr (harvest (tags-of entries "block")))
-        (println "wrote" (str out "/{version,item-tags,recipes,harvest}.edn"))))
+        (write-rows (io/file out "smelting.edn") jar-hdr (smelting entries tags))
+        (write-map (io/file out "drops.edn") jar-hdr (drops entries))
+        (println "wrote" (str out "/{version,item-tags,recipes,harvest,smelting,drops}.edn"))))
     (when probe-json
       (let [probe (json/read-str (slurp probe-json))]
         (write-map (io/file out "hardness.edn") probe-hdr (hardness probe (blocks reports)))
         (write-map (io/file out "materials.edn") probe-hdr (materials probe))
-        (println "wrote" (str out "/{hardness,materials}.edn"))))
+        (write-map (io/file out "fuel.edn") probe-hdr (fuel probe))
+        (println "wrote" (str out "/{hardness,materials,fuel}.edn"))))
     (write-rows (io/file out "blocks.edn") hdr (blocks reports))
     (write-map (io/file out "packets.edn") hdr (packets reports))
     (write-map (io/file out "items.edn") hdr (registry reports "minecraft:item"))
     (write-map (io/file out "entity-types.edn") hdr (registry reports "minecraft:entity_type"))
-    (println "wrote" (str out "/{blocks,packets,items,entity-types}.edn"))))
+    (write-map (io/file out "menus.edn") hdr (registry reports "minecraft:menu"))
+    (println "wrote" (str out "/{blocks,packets,items,entity-types,menus}.edn"))))

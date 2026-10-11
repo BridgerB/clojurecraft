@@ -44,7 +44,7 @@
    its :menu-type (registry minecraft:menu, 12 the crafting table). The bot's views and the
    server model's windows are both read from here."
   {:inventory {:size 2 :inventory 9 :armour 5 :offhand 45}
-   :table {:size 3 :inventory 10 :menu-type 12}})
+   :table {:size 3 :inventory 10 :menu-type (blocks/menus :crafting)}})
 
 (defn layout-of-menu
   "The layout of a container by its menu type, or nil for one the bot does not know."

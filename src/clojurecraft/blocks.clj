@@ -15,6 +15,16 @@
 (def entity-types "{name id}" (resource "entity-types"))
 (def hardness-by-name "{block-name hardness}; -1.0 is unbreakable" (resource "hardness"))
 (def harvest-by-name "{block-name {:tool kind :needs tier}}" (resource "harvest"))
+(def drops-by-name
+  "{block-name [[item-name chance] ...]}: what a broken block drops to a bare hand or a plain
+   tool, the tries in order (the game's loot tables)"
+  (resource "drops"))
+(def fuel-by-name
+  "{item-name burn-ticks}: every item a furnace burns (the game's FuelValues)"
+  (resource "fuel"))
+(def menus
+  "{menu-name type-id}: the registry minecraft:menu (12 crafting, 14 furnace)"
+  (resource "menus"))
 (def materials
   "{tier {:speed s :durability d :incorrect tag}}: the game's ToolMaterial constants"
   (resource "materials"))

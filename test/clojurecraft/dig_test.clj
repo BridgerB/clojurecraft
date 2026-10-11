@@ -83,3 +83,19 @@
            (dig/best-tool iron-ore (assoc inv 3 {:item (item :stone_pickaxe) :count 1}) none))
         "a stone pickaxe in that slot reaches it")
     (is (nil? (dig/best-tool stone {} none)) "nothing held")))
+
+(deftest what-a-block-drops-is-the-games-loot-table
+  (is (= :cobblestone (dig/drop-item stone)))
+  (is (= :raw_iron (dig/drop-item iron-ore)))
+  (is (= :dirt (dig/drop-item (state :grass_block))) "grass gives dirt")
+  (is (nil? (dig/drop-item (state :oak_leaves))) "leaves give a sapling only by chance")
+  (is (= [[:flint 0.1] [:gravel 1.0]] (dig/drop-tries (state :gravel))) "flint one time in ten")
+  (is (= :gravel (dig/drop-item (state :gravel))))
+  (is (nil? (dig/drop-tries (state :glass))) "glass drops only to silk touch"))
+
+(deftest the-furnace-tables-come-from-the-game
+  (is (= 1600 (blocks/fuel-by-name :coal)))
+  (is (= 300 (blocks/fuel-by-name :oak_planks)))
+  (is (= 100 (blocks/fuel-by-name :stick)))
+  (is (= 14 (blocks/menus :furnace)))
+  (is (= 12 (blocks/menus :crafting))))

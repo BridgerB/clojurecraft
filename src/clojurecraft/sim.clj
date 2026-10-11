@@ -55,16 +55,11 @@
   (* break-threshold (or (dig/ms id held {}) dig-ms)))
 
 (defn drop-of
-  "The item a broken block gives, {:item id :count 1}, or nil when it drops nothing: the
-   block's own item (cobblestone for stone, the log for a log) when the held item harvests it.
-   Only the two the goals need are mapped; anything else drops its own name's item or nothing."
+  "The item a broken block gives, {:item id :count 1}, or nil when it drops nothing: the item
+   the game's loot table surely drops (dig/drop-item) when the held item harvests the block."
   [id held]
   (when (dig/harvest? id held)
-    (let [n (blocks/name-of id)
-          item (case n
-                 :stone :cobblestone
-                 n)]
-      (when-let [item-id (get blocks/items item)] {:item item-id :count 1}))))
+    (when-let [item-id (get blocks/items (dig/drop-item id))] {:item item-id :count 1})))
 
 (defn wear
   "The inventory after one accepted dig with the tool in slot: its durability counts down from
