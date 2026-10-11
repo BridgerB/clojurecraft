@@ -1272,6 +1272,25 @@
     (is (empty? (:sim/broken sim)) "nothing dug by hand")
     (is (< (:time/now w) 2000))))
 
+(deftest stairs-up-walk-out-from-under-water
+  ;; live run 9 cut stairs up from y 22 to y 51 and met water over every stair; its level steps went
+  ;; round a square of four cells until it failed :boxed. Water seven wide over the pocket: the
+  ;; level steps keep their way until a stair up is allowed, then climb
+  (let [blocks (merge pocket
+                      (into {} (for [x (range 5 12) z (range 5 12)] [[x 69 z] blocks/water-base])))
+        [w sim] (staircase-run :stairs-up blocks 66 (get blocks/items :wooden_pickaxe) 72 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/level-steps])))
+    (is (<= 72.0 (second (:player/pos w))))
+    (is (not-any? #(= :water
+                      (some-> (sim/block-at sim %)
+                              blocks/fluid
+                              :fluid/kind))
+                  (for [x (range 4 13) y [67 68] z (range 4 13)] [x y z]))
+        "no water came down")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest gravel-over-the-head-is-never-dug-under
   ;; a stair up opens the cell over the head first; gravel over that cell would fall through it
   ;; onto the bot, so every stair from here is refused and a level step leads out from under it

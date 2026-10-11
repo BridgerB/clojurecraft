@@ -35,6 +35,7 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn tool-missing
   - test/clojurecraft/sim_test.clj#a-tunnel-with-no-pickaxe-stops-for-one
   - test/clojurecraft/sim_test.clj#a-tunnel-goes-round-what-refuses-it
+  - test/clojurecraft/sim_test.clj#stairs-up-walk-out-from-under-water
   - test/clojurecraft/sim_test.clj#gravel-that-refills-a-stair-is-dug-again
 related:
   - "[[bot/plan/_moc|Plan]]"
@@ -57,7 +58,7 @@ related:
 
 ## How it works
 Each stage is a method of `stairs-stage`; `run :stairs-down` only checks whether the feet are down far enough.
-1. `:plan`: with the current heading (`+x` first), compute the stair; `safe?` → `:open`; else turn a quarter and count. Four refusals → `step-aside`: a level step (`level-cells`: head and feet one block along, same height) toward the first heading `level-safe?` allows (a stair's rules, and no opened cell bordering a fluid, which the child dig would refuse), then `:plan` again from there with the turns counted afresh. No heading allows one, or `max-level-steps` (12) are spent: fail `:boxed`.
+1. `:plan`: with the current heading (`+x` first), compute the stair; `safe?` → `:open`; else turn a quarter and count. Four refusals → `step-aside`: a level step (`level-cells`: head and feet one block along, same height) that `level-safe?` allows (a stair's rules, and no opened cell bordering a fluid, which the child dig would refuse), then `:plan` again from there with the turns counted afresh. The first takes the first heading allowed; each later one keeps the last one's way (`:intent/level-dir`) while it is allowed and never goes straight back, so the staircase walks out from under what refuses it. No heading allows one, or `max-level-steps` (32) are spent: fail `:boxed`. When each step took the first heading allowed, live run 9 (cutting stairs up under water at y 51) stepped round a square of four cells until it failed `:boxed` three times (`stairs-up-walk-out-from-under-water`).
 2. `:open`: while any of the three cells is solid, run a child dig of the topmost. A child that finds its cell already open (`:target-gone`, `fell?`) is as good as done: gravel or sand fell out of it. A child refused for one of `refusals` turns the stair like an unsafe plan: `:needs-tool` (ore the pickaxe cannot drop) or `:unsafe` (a cell beside water or lava, which the dig executor will not open, since it would let the fluid in). Any other failure fails the stair with its reason.
 3. `:level`: dig the level step's cells with child digs, then walk until the feet are in its feet cell; 10 s from the step's start without that fails `:stair-not-taken`.
 4. `:step`: walk toward the new feet cell; done with the stair when the feet are half a block below where it began, which is the only proof the server broke what the bot asked for. A stair cell solid again (gravel fell into it) goes back to `:open`; 10 s without either fails `:stair-not-taken`.

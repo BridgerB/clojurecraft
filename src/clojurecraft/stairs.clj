@@ -41,7 +41,7 @@
 (set! *warn-on-reflection* true)
 
 (def max-turns 4)                     ; refusals before a level step, or :boxed (one full turn)
-(def max-level-steps 12)              ; level steps around what refuses every stair before :boxed
+(def max-level-steps 32)              ; level steps around what refuses every stair before :boxed
 (def step-timeout-ticks 200)          ; ticks a walk down one stair may take (10 s)
 (def directions [[1 0] [0 1] [-1 0] [0 -1]]) ; the four headings, each a quarter turn from the last
 
@@ -111,11 +111,6 @@
   [world cells]
   (and (safe? world cells) (not-any? #(intent/exposes-fluid? world %) cells)))
 
-(defn level-heading
-  "The first heading, from dir round a full turn, a level step may be taken toward, or nil."
-  [world feet dir]
-  (first (filter #(level-safe? world (level-cells feet %)) (take 4 (iterate turn dir)))))
-
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
   "The first of the stair's cells (top first) still solid, or nil when the stair is open."
@@ -144,15 +139,24 @@
       (intent/fail :boxed)))
 
 (defn step-aside
-  "Every stair refused: a level step along the first heading that allows one (level-heading),
-   the turns counted afresh, or :boxed when none does or max-level-steps are spent."
-  [world {:intent/keys [dir level-steps] :or {level-steps 0}}]
+  "Every stair refused: a level step, the turns counted afresh, or :boxed when none is allowed
+   or max-level-steps are spent. The step keeps the last one's way (:intent/level-dir) while it
+   is allowed and never goes straight back, so the staircase walks out from under what refuses
+   it: the ninth live run, cutting stairs up under water at y 51, stepped round a square of four
+   cells until it failed :boxed three times. The first step takes the first heading allowed,
+   from the staircase's own round a full turn."
+  [world {:intent/keys [dir level-steps level-dir] :or {level-steps 0}}]
   (let [feet (intent/feet world)
+        back (when level-dir (mapv - level-dir))
+        ways (if level-dir
+               (cons level-dir (remove #{back} (take 4 (iterate turn level-dir))))
+               (take 4 (iterate turn (or dir (first directions)))))
         d (when (< level-steps max-level-steps)
-            (level-heading world feet (or dir (first directions))))]
+            (first (filter #(level-safe? world (level-cells feet %)) ways)))]
     (if d
       (-> world
           (intent/assoc-intent :intent/dir d
+                               :intent/level-dir d
                                :intent/turns 0
                                :intent/level-steps (inc level-steps)
                                :intent/level-cells (level-cells feet d)

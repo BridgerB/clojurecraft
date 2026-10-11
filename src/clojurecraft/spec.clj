@@ -330,6 +330,7 @@
 (s/def :intent/level-steps pos-int?)
 (s/def :intent/length pos-int?)
 (s/def :intent/side (s/tuple int? int?))
+(s/def :intent/level-dir (s/tuple int? int?))
 (s/def :intent/child (s/keys :req [:intent/kind]))
 (s/def :intent/started-y number?)
 (s/def :intent/started-tick int?)
