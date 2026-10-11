@@ -1,6 +1,6 @@
 ---
 title: Datagen
-description: How bb datagen and datagen.clj produce the six EDN tables - four from the vanilla --reports output, two (recipes, item tags) from the inner server jar - and how to regenerate them.
+description: How bb datagen and datagen.clj produce the generated EDN tables - from the vanilla --reports output, the inner server jar's data files, and the game's own classes - and how to regenerate them.
 type: reference
 tags: [bot, tooling, datagen, data]
 aliases: [datagen.clj, bb datagen, gen_tables.clj, scripts/datagen.sh, reports, inner jar, regenerate edn]
@@ -16,6 +16,7 @@ sourceRefs:
   - bb/clojurecraft/gen_tables.clj#defn jars!
   - dev/clojurecraft/jar_probe.clj#defn -main
   - dev/clojurecraft/datagen.clj#defn hardness
+  - dev/clojurecraft/fmt.clj#def generated
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[mc-recipes-in-jar]]"
@@ -45,7 +46,7 @@ related:
 | `menus.edn` | `reports/registries.json`, `minecraft:menu` | `registry`: menu type ids (12 crafting, 14 furnace) |
 
 ## How it works
-0. `bb datagen` (`bb/clojurecraft/gen_tables.clj`) first unzips the inner jar and the bundler's `META-INF/libraries/*` and runs `clojurecraft.jar-probe` in a JVM with them on the classpath: it boots the game's registries (`Bootstrap/bootStrap`) and writes hardness and materials as JSON for the step below. The inner jar is not obfuscated, so the classes are named as in the source.
+0. `bb datagen` (`bb/clojurecraft/gen_tables.clj`) first unzips the inner jar and the bundler's `META-INF/libraries/*` and runs `clojurecraft.jar-probe` in a JVM with them on the classpath: it boots the game's registries (`Bootstrap/bootStrap`) and writes hardness, materials and fuel as JSON for the step below. The inner jar is not obfuscated, so the classes are named as in the source.
 1. `inner-jar-entries` streams the outer jar until `META-INF/versions/<v>/server-<v>.jar`, reads it into memory, and keeps every entry matching `data/minecraft/(recipe/*|tags/(item|block)/**).json`.
 2. Packet names become kebab-case keywords; block, item and tag names keep their underscores.
 3. Each file is written one row or entry per line under a "generated ... do not edit" header.
@@ -54,6 +55,7 @@ related:
 - Recipes, tags, hardness and materials are **not** in the `--reports` output; without the jar argument only the four report tables are written, and without the probe's JSON hardness and materials are not.
 - The data generator is run only when `data/reports/reports/blocks.json` is missing; delete `data/reports` to force a rerun after a version bump.
 - `data/` is gitignored; the EDN tables in `resources/` are the committed artefact. Never hand-edit them.
+- A new table goes into the formatter's `generated` list (`dev/clojurecraft/fmt.clj`) in the same change: the pre-commit hook formats every staged `.edn` but those, and it reformatted smelting, drops, fuel and menus when they were first committed, so the committed tables stopped being what `bb datagen` writes (same data, other layout) until they were added and regenerated.
 
 ## See also
 - [[mc-recipes-in-jar]] - where vanilla keeps them.
