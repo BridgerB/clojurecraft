@@ -22,6 +22,8 @@
 (def goal-range 3)                    ; a walk's route ends within this of its target
 (def waypoint-reach 0.35)             ; horizontal distance to a waypoint's centre that reaches it
 (def jump-near 1.3)                   ; a waypoint above the feet is jumped for from this close
+(def pickup-range 1.5)               ; octile cells from a dug block's own cell where its drop is in the
+                                      ; pickup box (1.3 each way): a neighbour, diagonals too
 (def pickup-rise 2)                   ; a drop resting more than 2 blocks above the feet is above
                                       ; the pickup box (1.8 tall, grown 0.5 up)
 (def settle-ms 500)                   ; let the server catch up before START
@@ -153,22 +155,25 @@
   "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
    the pickup box: for a log, no more than pickup-rise below it (not on a bank above the box);
    for a block mined from beside (:intent/pickup?: stone, ore), neither above it (the drop would
-   lie under the box) nor more than pickup-rise below it."
+   lie under the box) nor more than pickup-rise below it, and within pickup-range of its cell on
+   the plane: the drop lands in the block's own cell, and a collect walks straight at it, so
+   from farther, round a tunnel's corner, it walked into the wall until it failed."
   [world {:intent/keys [target for pickup?]} d]
   (let [rise (- (second target) (long (math/floor (second (:player/pos world)))))]
     (and (<= d reach)
-         (cond pickup? (<= 0 rise pickup-rise)
+         (cond pickup?
+               (and (<= 0 rise pickup-rise) (<= (path/octile (feet world) target) pickup-range))
                (= :log for) (<= rise pickup-rise)
                :else true))))
 
 (defn walk-goal
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell
-   within goal-range whose feet are where the drop lands in reach (path's :pickup goal: the
-   block at or up to pickup-rise above them; no single cell beside it, which a wall may close
-   off); else anywhere within goal-range."
+   within pickup-range of it whose feet are where the drop lands in reach (path's :pickup goal:
+   the block at or up to pickup-rise above them; no single cell beside it, which a wall may
+   close off); else anywhere within goal-range."
   [{:intent/keys [target pickup?]}]
   (if pickup?
-    {:goal/kind :pickup :goal/pos target :goal/range goal-range :goal/rise pickup-rise}
+    {:goal/kind :pickup :goal/pos target :goal/range pickup-range :goal/rise pickup-rise}
     {:goal/kind :near :goal/pos target :goal/range goal-range}))
 
 (defn routable?

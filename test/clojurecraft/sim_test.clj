@@ -734,6 +734,39 @@
     (is (not-any? stairs (keys (:sim/placed sim))) "nothing placed on the staircase")
     (is (empty? (:sim/violations sim)))))
 
+(deftest at-the-rows-depth-a-tunnel-finds-the-ore-its-walls-show
+  ;; live iron-kit runs waited at the depth with nothing in sight until the plan failed: a
+  ;; staircase shows little rock. Here the ore is sealed in the hill until a tunnel passes it
+  (let [ore-row {:goal/id :mine-test-ore
+                 :goal/priority 10
+                 :goal/holds {:item/stone_pickaxe 1}
+                 :goal/provides {:item/raw_iron 1}
+                 :goal/act :mine
+                 :goal/blocks [:iron_ore]
+                 :goal/depth 74
+                 :goal/done? :provided?}
+        table (conj (filterv #(not= :mine-iron (:goal/id %)) plan/goals) ; this row in its place
+                    ore-row
+                    {:goal/id :ore-test
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:item/raw_iron 1}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init
+                          {:column (world/column-bytes
+                                    (assoc deep-stone [13 74 9] (blocks/default-state :iron_ore)))
+                           :spawn [8.5 76.0 8.5]
+                           :inventory {36 {:item (get blocks/items :stone_pickaxe) :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         240000
+                         {:event/kind :go :go/goals [:ore-test]})]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= 1 (get (recipe/counts (:player/inventory w)) :raw_iron 0)))
+    (is (some #(= :tunnel (:intention/kind %)) (memory/intentions w)) "a tunnel showed it")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest boxed-in-by-lava-on-every-side-fails-boxed
   ;; lava under every first stair, and beside the feet on all four sides, so no level step is
   ;; allowed either (lava under the stairs alone is now stepped around)

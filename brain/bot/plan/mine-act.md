@@ -15,6 +15,8 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn routable?
   - test/clojurecraft/stone_test.clj#an-ore-no-route-reaches-is-passed-over
   - src/clojurecraft/stone.clj#defn stairs
+  - src/clojurecraft/stone.clj#defn outward
+  - test/clojurecraft/sim_test.clj#at-the-rows-depth-a-tunnel-finds-the-ore-its-walls-show
   - src/clojurecraft/intent.clj#defn arrived?
   - resources/clojurecraft/goals.edn#{:goal/id :mine-iron
   - test/clojurecraft/stone_test.clj#with-nothing-in-sight-the-stairs-stop-at-the-rows-depth
@@ -38,21 +40,21 @@ A mining row is data: `:goal/act :mine`, the blocks it digs (`:goal/blocks`) and
 |---|---|---|---|---|
 | `:mine-stone` | stone | a wooden pickaxe | cobblestone | none |
 | `:mine-coal` | coal ore, deepslate coal ore | any pickaxe (`:tag/pickaxes`) | coal | 0 |
-| `:mine-iron` | iron ore, deepslate iron ore | a stone pickaxe | raw iron | 0 |
+| `:mine-iron` | iron ore, deepslate iron ore | a stone pickaxe | raw iron | 16 |
 | `:dig-gravel` | gravel | nothing | gravel | 40 |
 
 ## How it works (`mine-next`)
 1. A chain in flight continues: walk → dig → collect via `intent/chain-next`, tagged `:intent/for` the row's id, so another row's chain (a coal walk when iron is now wanted) is never continued as this one's dig.
 2. `tool-missing`: a block that drops only to its tool (`blocks/drops-need-tool?`, [[hardness-and-tools]]) with no such tool held waits `:no-pickaxe`; gravel drops to a hand and never waits.
 3. `exposed-of-states`: the blocks of the row within 24 of the eye and 12 of its height, read from the loaded chunks through the block overlay, that the bot can stand beside at its own level, nearest first (never memory: stone is most of the world and ore is in every chunk; [[memory-edge-cases]]). Of the three nearest, the first a route reaches (`intent/routable?`: the planner's route is not `:none`) is walked to (`:found`, or `:partial` only toward an unloaded chunk); one in a cave below with no way down is passed over. The fourth live iron-kit run walked at three such ores, each failing `:no-path` at once, and the third failure ended the plan. The walk carries `:intent/pickup? true`: it ends where the dug block's drop lands in the pickup box (`intent/arrived?`, the path's `:pickup` goal; [[walk-intent]]).
-4. With none in sight, `stairs`: a staircase six down from the feet, never below the row's depth ([[stairs-down]]); at the depth, `{:plan/wait :none-in-sight}`, which fails the plan after 20 s. A staircase also exposes the ore in its own walls.
+4. With none in sight, `stairs`: a staircase six down from the feet, never below the row's depth ([[stairs-down]]); at the depth, a `:tunnel` of `tunnel-length` (12) level steps along `outward`, the heading that leads farthest from the landing, so tunnels never double back. A staircase shows little rock: the live runs that waited at the depth with nothing in sight failed there. The tunnel's walls are where the ore shows; the next pass sees it (`at-the-rows-depth-a-tunnel-finds-the-ore-its-walls-show`).
 5. The collect waits for one more of any item the row's blocks can drop (`drops-of-row`, every try of their loot tables: flint and gravel both for gravel).
 
 ## Flint: dig a held gravel again (`:redig`)
 Gravel's loot table drops flint one time in ten, else the gravel itself. The `:flint-from-gravel` row needs one gravel and provides flint; its act starts a `:redig` intent, which runs three child intents in its own place (`link`, as stairs runs its digs): `:place` the held gravel, `:dig` what it placed, `:collect` with the row's drops (flint and gravel). One intent from placing to picking up matters: as three separate intents, the placing spent the gravel the row needs, and on the next tick the planner went for more gravel with `:dig-gravel` instead of digging the one it had just placed. When gravel comes back, the planner simply starts another `:redig`; there is no counter. In the sim, seed 4 rolls gravel four times and flint on the fifth dig, and the run replays to the same tick.
 
 ## Gotchas
-- The depths are where the game makes each ore common (iron from y 56 down past 0, peaking at 16; coal down to y 0); they are guesses about where a staircase finds ore in sight. When runs fail `:none-in-sight`, the depth is the first thing to look at. Iron's was 16 until the second live iron-kit run (local landing 2360,2360) reached y 16 with the only iron in sight at y 7 in a cave it had no path to, and waited there until the plan failed; it is 0 now, still above deepslate's slower digs.
+- The depths are where the game makes each ore densest (iron peaks at y 16; coal runs down to y 0): where a tunnel is cut. Iron's went 16, then 0 (the second live run waited at 16 with the only iron in sight out of reach), then back to 16 when tunnels came, since a tunnel at the peak shows the most.
 - `:mine-stone` holds a wooden pickaxe by item, not by tag, as it always has: a bot that has only a stone pickaxe plans a wooden one before more cobblestone.
 - Before rows named their blocks, the chain was tagged `:intent/for :stone` and the walk keyed its arrival off that; it is now the row's id and `:intent/pickup?`.
 

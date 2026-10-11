@@ -45,11 +45,16 @@
   (testing "stairs: six down at a time"
     (is (= {:intent/kind :stairs-down :intent/to-y 58}
            (stone/mine-next (standing 64 :stone_pickaxe) (row :mine-iron)))))
-  (testing "never below the row's depth"
-    (is (= {:intent/kind :stairs-down :intent/to-y 0}
-           (stone/mine-next (standing 4 :stone_pickaxe) (row :mine-iron))))
-    (is (= {:plan/wait :none-in-sight}
-           (stone/mine-next (standing 0 :stone_pickaxe) (row :mine-iron)))))
+  (testing "never below the row's depth: there, a tunnel"
+    (is (= {:intent/kind :stairs-down :intent/to-y 16}
+           (stone/mine-next (standing 20 :stone_pickaxe) (row :mine-iron))))
+    (is (= {:intent/kind :tunnel :intent/dir [1 0] :intent/length stone/tunnel-length}
+           (stone/mine-next (standing 16 :stone_pickaxe) (row :mine-iron))))
+    (is (= [-1 0]
+           (:intent/dir (stone/mine-next
+                         (assoc (standing 16 :stone_pickaxe) :plan/go-at [40.5 70.0 5.5])
+                         (row :mine-iron))))
+        "outward: away from the landing"))
   (testing "stone has no depth: always down"
     (is (= {:intent/kind :stairs-down :intent/to-y -40}
            (stone/mine-next (standing -34 :wooden_pickaxe) (row :mine-stone))))))

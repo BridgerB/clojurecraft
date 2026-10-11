@@ -15,6 +15,12 @@
    that allows it, and tries the stairs again from there: a live descent stood over an
    underground lake that refused every stair and failed :boxed three times before this. After
    max-level-steps such steps it fails :boxed.
+
+     {:intent/kind :tunnel :intent/dir [1 0] :intent/length 12}
+
+   A tunnel is level steps alone, length of them along its heading, turning where one is
+   refused: where a mining row has reached its depth with nothing in sight, the walls of a
+   tunnel are where the ore shows.
    Each dig is a child :dig intent run by the dig
    executor itself (intents composing intents: no second rule for breaking blocks), and the
    descent is judged by the feet having actually gone down, never by a packet having been
@@ -223,6 +229,32 @@
           (assoc world
                  :player/controls
                  (intent/toward world [(+ fx 0.5) (double fy) (+ fz 0.5)] 0.0)))))
+
+(defn tunnel-plan
+  "Plan a tunnel's next level step: along its heading when level-safe?, else a quarter turn,
+   and :boxed after a full one."
+  [world {:intent/keys [dir turns level-steps] :or {turns 0 level-steps 0}}]
+  (let [dir (or dir (first directions))
+        cells (level-cells (intent/feet world) dir)]
+    (cond (level-safe? world cells)
+          (intent/assoc-intent world
+                               :intent/dir dir
+                               :intent/turns 0
+                               :intent/level-cells cells
+                               :intent/level-steps (inc level-steps)
+                               :intent/stage :level
+                               :intent/started-tick (:time/tick world))
+          (boxed? turns) (box world)
+          :else (turned world dir turns (str "tunnel: refused toward " dir ", turning")))))
+
+(defmethod intent/run :tunnel
+  [world {:intent/keys [length level-steps stage] :or {level-steps 0} :as i} event]
+  (cond (and (>= level-steps length) (not= :level stage))
+        (-> world
+            (assoc :player/controls {})
+            intent/done)
+        (= :level stage) (stairs-stage world i event)
+        :else (tunnel-plan world i)))
 
 (defmethod intent/run :stairs-down
   [world {:intent/keys [to-y] :as i} event]

@@ -16,9 +16,10 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
             [clojurecraft.place]
             [clojurecraft.plan :as plan]
-            [clojurecraft.stairs]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -28,6 +29,7 @@
 (def stair-depth 6)                   ; stairs cut when no target is in sight, before looking again
 (def default-blocks [:stone])         ; a :mine row that names no blocks mines stone, as the first one did
 (def max-candidates 3)                ; the nearest targets a route is planned to before none counts as in sight
+(def tunnel-length 12)                ; level steps a tunnel at a row's depth cuts before looking again
 
 (def states-of-row
   "row → every state id of the blocks it mines. Memoized: a row is a value."
@@ -111,11 +113,23 @@
         to (cond-> (- feet stair-depth) depth (max depth))]
     (when (< to feet) {:intent/kind :stairs-down :intent/to-y to})))
 
+(defn outward
+  "The heading that leads farthest from the landing (:plan/go-at), so a tunnel never doubles
+   back toward where the bot came down; +x without a landing."
+  [world]
+  (let [[x _ z] (:player/pos world)]
+    (if-let [home (:plan/go-at world)]
+      (apply max-key
+             (fn [[dx dz]] (physics/horizontal-distance [(+ x dx) 0 (+ z dz)] home))
+             stairs/directions)
+      (first stairs/directions))))
+
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need,
    walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
-   ends where the drop lands in reach, :intent/pickup?), or cut stairs down toward them; wait
-   for the tool, or :none-in-sight at the row's depth."
+   ends where the drop lands in reach, :intent/pickup?), or cut stairs down toward them, or at
+   the row's depth a tunnel outward; wait for the tool. The live runs that waited at the depth
+   with nothing in sight failed there; a tunnel's walls are where the ore shows."
   [world row]
   (or (continue-mine world row)
       (let [missing (tool-missing world row)
@@ -130,7 +144,10 @@
                         first))]
         (cond missing {:plan/wait missing}
               walk walk
-              :else (or (stairs world row) {:plan/wait :none-in-sight})))))
+              :else
+              (or
+               (stairs world row)
+               {:intent/kind :tunnel :intent/dir (outward world) :intent/length tunnel-length})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
 

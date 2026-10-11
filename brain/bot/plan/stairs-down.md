@@ -50,6 +50,9 @@ Each stage is a method of `stairs-stage`; `run :stairs-down` only checks whether
 4. `:step`: walk toward the new feet cell; done with the stair when the feet are half a block below where it began, which is the only proof the server broke what the bot asked for; 10 s without that fails `:stair-not-taken`.
 5. Done when the feet are at or below `to-y`.
 
+## Tunnels
+`{:intent/kind :tunnel :intent/dir d :intent/length n}` is level steps alone: `tunnel-plan` takes the next along its heading when `level-safe?`, else turns a quarter, `:boxed` after a full turn; the `:level` stage is the staircase's own. Done after n steps. The mine act cuts one at a row's depth ([[mine-act]]).
+
 ## Gotchas
 - Keys that are over (`:intent/child`, `:intent/cells`) are removed, never nil: the world spec refuses a nil vector.
 - Water beside a stair is allowed, lava is not: the siblings found refusing water wedged descents in wet biomes. A cell that itself borders water is still never dug (the dig's `exposes-fluid?`): the stair turns instead. Before it turned, a live iron-kit descent (local landing 2360,2360) met an aquifer at y 36 and failed `:unsafe` three times in a moment, the planner restarting the same refused stair (`water-beside-a-stair-cell-turns-the-stairs`).

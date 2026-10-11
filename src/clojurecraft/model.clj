@@ -143,7 +143,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :smelt :redig :scoop"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :tunnel :smelt :redig :scoop"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -184,8 +184,9 @@
     "the two cells a level step opens, head then feet, when every stair down was refused"
     "stairs-down, during a level step"]
    [:intent/level-steps
-    "level steps this staircase has taken; past stairs/max-level-steps it fails :boxed"
-    "stairs-down, after a level step"]
+    "level steps this staircase (past stairs/max-level-steps it fails :boxed) or tunnel (done at its length) has taken"
+    "stairs-down and tunnel, after a level step"]
+   [:intent/length "level steps a tunnel cuts" "tunnel"]
    [:intent/child
     "the child intent run in the intent's place by its own executor (stairs: the :dig cutting one cell; redig: the place, dig or collect it is on)"
     "stairs-down, while digging; redig; place, while digging a niche"]

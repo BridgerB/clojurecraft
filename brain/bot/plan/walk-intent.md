@@ -38,7 +38,7 @@ related:
 - `intent.clj`, `waypoint-reached?` - within `waypoint-reach` (0.35) of the waypoint's centre on the plane, and the feet within half a block of its height in both directions.
 - `intent.clj`, `follow` - `toward` the waypoint's centre, jumping when it is above the feet and within `jump-near` (1.3), or when blocked.
 - `intent.clj`, `route-stale?` - the three reasons to plan again.
-- `intent.clj`, `arrived?` - within reach, and for a log the feet no more than `pickup-rise` (2) below it, for a block mined from beside (`:intent/pickup?`) neither above it nor more than `pickup-rise` below it: where the drop comes to rest inside the pickup box.
+- `intent.clj`, `arrived?` - within reach, and for a log the feet no more than `pickup-rise` (2) below it, for a block mined from beside (`:intent/pickup?`) neither above it nor more than `pickup-rise` below it, and within `pickup-range` (octile 1.5: a neighbour, diagonals too) of its cell: where the drop comes to rest inside the pickup box. Within reach alone, a walk to ore in a tunnel's wall ended round the corner, and the collect walked straight at the drop into the wall until it failed `:not-picked-up`.
 
 ## How it works
 1. Arrived (`arrived?`): set only `:control/look` at the target and finish, so the next intent starts already looking.
