@@ -14,7 +14,7 @@ sourceRefs:
   - test/clojurecraft/runner.clj#defn -main
   - test/clojurecraft/runner.clj#defn selected
   - test/clojurecraft/fixtures.clj#defn instrument!
-  - .github/workflows/test.yml#FOREST_TRIALS: '500'
+  - .github/workflows/test.yml#FOREST_TRIALS: '250'
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[property-tests]]"
@@ -29,7 +29,7 @@ related:
 - `fixtures.clj`, `ticks` - tick events every 50 ms over a range, all with `:event/rand 0.5`.
 - `fixtures.clj`, `packet` - wraps a packet map as an event; `opts` is the standard `game/init` argument.
 - `fixtures.clj`, `instrumented` / `instrument!` - see [[specs-and-instrumentation]]. Instrumentation is never undone: namespaces run side by side, and an unstrument at one namespace's end would strip the checks from another mid-test.
-- `runner.clj` - `clojure -M:test` is eftest over the test directory with `:multithread? true`: every namespace and every var in parallel on all cores, the reducers instrumented once first. `-n ns`, `-v ns/var` and `-x ns` select; the exit code is the verdict. The tests are pure functions over values, so they share nothing; the serial suite (cognitect's runner) took nine minutes on a runner, nearly all of it the sim namespace. `test.yml` runs the suite in one job with `FOREST_TRIALS=0` and the 2,000 forests as four jobs of 500 with a seed from the run id.
+- `runner.clj` - `clojure -M:test` is eftest over the test directory with `:multithread? true`: every namespace and every var in parallel on all cores, the reducers instrumented once first. `-n ns`, `-v ns/var` and `-x ns` select; the exit code is the verdict. The tests are pure functions over values, so they share nothing; the serial suite (cognitect's runner) took nine minutes on a runner, nearly all of it the sim namespace. `test.yml` runs the suite in one job with `FOREST_TRIALS=0` and the 2,000 forests as eight jobs of 250 with a seed from the run id: the suite is about a minute on one runner and the forests about a minute and a half each, against nine minutes serial.
 - `world.clj`, `column-bytes` / `column` - real chunk-column bytes from `{[lx y lz] state-id}`: stone below y 64, air above, and any section containing a listed block written as a 15-bit direct container.
 
 ## How tests use them

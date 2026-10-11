@@ -32,7 +32,7 @@ related:
 
 # Gym on runners
 
-Three workflows. `test.yml` runs the suite and the brain checker on every push, spread over five runners ([[test-fixtures]]: the parallel runner, and the forests as four shards). `gym.yml` runs real runs of goals on real terrain: on push every goal once (the smoke test `wood.yml` used to be), on dispatch one goal `runs` times (`goal`, `runs`, `landing-set`, `label`). `gym-world.yml` builds a landing set's world once and caches it.
+Three workflows. `test.yml` runs the suite and the brain checker on every push, spread over nine runners ([[test-fixtures]]: the parallel runner, and the forests as eight shards). `gym.yml` runs real runs of goals on real terrain: on push every goal once (the smoke test `wood.yml` used to be), on dispatch one goal `runs` times (`goal`, `runs`, `landing-set`, `label`). `gym-world.yml` builds a landing set's world once and caches it.
 
 ## How a batch runs
 1. **plan**: refuses when more than 20 jobs are already running in the repository, then `clojure -M:gym plan --goals ... --runs N` prints the shard matrix; only goal, run number and job minutes cross the job boundary.

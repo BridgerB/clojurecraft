@@ -250,16 +250,34 @@
 (def wade-timeout-ticks 2400)         ; 120 s to find water and get the eye under it
 
 (defn water-source?
-  "Is the state id a water source with no water over it: the top of a pool."
+  "Is the cell the top of a pool at least two deep: a water source with water under it and
+   none over it (steve's landing set W: swimmable water 2+ deep; a one-deep puddle walked
+   across on foot was gym shore-w5 run 1)."
   [world [x y z :as cell]]
-  (let [f (blocks/fluid (terrain/block-at world cell))]
-    (and (= :water (:fluid/kind f)) (= 0 (:fluid/level f))
-         (not= :water (:fluid/kind (blocks/fluid (terrain/block-at world [x (inc y) z])))))))
+  (let [kind (fn [c] (:fluid/kind (blocks/fluid (terrain/block-at world c))))]
+    (and (= :water (kind cell)) (= 0 (:fluid/level (blocks/fluid (terrain/block-at world cell))))
+         (= :water (kind [x (dec y) z]))
+         (not= :water (kind [x (inc y) z])))))
+
+(defn shallow?
+  "Is the cell one-deep water: water with no water over it and a solid under it, which the feet
+   stand in with the eye in air."
+  [world [x y z :as cell]]
+  (let [kind (fn [c] (:fluid/kind (blocks/fluid (terrain/block-at world c))))]
+    (and (= :water (kind cell)) (not= :water (kind [x (inc y) z])) (solid-cell? world [x (dec y) z]))))
+
+(defn wadeable?
+  "Could the feet rest in cell on the way into deep water: a cell they can stand in, or
+   one-deep water with a clear head cell (a beach's shelf; the bank beside the first deep
+   cell is usually that, not sand)."
+  [world [x y z :as cell]]
+  (or (path/standable? world cell)
+      (and (shallow? world cell) (= :clear (path/classify world [x (inc y) z])))))
 
 (defn entries
   "Where the bot could walk into the water of chunk key: [bank water] pairs, the bank a cell
-   the feet can stand in beside a surface source of the column no more than wade-below under
-   the feet (cave water under a beach is not the sea: gym shore-w2 runs 1, 3, 5, 7), nearest
+   the feet can stand in or wade through (wadeable?) beside a deep source of the column no more
+   than wade-below under the feet (cave water under a beach is not the sea: gym shore-w2 runs 1, 3, 5, 7), nearest
    the feet first; blacklist removes banks a wade failed to reach (shore-w3 run 5: the nearest
    bank lay under a cliff and was chosen three times)."
   [world key [_ fy _ :as feet] blacklist]
@@ -271,7 +289,7 @@
                [dx _ dz] path/around
                by [(inc y) y]
                :let [bank [(+ x dx) by (+ z dz)]]
-               :when (and (not (blacklist bank)) (path/standable? world bank))]
+               :when (and (not (blacklist bank)) (wadeable? world bank))]
            [bank water])
          (sort-by (fn [[bank _]] (physics/horizontal-distance (physics/centre feet) (physics/centre bank))))
          distinct)))
@@ -290,11 +308,16 @@
          (some (fn [[key _]] (first (entries world key feet (:plan/blacklist world #{}))))))))
 
 (defn beyond
-  "A point wade-beyond blocks ahead of pos on the plane, in the direction from bank to water:
-   where the wade heads, so a shallow shelf is crossed into depth however wide it is."
-  [[bx _ bz] [wx wy wz] [px _ pz]]
+  "Where the wade heads: the water cell's centre until the body has been in water, then a
+   point wade-beyond blocks ahead of pos on the plane in the direction from bank to water, so
+   a shallow shelf is crossed into depth however wide it is. Heading past the water before
+   reaching it walked a bot that came at the bank from the far side away from the sea for two
+   minutes (gym shore-w5 run 9)."
+  [[bx _ bz] [wx wy wz :as water] [px _ pz] wet?]
   (let [dx (- wx bx) dz (- wz bz)]
-    [(+ px (* wade-beyond dx)) (+ wy 0.5) (+ pz (* wade-beyond dz))]))
+    (if wet?
+      [(+ px (* wade-beyond dx)) (+ wy 0.5) (+ pz (* wade-beyond dz))]
+      (physics/centre water))))
 
 (defmethod intent/run :wade
   [world {:intent/keys [target water started child wet?]} event]
@@ -328,10 +351,18 @@
       child
       (stairs/run-child world event)
 
-      ;; on the bank: straight in and on past the entry, jumping only when blocked (a seabed
-      ;; step, shore-w4 runs 1 and 6), sinking as it deepens; the planner's trap takes over
+      ;; on the bank: straight in and on past the entry, jumping only when blocked with the
+      ;; feet on the ground (a seabed step, shore-w4 runs 1 and 6), never afloat (a jump there
+      ;; is a swim-up that keeps the eye in air against a wall), so it sinks as it deepens and
+      ;; the planner's trap takes over
+      ;; afloat and pressed against something: stop pushing and sink (pressing into a bank
+      ;; fires the out-of-liquid impulse, which kept the eye in air for good)
+      (and (:player/in-water? world) (:player/horizontal-collision? world) (not (:player/on-ground? world)))
+      (assoc world :player/controls {:control/sneak? true})
+
       :else
-      (assoc world :player/controls (intent/toward world (beyond target water (:player/pos world)) 0.0)))))
+      (let [controls (intent/toward world (beyond target water (:player/pos world) wet?) 0.0)]
+        (assoc world :player/controls (assoc controls :control/jump? (boolean (and (:control/jump? controls) (:player/on-ground? world)))))))))
 
 (defmethod plan/done-by :escaped-water? [world _]
   (boolean (some #(= :water (:trap/kind %)) (:world/traps world))))
