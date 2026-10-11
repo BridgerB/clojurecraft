@@ -68,6 +68,23 @@
   (some-> (row id)
           (nth 1)))
 
+(def name-states
+  "block name → the set of every state id of that block."
+  (reduce (fn [m [n _ lo hi]] (assoc m n (set (range lo (inc hi))))) {} table))
+
+(defn states-of
+  "Every state id of the block named n (empty for no such block)."
+  [n]
+  (get name-states n #{}))
+
+(defn default-state
+  "The lowest state id of the block named n, or nil: the one a server model places (a real
+   server picks the state, a furnace facing away from the player, so the bot judges a placement
+   by the block's name, never by this)."
+  [n]
+  (some->> (seq (states-of n))
+           (apply min)))
+
 (def solid-states
   "Every state that collides as a full cube (approximation: every non-passable type does)."
   (states-where (fn [[_ type]] (not (contains? passable-types type)))))

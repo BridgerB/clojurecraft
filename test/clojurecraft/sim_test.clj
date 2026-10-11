@@ -14,7 +14,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main :as main]
-            [clojurecraft.make]
+            [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
@@ -721,6 +721,27 @@
     (is (= 1 (get (held w) :stone_pickaxe 0)))
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w))
         (pr-str (filter #(= :failed (:intention/event %)) (memory/intentions w))))
+    (is (empty? (:sim/violations sim)))))
+
+(deftest a-held-furnace-is-placed-and-remembered-near
+  (let [table (conj plan/goals
+                    {:goal/id :furnace-near
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:block/furnace :near}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes {})
+                                    :spawn [8.5 64.0 8.5]
+                                    :inventory {36 {:item (get blocks/items :furnace) :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         30000
+                         {:event/kind :go :go/goals [:furnace-near]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (some? (make/near w :furnace)) "the placed furnace is remembered near")
+    (is (= [:furnace] (map blocks/name-of (vals (:sim/placed sim)))) "the server has it")
+    (is (zero? (get (held w) :furnace 0)) "and it left the hand")
     (is (empty? (:sim/violations sim)))))
 
 (def walled-ledge

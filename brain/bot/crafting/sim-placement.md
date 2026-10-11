@@ -23,13 +23,13 @@ related:
 ## How it works
 `on-packet [:play :use-item-on]` with `{:pos :face :sequence}`:
 1. **The target is a crafting table** (`sim/block-at` = `table-state`): open window id `:sim/next-window` (then increment) with an empty grid and state id 1; send the ack, `open-screen` (menu type 12) and a full `container-set-content` for the table view with the real cursor.
-2. **Otherwise it is a placement** at `pos + face`. It succeeds only if the held hotbar slot (`36 + :sim/held`, set by `set-carried-item`) holds a crafting table, the destination is not solid and not liquid, the clicked block is solid, and the destination does not overlap the player's 0.6 × 1.8 box. Success: record it in `:sim/placed`, take one from the held stack, send `block-update` with the table state, sync window 0, then the ack.
+2. **Otherwise it is a placement** at `pos + face`. It succeeds only if the held hotbar slot (`36 + :sim/held`, set by `set-carried-item`) holds a block item (`blocks/default-state` of its name: a table, a furnace, gravel), the destination is not solid and not liquid, the clicked block is solid, and the destination does not overlap the player's 0.6 × 1.8 box. Success: record it in `:sim/placed`, take one from the held stack, send `block-update` with that state, sync window 0, then the ack.
 3. **Rejection**: send `block-update` with the destination's current state, then the ack. An overlap also records `[:place-into-player dest]`.
 
 `sim/block-at` answers placed blocks first, then broken positions (air), then the fixture column.
 
 ## Gotchas
-- Only crafting tables can be placed; any other held item is a rejection.
+- Only a held item whose name is a block can be placed; any other is a rejection. The model places the block's lowest state, where a real server picks one (a furnace's facing), which is why the bot judges a placement by name.
 - `run` delivers the last tick's outgoing packets to the sim before returning, so a test sees the final `container-close` in `:sim/window`.
 - The pickaxe test asserts one table placed, the table window closed on both sides, no violations, no failed attempts, and that the bot remembers the table where the server put it.
 

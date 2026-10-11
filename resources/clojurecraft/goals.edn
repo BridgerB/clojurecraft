@@ -90,4 +90,12 @@
   :goal/provides {:block/crafting_table :near}
   :goal/act :place
   :goal/item :crafting_table
+  :goal/done? :provided?}
+ {:goal/id :place-furnace
+  :goal/priority 10
+  :goal/doc "put a held furnace down near the player"
+  :goal/needs {:item/furnace 1}
+  :goal/provides {:block/furnace :near}
+  :goal/act :place
+  :goal/item :furnace
   :goal/done? :provided?}]

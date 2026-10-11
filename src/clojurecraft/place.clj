@@ -13,7 +13,6 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
-            [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]
@@ -148,7 +147,7 @@
 (defmethod place-stage :sent
   [world {:intent/keys [item target sequence sent-at]}]
   (let [placed (terrain/block-at world target)]
-    (cond (= placed (memory/placed-state item)) (intent/done world)
+    (cond (= item (blocks/name-of placed)) (intent/done world) ; any state of the block: a furnace faces as the server chose
           (and (>= (or (:stats/last-ack world) -1) sequence) (> (- (now world) sent-at) 500))
           (intent/fail world :rejected)
           (> (- (now world) sent-at) answer-ms) (intent/fail world :no-answer)

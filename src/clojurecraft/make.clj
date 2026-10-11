@@ -12,6 +12,7 @@
    Requiring this namespace registers the :needs planner, the :provided? predicate and the
    :gather, :place and :craft acts."
   (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.craft]
             [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]
@@ -88,15 +89,16 @@
 (defn counts "Held items by name." [world] (recipe/counts (:player/inventory world)))
 
 (defn near
-  "The remembered position of a placed block of this name within table-search, or nil. A
-   position the plan blacklisted (a walk to it failed) does not count, so an unreachable table
-   is replaced by a new one instead of walked at until the plan fails."
+  "The remembered position of a placed block of this name (a table, a furnace: memory's
+   placed-kinds) within table-search, or nil. A position the plan blacklisted (a walk to it
+   failed) does not count, so an unreachable table is replaced by a new one instead of walked
+   at until the plan fails."
   [world block]
-  (when (= block :crafting_table)
+  (when (contains? memory/placed-kinds block)
     (memory/nearest-of (game/eye world)
                        table-search
                        (remove (or (:plan/blacklist world) #{})
-                               (memory/positions-now world [memory/crafting-table])))))
+                               (memory/positions-now world (blocks/states-of block))))))
 
 ;; ---------------------------------------------------------------- the planner
 

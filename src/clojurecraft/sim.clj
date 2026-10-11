@@ -213,7 +213,7 @@
 
 ;; ---------------------------------------------------------------- windows
 
-(def table-state (first (keep (fn [[n _ lo]] (when (= n :crafting_table) lo)) blocks/table)))
+(def table-state (blocks/default-state :crafting_table))
 
 (defn result-of
   "What the grid of view crafts, {:item id :count n}, or nil when it matches no recipe."
@@ -571,8 +571,11 @@
             held (get-in sim [:sim/inv slot])
             d (block-at sim dest)
             overlap? (overlaps-player? sim dest)
-            ok? (and held
-                     (= (:item held) (recipe/item-id :crafting_table))
+            placing (some-> held
+                            :item
+                            recipe/item-name
+                            blocks/default-state) ; the held item is a block: it is placed
+            ok? (and placing
                      d
                      (not (blocks/solid? d))
                      (not= :liquid (blocks/type-of d))
@@ -582,9 +585,9 @@
         (if ok?
           (let [before (full (:sim/inv sim) (inventory/layouts :inventory))]
             (-> sim
-                (assoc-in [:sim/placed dest] table-state)
+                (assoc-in [:sim/placed dest] placing)
                 (update :sim/inv take-one slot)
-                (send {:packet/name :block-update :pos dest :state table-state})
+                (send {:packet/name :block-update :pos dest :state placing})
                 (sync-window :inventory before (:sim/cursor sim) false)
                 (send ack)))
           (-> sim
