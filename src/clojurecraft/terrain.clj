@@ -13,10 +13,20 @@
   [world pos]
   (or (get (:world/blocks world) pos) (chunk/block-at (:world/chunks world) pos)))
 
+(defn fluid-at
+  "The fluid at pos, {:fluid/kind :fluid/level}, or nil: no fluid, or a block not loaded."
+  [world pos]
+  (blocks/fluid (block-at world pos)))
+
+(defn fluid-kind
+  "The kind of fluid at pos, :water or :lava, or nil."
+  [world pos]
+  (:fluid/kind (fluid-at world pos)))
+
 (defn fluid-fn
   "Fluid oracle for physics: the fluid at a block, or nil. An unloaded block is no fluid."
   [world]
-  (fn [x y z] (blocks/fluid (block-at world [x y z]))))
+  (fn [x y z] (fluid-at world [x y z])))
 
 (defn solid-fn
   "Solidity oracle for physics. Unloaded counts as solid so the bot never falls out of the world."

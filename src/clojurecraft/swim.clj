@@ -50,8 +50,7 @@
   "The y of the first cell above the feet cell that is not the fluid kind: the water's
    surface cell, or the roof over it."
   [world kind [x y z]]
-  (let [fluid-kind (fn [cy] (:fluid/kind (blocks/fluid (terrain/block-at world [x cy z]))))]
-    (or (first (filter #(not= kind (fluid-kind %)) (range y (+ y 16)))) (+ y 16))))
+  (or (first (filter #(not= kind (terrain/fluid-kind world [x % z])) (range y (+ y 16)))) (+ y 16)))
 
 (defn float-top
   "The highest feet level the body reaches in this column: float-depth under an open surface
@@ -265,20 +264,18 @@
    none over it (steve's landing set W: swimmable water 2+ deep; a one-deep puddle walked
    across on foot was gym shore-w5 run 1)."
   [world [x y z :as cell]]
-  (let [kind (fn [c] (:fluid/kind (blocks/fluid (terrain/block-at world c))))]
-    (and (= :water (kind cell))
-         (blocks/source? (terrain/block-at world cell))
-         (= :water (kind [x (dec y) z]))
-         (not= :water (kind [x (inc y) z])))))
+  (and (= :water (terrain/fluid-kind world cell))
+       (blocks/source? (terrain/block-at world cell))
+       (= :water (terrain/fluid-kind world [x (dec y) z]))
+       (not= :water (terrain/fluid-kind world [x (inc y) z]))))
 
 (defn shallow?
   "Is the cell one-deep water: water with no water over it and a solid under it, which the feet
    stand in with the eye in air."
   [world [x y z :as cell]]
-  (let [kind (fn [c] (:fluid/kind (blocks/fluid (terrain/block-at world c))))]
-    (and (= :water (kind cell))
-         (not= :water (kind [x (inc y) z]))
-         (solid-cell? world [x (dec y) z]))))
+  (and (= :water (terrain/fluid-kind world cell))
+       (not= :water (terrain/fluid-kind world [x (inc y) z]))
+       (solid-cell? world [x (dec y) z])))
 
 (defn wadeable?
   "Could the feet rest in cell on the way into deep water: a cell they can stand in, or

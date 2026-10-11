@@ -41,8 +41,7 @@
   "Would breaking target let water or lava in: is any of its six neighbours a fluid
    (steve's digExposesWater)?"
   [world [x y z]]
-  (boolean (some (fn [[dx dy dz]]
-                   (blocks/fluid (terrain/block-at world [(+ x dx) (+ y dy) (+ z dz)])))
+  (boolean (some (fn [[dx dy dz]] (terrain/fluid-at world [(+ x dx) (+ y dy) (+ z dz)]))
                  [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
 
 (defn dig-time
