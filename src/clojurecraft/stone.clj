@@ -52,13 +52,18 @@
       (keyword (str "no-" (name (blocks/tool-of s)))))))
 
 (defn beside
-  "A cell a route could stand in beside a block at pos, at its level (one of its horizontal
-   neighbours), or nil: standing there, the block is dug from the side and its drop comes to
-   rest at the feet, inside the pickup box. Dug from the surface above, the drop lies a block
-   under the feet and is never picked up."
+  "A cell a route could stand in to dig a block at pos from, or nil: one of its horizontal
+   neighbours at its level or a block lower (the block at the head), or the cell under it with
+   the head just below it (the block overhead). From each the drop comes to rest inside the
+   pickup box. Dug from the surface above, the drop lies a block under the feet and is never
+   picked up, so a block under the feet never counts. In a tunnel two high, only the walls at
+   the feet counted before the head and the ceiling did: batch iron-a2 run 4 tunnelled over a
+   hundred blocks at y 16 without one iron ore in sight."
   [world [x y z]]
   (first (filter #(path/standable? world %)
-                 (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ x dx) y (+ z dz)]))))
+                 (concat
+                  (for [dy [0 -1] [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ x dx) (+ y dy) (+ z dz)])
+                  [[x (- y 2) z]]))))
 
 (defn exposed?
   "Can a player stand beside the block at pos and dig it?"

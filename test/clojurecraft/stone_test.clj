@@ -79,3 +79,23 @@
          {:intent/kind :walk :intent/target [14 64 14] :intent/for :mine-iron :intent/pickup? true}
          (stone/mine-next w (row :mine-iron)))
         "the open one, farther, is the one walked to")))
+
+(def corridor
+  "A tunnel two high at y 64-65 along x from 2 to 12 at z 8, cut into stone filling y 64-70, with
+   iron ore in its wall at the head (x 5), in its ceiling (x 8) and in its floor (x 11)."
+  (merge (into {} (for [x (range 16) y (range 64 71) z (range 16)] [[x y z] 1]))
+         (into {} (for [x (range 2 13) y [64 65]] [[x y 8] blocks/air]))
+         {[5 65 9] (blocks/default-state :iron_ore)
+          [8 66 8] (blocks/default-state :iron_ore)
+          [11 63 8] (blocks/default-state :iron_ore)}))
+
+(deftest a-tunnel-shows-ore-at-the-head-and-overhead
+  ;; batch iron-a2 run 4 tunnelled over a hundred blocks at y 16 seeing only the walls at its feet
+  (let [w (assoc (standing 64 :stone_pickaxe)
+                 :player/pos [2.5 64.0 8.5]
+                 :world/chunks {[0 0] (world/column corridor)})
+        seen (set (stone/exposed-of-states w (stone/states-of-row (row :mine-iron))))]
+    (is (contains? seen [5 65 9])
+        "in the wall at the head: dug from the cell beside it, a block lower")
+    (is (contains? seen [8 66 8]) "in the ceiling: dug from under it")
+    (is (not (contains? seen [11 63 8])) "in the floor: the drop would lie under the feet")))

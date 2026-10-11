@@ -1083,6 +1083,35 @@
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
     (is (empty? (:sim/violations sim)))))
 
+(def ore-corridor
+  "A tunnel two high at y 64-65 along x from 2 to 12 at z 8, in stone up to y 70, with iron ore
+   in its wall at the head (x 5) and in its ceiling (x 9)."
+  (merge (into {} (for [x (range 16) y (range 64 71) z (range 16)] [[x y z] 1]))
+         (into {} (for [x (range 2 13) y [64 65]] [[x y 8] blocks/air]))
+         {[5 65 9] (blocks/default-state :iron_ore) [9 66 8] (blocks/default-state :iron_ore)}))
+
+(deftest ore-at-the-head-and-overhead-is-mined-from-the-tunnel
+  ;; batch iron-a2 run 4 tunnelled over a hundred blocks at y 16 seeing only the walls at its feet
+  (let [table (conj plan/goals
+                    {:goal/id :ore-test
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:item/raw_iron 2}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes ore-corridor)
+                                    :spawn [2.5 64.0 8.5]
+                                    :inventory {36 {:item (item :stone_pickaxe) :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         {:event/kind :go :go/goals [:ore-test]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 2 (get (held w) :raw_iron 0)))
+    (is (= #{[5 65 9] [9 66 8]} (:sim/broken sim)) "the two ores, nothing else")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- flint, by the loot table's luck
 
 (def gravel-state (blocks/default-state :gravel))
