@@ -105,6 +105,29 @@
 
 (defmethod run :default [world i _] (fail world [:unknown-intent (:intent/kind i)]))
 
+;; ---------------------------------------------------------------- intents composing intents
+
+(defn feet
+  "The cell the feet stand in: y a touch below the position, since physics jitter dips it
+   just under the integer (ruststeve's (p.y - 0.5).floor())."
+  [world]
+  (let [[x y z] (:player/pos world)]
+    [(long (math/floor x)) (long (math/floor (+ y 0.5))) (long (math/floor z))]))
+
+(defn child-dig
+  "A fresh :dig intent for one cell, to be run by the dig executor as another intent's child."
+  [target]
+  {:intent/kind :dig :intent/target target :intent/status :active})
+
+(defn run-child
+  "One tick of the child intent at :intent/child by its own executor: the child stands in as
+   :plan/intent for the tick, then returns to its place. Returns the world."
+  [world event]
+  (let [parent (:plan/intent world)
+        world (run (assoc world :plan/intent (:intent/child parent)) (:intent/child parent) event)
+        child (:plan/intent world)]
+    (assoc world :plan/intent (assoc parent :intent/child child))))
+
 ;; ---------------------------------------------------------------- walk
 
 (defn arrived?

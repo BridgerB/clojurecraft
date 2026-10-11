@@ -26,7 +26,6 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (def bank-radius 16)                  ; how far on the plane a bank is looked for (gym shore-w1 run 6: none within 12 from mid-sea)
@@ -104,7 +103,7 @@
 (defn child-dig
   "A :dig child for cell that may expose water: the escape digs beside the water it is in."
   [cell]
-  (assoc (stairs/child-dig cell) :intent/exposes-ok? true))
+  (assoc (intent/child-dig cell) :intent/exposes-ok? true))
 
 (defn floor-y
   "The feet level of the floor under the feet cell: one above the first solid cell below it
@@ -158,7 +157,7 @@
   [world {:intent/keys [bank started best-dist best-tick child next-search dig-when-down]} event]
   (let [tick (:time/tick world)
         started (or started tick)
-        feet (stairs/feet world)
+        feet (intent/feet world)
         world (intent/assoc-intent world :intent/started started)
         dist (when bank (physics/horizontal-distance (:player/pos world) (physics/centre bank)))
         nearer? (and dist (< dist (- (or best-dist Double/MAX_VALUE) progress)))
@@ -173,7 +172,7 @@
           (-> world
               (assoc :player/controls {})
               (intent/fail (:intent/reason child)))
-          child (stairs/run-child world event)
+          child (intent/run-child world event)
           (and dig-when-down (or (:player/on-ground? world) (not (:player/in-water? world))))
           (start-dig world dig-when-down "down")
           dig-when-down (assoc world :player/controls {:control/sneak? true})
@@ -222,7 +221,7 @@
   [world {:intent/keys [target started]} _]
   (let [tick (:time/tick world)
         started (or started tick)
-        feet (stairs/feet world)
+        feet (intent/feet world)
         world (intent/assoc-intent world :intent/started started)]
     (cond (> (- tick started) flee-timeout-ticks)
           (-> world
@@ -347,7 +346,7 @@
               (assoc :player/controls {})
               (intent/fail :shallow))
           (nil? target)
-          (if-let [[bank w] (entry world (stairs/feet world))]
+          (if-let [[bank w] (entry world (intent/feet world))]
             (-> world
                 (intent/assoc-intent
                  :intent/target bank
@@ -362,7 +361,7 @@
           (-> world
               (assoc :player/controls {})
               (intent/fail (:intent/reason child)))
-          child (stairs/run-child world event)
+          child (intent/run-child world event)
           ;; on the bank: straight in and on past the entry, jumping only when blocked with the
           ;; feet on the ground (a seabed step, shore-w4 runs 1 and 6), never afloat (a jump there
           ;; is a swim-up that keeps the eye in air against a wall), so it sinks as it deepens and
@@ -392,5 +391,5 @@
   ;; otherwise a wade needs a way into water it remembers, and with none it waits, as a gather
   ;; with no tree does
   (cond (:player/eye-in-water? world) {:plan/wait :in-water}
-        (entry world (stairs/feet world)) {:intent/kind :wade}
+        (entry world (intent/feet world)) {:intent/kind :wade}
         :else {:plan/wait :no-water}))

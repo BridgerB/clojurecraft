@@ -15,8 +15,7 @@
    executor itself (intents composing intents: no second rule for breaking blocks), and the
    descent is judged by the feet having actually gone down, never by a packet having been
    sent, since a dig the server refused leaves the bot where it stood."
-  (:require [clojure.math :as math]
-            [clojurecraft.blocks :as blocks]
+  (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
@@ -30,13 +29,6 @@
   "The heading a quarter turn from dir."
   [dir]
   (nth directions (mod (inc (.indexOf ^java.util.List directions dir)) 4)))
-
-(defn feet
-  "The cell the feet stand in: y a touch below the position, since physics jitter dips it
-   just under the integer (ruststeve's (p.y - 0.5).floor())."
-  [world]
-  (let [[x y z] (:player/pos world)]
-    [(long (math/floor x)) (long (math/floor (+ y 0.5))) (long (math/floor z))]))
 
 (defn stair-cells
   "The three cells a stair ahead of feet [x y z] in direction [dx dz] opens, top first:
@@ -63,21 +55,6 @@
          (every? #(not= :lava (kind %)) (exposed cells))
          (= :solid (kind [fx (dec fy) fz])))))
 
-(defn child-dig
-  "A fresh :dig intent for one cell, to be run by the dig executor."
-  [target]
-  {:intent/kind :dig :intent/target target :intent/status :active})
-
-(defn run-child
-  "One tick of the child intent at :intent/child by its own executor: the child stands in as
-   :plan/intent for the tick, then returns to its place. Returns the world."
-  [world event]
-  (let [parent (:plan/intent world)
-        world
-        (intent/run (assoc world :plan/intent (:intent/child parent)) (:intent/child parent) event)
-        child (:plan/intent world)]
-    (assoc world :plan/intent (assoc parent :intent/child child))))
-
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
   "The first of the stair's cells (top first) still solid, or nil when the stair is open."
@@ -92,13 +69,13 @@
     :or {turns 0 stage :plan}} event]
   (let [tick (:time/tick world)
         y-now (second (:player/pos world))]
-    (cond (<= (second (feet world)) to-y)
+    (cond (<= (second (intent/feet world)) to-y)
           (-> world
               (assoc :player/controls {})
               intent/done)
           (= stage :plan)
           (let [dir (or dir (first directions))
-                cells (stair-cells (feet world) dir)]
+                cells (stair-cells (intent/feet world) dir)]
             (cond (safe? world cells)
                   (intent/assoc-intent world
                                        :intent/dir dir
@@ -132,11 +109,13 @@
                 (-> world
                     (assoc :player/controls {})
                     (intent/fail (:intent/reason child)))
-                child (run-child world event)
+                child (intent/run-child world event)
                 (next-to-open world cells)
-                (run-child
-                 (intent/assoc-intent world :intent/child (child-dig (next-to-open world cells)))
-                 event)
+                (intent/run-child (intent/assoc-intent world
+                                                       :intent/child
+                                                       (intent/child-dig (next-to-open world
+                                                                                       cells)))
+                                  event)
                 :else (intent/assoc-intent world :intent/stage :step :intent/started-tick tick))
           (= stage :step)
           (let [[_ _ [fx fy fz]] cells
