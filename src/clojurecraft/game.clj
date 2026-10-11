@@ -42,35 +42,35 @@
 
 (defn init
   "The world before any event: handshake phase, no position, empty inventory, chunks and facts.
-   Attributes the bot cannot know yet (:player/pos, :player/entity-id ...) are absent."
+   Attributes the bot cannot know yet (:player/pos, :player/entity-id ...) are absent, and so
+   are the connection and the name when they are not given: the :start event carries them."
   [{:keys [host port name]}]
-  {:bot/phase :handshake
-   :bot/name name
-   :bot/uuid (b/offline-uuid name)
-   :bot/effects []
-   :bot/sequence 0
-   :conn/host host
-   :conn/port port
-   :time/now 0
-   :time/tick 0
-   :player/vel [0.0 0.0 0.0]
-   :player/look [0.0 0.0]
-   :player/on-ground? false
-   :player/horizontal-collision? false
-   :player/jump-ticks 0
-   :player/loaded? false
-   :player/controls {}
-   :player/inventory {}
-   :window/grid {}
-   :player/held-slot 0
-   :world/chunks {}
-   :world/blocks {}
-   :world/entities {}
-   :world/facts (memory/empty-facts)
-   :stats/unknown {}
-   :stats/keep-alives 0
-   :stats/teleports 0
-   :stats/chunks 0})
+  (cond-> {:bot/phase :handshake
+           :bot/effects []
+           :bot/sequence 0
+           :time/now 0
+           :time/tick 0
+           :player/vel [0.0 0.0 0.0]
+           :player/look [0.0 0.0]
+           :player/on-ground? false
+           :player/horizontal-collision? false
+           :player/jump-ticks 0
+           :player/loaded? false
+           :player/controls {}
+           :player/inventory {}
+           :window/grid {}
+           :player/held-slot 0
+           :world/chunks {}
+           :world/blocks {}
+           :world/entities {}
+           :world/facts (memory/empty-facts)
+           :stats/unknown {}
+           :stats/keep-alives 0
+           :stats/teleports 0
+           :stats/chunks 0}
+    name (assoc :bot/name name :bot/uuid (b/offline-uuid name))
+    host (assoc :conn/host host)
+    port (assoc :conn/port port)))
 
 ;; ---------------------------------------------------------------- effects
 

@@ -10,14 +10,14 @@
   "[attribute meaning when] rows, grouped by what the fact is about."
   [;; ---- the bot itself and its connection
    [:bot/phase "protocol phase: :handshake, :login, :configuration or :play; moves only in game/emit" "always"]
-   [:bot/name "player name" "always"]
-   [:bot/uuid "offline UUID derived from the name" "always"]
+   [:bot/name "player name" "once given, by init or the :start event"]
+   [:bot/uuid "offline UUID derived from the name" "once the name is given"]
    [:bot/effects "effects the last event asked for; the loop performs and clears them" "always"]
    [:bot/sequence "last block-interaction sequence number sent" "always"]
    [:bot/closed "why the socket closed" "after it closed"]
    [:bot/disconnected "the server's disconnect reason" "after a disconnect"]
-   [:conn/host "server host" "always"]
-   [:conn/port "server port" "always"]
+   [:conn/host "server host" "once given, by init or the :start event"]
+   [:conn/port "server port" "once given, by init or the :start event"]
    ;; ---- time, which enters only on ticks
    [:time/now "ms of the last tick event" "always"]
    [:time/tick "ticks seen so far" "always"]
