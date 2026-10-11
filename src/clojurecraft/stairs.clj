@@ -91,8 +91,6 @@
    {:intent/keys [to-y dir turns stage child cells started-y started-tick]
     :or {turns 0 stage :plan}} event]
   (let [tick (:time/tick world)
-        set-i (fn [w & kvs] (apply update w :plan/intent assoc kvs))
-        drop-i (fn [w & ks] (apply update w :plan/intent dissoc ks)) ; what is over is absent, never nil
         y-now (second (:player/pos world))]
     (cond (<= (second (feet world)) to-y)
           (-> world
@@ -102,30 +100,32 @@
           (let [dir (or dir (first directions))
                 cells (stair-cells (feet world) dir)]
             (cond (safe? world cells)
-                  (set-i world
-                         :intent/dir dir
-                         :intent/cells cells
-                         :intent/stage :open
-                         :intent/started-y y-now
-                         :intent/started-tick tick)
+                  (intent/assoc-intent world
+                                       :intent/dir dir
+                                       :intent/cells cells
+                                       :intent/stage :open
+                                       :intent/started-y y-now
+                                       :intent/started-tick tick)
                   (>= (inc turns) max-turns)
                   (-> world
                       (assoc :player/controls {})
                       (intent/fail :boxed))
                   :else
                   (-> world
-                      (set-i :intent/dir (turn dir) :intent/turns (inc turns))
+                      (intent/assoc-intent :intent/dir (turn dir) :intent/turns (inc turns))
                       (game/say (str "stairs: refused toward " dir ", turning")))))
           (= stage :open)
-          (cond (and child (intent/done? child)) (drop-i world :intent/child)
+          (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
                 (and child (= :needs-tool (:intent/reason child))) ; ore the pickaxe cannot drop: this way is refused, turn
                 (if (>= (inc turns) max-turns)
                   (-> world
                       (assoc :player/controls {})
                       (intent/fail :boxed))
                   (-> world
-                      (set-i :intent/dir (turn dir) :intent/turns (inc turns) :intent/stage :plan)
-                      (drop-i :intent/child :intent/cells)
+                      (intent/assoc-intent :intent/dir (turn dir)
+                                           :intent/turns (inc turns)
+                                           :intent/stage :plan)
+                      (intent/dissoc-intent :intent/child :intent/cells)
                       (game/say
                        (str "stairs: " (:intent/target child) " needs a better tool, turning"))))
                 (and child (intent/failed? child))
@@ -134,16 +134,18 @@
                     (intent/fail (:intent/reason child)))
                 child (run-child world event)
                 (next-to-open world cells)
-                (run-child (set-i world :intent/child (child-dig (next-to-open world cells))) event)
-                :else (set-i world :intent/stage :step :intent/started-tick tick))
+                (run-child
+                 (intent/assoc-intent world :intent/child (child-dig (next-to-open world cells)))
+                 event)
+                :else (intent/assoc-intent world :intent/stage :step :intent/started-tick tick))
           (= stage :step)
           (let [[_ _ [fx fy fz]] cells
                 target [(+ fx 0.5) (double fy) (+ fz 0.5)]]
             (cond (<= y-now (- started-y 0.5)) ; the feet went down: the stair is cut and taken
                   (-> world
                       (assoc :player/controls {})
-                      (set-i :intent/stage :plan)
-                      (drop-i :intent/child :intent/cells))
+                      (intent/assoc-intent :intent/stage :plan)
+                      (intent/dissoc-intent :intent/child :intent/cells))
                   (> (- tick started-tick) step-timeout-ticks)
                   (-> world
                       (assoc :player/controls {})

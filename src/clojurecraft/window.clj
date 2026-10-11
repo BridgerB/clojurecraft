@@ -9,6 +9,7 @@
    changed slots, so every changed slot comes back; and an empty cursor, so the world drops
    :window/cursor on every click and the server corrects it only when it is not empty."
   (:require [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.recipe :as recipe]))
 
 (def answer-timeout 3000)             ; a click the server never answers fails the intent
@@ -54,10 +55,9 @@
                   :changed []
                   :cursor nil})
       (dissoc :window/cursor)
-      (update :plan/intent assoc
-              :intent/awaiting state-id
-              :intent/awaiting-window id
-              :intent/sent-at (:time/now world))))
+      (intent/assoc-intent :intent/awaiting state-id
+                           :intent/awaiting-window id
+                           :intent/sent-at (:time/now world))))
 
 (defn state-id-of
   "The latest state id the server sent for window-id: window 0's, or the open container's
