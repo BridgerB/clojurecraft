@@ -46,10 +46,10 @@
     (is (= {:intent/kind :stairs-down :intent/to-y 58}
            (stone/mine-next (standing 64 :stone_pickaxe) (row :mine-iron)))))
   (testing "never below the row's depth"
-    (is (= {:intent/kind :stairs-down :intent/to-y 16}
-           (stone/mine-next (standing 20 :stone_pickaxe) (row :mine-iron))))
+    (is (= {:intent/kind :stairs-down :intent/to-y 0}
+           (stone/mine-next (standing 4 :stone_pickaxe) (row :mine-iron))))
     (is (= {:plan/wait :none-in-sight}
-           (stone/mine-next (standing 16 :stone_pickaxe) (row :mine-iron)))))
+           (stone/mine-next (standing 0 :stone_pickaxe) (row :mine-iron)))))
   (testing "stone has no depth: always down"
     (is (= {:intent/kind :stairs-down :intent/to-y -40}
            (stone/mine-next (standing -34 :wooden_pickaxe) (row :mine-stone))))))

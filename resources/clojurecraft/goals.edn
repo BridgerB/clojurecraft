@@ -143,12 +143,12 @@
  {:goal/id :mine-iron
   :goal/priority 10
   :goal/doc
-  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it (it is most common around y 16)"
+  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it (common from y 56 down past 0, most around 16; the stairs stop at 0, above deepslate's slower digs)"
   :goal/holds {:item/stone_pickaxe 1}
   :goal/provides {:item/raw_iron 1}
   :goal/act :mine
   :goal/blocks [:iron_ore :deepslate_iron_ore]
-  :goal/depth 16
+  :goal/depth 0
   :goal/done? :provided?}
  {:goal/id :dig-gravel
   :goal/priority 10
