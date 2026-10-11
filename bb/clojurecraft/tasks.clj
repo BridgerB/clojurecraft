@@ -13,7 +13,7 @@
    namespace and these tasks."
   ["src" "dev" "test" "repl" "bb"])
 
-(defn tool
+(defn tool!
   "Run native (a program name) with args when it is on PATH, else `clojure -M:<alias>` with the
    same args. Throws when the command fails, so a task stops there."
   [native alias & args]

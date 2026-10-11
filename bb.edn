@@ -13,17 +13,17 @@
        :task (apply clojure "-M:fmt" "fix" *command-line-args*)}
   fmt:check {:doc "Fail when a file is not as zprint lays it out" :task (clojure "-M:fmt" "check")}
   lint {:doc "clj-kondo, held at zero findings"
-        :task (apply t/tool "clj-kondo" "lint" "--lint" t/source-paths)}
+        :task (apply t/tool! "clj-kondo" "lint" "--lint" t/source-paths)}
   idioms
   {:doc "Splint, held at zero findings (.splint.edn)"
    :task
    (apply clojure "-M:splint" "src" "dev" "test/clojurecraft" "repl" "bb" *command-line-args*)}
   ns {:doc "Sort and prune every ns form (clojure-lsp clean-ns, .lsp/config.edn)"
-      :task (t/tool "clojure-lsp" "lsp" "clean-ns")}
+      :task (t/tool! "clojure-lsp" "lsp" "clean-ns")}
   ns:check {:doc "Fail when an ns form is not as clean-ns leaves it"
-            :task (t/tool "clojure-lsp" "lsp" "clean-ns" "--dry")}
+            :task (t/tool! "clojure-lsp" "lsp" "clean-ns" "--dry")}
   unused {:doc "Fail on a public var nothing calls (clojure-lsp diagnostics)"
-          :task (t/tool "clojure-lsp" "lsp" "diagnostics" "--raw")}
+          :task (t/tool! "clojure-lsp" "lsp" "diagnostics" "--raw")}
   brain {:doc "The brain checker: every note's links and source anchors resolve"
          :task (clojure "-M:brain")}
   check {:doc "Every static check CI runs, in its order"
