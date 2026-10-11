@@ -29,6 +29,8 @@
             [clojurecraft.physics :as physics]
             [datascript.core :as d]))
 
+(set! *warn-on-reflection* true)
+
 (def schema
   "Positions and states are indexed, so lookups by place and Datalog by kind are direct;
    intention ids too, so an intention's story is one lookup."
@@ -110,13 +112,6 @@
        states
        (set states)))
 
-(defn positions-ever
-  "Positions where any of the states was ever observed (a Datalog query over the facts)."
-  [world states]
-  (d/q '[:find [?pos ...] :in $ [?s ...] :where [?e :sight/state ?s] [?e :sight/pos ?pos]]
-       (:world/facts world)
-       states))
-
 ;; ---------------------------------------------------------------- writing
 
 (defn observation
@@ -137,10 +132,10 @@
     (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))
 
 (defn surface-fluid?
-  "Is the fluid at [x y z] of column (the fluid map of one chunk, {[x y z] fluid}) exposed:
-   nothing of its kind directly above it?"
+  "Is the fluid at [x y z] of a column (its fluid states, {[x y z] id}) exposed: nothing of its
+   kind directly above it?"
   [fluids [x y z] kind]
-  (not= kind (:fluid/kind (get fluids [x (inc y) z]))))
+  (not= kind (:fluid/kind (blocks/fluid (get fluids [x (inc y) z])))))
 
 (defn pool-of
   "The pool fact for one fluid kind in a freshly loaded column: its highest surface source,
@@ -148,9 +143,9 @@
    because the pool under the sky is the one to walk to; cave water is the aquifer trap."
   [[cx cz] fluids kind now]
   (let [[mx mz] [(+ (* 16 cx) 8) (+ (* 16 cz) 8)]
-        cells (for [[[x y z :as pos] f] fluids
-                    :when (and (= kind (:fluid/kind f))
-                               (= 0 (:fluid/level f))
+        cells (for [[[x y z :as pos] id] fluids
+                    :when (and (= kind (:fluid/kind (blocks/fluid id)))
+                               (blocks/source? id)
                                (surface-fluid? fluids pos kind))]
                 [[(- y) (+ (abs (- x mx)) (abs (- z mz)))] pos])]
     (when (seq cells)
@@ -173,8 +168,7 @@
   [world key column]
   (let [db (:world/facts world)
         fluids (into {}
-                     (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)]
-                       [[x y z] (blocks/fluid id)]))
+                     (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)] [[x y z] id]))
         tx (for [kind [:water :lava]
                  :let [pool (pool-of key fluids kind (:time/now world))]
                  :when (and pool (not= (:pool/pos pool) (:pool/pos (latest-pool db key kind))))]

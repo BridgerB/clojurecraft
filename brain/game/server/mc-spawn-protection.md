@@ -9,7 +9,7 @@ lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
   - bb/clojurecraft/server.clj#["spawn-protection" 0]
-  - src/clojurecraft/harness.clj#positioned over motion_blocking_no_leaves run tp
+  - src/clojurecraft/fixture.clj#positioned over motion_blocking_no_leaves run 
 related:
   - "[[game/server/_moc|Server]]"
   - "[[local-server]]"

@@ -12,6 +12,8 @@
             [clojure.string :as str])
   (:import [java.util.zip ZipInputStream]))
 
+(set! *warn-on-reflection* true)
+
 (defn strip-ns "s without a leading \"minecraft:\"." [s] (str/replace s #"^minecraft:" ""))
 
 (defn kebab-kw
@@ -232,7 +234,7 @@
 
 (defn write-rows
   "Write rows to file f as an EDN vector, one row per line, after the header comment."
-  [f header rows]
+  [f ^String header rows]
   (with-open [w (io/writer f)]
     (.write w header)
     (.write w "[\n")
@@ -241,7 +243,7 @@
 
 (defn write-map
   "Write m to file f as an EDN map, one entry per line in m's order, after the header comment."
-  [f header m]
+  [f ^String header m]
   (with-open [w (io/writer f)]
     (.write w header)
     (.write w "{\n")

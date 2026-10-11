@@ -14,7 +14,7 @@
    loaded cursor.
 
    Two ways to drive it: run folds bot and model together, deterministic and fast (generated
-   worlds); connect puts the model on a thread behind a channel pair shaped like conn/open's,
+   worlds); connect puts the model on a thread behind a channel pair shaped like conn/open!'s,
    so main's own loop (its clock, its effects, its tap) runs against it with no Java process."
   (:refer-clojure :exclude [send])
   (:require [clojure.core.async :as async]
@@ -22,7 +22,10 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.recipe :as recipe]))
+
+(set! *warn-on-reflection* true)
 
 (def dig-ms 3000)                       ; a log by hand (hardness 2), the fallback for an unknown block
 (def break-threshold 0.7)               ; the server breaks once this share of the block's time has passed
@@ -35,7 +38,7 @@
         (contains? (:sim/broken sim) pos) 0
         :else (chunk/block-at {[0 0] (:sim/chunk sim)} pos)))
 
-(declare full layouts sync-window)
+(declare full sync-window)
 
 (defn held-item
   "The item id in the slot the client last selected (set-carried-item), or nil for an empty
@@ -185,7 +188,7 @@
               [x y z] pos
               item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
               drop (drop-of id held)
-              before (full (:sim/inv sim) (layouts :inventory))
+              before (full (:sim/inv sim) (inventory/layouts :inventory))
               sim (-> sim
                       (update :sim/broken conj pos)
                       (dissoc :sim/dig)
@@ -217,22 +220,11 @@
 
 (def table-state (first (keep (fn [[n _ lo]] (when (= n :crafting_table) lo)) blocks/table)))
 
-(def layouts
-  "Window 0 has a 2x2 grid and the inventory at 9-44; a crafting table has a 3x3 grid and the
-   same inventory shifted to 10-45. Slot 0 is always the result."
-  {:inventory {:size 2 :store (range 9 45) :hotbar 36}
-   :table {:size 3 :store (range 10 46) :hotbar 37}})
-
-(defn grid-slots
-  "The crafting-grid slots of a layout, 1..size²."
-  [{:keys [size]}]
-  (range 1 (inc (* size size))))
-
 (defn result-of
   "What the grid of view crafts, {:item id :count n}, or nil when it matches no recipe."
   [view layout]
   (let [grid (into {}
-                   (for [s (grid-slots layout)
+                   (for [s (inventory/grid-slots layout)
                          :let [it (get view s)]
                          :when it]
                      [s (recipe/item-name (:item it))]))]
@@ -241,13 +233,20 @@
 
 (defn view-of
   "The slots of window kind as the click rules see them, {slot item} without the result slot:
-   :inventory is window 0; :table is the table grid plus the inventory shifted up one slot."
+   :inventory is window 0; :table is the table grid plus the player's slots where the table
+   shows them (inventory/layouts)."
   [sim kind]
   (case kind
     :inventory (:sim/inv sim)
     :table
     (merge (get-in sim [:sim/window :grid])
-           (into {} (for [[s it] (:sim/inv sim) :when (<= 9 s 44)] [(inc s) it])))))
+           (into {}
+                 (for [[s it] (:sim/inv sim)
+                       :let [t (inventory/translate (inventory/layouts :inventory)
+                                                    (inventory/layouts :table)
+                                                    s)]
+                       :when t]
+                   [t it])))))
 
 (defn with-view
   "Write a clicked view of window kind back into the sim; the inverse of view-of. The result
@@ -259,10 +258,20 @@
       :table
       (-> sim
           (assoc-in [:sim/window :grid]
-                    (into {} (for [s (range 1 10) :let [it (get view s)] :when it] [s it])))
-          (assoc :sim/inv
-                 (merge (into {} (remove (fn [[s _]] (<= 9 s 44)) (:sim/inv sim)))
-                        (into {} (for [[s it] view :when (<= 10 s 45)] [(dec s) it]))))))))
+                    (into {}
+                          (for [s (inventory/grid-slots (inventory/layouts :table))
+                                :let [it (get view s)]
+                                :when it]
+                            [s it])))
+          (assoc
+           :sim/inv
+           (let [inv (inventory/layouts :inventory)
+                 table (inventory/layouts :table)]
+             (merge
+              (into {} (remove (fn [[s _]] (inventory/translate inv table s)) (:sim/inv sim)))
+              (into
+               {}
+               (for [[s it] view :let [w (inventory/translate table inv s)] :when w] [w it])))))))))
 
 (defn full
   "view with slot 0 set to what its grid crafts."
@@ -293,7 +302,9 @@
 (defn craft-once
   "view after one craft: one item taken from every occupied grid slot."
   [view layout]
-  (reduce (fn [view s] (if (get view s) (take-one view s) view)) view (grid-slots layout)))
+  (reduce (fn [view s] (if (get view s) (take-one view s) view))
+          view
+          (inventory/grid-slots layout)))
 
 (defn craft-all
   "Shift-click on the result: craft and move results into the store until the grid matches
@@ -301,14 +312,30 @@
   [view layout]
   (loop [view view]
     (let [out (result-of view layout)
-          [view' left] (when out (insert view (:store layout) out))]
+          [view' left] (when out (insert view (inventory/store-slots layout) out))]
       (cond (or (nil? out) left) view
             :else (recur (craft-once view' layout))))))
 
-(defn click-result
-  "A click on the result slot (0): vanilla crafts onto the cursor, or with a shift-click into the
-   store; a click when the grid matches nothing is recorded as a violation."
-  [layout view cursor mode]
+(defn click-kind
+  "Which vanilla rule a click falls under: :result (slot 0), :swap (mode 2, with a hotbar slot),
+   :shift (mode 1), :left (button 0) or :right."
+  [{:keys [slot button mode]}]
+  (cond (= slot 0) :result
+        (= mode 2) :swap
+        (= mode 1) :shift
+        (= button 0) :left
+        :else :right))
+
+(defmulti click-view
+  "Vanilla click rules over one window's slots, one method per kind of click (click-kind).
+   Returns {:view :cursor :violation}."
+  {:arglists '([layout view cursor click])}
+  (fn [_layout _view _cursor click] (click-kind click)))
+
+(defmethod click-view :result
+  ;; vanilla crafts onto the cursor, or with a shift-click into the store; a click when the grid
+  ;; matches nothing is recorded as a violation
+  [layout view cursor {:keys [mode]}]
   (let [out (result-of view layout)]
     (cond (nil? out) {:view view :cursor cursor :violation [:click-on-empty-result mode]}
           (= mode 1) {:view (craft-all view layout) :cursor cursor}
@@ -317,46 +344,55 @@
           {:view (craft-once view layout) :cursor (update out :count + (:count cursor 0))}
           :else {:view view :cursor cursor})))
 
-(defn click-view
-  "Vanilla click rules over one window's slots. Returns {:view :cursor :violation}."
-  [layout view cursor {:keys [slot button mode]}]
+(defmethod click-view :swap
+  ;; the slot and hotbar slot (hotbar + button) trade places
+  [layout view cursor {:keys [slot button]}]
   (let [at (get view slot)
-        store (:store layout)]
-    (cond (= slot 0) (click-result layout view cursor mode)
-          (= mode 2)
-          (let [h (+ (:hotbar layout) button)
-                other (get view h)]
-            {:view (-> view
-                       (dissoc slot h)
-                       (cond-> other (assoc slot other)
-                               at (assoc h at)))
-             :cursor cursor})
-          (= mode 1)
-          (if (and at (some #{slot} (grid-slots layout)))
-            (let [[view' left] (insert (dissoc view slot) store at)]
-              {:view (cond-> view' left (assoc slot left)) :cursor cursor})
-            {:view view :cursor cursor})
-          (= button 0)
-          (cond (nil? cursor) {:view (dissoc view slot) :cursor at}
-                (nil? at) {:view (assoc view slot cursor) :cursor nil}
-                (= (:item at) (:item cursor))
-                (let [k (min (:count cursor) (- max-stack (:count at)))
-                      left (- (:count cursor) k)]
-                  {:view (assoc view slot (update at :count + k))
-                   :cursor (when (pos? left) (assoc cursor :count left))})
-                :else {:view (assoc view slot cursor) :cursor at})
-          :else
-          (cond (and (nil? cursor) at)
-                (let [half (long (math/ceil (/ (:count at) 2)))
-                      rest (- (:count at) half)]
-                  {:cursor (assoc at :count half)
-                   :view
-                   (if (pos? rest) (assoc view slot (assoc at :count rest)) (dissoc view slot))})
-                (nil? cursor) {:view view :cursor nil}
-                (or (nil? at) (and (= (:item at) (:item cursor)) (< (:count at) max-stack)))
-                {:view (assoc view slot {:item (:item cursor) :count (inc (:count at 0))})
-                 :cursor (when (> (:count cursor) 1) (update cursor :count dec))}
-                :else {:view view :cursor cursor}))))
+        h (+ (inventory/hotbar-start layout) button)
+        other (get view h)]
+    {:view (-> view
+               (dissoc slot h)
+               (cond-> other (assoc slot other)
+                       at (assoc h at)))
+     :cursor cursor}))
+
+(defmethod click-view :shift
+  ;; a grid cell's stack moves into the store, what does not fit stays; anywhere else nothing
+  [layout view cursor {:keys [slot]}]
+  (let [at (get view slot)]
+    (if (and at (some #{slot} (inventory/grid-slots layout)))
+      (let [[view' left] (insert (dissoc view slot) (inventory/store-slots layout) at)]
+        {:view (cond-> view' left (assoc slot left)) :cursor cursor})
+      {:view view :cursor cursor})))
+
+(defmethod click-view :left
+  ;; pick up, put down, merge up to a full stack (the rest stays on the cursor), or swap
+  [_layout view cursor {:keys [slot]}]
+  (let [at (get view slot)]
+    (cond (nil? cursor) {:view (dissoc view slot) :cursor at}
+          (nil? at) {:view (assoc view slot cursor) :cursor nil}
+          (= (:item at) (:item cursor))
+          (let [k (min (:count cursor) (- max-stack (:count at)))
+                left (- (:count cursor) k)]
+            {:view (assoc view slot (update at :count + k))
+             :cursor (when (pos? left) (assoc cursor :count left))})
+          :else {:view (assoc view slot cursor) :cursor at})))
+
+(defmethod click-view :right
+  ;; an empty cursor picks up half (rounded up); a loaded one places one into an empty or
+  ;; same-item slot that is not full
+  [_layout view cursor {:keys [slot]}]
+  (let [at (get view slot)]
+    (cond (and (nil? cursor) at)
+          (let [half (long (math/ceil (/ (:count at) 2)))
+                rest (- (:count at) half)]
+            {:cursor (assoc at :count half)
+             :view (if (pos? rest) (assoc view slot (assoc at :count rest)) (dissoc view slot))})
+          (nil? cursor) {:view view :cursor nil}
+          (or (nil? at) (and (= (:item at) (:item cursor)) (< (:count at) max-stack)))
+          {:view (assoc view slot {:item (:item cursor) :count (inc (:count at 0))})
+           :cursor (when (> (:count cursor) 1) (update cursor :count dec))}
+          :else {:view view :cursor cursor})))
 
 (defn state-id-path
   "Where the sim keeps the state id of window kind."
@@ -378,7 +414,7 @@
    sent) and an empty cursor (so the cursor is sent only when it is not empty). A stale state
    id gets the full window instead. predicted-cursor is the cursor the client last claimed."
   [sim kind before predicted-cursor stale?]
-  (let [layout (layouts kind)
+  (let [layout (inventory/layouts kind)
         after (full (view-of sim kind) layout)
         id (window-id sim kind)
         path (state-id-path kind)]
@@ -427,7 +463,7 @@
         kind (when-not (and (= kind :inventory) (:sim/window sim)) kind)]
     (if (or (nil? kind) (contains? (:sim/drop-clicks sim) n))
       sim
-      (let [layout (layouts kind)
+      (let [layout (inventory/layouts kind)
             before (full (view-of sim kind) layout)
             {:keys [view cursor violation]}
             (click-view layout (view-of sim kind) (:sim/cursor sim) pkt)
@@ -447,8 +483,10 @@
               (:sim/cursor sim)
               (update :sim/violations conj [:close-with-cursor (:sim/cursor sim)]))]
     (if (= :table (window-kind sim window-id))
-      (let [before (full (:sim/inv sim) (layouts :inventory))
-            inv (reduce (fn [inv it] (first (insert inv (range 9 45) it)))
+      (let [before (full (:sim/inv sim) (inventory/layouts :inventory))
+            inv (reduce (fn [inv it]
+                          (first
+                           (insert inv (inventory/store-slots (inventory/layouts :inventory)) it)))
                         (:sim/inv sim)
                         (vals (get-in sim [:sim/window :grid])))]
         (-> sim
@@ -460,8 +498,8 @@
 (defn give
   "An item entity reaches the inventory: stack it into window 0 and tell the client."
   [sim item]
-  (let [before (full (:sim/inv sim) (layouts :inventory))
-        [inv _] (insert (:sim/inv sim) (range 9 45) item)]
+  (let [before (full (:sim/inv sim) (inventory/layouts :inventory))
+        [inv _] (insert (:sim/inv sim) (inventory/store-slots (inventory/layouts :inventory)) item)]
     (sync-window (assoc sim :sim/inv inv) :inventory before (:sim/cursor sim) false)))
 
 ;; ---------------------------------------------------------------- using items on blocks
@@ -530,7 +568,8 @@
             (send {:packet/name :container-set-content
                    :window-id id
                    :state-id 1
-                   :items (mapv #(get (full (view-of sim :table) (layouts :table)) %) (range 46))
+                   :items (mapv #(get (full (view-of sim :table) (inventory/layouts :table)) %)
+                                (range 46))
                    :carried (:sim/cursor sim)})))
       (let [dest (mapv + pos (faces face))
             slot (+ 36 (:sim/held sim 0))
@@ -546,7 +585,7 @@
                      (not overlap?))
             sim (cond-> sim overlap? (update :sim/violations conj [:place-into-player dest]))]
         (if ok?
-          (let [before (full (:sim/inv sim) (layouts :inventory))]
+          (let [before (full (:sim/inv sim) (inventory/layouts :inventory))]
             (-> sim
                 (assoc-in [:sim/placed dest] table-state)
                 (update :sim/inv take-one slot)
@@ -663,8 +702,8 @@
 
 (def tick-ms 50)                        ; the model's tick, as the vanilla server's
 
-(defn connect
-  "The model behind a channel pair shaped like conn/open's: {:in chan :out chan :close! fn}.
+(defn connect!
+  "The model behind a channel pair shaped like conn/open!'s: {:in chan :out chan :close! fn}.
    Packet maps the client puts on :out are stepped into the model; every tick-ms of wall time
    the model ticks; whatever it says for the client goes onto :in, in order. Both channels are
    bounded, as conn's are. :in closes when the client closes :out or calls :close!, which the

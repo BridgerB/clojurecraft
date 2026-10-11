@@ -13,6 +13,8 @@
            [java.util Base64]
            [java.util.zip GZIPInputStream]))
 
+(set! *warn-on-reflection* true)
+
 (defmethod print-method (Class/forName "[B")
   [^bytes b ^Writer w]
   (.write w "#clojurecraft/bytes \"")
@@ -35,7 +37,7 @@
 
 ;;;; I/O: recording files ;;;;
 
-(defn tap
+(defn tap!
   "A recording as a channel tap: {:write (fn [event]) :effects (fn [effects]) :close (fn [])}.
    Call :write before applying an event, :effects with what applying it produced, and :result
    with the RESULT the run printed (the recording ends there); each puts

@@ -23,7 +23,7 @@ related:
 
 ## Steps
 1. `cd` into the repo: direnv loads the flake's shell (`.envrc`, `use flake`), with Java 25, Clojure, clj-kondo, clojure-lsp, lefthook and zstd on PATH and the git hooks installed. Once per clone, `direnv allow`; without direnv, `nix develop`.
-2. `clojure -M:test` - the unit, property and sim tests, no server needed.
+2. `clojure -M:test` - the unit, property and sim tests, no server needed. For a REPL, `bb nrepl` (`clojure -M:dev:nrepl`) loads `repl/user.clj`, whose comment block runs the whole bot against the server model and folds a recorded run into its worlds.
 3. `bb local-server start` - first boot generates the world; wait for "server up". `bb tasks` lists every command.
 4. Land the bot in a forest and run it, the fixture piped into the bot ([[harness-landing]]):
    ```bash

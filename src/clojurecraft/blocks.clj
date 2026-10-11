@@ -6,6 +6,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]))
 
+(set! *warn-on-reflection* true)
+
 (defn- resource [n] (edn/read-string (slurp (io/resource (str "clojurecraft/" n ".edn")))))
 
 (def table "[[name type min-state max-state] ...]" (resource "blocks"))

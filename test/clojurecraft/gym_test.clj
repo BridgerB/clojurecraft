@@ -3,13 +3,14 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
+            [clojurecraft.fixture :as fixture]
             [clojurecraft.gym :as gym]
             [clojurecraft.landings :as landings]
             [clojurecraft.plan :as plan]
             [clojurecraft.spec]))
 
 (deftest the-registry-is-data-and-agrees-with-the-goal-table
-  (is (every? #(s/valid? :clojurecraft.spec/gym %) gym/gyms))
+  (is (every? #(s/valid? :clojurecraft.gym/row %) gym/gyms))
   (is (= gym/gyms (edn/read-string (pr-str gym/gyms))) "printable and readable back")
   (testing "every row's --until puts exactly its goal in play"
     (is (every? #(= [(:gym/goal %)] (plan/goals-for (:gym/until %))) gym/gyms)))
@@ -74,7 +75,7 @@
               (gym/judged (merge (left :landed? false)
                                  {:gym/goal :wood :gym/run 3 :gym/landing [5 6 70]}))]
         md (gym/report rows)]
-    (is (every? #(s/valid? :clojurecraft.spec/gym-result %) rows))
+    (is (every? #(s/valid? :clojurecraft.gym/result %) rows))
     (is (str/includes? md "pass 1/2 [9%, 91%]; not counted: harness 1, disconnect 0"))
     (is (str/includes? md "| 2 | 3,4 | fail | 30 | goal | No items were found |")
         "the disagreement shows its truth text")
@@ -96,7 +97,7 @@
     (is (= [1 2 70] (landings/landing-for ls 1)) "run 1 lands on the first")
     (is (= [1 2 70] (landings/landing-for ls 4)) "runs past the end wrap"))
   (is (= [2000 3000]
-         (landings/parse-located
+         (fixture/parse-located
           "The nearest #minecraft:is_forest is at [2000, ~, 3000] (12 blocks away)")))
   (is (= 169 (landings/chunk-count (landings/square [100 100] 96))) "13x13 chunks at radius 96")
   (is (<= (landings/chunk-count (landings/square [-8 -8] 96)) landings/max-forceload-chunks))

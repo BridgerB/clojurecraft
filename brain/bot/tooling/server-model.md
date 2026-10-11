@@ -10,7 +10,7 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#defn init
   - src/clojurecraft/sim.clj#defn run
-  - src/clojurecraft/sim.clj#defn connect
+  - src/clojurecraft/sim.clj#defn connect!
   - "test/clojurecraft/sim_test.clj#main's-own-loop-against-the-model-through-channels"
   - src/clojurecraft/sim.clj#def dig-ms
   - src/clojurecraft/sim.clj#observed live on 26.1.2: the breaker gets the block update, then the ack
@@ -28,7 +28,7 @@ related:
 
 ## Two ways to drive it
 - `sim/run` folds the bot's reducer and the model together on one thread, 50 ms per tick of model time: deterministic and fast, so the generated-worlds property can run thousands of worlds.
-- `sim/connect` puts the model on a thread of its own behind a bounded channel pair shaped like `conn/open`'s (`:in`, `:out`, `:close!`), ticking every 50 ms of wall time. `main`'s own loop (`run-loop`, `apply-event!`, `go-when-loaded!`) then runs against it unchanged: the essay's "bot and server model composed through a channel pair", a complete run of the real process with no Java server. `main's-own-loop-against-the-model-through-channels` gets a log that way in about 6 s, with the model's keep-alives answered; a model that never forwards its packets fails it.
+- `sim/connect!` puts the model on a thread of its own behind a bounded channel pair shaped like `conn/open!`'s (`:in`, `:out`, `:close!`), ticking every 50 ms of wall time. `main`'s own loop (`run-loop!`, `apply-event!`, `go-when-loaded!`) then runs against it unchanged: the essay's "bot and server model composed through a channel pair", a complete run of the real process with no Java server. `main's-own-loop-against-the-model-through-channels` gets a log that way in about 6 s, with the model's keep-alives answered; a model that never forwards its packets fails it.
 
 ## Key files
 - `sim.clj`, `init` - takes `{:column bytes :spawn [x y z] :keep-alive-every ms :drop-clicks #{n} :inventory {slot item} :respawn [x y z]}`.

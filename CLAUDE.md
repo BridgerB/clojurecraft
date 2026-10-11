@@ -17,7 +17,7 @@ Read `docs/hickey.md` first; it is the design brief. In short:
 - **Dispatch is open**: multimethods for packets (`game/on-packet` on `[phase name]`), intents (`intent/run` on `:intent/kind`) and goal rows (`plan/done-by` on `:goal/done?`, `plan/act` on `:goal/act`, `plan/next-intent` on `:goal/plan`). A new packet, intent or goal is a `defmethod` in a new namespace. The goal table is data, `resources/clojurecraft/goals.edn`; recipes add generated rows (`make`).
 - **Memory is facts with time** (`memory`): `:world/facts` is a DataScript value of append-only facts, never retracted, queried with Datalog: observations `{:sight/pos :sight/state :sight/at}` (kept after chunks unload), the bot's own intentions (`:intention/*`: started, done, failed, abandoned; `intention-as-of` answers what it was doing at any time) and the server's answers to its actions (`:answer/*`: acks, pickups).
 - **Every run is a file**: `--record run.edn` writes each event and the effects it produced, through a bounded channel tap with its own writer thread; `clojure -M:replay run.edn` folds the reducer over it with no server and verifies every effect. Keep this true (no hidden inputs). Observers watch the atom and never touch the reducers: `--telemetry` writes what changed, dropping rather than slowing the loop.
-- **Specs** live in `spec.clj` (every attribute in `model`, every packet derived from `packet/specs`) and are instrumented in tests; properties in `props_test.clj` and `make_test.clj`; the whole bot runs against the pure server model in `sim.clj` (`sim_test.clj`), including in 100 worlds test.check generates, with no Java process.
+- **Specs** live in `spec.clj` (every attribute in `model`, every packet derived from `packet/specs`) and are instrumented in tests; properties in `props_test.clj` and `make_test.clj`; the whole bot runs against the pure server model in `sim.clj` (`sim_test.clj`), including in the 2,000 worlds test.check generates on every push, with no Java process.
 - **The hammock**: every stage of the run has a problem statement in `resources/clojurecraft/problems.edn` (needs, risks, done in world terms, the last recorded failure), written before its goal; when a run fails in a new way, its row is updated.
 - I/O lives only below a `;;;; I/O ;;;;` fence, in `conn` (the socket and its threads), `rcon`, `main` (the loop, the clock, stderr), `record` (recording files), `watch` (telemetry), `replay`, and `harness`, the RCON fixture, which is its own process (`clojure -M:harness`) and reaches the bot only as EDN events on its stdin (`--events stdin`). Everything else is values in, values out.
 
@@ -41,11 +41,13 @@ src/clojurecraft/dig.clj      a block's break time and drop as a pure function o
 src/clojurecraft/intent.clj   open executors (multimethod on :intent/kind): :walk (follows a route) :dig (with the best tool) :collect, and the leaf blocker
 src/clojurecraft/stairs.clj   the :stairs-down executor: a staircase of child :dig intents, refusing water, lava and drops
 src/clojurecraft/stone.clj    the :mine act: the stone chain toward cobblestone, or stairs down to stone
+src/clojurecraft/swim.clj     the escape goals' rules and executors: :swim-out, :flee, and :wade (the shore trial)
 src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with clicks, verify, take
 src/clojurecraft/place.clj    the :place and :open-container executors: a spot, use-item-on, the server's answer
 src/clojurecraft/window.clj   window views (inventory or table) and the click that predicts nothing
 src/clojurecraft/recipe.clj   the vanilla crafting table as data: match, clicks, needs
 src/clojurecraft/plan.clj     loads goals.edn; registries done-by, act, next-intent; the planner; :plan/*
+src/clojurecraft/trap.clj     trapped in water or lava, re-derived every tick with hysteresis; dry land
 src/clojurecraft/make.clj     the needs planner: recipe rows, netting needs against inventory, the acts
 src/clojurecraft/wood.clj     the gather chain toward a log (walk → dig → collect)
 src/clojurecraft/model.clj    the information model: every attribute, its meaning, when it exists (model_test keeps it true)
@@ -54,11 +56,13 @@ src/clojurecraft/record.clj   the recording: a channel tap, reading it back, rep
 src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server, print RESULT
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin
+src/clojurecraft/fixture.clj  what every fixture asks the server over RCON: wait, load, teleport, judge a landing; the :go event
 src/clojurecraft/rcon.clj     RCON client (fixtures, CI judge); `clojure -M:rcon`
-src/clojurecraft/gym.clj      the gym: registry, land, judge, report (`clojure -M:gym`)
+src/clojurecraft/gym.clj      the gym: registry, one trial (land, judge, retry a disconnect), report (`clojure -M:gym`)
 src/clojurecraft/landings.clj landing sets: grid, biome snap, surface checks, pregeneration
 src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successive worlds, bounded, off-thread
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
+src/clojurecraft/cli.clj      what every entry point shares: --key value options, a timestamped stderr line
 dev/clojurecraft/datagen.clj  vanilla --reports and the inner jar's data → resources/clojurecraft/*.edn
 dev/clojurecraft/jar_probe.clj hardness and tool materials read from the game's own classes, for datagen
 dev/clojurecraft/brain.clj    the brain checker (clojure -M:brain)
@@ -73,6 +77,7 @@ nix develop                                   # Java 25, Clojure, clj-kondo, clo
 nix flake update                              # move every tool to today's nixpkgs; match the :lint and :lsp
                                               # versions in deps.edn, which CI runs from Maven
 bb tasks                                      # every command below as a Babashka task (bb.edn); bb ci is what CI's unit job runs
+bb nrepl                                      # nREPL with the bot, the tests and repl/user.clj (clojure -M:dev:nrepl); its comment block runs the bot against the model
 clojure -M:test                               # every test, namespaces and vars in parallel (eftest); -n ns, -v ns/var, -x ns
 bb local-server start|stop                    # vanilla 26.1.2 on game 25571 / RCON 25581 (bb/clojurecraft/server.clj)
 clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)" --name Clj_wood --until wood \

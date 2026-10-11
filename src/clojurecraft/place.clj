@@ -12,18 +12,20 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
+(set! *warn-on-reflection* true)
+
 (def place-reach 4.0)                 ; eye → target centre
 (def open-reach 4.5)                  ; eye → container centre for opening it; the server allows about 4.5
 (def settle-ms 300)                   ; standing still this long before using an item on a block
 (def answer-ms 3000)                  ; ms to wait for the server to answer a placement or an open
 
-(defn- set-intent [world & kvs] (apply update world :plan/intent assoc kvs))
 (defn- now [world] (:time/now world))
 
 (def around
@@ -85,7 +87,7 @@
                     :world-border-hit false
                     :sequence seq})
         (game/emit {:packet/name :swing :hand 0})
-        (set-intent :intent/sequence seq :intent/sent-at (now world)))))
+        (intent/assoc-intent :intent/sequence seq :intent/sent-at (now world)))))
 
 (defn held-slot-of
   "The lowest player-inventory slot holding item-id, or nil."
@@ -107,27 +109,29 @@
         p (held-slot-of world id)
         held (:player/held-slot world)]
     (cond (nil? p) (intent/fail world :not-held)
-          (= p held) (set-intent world :intent/stage :spot)
+          (= p held) (intent/assoc-intent world :intent/stage :spot)
           (<= 0 p 8)
           (-> world
               (game/emit {:packet/name :set-carried-item :slot p})
               (assoc :player/held-slot p)
-              (set-intent :intent/stage :spot))
+              (intent/assoc-intent :intent/stage :spot))
           :else
-          (window/click
-           world
-           (window/view world :inventory) ; swap into the held slot
-           {:click/slot (recipe/player->container-slot p) :click/button held :click/mode 2}))))
+          (window/click world
+                        (window/view world :inventory) ; swap into the held slot
+                        {:click/slot (inventory/player->window-slot (inventory/layouts :inventory)
+                                                                    p)
+                         :click/button held
+                         :click/mode 2}))))
 
 (defmethod place-stage :spot
   [world _]
   (if-let [[target support] (spot world)]
-    (set-intent world
-                :intent/stage :settle
-                :intent/target target
-                :intent/against support
-                :intent/since (now world)
-                :intent/still 0)
+    (intent/assoc-intent world
+                         :intent/stage :settle
+                         :intent/target target
+                         :intent/against support
+                         :intent/since (now world)
+                         :intent/still 0)
     (intent/fail world :no-spot)))
 
 (defmethod place-stage :settle
@@ -138,8 +142,8 @@
     (if (and (>= still 3) (> (- (now world) since) settle-ms))
       (-> world
           (use-item-on against 1 [0.5 1.0 0.5])
-          (set-intent :intent/stage :sent))
-      (set-intent world :intent/still still))))
+          (intent/assoc-intent :intent/stage :sent))
+      (intent/assoc-intent world :intent/still still))))
 
 (defmethod place-stage :sent
   [world {:intent/keys [item target sequence sent-at]}]
@@ -175,4 +179,4 @@
           (-> world
               (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
               (use-item-on target (intent/face-toward eye target) [0.5 0.5 0.5])
-              (set-intent :intent/stage :sent)))))
+              (intent/assoc-intent :intent/stage :sent)))))

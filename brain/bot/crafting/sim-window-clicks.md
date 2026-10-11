@@ -5,11 +5,12 @@ type: reference
 tags: [bot, tooling, sim, crafting]
 aliases: [sim click, click-view, layouts, sim/inv, sim/cursor, result-of, craft-once, insert]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
-  - src/clojurecraft/sim.clj#defn click-view
-  - src/clojurecraft/sim.clj#def layouts
+  - src/clojurecraft/sim.clj#defmulti click-view
+  - src/clojurecraft/sim.clj#defn click-kind
+  - src/clojurecraft/inventory.clj#def layouts
   - src/clojurecraft/sim.clj#defn result-of
   - src/clojurecraft/sim.clj#defn insert
   - src/clojurecraft/sim.clj#defn view-of
@@ -24,13 +25,13 @@ related:
 
 The sim stores the player's window-0 slots in `:sim/inv` (1-44 meaningful), the cursor in `:sim/cursor`, and an open crafting table in `:sim/window` (`{:id :grid :state-id}`). A click is applied by `click-view` to a **view**: a slot map of one window, built by `view-of` (window 0 is `:sim/inv` itself; the table is its grid plus the inventory shifted up by one). Slot 0 is never stored: `result-of` computes it from the grid with `recipe/match`.
 
-## Layouts (`layouts`)
-| Kind | Grid size | Inventory slots (`:store`) | Hotbar starts |
+## Layouts (`inventory/layouts`, shared with the bot's views)
+| Kind | Grid size | Inventory slots (`store-slots`) | Hotbar starts (`hotbar-start`) |
 |---|---|---|---|
 | `:inventory` | 2 (slots 1-4) | 9-44 | 36 |
 | `:table` | 3 (slots 1-9) | 10-45 | 37 |
 
-## Rules (`click-view`, returns `{:view :cursor :violation}`)
+## Rules (`click-view`, one method per `click-kind`, returns `{:view :cursor :violation}`)
 - **Slot 0, mode 1 (shift)**: craft repeatedly, inserting each result into the store, until the grid stops matching or the result does not fit.
 - **Slot 0, other modes**: with an empty or same-item cursor that can hold it, craft once onto the cursor; else nothing.
 - **Slot 0 with no result**: violation `[:click-on-empty-result mode]`.

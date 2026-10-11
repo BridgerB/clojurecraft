@@ -13,6 +13,8 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
 
+(set! *warn-on-reflection* true)
+
 (def reach 4.0)                       ; eye → block centre; the server allows ~4.5
 (def walk-timeout-ticks 1200)         ; 60 s
 (def stuck-ticks 40)                  ; no waypoint reached for 2 s → plan again
@@ -41,8 +43,7 @@
   "Would breaking target let water or lava in: is any of its six neighbours a fluid
    (steve's digExposesWater)?"
   [world [x y z]]
-  (boolean (some (fn [[dx dy dz]]
-                   (blocks/fluid (terrain/block-at world [(+ x dx) (+ y dy) (+ z dz)])))
+  (boolean (some (fn [[dx dy dz]] (terrain/fluid-at world [(+ x dx) (+ y dy) (+ z dz)]))
                  [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
 
 (defn dig-time
@@ -71,12 +72,21 @@
           (>= ax az) (if (pos? dx) 5 4)
           :else (if (pos? dz) 3 2))))
 
-(defn- intent [world f & args] (apply update world :plan/intent f args))
-(defn done "Mark the current intent done." [world] (intent world assoc :intent/status :done))
+(defn assoc-intent
+  "The world with keys set on the running intent (:plan/intent)."
+  [world & kvs]
+  (apply update world :plan/intent assoc kvs))
+
+(defn dissoc-intent
+  "The world with keys removed from the running intent: what is over is absent, never nil."
+  [world & ks]
+  (apply update world :plan/intent dissoc ks))
+
+(defn done "Mark the current intent done." [world] (assoc-intent world :intent/status :done))
 (defn fail
   "Mark the current intent failed, with the reason the planner reports."
   [world reason]
-  (intent world assoc :intent/status :failed :intent/reason reason))
+  (assoc-intent world :intent/status :failed :intent/reason reason))
 (defn done? "Did intent i finish?" [i] (= :done (:intent/status i)))
 (defn failed? "Did intent i fail?" [i] (= :failed (:intent/status i)))
 
@@ -97,15 +107,69 @@
 
 (defmethod run :default [world i _] (fail world [:unknown-intent (:intent/kind i)]))
 
+;; ---------------------------------------------------------------- intents composing intents
+
+(defn feet
+  "The cell the feet stand in: y a touch below the position, since physics jitter dips it
+   just under the integer (ruststeve's (p.y - 0.5).floor())."
+  [world]
+  (let [[x y z] (:player/pos world)]
+    [(long (math/floor x)) (long (math/floor (+ y 0.5))) (long (math/floor z))]))
+
+(defn child-dig
+  "A fresh :dig intent for one cell, to be run by the dig executor as another intent's child."
+  [target]
+  {:intent/kind :dig :intent/target target :intent/status :active})
+
+(defn chain-next
+  "The next link of a walk → dig → collect chain toward one drop, from the intent that just
+   ended (last), or nil: after the walk, dig its target; after the dig, collect the drop
+   (counting drops). Only a link of the chain for `for` continues, so a walk for another
+   purpose (to a crafting table) is never taken for one. Every link carries extra (a trunk)."
+  [last for drops extra]
+  (when (= for (:intent/for last))
+    (case (:intent/kind last)
+      :walk (merge {:intent/kind :dig :intent/target (:intent/target last) :intent/for for} extra)
+      :dig
+      (merge {:intent/kind :collect
+              :intent/target (:intent/target last)
+              :intent/for for
+              :intent/drops drops}
+             extra)
+      nil)))
+
+(defn run-child
+  "One tick of the child intent at :intent/child by its own executor: the child stands in as
+   :plan/intent for the tick, then returns to its place. Returns the world."
+  [world event]
+  (let [parent (:plan/intent world)
+        world (run (assoc world :plan/intent (:intent/child parent)) (:intent/child parent) event)
+        child (:plan/intent world)]
+    (assoc world :plan/intent (assoc parent :intent/child child))))
+
 ;; ---------------------------------------------------------------- walk
 
 (defn arrived?
-  "Is a walk over: the target within reach, and, for a log, the feet no more than pickup-rise
-   below it, so the drop comes to rest inside the pickup box rather than on a bank above it."
+  "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
+   the pickup box: for a log, no more than pickup-rise below it (not on a bank above the box);
+   for stone, neither above it (the drop would lie under the box) nor more than pickup-rise
+   below it."
   [world {:intent/keys [target for]} d]
-  (and (<= d reach)
-       (or (not= :log for)
-           (<= (- (second target) (long (math/floor (second (:player/pos world))))) pickup-rise))))
+  (let [rise (- (second target) (long (math/floor (second (:player/pos world)))))]
+    (and (<= d reach)
+         (case for
+           :log (<= rise pickup-rise)
+           :stone (<= 0 rise pickup-rise)
+           true))))
+
+(defn walk-goal
+  "Where a walk's route may end: for stone, any cell within goal-range whose feet are where the
+   drop lands in reach (path's :pickup goal: the stone at or up to pickup-rise above them; no
+   single cell beside it, which a wall may close off); else anywhere within goal-range."
+  [{:intent/keys [target for]}]
+  (if (= :stone for)
+    {:goal/kind :pickup :goal/pos target :goal/range goal-range :goal/rise pickup-rise}
+    {:goal/kind :near :goal/pos target :goal/range goal-range}))
 
 (defn waypoint-reached?
   "Is the player at waypoint [x y z]: within waypoint-reach of its centre on the plane, and the
@@ -128,20 +192,17 @@
     (update (toward world centre 0.0) :control/jump? #(or % (and up? near?)))))
 
 (defn route!
-  "The intent with a fresh route from the feet toward the target (goal :near target within
-   goal-range), counting the plan and noting how many chunks were loaded when it was made."
-  [world {:intent/keys [target replans] :or {replans 0}}]
-  (let [r (path/plan world
-                     (path/feet-cell (:player/pos world))
-                     {:goal/kind :near :goal/pos target :goal/range goal-range})]
-    (intent world
-            assoc
-            :intent/waypoints (:path/waypoints r)
-            :intent/route (:path/status r)
-            :intent/at 0
-            :intent/replans (inc replans)
-            :intent/planned-chunks (:stats/chunks world 0)
-            :intent/best-tick (:time/tick world))))
+  "The intent with a fresh route from the feet toward its walk-goal, counting the plan and
+   noting how many chunks were loaded when it was made."
+  [world {:intent/keys [replans] :or {replans 0} :as i}]
+  (let [r (path/plan world (path/feet-cell (:player/pos world)) (walk-goal i))]
+    (assoc-intent world
+                  :intent/waypoints (:path/waypoints r)
+                  :intent/route (:path/status r)
+                  :intent/at 0
+                  :intent/replans (inc replans)
+                  :intent/planned-chunks (:stats/chunks world 0)
+                  :intent/best-tick (:time/tick world))))
 
 (defn route-stale?
   "Should the walk plan again: a waypoint still ahead can no longer be stood on (a chunk that
@@ -160,7 +221,7 @@
   (let [tick (:time/tick world)
         started (or started tick)
         d (physics/distance (game/eye world) (physics/centre target))
-        world (intent world assoc :intent/started started)
+        world (assoc-intent world :intent/started started)
         i (:plan/intent world)]
     (cond (arrived? world i d)
           (-> world
@@ -189,7 +250,7 @@
           (assoc world :player/controls (toward world (physics/centre target) 0.0))
           (waypoint-reached? world (get waypoints at))
           (-> world
-              (intent assoc :intent/at (inc at) :intent/best-tick tick)
+              (assoc-intent :intent/at (inc at) :intent/best-tick tick)
               (assoc :player/controls {}))
           :else (assoc world :player/controls (follow world (get waypoints at))))))
 
@@ -219,46 +280,44 @@
           (and (blocks/needs-tier id) (not (dig/harvest? id nil))) :needs-tool
           :else [0 nil])))
 
-(defmethod run :dig
-  [world
-   {:intent/keys [target stage since still next-swing finish-at face slot tool state exposes-ok?]
-    :or {stage :settle still 0}} _]
+(defmulti dig-stage
+  "Advance a :dig intent one tick in its :intent/stage (:settle :digging :confirm), the stage and
+   its start already on the intent."
+  {:arglists '([world intent])}
+  (fn [_world i] (:intent/stage i)))
+
+(defmethod dig-stage :settle
+  [world {:intent/keys [target since still exposes-ok?] :or {still 0}}]
   (let [now (:time/now world)
-        since (or since now)
         eye (game/eye world)
-        world (intent world assoc :intent/stage stage :intent/since since)
         at-target (terrain/block-at world target)]
-    (case stage
-      :settle
-      (cond
-        (and at-target (not (blocks/solid? at-target))) (fail world :target-gone)
-        (> (physics/distance eye (physics/centre target)) (+ reach 0.5)) (fail world :out-of-reach)
-        (= :needs-tool (choose-tool world at-target)) (fail world :needs-tool)
-        (or (contains? never-dug (blocks/name-of at-target))
-            (and (not exposes-ok?) (exposes-fluid? world target)))
-        (fail world :unsafe)
-        (and (>= still 3) (> (- now since) settle-ms))
-        (let [seq (inc (:bot/sequence world))
-              face (face-toward eye target)
-              [slot tool] (choose-tool world at-target)
-              ms (dig-time at-target tool (penalties world))]
-          (->
-            world
+    (cond
+      (and at-target (not (blocks/solid? at-target))) (fail world :target-gone)
+      (> (physics/distance eye (physics/centre target)) (+ reach 0.5)) (fail world :out-of-reach)
+      (= :needs-tool (choose-tool world at-target)) (fail world :needs-tool)
+      (or (contains? never-dug (blocks/name-of at-target))
+          (and (not exposes-ok?) (exposes-fluid? world target)))
+      (fail world :unsafe)
+      (and (>= still 3) (> (- now since) settle-ms))
+      (let [seq (inc (:bot/sequence world))
+            face (face-toward eye target)
+            [slot tool] (choose-tool world at-target)
+            ms (dig-time at-target tool (penalties world))]
+        (-> world
             (assoc :bot/sequence seq)
             (assoc :player/held-slot slot)
             (game/emit {:packet/name :set-carried-item :slot slot})
             (game/emit {:packet/name :player-action :status 0 :pos target :face face :sequence seq})
             (game/emit {:packet/name :swing :hand 0})
-            (intent assoc
-                    :intent/stage :digging
-                    :intent/face face
-                    :intent/started now
-                    :intent/slot slot
-                    :intent/tool tool
-                    :intent/dig-ms ms
-                    :intent/state at-target
-                    :intent/next-swing (+ now swing-every)
-                    :intent/finish-at (+ now (finish-delay ms)))
+            (assoc-intent :intent/stage :digging
+                          :intent/face face
+                          :intent/started now
+                          :intent/slot slot
+                          :intent/tool tool
+                          :intent/dig-ms ms
+                          :intent/state at-target
+                          :intent/next-swing (+ now swing-every)
+                          :intent/finish-at (+ now (finish-delay ms)))
             (game/say (str "digging "
                            target
                            " face "
@@ -267,39 +326,45 @@
                            " "
                            ms
                            "ms"))))
-        :else
-        (-> world
-            (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
-            (intent assoc :intent/still (if (still? world) (inc still) 0))))
-      :digging
-      (cond (and tool (not= tool (get-in world [:player/inventory slot :item])))
-            (fail world :tool-broke) ; the slot no longer holds it: the next dig chooses again
-            (>= now finish-at)
-            (let [seq (inc (:bot/sequence world))]
-              (-> world
-                  (assoc :bot/sequence seq)
-                  (game/emit
-                   {:packet/name :player-action :status 2 :pos target :face face :sequence seq})
-                  (terrain/set-block target blocks/air) ; the server echoes a block-update and an ack; the overlay makes the bot independent of their timing
-                  (intent assoc
-                          :intent/stage :confirm
-                          :intent/since now
-                          :intent/sequence seq
-                          :intent/confirm-left confirm-ticks)))
-            (>= now next-swing)
+      :else
+      (-> world
+          (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
+          (assoc-intent :intent/still (if (still? world) (inc still) 0))))))
+
+(defmethod dig-stage :digging
+  [world {:intent/keys [target face slot tool next-swing finish-at]}]
+  (let [now (:time/now world)]
+    (cond (and tool (not= tool (get-in world [:player/inventory slot :item])))
+          (fail world :tool-broke) ; the slot no longer holds it: the next dig chooses again
+          (>= now finish-at)
+          (let [seq (inc (:bot/sequence world))]
             (-> world
-                (game/emit {:packet/name :swing :hand 0})
-                (intent assoc :intent/next-swing (+ now swing-every)))
-            :else world)
-      :confirm
-      (let [left (:intent/confirm-left (:plan/intent world))
-            restored? (and at-target (= at-target state))]
-        (cond restored? (fail world :rejected) ; the server put the block back: the break was refused
-              ;; the server acknowledged, or no word either way in time: trust the overlay
-              (or (>= (:stats/last-ack world -1) (:intent/sequence (:plan/intent world)))
-                  (zero? left))
-              (done world)
-              :else (intent world assoc :intent/confirm-left (dec left)))))))
+                (assoc :bot/sequence seq)
+                (game/emit
+                 {:packet/name :player-action :status 2 :pos target :face face :sequence seq})
+                (terrain/set-block target blocks/air) ; the server echoes a block-update and an ack; the overlay makes the bot independent of their timing
+                (assoc-intent :intent/stage :confirm
+                              :intent/since now
+                              :intent/sequence seq
+                              :intent/confirm-left confirm-ticks)))
+          (>= now next-swing)
+          (-> world
+              (game/emit {:packet/name :swing :hand 0})
+              (assoc-intent :intent/next-swing (+ now swing-every)))
+          :else world)))
+
+(defmethod dig-stage :confirm
+  [world {:intent/keys [target state sequence confirm-left]}]
+  (let [at-target (terrain/block-at world target)]
+    (cond (and at-target (= at-target state)) (fail world :rejected) ; the server put the block back: the break was refused
+          ;; the server acknowledged, or no word either way in time: trust the overlay
+          (or (>= (:stats/last-ack world -1) sequence) (zero? confirm-left)) (done world)
+          :else (assoc-intent world :intent/confirm-left (dec confirm-left)))))
+
+(defmethod run :dig
+  [world {:intent/keys [stage since] :or {stage :settle}} _]
+  (let [world (assoc-intent world :intent/stage stage :intent/since (or since (:time/now world)))]
+    (dig-stage world (:plan/intent world))))
 
 ;; ---------------------------------------------------------------- collect
 
@@ -348,7 +413,8 @@
 
 (defmethod run :collect
   [world
-   {:intent/keys [target since best-dist best-tick logs-before] :or {best-dist Double/MAX_VALUE}} _]
+   {:intent/keys [target since best-dist best-tick drops drops-before]
+    :or {best-dist Double/MAX_VALUE drops blocks/log-items}} _] ; a collect made before :intent/drops collected a log
   (let [now (:time/now world)
         tick (:time/tick world)
         since (or since now)
@@ -356,23 +422,22 @@
         d (physics/horizontal-distance (:player/pos world) goal)
         progressed? (< d (- best-dist 0.1))
         best-tick (if (or progressed? (nil? best-tick)) tick best-tick)
-        logs-before (or logs-before (inventory/logs-held world))
-        world (intent world
-                      assoc
-                      :intent/since since
-                      :intent/best-tick best-tick
-                      :intent/logs-before logs-before
-                      :intent/best-dist (if progressed? d best-dist))
+        drops-before (or drops-before (inventory/held world drops))
+        world (assoc-intent world
+                            :intent/since since
+                            :intent/best-tick best-tick
+                            :intent/drops-before drops-before
+                            :intent/best-dist (if progressed? d best-dist))
         stalled? (and (:player/horizontal-collision? world)
                       (> (- tick best-tick) collect-stall-ticks))]
-    (cond (> (inventory/logs-held world) logs-before) ; one more log than when the collect began
+    (cond (> (inventory/held world drops) drops-before) ; one more of its drop than when it began
           (-> world
               (assoc :player/controls {})
               done)
           (and stalled? (blocker world goal))
           (-> world
               (assoc :player/controls {})
-              (intent assoc :intent/blocked-by (blocker world goal))
+              (assoc-intent :intent/blocked-by (blocker world goal))
               done)
           (> (- now since) collect-timeout)
           (-> world

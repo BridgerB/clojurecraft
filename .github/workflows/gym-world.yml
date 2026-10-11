@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v7
       - id: key
         name: The world's cache key
-        run: echo "key=gym-world-$SET-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/gym_world.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/harness.clj') }}" >> "$GITHUB_OUTPUT"
+        run: echo "key=gym-world-$SET-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/gym_world.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj') }}" >> "$GITHUB_OUTPUT"
       - id: have
         uses: actions/cache/restore@v6
         with:

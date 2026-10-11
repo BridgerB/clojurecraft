@@ -20,6 +20,8 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.terrain :as terrain]))
 
+(set! *warn-on-reflection* true)
+
 (def max-fall 3)                      ; blocks a drop may fall; vanilla damage starts above 3
 (def default-max-nodes 6000)          ; expansions one plan may spend
 (def walk-cost 1.0)                   ; one cell on the level
@@ -46,16 +48,13 @@
     :weathering_copper_grate :bamboo_stalk :chorus_plant :chorus_flower :mangrove_roots :heavy_core
     :vault :trial_spawner :spawner :conduit :beacon :shelf})
 
-(def water-states "Every state of water." (blocks/states-where (fn [[n]] (= n :water))))
-(def lava-states "Every state of lava." (blocks/states-where (fn [[n]] (= n :lava))))
-
 (defn classify-id
   "What a block state means to a route: :water, :lava, :awkward (a shape the physics cannot
    simulate), :solid (a full cube), or :clear (passable, not a liquid). nil → :unknown."
   [id]
   (cond (nil? id) :unknown
-        (contains? water-states id) :water
-        (contains? lava-states id) :lava
+        (contains? blocks/water-states id) :water
+        (contains? blocks/lava-states id) :lava
         (contains? awkward-types (blocks/type-of id)) :awkward
         (blocks/solid? id) :solid
         :else :clear))
@@ -222,6 +221,19 @@
 (defmethod heuristic :away
   [{:goal/keys [pos range]} node]
   (max 0.0 (- range (flat-distance node pos))))
+
+(defmethod goal-done? :pickup
+  ;; where a block dug at pos drops within the pickup box: within range on the plane, with pos at
+  ;; the feet's height or up to rise above it
+  [{:goal/keys [pos range rise]} [_ ny _ :as node]]
+  (and (<= (octile node pos) range) (<= ny (second pos) (+ ny rise))))
+(defmethod heuristic :pickup
+  [{:goal/keys [pos range rise]} [_ ny _ :as node]]
+  (let [py (second pos)]
+    (+ (max 0.0 (- (octile node pos) range))
+       (cond (< py ny) (- ny py)
+             (> py (+ ny rise)) (- py ny rise)
+             :else 0))))
 
 ;; ---------------------------------------------------------------- the search
 

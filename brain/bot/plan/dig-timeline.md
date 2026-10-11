@@ -18,6 +18,7 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn still?
   - src/clojurecraft/intent.clj#defn exposes-fluid?
   - src/clojurecraft/intent.clj#defmethod run :dig
+  - src/clojurecraft/intent.clj#defmulti dig-stage
   - test/clojurecraft/plan_test.clj#stone-is-dug-with-the-pickaxe-in-its-slot
   - test/clojurecraft/plan_test.clj#a-restored-block-after-finish-is-a-refused-break
   - test/clojurecraft/props_test.clj#a-dig-with-any-tool-on-any-block-keeps-the-rules
@@ -39,7 +40,7 @@ The `:dig` intent has three stages. `:settle`: look at the block, refuse at once
 - `intent.clj`, `choose-tool` - `dig/best-tool` over the hotbar; `[0 nil]` for the hand; `:needs-tool` when the block needs a tier no held tool of its kind reaches.
 - `intent.clj`, `swing-every` 350 ms, `confirm-ticks` 10.
 - `intent.clj`, `still?` - horizontal-only stillness, on the ground or afloat in a liquid; see [[resting-vertical-velocity]].
-- `intent.clj`, `run :dig` - the stages.
+- `intent.clj`, `run :dig` - starts the stage clock; `dig-stage` is the stages, one method each (`:settle`, `:digging`, `:confirm`), as `craft/stage` is the craft's.
 
 ## Gotchas
 - A tool that vanishes from its slot mid-dig (it broke) fails the dig `:tool-broke`; the next dig chooses again.

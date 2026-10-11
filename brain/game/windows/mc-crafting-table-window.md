@@ -5,12 +5,11 @@ type: reference
 tags: [game, windows, crafting]
 aliases: [menu type 12, crafting menu, 3x3 grid slots, table window layout, open-screen crafting]
 status: verified
-lastUpdated: 2026-10-09
+lastUpdated: 2026-10-11
 verifiedAgainst: 26.1.2
 sourceRefs:
-  - src/clojurecraft/inventory.clj#{12 {:menu/name :crafting :menu/size 3 :menu/grid (range 0 10) :menu/inventory 10}}
-  - src/clojurecraft/window.clj#defn table-slot
-  - src/clojurecraft/sim.clj#a crafting table has a 3x3 grid and the
+  - src/clojurecraft/inventory.clj#:table {:size 3 :inventory 10 :menu-type 12}
+  - src/clojurecraft/inventory.clj#defn player->window-slot
 related:
   - "[[game/windows/_moc|Windows]]"
   - "[[mc-window-zero-slots]]"
@@ -28,7 +27,7 @@ related:
 
 ## Gotchas
 - The armour and offhand slots are not part of a container window.
-- Menu type ids are registry indexes and change between versions; `inventory/menus` is keyed by the 26.1.2 number.
+- Menu type ids are registry indexes and change between versions; the table's layout in `inventory/layouts` carries the 26.1.2 number as `:menu-type`.
 
 ## See also
 - [[window-zero-model]] - how the bot stores the open window.

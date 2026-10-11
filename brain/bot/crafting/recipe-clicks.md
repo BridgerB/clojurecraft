@@ -3,14 +3,14 @@ title: Recipe clicks
 description: How recipe/clicks turns one craft into window-0 clicks from the inventory value: one source stack per ingredient, a right-click per cell, the remainder put back; nil when it cannot.
 type: reference
 tags: [bot, crafting, clicks]
-aliases: [clicks, click plan, laying a recipe, placement, player->container-slot]
+aliases: [clicks, click plan, laying a recipe, placement, player->window-slot]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/recipe.clj#defn clicks
   - src/clojurecraft/recipe.clj#defn placement
-  - src/clojurecraft/recipe.clj#defn player->container-slot
+  - src/clojurecraft/inventory.clj#defn player->window-slot
   - test/clojurecraft/recipe_test.clj#clicks-lay-one-craft
   - test/clojurecraft/recipe_test.clj#clicks-then-match-round-trip
 related:
@@ -28,7 +28,7 @@ related:
 ## Key files
 - `recipe.clj`, `placement` - `{grid-slot ingredient-set}`: a shaped recipe at the top-left (`1 + row*size + col`), a shapeless one in slots 1..n.
 - `recipe.clj`, `clicks` - groups cells by ingredient set, picks a source stack per group, emits the clicks.
-- `recipe.clj`, `player->container-slot` - the default `slot-of`, player slot to window-0 slot: hotbar 0-8 → 36-44, main 9-35 unchanged, offhand 40 → 45, armour not offered. A table view passes its own map ([[window-views]]).
+- `inventory.clj`, `player->window-slot` over window 0's layout - the default `slot-of`, player slot to window-0 slot: hotbar 0-8 → 36-44, main 9-35 unchanged, offhand 40 → 45, armour not offered. A table view passes its own map ([[window-views]]).
 
 ## How it works
 For each ingredient group (cells sharing one set):

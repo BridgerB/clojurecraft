@@ -54,17 +54,17 @@
         (loop [] (let [n (.read in buf)] (when (pos? n) (.update digest buf 0 n) (recur))))))
     (str/join (map #(format "%02x" %) (.digest digest)))))
 
-(defn java-bin
+;;;; I/O: the jar, the world directory, the server process ;;;;
+
+(defn java-bin!
   "java to run the server with: JAVA, else java on PATH (the flake's shell, CI), else the
-   flake's own (scripts/nix-tool jdk)."
+   flake's own (scripts/nix-tool jdk, which builds it the first time)."
   [env-java]
   (cond env-java env-java
         (fs/which "java") "java"
         :else
         (str (str/trim (:out (p/shell {:out :string} (str root "/scripts/nix-tool") "jdk")))
              "/java")))
-
-;;;; I/O: the jar, the world directory, the server process ;;;;
 
 (defn ensure-jar!
   "The server jar at path, downloaded when missing or not the published jar."
@@ -139,7 +139,7 @@
      :rcon-port (env "RCON_PORT")
      :rcon-pass (env "RCON_PASS")
      :world (env "WORLD")
-     :java (java-bin (env "JAVA"))
+     :java (java-bin! (env "JAVA"))
      :heap-mb (or (env "HEAP_MB") "2048")
      :jar (or (env "JAR") (str root "/data/local-server/server-26.1.2.jar"))
      :level-seed (or (env "LEVEL_SEED") "typecraft")

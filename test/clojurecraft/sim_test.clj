@@ -24,6 +24,7 @@
             [clojurecraft.stone]
             [clojurecraft.swim]
             [clojurecraft.terrain :as terrain]
+            [clojurecraft.trap :as trap]
             [clojurecraft.wood]
             [clojurecraft.world :as world]))
 
@@ -67,7 +68,7 @@
       (is (= (into {}
                    (for [[s it] (:sim/inv sim)
                          :when (<= 9 s 44)]
-                     [(inventory/container->player-slot s) it]))
+                     [(inventory/window->player-slot (inventory/layouts :inventory) s) it]))
              (:player/inventory w))))))
 
 (def kit-items #{:oak_log :oak_planks :stick :crafting_table})
@@ -574,7 +575,7 @@
   ;; simulation with no Java process." The loop here is main's: wall-clock ticks, effects
   ;; drained onto :out, packets read from :in, :go put on the events channel once loaded.
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
-        c (sim/connect (sim/init {:column column :spawn [0.5 64.0 0.5] :keep-alive-every 1000}))
+        c (sim/connect! (sim/init {:column column :spawn [0.5 64.0 0.5] :keep-alive-every 1000}))
         events (async/chan 16)
         world* (atom (game/init fx/opts))
         deadline (+ (System/currentTimeMillis) 30000)]
@@ -583,7 +584,7 @@
                        (:out c)
                        nil)
     (main/go-when-loaded! world* events {:event/kind :go :go/goals [:wood]})
-    (let [w (main/run-loop
+    (let [w (main/run-loop!
              c
              events
              world*
@@ -698,6 +699,33 @@
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (>= (get (held w) :cobblestone 0) 3))
     (is (= 1 (get (held w) :wooden_pickaxe 0)) "the pickaxe is still held")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w))
+        "every collect ends on its cobblestone, none times out")
+    (is (< (:time/now w) 20000)
+        "three cobblestone in well under the 30 s three collect timeouts used to cost")
+    (is (empty? (:sim/violations sim)))))
+
+(def walled-ledge
+  "Gym batch push70 (landing 18648,18464): the nearest stone's only cell at its own level was
+   walled in, so no route reached it, while a cell one block below it was reachable. Here: stone
+   S at [10 65 8] on [10 64 8], its one standable side cell [11 65 8] closed in by two-high walls,
+   and the open floor at y 64 west of it."
+  (merge {[10 64 8] 1 [10 65 8] 1 [10 66 8] 1 [11 64 8] 1}
+         (into {} (for [y [65 66] c [[12 y 8] [11 y 7] [11 y 9]]] [c 1]))))
+
+(deftest a-stone-is-dug-from-wherever-its-drop-lands-in-reach
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes walled-ledge)
+                                    :spawn [5.5 64.0 8.5]
+                                    :inventory {36 {:item (get blocks/items :wooden_pickaxe)
+                                                    :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         240000
+                         {:event/kind :go :go/goals [:cobblestone]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w))
+        (pr-str (filter #(= :failed (:intention/event %)) (memory/intentions w))))
     (is (empty? (:sim/violations sim)))))
 
 (deftest bare-handed-the-cobblestone-goal-never-digs-stone
@@ -776,7 +804,7 @@
     (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
     (is (nil? (:plan/trap w)))
-    (is (plan/dry-land? w))
+    (is (trap/dry-land? w))
     (is (< (:time/now w) 10000) "out within 10 s")
     (is (>= low 200) (str "lowest air " low))
     (is (some #(= :swim-out (:intention/kind %)) (memory/intentions w)))
@@ -794,7 +822,7 @@
   (let [[w sim low] (escape-run roofed-pool [3.5 23.0 2.5] 90000)]
     (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
-    (is (plan/dry-land? w))
+    (is (trap/dry-land? w))
     (is (= [0 27 2] (path/feet-cell (:player/pos w))) "standing in the pocket")
     (is (pos? low))
     (is (empty? (:sim/violations sim)))))
@@ -813,7 +841,7 @@
                               {:inventory {36 {:item wooden-pickaxe :count 1 :durability 1}}})]
     (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
-    (is (plan/dry-land? w))
+    (is (trap/dry-land? w))
     (is (>= (second (:player/pos w)) 64.0) "up on the surface")
     (is (= 0 (terrain/block-at w [0 64 0])) "the cap is gone")
     (is (empty? (:sim/violations sim)))))
@@ -834,7 +862,7 @@
                          {:event/kind :go :go/goals [:shore]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
-    (is (plan/dry-land? w))
+    (is (trap/dry-land? w))
     (is (= [:water] (map :trap/kind (:world/traps w))))
     (is (= [:wade :swim-out]
            (map :intention/kind (filter #(= :started (:intention/event %)) (memory/intentions w)))))
@@ -861,6 +889,6 @@
                          {:event/kind :go :go/goals [:shore]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
-    (is (plan/dry-land? w))
+    (is (trap/dry-land? w))
     (is (= [:water] (map :trap/kind (:world/traps w))))
     (is (empty? (:sim/violations sim)))))

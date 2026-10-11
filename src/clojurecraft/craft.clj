@@ -21,10 +21,11 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.window :as window]))
 
+(set! *warn-on-reflection* true)
+
 (def stage-timeout 5000)              ; ms a craft stage waits on the server before it fails
 
 (defn- now [world] (:time/now world))
-(defn- set-intent [world & kvs] (apply update world :plan/intent assoc kvs))
 
 (defn dirty-grid-slot
   "The first crafting-grid slot (1..size²) of the view that still holds an item, or nil when
@@ -57,14 +58,14 @@
           (window/click world v {:click/slot (dirty-grid-slot v) :click/button 0 :click/mode 1})
           :else
           (if-let [cs (recipe/clicks (:player/inventory world) r (:view/size v) (:view/slot-of v))]
-            (set-intent world
-                        :intent/stage :click
-                        :intent/clicks cs
-                        :intent/since (now world)
-                        :intent/result (recipe/item-id (:recipe/result r))
-                        :intent/makes (:recipe/count r)
-                        :intent/before
-                        (inventory/item-count world (recipe/item-id (:recipe/result r))))
+            (intent/assoc-intent world
+                                 :intent/stage :click
+                                 :intent/clicks cs
+                                 :intent/since (now world)
+                                 :intent/result (recipe/item-id (:recipe/result r))
+                                 :intent/makes (:recipe/count r)
+                                 :intent/before
+                                 (inventory/item-count world (recipe/item-id (:recipe/result r))))
             (intent/fail world :no-ingredient)))))
 
 (defmethod stage :click
@@ -72,8 +73,8 @@
   (if (seq clicks)
     (-> world
         (window/click v (first clicks))
-        (set-intent :intent/clicks (vec (rest clicks))))
-    (set-intent world :intent/stage :verify :intent/since (now world))))
+        (intent/assoc-intent :intent/clicks (vec (rest clicks))))
+    (intent/assoc-intent world :intent/stage :verify :intent/since (now world))))
 
 (defmethod stage :verify
   [world {:intent/keys [result makes since]} v]
@@ -81,7 +82,7 @@
     (cond (= out {:item result :count makes})
           (-> world
               (window/click v {:click/slot 0 :click/button 0 :click/mode 1})
-              (set-intent :intent/stage :take :intent/since (now world)))
+              (intent/assoc-intent :intent/stage :take :intent/since (now world)))
           (some? out) (intent/fail world :wrong-result)
           (> (- (now world) since) stage-timeout) (intent/fail world :no-result)
           :else world)))

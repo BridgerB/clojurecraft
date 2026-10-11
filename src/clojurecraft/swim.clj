@@ -2,7 +2,7 @@
   "Getting out of water and away from lava (issue #5).
 
    Requiring this namespace registers the escape goals' rules: a goal is done when the planner's
-   trap (plan/trapped-tick) is not of its kind, its next intent is :swim-out or :flee, and the
+   trap (trap/trapped-tick) is not of its kind, its next intent is :swim-out or :flee, and the
    two executors are defmethods of intent/run.
 
    :swim-out picks one bank and keeps it (the siblings re-picked every tick and swam in circles):
@@ -26,8 +26,10 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
-            [clojurecraft.stairs :as stairs]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.trap :as trap]))
+
+(set! *warn-on-reflection* true)
 
 (def bank-radius 16)                  ; how far on the plane a bank is looked for (gym shore-w1 run 6: none within 12 from mid-sea)
 (def bank-rise 1)                     ; a bank at most this far above the highest feet level afloat (steve's landing set W)
@@ -50,8 +52,7 @@
   "The y of the first cell above the feet cell that is not the fluid kind: the water's
    surface cell, or the roof over it."
   [world kind [x y z]]
-  (let [fluid-kind (fn [cy] (:fluid/kind (blocks/fluid (terrain/block-at world [x cy z]))))]
-    (or (first (filter #(not= kind (fluid-kind %)) (range y (+ y 16)))) (+ y 16))))
+  (or (first (filter #(not= kind (terrain/fluid-kind world [x % z])) (range y (+ y 16)))) (+ y 16)))
 
 (defn float-top
   "The highest feet level the body reaches in this column: float-depth under an open surface
@@ -105,7 +106,7 @@
 (defn child-dig
   "A :dig child for cell that may expose water: the escape digs beside the water it is in."
   [cell]
-  (assoc (stairs/child-dig cell) :intent/exposes-ok? true))
+  (assoc (intent/child-dig cell) :intent/exposes-ok? true))
 
 (defn floor-y
   "The feet level of the floor under the feet cell: one above the first solid cell below it
@@ -126,11 +127,10 @@
 (defn start-dig
   "Dig cell as a child intent now."
   [world cell why]
-  (->
-    world
-    (update :plan/intent assoc :intent/child (child-dig cell) :intent/best-tick (:time/tick world))
-    (update :plan/intent dissoc :intent/dig-when-down)
-    (game/say (str "swim-out: " why ", digging " cell))))
+  (-> world
+      (intent/assoc-intent :intent/child (child-dig cell) :intent/best-tick (:time/tick world))
+      (intent/dissoc-intent :intent/dig-when-down)
+      (game/say (str "swim-out: " why ", digging " cell))))
 
 (defn dig-or-sink
   "Dig cell as a child intent now, or, afloat with the floor in reach of it, remember it as
@@ -141,7 +141,7 @@
            (dig-from-floor? world feet cell))
     (-> world
         (assoc :player/controls {:control/sneak? true})
-        (update :plan/intent assoc :intent/dig-when-down cell)
+        (intent/assoc-intent :intent/dig-when-down cell)
         (game/say (str "swim-out: " why ", sinking to the floor to dig " cell)))
     (start-dig world cell why)))
 
@@ -151,7 +151,7 @@
    planner can see the land held still (a bot that kept jumping on the bank never counted as
    out)."
   [world bank]
-  (cond (plan/dry-land? world) {}
+  (cond (trap/dry-land? world) {}
         (:player/in-water? world)
         (assoc (intent/toward world (physics/centre bank) 0.0) :control/jump? true)
         :else (intent/toward world (physics/centre bank) 0.0)))
@@ -160,10 +160,8 @@
   [world {:intent/keys [bank started best-dist best-tick child next-search dig-when-down]} event]
   (let [tick (:time/tick world)
         started (or started tick)
-        feet (stairs/feet world)
-        set-i (fn [w & kvs] (apply update w :plan/intent assoc kvs))
-        drop-i (fn [w & ks] (apply update w :plan/intent dissoc ks))
-        world (set-i world :intent/started started)
+        feet (intent/feet world)
+        world (intent/assoc-intent world :intent/started started)
         dist (when bank (physics/horizontal-distance (:player/pos world) (physics/centre bank)))
         nearer? (and dist (< dist (- (or best-dist Double/MAX_VALUE) progress)))
         best-tick (if (or nearer? (nil? best-tick)) tick best-tick)]
@@ -171,12 +169,13 @@
           (-> world
               (assoc :player/controls {})
               (intent/fail :no-escape))
-          (and child (intent/done? child)) (drop-i world :intent/child :intent/best-tick)
+          (and child (intent/done? child))
+          (intent/dissoc-intent world :intent/child :intent/best-tick)
           (and child (intent/failed? child))
           (-> world
               (assoc :player/controls {})
               (intent/fail (:intent/reason child)))
-          child (stairs/run-child world event)
+          child (intent/run-child world event)
           (and dig-when-down (or (:player/on-ground? world) (not (:player/in-water? world))))
           (start-dig world dig-when-down "down")
           dig-when-down (assoc world :player/controls {:control/sneak? true})
@@ -188,14 +187,14 @@
                 cap (when-not b (obstacle world feet nil))]
             (cond b
                   (-> world
-                      (set-i :intent/bank b :intent/target b)
+                      (intent/assoc-intent :intent/bank b :intent/target b)
                       (game/say (str "swim-out: bank " b)))
                   cap (dig-or-sink world feet cap "no bank")
                   ;; nothing in reach: rise (the roof or a bank comes into reach, or the timeout ends it)
                   :else
                   (-> world
                       (assoc :player/controls {:control/jump? true})
-                      (set-i :intent/next-search (+ tick search-every-ticks)))))
+                      (intent/assoc-intent :intent/next-search (+ tick search-every-ticks)))))
           (> (- tick best-tick) stuck-ticks)
           (if-let [cell (obstacle world feet bank)]
             (dig-or-sink world feet cell "stuck")
@@ -205,8 +204,8 @@
           :else
           (-> world
               (assoc :player/controls (swim-controls world bank))
-              (set-i :intent/best-dist (if nearer? dist (or best-dist dist))
-                     :intent/best-tick best-tick)))))
+              (intent/assoc-intent :intent/best-dist (if nearer? dist (or best-dist dist))
+                                   :intent/best-tick best-tick)))))
 
 (defn footing
   "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand
@@ -225,8 +224,8 @@
   [world {:intent/keys [target started]} _]
   (let [tick (:time/tick world)
         started (or started tick)
-        feet (stairs/feet world)
-        world (update world :plan/intent assoc :intent/started started)]
+        feet (intent/feet world)
+        world (intent/assoc-intent world :intent/started started)]
     (cond (> (- tick started) flee-timeout-ticks)
           (-> world
               (assoc :player/controls {})
@@ -234,7 +233,7 @@
           (nil? target)
           (if-let [cell (footing world feet)]
             (-> world
-                (update :plan/intent assoc :intent/target cell)
+                (intent/assoc-intent :intent/target cell)
                 (game/say (str "flee: to " cell)))
             (-> world
                 (assoc :player/controls {})
@@ -265,20 +264,18 @@
    none over it (steve's landing set W: swimmable water 2+ deep; a one-deep puddle walked
    across on foot was gym shore-w5 run 1)."
   [world [x y z :as cell]]
-  (let [kind (fn [c] (:fluid/kind (blocks/fluid (terrain/block-at world c))))]
-    (and (= :water (kind cell))
-         (= 0 (:fluid/level (blocks/fluid (terrain/block-at world cell))))
-         (= :water (kind [x (dec y) z]))
-         (not= :water (kind [x (inc y) z])))))
+  (and (= :water (terrain/fluid-kind world cell))
+       (blocks/source? (terrain/block-at world cell))
+       (= :water (terrain/fluid-kind world [x (dec y) z]))
+       (not= :water (terrain/fluid-kind world [x (inc y) z]))))
 
 (defn shallow?
   "Is the cell one-deep water: water with no water over it and a solid under it, which the feet
    stand in with the eye in air."
   [world [x y z :as cell]]
-  (let [kind (fn [c] (:fluid/kind (blocks/fluid (terrain/block-at world c))))]
-    (and (= :water (kind cell))
-         (not= :water (kind [x (inc y) z]))
-         (solid-cell? world [x (dec y) z]))))
+  (and (= :water (terrain/fluid-kind world cell))
+       (not= :water (terrain/fluid-kind world [x (inc y) z]))
+       (solid-cell? world [x (dec y) z])))
 
 (defn wadeable?
   "Could the feet rest in cell on the way into deep water: a cell they can stand in, or
@@ -340,7 +337,7 @@
   (let [tick (:time/tick world)
         started (or started tick)
         wet? (or wet? (boolean (:player/in-water? world)))
-        world (update world :plan/intent assoc :intent/started started :intent/wet? wet?)]
+        world (intent/assoc-intent world :intent/started started :intent/wet? wet?)]
     (cond (> (- tick started) wade-timeout-ticks)
           (-> world
               (assoc :player/controls {})
@@ -352,23 +349,22 @@
               (assoc :player/controls {})
               (intent/fail :shallow))
           (nil? target)
-          (if-let [[bank w] (entry world (stairs/feet world))]
+          (if-let [[bank w] (entry world (intent/feet world))]
             (-> world
-                (update :plan/intent assoc
-                        :intent/target bank
-                        :intent/water w
-                        :intent/child
-                        {:intent/kind :walk :intent/target bank :intent/status :active})
+                (intent/assoc-intent
+                 :intent/target bank
+                 :intent/water w
+                 :intent/child {:intent/kind :walk :intent/target bank :intent/status :active})
                 (game/say (str "wade: to the bank " bank " into " w)))
             (-> world
                 (assoc :player/controls {})
                 (intent/fail :no-water)))
-          (and child (intent/done? child)) (update world :plan/intent dissoc :intent/child)
+          (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
           (and child (intent/failed? child))
           (-> world
               (assoc :player/controls {})
               (intent/fail (:intent/reason child)))
-          child (stairs/run-child world event)
+          child (intent/run-child world event)
           ;; on the bank: straight in and on past the entry, jumping only when blocked with the
           ;; feet on the ground (a seabed step, shore-w4 runs 1 and 6), never afloat (a jump there
           ;; is a swim-up that keeps the eye in air against a wall), so it sinks as it deepens and
@@ -398,5 +394,5 @@
   ;; otherwise a wade needs a way into water it remembers, and with none it waits, as a gather
   ;; with no tree does
   (cond (:player/eye-in-water? world) {:plan/wait :in-water}
-        (entry world (stairs/feet world)) {:intent/kind :wade}
+        (entry world (intent/feet world)) {:intent/kind :wade}
         :else {:plan/wait :no-water}))

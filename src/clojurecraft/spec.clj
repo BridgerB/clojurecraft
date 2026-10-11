@@ -20,6 +20,8 @@
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
 
+(set! *warn-on-reflection* true)
+
 (s/def ::vec3 (s/coll-of double? :kind vector? :count 3))
 (s/def ::block-pos (s/coll-of int? :kind vector? :count 3))
 
@@ -100,35 +102,6 @@
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
-(defn int-in? "Is x an integer in [lo, hi]?" [lo hi x] (and (int? x) (<= lo x hi)))
-
-(defn slot?
-  "A decoded slot: nil when empty, else at least {:item id :count n}."
-  [x]
-  (or (nil? x) (and (map? x) (int? (:item x)) (int? (:count x)))))
-
-(def wire-types
-  "What a value of each wire type in packet/specs must be, with the wire's own range."
-  {:bool boolean?
-   :i8 (partial int-in? -128 127)
-   :u8 (partial int-in? 0 255)
-   :i16 (partial int-in? -32768 32767)
-   :u16 (partial int-in? 0 65535)
-   :i32 (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE)
-   :u32 (partial int-in? 0 4294967295)
-   :i64 int?
-   :varint (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE)
-   :varlong int?
-   :f32 number?
-   :f64 number?
-   :string string?
-   :uuid #(or (nil? %) (uuid? %))
-   :position #(and (vector? %) (= 3 (count %)) (every? int? %))
-   :bytes bytes?
-   :rest bytes?
-   :slot slot?
-   :hashed-slot slot?})
-
 (declare fields-ok?)
 
 (defn value-ok?
@@ -137,7 +110,7 @@
   (cond (and (vector? t) (vector? (first t))) (and (map? v) (fields-ok? t v))
         (vector? t) (and (sequential? v) (every? #(value-ok? (second t) %) v))
         (empty? (str t)) false
-        :else ((wire-types t) v)))
+        :else ((:valid? (p/wire-types t)) v)))
 
 (defn fields-ok?
   "Does map m carry every field of a spec, each fitting its type? Extra keys are fine."
@@ -204,10 +177,10 @@
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
 (s/def :goal/target? boolean?)
-(s/def :goal/until string?)
+(s/def :goal/until string?)                ; the --until name that selects a target row
 (s/def :goal/always? boolean?)
 (s/def :goal/trap #{:water :lava})
-(s/def :goal/plan keyword?)                ; the --until name that selects a target row
+(s/def :goal/plan keyword?)                ; which next-intent planner the row uses (default :needs)
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
@@ -362,11 +335,14 @@
 (s/def :path/max-nodes pos-int?)
 (s/def :path/from ::block-pos)
 (s/def ::route (s/keys :req [:path/waypoints :path/cost :path/status] :opt [:path/from]))
-(s/def :goal/kind #{:near :block :xz :away})
+(s/def :goal/kind #{:near :block :xz :away :pickup})
 (s/def :goal/pos ::block-pos)
 (s/def :goal/range number?)
-(s/def ::path-goal (s/keys :req [:goal/kind :goal/pos] :opt [:goal/range]))
+(s/def :goal/rise nat-int?)
+(s/def ::path-goal (s/keys :req [:goal/kind :goal/pos] :opt [:goal/range :goal/rise]))
 (s/def :intent/logs-before nat-int?)
+(s/def :intent/drops (s/coll-of int? :kind set?))
+(s/def :intent/drops-before nat-int?)
 (s/def :intent/blocked-by ::block-pos)
 (s/def :intent/clears nat-int?)
 (s/def :intent/resume (s/keys :req [:intent/kind]))
@@ -420,7 +396,7 @@
 (s/def ::sim-event (s/keys :req [:sim/kind] :opt [:sim/packet :sim/now]))
 (s/def :sim/phase #{:handshake :login :configuration :play})
 (s/def :sim/out (s/coll-of ::packet :kind vector?))   ; what the model says is held to the packet table
-(s/def :sim/inv (s/map-of int? slot?))
+(s/def :sim/inv (s/map-of int? p/slot?))
 (s/def :sim/state-id int?)
 (s/def :sim/held int?)
 (s/def :sim/placed map?)
@@ -536,60 +512,3 @@
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `window/view `path/plan
    `path/classify])
 (s/def :stats/deaths pos-int?)
-
-;; ---------------------------------------------------------------- the gym
-(s/def :gym/goal keyword?)
-(s/def :gym/until string?)
-(s/def :gym/prereqs (s/coll-of string? :kind vector?))
-(s/def :gym/timeout-ms pos-int?)
-(s/def :truth/cmd string?)
-(s/def :truth/re string?)
-(s/def :truth/reply string?)
-(s/def :truth/ok? boolean?)
-(s/def :gym/truth (s/coll-of (s/keys :req [:truth/cmd :truth/re]) :kind vector? :min-count 1))
-(s/def ::gym (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]))
-(s/def :gym/run pos-int?)
-(s/def :gym/landing (s/coll-of int? :kind vector? :count 3))
-(s/def :gym/landed? boolean?)
-(s/def :gym/outcome #{:pass :fail :timeout :death :disconnect :harness})
-(s/def :gym/ms int?)
-(s/def :gym/reason (s/nilable keyword?))
-(s/def :gym/truths (s/coll-of (s/keys :req [:truth/cmd :truth/reply :truth/ok?]) :kind vector?))
-(s/def :gym/commit (s/nilable string?))
-(s/def :gym/result (s/nilable map?))
-(s/def ::gym-result
-  (s/keys :req [:gym/goal :gym/run :gym/landed? :gym/outcome :gym/truths]
-          :opt [:gym/landing :gym/ms :gym/reason :gym/commit :gym/result]))
-
-;; ---------------------------------------------------------------- the fleet
-(s/def :fleet/label string?)
-(s/def :fleet/workers (s/int-in 1 257))              ; a matrix holds at most 256 jobs
-(s/def :fleet/max-parallel (s/int-in 1 21))
-(s/def :fleet/max-worker-s pos-int?)
-(s/def :fleet/issue pos-int?)
-(s/def :fleet/salt string?)                         ; a repeated plan's run, so its sims sample fresh worlds
-(s/def :exp/name string?)
-(s/def :exp/kind #{:gym :sim})
-(s/def :exp/goal string?)
-(s/def :exp/set string?)
-(s/def :exp/runs pos-int?)
-(s/def :exp/bots pos-int?)
-(s/def :exp/est-s pos-int?)
-(s/def :arm/name string?)
-(s/def :arm/ref string?)
-(s/def :exp/arms (s/coll-of (s/keys :req [:arm/name] :opt [:arm/ref]) :kind vector? :min-count 1))
-(s/def :exp/property string?)
-(s/def :exp/shards pos-int?)
-(s/def :exp/worlds pos-int?)
-(s/def ::experiment
-  (s/and (s/keys :req [:exp/name :exp/kind :exp/est-s]
-                 :opt
-                 [:exp/goal :exp/set :exp/runs :exp/bots :exp/arms :exp/property :exp/shards
-                  :exp/worlds])
-         #(case (:exp/kind %)
-            :gym (and (:exp/goal %) (:exp/runs %))
-            :sim (and (:exp/property %) (:exp/shards %) (:exp/worlds %)))))
-(s/def :fleet/experiments (s/coll-of ::experiment :kind vector? :min-count 1))
-(s/def ::fleet-plan
-  (s/keys :req [:fleet/label :fleet/workers :fleet/experiments]
-          :opt [:fleet/max-parallel :fleet/max-worker-s :fleet/issue :fleet/salt]))

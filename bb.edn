@@ -13,16 +13,17 @@
        :task (apply clojure "-M:fmt" "fix" *command-line-args*)}
   fmt:check {:doc "Fail when a file is not as zprint lays it out" :task (clojure "-M:fmt" "check")}
   lint {:doc "clj-kondo, held at zero findings"
-        :task (apply t/tool "clj-kondo" "lint" "--lint" t/source-paths)}
-  idioms {:doc "Splint, held at zero findings (.splint.edn)"
-          :task
-          (apply clojure "-M:splint" "src" "dev" "test/clojurecraft" "bb" *command-line-args*)}
+        :task (apply t/tool! "clj-kondo" "lint" "--lint" t/source-paths)}
+  idioms
+  {:doc "Splint, held at zero findings (.splint.edn)"
+   :task
+   (apply clojure "-M:splint" "src" "dev" "test/clojurecraft" "repl" "bb" *command-line-args*)}
   ns {:doc "Sort and prune every ns form (clojure-lsp clean-ns, .lsp/config.edn)"
-      :task (t/tool "clojure-lsp" "lsp" "clean-ns")}
+      :task (t/tool! "clojure-lsp" "lsp" "clean-ns")}
   ns:check {:doc "Fail when an ns form is not as clean-ns leaves it"
-            :task (t/tool "clojure-lsp" "lsp" "clean-ns" "--dry")}
+            :task (t/tool! "clojure-lsp" "lsp" "clean-ns" "--dry")}
   unused {:doc "Fail on a public var nothing calls (clojure-lsp diagnostics)"
-          :task (t/tool "clojure-lsp" "lsp" "diagnostics" "--raw")}
+          :task (t/tool! "clojure-lsp" "lsp" "diagnostics" "--raw")}
   brain {:doc "The brain checker: every note's links and source anchors resolve"
          :task (clojure "-M:brain")}
   check {:doc "Every static check CI runs, in its order"
@@ -36,9 +37,12 @@
           :task (apply clojure "-M:replay" *command-line-args*)}
   rcon {:doc "One RCON command: bb rcon --port 25581 --pass P <command words>"
         :task (apply clojure "-M:rcon" *command-line-args*)}
+  nrepl {:doc
+         "An nREPL server with the bot, the tests and repl/user.clj loaded (clojure -M:dev:nrepl)"
+         :task (clojure "-M:dev:nrepl")}
   harness {:doc "The landing fixture as its own process (clojure -M:harness)"
            :task (apply clojure "-M:harness" *command-line-args*)}
-  gym {:doc "The gym: plan, land, judge, report (clojure -M:gym <command> ...)"
+  gym {:doc "The gym: plan, landings, trial, report (clojure -M:gym <command> ...)"
        :task (apply clojure "-M:gym" *command-line-args*)}
   fleet {:doc "The fleet: plan, work, report, pull (clojure -M:fleet <command> ...)"
          :task (apply clojure "-M:fleet" *command-line-args*)}
@@ -46,11 +50,6 @@
           "A vanilla 26.1.2 server: bb server start|stop, set up by PORT RCON_PORT RCON_PASS WORLD"
           :requires ([clojurecraft.server :as server])
           :task (server/command! (first *command-line-args*) (server/env-opts))}
-  gym-run
-  {:doc
-   "One gym run on a running server (gym.yml's shards): GOAL RUN BOT UNTIL TIMEOUT_MS LANDINGS RCON_PASS"
-   :requires ([clojurecraft.gym-run :as gym-run])
-   :task (gym-run/-main)}
   prepare-world
   {:doc "Build a gym landing set's world into cache/worlds/<set> (gym-world.yml): SET RCON_PASS"
    :requires ([clojurecraft.gym-world :as gym-world])

@@ -38,3 +38,16 @@
 
 (deftest cond-over-nested-if
   (is (= [] (vec (concat (nested-ifs "src/clojurecraft") (nested-ifs "dev/clojurecraft"))))))
+
+(defn without-reflection-warnings
+  "Every .clj file under dir that does not set *warn-on-reflection* right after its ns form: Java
+   interop that falls back to reflection is slow and silent, so every namespace asks to be told."
+  [dir]
+  (for [[f forms] (group-by first (forms dir))
+        :when (not= '(set! *warn-on-reflection* true) (second (second (vec forms))))]
+    f))
+
+(deftest every-namespace-warns-on-reflection
+  (is (= []
+         (vec (concat (without-reflection-warnings "src/clojurecraft")
+                      (without-reflection-warnings "dev/clojurecraft"))))))

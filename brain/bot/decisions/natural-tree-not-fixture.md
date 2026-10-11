@@ -8,7 +8,7 @@ status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
-  - src/clojurecraft/harness.clj#defn locate-forest
+  - src/clojurecraft/harness.clj#defn locate-forest!
   - bb/clojurecraft/server.clj#["level-type" "minecraft:normal"]
 related:
   - "[[bot/decisions/_moc|Decisions]]"

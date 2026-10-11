@@ -12,7 +12,9 @@
    the world, from a watch on the atom (clojurecraft.watch) that never slows the loop."
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [clojurecraft.cli :as cli]
             [clojurecraft.conn :as conn]
             [clojurecraft.game :as game]
             [clojurecraft.make]
@@ -20,6 +22,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.record :as record]
+            [clojurecraft.spec]
             [clojurecraft.stairs]
             [clojurecraft.stone]
             [clojurecraft.swim]
@@ -27,15 +30,12 @@
             [clojurecraft.wood])
   (:gen-class))
 
+(set! *warn-on-reflection* true)
+
 (def step
   "The whole bot: the world reducer, then the planner. Requiring clojurecraft.wood and
    clojurecraft.make registers the goals."
   (game/compose game/step plan/step))
-
-(defn parse-args
-  "--key value pairs → {:key \"value\"}; values stay strings, a trailing lone flag is dropped."
-  [args]
-  (into {} (map (fn [[k v]] [(keyword (subs k 2)) v]) (partition 2 args))))
 
 (defn goal-fn
   "What counts as done for a --until name: the plan done when it names goals, else being loaded."
@@ -47,6 +47,17 @@
    neither closed nor disconnected. The live run and its replay judge with this one rule."
   [world until]
   (boolean (and ((goal-fn until) world) (not (:bot/closed world)) (not (:bot/disconnected world)))))
+
+(defn external-event
+  "An event line from outside the bot (the fixture's stdout, piped in), read and checked against
+   the event spec: [event nil] when it is one, [nil why] when it does not read or is not an
+   event. What comes from another process is checked here, at the edge, before it is queued."
+  [line]
+  (try (let [e (edn/read-string {:readers record/readers} line)]
+         (if (s/valid? :clojurecraft.spec/event e)
+           [e nil]
+           [nil (str "not an event: " (s/explain-str :clojurecraft.spec/event e))]))
+       (catch Exception e [nil (str "unreadable: " (ex-message e))])))
 
 (defn result
   "The RESULT map: :ok, :until, the reason, the game summary, held items, the nearest
@@ -75,19 +86,12 @@
 
 (defn- now [] (System/currentTimeMillis))
 
-(defn stamp
-  "One timestamped line on stderr; stdout carries only RESULT."
-  [& xs]
-  (binding [*out* *err*]
-    (println (str (java.time.LocalTime/now)) (str/join " " xs))
-    (flush)))
-
-(defn perform
-  "Do one effect: :send puts the packet on the socket's out channel (blocking), :log stamps it."
+(defn perform!
+  "Do one effect: :send puts the packet on the socket's out channel (blocking), :log writes it to stderr."
   [{:effect/keys [kind packet message]} out]
   (case kind
     :send (async/>!! out packet)
-    :log (stamp message)))
+    :log (cli/log message)))
 
 (defn apply-event!
   "The epochal write: swap the world, then perform and clear what it asked for."
@@ -97,9 +101,9 @@
   (let [effects (:bot/effects @world*)]
     (when tap ((:effects tap) effects))
     (swap! world* assoc :bot/effects [])
-    (doseq [e effects] (perform e out))))
+    (doseq [e effects] (perform! e out))))
 
-(defn run-loop
+(defn run-loop!
   "Drive the reducer over socket packets, 50 ms ticks and external events until (stop? world)
    or the socket closes. Returns the final world."
   [{:keys [in out]} events world* stop? tap]
@@ -124,8 +128,8 @@
   (async/thread (doseq [line (line-seq (java.io.BufferedReader. reader))
                         :let [line (str/trim line)]
                         :when (seq line)]
-                  (try (async/>!! events (edn/read-string {:readers record/readers} line))
-                       (catch Exception e (stamp "unreadable event:" line (.getMessage e)))))))
+                  (let [[e why] (external-event line)]
+                    (if e (async/>!! events e) (cli/log "dropped event" line why))))))
 
 (defn go-when-loaded!
   "Put a :go on the queue the first time the world says the player is loaded: the run without
@@ -146,7 +150,7 @@
               until "wood"
               timeout-ms "120000"
               hold-ms "0"}}
-        (parse-args args)
+        (cli/options args)
         opts {:host host :port (Long/parseLong port) :name name}
         deadline (+ (now) (Long/parseLong timeout-ms))
         hold (Long/parseLong hold-ms)
@@ -154,29 +158,29 @@
         goal? (goal-fn until)
         stop? (fn [w] (or (goal? w) (and planned (plan/failed? w)) (> (now) deadline)))
         tap (some-> record
-                    record/tap)
-        c (conn/open opts)
+                    record/tap!)
+        c (conn/open! opts)
         queue (async/chan 16)
         world* (atom (game/init opts))
         watcher (some->> telemetry
                          (watch/telemetry! world*))]
-    (stamp "connected to" host port "as" name)
+    (cli/log "connected to" host port "as" name)
     (cond (= events "stdin") (read-events! *in* queue) ; a fixture speaks through the pipe
           planned (go-when-loaded! world* queue {:event/kind :go :go/goals planned})) ; no fixture: start where we stand
     (apply-event! world*
                   {:event/kind :start :start/host host :start/port (:port opts) :start/name name}
                   (:out c)
                   tap)
-    (let [final (run-loop c queue world* stop? tap)
+    (let [final (run-loop! c queue world* stop? tap)
           ok (ok? final until)
           r (result final until ok)]
       (prn 'RESULT r)
       (flush)
       (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT
       (when (and ok (pos? hold))
-        (stamp "holding" hold "ms for an outside judge")
-        (let [until (+ (now) hold)] (run-loop c queue world* (fn [_] (> (now) until)) nil)))
-      (when watcher ((:close watcher)) (stamp "telemetry dropped" ((:dropped watcher)) "lines"))
+        (cli/log "holding" hold "ms for an outside judge")
+        (let [until (+ (now) hold)] (run-loop! c queue world* (fn [_] (> (now) until)) nil)))
+      (when watcher ((:close watcher)) (cli/log "telemetry dropped" ((:dropped watcher)) "lines"))
       ((:close! c))
       (shutdown-agents)
       (System/exit (if ok 0 1)))))

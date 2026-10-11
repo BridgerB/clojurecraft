@@ -10,6 +10,8 @@
            [java.nio.charset StandardCharsets]
            [java.util UUID]))
 
+(set! *warn-on-reflection* true)
+
 ;; ---------------------------------------------------------------- reading
 
 (defn read-varint

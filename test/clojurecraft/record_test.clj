@@ -21,7 +21,7 @@
 (defn record!
   "Write a recording the way the loop does: the event, then what applying it produced."
   [path evs]
-  (let [tap (record/tap path)]
+  (let [tap (record/tap! path)]
     (reduce (fn [w e]
               ((:write tap) e)
               (let [w (game/step w e)]
@@ -92,7 +92,7 @@
         (is (= [136 136] [(terrain/block-at a [3 64 3]) (terrain/block-at r [3 64 3])])
             "the same column")))
     (testing "the recording keeps the bytes and drops the derived column, and replays identically"
-      (let [tap (record/tap path)]
+      (let [tap (record/tap! path)]
         (reduce (fn [w e]
                   ((:write tap) e)
                   (let [w (game/step w e)]
@@ -108,7 +108,7 @@
 
 (deftest a-recording-carries-its-result-and-a-replay-reaches-it
   (let [path (tmp "record-result")
-        tap (record/tap path)
+        tap (record/tap! path)
         w (reduce (fn [w e]
                     ((:write tap) e)
                     (let [w (main/step w e)]

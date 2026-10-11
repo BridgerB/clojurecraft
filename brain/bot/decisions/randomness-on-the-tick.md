@@ -8,7 +8,7 @@ status: verified
 lastUpdated: 2026-10-10
 verifiedAgainst: b08563f
 sourceRefs:
-  - src/clojurecraft/main.clj#defn run-loop
+  - src/clojurecraft/main.clj#defn run-loop!
   - src/clojurecraft/main.clj#:event/rand (rand)
 related:
   - "[[bot/decisions/_moc|Decisions]]"

@@ -12,6 +12,8 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]))
 
+(set! *warn-on-reflection* true)
+
 (defn frontmatter
   "The YAML between the opening \"---\" line and the next \"---\", or nil when the note has none."
   [text]
@@ -77,7 +79,7 @@
   [^String hay ^String needle]
   (loop [from 0
          acc []]
-    (let [i (str/index-of hay needle from)] (if (nil? i) acc (recur (inc i) (conj acc i))))))
+    (let [i (str/index-of hay needle from)] (if (nil? i) acc (recur (inc (long i)) (conj acc i))))))
 
 (defn hub?
   "Is the note a hub (an _moc, the _index, or a top-level manual note)? Hubs need no inbound link
@@ -100,9 +102,9 @@
   [root]
   (->> (file-seq (io/file root))
        (filter #(and (.isFile ^java.io.File %) (str/ends-with? (.getName ^java.io.File %) ".md")))
-       (map (fn [^java.io.File f]
-              (let [rel (subs (.getPath f) (inc (count (.getPath (io/file root)))))]
-                {:file f :rel (str/replace rel #"\.md$" "") :text (slurp f)})))))
+       (mapv (fn [^java.io.File f]
+               (let [rel (subs (.getPath f) (inc (count (.getPath (io/file root)))))]
+                 {:file f :rel (str/replace rel #"\.md$" "") :text (slurp f)})))))
 
 (defn resolve-path
   "The file a sourceRef path names: under a sibling checkout for a steve: or ruststeve: prefix,
@@ -165,7 +167,7 @@
           (let [[path anchor] (if-let [i (str/index-of ref "#")]
                                 [(subs ref 0 i) (subs ref (inc i))]
                                 [ref ""])
-                f (resolve-path repo path)]
+                ^java.io.File f (resolve-path repo path)]
             (cond (sibling-missing? path) (swap! unchecked conj [(:rel n) ref])
                   (not (.exists f)) (swap! unresolved conj [(:rel n) ref "no such file"])
                   (str/blank? anchor) (swap! unresolved conj [(:rel n) ref "no anchor"])

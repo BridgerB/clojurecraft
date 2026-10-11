@@ -9,17 +9,12 @@
    changed slots, so every changed slot comes back; and an empty cursor, so the world drops
    :window/cursor on every click and the server corrects it only when it is not empty."
   (:require [clojurecraft.game :as game]
-            [clojurecraft.recipe :as recipe]))
+            [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]))
+
+(set! *warn-on-reflection* true)
 
 (def answer-timeout 3000)             ; a click the server never answers fails the intent
-
-(defn table-slot
-  "Player-inventory slot → crafting-table window slot (hotbar 0-8 → 37-45, store 9-35 → 10-36),
-   or nil for armor and offhand, which the table window does not show."
-  [p]
-  (cond (<= 0 p 8) (+ 37 p)
-        (<= 9 p 35) (inc p)
-        :else nil))
 
 (defn view
   "The window an intent clicks in: :inventory (window 0, 2x2 grid) or :table (the open
@@ -29,17 +24,17 @@
     :inventory
     {:view/id 0
      :view/state-id (:window/state-id world)
-     :view/size 2
+     :view/size (:size (inventory/layouts :inventory))
      :view/grid (:window/grid world)
-     :view/slot-of recipe/player->container-slot}
+     :view/slot-of #(inventory/player->window-slot (inventory/layouts :inventory) %)}
     :table
     (let [{:window/keys [id menu-type state-id slots]} (:window/open world)]
-      (when (= 12 menu-type)
+      (when (= (:menu-type (inventory/layouts :table)) menu-type)
         {:view/id id
          :view/state-id state-id
-         :view/size 3
+         :view/size (:size (inventory/layouts :table))
          :view/grid slots
-         :view/slot-of table-slot}))))
+         :view/slot-of #(inventory/player->window-slot (inventory/layouts :table) %)}))))
 
 (defn click
   "Send one click into a view and remember which state id the answer must move."
@@ -54,10 +49,9 @@
                   :changed []
                   :cursor nil})
       (dissoc :window/cursor)
-      (update :plan/intent assoc
-              :intent/awaiting state-id
-              :intent/awaiting-window id
-              :intent/sent-at (:time/now world))))
+      (intent/assoc-intent :intent/awaiting state-id
+                           :intent/awaiting-window id
+                           :intent/sent-at (:time/now world))))
 
 (defn state-id-of
   "The latest state id the server sent for window-id: window 0's, or the open container's

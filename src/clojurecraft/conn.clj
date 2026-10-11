@@ -13,6 +13,8 @@
            [java.net InetSocketAddress Socket]
            [java.util.zip Deflater Inflater]))
 
+(set! *warn-on-reflection* true)
+
 (defn inflate
   "zlib-decompress data into exactly size bytes, the uncompressed length the frame
    declared."
@@ -57,7 +59,7 @@
             body (b/read-rest buf)]
         (if (zero? size) body (inflate body size))))))
 
-(defn write-frame
+(defn write-frame!
   "Frame and flush one packet: raw when no threshold (negative), else a data-length
    prefix, with zlib only when the payload reaches the threshold."
   [^DataOutputStream out ^bytes payload ^long threshold]
@@ -72,7 +74,7 @@
     (b/write-bytes out body)
     (.flush out)))
 
-(defn open
+(defn open!
   "Connect. Returns {:in chan :out chan :close! fn}. The reader thread decodes with the state
    current when a frame has fully arrived; the writer thread flips state before sending a
    state-changing packet, so the server's reply is decoded in the new state."
@@ -101,13 +103,14 @@
                              (swap! proto assoc :threshold (:threshold pkt)))
                            (async/>!! inbox pkt)
                            (recur)))
+                       ;; an Error too: a thread that dies silently leaves the loop on a dead wire
                        (catch Throwable e (closed (str e)))))
     (async/thread (try (loop []
                          (when-let [pkt (async/<!! outbox)]
                            (let [state (:state @proto)
                                  payload (p/encode state pkt)]
                              (swap! proto update :state p/next-state (:packet/name pkt))
-                             (write-frame out payload (:threshold @proto))
+                             (write-frame! out payload (:threshold @proto))
                              (recur))))
                        (catch Throwable e (closed (str e)))))
     {:in inbox :out outbox :close! (fn [] (async/close! outbox) (.close sock))}))

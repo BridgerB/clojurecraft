@@ -44,7 +44,7 @@ In order, as vanilla: a jump on the ground is not a jump in a liquid; `:control/
 Fall distance: `:player/fall-distance` accumulates the drop while vy is negative out of a liquid, and resets on landing or in a liquid. Vanilla's damage is the fall less three blocks, so three are free; nothing consumes the distance yet.
 
 ## What the step writes
-`:player/in-water?`, `:player/in-lava?`, `:player/eye-in-water?` and `:player/fall-distance`, every tick, by the step alone: typecraft computed in-water and never published it, and every consumer was blind ([[sib-water-traps]] item 2). `game/breathe` turns the eye flag into `:player/air` ([[death-and-respawn]]); `plan/trapped-tick` turns it into the trap ([[water-escape]]).
+`:player/in-water?`, `:player/in-lava?`, `:player/eye-in-water?` and `:player/fall-distance`, every tick, by the step alone: typecraft computed in-water and never published it, and every consumer was blind ([[sib-water-traps]] item 2). `game/breathe` turns the eye flag into `:player/air` ([[death-and-respawn]]); `trap/trapped-tick` turns it into the trap ([[water-escape]]).
 
 ## Behaviour the tests pin
 From rest in a two-deep pond the bot sinks with vy settling in (−0.006, −0.004); with jump held the feet rise to float-depth 1.03 under the surface with the eye in air; pressed forward into a one-high bank the impulse fires and the bot stands on it within 60 ticks; a four-block fall counts 4.0 and water resets it; horizontal speed in water settles at 0.02 / (1 − 0.8) = 0.1 blocks a tick. `pond-at` builds the ponds.

@@ -11,7 +11,7 @@ sourceRefs:
   - src/clojurecraft/game.clj#defn step
   - src/clojurecraft/game.clj#defn emit
   - src/clojurecraft/game.clj#defn compose
-  - src/clojurecraft/main.clj#defn run-loop
+  - src/clojurecraft/main.clj#defn run-loop!
 related:
   - "[[bot/concepts/_moc|Concepts]]"
   - "[[world-value]]"
@@ -26,7 +26,7 @@ related:
 - `game.clj`, `step` - dispatches on `:event/kind` through the `on-event` multimethod.
 - `game.clj`, `emit` - queues `{:effect/kind :send ...}` and advances `:bot/phase` through `packet/transitions`; the only place the phase changes.
 - `game.clj`, `compose` - folds several reducers left to right; `main/step` is `game/step` then `plan/step`.
-- `main.clj`, `run-loop` - `alts!!` over the socket, external events and a 50 ms timer; builds the event, calls `apply-event!`.
+- `main.clj`, `run-loop!` - `alts!!` over the socket, external events and a 50 ms timer; builds the event, calls `apply-event!`.
 
 ## How it works
 1. The loop builds one event and swaps the atom with `step`.

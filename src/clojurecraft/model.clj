@@ -6,6 +6,8 @@
    every world attribute listed has a spec. An attribute never changes meaning; a new meaning is
    a new name beside it.")
 
+(set! *warn-on-reflection* true)
+
 (def attributes
   "[attribute meaning when] rows, grouped by what the fact is about."
   [;; ---- the bot itself and its connection
@@ -37,8 +39,8 @@
    [:player/eye-in-water? "the eye (y + 1.62) is inside water, by the physics this tick"
     "after the first physics tick"]
    [:plan/wet-ticks "consecutive ticks the eye has been under water" "while planning"]
-   [:plan/dry-ticks "consecutive ticks on dry land (plan/dry-land?)" "while planning"]
-   [:plan/trap "the trap the player is in, :water or :lava, with hysteresis (plan/trapped-tick)"
+   [:plan/dry-ticks "consecutive ticks on dry land (trap/dry-land?)" "while planning"]
+   [:plan/trap "the trap the player is in, :water or :lava, with hysteresis (trap/trapped-tick)"
     "while trapped"] [:plan/trap-at "the [x z] column where the current trap began" "while trapped"]
    [:world/traps
     "every trap escaped: {:trap/pos [x z] :trap/kind :trap/at}, for routes to keep away from"
@@ -188,7 +190,11 @@
     "walk, once planned"]
    [:intent/planned-chunks
     "chunk columns loaded when the route was made (kept for the record; a new chunk no longer replans by itself)"
-    "walk, once planned"] [:intent/logs-before "logs held when collecting began" "collect"]
+    "walk, once planned"]
+   [:intent/logs-before "logs held when collecting began" "collect, before :intent/drops"]
+   [:intent/drops
+    "the item ids a collect is for: one more of any of them than it began with ends it" "collect"]
+   [:intent/drops-before "items of :intent/drops held when collecting began" "collect"]
    [:intent/blocked-by "leaf block over the drop" "collect, when the drop is covered"]
    [:intent/clears "leaf blocks cleared for this drop" "a collect resumed after clearing"]
    [:intent/resume "the intent to run after clearing a blocker" "a dig that clears a blocker"]

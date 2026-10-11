@@ -11,9 +11,11 @@
             [clojure.java.io :as io]
             [zprint.core :as zprint]))
 
+(set! *warn-on-reflection* true)
+
 (def paths
   "Where a bare fix or check looks: the code, the tests, the tooling and the hand-written data."
-  ["src" "dev" "test/clojurecraft" "bb" "bb.edn" "deps.edn" "ci" ".zprint.edn"
+  ["src" "dev" "test/clojurecraft" "repl" "bb" "bb.edn" "deps.edn" "ci" ".zprint.edn"
    "resources/clojurecraft/goals.edn" "resources/clojurecraft/problems.edn"])
 
 (def formatted? #"\.(clj|cljc|cljs|edn)$")      ; what a path must end in to be formatted
@@ -45,11 +47,14 @@
   "fix or check the given files, or every file under paths."
   [mode & args]
   (let [options (edn/read-string (slurp ".zprint.edn"))
-        changed (doall (for [path (files (or (seq args) paths))
-                             :let [text (slurp path)
-                                   out (formatted options path text)]
-                             :when (not= text out)]
-                         (do (when (= mode "fix") (spit path out)) path)))]
-    (doseq [path changed] (println (str (if (= mode "fix") "formatted " "needs formatting ") path)))
+        changed (into []
+                      (keep (fn [path]
+                              (let [text (slurp path)
+                                    out (formatted options path text)]
+                                (when (not= text out) [path out]))))
+                      (files (or (seq args) paths)))]
+    (doseq [[path out] changed]
+      (when (= mode "fix") (spit path out))
+      (println (str (if (= mode "fix") "formatted " "needs formatting ") path)))
     (shutdown-agents)
     (System/exit (if (and (= mode "check") (seq changed)) 1 0))))

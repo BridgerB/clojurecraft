@@ -8,6 +8,8 @@
   (:require [clojure.core.async :as async]
             [clojure.java.io :as io]))
 
+(set! *warn-on-reflection* true)
+
 (def ignored
   "Attributes not worth a telemetry line: they change every tick by construction (time), are
    large values with their own record (chunks, facts, the block overlay), or are drained by the
