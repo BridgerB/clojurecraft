@@ -65,3 +65,30 @@
     (testing "each scoop is aimed at the source by the look it carries"
       (is (every? #(< 30.0 (:x-rot %) 60.0) uses) "down toward the water")
       (is (apply < (map :sequence uses)) "a fresh sequence each"))))
+
+(def low-ground
+  "A chunk whose ground is three blocks lower than the floor elsewhere: y 61-63 dug out."
+  (into {} (for [x (range 16) y (range 61 64) z (range 16)] [[x y z] blocks/air])))
+
+(defn wide
+  "Standing at [x 64 z] in a row of chunks from cx -3 to 3 at cz -2 to 2, the ones named in low
+   three blocks lower, no water anywhere; landed at home."
+  [[x z] low home]
+  (assoc (standing {} [x z])
+         :plan/go-at home
+         :world/chunks
+         (into {}
+               (for [cx (range -3 4)
+                     cz (range -2 3)]
+                 [[cx cz] (world/column (if (contains? low [cx cz]) low-ground {}))]))))
+
+(deftest with-no-water-known-the-hunt-walks-out-and-downhill
+  (let [w (wide [8.5 8.5] #{[3 0]} [8.5 64.0 8.5])]
+    (is (= {:intent/kind :walk :intent/target [48 61 8] :intent/for :water-hunt}
+           (scoop/scoop-next w))
+        "the lower ground, forty blocks east"))
+  (testing "never back toward the landing"
+    (let [w (wide [8.5 8.5] #{[-2 0]} [-31.5 64.0 8.5])
+          [x _ _] (scoop/hunt-target w)]
+      (is (<= 8 x) "the low ground to the west is behind the bot: the hunt never goes back west")))
+  (is (nil? (scoop/hunt-target (standing {} [8.5 8.5]))) "nothing loaded out there: no hunt"))

@@ -6,19 +6,23 @@
    The act looks for a surface water source in the loaded terrain near the bot (never deeper
    than memory/surface-water-below under the eye: cave water is the aquifer trap the siblings
    drowned in), scoops it when it is in reach, else walks to it, else walks to the nearest
-   remembered pool (one per chunk, memory/pools), else waits :no-water.
+   remembered pool (one per chunk, memory/pools), else hunts: a walk of hunt-distance along
+   one of eight bearings, downhill first and never back toward the landing, so new chunks load
+   and their water is remembered. With nowhere left to hunt it waits :no-water.
 
    The intent puts the bucket in hand, looks at the source, and sends use-item with that look:
    a bucket is used by where the eyes point, not on a block face (use-item-on with a bucket does
    nothing). It is done only when the inventory holds one more water bucket than when it began;
    an unanswered scoop is tried again, and the last try fails :no-scoop, which blacklists the
    source. Nothing is remembered that the inventory can tell."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
@@ -35,6 +39,9 @@
 (def answer-ms 3000)                  ; ms a scoop waits for the water bucket before it is tried again
 (def max-tries 3)                     ; scoops sent at one source before it fails :no-scoop
 (def surface-height 0.85)             ; where a source's surface is aimed at: a source stands 8/9 of a block
+(def hunt-distance 40)                ; blocks a water hunt walks along a bearing before looking again
+(def surface-above 16)                ; how far above the eye a hunt looks for the ground to stand on
+(def surface-below 24)                ; and how far below it
 
 (defn- now [world] (:time/now world))
 
@@ -78,16 +85,55 @@
                             (filter (fn [[_ y _]] (>= y lo)))
                             (remove blacklist)))))
 
+(defn ground
+  "The highest cell of column [x z] the feet could stand in, from surface-above over the eye down
+   to surface-below under it, or nil (unloaded, or no floor there)."
+  [world [x z] eye-y]
+  (let [top (long (+ eye-y surface-above))]
+    (when (terrain/chunk-loaded? world [x 0 z])
+      (first (filter #(path/standable? world %)
+                     (for [y (range top (- top surface-above surface-below) -1)] [x y z]))))))
+
+(def bearings
+  "The eight directions a water hunt can take, as unit [dx dz]."
+  (for [k (range 8) :let [a (* k (/ math/PI 4))]] [(math/cos a) (math/sin a)]))
+
+(defn hunt-target
+  "Where a water hunt walks next: the ground hunt-distance along one of the eight bearings, the
+   lowest first (water lies low), leaving out any that is nearer the landing (:plan/go-at) than
+   the bot is now, so a hunt goes out and never doubles back. nil when no bearing has ground."
+  [world]
+  (let [[px _ pz] (:player/pos world)
+        ey (second (game/eye world))
+        home (:plan/go-at world)
+        out? (fn [[x _ z]]
+               (or (nil? home)
+                   (>= (physics/horizontal-distance [x 0 z] home)
+                       (physics/horizontal-distance [px 0 pz] home))))]
+    (->> bearings
+         (keep (fn [[dx dz]]
+                 (ground world
+                         [(long (math/floor (+ px (* dx hunt-distance))))
+                          (long (math/floor (+ pz (* dz hunt-distance))))]
+                         ey)))
+         (filter out?)
+         (remove (:plan/blacklist world #{}))
+         (sort-by second)
+         first)))
+
 (defn scoop-next
   "The next step toward a filled bucket: scoop the nearest surface source in reach, walk to the
-   nearest one in sight, or to the nearest remembered pool; else wait :no-water."
+   nearest one in sight, or to the nearest remembered pool, or hunt for one (hunt-target); else
+   wait :no-water."
   [world]
   (let [src (nearest-source world)
-        pool (when-not src (nearest-pool world))]
+        pool (when-not src (nearest-pool world))
+        hunt (when-not (or src pool) (hunt-target world))]
     (cond (and src (<= (physics/distance (game/eye world) (physics/centre src)) intent/reach))
           {:intent/kind :scoop :intent/target src}
           src {:intent/kind :walk :intent/target src :intent/for :scoop}
           pool {:intent/kind :walk :intent/target pool :intent/for :scoop}
+          hunt {:intent/kind :walk :intent/target hunt :intent/for :water-hunt}
           :else {:plan/wait :no-water})))
 
 (defmethod plan/act :scoop [world _] (scoop-next world))

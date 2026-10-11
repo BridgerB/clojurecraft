@@ -1,6 +1,6 @@
 ---
 title: Scoop intent
-description: How the bot fills a bucket - the :scoop act choosing surface water in sight or a remembered pool (never cave water), and the :scoop intent that equips the bucket, aims at the water's surface and sends use-item, done only when the inventory shows the water bucket.
+description: How the bot fills a bucket - the :scoop act choosing surface water in sight or a remembered pool (never cave water), hunting outward and downhill when none is known, and the :scoop intent that equips the bucket, aims at the water's surface and sends use-item, done only when the inventory shows the water bucket.
 type: reference
 tags: [bot, plan, water, bucket, intents]
 aliases: [:scoop, scoop.clj, fill-bucket, water bucket, use-item, no-scoop, no-water, aim-point]
@@ -10,6 +10,8 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/scoop.clj#defn scoop-next
   - src/clojurecraft/scoop.clj#defn nearest-source
+  - src/clojurecraft/scoop.clj#defn hunt-target
+  - test/clojurecraft/scoop_test.clj#with-no-water-known-the-hunt-walks-out-and-downhill
   - src/clojurecraft/scoop.clj#defn aim-point
   - src/clojurecraft/scoop.clj#defmethod scoop-stage :sent
   - src/clojurecraft/place.clj#defn equip
@@ -31,7 +33,10 @@ The `:fill-bucket` row needs an empty bucket and provides a water bucket; its ac
 ## Where the water is (`scoop-next`)
 1. `nearest-source`: the nearest plain water source (`blocks/water-base`: not a waterlogged block) with no water above it in the loaded terrain, within 24 of the eye, no more than `memory/surface-water-below` (5) under it, not blacklisted. In reach (4 blocks, eye to centre): `{:intent/kind :scoop :intent/target src}`; else a walk to it, which the pathfinder ends on the bank, since water is a wall to it ([[pathfinder]]).
 2. With none in sight, a walk to the nearest remembered pool within 96, the same depth rule ([[memory-sightings]]): one fact per chunk, so a far pond is known without a fact per water cell.
-3. Else `{:plan/wait :no-water}`. There is no hunt yet: the siblings' long directional search ([[sib-bucket-water-find]]) waits until a gym batch shows dry landings.
+3. Else a hunt (`hunt-target`): of eight bearings, the ground 40 blocks out (the highest cell the feet could stand in, 16 over to 24 under the eye, in a loaded chunk), leaving out any nearer the landing (`:plan/go-at`) than the bot is now, lowest first, since water lies low; a walk there tagged `:intent/for :water-hunt`. The chunks it loads are remembered as they arrive, pools included, so the next pass finds the water in sight or remembered. Nothing is stored for the hunt: going outward from the landing is what keeps it from walking back over dry ground. This is the siblings' directional hunt, downhill first ([[sib-bucket-water-find]]).
+4. With no bearing that has ground, `{:plan/wait :no-water}`.
+
+The hunt came from gym batch `water-a1` (forest landings, set A): 1 pass in 5, and all four failures waited `:no-water` about 33 s in, with no water in sight within 24 and none remembered within 96.
 
 ## The intent
 1. `:equip`: `place/equip`, shared with the place intent: the bucket into the held slot (select it in the hotbar, or swap it there with a window-0 click).
