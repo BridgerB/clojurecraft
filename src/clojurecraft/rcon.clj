@@ -13,8 +13,12 @@
   (let [body (.getBytes payload StandardCharsets/UTF_8)
         len (+ 4 4 (alength body) 2)
         bb (doto (ByteBuffer/allocate (+ 4 len)) (.order ByteOrder/LITTLE_ENDIAN))]
-    (.putInt bb (int len)) (.putInt bb (int id)) (.putInt bb (int type))
-    (.put bb body) (.put bb (byte 0)) (.put bb (byte 0))
+    (.putInt bb (int len))
+    (.putInt bb (int id))
+    (.putInt bb (int type))
+    (.put bb body)
+    (.put bb (byte 0))
+    (.put bb (byte 0))
     (.array bb)))
 
 (defn decode-packet
@@ -24,15 +28,19 @@
   (when (>= (.remaining bb) 4)
     (let [len (.getInt bb)]
       (when (>= (.remaining bb) len)
-        (let [id (.getInt bb) type (.getInt bb)
+        (let [id (.getInt bb)
+              type (.getInt bb)
               body (byte-array (- len 10))]
           (.get bb body)
-          (.get bb) (.get bb)
+          (.get bb)
+          (.get bb)
           {:id id :type type :body (String. body StandardCharsets/UTF_8)})))))
 
 ;;;; I/O: the socket ;;;;
 
-(defn read-response "Block for one whole response packet and decode it." [^DataInputStream in]
+(defn read-response
+  "Block for one whole response packet and decode it."
+  [^DataInputStream in]
   (let [head (byte-array 4)]
     (.readFully in head)
     (let [len (.getInt (.order (ByteBuffer/wrap head) ByteOrder/LITTLE_ENDIAN))
@@ -60,10 +68,7 @@
     (.write out ^bytes (encode-packet id 2 s))
     (.flush out)
     (loop [acc ""]
-      (let [r (read-response in)]
-        (if (= id (:id r))
-          (str acc (:body r))
-          (recur acc))))))
+      (let [r (read-response in)] (if (= id (:id r)) (str acc (:body r)) (recur acc))))))
 
 (defn close "Close the connection's socket." [{:keys [^Socket sock]}] (.close sock))
 
@@ -71,15 +76,17 @@
   "Call (f conn) on an authenticated connection and close it afterwards, even on
    a throw; returns what f returns."
   [host port pass f]
-  (let [c (connect host port pass)]
-    (try (f c) (finally (close c)))))
+  (let [c (connect host port pass)] (try (f c) (finally (close c)))))
 
 (defn -main
   "clojure -M:rcon --host H --port P --pass S <command...>"
   [& args]
-  (let [[flags words] (split-with (fn [[k _]] (clojure.string/starts-with? k "--")) (partition-all 2 args))
+  (let [[flags words] (split-with (fn [[k _]] (clojure.string/starts-with? k "--"))
+                                  (partition-all 2 args))
         {:strs [--host --port --pass]} (into {} (map vec flags))
         cmd (clojure.string/join " " (apply concat words))]
-    (println (with-rcon (or --host "127.0.0.1") (Long/parseLong (or --port "25575")) --pass
-               #(command % cmd)))
+    (println (with-rcon (or --host "127.0.0.1")
+                        (Long/parseLong (or --port "25575"))
+                        --pass
+                        #(command % cmd)))
     (shutdown-agents)))

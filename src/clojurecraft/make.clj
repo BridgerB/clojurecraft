@@ -29,8 +29,10 @@
 
 (def tag-named
   "An item set → the shortest tag name with exactly that set, so rows read :tag/planks."
-  (reduce (fn [m [t s]] (if (and (contains? m s) (<= (count (name (m s))) (count (name t)))) m (assoc m s t)))
-          {} recipe/tags))
+  (reduce (fn [m [t s]]
+            (if (and (contains? m s) (<= (count (name (m s))) (count (name t)))) m (assoc m s t)))
+          {}
+          recipe/tags))
 
 (defn need-key
   "The data key for an ingredient set: :tag/<name>, :item/<name>, or the set itself."
@@ -71,9 +73,12 @@
   "table → {item name → producer rows that provide it}. Memoized like producers."
   (memoize (fn [table]
              (reduce (fn [m row]
-                       (reduce (fn [m k] (reduce #(update %1 %2 (fnil conj []) row) m (or (need-set k) [])))
-                               m (keys (:goal/provides row))))
-                     {} (producers table)))))
+                       (reduce (fn [m k]
+                                 (reduce #(update %1 %2 (fnil conj []) row) m (or (need-set k) [])))
+                               m
+                               (keys (:goal/provides row))))
+                     {}
+                     (producers table)))))
 
 ;; ---------------------------------------------------------------- the world as needs see it
 
@@ -85,8 +90,10 @@
    is replaced by a new one instead of walked at until the plan fails."
   [world block]
   (when (= block :crafting_table)
-    (memory/nearest-of (game/eye world) table-search
-                       (remove (or (:plan/blacklist world) #{}) (memory/positions-now world [memory/crafting-table])))))
+    (memory/nearest-of (game/eye world)
+                       table-search
+                       (remove (or (:plan/blacklist world) #{})
+                               (memory/positions-now world [memory/crafting-table])))))
 
 ;; ---------------------------------------------------------------- the planner
 
@@ -102,7 +109,8 @@
   (reduce (fn [[c _] [k n]]
             (let [[_ a] (resolve-need world table c k n (inc depth))]
               (if a (reduced [c a]) [c nil])))
-          [counts nil] (:goal/holds row)))
+          [counts nil]
+          (:goal/holds row)))
 
 (defn resolve-row
   "Try to get times × row done: [counts row-to-act-on] (a producer whose needs are met, maybe
@@ -112,10 +120,13 @@
   (let [[c a] (resolve-holds world table counts row depth)
         [c a] (if a
                 [c a]
-                (reduce (fn [[c _] [k n]]
-                          (let [[c a] (resolve-need world table c k (if (number? n) (* n times) n) (inc depth))]
-                            (if a (reduced [c a]) [c nil])))
-                        [c nil] (:goal/needs row)))]
+                (reduce
+                 (fn [[c _] [k n]]
+                   (let [[c a]
+                         (resolve-need world table c k (if (number? n) (* n times) n) (inc depth))]
+                     (if a (reduced [c a]) [c nil])))
+                 [c nil]
+                 (:goal/needs row)))]
     (cond (= a :stuck) [counts :stuck]
           a [c a]
           :else [c row])))
@@ -127,34 +138,33 @@
   (let [block? (= "block" (namespace k))
         s (when-not block? (need-set k))
         h (when-not block? (recipe/have counts s))]
-    (cond
-      (and block? (near world (keyword (name k))))
-      [counts nil]
-
-      block?
-      (or (some (fn [row] (let [[c a] (resolve-row world table counts row 1 depth)] (when (not= a :stuck) [c a])))
-                (for [row (producers table) :when (contains? (:goal/provides row) k)] row))
-          [counts :stuck])
-
-      (>= h n) [(recipe/consume counts s n) nil]
-      (> depth max-depth) [counts :stuck]
-
-      :else
-      (let [counts (recipe/consume counts s h)
-            missing (- n h)
-            rows (->> (mapcat (by-item table) s)
-                      distinct
-                      (sort-by (fn [row] [(- (reduce + (for [[nk nn] (:goal/needs row) :when (number? nn)]
-                                                         (recipe/have counts (need-set nk)))))
-                                          (contains? (:goal/needs row) :block/crafting_table)
-                                          (- (val (first (:goal/provides row))))])))]
-        (or (some (fn [row]
-                    (let [per (val (first (:goal/provides row)))
-                          times (long (Math/ceil (/ missing per)))
-                          [c a] (resolve-row world table counts row times depth)]
-                      (when (not= a :stuck) [c a])))
-                  rows)
-            [counts :stuck])))))
+    (cond (and block? (near world (keyword (name k)))) [counts nil]
+          block?
+          (or (some (fn [row]
+                      (let [[c a] (resolve-row world table counts row 1 depth)]
+                        (when (not= a :stuck) [c a])))
+                    (for [row (producers table) :when (contains? (:goal/provides row) k)] row))
+              [counts :stuck])
+          (>= h n) [(recipe/consume counts s n) nil]
+          (> depth max-depth) [counts :stuck]
+          :else
+          (let [counts (recipe/consume counts s h)
+                missing (- n h)
+                rows (->> (mapcat (by-item table) s)
+                          distinct
+                          (sort-by (fn [row] [(- (reduce +
+                                                         (for [[nk nn] (:goal/needs row)
+                                                               :when (number? nn)]
+                                                           (recipe/have counts (need-set nk)))))
+                                              (contains? (:goal/needs row) :block/crafting_table)
+                                              (- (val (first (:goal/provides row))))])))]
+            (or (some (fn [row]
+                        (let [per (val (first (:goal/provides row)))
+                              times (long (Math/ceil (/ missing per)))
+                              [c a] (resolve-row world table counts row times depth)]
+                          (when (not= a :stuck) [c a])))
+                      rows)
+                [counts :stuck])))))
 
 (defn next-row
   "The producer row of table to act on next for a goal, nil when its provides are all held, or
@@ -163,7 +173,8 @@
   (second (reduce (fn [[counts _] [k n]]
                     (let [[counts a] (resolve-need world table counts k n 0)]
                       (if a (reduced [counts a]) [counts nil])))
-                  [(counts world) nil] (:goal/provides goal))))
+                  [(counts world) nil]
+                  (:goal/provides goal))))
 
 (defn decide
   "The next intent toward goal: continue a log chain in flight, else act on the row the needs
@@ -177,11 +188,13 @@
 
 (defmethod plan/next-intent :needs [world goal table] (decide world goal table))
 
-(defmethod plan/done-by :provided? [world goal]
+(defmethod plan/done-by :provided?
+  [world goal]
   (let [c (counts world)]
-    (every? (fn [[k n]] (if (= "block" (namespace k))
-                          (some? (near world (keyword (name k))))
-                          (>= (recipe/have c (need-set k)) n)))
+    (every? (fn [[k n]]
+              (if (= "block" (namespace k))
+                (some? (near world (keyword (name k))))
+                (>= (recipe/have c (need-set k)) n)))
             (:goal/provides goal))))
 
 ;; ---------------------------------------------------------------- acts
@@ -190,15 +203,15 @@
 
 (defmethod plan/act :place [_ row] {:intent/kind :place :intent/item (:goal/item row)})
 
-(defmethod plan/act :craft [world {:goal/keys [recipe]}]
+(defmethod plan/act :craft
+  [world {:goal/keys [recipe]}]
   (if (recipe/fits? (recipe/by-id recipe) 2)
     {:intent/kind :craft :intent/recipe recipe :intent/window :inventory}
     (let [eye (game/eye world)
           table (near world :crafting_table)]
-      (cond
-        (= 12 (get-in world [:window/open :window/menu-type]))
-        {:intent/kind :craft :intent/recipe recipe :intent/window :table}
-        (and table (<= (physics/distance eye (mapv #(+ % 0.5) table)) place/open-reach))
-        {:intent/kind :open-container :intent/target table}
-        table {:intent/kind :walk :intent/target table}
-        :else {:plan/wait :no-table}))))
+      (cond (= 12 (get-in world [:window/open :window/menu-type]))
+            {:intent/kind :craft :intent/recipe recipe :intent/window :table}
+            (and table (<= (physics/distance eye (mapv #(+ % 0.5) table)) place/open-reach))
+            {:intent/kind :open-container :intent/target table}
+            table {:intent/kind :walk :intent/target table}
+            :else {:plan/wait :no-table}))))

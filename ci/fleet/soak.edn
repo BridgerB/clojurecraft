@@ -10,7 +10,12 @@
  :fleet/workers 10
  :fleet/max-parallel 10
  :fleet/experiments
- [{:exp/name "forests" :exp/kind :sim :exp/property "forests" :exp/shards 8 :exp/worlds 1200000 :exp/est-s 5400}
+ [{:exp/name "forests"
+   :exp/kind :sim
+   :exp/property "forests"
+   :exp/shards 8
+   :exp/worlds 1200000
+   :exp/est-s 5400}
   {:exp/name "wood" :exp/kind :gym :exp/goal "wood" :exp/runs 20 :exp/bots 2 :exp/est-s 180}
   {:exp/name "table" :exp/kind :gym :exp/goal "table" :exp/runs 20 :exp/bots 2 :exp/est-s 300}
   {:exp/name "pickaxe" :exp/kind :gym :exp/goal "pickaxe" :exp/runs 20 :exp/bots 2 :exp/est-s 360}]}

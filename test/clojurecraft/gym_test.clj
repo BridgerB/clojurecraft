@@ -18,10 +18,15 @@
 
 (def ok-result {:ok true :reason :goal :stats {}})
 
-(def found {:truth/cmd "clear Clj_g1 #minecraft:logs 0" :truth/reply "Found 1 matching item(s)" :truth/ok? true})
-(def none {:truth/cmd "clear Clj_g1 #minecraft:logs 0" :truth/reply "No items were found" :truth/ok? false})
+(def found
+  {:truth/cmd "clear Clj_g1 #minecraft:logs 0"
+   :truth/reply "Found 1 matching item(s)"
+   :truth/ok? true})
+(def none
+  {:truth/cmd "clear Clj_g1 #minecraft:logs 0" :truth/reply "No items were found" :truth/ok? false})
 
-(defn left [& {:as m}]
+(defn left
+  [& {:as m}]
   (merge {:gym/landed? true :gym/result ok-result :gym/truths [found] :gym/ms 1000}
          (into {} (map (fn [[k v]] [(keyword "gym" (name k)) v])) m)))
 
@@ -33,7 +38,9 @@
   (is (= :fail (gym/outcome (left :result {:ok false :reason :stuck :stats {}}))))
   (is (= :timeout (gym/outcome (left :result {:ok false :reason :timeout :stats {}}))))
   (is (= :death (gym/outcome (left :result {:ok false :reason :timeout :stats {:stats/deaths 1}}))))
-  (is (= :disconnect (gym/outcome (left :result {:ok false :reason :disconnected :disconnected "kicked" :stats {}}))))
+  (is (= :disconnect
+         (gym/outcome (left :result
+                            {:ok false :reason :disconnected :disconnected "kicked" :stats {}}))))
   (is (= :disconnect (gym/outcome (left :result nil))) "the bot never printed RESULT")
   (is (= :harness (gym/outcome (left :landed? false))) "the landing failed before :go"))
 
@@ -46,23 +53,31 @@
     (is (not (:truth/ok? (gym/truth row "Clj_g1" "No items were found on player Clj_g1"))))))
 
 (deftest the-result-line-is-read-from-the-log
-  (is (= {:ok true :reason :goal} (gym/parse-result "12:00 connected\nRESULT {:ok true, :reason :goal}\n12:01 holding")))
+  (is (= {:ok true :reason :goal}
+         (gym/parse-result "12:00 connected\nRESULT {:ok true, :reason :goal}\n12:01 holding")))
   (is (nil? (gym/parse-result "12:00 connected\n"))))
 
 (deftest wilson-intervals
-  (let [[lo hi] (gym/wilson 12 12)] (is (< 0.75 lo 0.76)) (is (= 1.0 hi)))
-  (let [[lo hi] (gym/wilson 6 12)] (is (< 0.25 lo 0.26)) (is (< 0.74 hi 0.75)))
+  (let [[lo hi] (gym/wilson 12 12)]
+    (is (< 0.75 lo 0.76))
+    (is (= 1.0 hi)))
+  (let [[lo hi] (gym/wilson 6 12)]
+    (is (< 0.25 lo 0.26))
+    (is (< 0.74 hi 0.75)))
   (is (= [0.0 1.0] (gym/wilson 0 0))))
 
 (deftest the-report-folds-results
-  (let [rows [(gym/judged (merge (left) {:gym/goal :wood :gym/run 1 :gym/landing [1 2 70] :gym/ms 20000}))
+  (let [rows [(gym/judged (merge (left)
+                                 {:gym/goal :wood :gym/run 1 :gym/landing [1 2 70] :gym/ms 20000}))
               (gym/judged (merge (left :truths [none])
                                  {:gym/goal :wood :gym/run 2 :gym/landing [3 4 70] :gym/ms 30000}))
-              (gym/judged (merge (left :landed? false) {:gym/goal :wood :gym/run 3 :gym/landing [5 6 70]}))]
+              (gym/judged (merge (left :landed? false)
+                                 {:gym/goal :wood :gym/run 3 :gym/landing [5 6 70]}))]
         md (gym/report rows)]
     (is (every? #(s/valid? :clojurecraft.spec/gym-result %) rows))
     (is (str/includes? md "pass 1/2 [9%, 91%]; not counted: harness 1, disconnect 0"))
-    (is (str/includes? md "| 2 | 3,4 | fail | 30 | goal | No items were found |") "the disagreement shows its truth text")
+    (is (str/includes? md "| 2 | 3,4 | fail | 30 | goal | No items were found |")
+        "the disagreement shows its truth text")
     (is (str/includes? md "| 1 | 1,2 | pass | 20 | goal | Found 1 matching item(s) |"))
     (is (str/includes? md "outcomes: fail 1, harness 1, pass 1"))))
 
@@ -80,7 +95,9 @@
   (let [ls [[1 2 70] [3 4 71] [5 6 72]]]
     (is (= [1 2 70] (landings/landing-for ls 1)) "run 1 lands on the first")
     (is (= [1 2 70] (landings/landing-for ls 4)) "runs past the end wrap"))
-  (is (= [2000 3000] (landings/parse-located "The nearest #minecraft:is_forest is at [2000, ~, 3000] (12 blocks away)")))
+  (is (= [2000 3000]
+         (landings/parse-located
+          "The nearest #minecraft:is_forest is at [2000, ~, 3000] (12 blocks away)")))
   (is (= 169 (landings/chunk-count (landings/square [100 100] 96))) "13x13 chunks at radius 96")
   (is (<= (landings/chunk-count (landings/square [-8 -8] 96)) landings/max-forceload-chunks))
   (testing "a landing is fit when high enough and no check passed"

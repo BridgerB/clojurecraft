@@ -22,14 +22,17 @@
   []
   (for [d (sort (.listFiles (io/file root)))
         :when (.isDirectory ^java.io.File d)
-        :let [rec (io/file d "run.edn.gz") res (io/file d "result.edn")]
+        :let [rec (io/file d "run.edn.gz")
+              res (io/file d "result.edn")]
         :when (and (.exists rec) (.exists res))]
     [(.getName ^java.io.File d) (str rec) (edn/read-string (slurp res))]))
 
 (defn bytes-under
   "Total size of every file under dir."
   [dir]
-  (reduce + (map #(.length ^java.io.File %) (filter #(.isFile ^java.io.File %) (file-seq (io/file dir))))))
+  (reduce +
+          (map #(.length ^java.io.File %)
+               (filter #(.isFile ^java.io.File %) (file-seq (io/file dir))))))
 
 (deftest the-corpus-exists-and-stays-small
   (is (seq (corpus)) "at least one promoted run")
@@ -41,8 +44,11 @@
       (let [worlds (reductions (fn [w e] (assoc (main/step w e) :bot/effects []))
                                (game/init {:host "replay" :port 0 :name "Clj_replay"})
                                (record/events path))
-            bad (first (keep-indexed (fn [i w] (when-not (s/valid? :clojurecraft.spec/world w) i)) worlds))]
+            bad (first (keep-indexed (fn [i w] (when-not (s/valid? :clojurecraft.spec/world w) i))
+                                     worlds))]
         (is (nil? bad) (str "world " bad " breaks the world spec"))
         (let [replayed (main/replayed path)]
-          (is (= :identical (:replay/result replayed)) "the fold reaches the RESULT the run printed")
-          (is (= (:gym/result result) (record/recorded-result path)) "the gym judged the RESULT the recording holds"))))))
+          (is (= :identical (:replay/result replayed))
+              "the fold reaches the RESULT the run printed")
+          (is (= (:gym/result result) (record/recorded-result path))
+              "the gym judged the RESULT the recording holds"))))))

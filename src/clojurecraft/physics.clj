@@ -43,13 +43,16 @@
 
 (defn eye "Eye position of a player whose feet centre is [x y z]." [[x y z]] [x (+ y eye-height) z])
 
-(defn centre "The centre point of the block at integer position [x y z]." [[x y z]] [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
+(defn centre
+  "The centre point of the block at integer position [x y z]."
+  [[x y z]]
+  [(+ x 0.5) (+ y 0.5) (+ z 0.5)])
 
 (defn expand
   "The box grown along a velocity: the region a move may sweep through this tick."
   [[x0 y0 z0 x1 y1 z1] [vx vy vz]]
-  [(+ x0 (min 0.0 vx)) (+ y0 (min 0.0 vy)) (+ z0 (min 0.0 vz))
-   (+ x1 (max 0.0 vx)) (+ y1 (max 0.0 vy)) (+ z1 (max 0.0 vz))])
+  [(+ x0 (min 0.0 vx)) (+ y0 (min 0.0 vy)) (+ z0 (min 0.0 vz)) (+ x1 (max 0.0 vx))
+   (+ y1 (max 0.0 vy)) (+ z1 (max 0.0 vz))])
 
 (defn solid-boxes
   "Unit boxes of every solid block touching the region."
@@ -63,8 +66,7 @@
 (defn overlaps?
   "Do boxes a and b overlap strictly along axis (0 x, 1 y, 2 z)? Touching faces do not."
   [a b axis]
-  (and (< (double (a axis)) (double (b (+ axis 3))))
-       (> (double (a (+ axis 3))) (double (b axis)))))
+  (and (< (double (a axis)) (double (b (+ axis 3)))) (> (double (a (+ axis 3))) (double (b axis)))))
 
 (defn clip
   "Shrink the move d along axis so box does not enter any of boxes."
@@ -72,19 +74,26 @@
   (let [others (remove #{axis} [0 1 2])]
     (reduce (fn [d c]
               (if (every? #(overlaps? box c %) others)
-                (cond
-                  (and (pos? d) (>= (double (c axis)) (double (box (+ axis 3)))))
-                  (min d (- (double (c axis)) (double (box (+ axis 3)))))
-                  (and (neg? d) (<= (double (c (+ axis 3))) (double (box axis))))
-                  (max d (- (double (c (+ axis 3))) (double (box axis))))
-                  :else d)
+                (cond (and (pos? d) (>= (double (c axis)) (double (box (+ axis 3)))))
+                      (min d (- (double (c axis)) (double (box (+ axis 3)))))
+                      (and (neg? d) (<= (double (c (+ axis 3))) (double (box axis))))
+                      (max d (- (double (c (+ axis 3))) (double (box axis))))
+                      :else d)
                 d))
-            d boxes)))
+            d
+            boxes)))
 
-(defn shift "The box moved d along axis." [box axis d]
-  (-> box (update axis + d) (update (+ axis 3) + d)))
+(defn shift
+  "The box moved d along axis."
+  [box axis d]
+  (-> box
+      (update axis + d)
+      (update (+ axis 3) + d)))
 
-(defn squash "v, or 0.0 when it is below negligible (vanilla's velocity snap)." [v] (if (< (Math/abs (double v)) negligible) 0.0 v))
+(defn squash
+  "v, or 0.0 when it is below negligible (vanilla's velocity snap)."
+  [v]
+  (if (< (Math/abs (double v)) negligible) 0.0 v))
 
 ;; ---------------------------------------------------------------- fluids
 
@@ -98,15 +107,20 @@
   "Does the player's box, contracted by [cx cy cz], overlap any block of fluid kind, counting a
    block only up to the height its level fills?"
   [fluid-at kind [cx cy cz] [x0 y0 z0 x1 y1 z1]]
-  (let [x0 (+ x0 cx) y0 (+ y0 cy) z0 (+ z0 cz) x1 (- x1 cx) y1 (- y1 cy) z1 (- z1 cz)]
-    (boolean (some (fn [[bx by bz]]
-                     (let [f (fluid-at bx by bz)]
-                       (and f (= kind (:fluid/kind f))
-                            (< y0 (+ by (fluid-height (:fluid/level f)))))))
-                   (for [bx (range (long (Math/floor x0)) (inc (long (Math/floor x1))))
-                         by (range (long (Math/floor y0)) (inc (long (Math/floor y1))))
-                         bz (range (long (Math/floor z0)) (inc (long (Math/floor z1))))]
-                     [bx by bz])))))
+  (let [x0 (+ x0 cx)
+        y0 (+ y0 cy)
+        z0 (+ z0 cz)
+        x1 (- x1 cx)
+        y1 (- y1 cy)
+        z1 (- z1 cz)]
+    (boolean (some
+              (fn [[bx by bz]]
+                (let [f (fluid-at bx by bz)]
+                  (and f (= kind (:fluid/kind f)) (< y0 (+ by (fluid-height (:fluid/level f)))))))
+              (for [bx (range (long (Math/floor x0)) (inc (long (Math/floor x1))))
+                    by (range (long (Math/floor y0)) (inc (long (Math/floor y1))))
+                    bz (range (long (Math/floor z0)) (inc (long (Math/floor z1))))]
+                [bx by bz])))))
 
 (defn eye-in-water?
   "Is the eye (y + 1.62, never feet + 1: a surface floater's eye is in air) inside water,
@@ -114,7 +128,8 @@
   [fluid-at [x y z]]
   (let [ey (+ y eye-height)
         f (fluid-at (long (Math/floor x)) (long (Math/floor ey)) (long (Math/floor z)))]
-    (boolean (and f (= :water (:fluid/kind f))
+    (boolean (and f
+                  (= :water (:fluid/kind f))
                   (< (- ey (Math/floor ey)) (fluid-height (:fluid/level f)))))))
 
 (defn no-fluid "A fluid oracle for a dry world." [_ _ _] nil)
@@ -133,7 +148,10 @@
   "Is the player's box, moved by [dx dy dz], clear of solids and of water? The test behind the
    out-of-liquid impulse: a bank the body can rise onto."
   [solid? fluid-at box [dx dy dz]]
-  (let [moved (-> box (shift 0 dx) (shift 1 dy) (shift 2 dz))]
+  (let [moved (-> box
+                  (shift 0 dx)
+                  (shift 1 dy)
+                  (shift 2 dz))]
     (and (empty? (solid-boxes solid? moved))
          (not (in-fluid? fluid-at :water [0.0 0.0 0.0] moved)))))
 
@@ -143,15 +161,17 @@
   [solid? pos [vx vy vz]]
   (let [box (aabb pos)
         boxes (vec (solid-boxes solid? (expand box [vx vy vz])))
-        dy (clip box boxes 1 vy) box (shift box 1 dy)
-        dx (clip box boxes 0 vx) box (shift box 0 dx)
-        dz (clip box boxes 2 vz) box (shift box 2 dz)
+        dy (clip box boxes 1 vy)
+        box (shift box 1 dy)
+        dx (clip box boxes 0 vx)
+        box (shift box 0 dx)
+        dz (clip box boxes 2 vz)
+        box (shift box 2 dz)
         landed? (and (not= dy vy) (neg? vy))
         hit? (or (not= dx vx) (not= dz vz))
         [x y z] pos]
     [[(+ x dx) (+ y dy) (+ z dz)]
-     [(if (not= dx vx) 0.0 vx) (if (not= dy vy) 0.0 vy) (if (not= dz vz) 0.0 vz)]
-     landed? hit?]))
+     [(if (not= dx vx) 0.0 vx) (if (not= dy vy) 0.0 vy) (if (not= dz vz) 0.0 vz)] landed? hit?]))
 
 (defn step
   "One tick of movement. Reads :player/pos :player/vel :player/on-ground? :player/jump-ticks
@@ -160,8 +180,9 @@
    world is dry."
   ([solid? world controls] (step solid? no-fluid world controls))
   ([solid? fluid-at
-    {:player/keys [pos vel on-ground? jump-ticks fall-distance] :or {vel [0.0 0.0 0.0] jump-ticks 0 fall-distance 0.0} :as world}
-    {:control/keys [forward? jump? sneak? yaw]}]
+    {:player/keys [pos vel on-ground? jump-ticks fall-distance]
+     :or {vel [0.0 0.0 0.0] jump-ticks 0 fall-distance 0.0}
+     :as world} {:control/keys [forward? jump? sneak? yaw]}]
    (let [{:keys [in-water? in-lava?]} (fluids-here fluid-at pos)
          liquid? (or in-water? in-lava?)
          [vx vy vz] (map squash vel)
@@ -172,17 +193,26 @@
                   (and liquid? sneak?) (- vy swim-down)
                   :else vy)
          jump-ticks (if jumping? 10 jump-ticks)
-         accel (cond liquid? liquid-acceleration on-ground? ground-acceleration :else air-acceleration)
+         accel (cond liquid? liquid-acceleration
+                     on-ground? ground-acceleration
+                     :else air-acceleration)
          f (if forward? 0.98 0.0)
          rad (Math/toRadians (double (or yaw 0.0)))
          vx (- vx (* f accel (Math/sin rad)))
          vz (+ vz (* f accel (Math/cos rad)))
          [pos' [vx vy vz] landed? hit?] (land-tick solid? pos [vx vy vz])
-         inertia (cond in-lava? lava-inertia in-water? water-inertia landed? ground-inertia :else air-inertia)
-         g (cond in-lava? lava-gravity in-water? water-gravity :else gravity)
+         inertia (cond in-lava? lava-inertia
+                       in-water? water-inertia
+                       landed? ground-inertia
+                       :else air-inertia)
+         g (cond in-lava? lava-gravity
+                 in-water? water-gravity
+                 :else gravity)
          vy' (if liquid? (- (* vy inertia) g) (* (- vy gravity) vertical-drag))
          ;; the one real lift out of a liquid: pressing into a bank whose top is free
-         vy' (if (and liquid? hit? (free? solid? fluid-at (aabb pos') [vx (+ vy' 0.6) vz])) out-of-liquid-impulse vy')
+         vy' (if (and liquid? hit? (free? solid? fluid-at (aabb pos') [vx (+ vy' 0.6) vz]))
+               out-of-liquid-impulse
+               vy')
          fall (cond liquid? 0.0
                     landed? 0.0
                     (neg? vy) (+ fall-distance (- (second pos) (second pos')))
@@ -201,13 +231,18 @@
 (defn look-at
   "[yaw pitch] in degrees from eye to target, Notchian convention (south = 0, west = +90)."
   [[ex ey ez] [tx ty tz]]
-  (let [dx (- tx ex) dy (- ty ey) dz (- tz ez)
+  (let [dx (- tx ex)
+        dy (- ty ey)
+        dz (- tz ez)
         horiz (Math/sqrt (+ (* dx dx) (* dz dz)))]
-    [(Math/toDegrees (Math/atan2 (- dx) dz))
-     (Math/toDegrees (- (Math/atan2 dy horiz)))]))
+    [(Math/toDegrees (Math/atan2 (- dx) dz)) (Math/toDegrees (- (Math/atan2 dy horiz)))]))
 
-(defn distance "Euclidean distance between two points." [[ax ay az] [bx by bz]]
+(defn distance
+  "Euclidean distance between two points."
+  [[ax ay az] [bx by bz]]
   (Math/sqrt (+ (Math/pow (- ax bx) 2) (Math/pow (- ay by) 2) (Math/pow (- az bz) 2))))
 
-(defn horizontal-distance "Distance between two points ignoring y." [[ax _ az] [bx _ bz]]
+(defn horizontal-distance
+  "Distance between two points ignoring y."
+  [[ax _ az] [bx _ bz]]
   (Math/sqrt (+ (Math/pow (- ax bx) 2) (Math/pow (- az bz) 2))))

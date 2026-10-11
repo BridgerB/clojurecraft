@@ -6,13 +6,18 @@
             [clojurecraft.sim :as sim]
             [clojurecraft.world :as world]))
 
-(defn table-slot [p] (cond (<= 0 p 8) (+ 37 p) (<= 9 p 35) (inc p)))
+(defn table-slot
+  [p]
+  (cond (<= 0 p 8) (+ 37 p)
+        (<= 9 p 35) (inc p)))
 
 (defn stock
   "One stack per ingredient set, enough for one craft, in main-inventory slots 9.."
   [r]
-  (into {} (map-indexed (fn [i [s n]] [(+ 9 i) {:item (recipe/item-id (first (sort s))) :count (+ n 3)}])
-                        (recipe/needs r))))
+  (into {}
+        (map-indexed (fn [i [s n]] [(+ 9 i)
+                                    {:item (recipe/item-id (first (sort s))) :count (+ n 3)}])
+                     (recipe/needs r))))
 
 (defn craft-in-table
   "Apply the click plan for r inside an open table window of the sim; returns the last item the
@@ -23,11 +28,18 @@
                  (assoc :sim/phase :play :sim/inv inv :sim/window {:id 1 :grid {} :state-id 1}))]
     (if-let [cs (recipe/clicks inv r 3 table-slot)]
       (let [sim (reduce (fn [sim {:click/keys [slot button mode]}]
-                          (sim/step sim {:sim/kind :packet
-                                         :sim/packet {:packet/name :container-click :window-id 1
-                                                      :state-id (get-in sim [:sim/window :state-id])
-                                                      :slot slot :button button :mode mode :changed [] :cursor nil}}))
-                        sim0 cs)]
+                          (sim/step sim
+                                    {:sim/kind :packet
+                                     :sim/packet {:packet/name :container-click
+                                                  :window-id 1
+                                                  :state-id (get-in sim [:sim/window :state-id])
+                                                  :slot slot
+                                                  :button button
+                                                  :mode mode
+                                                  :changed []
+                                                  :cursor nil}}))
+                        sim0
+                        cs)]
         (->> (:sim/out sim)
              (filter #(and (= :container-set-slot (:packet/name %)) (= 0 (:slot %))))
              last

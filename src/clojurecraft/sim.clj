@@ -57,9 +57,10 @@
   [id held]
   (when (dig/harvest? id held)
     (let [n (blocks/name-of id)
-          item (case n :stone :cobblestone n)]
-      (when-let [item-id (get blocks/items item)]
-        {:item item-id :count 1}))))
+          item (case n
+                 :stone :cobblestone
+                 n)]
+      (when-let [item-id (get blocks/items item)] {:item item-id :count 1}))))
 
 (defn wear
   "The inventory after one accepted dig with the tool in slot: its durability counts down from
@@ -68,10 +69,10 @@
   [inv slot]
   (let [{:keys [item durability] :as it} (get inv slot)
         tool (blocks/tool item)]
-    (cond
-      (nil? tool) inv
-      :else (let [left (dec (or durability (:durability (blocks/materials (:tier tool)))))]
-              (if (pos? left) (assoc inv slot (assoc it :durability left)) (dissoc inv slot))))))
+    (cond (nil? tool) inv
+          :else
+          (let [left (dec (or durability (:durability (blocks/materials (:tier tool)))))]
+            (if (pos? left) (assoc inv slot (assoc it :durability left)) (dissoc inv slot))))))
 (def pickup-delay 500)                ; ms before a dropped item can be picked up (vanilla: 10 ticks)
 (def keep-alive-every 15000)          ; ms between the model's keep-alives (vanilla: 15 s)
 (def max-stack 64)                    ; items per slot
@@ -84,7 +85,8 @@
    :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {window-0-slot item}, :lag-ticks and
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
    from the world spawn)."
-  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn] :or {keep-alive-every keep-alive-every}}]
+  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn]
+    :or {keep-alive-every keep-alive-every}}]
   {:sim/phase :handshake
    :sim/lag-ticks (or lag-ticks 0)
    :sim/inv (or inventory {})
@@ -120,60 +122,93 @@
 (defmethod on-packet :default [sim _] sim)
 
 (defmethod on-packet [:handshake :intention] [sim _] (assoc sim :sim/phase :login))
-(defmethod on-packet [:login :hello] [sim {:keys [username uuid]}]
+(defmethod on-packet [:login :hello]
+  [sim {:keys [username uuid]}]
   (send sim {:packet/name :login-finished :uuid uuid :username username}))
-(defmethod on-packet [:login :login-acknowledged] [sim _]
-  (-> sim (assoc :sim/phase :configuration) (send {:packet/name :select-known-packs})))
-(defmethod on-packet [:configuration :select-known-packs] [sim _]
+(defmethod on-packet [:login :login-acknowledged]
+  [sim _]
+  (-> sim
+      (assoc :sim/phase :configuration)
+      (send {:packet/name :select-known-packs})))
+(defmethod on-packet [:configuration :select-known-packs]
+  [sim _]
   (send sim {:packet/name :finish-configuration}))
-(defmethod on-packet [:configuration :finish-configuration] [sim _]
+(defmethod on-packet [:configuration :finish-configuration]
+  [sim _]
   (let [[x y z] (:sim/spawn sim)]
     (-> sim
         (assoc :sim/phase :play)
         (send {:packet/name :login :entity-id 1})
-        (send {:packet/name :player-position :teleport-id 1 :x x :y y :z z :dx 0.0 :dy 0.0 :dz 0.0
-               :yaw 0.0 :pitch 0.0 :flags 0})
-        (send {:packet/name :container-set-content :window-id 0 :state-id (:sim/state-id sim)
-               :items (mapv #(get-in sim [:sim/inv %]) (range 46)) :carried nil})
-        (send {:packet/name :level-chunk-with-light :x 0 :z 0 :heightmaps [] :data (:sim/column sim)})
+        (send {:packet/name :player-position
+               :teleport-id 1
+               :x x
+               :y y
+               :z z
+               :dx 0.0
+               :dy 0.0
+               :dz 0.0
+               :yaw 0.0
+               :pitch 0.0
+               :flags 0})
+        (send {:packet/name :container-set-content
+               :window-id 0
+               :state-id (:sim/state-id sim)
+               :items (mapv #(get-in sim [:sim/inv %]) (range 46))
+               :carried nil})
+        (send
+         {:packet/name :level-chunk-with-light :x 0 :z 0 :heightmaps [] :data (:sim/column sim)})
         (send {:packet/name :chunk-batch-finished :batch-size 1}))))
 
-(defmethod on-packet [:play :move-player-pos-rot] [sim {:keys [x y z]}] (assoc sim :sim/player-pos [x y z]))
-(defmethod on-packet [:play :move-player-pos] [sim {:keys [x y z]}] (assoc sim :sim/player-pos [x y z]))
-(defmethod on-packet [:play :keep-alive] [sim {:keys [id]}] (update sim :sim/keep-alives-pending disj id))
+(defmethod on-packet [:play :move-player-pos-rot]
+  [sim {:keys [x y z]}]
+  (assoc sim :sim/player-pos [x y z]))
+(defmethod on-packet [:play :move-player-pos]
+  [sim {:keys [x y z]}]
+  (assoc sim :sim/player-pos [x y z]))
+(defmethod on-packet [:play :keep-alive]
+  [sim {:keys [id]}]
+  (update sim :sim/keep-alives-pending disj id))
 
-(defmethod on-packet [:play :player-action] [sim {:keys [status pos sequence]}]
+(defmethod on-packet [:play :player-action]
+  [sim {:keys [status pos sequence]}]
   (case (long status)
     0 (assoc sim :sim/dig {:pos pos :at (:sim/now sim)})
-    2 (let [{:keys [at] dpos :pos} (:sim/dig sim)
-            id (block-at sim pos)
-            held (held-item sim)
-            slot (+ 36 (:sim/held sim 0))]
-        (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
-          (let [eid (:sim/next-eid sim)
-                [x y z] pos
-                item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
-                drop (drop-of id held)
-                before (full (:sim/inv sim) (layouts :inventory))
-                sim (-> sim
-                        (update :sim/broken conj pos)
-                        (dissoc :sim/dig)
-                        ;; observed live on 26.1.2: the breaker gets the block update, then the ack
-                        (send {:packet/name :block-update :pos pos :state 0})
-                        (send {:packet/name :block-changed-ack :sequence sequence})
-                        (update :sim/inv wear slot))
-                sim (sync-window sim :inventory before (:sim/cursor sim) false)]
-            (if drop
-              (-> sim
-                  (assoc :sim/next-eid (inc eid))
-                  (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
-                  (send {:packet/name :add-entity :entity-id eid :uuid nil :type blocks/item-entity-type
-                         :x (first item-pos) :y (second item-pos) :z (nth item-pos 2)}))
-              sim))
-          ;; too early: the real server keeps the block and restores the client's view of it
-          (-> sim (dissoc :sim/dig)
-              (send {:packet/name :block-update :pos pos :state (or id 0)})
-              (send {:packet/name :block-changed-ack :sequence sequence}))))
+    2
+    (let [{:keys [at] dpos :pos} (:sim/dig sim)
+          id (block-at sim pos)
+          held (held-item sim)
+          slot (+ 36 (:sim/held sim 0))]
+      (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
+        (let [eid (:sim/next-eid sim)
+              [x y z] pos
+              item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
+              drop (drop-of id held)
+              before (full (:sim/inv sim) (layouts :inventory))
+              sim (-> sim
+                      (update :sim/broken conj pos)
+                      (dissoc :sim/dig)
+                      ;; observed live on 26.1.2: the breaker gets the block update, then the ack
+                      (send {:packet/name :block-update :pos pos :state 0})
+                      (send {:packet/name :block-changed-ack :sequence sequence})
+                      (update :sim/inv wear slot))
+              sim (sync-window sim :inventory before (:sim/cursor sim) false)]
+          (if drop
+            (-> sim
+                (assoc :sim/next-eid (inc eid))
+                (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
+                (send {:packet/name :add-entity
+                       :entity-id eid
+                       :uuid nil
+                       :type blocks/item-entity-type
+                       :x (first item-pos)
+                       :y (second item-pos)
+                       :z (nth item-pos 2)}))
+            sim))
+        ;; too early: the real server keeps the block and restores the client's view of it
+        (-> sim
+            (dissoc :sim/dig)
+            (send {:packet/name :block-update :pos pos :state (or id 0)})
+            (send {:packet/name :block-changed-ack :sequence sequence}))))
     sim))
 
 ;; ---------------------------------------------------------------- windows
@@ -186,12 +221,19 @@
   {:inventory {:size 2 :store (range 9 45) :hotbar 36}
    :table {:size 3 :store (range 10 46) :hotbar 37}})
 
-(defn grid-slots "The crafting-grid slots of a layout, 1..size²." [{:keys [size]}] (range 1 (inc (* size size))))
+(defn grid-slots
+  "The crafting-grid slots of a layout, 1..size²."
+  [{:keys [size]}]
+  (range 1 (inc (* size size))))
 
 (defn result-of
   "What the grid of view crafts, {:item id :count n}, or nil when it matches no recipe."
   [view layout]
-  (let [grid (into {} (for [s (grid-slots layout) :let [it (get view s)] :when it] [s (recipe/item-name (:item it))]))]
+  (let [grid (into {}
+                   (for [s (grid-slots layout)
+                         :let [it (get view s)]
+                         :when it]
+                     [s (recipe/item-name (:item it))]))]
     (when-let [r (recipe/match grid (:size layout))]
       {:item (recipe/item-id (:recipe/result r)) :count (:recipe/count r)})))
 
@@ -201,8 +243,9 @@
   [sim kind]
   (case kind
     :inventory (:sim/inv sim)
-    :table (merge (get-in sim [:sim/window :grid])
-                  (into {} (for [[s it] (:sim/inv sim) :when (<= 9 s 44)] [(inc s) it])))))
+    :table
+    (merge (get-in sim [:sim/window :grid])
+           (into {} (for [[s it] (:sim/inv sim) :when (<= 9 s 44)] [(inc s) it])))))
 
 (defn with-view
   "Write a clicked view of window kind back into the sim; the inverse of view-of. The result
@@ -211,23 +254,32 @@
   (let [view (dissoc view 0)]
     (case kind
       :inventory (assoc sim :sim/inv view)
-      :table (-> sim
-                 (assoc-in [:sim/window :grid] (into {} (for [s (range 1 10) :let [it (get view s)] :when it] [s it])))
-                 (assoc :sim/inv (merge (into {} (remove (fn [[s _]] (<= 9 s 44)) (:sim/inv sim)))
-                                        (into {} (for [[s it] view :when (<= 10 s 45)] [(dec s) it]))))))))
+      :table
+      (-> sim
+          (assoc-in [:sim/window :grid]
+                    (into {} (for [s (range 1 10) :let [it (get view s)] :when it] [s it])))
+          (assoc :sim/inv
+                 (merge (into {} (remove (fn [[s _]] (<= 9 s 44)) (:sim/inv sim)))
+                        (into {} (for [[s it] view :when (<= 10 s 45)] [(dec s) it]))))))))
 
-(defn full "view with slot 0 set to what its grid crafts." [view layout] (assoc view 0 (result-of view layout)))
+(defn full
+  "view with slot 0 set to what its grid crafts."
+  [view layout]
+  (assoc view 0 (result-of view layout)))
 
 (defn insert
   "Put a stack into the given slots, stacking first. Returns [view leftover]."
   [view slots {:keys [item count]}]
-  (let [order (concat (filter #(= item (:item (get view %))) slots) (filter #(nil? (get view %)) slots))]
+  (let [order (concat (filter #(= item (:item (get view %))) slots)
+                      (filter #(nil? (get view %)) slots))]
     (let [[view n] (reduce (fn [[view n] s]
                              (if (zero? n)
                                (reduced [view n])
-                               (let [have (:count (get view s) 0) k (min n (- max-stack have))]
+                               (let [have (:count (get view s) 0)
+                                     k (min n (- max-stack have))]
                                  [(assoc view s {:item item :count (+ have k)}) (- n k)])))
-                           [view count] order)]
+                           [view count]
+                           order)]
       [view (when (pos? n) {:item item :count n})])))
 
 (defn take-one
@@ -257,57 +309,66 @@
    store; a click when the grid matches nothing is recorded as a violation."
   [layout view cursor mode]
   (let [out (result-of view layout)]
-    (cond
-      (nil? out) {:view view :cursor cursor :violation [:click-on-empty-result mode]}
-      (= mode 1) {:view (craft-all view layout) :cursor cursor}
-      (or (nil? cursor) (and (= (:item cursor) (:item out)) (<= (+ (:count cursor) (:count out)) max-stack)))
-      {:view (craft-once view layout) :cursor (update out :count + (:count cursor 0))}
-      :else {:view view :cursor cursor})))
+    (cond (nil? out) {:view view :cursor cursor :violation [:click-on-empty-result mode]}
+          (= mode 1) {:view (craft-all view layout) :cursor cursor}
+          (or (nil? cursor)
+              (and (= (:item cursor) (:item out)) (<= (+ (:count cursor) (:count out)) max-stack)))
+          {:view (craft-once view layout) :cursor (update out :count + (:count cursor 0))}
+          :else {:view view :cursor cursor})))
 
 (defn click-view
   "Vanilla click rules over one window's slots. Returns {:view :cursor :violation}."
   [layout view cursor {:keys [slot button mode]}]
   (let [at (get view slot)
         store (:store layout)]
-    (cond
-      (= slot 0) (click-result layout view cursor mode)
-
-      (= mode 2)
-      (let [h (+ (:hotbar layout) button) other (get view h)]
-        {:view (-> view (dissoc slot h) (cond-> other (assoc slot other) at (assoc h at))) :cursor cursor})
-
-      (= mode 1)
-      (if (and at (some #{slot} (grid-slots layout)))
-        (let [[view' left] (insert (dissoc view slot) store at)] {:view (cond-> view' left (assoc slot left)) :cursor cursor})
-        {:view view :cursor cursor})
-
-      (= button 0)
-      (cond (nil? cursor) {:view (dissoc view slot) :cursor at}
-            (nil? at) {:view (assoc view slot cursor) :cursor nil}
-            (= (:item at) (:item cursor))
-            (let [k (min (:count cursor) (- max-stack (:count at)))
-                  left (- (:count cursor) k)]
-              {:view (assoc view slot (update at :count + k)) :cursor (when (pos? left) (assoc cursor :count left))})
-            :else {:view (assoc view slot cursor) :cursor at})
-
-      :else
-      (cond (and (nil? cursor) at)
-            (let [half (long (Math/ceil (/ (:count at) 2)))
-                  rest (- (:count at) half)]
-              {:cursor (assoc at :count half)
-               :view (if (pos? rest) (assoc view slot (assoc at :count rest)) (dissoc view slot))})
-            (nil? cursor) {:view view :cursor nil}
-            (or (nil? at) (and (= (:item at) (:item cursor)) (< (:count at) max-stack)))
-            {:view (assoc view slot {:item (:item cursor) :count (inc (:count at 0))})
-             :cursor (when (> (:count cursor) 1) (update cursor :count dec))}
-            :else {:view view :cursor cursor}))))
+    (cond (= slot 0) (click-result layout view cursor mode)
+          (= mode 2)
+          (let [h (+ (:hotbar layout) button)
+                other (get view h)]
+            {:view (-> view
+                       (dissoc slot h)
+                       (cond-> other (assoc slot other)
+                               at (assoc h at)))
+             :cursor cursor})
+          (= mode 1)
+          (if (and at (some #{slot} (grid-slots layout)))
+            (let [[view' left] (insert (dissoc view slot) store at)]
+              {:view (cond-> view' left (assoc slot left)) :cursor cursor})
+            {:view view :cursor cursor})
+          (= button 0)
+          (cond (nil? cursor) {:view (dissoc view slot) :cursor at}
+                (nil? at) {:view (assoc view slot cursor) :cursor nil}
+                (= (:item at) (:item cursor))
+                (let [k (min (:count cursor) (- max-stack (:count at)))
+                      left (- (:count cursor) k)]
+                  {:view (assoc view slot (update at :count + k))
+                   :cursor (when (pos? left) (assoc cursor :count left))})
+                :else {:view (assoc view slot cursor) :cursor at})
+          :else
+          (cond (and (nil? cursor) at)
+                (let [half (long (Math/ceil (/ (:count at) 2)))
+                      rest (- (:count at) half)]
+                  {:cursor (assoc at :count half)
+                   :view
+                   (if (pos? rest) (assoc view slot (assoc at :count rest)) (dissoc view slot))})
+                (nil? cursor) {:view view :cursor nil}
+                (or (nil? at) (and (= (:item at) (:item cursor)) (< (:count at) max-stack)))
+                {:view (assoc view slot {:item (:item cursor) :count (inc (:count at 0))})
+                 :cursor (when (> (:count cursor) 1) (update cursor :count dec))}
+                :else {:view view :cursor cursor}))))
 
 (defn state-id-path
   "Where the sim keeps the state id of window kind."
-  [kind] (case kind :inventory [:sim/state-id] :table [:sim/window :state-id]))
+  [kind]
+  (case kind
+    :inventory [:sim/state-id]
+    :table [:sim/window :state-id]))
 (defn window-id
   "The protocol window id of window kind: 0, or the open table's."
-  [sim kind] (case kind :inventory 0 :table (get-in sim [:sim/window :id])))
+  [sim kind]
+  (case kind
+    :inventory 0
+    :table (get-in sim [:sim/window :id])))
 
 (defn sync-window
   "Answer a click the way vanilla does. The click's own changed-slots and cursor fields are the
@@ -322,17 +383,28 @@
         path (state-id-path kind)]
     (if stale?
       (let [sim (update-in sim path inc)]
-        (send sim {:packet/name :container-set-content :window-id id :state-id (get-in sim path)
-                   :items (mapv #(get after %) (range 46)) :carried (:sim/cursor sim)}))
+        (send sim
+              {:packet/name :container-set-content
+               :window-id id
+               :state-id (get-in sim path)
+               :items (mapv #(get after %) (range 46))
+               :carried (:sim/cursor sim)}))
       (as-> sim sim
         (reduce (fn [sim s]
                   (if (= (get before s) (get after s))
                     sim
                     (let [sim (update-in sim path inc)]
-                      (send sim {:packet/name :container-set-slot :window-id id :state-id (get-in sim path)
-                                 :slot s :item (get after s)}))))
-                sim (range 46))
-        (if (= predicted-cursor (:sim/cursor sim)) sim (send sim {:packet/name :set-cursor-item :item (:sim/cursor sim)}))))))
+                      (send sim
+                            {:packet/name :container-set-slot
+                             :window-id id
+                             :state-id (get-in sim path)
+                             :slot s
+                             :item (get after s)}))))
+                sim
+                (range 46))
+        (if (= predicted-cursor (:sim/cursor sim))
+          sim
+          (send sim {:packet/name :set-cursor-item :item (:sim/cursor sim)}))))))
 
 (defn window-kind
   "Which window a protocol window id names: :inventory, :table when it is the open table,
@@ -341,30 +413,47 @@
   (cond (zero? window-id) :inventory
         (= window-id (get-in sim [:sim/window :id])) :table))
 
-(defmethod on-packet [:play :container-click] [sim {:keys [window-id state-id] :as pkt}]
+(defmethod on-packet [:play :container-click]
+  [sim {:keys [window-id state-id] :as pkt}]
   (let [n (:sim/clicks sim)
         sim (update sim :sim/clicks inc)
         kind (window-kind sim window-id)
         ;; with a container open, the player's own window is not the open menu: vanilla
         ;; ignores the click, and a careful client never sends it
-        sim (cond-> sim (and (= kind :inventory) (:sim/window sim))
-                    (update :sim/violations conj [:click-inventory-while-open window-id]))
+        sim (cond-> sim
+              (and (= kind :inventory) (:sim/window sim))
+              (update :sim/violations conj [:click-inventory-while-open window-id]))
         kind (if (and (= kind :inventory) (:sim/window sim)) nil kind)]
     (if (or (nil? kind) (contains? (:sim/drop-clicks sim) n))
       sim
       (let [layout (layouts kind)
             before (full (view-of sim kind) layout)
-            {:keys [view cursor violation]} (click-view layout (view-of sim kind) (:sim/cursor sim) pkt)
-            sim (cond-> (-> sim (with-view kind view) (assoc :sim/cursor cursor))
+            {:keys [view cursor violation]}
+            (click-view layout (view-of sim kind) (:sim/cursor sim) pkt)
+            sim (cond-> (-> sim
+                            (with-view kind view)
+                            (assoc :sim/cursor cursor))
                   violation (update :sim/violations conj violation))]
-        (sync-window sim kind before (:cursor pkt) (not= state-id (get-in sim (state-id-path kind))))))))
+        (sync-window sim
+                     kind
+                     before
+                     (:cursor pkt)
+                     (not= state-id (get-in sim (state-id-path kind))))))))
 
-(defmethod on-packet [:play :container-close] [sim {:keys [window-id]}]
-  (let [sim (cond-> sim (:sim/cursor sim) (update :sim/violations conj [:close-with-cursor (:sim/cursor sim)]))]
+(defmethod on-packet [:play :container-close]
+  [sim {:keys [window-id]}]
+  (let [sim (cond-> sim
+              (:sim/cursor sim)
+              (update :sim/violations conj [:close-with-cursor (:sim/cursor sim)]))]
     (if (= :table (window-kind sim window-id))
       (let [before (full (:sim/inv sim) (layouts :inventory))
-            inv (reduce (fn [inv it] (first (insert inv (range 9 45) it))) (:sim/inv sim) (vals (get-in sim [:sim/window :grid])))]
-        (-> sim (assoc :sim/inv inv) (dissoc :sim/window) (sync-window :inventory before (:sim/cursor sim) false)))
+            inv (reduce (fn [inv it] (first (insert inv (range 9 45) it)))
+                        (:sim/inv sim)
+                        (vals (get-in sim [:sim/window :grid])))]
+        (-> sim
+            (assoc :sim/inv inv)
+            (dissoc :sim/window)
+            (sync-window :inventory before (:sim/cursor sim) false)))
       sim)))
 
 (defn give
@@ -383,18 +472,28 @@
    nil before the player has moved."
   [sim [x y z]]
   (when-let [[px py pz] (:sim/player-pos sim)]
-    (and (< (- px 0.3) (inc x)) (> (+ px 0.3) x)
-         (< py (inc y)) (> (+ py 1.8) y)
-         (< (- pz 0.3) (inc z)) (> (+ pz 0.3) z))))
+    (and (< (- px 0.3) (inc x))
+         (> (+ px 0.3) x)
+         (< py (inc y))
+         (> (+ py 1.8) y)
+         (< (- pz 0.3) (inc z))
+         (> (+ pz 0.3) z))))
 
 (defmethod on-packet [:play :set-carried-item] [sim {:keys [slot]}] (assoc sim :sim/held slot))
 
 (def respawn
   "The respawn the model sends for a new life: the overworld, survival, nothing before it."
-  {:packet/name :respawn :dimension-type 0 :dimension "minecraft:overworld" :seed 0 :game-type 0
-   :previous-game-type -1 :debug? false :flat? false})
+  {:packet/name :respawn
+   :dimension-type 0
+   :dimension "minecraft:overworld"
+   :seed 0
+   :game-type 0
+   :previous-game-type -1
+   :debug? false
+   :flat? false})
 
-(defmethod on-packet [:play :client-command] [sim {:keys [action]}]
+(defmethod on-packet [:play :client-command]
+  [sim {:keys [action]}]
   ;; 0 asks to respawn: a dead player gets a new life at spawn, full health and breath, then
   ;; the teleport that places it
   (if (and (= 0 action) (<= (:sim/health sim) 0.0))
@@ -403,19 +502,33 @@
           (assoc :sim/health 20.0 :sim/air max-air :sim/player-pos [x y z])
           (update :sim/respawns inc)
           (send respawn)
-          (send {:packet/name :player-position :teleport-id 2 :x x :y y :z z :dx 0.0 :dy 0.0 :dz 0.0
-                 :yaw 0.0 :pitch 0.0 :flags 0})))
+          (send {:packet/name :player-position
+                 :teleport-id 2
+                 :x x
+                 :y y
+                 :z z
+                 :dx 0.0
+                 :dy 0.0
+                 :dz 0.0
+                 :yaw 0.0
+                 :pitch 0.0
+                 :flags 0})))
     sim))
 
-(defmethod on-packet [:play :use-item-on] [sim {:keys [pos face sequence]}]
+(defmethod on-packet [:play :use-item-on]
+  [sim {:keys [pos face sequence]}]
   (let [ack {:packet/name :block-changed-ack :sequence sequence}]
     (if (= table-state (block-at sim pos))
       (let [id (:sim/next-window sim)
-            sim (-> sim (assoc :sim/window {:id id :grid {} :state-id 1}) (update :sim/next-window inc))]
+            sim (-> sim
+                    (assoc :sim/window {:id id :grid {} :state-id 1})
+                    (update :sim/next-window inc))]
         (-> sim
             (send ack)
             (send {:packet/name :open-screen :window-id id :menu-type 12 :title (byte-array 0)})
-            (send {:packet/name :container-set-content :window-id id :state-id 1
+            (send {:packet/name :container-set-content
+                   :window-id id
+                   :state-id 1
                    :items (mapv #(get (full (view-of sim :table) (layouts :table)) %) (range 46))
                    :carried (:sim/cursor sim)})))
       (let [dest (mapv + pos (faces face))
@@ -423,8 +536,11 @@
             held (get-in sim [:sim/inv slot])
             d (block-at sim dest)
             overlap? (overlaps-player? sim dest)
-            ok? (and held (= (:item held) (recipe/item-id :crafting_table))
-                     d (not (blocks/solid? d)) (not= :liquid (blocks/type-of d))
+            ok? (and held
+                     (= (:item held) (recipe/item-id :crafting_table))
+                     d
+                     (not (blocks/solid? d))
+                     (not= :liquid (blocks/type-of d))
                      (blocks/solid? (or (block-at sim pos) 0))
                      (not overlap?))
             sim (cond-> sim overlap? (update :sim/violations conj [:place-into-player dest]))]
@@ -436,7 +552,9 @@
                 (send {:packet/name :block-update :pos dest :state table-state})
                 (sync-window :inventory before (:sim/cursor sim) false)
                 (send ack)))
-          (-> sim (send {:packet/name :block-update :pos dest :state (or d 0)}) (send ack)))))))
+          (-> sim
+              (send {:packet/name :block-update :pos dest :state (or d 0)})
+              (send ack)))))))
 
 (defn within-pickup?
   "Is an item at [ix iy iz] inside the pickup box of a player at [px py pz] (its box inflated
@@ -449,7 +567,10 @@
    of the model's column?"
   [sim]
   (when-let [[x y z] (:sim/player-pos sim)]
-    (= :water (:fluid/kind (blocks/fluid (block-at sim [(long (Math/floor x)) (long (Math/floor (+ y 1.62))) (long (Math/floor z))]))))))
+    (= :water
+       (:fluid/kind (blocks/fluid (block-at sim
+                                            [(long (Math/floor x)) (long (Math/floor (+ y 1.62)))
+                                             (long (Math/floor z))]))))))
 
 (defn drown
   "One tick of breath: air falls while the eye is under and refills otherwise; at zero, a hurt
@@ -458,7 +579,10 @@
   [sim]
   (let [under? (eye-under? sim)
         air (if under? (max 0 (- (:sim/air sim) 1)) (min max-air (+ (:sim/air sim) 4)))
-        hurt? (and under? (zero? air) (zero? (mod (quot (:sim/now sim) 50) drown-every)) (pos? (:sim/health sim)))
+        hurt? (and under?
+                   (zero? air)
+                   (zero? (mod (quot (:sim/now sim) 50) drown-every))
+                   (pos? (:sim/health sim)))
         health (if hurt? (max 0.0 (- (:sim/health sim) drown-damage)) (:sim/health sim))]
     (cond-> (assoc sim :sim/air air :sim/health health)
       hurt? (send {:packet/name :set-health :health health :food 20 :saturation 5.0}))))
@@ -475,17 +599,19 @@
                   (update :sim/keep-alives-pending conj now)
                   (assoc :sim/next-keep-alive (+ now (:sim/keep-alive-every sim))))
               sim)]
-    (reduce (fn [sim [eid {:keys [pos spawned]}]]
-              (if (and (:sim/player-pos sim)
-                       (>= (- now spawned) pickup-delay)
-                       (within-pickup? (:sim/player-pos sim) pos))
-                (-> sim
-                    (update :sim/items dissoc eid)
-                    (send {:packet/name :take-item-entity :collected eid :collector 1 :count 1})
-                    (send {:packet/name :remove-entities :ids [eid]})
-                    (give (get (get (:sim/items sim) eid) :item {:item (:oak_log blocks/items) :count 1})))
-                sim))
-            sim (:sim/items sim))))
+    (reduce
+     (fn [sim [eid {:keys [pos spawned]}]]
+       (if (and (:sim/player-pos sim)
+                (>= (- now spawned) pickup-delay)
+                (within-pickup? (:sim/player-pos sim) pos))
+         (-> sim
+             (update :sim/items dissoc eid)
+             (send {:packet/name :take-item-entity :collected eid :collector 1 :count 1})
+             (send {:packet/name :remove-entities :ids [eid]})
+             (give (get (get (:sim/items sim) eid) :item {:item (:oak_log blocks/items) :count 1})))
+         sim))
+     sim
+     (:sim/items sim))))
 
 (defn step
   "The model's reducer: a client packet or a tick in, the next sim out."
@@ -495,10 +621,7 @@
     :tick (tick sim now)
     sim))
 
-(defn drain
-  "[sim' packets-for-the-client]"
-  [sim]
-  [(assoc sim :sim/out []) (:sim/out sim)])
+(defn drain "[sim' packets-for-the-client]" [sim] [(assoc sim :sim/out []) (:sim/out sim)])
 
 (defn sends
   "The packets a bot world asked to send, from its :bot/effects."
@@ -513,7 +636,12 @@
   [bot-step world0 sim0 stop? max-ms & [go]]
   (let [w (bot-step world0 {:event/kind :start})
         lag (* 50 (:sim/lag-ticks sim0 0))]
-    (loop [world (assoc w :bot/effects []) sim sim0 pending (sends w) t 0 went? false inflight []]
+    (loop [world (assoc w :bot/effects [])
+           sim sim0
+           pending (sends w)
+           t 0
+           went? false
+           inflight []]
       (let [sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim pending)
             sim (step sim {:sim/kind :tick :sim/now t})
             [sim fresh] (drain sim)
@@ -527,7 +655,7 @@
             out (sends world)
             world (assoc world :bot/effects [])]
         (if (or (stop? world) (> t max-ms))
-          [world (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out)]   ; deliver the last tick's packets
+          [world (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out)] ; deliver the last tick's packets
           (recur world sim out (+ t 50) (or went? go?) inflight))))))
 
 ;;;; I/O: the model behind a channel pair, on a thread of its own ;;;;
@@ -545,17 +673,17 @@
         out (a/chan 256)
         stop (a/chan)
         t0 (System/currentTimeMillis)]
-    (a/thread
-      (loop [sim sim0 next-tick tick-ms]
-        (let [wait (max 0 (- next-tick (- (System/currentTimeMillis) t0)))
-              [v ch] (a/alts!! [stop out (a/timeout wait)] :priority true)
-              closed? (or (= ch stop) (and (= ch out) (nil? v)))
-              sim (cond closed? sim
-                        (= ch out) (step sim {:sim/kind :packet :sim/packet v})
-                        :else (step sim {:sim/kind :tick :sim/now next-tick}))
-              [sim said] (drain sim)]
-          (doseq [p said] (a/>!! in p))
-          (cond closed? (a/close! in)
-                (= ch out) (recur sim next-tick)
-                :else (recur sim (+ next-tick tick-ms))))))
+    (a/thread (loop [sim sim0
+                     next-tick tick-ms]
+                (let [wait (max 0 (- next-tick (- (System/currentTimeMillis) t0)))
+                      [v ch] (a/alts!! [stop out (a/timeout wait)] :priority true)
+                      closed? (or (= ch stop) (and (= ch out) (nil? v)))
+                      sim (cond closed? sim
+                                (= ch out) (step sim {:sim/kind :packet :sim/packet v})
+                                :else (step sim {:sim/kind :tick :sim/now next-tick}))
+                      [sim said] (drain sim)]
+                  (doseq [p said] (a/>!! in p))
+                  (cond closed? (a/close! in)
+                        (= ch out) (recur sim next-tick)
+                        :else (recur sim (+ next-tick tick-ms))))))
     {:in in :out out :close! (fn [] (a/close! stop) (a/close! out))}))

@@ -19,10 +19,11 @@
 (defn entry-changes
   "{key new-value} for the entries that differ between two maps; a removed key maps to nil."
   [old new]
-  (into {} (for [k (into (set (keys old)) (keys new))
-                 :let [v (get new k)]
-                 :when (not= (get old k) v)]
-             [k v])))
+  (into {}
+        (for [k (into (set (keys old)) (keys new))
+              :let [v (get new k)]
+              :when (not= (get old k) v)]
+          [k v])))
 
 (defn changes
   "What differs between two world values, minus the ignored attributes:
@@ -32,9 +33,11 @@
    noting changed."
   [old new]
   (reduce (fn [acc k]
-            (let [a (get old k) b (get new k)]
+            (let [a (get old k)
+                  b (get new k)]
               (cond (= a b) acc
-                    (and (map? a) (map? b)) (assoc-in acc [:telemetry/patched k] (entry-changes a b))
+                    (and (map? a) (map? b))
+                    (assoc-in acc [:telemetry/patched k] (entry-changes a b))
                     :else (assoc-in acc [:telemetry/changed k] b))))
           {}
           (remove ignored (into (set (keys old)) (keys new)))))
@@ -59,9 +62,9 @@
                            (binding [*out* w] (prn l))
                            (recur)))
                        (.close w))]
-    (add-watch world* ::telemetry
+    (add-watch world*
+               ::telemetry
                (fn [_ _ old new]
-                 (when-let [l (line old new)]
-                   (when-not (a/offer! ch l) (swap! dropped inc)))))
+                 (when-let [l (line old new)] (when-not (a/offer! ch l) (swap! dropped inc)))))
     {:dropped (fn [] @dropped)
      :close (fn [] (remove-watch world* ::telemetry) (a/close! ch) (a/<!! done))}))

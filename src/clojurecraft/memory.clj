@@ -48,7 +48,9 @@
 (defn placed-state
   "The block state a placed item turns into, for the blocks the bot places today."
   [item]
-  (case item :crafting_table crafting-table nil))
+  (case item
+    :crafting_table crafting-table
+    nil))
 
 (defn watched?
   "Does seeing this state start a record? Logs and crafting tables: things rare enough to
@@ -67,7 +69,9 @@
   (when-let [datoms (seq (d/datoms db :avet :sight/pos pos))]
     (d/entity db (apply max (map :e datoms)))))
 
-(defn remembered "The last state seen at pos, or nil." [world pos]
+(defn remembered
+  "The last state seen at pos, or nil."
+  [world pos]
   (:sight/state (latest-entity (:world/facts world) pos)))
 
 (defn history
@@ -77,33 +81,41 @@
     (->> (d/datoms db :avet :sight/pos pos)
          (map :e)
          sort
-         (mapv #(let [e (d/entity db %)] {:block/state (:sight/state e) :block/seen-at (:sight/at e)})))))
+         (mapv #(let [e (d/entity db %)]
+                  {:block/state (:sight/state e) :block/seen-at (:sight/at e)})))))
 
 (defn latest
   "The latest observation at every position on record: {pos {:block/state id :block/seen-at ms}}."
   [world]
   (let [db (:world/facts world)]
-    (into {} (for [[pos e] (d/q '[:find ?pos (max ?e) :where [?e :sight/pos ?pos]] db)
-                   :let [ent (d/entity db e)]]
-               [pos {:block/state (:sight/state ent) :block/seen-at (:sight/at ent)}]))))
+    (into {}
+          (for [[pos e] (d/q '[:find ?pos (max ?e) :where [?e :sight/pos ?pos]] db)
+                :let [ent (d/entity db e)]]
+            [pos {:block/state (:sight/state ent) :block/seen-at (:sight/at ent)}]))))
 
 (defn positions-now
   "Positions where one of states was seen and nothing seen there since is outside states: the
    essay's \"the nearest log I have ever seen that I have not confirmed gone\", as one Datalog
    query over the facts (no later fact at the place with a state outside the set)."
   [world states]
-  (d/q '[:find [?pos ...] :in $ [?s ...] ?all
-         :where [?e :sight/state ?s] [?e :sight/pos ?pos]
-         (not-join [?e ?pos ?all]
-                   [?later :sight/pos ?pos] [(> ?later ?e)] [?later :sight/state ?t]
-                   [(contains? ?all ?t) ?kept] [(false? ?kept)])]
-       (:world/facts world) states (set states)))
+  (d/q '[:find [?pos ...] :in $ [?s ...] ?all :where [?e :sight/state ?s] [?e :sight/pos ?pos]
+         (not-join
+          [?e ?pos ?all]
+          [?later :sight/pos ?pos]
+          [(> ?later ?e)]
+          [?later :sight/state ?t]
+          [(contains? ?all ?t) ?kept]
+          [(false? ?kept)])]
+       (:world/facts world)
+       states
+       (set states)))
 
 (defn positions-ever
   "Positions where any of the states was ever observed (a Datalog query over the facts)."
   [world states]
   (d/q '[:find [?pos ...] :in $ [?s ...] :where [?e :sight/state ?s] [?e :sight/pos ?pos]]
-       (:world/facts world) states))
+       (:world/facts world)
+       states))
 
 ;; ---------------------------------------------------------------- writing
 
@@ -120,7 +132,8 @@
   [world key column]
   (let [db (:world/facts world)
         now (:time/now world)
-        tx (keep (fn [[x y z id]] (observation db [x y z] id now)) (chunk/find-blocks {key column} watched?))]
+        tx (keep (fn [[x y z id]] (observation db [x y z] id now))
+                 (chunk/find-blocks {key column} watched?))]
     (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))
 
 (defn surface-fluid?
@@ -136,22 +149,32 @@
   [[cx cz] fluids kind now]
   (let [[mx mz] [(+ (* 16 cx) 8) (+ (* 16 cz) 8)]
         cells (for [[[x y z :as pos] f] fluids
-                    :when (and (= kind (:fluid/kind f)) (= 0 (:fluid/level f)) (surface-fluid? fluids pos kind))]
+                    :when (and (= kind (:fluid/kind f))
+                               (= 0 (:fluid/level f))
+                               (surface-fluid? fluids pos kind))]
                 [[(- y) (+ (abs (- x mx)) (abs (- z mz)))] pos])]
     (when (seq cells)
-      {:pool/chunk [cx cz] :pool/kind kind :pool/pos (second (first (sort-by first cells))) :pool/at now})))
+      {:pool/chunk [cx cz]
+       :pool/kind kind
+       :pool/pos (second (first (sort-by first cells)))
+       :pool/at now})))
 
 (defn latest-pool
   "The newest pool fact for a chunk and kind, as an entity, or nil."
   [db key kind]
-  (let [es (d/q '[:find [?e ...] :in $ ?c ?k :where [?e :pool/chunk ?c] [?e :pool/kind ?k]] db key kind)]
+  (let [es (d/q '[:find [?e ...] :in $ ?c ?k :where [?e :pool/chunk ?c] [?e :pool/kind ?k]]
+                db
+                key
+                kind)]
     (when (seq es) (d/entity db (apply max es)))))
 
 (defn remember-pools
   "Append a pool fact per fluid kind the loaded column holds, when the chunk's pool changed."
   [world key column]
   (let [db (:world/facts world)
-        fluids (into {} (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)] [[x y z] (blocks/fluid id)]))
+        fluids (into {}
+                     (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)]
+                       [[x y z] (blocks/fluid id)]))
         tx (for [kind [:water :lava]
                  :let [pool (pool-of key fluids kind (:time/now world))]
                  :when (and pool (not= (:pool/pos pool) (:pool/pos (latest-pool db key kind))))]
@@ -169,7 +192,10 @@
 (defn intention
   "The fact for intent i reaching event (:started :done :failed :abandoned) at now."
   [i event now]
-  (cond-> {:intention/id (:intent/id i) :intention/event event :intention/kind (:intent/kind i) :intention/at now}
+  (cond-> {:intention/id (:intent/id i)
+           :intention/event event
+           :intention/kind (:intent/kind i)
+           :intention/at now}
     (:intent/target i) (assoc :intention/target (:intent/target i))
     (:intent/recipe i) (assoc :intention/recipe (:intent/recipe i))
     (:intent/reason i) (assoc :intention/reason (:intent/reason i))))
@@ -211,13 +237,21 @@
    question works for any moment of a run, e.g. the tick before a death."
   [world t]
   (let [db (:world/facts world)
-        latest (d/q '[:find ?id (max ?e) :in $ ?t
-                      :where [?e :intention/id ?id] [?e :intention/at ?at] [(<= ?at ?t)]]
-                    db t)
-        open (for [[id e] latest :let [f (d/entity db e)] :when (= :started (:intention/event f))] [id f])]
+        latest (d/q '[:find ?id (max ?e) :in $ ?t :where [?e :intention/id ?id]
+                      [?e :intention/at ?at] [(<= ?at ?t)]]
+                    db
+                    t)
+        open (for [[id e] latest
+                   :let [f (d/entity db e)]
+                   :when (= :started (:intention/event f))]
+               [id f])]
     (when (seq open) (into {} (d/touch (second (apply max-key first open)))))))
 
-(defn log-at? "Is the last thing seen at pos a log?" [world pos] (boolean (some-> (remembered world pos) blocks/log?)))
+(defn log-at?
+  "Is the last thing seen at pos a log?"
+  [world pos]
+  (boolean (some-> (remembered world pos)
+                   blocks/log?)))
 
 (defn trunk-bottom?
   "A remembered log with no remembered log below it: where a trunk meets the ground."
@@ -238,7 +272,8 @@
   "Nearest position whose latest observed state satisfies pred, within radius of eye, or nil.
    Crafting tables are one Datalog query (positions-now); other predicates scan the latest view."
   [world eye radius pred]
-  (nearest-of eye radius
+  (nearest-of eye
+              radius
               (if (= pred crafting-table?)
                 (positions-now world [crafting-table])
                 (for [[p {:block/keys [state]}] (latest world) :when (pred state)] p))))
@@ -247,8 +282,12 @@
   "Every chunk's latest pool of a kind: {[cx cz] [x y z]}."
   [world kind]
   (let [db (:world/facts world)]
-    (into {} (for [[c e] (d/q '[:find ?c (max ?e) :in $ ?k :where [?e :pool/kind ?k] [?e :pool/chunk ?c]] db kind)]
-               [c (:pool/pos (d/entity db e))]))))
+    (into {}
+          (for [[c e] (d/q '[:find ?c (max ?e) :in $ ?k :where [?e :pool/kind ?k]
+                             [?e :pool/chunk ?c]]
+                           db
+                           kind)]
+            [c (:pool/pos (d/entity db e))]))))
 
 (def surface-water-below 5)           ; a pool deeper under the eye than this is cave water: never dive for it (steve's aquifer trap)
 
@@ -257,7 +296,10 @@
    under it, or nil: where a bucket could be filled without diving for it."
   [world eye radius]
   (let [ey (second eye)]
-    (nearest-of eye radius (filter (fn [[_ y _]] (>= y (- ey surface-water-below))) (vals (pools world :water))))))
+    (nearest-of eye
+                radius
+                (filter (fn [[_ y _]] (>= y (- ey surface-water-below)))
+                        (vals (pools world :water))))))
 
 (defn nearest-log
   "Nearest bottom log on record within radius of eye, skipping blacklisted positions and logs
@@ -267,7 +309,8 @@
   ([world eye radius blacklist] (nearest-log world eye radius blacklist trunk-bottom?))
   ([world eye radius blacklist bottom?]
    (let [ey (second eye)]
-     (nearest-of eye radius
+     (nearest-of eye
+                 radius
                  (->> (positions-now world blocks/log-states)
                       (remove blacklist)
                       (filter (fn [[_ y _]] (<= (abs (- y ey)) 12)))

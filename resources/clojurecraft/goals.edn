@@ -8,25 +8,79 @@
 ;; A row is never edited into a different meaning or deleted: to fix one, add the fixed row under
 ;; a new id (moving :goal/until to it) and mark the old one :goal/superseded-by <new id>. It stays
 ;; here so a recording whose :go names it still replays; the planner follows the chain.
-[{:goal/id :escape-water :goal/priority 0 :goal/target? true :goal/always? true :goal/doc "out of water onto dry land, before anything else"
-  :goal/trap :water :goal/done? :not-trapped-in :goal/plan :escape :goal/act :swim-out}
- {:goal/id :escape-lava :goal/priority 0 :goal/target? true :goal/always? true :goal/doc "off lava onto footing, before anything else"
-  :goal/trap :lava :goal/done? :not-trapped-in :goal/plan :escape :goal/act :flee}
- {:goal/id :wood :goal/priority 1 :goal/target? true :goal/until "wood" :goal/doc "hold one log"
-  :goal/provides {:tag/logs 1} :goal/done? :provided?}
- {:goal/id :kit :goal/priority 2 :goal/target? true :goal/until "table" :goal/doc "a crafting table and four sticks, from logs"
-  :goal/provides {:item/crafting_table 1 :item/stick 4} :goal/done? :provided?}
- {:goal/id :pickaxe :goal/priority 3 :goal/target? true :goal/until "pickaxe" :goal/doc "a wooden pickaxe, placing a crafting table to make it"
-  :goal/provides {:item/wooden_pickaxe 1} :goal/done? :provided?}
- {:goal/id :cobblestone :goal/priority 4 :goal/target? true :goal/until "cobblestone" :goal/doc "three cobblestone, dug with the wooden pickaxe"
-  :goal/provides {:item/cobblestone 3} :goal/done? :provided?}
- {:goal/id :shore :goal/priority 5 :goal/target? true :goal/until "shore" :goal/doc "wade into the nearest water on purpose until trapped, and be out of it again (the gym's water trial)"
-  :goal/done? :escaped-water? :goal/plan :wade}
-
- {:goal/id :gather-log :goal/priority 10 :goal/doc "chop the nearest remembered trunk and pick the log up"
-  :goal/needs {} :goal/provides {:tag/logs 1} :goal/act :gather :goal/done? :provided?}
- {:goal/id :mine-stone :goal/priority 10 :goal/doc "dig the nearest exposed stone with a pickaxe, or cut stairs down to stone"
-  :goal/holds {:item/wooden_pickaxe 1} :goal/provides {:item/cobblestone 1} :goal/act :mine :goal/done? :provided?}
- {:goal/id :place-table :goal/priority 10 :goal/doc "put a held crafting table down near the player"
-  :goal/needs {:item/crafting_table 1} :goal/provides {:block/crafting_table :near}
-  :goal/act :place :goal/item :crafting_table :goal/done? :provided?}]
+[{:goal/id :escape-water
+  :goal/priority 0
+  :goal/target? true
+  :goal/always? true
+  :goal/doc "out of water onto dry land, before anything else"
+  :goal/trap :water
+  :goal/done? :not-trapped-in
+  :goal/plan :escape
+  :goal/act :swim-out}
+ {:goal/id :escape-lava
+  :goal/priority 0
+  :goal/target? true
+  :goal/always? true
+  :goal/doc "off lava onto footing, before anything else"
+  :goal/trap :lava
+  :goal/done? :not-trapped-in
+  :goal/plan :escape
+  :goal/act :flee}
+ {:goal/id :wood
+  :goal/priority 1
+  :goal/target? true
+  :goal/until "wood"
+  :goal/doc "hold one log"
+  :goal/provides {:tag/logs 1}
+  :goal/done? :provided?}
+ {:goal/id :kit
+  :goal/priority 2
+  :goal/target? true
+  :goal/until "table"
+  :goal/doc "a crafting table and four sticks, from logs"
+  :goal/provides {:item/crafting_table 1 :item/stick 4}
+  :goal/done? :provided?}
+ {:goal/id :pickaxe
+  :goal/priority 3
+  :goal/target? true
+  :goal/until "pickaxe"
+  :goal/doc "a wooden pickaxe, placing a crafting table to make it"
+  :goal/provides {:item/wooden_pickaxe 1}
+  :goal/done? :provided?}
+ {:goal/id :cobblestone
+  :goal/priority 4
+  :goal/target? true
+  :goal/until "cobblestone"
+  :goal/doc "three cobblestone, dug with the wooden pickaxe"
+  :goal/provides {:item/cobblestone 3}
+  :goal/done? :provided?}
+ {:goal/id :shore
+  :goal/priority 5
+  :goal/target? true
+  :goal/until "shore"
+  :goal/doc
+  "wade into the nearest water on purpose until trapped, and be out of it again (the gym's water trial)"
+  :goal/done? :escaped-water?
+  :goal/plan :wade}
+ {:goal/id :gather-log
+  :goal/priority 10
+  :goal/doc "chop the nearest remembered trunk and pick the log up"
+  :goal/needs {}
+  :goal/provides {:tag/logs 1}
+  :goal/act :gather
+  :goal/done? :provided?}
+ {:goal/id :mine-stone
+  :goal/priority 10
+  :goal/doc "dig the nearest exposed stone with a pickaxe, or cut stairs down to stone"
+  :goal/holds {:item/wooden_pickaxe 1}
+  :goal/provides {:item/cobblestone 1}
+  :goal/act :mine
+  :goal/done? :provided?}
+ {:goal/id :place-table
+  :goal/priority 10
+  :goal/doc "put a held crafting table down near the player"
+  :goal/needs {:item/crafting_table 1}
+  :goal/provides {:block/crafting_table :near}
+  :goal/act :place
+  :goal/item :crafting_table
+  :goal/done? :provided?}]

@@ -19,8 +19,7 @@
     (if (zero? bits)
       {:single (b/read-varint buf)}
       (let [palette (when (<= bits max-bits)
-                      (let [n (b/read-varint buf)]
-                        (vec (repeatedly n #(b/read-varint buf)))))
+                      (let [n (b/read-varint buf)] (vec (repeatedly n #(b/read-varint buf)))))
             per-long (quot 64 bits)
             n (long (Math/ceil (/ (double entries) per-long)))
             longs (long-array n)]
@@ -39,8 +38,7 @@
 (defn decode
   "The chunkData bytes of level_chunk_with_light → column."
   [^bytes data]
-  (let [buf (b/buffer data)]
-    {:sections (vec (repeatedly section-count #(read-section buf)))}))
+  (let [buf (b/buffer data)] {:sections (vec (repeatedly section-count #(read-section buf)))}))
 
 (defn section-get
   "The id at index idx (0-4095 for blocks) of a section, through the palette when
@@ -54,7 +52,9 @@
           v (bit-and (unsigned-bit-shift-right (aget longs (quot idx per-long))
                                                (* bits (rem idx per-long)))
                      (dec (bit-shift-left 1 bits)))]
-      (if-let [p (:palette section)] (nth p v) v))))
+      (if-let [p (:palette section)]
+        (nth p v)
+        v))))
 
 (defn block-index
   "Index of local cell (lx ly lz), each 0-15, inside a section: y, then z, then x."
@@ -63,12 +63,15 @@
 
 (defn section-index
   "Which of the 24 sections holds world y; outside 0-23 when y is out of the world."
-  ^long [^long y] (bit-shift-right (- y min-y) 4))
+  ^long [^long y]
+  (bit-shift-right (- y min-y) 4))
 
 (defn block-at
   "State id at world [x y z] from a {[cx cz] column} map, or nil when the chunk is not loaded."
   [chunks [x y z]]
-  (let [x (long x) y (long y) z (long z)]
+  (let [x (long x)
+        y (long y)
+        z (long z)]
     (when-let [col (get chunks [(bit-shift-right x 4) (bit-shift-right z 4)])]
       (let [si (section-index y)]
         (when (< -1 si section-count)
@@ -108,4 +111,6 @@
   [pkt]
   (if (or (not= :level-chunk-with-light (:packet/name pkt)) (contains? pkt :chunk/column))
     pkt
-    (assoc pkt :chunk/column (try (decode (:data pkt)) (catch Exception e {:chunk/error (str e)})))))
+    (assoc pkt
+           :chunk/column
+           (try (decode (:data pkt)) (catch Exception e {:chunk/error (str e)})))))

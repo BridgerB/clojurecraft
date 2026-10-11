@@ -15,14 +15,14 @@
             [clojure.string :as str]
             [clojurecraft.conn :as conn]
             [clojurecraft.game :as game]
-            [clojurecraft.plan :as plan]
-            [clojurecraft.record :as record]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.record :as record]
             [clojurecraft.stairs]
-            [clojurecraft.swim]
             [clojurecraft.stone]
+            [clojurecraft.swim]
             [clojurecraft.watch :as watch]
             [clojurecraft.wood])
   (:gen-class))
@@ -65,17 +65,22 @@
             :planks (recipe/have held (recipe/tags :planks))
             :sticks (get held :stick 0)
             :tables (get held :crafting_table 0)})
-         (when-let [t (and (:player/pos world) (memory/nearest world (game/eye world) 32 memory/crafting-table?))]
-           {:table/pos t})                     ; no position yet (an early end): no table to speak of
-         (when (seq (:world/traps world)) {:escaped true})   ; only once a trap was escaped, so older recordings' RESULTs are unchanged
+         (when-let [t (and (:player/pos world)
+                           (memory/nearest world (game/eye world) 32 memory/crafting-table?))]
+           {:table/pos t}) ; no position yet (an early end): no table to speak of
+         (when (seq (:world/traps world)) {:escaped true}) ; only once a trap was escaped, so older recordings' RESULTs are unchanged
          (when (:plan/status world) {:plan (plan/summary world)})))
 
 ;;;; I/O: the clock, stderr, the socket, the atom ;;;;
 
 (defn- now [] (System/currentTimeMillis))
 
-(defn stamp "One timestamped line on stderr; stdout carries only RESULT." [& xs]
-  (binding [*out* *err*] (println (str (java.time.LocalTime/now)) (str/join " " xs)) (flush)))
+(defn stamp
+  "One timestamped line on stderr; stdout carries only RESULT."
+  [& xs]
+  (binding [*out* *err*]
+    (println (str (java.time.LocalTime/now)) (str/join " " xs))
+    (flush)))
 
 (defn perform
   "Do one effect: :send puts the packet on the socket's out channel (blocking), :log stamps it."
@@ -100,9 +105,10 @@
   [{:keys [in out]} events world* stop? tap]
   (loop [next-tick (+ (now) 50)]
     (let [[v ch] (a/alts!! [in events (a/timeout (max 0 (- next-tick (now))))])
-          event (cond (= ch in) (if (nil? v)
-                                  {:event/kind :closed :event/reason "socket closed"}
-                                  {:event/kind :packet :event/packet v})
+          event (cond (= ch in)
+                      (if (nil? v)
+                        {:event/kind :closed :event/reason "socket closed"}
+                        {:event/kind :packet :event/packet v})
                       (= ch events) v
                       :else {:event/kind :tick :event/now (now) :event/rand (rand)})]
       (apply-event! world* event out tap)
@@ -115,28 +121,31 @@
   "Feed EDN events from a reader (the fixture's stdout, piped in) onto the events channel until
    end of input. The only way anything outside the bot reaches it."
   [reader events]
-  (a/thread
-    (doseq [line (line-seq (java.io.BufferedReader. reader))
-            :let [line (str/trim line)]
-            :when (seq line)]
-      (try (a/>!! events (edn/read-string {:readers record/readers} line))
-           (catch Exception e (stamp "unreadable event:" line (.getMessage e)))))))
+  (a/thread (doseq [line (line-seq (java.io.BufferedReader. reader))
+                    :let [line (str/trim line)]
+                    :when (seq line)]
+              (try (a/>!! events (edn/read-string {:readers record/readers} line))
+                   (catch Exception e (stamp "unreadable event:" line (.getMessage e)))))))
 
 (defn go-when-loaded!
   "Put a :go on the queue the first time the world says the player is loaded: the run without
    a fixture starts where the bot stands, as soon as it stands anywhere."
   [world* queue go]
-  (add-watch world* ::go (fn [k r _ w]
-                           (when (:player/loaded? w)
-                             (remove-watch r k)
-                             (a/put! queue go)))))
+  (add-watch world*
+             ::go
+             (fn [k r _ w] (when (:player/loaded? w) (remove-watch r k) (a/put! queue go)))))
 
 (defn -main
   "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,
    hold for an outside judge when ok, and exit 0 when ok else 1."
   [& args]
   (let [{:keys [host port name until timeout-ms hold-ms events record telemetry]
-         :or {host "127.0.0.1" port "25571" name "Clj_wood" until "wood" timeout-ms "120000" hold-ms "0"}}
+         :or {host "127.0.0.1"
+              port "25571"
+              name "Clj_wood"
+              until "wood"
+              timeout-ms "120000"
+              hold-ms "0"}}
         (parse-args args)
         opts {:host host :port (Long/parseLong port) :name name}
         deadline (+ (now) (Long/parseLong timeout-ms))
@@ -144,22 +153,26 @@
         planned (plan/goals-for until)
         goal? (goal-fn until)
         stop? (fn [w] (or (goal? w) (and planned (plan/failed? w)) (> (now) deadline)))
-        tap (some-> record record/tap)
+        tap (some-> record
+                    record/tap)
         c (conn/open opts)
         queue (a/chan 16)
         world* (atom (game/init opts))
-        watcher (some->> telemetry (watch/telemetry! world*))]
+        watcher (some->> telemetry
+                         (watch/telemetry! world*))]
     (stamp "connected to" host port "as" name)
-    (cond
-      (= events "stdin") (read-events! *in* queue)                     ; a fixture speaks through the pipe
-      planned (go-when-loaded! world* queue {:event/kind :go :go/goals planned})) ; no fixture: start where we stand
-    (apply-event! world* {:event/kind :start :start/host host :start/port (:port opts) :start/name name} (:out c) tap)
+    (cond (= events "stdin") (read-events! *in* queue) ; a fixture speaks through the pipe
+          planned (go-when-loaded! world* queue {:event/kind :go :go/goals planned})) ; no fixture: start where we stand
+    (apply-event! world*
+                  {:event/kind :start :start/host host :start/port (:port opts) :start/name name}
+                  (:out c)
+                  tap)
     (let [final (run-loop c queue world* stop? tap)
           ok (ok? final until)
           r (result final until ok)]
       (prn 'RESULT r)
       (flush)
-      (when tap ((:result tap) r) ((:close tap)))     ; the recording is the run: it ends at RESULT
+      (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT
       (when (and ok (pos? hold))
         (stamp "holding" hold "ms for an outside judge")
         (let [until (+ (now) hold)] (run-loop c queue world* (fn [_] (> (now) until)) nil)))
@@ -175,7 +188,9 @@
    same run then stands a fraction of a block elsewhere when its goal is met. What the run
    held, reached and reported is the outcome."
   [result]
-  (-> result (update :plan dissoc :plan/last) (dissoc :pos)))
+  (-> result
+      (update :plan dissoc :plan/last)
+      (dissoc :pos)))
 
 (defn replayed
   "The RESULT of folding the reducer over a recording, judged as the run judged itself (its
@@ -191,12 +206,14 @@
         until (:until recorded "replay")
         r (result final until (ok? final until))]
     (assoc r
-           :replay/effects (cond (nil? check) :identical
-                                 (= check :record/no-effects) :not-recorded
-                                 :else check)
-           :replay/result (cond (nil? recorded) :not-recorded
-                                (record/accretes? (outcome recorded) (outcome r)) :identical
-                                :else {:recorded recorded}))))
+           :replay/effects
+           (cond (nil? check) :identical
+                 (= check :record/no-effects) :not-recorded
+                 :else check)
+           :replay/result
+           (cond (nil? recorded) :not-recorded
+                 (record/accretes? (outcome recorded) (outcome r)) :identical
+                 :else {:recorded recorded}))))
 
 (defn replay
   "clojure -M:replay run.edn → print the replayed RESULT (see replayed)."

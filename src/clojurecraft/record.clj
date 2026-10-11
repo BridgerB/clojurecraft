@@ -13,7 +13,8 @@
            [java.util Base64]
            [java.util.zip GZIPInputStream]))
 
-(defmethod print-method (Class/forName "[B") [^bytes b ^Writer w]
+(defmethod print-method (Class/forName "[B")
+  [^bytes b ^Writer w]
   (.write w "#clojurecraft/bytes \"")
   (.write w (.encodeToString (Base64/getEncoder) b))
   (.write w "\""))
@@ -68,9 +69,9 @@
   "Does later hold every fact earlier holds? Maps compare key by key, so attributes added since
    (accretion) are allowed; a value that changed or an attribute that went missing is not."
   [earlier later]
-  (cond
-    (and (map? earlier) (map? later)) (every? (fn [[k v]] (and (contains? later k) (accretes? v (get later k)))) earlier)
-    :else (= earlier later)))
+  (cond (and (map? earlier) (map? later))
+        (every? (fn [[k v]] (and (contains? later k) (accretes? v (get later k)))) earlier)
+        :else (= earlier later)))
 
 (defn recorded-result
   "The RESULT a recording says its run printed, or nil for recordings made before results were
@@ -78,10 +79,7 @@
   [path]
   (some :record/result (entries path)))
 
-(defn events
-  "The events in a recording, in order."
-  [path]
-  (filterv :event/kind (entries path)))
+(defn events "The events in a recording, in order." [path] (filterv :event/kind (entries path)))
 
 (defn effects
   "The recorded effects of each event, aligned with `events` ([] where none were produced), or
@@ -90,10 +88,11 @@
   (let [es (entries path)]
     (when (some :record/effects es)
       (reduce (fn [acc e]
-                (cond (:event/kind e) (conj acc [])                              ; an event: no effects yet
-                      (:record/effects e) (conj (pop acc) (:record/effects e))   ; its effects follow it
+                (cond (:event/kind e) (conj acc [])                            ; an event: no effects yet
+                      (:record/effects e) (conj (pop acc) (:record/effects e)) ; its effects follow it
                       :else acc))
-              [] es))))
+              []
+              es))))
 
 (defn replay
   "Fold step over the recorded events from world0; returns the final world."
@@ -117,7 +116,10 @@
                               produced (:bot/effects w)]
                           (if (= (sent produced) (sent r))
                             (assoc w :bot/effects [])
-                            (reduced {:record/mismatch {:index i :event e :recorded (sent r) :replayed (sent produced)}}))))
-                      world0 (map vector (range) (events path) recorded))]
+                            (reduced
+                             {:record/mismatch
+                              {:index i :event e :recorded (sent r) :replayed (sent produced)}}))))
+                      world0
+                      (map vector (range) (events path) recorded))]
       (when (:record/mismatch end) end))
     :record/no-effects))

@@ -20,28 +20,30 @@
 (def landing-offsets
   "Where to try when a landing will not do: the located point, then two rings of eight nearby
    points in the same forest, nearest first (a CI run needed seven tries around one pond)."
-  (into [[0 0]] (for [r [24 48] [dx dz] [[1 0] [0 1] [-1 0] [0 -1] [1 1] [-1 1] [-1 -1] [1 -1]]]
-                  [(* r dx) (* r dz)])))
+  (into [[0 0]]
+        (for [r [24 48]
+              [dx dz] [[1 0] [0 1] [-1 0] [0 -1] [1 1] [-1 1] [-1 -1] [1 -1]]]
+          [(* r dx) (* r dz)])))
 
 (def checks
   "How the fixture asks the server whether a landing will do: each is an `execute at <bot>`
    test, and a passing one names the reason to try elsewhere. Seen in CI before these existed:
    a pond (the heightmap counts water as surface), a log in an oak canopy (it skips leaves but
    not a trunk top), and inside stone (the heightmap was not ready)."
-  [[:water "if block ~ ~ ~ minecraft:water"]
-   [:water "if block ~ ~-1 ~ minecraft:water"]
+  [[:water "if block ~ ~ ~ minecraft:water"] [:water "if block ~ ~-1 ~ minecraft:water"]
    [:water "if block ~ ~1 ~ minecraft:water"]
    ;; the heightmap stops on sea plants, which are water to the physics (gym shore-w1 run 6 landed on one)
    [:water "if block ~ ~ ~ #minecraft:underwater_bonemeals"]
    [:water "if block ~ ~-1 ~ #minecraft:underwater_bonemeals"]
-   [:lava "if block ~ ~-1 ~ minecraft:lava"]
-   [:tree "if block ~ ~-1 ~ #minecraft:logs"]
-   [:tree "if block ~ ~-1 ~ #minecraft:leaves"]
-   [:tree "if block ~ ~ ~ #minecraft:leaves"]
+   [:lava "if block ~ ~-1 ~ minecraft:lava"] [:tree "if block ~ ~-1 ~ #minecraft:logs"]
+   [:tree "if block ~ ~-1 ~ #minecraft:leaves"] [:tree "if block ~ ~ ~ #minecraft:leaves"]
    [:buried "unless block ~ ~ ~ #minecraft:replaceable"]
    [:buried "unless block ~ ~1 ~ #minecraft:replaceable"]])
 
-(defn passed? "Did an `execute ... if/unless` test pass?" [reply] (str/includes? (str reply) "Test passed"))
+(defn passed?
+  "Did an `execute ... if/unless` test pass?"
+  [reply]
+  (str/includes? (str reply) "Test passed"))
 
 (defn bad-landing
   "The first reason a landing will not do, from [[reason reply] ...] answers to `checks`, or nil."
@@ -64,7 +66,9 @@
 (defn log
   "One timestamped line on stderr; stdout is reserved for the event the bot reads."
   [& xs]
-  (binding [*out* *err*] (println (str (java.time.LocalTime/now)) (str/join " " xs)) (flush)))
+  (binding [*out* *err*]
+    (println (str (java.time.LocalTime/now)) (str/join " " xs))
+    (flush)))
 
 (defn position
   "Where the server says the player stands, [x y z], or nil when it is not in the world."
@@ -103,8 +107,15 @@
   [rc name [x z]]
   (rcon/command rc (str "forceload add " x " " z))
   (wait-loaded! rc x z)
-  (log "tp:" (rcon/command rc (str "execute positioned " x " 0 " z
-                                   " positioned over motion_blocking_no_leaves run tp " name " ~0.5 ~ ~0.5")))
+  (log "tp:"
+       (rcon/command rc
+                     (str "execute positioned "
+                          x
+                          " 0 "
+                          z
+                          " positioned over motion_blocking_no_leaves run tp "
+                          name
+                          " ~0.5 ~ ~0.5")))
   (rcon/command rc (str "forceload remove " x " " z)))
 
 (defn land!
@@ -126,15 +137,15 @@
   (let [{:strs [--host --rcon-port --rcon-pass --name --until]} (apply hash-map args)
         host (or --host "127.0.0.1")
         until (or --until "wood")]
-    (try
-      (let [at (rcon/with-rcon host (Long/parseLong --rcon-port) --rcon-pass
-                 (fn [rc]
-                   (when-not (wait-online rc --name online-timeout) (throw (ex-info "bot never came online" {:name --name})))
-                   (land! rc --name)))]
-        (log "landed at" at)
-        (prn (go-event until at)))
-      (catch Throwable e
-        (log "harness failed:" e)
-        (prn (go-event until nil))))
+    (try (let [at (rcon/with-rcon host
+                                  (Long/parseLong --rcon-port)
+                                  --rcon-pass
+                                  (fn [rc]
+                                    (when-not (wait-online rc --name online-timeout)
+                                      (throw (ex-info "bot never came online" {:name --name})))
+                                    (land! rc --name)))]
+           (log "landed at" at)
+           (prn (go-event until at)))
+         (catch Throwable e (log "harness failed:" e) (prn (go-event until nil))))
     (flush)
     (shutdown-agents)))

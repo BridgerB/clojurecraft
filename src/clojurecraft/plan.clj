@@ -13,10 +13,10 @@
             [clojure.java.io :as io]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
-            [clojurecraft.terrain :as terrain]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
-            [clojurecraft.physics :as physics]))
+            [clojurecraft.physics :as physics]
+            [clojurecraft.terrain :as terrain]))
 
 (def goals
   "The goal table, loaded from resources/clojurecraft/goals.edn."
@@ -33,11 +33,15 @@
    table (at most a table's length of hops, so a cycle cannot hang it)."
   [table id]
   (let [by-id (into {} (map (juxt :goal/id identity)) table)]
-    (loop [id id hops 0]
+    (loop [id id
+           hops 0]
       (let [next (:goal/superseded-by (by-id id))]
         (if (and next (< hops (count table))) (recur next (inc hops)) id)))))
 
-(defn targets-of "The live target rows of a table." [table] (filterv #(and (:goal/target? %) (live? %)) table))
+(defn targets-of
+  "The live target rows of a table."
+  [table]
+  (filterv #(and (:goal/target? %) (live? %)) table))
 
 (def targets (targets-of goals))
 
@@ -82,7 +86,9 @@
     (boolean (and (:player/on-ground? world)
                   (not (:player/in-water? world))
                   (not (:player/eye-in-water? world))
-                  support (blocks/solid? support) (not= :lily_pad (blocks/type-of support))))))
+                  support
+                  (blocks/solid? support)
+                  (not= :lily_pad (blocks/type-of support))))))
 
 (defn trapped-tick
   "The trap the player is in, re-derived with hysteresis every tick: lava on any contact, water
@@ -100,10 +106,14 @@
                    :else nil)
         [x _ z] (:player/pos world)]
     (cond-> (assoc world :plan/wet-ticks wet :plan/dry-ticks dry)
-      (and trap (not was)) (assoc :plan/trap trap :plan/trap-at [(long (Math/floor x)) (long (Math/floor z))])
-      (and was (nil? trap)) (-> (dissoc :plan/trap :plan/trap-at)
-                                (update :world/traps (fnil conj []) {:trap/pos (:plan/trap-at world) :trap/kind was :trap/at (:time/now world)})
-                                (game/say (str "out of the " (name was) " at " (:plan/trap-at world)))))))
+      (and trap (not was))
+      (assoc :plan/trap trap :plan/trap-at [(long (Math/floor x)) (long (Math/floor z))])
+      (and was (nil? trap))
+      (-> (dissoc :plan/trap :plan/trap-at)
+          (update :world/traps
+                  (fnil conj [])
+                  {:trap/pos (:plan/trap-at world) :trap/kind was :trap/at (:time/now world)})
+          (game/say (str "out of the " (name was) " at " (:plan/trap-at world)))))))
 
 (defn choose
   "The highest-priority live target of table in play (:plan/goals, or every target) the world
@@ -123,7 +133,11 @@
   [world {:go/keys [goals at]} table]
   (-> world
       (cond-> (:plan/intent world) (memory/remember-intention (:plan/intent world) :abandoned))
-      (assoc :plan/status (if at :landing :active) :plan/since (:time/now world) :plan/blacklist #{} :plan/trunk-failures {} :plan/attempts 0)
+      (assoc :plan/status (if at :landing :active)
+             :plan/since (:time/now world)
+             :plan/blacklist #{}
+             :plan/trunk-failures {}
+             :plan/attempts 0)
       (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
       (dissoc :plan/intent :plan/last :plan/waiting-since)))
@@ -132,25 +146,30 @@
   "Is the bot at the landing the fixture named, standing in a loaded chunk?"
   [world at]
   (let [pos (:player/pos world)]
-    (boolean (and pos (:player/loaded? world)
+    (boolean (and pos
+                  (:player/loaded? world)
                   (<= (physics/horizontal-distance pos at) landing-reach)
                   (terrain/chunk-loaded? world pos)))))
 
 (defn landing-tick
   "While :landing, wait for the bot to be at :plan/go-at; then plan, or fail after landing-timeout."
   [world]
-  (cond
-    (landed? world (:plan/go-at world))
-    (-> world (assoc :plan/status :active :plan/since (:time/now world)) (game/say "landed"))
-    (> (- (:time/now world) (:plan/since world)) landing-timeout)
-    (assoc world :plan/status :failed :plan/reason :no-landing)
-    :else world))
+  (cond (landed? world (:plan/go-at world))
+        (-> world
+            (assoc :plan/status :active :plan/since (:time/now world))
+            (game/say "landed"))
+        (> (- (:time/now world) (:plan/since world)) landing-timeout)
+        (assoc world :plan/status :failed :plan/reason :no-landing)
+        :else world))
 
 (defn finish-intent
   "An intent that succeeds ends any failure streak: attempts count consecutive failures, so a
    long goal is not killed by three unrelated hiccups an hour apart."
   [world i]
-  (-> world (memory/remember-intention i :done) (assoc :plan/last i :plan/attempts 0) (dissoc :plan/intent)))
+  (-> world
+      (memory/remember-intention i :done)
+      (assoc :plan/last i :plan/attempts 0)
+      (dissoc :plan/intent)))
 
 (defn fail-intent
   "An intent failed: stop moving, blacklist its target (and count a failure against its trunk's
@@ -162,11 +181,15 @@
         (memory/remember-intention i :failed)
         (assoc :player/controls {})
         (cond-> (:intent/target i) (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
-        (cond-> (:intent/trunk i) (update-in [:plan/trunk-failures (let [[x _ z] (:intent/trunk i)] [x z])] (fnil inc 0)))
+        (cond-> (:intent/trunk i)
+                (update-in [:plan/trunk-failures (let [[x _ z] (:intent/trunk i)] [x z])]
+                           (fnil inc 0)))
         (assoc :plan/attempts attempts)
         (dissoc :plan/intent :plan/last)
-        (game/say (str "intent " (:intent/kind i) " failed: " (:intent/reason i) " (attempt " attempts ")"))
-        (cond-> (>= attempts max-attempts) (assoc :plan/status :failed :plan/reason (:intent/reason i))))))
+        (game/say
+         (str "intent " (:intent/kind i) " failed: " (:intent/reason i) " (attempt " attempts ")"))
+        (cond-> (>= attempts max-attempts)
+                (assoc :plan/status :failed :plan/reason (:intent/reason i))))))
 
 (declare plan-tick)
 
@@ -190,7 +213,8 @@
         (assoc :plan/intents n :plan/intent i)
         (memory/remember-intention i :started)
         (dissoc :plan/waiting-since)
-        (game/say (str "intent " (:intent/kind i) " " (or (:intent/target i) (:intent/recipe i)))))))
+        (game/say (str "intent " (:intent/kind i)
+                       " " (or (:intent/target i) (:intent/recipe i)))))))
 
 (defn abandon-intent
   "Drop the running intent i before it ended, for reason (:goal-met, :preempted): remember it
@@ -200,10 +224,11 @@
   (-> world
       (memory/remember-intention (assoc i :intent/reason reason) :abandoned)
       (assoc :player/controls {})
-      (dissoc :plan/last)               ; the next goal's planner must not continue a chain from it
+      (dissoc :plan/last) ; the next goal's planner must not continue a chain from it
       (cond-> (:window/open world)
-        (-> (game/emit {:packet/name :container-close :window-id (get-in world [:window/open :window/id])})
-            (dissoc :window/open)))
+              (-> (game/emit {:packet/name :container-close
+                              :window-id (get-in world [:window/open :window/id])})
+                  (dissoc :window/open)))
       (dissoc :plan/intent)))
 
 (defn can-abandon?
@@ -234,18 +259,19 @@
         goal (when active? (choose world table))
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)))
         next (when (and goal (nil? i)) (next-intent world goal table))]
-    (cond
-      (not active?) world
-      (and i (or (nil? goal) preempt?) (not (can-abandon? world))) (run-intent world i event table)
-      (nil? goal) (-> world
-                      (cond-> i (abandon-intent i :goal-met))
-                      (assoc :plan/status :done :player/controls {})
-                      (dissoc :plan/intent))
-      preempt? (plan-tick (abandon-intent world i :preempted) event table)
-      i (run-intent world i event table)
-      (nil? next) (wait world :nothing-to-do)
-      (:plan/wait next) (wait world (:plan/wait next))
-      :else (start-intent world (assoc next :intent/goal (:goal/id goal))))))
+    (cond (not active?) world
+          (and i (or (nil? goal) preempt?) (not (can-abandon? world)))
+          (run-intent world i event table)
+          (nil? goal)
+          (-> world
+              (cond-> i (abandon-intent i :goal-met))
+              (assoc :plan/status :done :player/controls {})
+              (dissoc :plan/intent))
+          preempt? (plan-tick (abandon-intent world i :preempted) event table)
+          i (run-intent world i event table)
+          (nil? next) (wait world :nothing-to-do)
+          (:plan/wait next) (wait world (:plan/wait next))
+          :else (start-intent world (assoc next :intent/goal (:goal/id goal))))))
 
 (defn step-over
   "The planner over a goal table (docs/hickey.md: \"(plan world goals) → intent\"), as a reducer
@@ -253,11 +279,15 @@
    from anywhere but its argument."
   [table world {:event/keys [kind] :as event}]
   (case kind
-    :go (-> world (begin event table) (game/say "go"))
-    :tick (case (:plan/status world)
-            :active (plan-tick world event table)
-            :landing (landing-tick world)
-            world)
+    :go
+    (-> world
+        (begin event table)
+        (game/say "go"))
+    :tick
+    (case (:plan/status world)
+      :active (plan-tick world event table)
+      :landing (landing-tick world)
+      world)
     world))
 
 (def step
@@ -267,5 +297,7 @@
 (defn done? "Has the plan reached every target in play?" [world] (= :done (:plan/status world)))
 (defn failed? "Has the plan given up (see :plan/reason)?" [world] (= :failed (:plan/status world)))
 
-(defn summary "Every :plan/* attribute but the blacklist, for the RESULT line." [world]
+(defn summary
+  "Every :plan/* attribute but the blacklist, for the RESULT line."
+  [world]
   (into {} (filter (fn [[k _]] (= "plan" (namespace k))) (dissoc world :plan/blacklist))))

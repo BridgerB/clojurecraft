@@ -1,23 +1,23 @@
-{:paths ["src" "resources"]
- :deps {org.clojure/clojure {:mvn/version "1.12.1"}
-        org.clojure/core.async {:mvn/version "1.8.741"}
-        datascript/datascript {:mvn/version "1.8.1"}}
- :aliases
- {:run {:main-opts ["-m" "clojurecraft.main"]}
-  :rcon {:main-opts ["-m" "clojurecraft.rcon"]}
-  :harness {:main-opts ["-m" "clojurecraft.harness"]}
-  :gym {:main-opts ["-m" "clojurecraft.gym"]}
-  :fleet {:main-opts ["-m" "clojurecraft.fleet"]}
-  :datagen {:extra-paths ["dev"]
-            :extra-deps {org.clojure/data.json {:mvn/version "2.5.1"}}
-            :main-opts ["-m" "clojurecraft.datagen"]}
-  :replay {:main-opts ["-m" "clojurecraft.replay"]}
-  :brain {:extra-paths ["dev"] :main-opts ["-m" "clojurecraft.brain"]}
-  :fmt {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.1"}}
-        :main-opts ["-m" "cljfmt.main"]}
-  :test {:extra-paths ["test"]
-         :extra-deps {eftest/eftest {:mvn/version "0.6.0"}
-                      org.clojure/test.check {:mvn/version "1.1.1"}}
-         :main-opts ["-m" "clojurecraft.runner"]}
-  :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.3.1"}}
-          :main-opts ["-m" "nrepl.cmdline"]}}}
+{:aliases {:brain {:extra-paths ["dev"] :main-opts ["-m" "clojurecraft.brain"]}
+           :datagen {:extra-deps {org.clojure/data.json {:mvn/version "2.5.1"}}
+                     :extra-paths ["dev"]
+                     :main-opts ["-m" "clojurecraft.datagen"]}
+           :fleet {:main-opts ["-m" "clojurecraft.fleet"]}
+           :fmt {:extra-deps {zprint/zprint {:mvn/version "1.2.9"}}
+                 :extra-paths ["dev"]
+                 :main-opts ["-m" "clojurecraft.fmt"]}
+           :gym {:main-opts ["-m" "clojurecraft.gym"]}
+           :harness {:main-opts ["-m" "clojurecraft.harness"]}
+           :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.3.1"}}
+                   :main-opts ["-m" "nrepl.cmdline"]}
+           :rcon {:main-opts ["-m" "clojurecraft.rcon"]}
+           :replay {:main-opts ["-m" "clojurecraft.replay"]}
+           :run {:main-opts ["-m" "clojurecraft.main"]}
+           :test {:extra-deps {eftest/eftest {:mvn/version "0.6.0"}
+                               org.clojure/test.check {:mvn/version "1.1.1"}}
+                  :extra-paths ["test"]
+                  :main-opts ["-m" "clojurecraft.runner"]}}
+ :deps {datascript/datascript {:mvn/version "1.8.1"}
+        org.clojure/clojure {:mvn/version "1.12.1"}
+        org.clojure/core.async {:mvn/version "1.8.741"}}
+ :paths ["src" "resources"]}

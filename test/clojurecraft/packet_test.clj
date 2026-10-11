@@ -6,18 +6,32 @@
 
 (def a-uuid (java.util.UUID/fromString "5627dd98-e6be-3c21-b8a8-e92344183641"))
 
-(defn sample [t]
-  (cond
-    (and (vector? t) (vector? (first t))) (into {} (map (fn [[k ft]] [k (sample ft)]) t))
-    (vector? t) [(sample (second t)) (sample (second t))]
-    :else (case t
-            :bool true :i8 -5 :u8 200 :i16 -300 :u16 60000 :i32 -70000 :u32 4000000000
-            :i64 -1234567890123 :f32 1.5 :f64 -2.25 :varint -1 :varlong 1234567890123
-            :string "héllo" :uuid a-uuid :position [-17 -60 42]
-            :hashed-slot {:item 134 :count 3})))
+(defn sample
+  [t]
+  (cond (and (vector? t) (vector? (first t))) (into {} (map (fn [[k ft]] [k (sample ft)]) t))
+        (vector? t) [(sample (second t)) (sample (second t))]
+        :else
+        (case t
+          :bool true
+          :i8 -5
+          :u8 200
+          :i16 -300
+          :u16 60000
+          :i32 -70000
+          :u32 4000000000
+          :i64 -1234567890123
+          :f32 1.5
+          :f64 -2.25
+          :varint -1
+          :varlong 1234567890123
+          :string "héllo"
+          :uuid a-uuid
+          :position [-17 -60 42]
+          :hashed-slot {:item 134 :count 3})))
 
 (deftest every-c2s-spec-roundtrips
-  (doseq [[[state dir pkt-name] fields] p/specs :when (= dir :c2s)]
+  (doseq [[[state dir pkt-name] fields] p/specs
+          :when (= dir :c2s)]
     (let [m (assoc (into {} (map (fn [[k t]] [k (sample t)]) fields)) :packet/name pkt-name)]
       (is (= m (p/decode state :c2s (p/encode state m))) (str state " " pkt-name)))))
 
@@ -34,15 +48,34 @@
 
 (deftest decode-server-packets
   (testing "player-position"
-    (let [frame (b/with-out (fn [o] (b/write-varint o 0x48) (b/write-varint o 7)
-                              (b/write-f64 o 1.5) (b/write-f64 o 64.0) (b/write-f64 o -3.5)
-                              (b/write-f64 o 0.0) (b/write-f64 o 0.0) (b/write-f64 o 0.0)
-                              (b/write-f32 o 90.0) (b/write-f32 o 0.0) (b/write-u32 o 0)))]
-      (is (= {:packet/name :player-position :teleport-id 7 :x 1.5 :y 64.0 :z -3.5 :dx 0.0 :dy 0.0 :dz 0.0
-              :yaw 90.0 :pitch 0.0 :flags 0}
+    (let [frame (b/with-out (fn [o]
+                              (b/write-varint o 0x48)
+                              (b/write-varint o 7)
+                              (b/write-f64 o 1.5)
+                              (b/write-f64 o 64.0)
+                              (b/write-f64 o -3.5)
+                              (b/write-f64 o 0.0)
+                              (b/write-f64 o 0.0)
+                              (b/write-f64 o 0.0)
+                              (b/write-f32 o 90.0)
+                              (b/write-f32 o 0.0)
+                              (b/write-u32 o 0)))]
+      (is (= {:packet/name :player-position
+              :teleport-id 7
+              :x 1.5
+              :y 64.0
+              :z -3.5
+              :dx 0.0
+              :dy 0.0
+              :dz 0.0
+              :yaw 90.0
+              :pitch 0.0
+              :flags 0}
              (p/decode :play :s2c frame)))))
   (testing "the tail of a frame is ignored"
-    (let [frame (b/with-out (fn [o] (b/write-varint o 0x2c) (b/write-i64 o 99) (b/write-bytes o (byte-array 10))))]
+    (let [frame
+          (b/with-out
+           (fn [o] (b/write-varint o 0x2c) (b/write-i64 o 99) (b/write-bytes o (byte-array 10))))]
       (is (= {:packet/name :keep-alive :id 99} (p/decode :play :s2c frame)))))
   (testing "unknown and unmodelled ids"
     (is (= :unknown (:packet/name (p/decode :play :s2c (b/with-out #(b/write-varint % 999))))))
@@ -50,32 +83,68 @@
       (is (= :unknown (:packet/name d)))
       (is (= :set-time (:packet/known d)))))
   (testing "slots"
-    (let [frame (b/with-out (fn [o] (b/write-varint o 0x14) (b/write-varint o 0) (b/write-varint o 3)
-                              (b/write-i16 o 36) (b/write-varint o 1) (b/write-varint o 134)
-                              (b/write-varint o 0) (b/write-varint o 0)))]
-      (is (= {:packet/name :container-set-slot :window-id 0 :state-id 3 :slot 36 :item {:item 134 :count 1}}
+    (let [frame (b/with-out (fn [o]
+                              (b/write-varint o 0x14)
+                              (b/write-varint o 0)
+                              (b/write-varint o 3)
+                              (b/write-i16 o 36)
+                              (b/write-varint o 1)
+                              (b/write-varint o 134)
+                              (b/write-varint o 0)
+                              (b/write-varint o 0)))]
+      (is (= {:packet/name :container-set-slot
+              :window-id 0
+              :state-id 3
+              :slot 36
+              :item {:item 134 :count 1}}
              (p/decode :play :s2c frame))))
-    (let [frame (b/with-out (fn [o] (b/write-varint o 0x14) (b/write-varint o 0) (b/write-varint o 3)
-                              (b/write-i16 o 36) (b/write-varint o 1) (b/write-varint o 134)
-                              (b/write-varint o 2) (b/write-varint o 0) (b/write-bytes o (byte-array 5))))
+    (let [frame (b/with-out (fn [o]
+                              (b/write-varint o 0x14)
+                              (b/write-varint o 0)
+                              (b/write-varint o 3)
+                              (b/write-i16 o 36)
+                              (b/write-varint o 1)
+                              (b/write-varint o 134)
+                              (b/write-varint o 2)
+                              (b/write-varint o 0)
+                              (b/write-bytes o (byte-array 5))))
           d (p/decode :play :s2c frame)]
       (is (:truncated d))
       (is (= {:item 134 :count 1 :components? true} (:item d))))
-    (let [empty-slot (b/with-out (fn [o] (b/write-varint o 0x6c) (b/write-varint o 5) (b/write-varint o 0)))]
-      (is (= {:packet/name :set-player-inventory :slot 5 :item nil} (p/decode :play :s2c empty-slot))))))
+    (let [empty-slot (b/with-out
+                      (fn [o] (b/write-varint o 0x6c) (b/write-varint o 5) (b/write-varint o 0)))]
+      (is (= {:packet/name :set-player-inventory :slot 5 :item nil}
+             (p/decode :play :s2c empty-slot))))))
 
 (deftest container-click-wire-format
   (testing "775 layout: window, state id, slot, button, mode, changed slots, cursor"
-    (let [bytes (p/encode :play {:packet/name :container-click :window-id 0 :state-id 7 :slot 36 :button 1
-                                 :mode 0 :changed [] :cursor nil})]
+    (let [bytes (p/encode :play
+                          {:packet/name :container-click
+                           :window-id 0
+                           :state-id 7
+                           :slot 36
+                           :button 1
+                           :mode 0
+                           :changed []
+                           :cursor nil})]
       (is (= [0x12 0 7 0 36 1 0 0 0] (map #(bit-and % 0xFF) bytes))))))
 
 (deftest use-item-on-wire-format
-  (testing "775 layout: hand, position, face varint, cursor x y z f32, inside-block, world-border-hit, sequence"
-    (let [bytes (p/encode :play {:packet/name :use-item-on :hand 0 :pos [7 64 5] :face 1 :cursor-x 0.5 :cursor-y 1.0
-                                 :cursor-z 0.5 :inside-block false :world-border-hit false :sequence 3})]
-      (is (= [0x42 0x00 0x00 0x00 0x01 0xC0 0x00 0x00 0x50 0x40 0x01 0x3F 0x00 0x00 0x00 0x3F 0x80 0x00 0x00
-              0x3F 0x00 0x00 0x00 0x00 0x00 0x03]
+  (testing
+    "775 layout: hand, position, face varint, cursor x y z f32, inside-block, world-border-hit, sequence"
+    (let [bytes (p/encode :play
+                          {:packet/name :use-item-on
+                           :hand 0
+                           :pos [7 64 5]
+                           :face 1
+                           :cursor-x 0.5
+                           :cursor-y 1.0
+                           :cursor-z 0.5
+                           :inside-block false
+                           :world-border-hit false
+                           :sequence 3})]
+      (is (= [0x42 0x00 0x00 0x00 0x01 0xC0 0x00 0x00 0x50 0x40 0x01 0x3F 0x00 0x00 0x00 0x3F 0x80
+              0x00 0x00 0x3F 0x00 0x00 0x00 0x00 0x00 0x03]
              (map #(bit-and % 0xFF) bytes))))))
 
 (deftest transitions
@@ -92,9 +161,10 @@
   ;; docs/hickey.md, Accrete: "A packet spec only ever gains fields." The decoder reads a
   ;; packet's fields in wire order, so growing means appending: what was there stays a prefix.
   (testing "every spec ever committed still exists, its fields an unchanged prefix of today's"
-    (is (= [] (vec (for [[k fields] ever
-                         :let [now (get p/specs k)]
-                         :when (not= fields (vec (take (count fields) now)))]
-                     k)))))
+    (is (= []
+           (vec (for [[k fields] ever
+                      :let [now (get p/specs k)]
+                      :when (not= fields (vec (take (count fields) now)))]
+                  k)))))
   (testing "every spec today is in the history, so the next change is held to it too"
     (is (= [] (vec (remove #(contains? ever %) (keys p/specs)))))))

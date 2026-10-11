@@ -7,7 +7,14 @@
 
 pre-commit:
   parallel: true
-  commands: {}
+  commands:
+    format:
+      # Formats what is being committed and stages the result, so a commit is never refused for
+      # formatting. The same zprint as CI (the deps.edn :fmt alias and .zprint.edn); scripts/clj
+      # finds Java and Clojure on PATH or builds them through nix once.
+      glob: "*.{clj,cljc,cljs,edn}"                   # clojurecraft.fmt itself skips the generated tables
+      run: scripts/clj -M:fmt fix {staged_files}
+      stage_fixed: true
 
 pre-push:
   commands: {}

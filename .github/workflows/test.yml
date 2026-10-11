@@ -39,6 +39,8 @@ jobs:
         run: clojure -M:test
       - name: Brain checker
         run: clojure -M:brain
+      - name: Formatting (the pre-commit hook fixes it; this catches a --no-verify)
+        run: clojure -M:fmt check
 
   forests:
     runs-on: ubuntu-24.04

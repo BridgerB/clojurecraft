@@ -16,8 +16,8 @@
    while the previous one is unanswered; slot 0 is never clicked unless it holds what the recipe
    makes (a stray plank turns a take into a button); every deadline is an absolute time."
   (:require [clojurecraft.game :as game]
-            [clojurecraft.inventory :as inventory]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.window :as window]))
 
@@ -37,62 +37,74 @@
    against view v. Called only when no click is unanswered."
   (fn [_world i _view] (:intent/stage i)))
 
-(defmethod stage :settle [world {:intent/keys [recipe since window]} v]
+(defmethod stage :settle
+  [world {:intent/keys [recipe since window]} v]
   (let [r (recipe/by-id recipe)]
-    (cond
-      (nil? r) (intent/fail world :unknown-recipe)
-      (and (= window :inventory) (:window/open world))
-      (-> world
-          (game/emit {:packet/name :container-close :window-id (get-in world [:window/open :window/id])})
-          (dissoc :window/open))
-      (nil? (:view/state-id v))
-      (if (> (- (now world) since) stage-timeout) (intent/fail world :no-window) world)
-      (:window/cursor world)
-      (if-let [s (window/free-slot world v)]
-        (window/click world v {:click/slot s :click/button 0 :click/mode 0})
-        (intent/fail world :inventory-full))
-      (dirty-grid-slot v)
-      (window/click world v {:click/slot (dirty-grid-slot v) :click/button 0 :click/mode 1})
-      :else
-      (if-let [cs (recipe/clicks (:player/inventory world) r (:view/size v) (:view/slot-of v))]
-        (set-intent world :intent/stage :click :intent/clicks cs :intent/since (now world)
-                    :intent/result (recipe/item-id (:recipe/result r)) :intent/makes (:recipe/count r)
-                    :intent/before (inventory/item-count world (recipe/item-id (:recipe/result r))))
-        (intent/fail world :no-ingredient)))))
+    (cond (nil? r) (intent/fail world :unknown-recipe)
+          (and (= window :inventory) (:window/open world))
+          (-> world
+              (game/emit {:packet/name :container-close
+                          :window-id (get-in world [:window/open :window/id])})
+              (dissoc :window/open))
+          (nil? (:view/state-id v))
+          (if (> (- (now world) since) stage-timeout) (intent/fail world :no-window) world)
+          (:window/cursor world)
+          (if-let [s (window/free-slot world v)]
+            (window/click world v {:click/slot s :click/button 0 :click/mode 0})
+            (intent/fail world :inventory-full))
+          (dirty-grid-slot v)
+          (window/click world v {:click/slot (dirty-grid-slot v) :click/button 0 :click/mode 1})
+          :else
+          (if-let [cs (recipe/clicks (:player/inventory world) r (:view/size v) (:view/slot-of v))]
+            (set-intent world
+                        :intent/stage :click
+                        :intent/clicks cs
+                        :intent/since (now world)
+                        :intent/result (recipe/item-id (:recipe/result r))
+                        :intent/makes (:recipe/count r)
+                        :intent/before
+                        (inventory/item-count world (recipe/item-id (:recipe/result r))))
+            (intent/fail world :no-ingredient)))))
 
-(defmethod stage :click [world {:intent/keys [clicks]} v]
+(defmethod stage :click
+  [world {:intent/keys [clicks]} v]
   (if (seq clicks)
-    (-> world (window/click v (first clicks)) (set-intent :intent/clicks (vec (rest clicks))))
+    (-> world
+        (window/click v (first clicks))
+        (set-intent :intent/clicks (vec (rest clicks))))
     (set-intent world :intent/stage :verify :intent/since (now world))))
 
-(defmethod stage :verify [world {:intent/keys [result makes since]} v]
+(defmethod stage :verify
+  [world {:intent/keys [result makes since]} v]
   (let [out (get-in v [:view/grid 0])]
-    (cond
-      (= out {:item result :count makes})
-      (-> world (window/click v {:click/slot 0 :click/button 0 :click/mode 1})
-          (set-intent :intent/stage :take :intent/since (now world)))
-      (some? out) (intent/fail world :wrong-result)
-      (> (- (now world) since) stage-timeout) (intent/fail world :no-result)
-      :else world)))
+    (cond (= out {:item result :count makes})
+          (-> world
+              (window/click v {:click/slot 0 :click/button 0 :click/mode 1})
+              (set-intent :intent/stage :take :intent/since (now world)))
+          (some? out) (intent/fail world :wrong-result)
+          (> (- (now world) since) stage-timeout) (intent/fail world :no-result)
+          :else world)))
 
-(defmethod stage :take [world {:intent/keys [result makes before since window]} v]
-  (cond
-    (>= (inventory/item-count world result) (+ before makes))
-    (cond-> (intent/done world)
-      (= window :table) (-> (game/emit {:packet/name :container-close :window-id (:view/id v)})
-                            (dissoc :window/open)))
-    (> (- (now world) since) stage-timeout) (intent/fail world :not-taken)
-    :else world))
+(defmethod stage :take
+  [world {:intent/keys [result makes before since window]} v]
+  (cond (>= (inventory/item-count world result) (+ before makes))
+        (cond-> (intent/done world)
+          (= window :table)
+          (-> (game/emit {:packet/name :container-close :window-id (:view/id v)})
+              (dissoc :window/open)))
+        (> (- (now world) since) stage-timeout) (intent/fail world :not-taken)
+        :else world))
 
-(defmethod intent/run :craft [world i _event]
+(defmethod intent/run :craft
+  [world i _event]
   (let [i (cond-> i
             (nil? (:intent/window i)) (assoc :intent/window :inventory)
             (nil? (:intent/stage i)) (assoc :intent/stage :settle :intent/since (now world)))
         world (assoc world :plan/intent i :player/controls {})
         v (window/view world (:intent/window i))]
-    (cond
-      (nil? v) (intent/fail world :no-table-window)
-      :else (case (window/waiting world i)
-              :overdue (intent/fail world :stale-window)
-              :waiting world
-              (stage world i v)))))
+    (cond (nil? v) (intent/fail world :no-table-window)
+          :else
+          (case (window/waiting world i)
+            :overdue (intent/fail world :stale-window)
+            :waiting world
+            (stage world i v)))))

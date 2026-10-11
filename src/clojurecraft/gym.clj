@@ -24,21 +24,39 @@
   "The gym registry. Truth commands count items without removing any (`clear <name> <item> 0`
    answers \"Found N matching item(s)...\"); {name} is the bot's name; patterns are strings so
    the table stays EDN."
-  [{:gym/goal :wood :gym/until "wood" :gym/prereqs [] :gym/timeout-ms 150000
+  [{:gym/goal :wood
+    :gym/until "wood"
+    :gym/prereqs []
+    :gym/timeout-ms 150000
     :gym/truth [{:truth/cmd "clear {name} #minecraft:logs 0" :truth/re "Found [1-9]"}]}
-   {:gym/goal :kit :gym/until "table" :gym/prereqs [] :gym/timeout-ms 240000
+   {:gym/goal :kit
+    :gym/until "table"
+    :gym/prereqs []
+    :gym/timeout-ms 240000
     :gym/truth [{:truth/cmd "clear {name} minecraft:crafting_table 0" :truth/re "Found [1-9]"}
                 {:truth/cmd "clear {name} minecraft:stick 0" :truth/re "Found ([4-9]|[1-9][0-9])"}]}
-   {:gym/goal :pickaxe :gym/until "pickaxe" :gym/prereqs [] :gym/timeout-ms 300000
+   {:gym/goal :pickaxe
+    :gym/until "pickaxe"
+    :gym/prereqs []
+    :gym/timeout-ms 300000
     :gym/truth [{:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}
    ;; the pickaxe is given, so the row measures stone, not the wood and crafting it already measures
-   {:gym/goal :cobblestone :gym/until "cobblestone" :gym/prereqs ["minecraft:wooden_pickaxe 1"] :gym/timeout-ms 300000
-    :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0" :truth/re "Found ([3-9]|[1-9][0-9])"}
+   {:gym/goal :cobblestone
+    :gym/until "cobblestone"
+    :gym/prereqs ["minecraft:wooden_pickaxe 1"]
+    :gym/timeout-ms 300000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0"
+                 :truth/re "Found ([3-9]|[1-9][0-9])"}
                 {:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}
    ;; issue #5: wade in, get out; the server must see the bot on dry land (steve's onDryLand judge)
-   {:gym/goal :shore :gym/until "shore" :gym/prereqs [] :gym/timeout-ms 180000
-    :gym/truth [{:truth/cmd "execute as {name} at @s unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water" :truth/re "Test passed"}
-                {:truth/cmd "data get entity {name} OnGround" :truth/re "1b"}]}])
+   {:gym/goal :shore
+    :gym/until "shore"
+    :gym/prereqs []
+    :gym/timeout-ms 180000
+    :gym/truth
+    [{:truth/cmd
+      "execute as {name} at @s unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water"
+      :truth/re "Test passed"} {:truth/cmd "data get entity {name} OnGround" :truth/re "1b"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
@@ -54,10 +72,12 @@
 (defn gym
   "The registry row for a goal, named by its keyword or its --until name, or nil."
   [goal]
-  (let [n (name goal)]
-    (some #(when (or (= n (name (:gym/goal %))) (= n (:gym/until %))) %) gyms)))
+  (let [n (name goal)] (some #(when (or (= n (name (:gym/goal %))) (= n (:gym/until %))) %) gyms)))
 
-(defn truth-cmd "A row's truth command for the bot's name." [{:truth/keys [cmd]} bot] (str/replace cmd "{name}" bot))
+(defn truth-cmd
+  "A row's truth command for the bot's name."
+  [{:truth/keys [cmd]} bot]
+  (str/replace cmd "{name}" bot))
 
 (defn truth
   "A truth row's verdict on the server's reply: {:truth/cmd :truth/reply :truth/ok?}."
@@ -76,21 +96,27 @@
   "How a run ended, from what it left behind. :pass only when the bot says ok and every truth
    command agrees; the bot saying ok while the server disagrees is :fail, the most useful row."
   [{:gym/keys [landed? result truths]}]
-  (cond
-    (not landed?) :harness
-    (nil? result) :disconnect
-    (or (:disconnected result) (:closed result)) :disconnect
-    (pos? (get-in result [:stats :stats/deaths] 0)) :death
-    (= :timeout (:reason result)) :timeout
-    (and (:ok result) (seq truths) (every? :truth/ok? truths)) :pass
-    :else :fail))
+  (cond (not landed?) :harness
+        (nil? result) :disconnect
+        (or (:disconnected result) (:closed result)) :disconnect
+        (pos? (get-in result [:stats :stats/deaths] 0)) :death
+        (= :timeout (:reason result)) :timeout
+        (and (:ok result) (seq truths) (every? :truth/ok? truths)) :pass
+        :else :fail))
 
 (defn judged
   "The result row for one run: what it left behind, plus its outcome."
   [{:gym/keys [goal run landing landed? result truths ms commit] :as left}]
-  {:gym/goal goal :gym/run run :gym/landing landing :gym/landed? (boolean landed?)
-   :gym/outcome (outcome left) :gym/ms ms :gym/reason (:reason result) :gym/truths (vec truths)
-   :gym/commit commit :gym/result result})
+  {:gym/goal goal
+   :gym/run run
+   :gym/landing landing
+   :gym/landed? (boolean landed?)
+   :gym/outcome (outcome left)
+   :gym/ms ms
+   :gym/reason (:reason result)
+   :gym/truths (vec truths)
+   :gym/commit commit
+   :gym/result result})
 
 (defn wilson
   "The 95% Wilson score interval for k passes in n trials, [lo hi] in 0..1."
@@ -114,36 +140,58 @@
         n (count scored)
         [lo hi] (wilson k n)
         uncounted (frequencies (map :gym/outcome (remove (comp counted :gym/outcome) rows)))]
-    (str "pass " k "/" n " [" (pct lo) "%, " (pct hi) "%]"
-         "; not counted: harness " (uncounted :harness 0) ", disconnect " (uncounted :disconnect 0))))
+    (str "pass "
+         k
+         "/"
+         n
+         " ["
+         (pct lo)
+         "%, "
+         (pct hi)
+         "%]"
+         "; not counted: harness " (uncounted :harness 0)
+         ", disconnect " (uncounted :disconnect 0))))
 
 (defn row-line
   "One run as a markdown table row."
   [{:gym/keys [run landing outcome ms reason truths]}]
-  (str "| " run " | " (str/join "," (take 2 landing)) " | " (name outcome) " | " (some-> ms (quot 1000))
-       " | " (some-> reason name) " | " (str/join "; " (map :truth/reply truths)) " |"))
+  (str "| "
+       run
+       " | "
+       (str/join "," (take 2 landing))
+       " | "
+       (name outcome)
+       " | "
+       (some-> ms
+               (quot 1000))
+       " | "
+       (some-> reason
+               name)
+       " | "
+       (str/join "; " (map :truth/reply truths))
+       " |"))
 
 (defn tally
   "\"a 2, b 1\" for the values of xs, sorted by name."
   [xs]
-  (str/join ", " (for [[x c] (sort-by (comp str key) (frequencies xs))] (str (if x (name x) "none") " " c))))
+  (str/join ", "
+            (for [[x c] (sort-by (comp str key) (frequencies xs))]
+              (str (if x (name x) "none") " " c))))
 
 (defn report
   "The markdown summary of a batch: per goal, the pass line, a table of runs, the outcome
    tally and the tally of the bot's reasons."
   [rows]
-  (str/join
-   "\n"
-   (for [[goal rs] (sort-by (comp name key) (group-by :gym/goal rows))
-         :let [rs (sort-by :gym/run rs)]]
-     (str/join "\n"
-               (concat [(str "### " (name goal)) ""
-                        (summary-line rs) ""
-                        "| run | landing | outcome | s | reason | truth |"
-                        "|---|---|---|---|---|---|"]
-                       (map row-line rs)
-                       ["" (str "outcomes: " (tally (map :gym/outcome rs)))
-                        (str "reasons: " (tally (map :gym/reason rs))) ""])))))
+  (str/join "\n"
+            (for [[goal rs] (sort-by (comp name key) (group-by :gym/goal rows))
+                  :let [rs (sort-by :gym/run rs)]]
+              (str/join "\n"
+                        (concat [(str "### " (name goal)) "" (summary-line rs) ""
+                                 "| run | landing | outcome | s | reason | truth |"
+                                 "|---|---|---|---|---|---|"]
+                                (map row-line rs)
+                                ["" (str "outcomes: " (tally (map :gym/outcome rs)))
+                                 (str "reasons: " (tally (map :gym/reason rs))) ""])))))
 
 (defn plan-matrix
   "The shard matrix for goals x runs as JSON, {\"include\": [{\"goal\", \"run\", \"minutes\"}]}.
@@ -151,11 +199,17 @@
    the rest from the registry."
   [goals runs]
   (str "{\"include\":["
-       (str/join "," (for [g goals
-                           :let [row (gym g)]
-                           run (range 1 (inc runs))]
-                       (str "{\"goal\":\"" (:gym/until row) "\",\"run\":" run
-                            ",\"minutes\":" (+ shard-overhead-minutes (quot (:gym/timeout-ms row) 60000)) "}")))
+       (str/join ","
+                 (for [g goals
+                       :let [row (gym g)]
+                       run (range 1 (inc runs))]
+                   (str "{\"goal\":\""
+                        (:gym/until row)
+                        "\",\"run\":"
+                        run
+                        ",\"minutes\":"
+                        (+ shard-overhead-minutes (quot (:gym/timeout-ms row) 60000))
+                        "}")))
        "]}"))
 
 (defn args->map
@@ -172,23 +226,28 @@
    {:gym/landed? false :gym/error ...}; never throws."
   [{:keys [goal run name host rcon-port rcon-pass landings]}]
   (let [row (gym goal)
-        [x z y :as landing] (landings/landing-for (landings/read-landings landings) (parse-long (str run)))
+        [x z y :as landing] (landings/landing-for (landings/read-landings landings)
+                                                  (parse-long (str run)))
         started (System/currentTimeMillis)]
-    (try
-      (rcon/with-rcon (or host "127.0.0.1") (parse-long (str rcon-port)) rcon-pass
-        (fn [rc]
-          (when-not (harness/wait-online rc name harness/online-timeout)
-            (throw (ex-info "bot never came online" {:name name})))
-          (rcon/command rc (str "gamemode survival " name))
-          (rcon/command rc (str "clear " name))
-          (doseq [p (:gym/prereqs row)] (rcon/command rc (str "give " name " " p)))
-          (harness/teleport! rc name [x z])
-          (rcon/command rc (str "spawnpoint " name " " x " " y " " z))
-          (Thread/sleep (long harness/settle-ms))
-          {:gym/landed? true :gym/landing landing :gym/at (harness/position rc name) :gym/started started}))
-      (catch Throwable e
-        (harness/log "landing failed:" e)
-        {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
+    (try (rcon/with-rcon (or host "127.0.0.1")
+                         (parse-long (str rcon-port))
+                         rcon-pass
+                         (fn [rc]
+                           (when-not (harness/wait-online rc name harness/online-timeout)
+                             (throw (ex-info "bot never came online" {:name name})))
+                           (rcon/command rc (str "gamemode survival " name))
+                           (rcon/command rc (str "clear " name))
+                           (doseq [p (:gym/prereqs row)] (rcon/command rc (str "give " name " " p)))
+                           (harness/teleport! rc name [x z])
+                           (rcon/command rc (str "spawnpoint " name " " x " " y " " z))
+                           (Thread/sleep (long harness/settle-ms))
+                           {:gym/landed? true
+                            :gym/landing landing
+                            :gym/at (harness/position rc name)
+                            :gym/started started}))
+         (catch Throwable e
+           (harness/log "landing failed:" e)
+           {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
 
 (defn land!
   "The fixture as a process: landing!, then write what happened to the landed file and print the
@@ -217,17 +276,26 @@
    still holds, write the result row and print it as one GYMRESULT line. Returns the row."
   [{:keys [goal run name host rcon-port rcon-pass bot-log landed out wait-ms commit]}]
   (let [row (gym goal)
-        result (wait-result! bot-log (if wait-ms (parse-long wait-ms) (+ (:gym/timeout-ms row) judge-grace-ms)))
+        result (wait-result!
+                bot-log
+                (if wait-ms (parse-long wait-ms) (+ (:gym/timeout-ms row) judge-grace-ms)))
         left (if (.exists (io/file landed))
                (edn/read-string (slurp landed))
                {:gym/landed? false :gym/error "no landed file"})
         truths (when result
-                 (try (rcon/with-rcon (or host "127.0.0.1") (parse-long (str rcon-port)) rcon-pass
-                        (fn [rc] (mapv #(truth % name (rcon/command rc (truth-cmd % name))) (:gym/truth row))))
+                 (try (rcon/with-rcon (or host "127.0.0.1")
+                                      (parse-long (str rcon-port))
+                                      rcon-pass
+                                      (fn [rc]
+                                        (mapv #(truth % name (rcon/command rc (truth-cmd % name)))
+                                              (:gym/truth row))))
                       (catch Throwable e (harness/log "truth failed:" e) [])))
         judged-row (judged (assoc left
-                                  :gym/goal (:gym/goal row) :gym/run (parse-long (str run)) :gym/result result
-                                  :gym/truths truths :gym/commit commit
+                                  :gym/goal (:gym/goal row)
+                                  :gym/run (parse-long (str run))
+                                  :gym/result result
+                                  :gym/truths truths
+                                  :gym/commit commit
                                   :gym/ms (- (System/currentTimeMillis) (:gym/started left 0))))]
     (spit out (pr-str judged-row))
     (prn 'GYMRESULT (dissoc judged-row :gym/result))
@@ -251,19 +319,25 @@
               --landed landed.edn --out result.edn [--commit sha] [--strict true]
      report   --dir artifacts"
   [command & args]
-  (let [{:keys [goals runs goal set plan rcon-port rcon-pass host out dir strict] :as opts} (args->map args)]
+  (let [{:keys [goals runs goal set plan rcon-port rcon-pass host out dir strict] :as opts}
+        (args->map args)]
     (case command
       "plan" (println (plan-matrix (str/split goals #",") (parse-long runs)))
-      "env" (let [row (gym goal)]
-              (println (str "UNTIL=" (:gym/until row)))
-              (println (str "TIMEOUT_MS=" (:gym/timeout-ms row))))
-      "landings" (let [ls (rcon/with-rcon (or host "127.0.0.1") (parse-long (str rcon-port)) rcon-pass
-                            #(landings/landings! % (landings/read-set plan set)))]
-                   (spit out (pr-str ls))
-                   (println (count ls) "landings in set" set))
+      "env"
+      (let [row (gym goal)]
+        (println (str "UNTIL=" (:gym/until row)))
+        (println (str "TIMEOUT_MS=" (:gym/timeout-ms row))))
+      "landings"
+      (let [ls (rcon/with-rcon (or host "127.0.0.1")
+                               (parse-long (str rcon-port))
+                               rcon-pass
+                               #(landings/landings! % (landings/read-set plan set)))]
+        (spit out (pr-str ls))
+        (println (count ls) "landings in set" set))
       "land" (land! opts)
-      "judge" (let [{:gym/keys [outcome]} (judge! opts)]
-                (shutdown-agents)
-                (System/exit (if (and (= "true" strict) (#{:fail :timeout :death} outcome)) 1 0)))
+      "judge"
+      (let [{:gym/keys [outcome]} (judge! opts)]
+        (shutdown-agents)
+        (System/exit (if (and (= "true" strict) (#{:fail :timeout :death} outcome)) 1 0)))
       "report" (println (report (results-in dir))))
     (shutdown-agents)))

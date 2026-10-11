@@ -15,12 +15,13 @@
   "A world that observed each [pos id] in order, one millisecond apart."
   [& sightings]
   (reduce (fn [w [i [pos id]]] (memory/observe (assoc w :time/now i) pos id))
-          (game/init fx/opts) (map-indexed vector sightings)))
+          (game/init fx/opts)
+          (map-indexed vector sightings)))
 
 (deftest positions-now-is-what-was-seen-and-not-seen-gone
-  (let [w (seen [[0 64 0] oak-y]                 ; a log, later dug
-                [[1 64 0] oak-y]                 ; a log, later seen as another log state
-                [[2 64 0] oak-y]                 ; a log, never seen again
+  (let [w (seen [[0 64 0] oak-y] ; a log, later dug
+                [[1 64 0] oak-y] ; a log, later seen as another log state
+                [[2 64 0] oak-y] ; a log, never seen again
                 [[0 64 0] blocks/air]
                 [[1 64 0] oak-x])]
     (is (= #{[1 64 0] [2 64 0]} (set (memory/positions-now w blocks/log-states))))
@@ -36,8 +37,8 @@
   "A pond three wide at x 2..4, two deep, with a flowing edge cell; a lava pool at x 12 z 12
    under one lava block above it (the top is the surface); a lone cave source far below."
   (merge (into {} (for [x (range 2 5) y [62 63] z (range 4 7)] [[x y z] blocks/water-base]))
-         {[5 63 5] (+ blocks/water-base 1)}                        ; flowing, not a source
-         {[12 60 12] blocks/lava-base [12 61 12] blocks/lava-base}  ; a lava column: 61 is its surface
+         {[5 63 5] (+ blocks/water-base 1)} ; flowing, not a source
+         {[12 60 12] blocks/lava-base [12 61 12] blocks/lava-base} ; a lava column: 61 is its surface
          {[9 20 9] blocks/water-base}))                           ; cave water, 40 below
 
 (defn loaded
@@ -47,17 +48,24 @@
 
 (deftest a-chunk-load-remembers-one-pool-per-fluid
   (let [w (loaded pond-and-lava 7)]
-    (testing "the water pool is the highest surface source, nearest the chunk's centre (8, 8) among those"
+    (testing
+      "the water pool is the highest surface source, nearest the chunk's centre (8, 8) among those"
       (is (= {[0 0] [4 63 6]} (memory/pools w :water))))
     (testing "the lava pool is the top of the column"
       (is (= {[0 0] [12 61 12]} (memory/pools w :lava))))
     (testing "two facts, not one per cell"
       (is (= 2 (count (d/datoms (:world/facts w) :aevt :pool/kind)))))
     (testing "loading the same column again adds nothing"
-      (is (= 2 (count (d/datoms (:world/facts (terrain/put-column w [0 0] (world/column pond-and-lava))) :aevt :pool/kind)))))
+      (is (= 2
+             (count (d/datoms (:world/facts
+                               (terrain/put-column w [0 0] (world/column pond-and-lava)))
+                              :aevt
+                              :pool/kind)))))
     (testing "nearest-surface-water from an eye on the bank, and never the cave water"
       (is (= [4 63 6] (memory/nearest-surface-water w [8.5 65.62 8.5] 48)))
-      (is (nil? (memory/nearest-surface-water w [8.5 75.0 8.5] 48)) "a pool 12 below the eye is cave water to the bucket")
-      (is (= [4 63 6] (memory/nearest-surface-water w [9.5 30.0 9.5] 48)) "a pool above is walked up to"))
+      (is (nil? (memory/nearest-surface-water w [8.5 75.0 8.5] 48))
+          "a pool 12 below the eye is cave water to the bucket")
+      (is (= [4 63 6] (memory/nearest-surface-water w [9.5 30.0 9.5] 48))
+          "a pool above is walked up to"))
     (testing "a chunk with no fluid remembers no pool"
       (is (empty? (memory/pools (loaded {} 1) :water))))))

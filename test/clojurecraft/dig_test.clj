@@ -36,7 +36,9 @@
   (testing "by hand"
     (is (= 3000 (dig/ms oak-log nil none)) "today's constant, now derived")
     (is (= 750 (dig/ms dirt nil none)))
-    (is (= 2300 (dig/ms stone nil none)) "the issue said 7500 and no drop; the game's tags say stone needs no tier, so a hand harvests it, only slower (45 ticks)")
+    (is
+     (= 2300 (dig/ms stone nil none))
+     "the issue said 7500 and no drop; the game's tags say stone needs no tier, so a hand harvests it, only slower (45 ticks)")
     (is (dig/harvest? stone nil)))
   (testing "with the mining tool"
     (is (= 1500 (dig/ms oak-log (item :wooden_axe) none)))
@@ -68,12 +70,16 @@
     (is (nil? (dig/ms 999999 nil none)))))
 
 (deftest the-best-tool-is-the-fastest-that-harvests
-  (let [inv {0 {:item (item :oak_log) :count 3} 3 {:item (item :wooden_pickaxe) :count 1}
-             5 {:item (item :stone_axe) :count 1} 7 {:item (item :wooden_axe) :count 1}}]
+  (let [inv {0 {:item (item :oak_log) :count 3}
+             3 {:item (item :wooden_pickaxe) :count 1}
+             5 {:item (item :stone_axe) :count 1}
+             7 {:item (item :wooden_axe) :count 1}}]
     (is (= [3 (item :wooden_pickaxe)] (dig/best-tool stone inv none)))
     (is (= [5 (item :stone_axe)] (dig/best-tool oak-log inv none)) "the faster of the two axes")
     (is (nil? (dig/best-tool dirt inv none)) "no shovel held: the hand is as good")
-    (is (nil? (dig/best-tool iron-ore inv none)) "needs stone; the wooden pickaxe would drop nothing, and the stone axe is the wrong kind")
-    (is (= [3 (item :stone_pickaxe)] (dig/best-tool iron-ore (assoc inv 3 {:item (item :stone_pickaxe) :count 1}) none))
+    (is (nil? (dig/best-tool iron-ore inv none))
+        "needs stone; the wooden pickaxe would drop nothing, and the stone axe is the wrong kind")
+    (is (= [3 (item :stone_pickaxe)]
+           (dig/best-tool iron-ore (assoc inv 3 {:item (item :stone_pickaxe) :count 1}) none))
         "a stone pickaxe in that slot reaches it")
     (is (nil? (dig/best-tool stone {} none)) "nothing held")))

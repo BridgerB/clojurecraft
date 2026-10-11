@@ -12,9 +12,15 @@
             [clojurecraft.world :as world]))
 
 (deftest changes-are-a-pure-diff
-  (let [a {:time/now 0 :player/pos [0.0 64.0 0.0] :player/held-slot 0 :plan/waiting :no-log
+  (let [a {:time/now 0
+           :player/pos [0.0 64.0 0.0]
+           :player/held-slot 0
+           :plan/waiting :no-log
            :stats/unknown {[:play 1] 3 [:play 2] 1}}
-        b {:time/now 50 :player/pos [0.5 64.0 0.0] :player/held-slot 0 :stats/unknown {[:play 1] 4 [:play 2] 1}}]
+        b {:time/now 50
+           :player/pos [0.5 64.0 0.0]
+           :player/held-slot 0
+           :stats/unknown {[:play 1] 4 [:play 2] 1}}]
     (is (= {:telemetry/changed {:player/pos [0.5 64.0 0.0] :plan/waiting nil}
             :telemetry/patched {:stats/unknown {[:play 1] 4}}}
            (watch/changes a b))
@@ -30,17 +36,26 @@
         watcher (watch/telemetry! world* path)
         ;; drive the atom the way main does: one swap per event
         driven (fn [w e] (reset! world* (step w e)))
-        [w _] (sim/run driven @world* (sim/init {:column column :spawn [0.5 64.0 0.5]})
-                       #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})
+        [w _] (sim/run driven
+                       @world*
+                       (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                       #(or (plan/done? %) (plan/failed? %))
+                       60000
+                       {:event/kind :go :go/goals [:wood]})
         _ ((:close watcher))
         lines (with-open [r (io/reader path)] (mapv edn/read-string (line-seq r)))]
     (is (plan/done? w))
     (is (zero? ((:dropped watcher))))
     (testing "the file tells the run's story"
       (is (some #(= :done (get-in % [:telemetry/changed :plan/status])) lines))
-      (is (some #(contains? (:telemetry/patched %) :player/inventory) lines) "the log arriving in the inventory")
+      (is (some #(contains? (:telemetry/patched %) :player/inventory) lines)
+          "the log arriving in the inventory")
       (is (every? #(or (seq (:telemetry/changed %)) (seq (:telemetry/patched %))) lines)))
     (testing "the same run without a watcher reaches the same world"
-      (let [[w' _] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
-                            #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})]
+      (let [[w' _] (sim/run step
+                            (game/init fx/opts)
+                            (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                            #(or (plan/done? %) (plan/failed? %))
+                            60000
+                            {:event/kind :go :go/goals [:wood]})]
         (is (= (dissoc w :world/chunks) (dissoc w' :world/chunks)))))))

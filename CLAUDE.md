@@ -77,7 +77,7 @@ clojure -M:run --port 25571 --until play --hold-ms 20000     # just connect and 
 clojure -M:run ... --record data/runs/x.edn                   # record every event
 clojure -M:replay data/runs/x.edn                             # replay it with no server
 clojure -M:run ... --telemetry data/runs/t.edn                # one EDN line per change of the world
-clojure -M:fmt fix src test dev                               # format (cljfmt)
+clojure -M:fmt fix|check                                      # format (zprint, settings in .zprint.edn); the pre-commit hook does it for staged files
 clojure -M:brain                                              # brain checker (must be zero)
 clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data get entity Clj_wood Inventory
 scripts/datagen.sh                            # regenerate the EDN tables (needs the jar)

@@ -42,9 +42,9 @@
     :stonecutter :turtle_egg :sniffer_egg :dragon_egg :daylight_detector :honey :slime :ice
     :frosted_ice :web :soul_sand :mud :weathering_copper_slab :weathering_copper_stair
     :weathering_copper_trap_door :weathering_copper_door :weathering_copper_bar
-    :weathering_copper_chain :weathering_copper_chest :weathering_lantern
-    :weathering_lightning_rod :weathering_copper_grate :bamboo_stalk :chorus_plant :chorus_flower
-    :mangrove_roots :heavy_core :vault :trial_spawner :spawner :conduit :beacon :shelf})
+    :weathering_copper_chain :weathering_copper_chest :weathering_lantern :weathering_lightning_rod
+    :weathering_copper_grate :bamboo_stalk :chorus_plant :chorus_flower :mangrove_roots :heavy_core
+    :vault :trial_spawner :spawner :conduit :beacon :shelf})
 
 (def water-states "Every state of water." (blocks/states-where (fn [[n]] (= n :water))))
 (def lava-states "Every state of lava." (blocks/states-where (fn [[n]] (= n :lava))))
@@ -53,13 +53,12 @@
   "What a block state means to a route: :water, :lava, :awkward (a shape the physics cannot
    simulate), :solid (a full cube), or :clear (passable, not a liquid). nil → :unknown."
   [id]
-  (cond
-    (nil? id) :unknown
-    (contains? water-states id) :water
-    (contains? lava-states id) :lava
-    (contains? awkward-types (blocks/type-of id)) :awkward
-    (blocks/solid? id) :solid
-    :else :clear))
+  (cond (nil? id) :unknown
+        (contains? water-states id) :water
+        (contains? lava-states id) :lava
+        (contains? awkward-types (blocks/type-of id)) :awkward
+        (blocks/solid? id) :solid
+        :else :clear))
 
 (defn classify
   "The cell at [x y z] of the world as a route sees it (see classify-id); :unknown when its
@@ -99,20 +98,30 @@
   "The move set along +x; `moves` rotates it to the eight directions. :move/to is the offset of
    the node reached; :move/needs are [what offset] pairs, each a predicate name over a cell
    relative to the current node; a :drop template falls from :move/to until it finds a floor."
-  [{:move/id :walk :move/to [1 0 0] :move/cost walk-cost
+  [{:move/id :walk
+    :move/to [1 0 0]
+    :move/cost walk-cost
     :move/needs [[:floor [1 -1 0]] [:clear [1 0 0]] [:clear [1 1 0]]]}
-   {:move/id :jump-up :move/to [1 1 0] :move/cost jump-cost
+   {:move/id :jump-up
+    :move/to [1 1 0]
+    :move/cost jump-cost
     :move/needs [[:clear [0 2 0]] [:floor [1 0 0]] [:clear [1 1 0]] [:clear [1 2 0]]]}
-   {:move/id :drop :move/to [1 0 0] :move/cost walk-cost :move/fall? true
+   {:move/id :drop
+    :move/to [1 0 0]
+    :move/cost walk-cost
+    :move/fall? true
     :move/needs [[:clear [1 0 0]] [:clear [1 1 0]] [:not-floor [1 -1 0]]]}
-   {:move/id :diagonal :move/to [1 0 1] :move/cost diagonal-cost
-    :move/needs [[:floor [1 -1 1]] [:clear [1 0 1]] [:clear [1 1 1]]
-                 [:clear [1 0 0]] [:clear [1 1 0]] [:clear [0 0 1]] [:clear [0 1 1]]]}])
+   {:move/id :diagonal
+    :move/to [1 0 1]
+    :move/cost diagonal-cost
+    :move/needs [[:floor [1 -1 1]] [:clear [1 0 1]] [:clear [1 1 1]] [:clear [1 0 0]]
+                 [:clear [1 1 0]] [:clear [0 0 1]] [:clear [0 1 1]]]}])
 
 (def rotations
   "The eight quarter-turn rotations of an [x y z] offset about y, as functions, so one template
    along +x yields the four cardinal moves and one along +x+z the four diagonals."
-  [(fn [[x y z]] [x y z]) (fn [[x y z]] [(- z) y x]) (fn [[x y z]] [(- x) y (- z)]) (fn [[x y z]] [z y (- x)])])
+  [(fn [[x y z]] [x y z]) (fn [[x y z]] [(- z) y x]) (fn [[x y z]] [(- x) y (- z)])
+   (fn [[x y z]] [z y (- x)])])
 
 (defn rotate-move
   "A move template turned by one of `rotations`."
@@ -144,11 +153,10 @@
   (reduce (fn [_ fall]
             (let [feet [x (- y fall) z]
                   below [x (- y fall 1) z]]
-              (cond
-                (not (clear? world feet)) (reduced nil)
-                (floor? world below) (reduced {:node feet :fall fall})
-                (= :clear (classify world below)) nil
-                :else (reduced nil))))
+              (cond (not (clear? world feet)) (reduced nil)
+                    (floor? world below) (reduced {:node feet :fall fall})
+                    (= :clear (classify world below)) nil
+                    :else (reduced nil))))
           nil
           (range 1 (inc max-fall))))
 
@@ -167,7 +175,11 @@
   "Every node reachable from node in one move, with the move's cost: [{:node :cost :move} ...].
    A drop and a walk to the same cell cannot both apply (a walk needs a floor the drop forbids)."
   [world node]
-  (into [] (keep (fn [m] (some-> (apply-move world node m) (assoc :move (:move/id m))))) moves))
+  (into []
+        (keep (fn [m]
+                (some-> (apply-move world node m)
+                        (assoc :move (:move/id m)))))
+        moves))
 
 ;; ---------------------------------------------------------------- goals as data
 
@@ -182,7 +194,8 @@
 (defn octile
   "Octile distance on the plane between two cells: diagonals at their real cost."
   [[ax _ az] [bx _ bz]]
-  (let [dx (abs (- ax bx)) dz (abs (- az bz))]
+  (let [dx (abs (- ax bx))
+        dz (abs (- az bz))]
     (+ (* diagonal-cost (min dx dz)) (- (max dx dz) (min dx dz)))))
 
 (defn flat-distance
@@ -190,9 +203,11 @@
   [[_ ay _ :as a] [_ by _ :as b]]
   (+ (octile a b) (abs (- ay by))))
 
-(defmethod goal-done? :near [{:goal/keys [pos range]} node]
+(defmethod goal-done? :near
+  [{:goal/keys [pos range]} node]
   (<= (flat-distance node pos) (or range 3)))
-(defmethod heuristic :near [{:goal/keys [pos range]} node]
+(defmethod heuristic :near
+  [{:goal/keys [pos range]} node]
   (max 0.0 (- (flat-distance node pos) (or range 3))))
 
 (defmethod goal-done? :block [{:goal/keys [pos]} node] (= node pos))
@@ -202,7 +217,9 @@
 (defmethod heuristic :xz [{:goal/keys [pos]} node] (octile node pos))
 
 (defmethod goal-done? :away [{:goal/keys [pos range]} node] (> (flat-distance node pos) range))
-(defmethod heuristic :away [{:goal/keys [pos range]} node] (max 0.0 (- range (flat-distance node pos))))
+(defmethod heuristic :away
+  [{:goal/keys [pos range]} node]
+  (max 0.0 (- range (flat-distance node pos))))
 
 ;; ---------------------------------------------------------------- the search
 
@@ -222,7 +239,9 @@
   (let [now (:time/now world 0)]
     (if (some (fn [{:trap/keys [pos at]}]
                 (let [[tx tz] pos]
-                  (and (<= (- now at) trap-ttl) (<= (abs (- x tx)) trap-reach) (<= (abs (- z tz)) trap-reach))))
+                  (and (<= (- now at) trap-ttl)
+                       (<= (abs (- x tx)) trap-reach)
+                       (<= (abs (- z tz)) trap-reach))))
               (:world/traps world))
       trap-cost
       1.0)))
@@ -243,30 +262,31 @@
            g {start 0.0}
            parents {start nil}
            closed #{}
-           best start best-h h0
+           best start
+           best-h h0
            expanded 0]
-      (cond
-        (empty? open) (done :none parents best g)
-        (>= expanded max-nodes) (done :partial parents best g)
-        :else
-        (let [[_ gn node :as entry] (first open)
-              open (disj open entry)]
-          (cond
-            (closed node) (recur open g parents closed best best-h expanded)
-            (goal-done? goal node) (done :found parents node g)
+      (cond (empty? open) (done :none parents best g)
+            (>= expanded max-nodes) (done :partial parents best g)
             :else
-            (let [closed (conj closed node)
-                  hn (heuristic goal node)
-                  [best best-h] (if (< hn best-h) [node hn] [best best-h])
-                  [open g parents]
-                  (reduce (fn [[open g parents] {next :node cost :cost}]
-                            (let [g' (+ gn (* cost (trap-factor world next)))]
-                              (if (and (not (closed next)) (< g' (get g next Double/MAX_VALUE)))
-                                [(conj open [(+ g' (heuristic goal next)) g' next]) (assoc g next g') (assoc parents next node)]
-                                [open g parents])))
+            (let [[_ gn node :as entry] (first open)
+                  open (disj open entry)]
+              (cond (closed node) (recur open g parents closed best best-h expanded)
+                    (goal-done? goal node) (done :found parents node g)
+                    :else
+                    (let [closed (conj closed node)
+                          hn (heuristic goal node)
+                          [best best-h] (if (< hn best-h) [node hn] [best best-h])
                           [open g parents]
-                          (neighbors world node))]
-              (recur open g parents closed best best-h (inc expanded)))))))))
+                          (reduce (fn [[open g parents] {next :node cost :cost}]
+                                    (let [g' (+ gn (* cost (trap-factor world next)))]
+                                      (if (and (not (closed next))
+                                               (< g' (get g next Double/MAX_VALUE)))
+                                        [(conj open [(+ g' (heuristic goal next)) g' next])
+                                         (assoc g next g') (assoc parents next node)]
+                                        [open g parents])))
+                                  [open g parents]
+                                  (neighbors world node))]
+                      (recur open g parents closed best best-h (inc expanded)))))))))
 
 (defn feet-cell
   "The node a player at feet position [x y z] stands in."
