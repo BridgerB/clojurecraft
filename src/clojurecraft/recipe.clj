@@ -10,7 +10,8 @@
    2x2 inventory grid is size 2, a crafting table is size 3."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojurecraft.blocks :as blocks]))
+            [clojurecraft.blocks :as blocks]
+            [clojurecraft.inventory :as inventory]))
 
 (defn- resource [n] (edn/read-string (slurp (io/resource (str "clojurecraft/" n ".edn")))))
 
@@ -109,14 +110,6 @@
 
 ;; ---------------------------------------------------------------- inventory
 
-(defn player->container-slot
-  "Player-inventory slot → window-0 slot."
-  [^long s]
-  (cond (<= 0 s 8) (+ 36 s)
-        (<= 9 s 35) s
-        (= s 40) 45
-        :else nil))
-
 (defn counts
   "{item-name n} over a {slot {:item id :count n}} inventory."
   [inventory]
@@ -149,7 +142,8 @@
    right-click one item into each cell, put the remainder back. Clicks are
    {:click/slot :click/button :click/mode}. slot-of maps a player-inventory slot to a slot of
    the window being clicked (window 0 by default)."
-  ([inventory r size] (clicks inventory r size player->container-slot))
+  ([inventory r size]
+   (clicks inventory r size #(inventory/player->window-slot (inventory/layouts :inventory) %)))
   ([inventory r size slot-of]
    (some-> (reduce (fn [[used acc] [s cells]]
                      (let [n (count cells)

@@ -105,11 +105,26 @@
     (is (= {0 log 5 {:item 134 :count 2} 9 {:item 1 :count 3}} (:player/inventory w)))
     (is (= 2 (:window/state-id w)) "window 0's latest state id is kept")
     (is (= 3 (inventory/logs-held w)))
-    (is (= 0 (inventory/container->player-slot 36)))
-    (is (= 40 (inventory/container->player-slot 45)))
-    (is (= 39 (inventory/container->player-slot 5)) "window 5 is the helmet, player slot 39")
-    (is (= 36 (inventory/container->player-slot 8)) "window 8 is the boots, player slot 36")
-    (is (nil? (inventory/container->player-slot 2)))))
+    (is (= 0 (inventory/window->player-slot (inventory/layouts :inventory) 36)))
+    (is (= 40 (inventory/window->player-slot (inventory/layouts :inventory) 45)))
+    (is (= 39 (inventory/window->player-slot (inventory/layouts :inventory) 5))
+        "window 5 is the helmet, player slot 39")
+    (is (= 36 (inventory/window->player-slot (inventory/layouts :inventory) 8))
+        "window 8 is the boots, player slot 36")
+    (is (nil? (inventory/window->player-slot (inventory/layouts :inventory) 2)))))
+
+(deftest window-layouts-map-player-slots-both-ways
+  (doseq [[kind l] inventory/layouts
+          p (range 36)]
+    (is (= p (inventory/window->player-slot l (inventory/player->window-slot l p))) [kind p]))
+  (is (= 37 (inventory/player->window-slot (inventory/layouts :table) 0)) "the table's hotbar")
+  (is (= 10 (inventory/player->window-slot (inventory/layouts :table) 9)) "the table's main")
+  (is (= 45 (inventory/player->window-slot (inventory/layouts :inventory) 40)) "window 0's offhand")
+  (is (nil? (inventory/player->window-slot (inventory/layouts :table) 40)) "no offhand in a table")
+  (is (nil? (inventory/player->window-slot (inventory/layouts :inventory) 39)) "armour not offered")
+  (is (nil? (inventory/window->player-slot (inventory/layouts :table) 9)) "the table's own grid")
+  (is (= (inventory/layouts :table) (inventory/layout-of-menu 12)))
+  (is (nil? (inventory/layout-of-menu 99))))
 
 (deftest the-crafting-grid-is-never-invisible
   (let [items (vec (concat [{:item 30 :count 1} {:item 36 :count 1} nil {:item 36 :count 1} nil]

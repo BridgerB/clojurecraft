@@ -12,6 +12,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
@@ -113,10 +114,12 @@
               (assoc :player/held-slot p)
               (intent/assoc-intent :intent/stage :spot))
           :else
-          (window/click
-           world
-           (window/view world :inventory) ; swap into the held slot
-           {:click/slot (recipe/player->container-slot p) :click/button held :click/mode 2}))))
+          (window/click world
+                        (window/view world :inventory) ; swap into the held slot
+                        {:click/slot (inventory/player->window-slot (inventory/layouts :inventory)
+                                                                    p)
+                         :click/button held
+                         :click/mode 2}))))
 
 (defmethod place-stage :spot
   [world _]

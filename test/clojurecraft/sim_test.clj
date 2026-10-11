@@ -68,7 +68,7 @@
       (is (= (into {}
                    (for [[s it] (:sim/inv sim)
                          :when (<= 9 s 44)]
-                     [(inventory/container->player-slot s) it]))
+                     [(inventory/window->player-slot (inventory/layouts :inventory) s) it]))
              (:player/inventory w))))))
 
 (def kit-items #{:oak_log :oak_planks :stick :crafting_table})

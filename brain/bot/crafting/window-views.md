@@ -3,16 +3,16 @@ title: Window views
 description: How window.clj gives the craft and place intents one click layer for window 0 and an open crafting table - a view map (id, state id, size, grid, slot map), click, waiting and free-slot.
 type: reference
 tags: [bot, crafting, windows]
-aliases: [window.clj, view, view/slot-of, table-slot, free-slot, window/click]
+aliases: [window.clj, view, view/slot-of, player->window-slot, free-slot, window/click]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/window.clj#defn view
   - src/clojurecraft/window.clj#defn click
   - src/clojurecraft/window.clj#defn waiting
   - src/clojurecraft/window.clj#defn free-slot
-  - src/clojurecraft/window.clj#defn table-slot
+  - src/clojurecraft/inventory.clj#defn player->window-slot
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[craft-intent]]"
@@ -30,7 +30,7 @@ A view is a plain map describing one window the way the click rules need it, so 
 | `:view/state-id` | `:window/state-id` | `:window/open`'s `:window/state-id` |
 | `:view/size` | 2 | 3 |
 | `:view/grid` | `:window/grid` | `:window/open`'s `:window/slots` |
-| `:view/slot-of` | `recipe/player->container-slot` | `table-slot`: hotbar 0-8 → 37-45, main 9-35 → 10-36 |
+| `:view/slot-of` | `inventory/player->window-slot` over window 0's layout | the same over the table's: hotbar 0-8 → 37-45, main 9-35 → 10-36 |
 
 ## Key files
 - `window.clj`, `view` - builds the map; `:table` is nil unless the open window's menu type is 12 (crafting).
