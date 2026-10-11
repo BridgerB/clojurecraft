@@ -285,7 +285,7 @@
              "HEAP_MB" (or heap-mb 6144)}]
     (.mkdirs dir)
     (exec! ["cp" "-r" (str (io/file worlds (:unit/set unit))) (str world)] {:log log})
-    (try (when-not (zero? (exec! ["scripts/server.sh" "start"] {:env env :log log}))
+    (try (when-not (zero? (exec! ["bb" "server" "start"] {:env env :log log}))
            (throw (ex-info "server did not start" {:unit (:unit/id unit)})))
          (spit (io/file dir "forceload-start.txt")
                (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command % "forceload query")))
@@ -304,7 +304,7 @@
            (spit (io/file dir "forceload-stop.txt")
                  (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command % "forceload query")))
            rows)
-         (finally (exec! ["scripts/server.sh" "stop"] {:env env :log log})
+         (finally (exec! ["bb" "server" "stop"] {:env env :log log})
                   (exec! ["cp" (str (io/file world "logs" "latest.log"))
                           (str (io/file dir "server.log"))]
                          {:log log})

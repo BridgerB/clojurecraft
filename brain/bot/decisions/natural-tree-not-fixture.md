@@ -5,11 +5,11 @@ type: decision
 tags: [bot, decision, wood, ci]
 aliases: [flat world fixture rejected, why locate biome, forest landing]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 85e133d
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/harness.clj#defn locate-forest
-  - scripts/server.sh#level-type=minecraft:normal
+  - bb/clojurecraft/server.clj#["level-type" "minecraft:normal"]
 related:
   - "[[bot/decisions/_moc|Decisions]]"
   - "[[gym-on-runners]]"

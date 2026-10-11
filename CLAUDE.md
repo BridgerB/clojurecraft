@@ -74,7 +74,7 @@ nix flake update                              # move every tool to today's nixpk
                                               # versions in deps.edn, which CI runs from Maven
 bb tasks                                      # every command below as a Babashka task (bb.edn); bb ci is what CI's unit job runs
 clojure -M:test                               # every test, namespaces and vars in parallel (eftest); -n ns, -v ns/var, -x ns
-./local-server.sh start|stop                  # vanilla 26.1.2 on game 25571 / RCON 25581
+bb local-server start|stop                    # vanilla 26.1.2 on game 25571 / RCON 25581 (bb/clojurecraft/server.clj)
 clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)" --name Clj_wood --until wood \
   | clojure -M:run --port 25571 --name Clj_wood --until wood --events stdin   # land in a forest, then run
 clojure -M:run --port 25571 --until play --hold-ms 20000     # just connect and stay in-world

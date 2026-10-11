@@ -6,7 +6,7 @@ Current milestone: from a natural forest on a vanilla 26.1.2 server, gather logs
 
 ```bash
 clojure -M:test                       # unit tests
-./local-server.sh start               # local vanilla server (25571 / RCON 25581)
+bb local-server start                 # local vanilla server (25571 / RCON 25581)
 clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)" --name Clj_wood --until wood \
   | clojure -M:run --port 25571 --name Clj_wood --until wood --events stdin
 ```

@@ -64,10 +64,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Install the Clojure CLI
+      - name: Install the Clojure CLI and Babashka
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
       - uses: actions/cache@v6
         with:
           path: |
@@ -108,10 +110,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Install the Clojure CLI
+      - name: Install the Clojure CLI and Babashka
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
       - uses: actions/cache@v6
         with:
           path: |
@@ -149,10 +153,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Install the Clojure CLI
+      - name: Install the Clojure CLI and Babashka
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
       - uses: actions/cache@v6
         with:
           path: |

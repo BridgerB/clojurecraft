@@ -13,8 +13,8 @@ rcon() { clojure -M:rcon --host 127.0.0.1 --port "$RCON_PORT" --pass "$RCON_PASS
 
 rm -rf "$WORLD"
 mkdir -p "$WORLD"
-"$ROOT/scripts/server.sh" start
-trap '"$ROOT/scripts/server.sh" stop' EXIT
+(cd "$ROOT" && bb server start)
+trap '(cd "$ROOT" && bb server stop)' EXIT
 
 clojure -M:gym landings --set "$SET" --plan "$ROOT/ci/gym.edn" --rcon-port "$RCON_PORT" --rcon-pass "$RCON_PASS" \
   --out "$WORLD/landings.edn"
@@ -25,7 +25,7 @@ rcon save-all flush
 rcon forceload query | tee "$ROOT/forceload.txt"
 grep -q 'No force loaded' "$ROOT/forceload.txt" || { echo "a forceload was left behind" >&2; exit 1; }
 
-"$ROOT/scripts/server.sh" stop
+(cd "$ROOT" && bb server stop)
 trap - EXIT
 # what a shard regenerates on start, and logs that would only bloat the cache
 rm -rf "$WORLD/server.properties" "$WORLD/server.pid" "$WORLD/server.log" "$WORLD/eula.txt" "$WORLD/logs"

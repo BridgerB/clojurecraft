@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v7
       - id: key
         name: The world's cache key
-        run: echo "key=gym-world-$SET-${{ hashFiles('ci/gym.edn', 'scripts/server.sh', 'scripts/ci/prepare-world.sh', 'src/clojurecraft/landings.clj', 'src/clojurecraft/harness.clj') }}" >> "$GITHUB_OUTPUT"
+        run: echo "key=gym-world-$SET-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'scripts/ci/prepare-world.sh', 'src/clojurecraft/landings.clj', 'src/clojurecraft/harness.clj') }}" >> "$GITHUB_OUTPUT"
       - id: have
         uses: actions/cache/restore@v6
         with:
@@ -44,11 +44,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Install the Clojure CLI
+      - name: Install the Clojure CLI and Babashka
         if: steps.have.outputs.cache-hit != 'true'
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
       - uses: actions/cache@v6
         if: steps.have.outputs.cache-hit != 'true'
         with:

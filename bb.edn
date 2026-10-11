@@ -42,7 +42,13 @@
        :task (apply clojure "-M:gym" *command-line-args*)}
   fleet {:doc "The fleet: plan, work, report, pull (clojure -M:fleet <command> ...)"
          :task (apply clojure "-M:fleet" *command-line-args*)}
+  server {:doc
+          "A vanilla 26.1.2 server: bb server start|stop, set up by PORT RCON_PORT RCON_PASS WORLD"
+          :requires ([clojurecraft.server :as server])
+          :task (server/command! (first *command-line-args*) (server/env-opts))}
   local-server {:doc "This Mac's vanilla server on 25571 / RCON 25581: bb local-server start|stop"
-                :task (apply shell "./local-server.sh" *command-line-args*)}
+                :requires ([clojurecraft.server :as server])
+                :task (server/command! (or (first *command-line-args*) "start")
+                                       (server/local-opts))}
   datagen {:doc "Regenerate the EDN tables in resources/clojurecraft/ from the server jar"
            :task (shell "scripts/datagen.sh")}}}

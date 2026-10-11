@@ -5,8 +5,8 @@ type: reference
 tags: [game, server, protocol, compression]
 aliases: [network-compression-threshold, login-compression, set compression, zlib threshold]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 26.1.2
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - "CLAUDE.md#Vanilla 26.1.2 = protocol 775, offline mode, Java 25, compression threshold 256, seed typecraft."
   - src/clojurecraft/conn.clj#(swap! proto assoc :threshold (:threshold pkt))
@@ -19,7 +19,7 @@ related:
 # Compression threshold
 
 ## Facts
-- Default `network-compression-threshold` is 256; `scripts/server.sh` does not set it, and the server-written `data/local-world/server.properties` shows `network-compression-threshold=256` (read 2026-10-09).
+- Default `network-compression-threshold` is 256; `clojurecraft.server` (`bb server`) does not set it, and the server-written `data/local-world/server.properties` shows `network-compression-threshold=256` (read 2026-10-09).
 - The server sends `login-compression {threshold}` during login, before `login-finished`. Every frame after that one, in both directions, uses the compressed format: `[length][uncompressed-size][payload]`, where size 0 means "not compressed" and is used for payloads shorter than the threshold.
 - A client must therefore implement both framings; with the default threshold, small packets (keep-alives, movement) stay raw and chunk packets are zlib-deflated.
 - A negative threshold disables compression (the server sends no `login-compression`).

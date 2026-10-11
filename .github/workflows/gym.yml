@@ -59,10 +59,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Install the Clojure CLI
+      - name: Install the Clojure CLI and Babashka
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
       - uses: actions/cache@v6
         with:
           path: |
@@ -103,10 +105,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Install the Clojure CLI
+      - name: Install the Clojure CLI and Babashka
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
       - uses: actions/cache@v6
         with:
           path: |
@@ -124,7 +128,7 @@ jobs:
           echo "RCON_PASS=$RCON_PASS" >> "$GITHUB_ENV"
           mkdir -p work
           cp -r "cache/worlds/$SET" work/world
-          PORT=25565 RCON_PORT=25575 RCON_PASS=$RCON_PASS WORLD=$PWD/work/world HEAP_MB=6144 scripts/server.sh start
+          PORT=25565 RCON_PORT=25575 RCON_PASS=$RCON_PASS WORLD=$PWD/work/world HEAP_MB=6144 bb server start
           clojure -M:rcon --host 127.0.0.1 --port 25575 --pass "$RCON_PASS" forceload query | tee forceload-start.txt
           grep -q 'No force loaded' forceload-start.txt || { echo "::error::the world starts with a forceload"; exit 1; }
       - name: Run and judge
@@ -140,7 +144,7 @@ jobs:
         if: always()
         run: |
           clojure -M:rcon --host 127.0.0.1 --port 25575 --pass "$RCON_PASS" forceload query | tee forceload-stop.txt || true
-          WORLD=$PWD/work/world scripts/server.sh stop
+          WORLD=$PWD/work/world bb server stop
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -173,10 +177,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Install the Clojure CLI
+      - name: Install the Clojure CLI and Babashka
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
       - uses: actions/cache@v6
         with:
           path: |
