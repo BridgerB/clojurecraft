@@ -1262,6 +1262,16 @@
     (is (= lava (sim/block-at sim [11 66 8])))
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-tunnel-with-no-pickaxe-stops-for-one
+  ;; batch iron-a2 runs dug stone by hand when the pickaxe broke, 7500 ms a block for nothing,
+  ;; until a step timed out; with no pickaxe the tunnel stops at once and the planner makes one
+  (let [[w sim]
+        (intent-run {:intent/kind :tunnel :intent/dir [1 0] :intent/length 4} pocket 66 nil 30000)]
+    (is (= :failed (:intent/status (:plan/intent w))))
+    (is (= :no-pickaxe (:intent/reason (:plan/intent w))))
+    (is (empty? (:sim/broken sim)) "nothing dug by hand")
+    (is (< (:time/now w) 2000))))
+
 (deftest gravel-over-the-head-is-never-dug-under
   ;; a stair up opens the cell over the head first; gravel over that cell would fall through it
   ;; onto the bot, so every stair from here is refused and a level step leads out from under it

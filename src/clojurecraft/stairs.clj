@@ -192,6 +192,33 @@
   [child]
   (and (intent/failed? child) (= :target-gone (:intent/reason child))))
 
+(defn tool-missing
+  "The reason to stop when the block at cell would be dug by hand for nothing (no-<tool>, as
+   :no-pickaxe): it drops only to a tool and no tool of its kind is in the hotbar at all, which
+   happens when the pickaxe breaks on the way. Stone by hand takes 7500 ms a block; batch iron-a2
+   runs went on that way, a stair at a time, until a step timed out. A tool of the kind too weak
+   for the block is the child dig's :needs-tool instead, which turns the stairs. nil when it can
+   be dug."
+  [world cell]
+  (let [id (terrain/block-at world cell)
+        kind (some-> id
+                     blocks/tool-of)]
+    (when (and id
+               (blocks/drops-need-tool? id)
+               (not-any? (fn [[_ {:keys [item]}]] (= kind (:kind (blocks/tool item))))
+                         (intent/hotbar world)))
+      (keyword (str "no-" (name (or kind :tool)))))))
+
+(defn dig-next
+  "Start a child :dig of cell, the next of a stair's to open, or fail with tool-missing's reason,
+   so the planner makes the tool again."
+  [world cell event]
+  (if-let [missing (tool-missing world cell)]
+    (-> world
+        (assoc :player/controls {})
+        (intent/fail missing))
+    (intent/run-child (intent/assoc-intent world :intent/child (intent/child-dig cell)) event)))
+
 (defmethod stairs-stage :open
   [world {:intent/keys [dir turns child cells] :or {turns 0} :as i} event]
   (cond
@@ -214,10 +241,7 @@
         (assoc :player/controls {})
         (intent/fail (:intent/reason child)))
     child (intent/run-child world event)
-    (next-to-open world cells)
-    (intent/run-child
-     (intent/assoc-intent world :intent/child (intent/child-dig (next-to-open world cells)))
-     event)
+    (next-to-open world cells) (dig-next world (next-to-open world cells) event)
     :else (intent/assoc-intent world :intent/stage :step :intent/started-tick (:time/tick world))))
 
 (defn taken?
@@ -249,33 +273,32 @@
 
 (defmethod stairs-stage :level
   ;; dig the level step's cells, one child at a time, then walk onto its feet cell; then plan
-  ;; the stairs again from there
+  ;; the stairs again from there. The step's time is the walk's: it starts again after each dig
   [world {:intent/keys [child level-cells started-tick]} event]
   (let [[fx fy fz] (last level-cells)]
-    (cond
-      (and child (or (intent/done? child) (fell? child))) (intent/dissoc-intent world :intent/child)
-      (and child (intent/failed? child))
-      (-> world
-          (assoc :player/controls {})
-          (intent/fail (:intent/reason child)))
-      child (intent/run-child world event)
-      (next-to-open world level-cells)
-      (intent/run-child
-       (intent/assoc-intent world :intent/child (intent/child-dig (next-to-open world level-cells)))
-       event)
-      (= (intent/feet world) [fx fy fz])
-      (-> world
-          (assoc :player/controls {})
-          (intent/assoc-intent :intent/stage :plan)
-          (intent/dissoc-intent :intent/level-cells))
-      (> (- (:time/tick world) started-tick) step-timeout-ticks)
-      (-> world
-          (assoc :player/controls {})
-          (intent/fail :stair-not-taken))
-      :else
-      (assoc world
-             :player/controls
-             (intent/toward world [(+ fx 0.5) (double fy) (+ fz 0.5)] 0.0)))))
+    (cond (and child (or (intent/done? child) (fell? child)))
+          (-> world
+              (intent/dissoc-intent :intent/child)
+              (intent/assoc-intent :intent/started-tick (:time/tick world)))
+          (and child (intent/failed? child))
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail (:intent/reason child)))
+          child (intent/run-child world event)
+          (next-to-open world level-cells) (dig-next world (next-to-open world level-cells) event)
+          (= (intent/feet world) [fx fy fz])
+          (-> world
+              (assoc :player/controls {})
+              (intent/assoc-intent :intent/stage :plan)
+              (intent/dissoc-intent :intent/level-cells))
+          (> (- (:time/tick world) started-tick) step-timeout-ticks)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :stair-not-taken))
+          :else
+          (assoc world
+                 :player/controls
+                 (intent/toward world [(+ fx 0.5) (double fy) (+ fz 0.5)] 0.0)))))
 
 (defn tunnel-plan
   "Plan a tunnel's next level step: along its heading when level-safe?; else a step to one side,
