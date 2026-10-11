@@ -96,8 +96,10 @@
    [x z]
    (fn []
      (fixture/wait-loaded! rc x z)
-     (vec (for [[reason test] fixture/checks]
-            [reason (rcon/command rc (str "execute positioned " x " " y " " z " " test))])))))
+     (mapv (fn [[reason test]] [reason
+                                (rcon/command rc
+                                              (str "execute positioned " x " " y " " z " " test))])
+           fixture/checks))))
 
 (defn landing!
   "The first fit surface near grid cell, after snapping it to the set's biome, that is not one

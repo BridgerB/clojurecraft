@@ -102,9 +102,9 @@
   [root]
   (->> (file-seq (io/file root))
        (filter #(and (.isFile ^java.io.File %) (str/ends-with? (.getName ^java.io.File %) ".md")))
-       (map (fn [^java.io.File f]
-              (let [rel (subs (.getPath f) (inc (count (.getPath (io/file root)))))]
-                {:file f :rel (str/replace rel #"\.md$" "") :text (slurp f)})))))
+       (mapv (fn [^java.io.File f]
+               (let [rel (subs (.getPath f) (inc (count (.getPath (io/file root)))))]
+                 {:file f :rel (str/replace rel #"\.md$" "") :text (slurp f)})))))
 
 (defn resolve-path
   "The file a sourceRef path names: under a sibling checkout for a steve: or ruststeve: prefix,

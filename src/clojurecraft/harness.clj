@@ -35,9 +35,10 @@
     (loop [[[ox oz] & more] fixture/landing-offsets]
       (fixture/teleport! rc name [(+ fx ox) (+ fz oz)])
       (Thread/sleep (long fixture/settle-ms))
-      (let [why (fixture/bad-landing (for [[reason test] fixture/checks]
-                                       [reason
-                                        (rcon/command rc (str "execute at " name " " test))]))]
+      (let [why (fixture/bad-landing (mapv (fn [[reason test]]
+                                             [reason
+                                              (rcon/command rc (str "execute at " name " " test))])
+                                           fixture/checks))]
         (if (and why (seq more))
           (do (cli/log "bad landing" why "- trying another spot") (recur more))
           (fixture/position rc name))))))

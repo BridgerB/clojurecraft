@@ -233,20 +233,21 @@
                (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command % "forceload query")))
          (let [landings (str (io/file world "landings.edn"))
                rows (mapv deref
-                          (doall (for [run (:unit/runs unit)]
-                                   (future (gym/trial! {:goal (:unit/goal unit)
-                                                        :run run
-                                                        :name (bot-name unit-index run)
-                                                        :dir (io/file dir (str "run-" run))
-                                                        :cp cp
-                                                        :bot-dir bot-dir
-                                                        :pass pass
-                                                        :landings landings
-                                                        :commit commit
-                                                        :tags {:fleet/exp (:unit/exp unit)
-                                                               :fleet/arm (:arm/name (:unit/arm
-                                                                                      unit))
-                                                               :fleet/unit (:unit/id unit)}})))))]
+                          (mapv (fn [run]
+                                  (future (gym/trial! {:goal (:unit/goal unit)
+                                                       :run run
+                                                       :name (bot-name unit-index run)
+                                                       :dir (io/file dir (str "run-" run))
+                                                       :cp cp
+                                                       :bot-dir bot-dir
+                                                       :pass pass
+                                                       :landings landings
+                                                       :commit commit
+                                                       :tags {:fleet/exp (:unit/exp unit)
+                                                              :fleet/arm (:arm/name (:unit/arm
+                                                                                     unit))
+                                                              :fleet/unit (:unit/id unit)}})))
+                                (:unit/runs unit)))]
            (spit (io/file dir "forceload-stop.txt")
                  (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command % "forceload query")))
            rows)
