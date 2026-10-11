@@ -37,8 +37,8 @@
    [:player/eye-in-water? "the eye (y + 1.62) is inside water, by the physics this tick"
     "after the first physics tick"]
    [:plan/wet-ticks "consecutive ticks the eye has been under water" "while planning"]
-   [:plan/dry-ticks "consecutive ticks on dry land (plan/dry-land?)" "while planning"]
-   [:plan/trap "the trap the player is in, :water or :lava, with hysteresis (plan/trapped-tick)"
+   [:plan/dry-ticks "consecutive ticks on dry land (trap/dry-land?)" "while planning"]
+   [:plan/trap "the trap the player is in, :water or :lava, with hysteresis (trap/trapped-tick)"
     "while trapped"] [:plan/trap-at "the [x z] column where the current trap began" "while trapped"]
    [:world/traps
     "every trap escaped: {:trap/pos [x z] :trap/kind :trap/at}, for routes to keep away from"

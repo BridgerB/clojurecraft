@@ -15,6 +15,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.spec]
             [clojurecraft.swim]
+            [clojurecraft.trap :as trap]
             [clojurecraft.world :as world]))
 
 (defn in-play
@@ -208,7 +209,7 @@
          :plan/trunk-failures {}
          :plan/attempts 0
          :plan/goals #{:wood}
-         :plan/wet-ticks (dec plan/trap-after-ticks)
+         :plan/wet-ticks (dec trap/trap-after-ticks)
          :plan/intent (assoc i :intent/status :active :intent/id 1 :intent/goal :wood)
          :plan/last {:intent/kind :walk :intent/target (:intent/target i)}
          :player/controls {:control/forward? true :control/look [33.0 1.0]}))

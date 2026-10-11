@@ -41,11 +41,13 @@ src/clojurecraft/dig.clj      a block's break time and drop as a pure function o
 src/clojurecraft/intent.clj   open executors (multimethod on :intent/kind): :walk (follows a route) :dig (with the best tool) :collect, and the leaf blocker
 src/clojurecraft/stairs.clj   the :stairs-down executor: a staircase of child :dig intents, refusing water, lava and drops
 src/clojurecraft/stone.clj    the :mine act: the stone chain toward cobblestone, or stairs down to stone
+src/clojurecraft/swim.clj     the escape goals' rules and executors: :swim-out, :flee, and :wade (the shore trial)
 src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with clicks, verify, take
 src/clojurecraft/place.clj    the :place and :open-container executors: a spot, use-item-on, the server's answer
 src/clojurecraft/window.clj   window views (inventory or table) and the click that predicts nothing
 src/clojurecraft/recipe.clj   the vanilla crafting table as data: match, clicks, needs
 src/clojurecraft/plan.clj     loads goals.edn; registries done-by, act, next-intent; the planner; :plan/*
+src/clojurecraft/trap.clj     trapped in water or lava, re-derived every tick with hysteresis; dry land
 src/clojurecraft/make.clj     the needs planner: recipe rows, netting needs against inventory, the acts
 src/clojurecraft/wood.clj     the gather chain toward a log (walk → dig → collect)
 src/clojurecraft/model.clj    the information model: every attribute, its meaning, when it exists (model_test keeps it true)

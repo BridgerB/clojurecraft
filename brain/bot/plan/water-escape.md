@@ -8,10 +8,10 @@ status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
-  - src/clojurecraft/plan.clj#defn dry-land?
-  - src/clojurecraft/plan.clj#defn trapped-tick
-  - src/clojurecraft/plan.clj#def trap-after-ticks 20
-  - src/clojurecraft/plan.clj#def dry-ticks-to-clear 6
+  - src/clojurecraft/trap.clj#defn dry-land?
+  - src/clojurecraft/trap.clj#defn trapped-tick
+  - src/clojurecraft/trap.clj#def trap-after-ticks 20
+  - src/clojurecraft/trap.clj#def dry-ticks-to-clear 6
   - src/clojurecraft/plan.clj#defn choose
   - "resources/clojurecraft/goals.edn#{:goal/id :escape-water :goal/priority 0 :goal/target? true :goal/always? true"
   - src/clojurecraft/swim.clj#defn banks
@@ -48,10 +48,10 @@ related:
 
 # Water escape
 
-Survival is two goal rows and one rule in the planner, not a watchdog thread. The siblings' lessons are in [[sib-water-escape]] and [[sib-water-traps]]; this is what the bot does with them.
+Survival is two goal rows, a trap rule the planner applies every tick, and the executors, not a watchdog thread. The siblings' lessons are in [[sib-water-escape]] and [[sib-water-traps]]; this is what the bot does with them.
 
-## The trap (plan.clj)
-`trapped-tick` runs at the top of every planning tick and re-derives `:plan/trap` with hysteresis. Lava is a trap on any contact (`:player/in-lava?`). Water is a trap once `:plan/wet-ticks` (consecutive ticks with `:player/eye-in-water?`) reaches `trap-after-ticks` (20, ruststeve's one-second watchdog): wading a stream never preempts a walk. Either trap holds until `dry-land?` has been true for `dry-ticks-to-clear` (6) consecutive ticks (`:plan/dry-ticks`): a one-tick bob above the surface is not out (steve's 300 ms settle). `dry-land?` is steve's `isOnDryLand`: on the ground, no part of the body in water, the eye in air, the block under the feet a solid that is not a lily pad. When a trap clears, `{:trap/pos [x z] :trap/kind :trap/at}` is appended to `:world/traps` (the column it began in, `:plan/trap-at`), and `path/trap-factor` makes a route into any column within two of it ten times dearer for ten minutes, so a resumed goal does not walk straight back in ([[sib-water-traps]] item 10).
+## The trap (trap.clj)
+`trap/trapped-tick` runs at the top of every planning tick (`plan/plan-tick` calls it) and re-derives `:plan/trap` with hysteresis. Lava is a trap on any contact (`:player/in-lava?`). Water is a trap once `:plan/wet-ticks` (consecutive ticks with `:player/eye-in-water?`) reaches `trap-after-ticks` (20, ruststeve's one-second watchdog): wading a stream never preempts a walk. Either trap holds until `dry-land?` has been true for `dry-ticks-to-clear` (6) consecutive ticks (`:plan/dry-ticks`): a one-tick bob above the surface is not out (steve's 300 ms settle). `dry-land?` is steve's `isOnDryLand`: on the ground, no part of the body in water, the eye in air, the block under the feet a solid that is not a lily pad. When a trap clears, `{:trap/pos [x z] :trap/kind :trap/at}` is appended to `:world/traps` (the column it began in, `:plan/trap-at`), and `path/trap-factor` makes a route into any column within two of it ten times dearer for ten minutes, so a resumed goal does not walk straight back in ([[sib-water-traps]] item 10).
 
 ## The goals (goals.edn)
 `:escape-water` and `:escape-lava` are targets at priority 0 with `:goal/always? true`: `plan/choose` puts them in play whatever `--until` asked for. Each is done by `:not-trapped-in` (the trap is not its kind) and planned by `:escape` into `:swim-out` or `:flee`, only while the trap is its kind. Preemption is the planner's existing rule ([[goals-and-intents]]): the running intent's `:intent/goal` is not the goal chosen now, so it is abandoned `:preempted`, controls cleared, `:plan/last` dropped (a chain must not continue from it), and the escape starts in the same tick. The property `water-over-the-eye-preempts-whatever-runs` holds it for any running walk or dig.

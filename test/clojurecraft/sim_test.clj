@@ -24,6 +24,7 @@
             [clojurecraft.stone]
             [clojurecraft.swim]
             [clojurecraft.terrain :as terrain]
+            [clojurecraft.trap :as trap]
             [clojurecraft.wood]
             [clojurecraft.world :as world]))
 
@@ -776,7 +777,7 @@
     (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
     (is (nil? (:plan/trap w)))
-    (is (plan/dry-land? w))
+    (is (trap/dry-land? w))
     (is (< (:time/now w) 10000) "out within 10 s")
     (is (>= low 200) (str "lowest air " low))
     (is (some #(= :swim-out (:intention/kind %)) (memory/intentions w)))
@@ -794,7 +795,7 @@
   (let [[w sim low] (escape-run roofed-pool [3.5 23.0 2.5] 90000)]
     (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
-    (is (plan/dry-land? w))
+    (is (trap/dry-land? w))
     (is (= [0 27 2] (path/feet-cell (:player/pos w))) "standing in the pocket")
     (is (pos? low))
     (is (empty? (:sim/violations sim)))))
@@ -813,7 +814,7 @@
                               {:inventory {36 {:item wooden-pickaxe :count 1 :durability 1}}})]
     (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
-    (is (plan/dry-land? w))
+    (is (trap/dry-land? w))
     (is (>= (second (:player/pos w)) 64.0) "up on the surface")
     (is (= 0 (terrain/block-at w [0 64 0])) "the cap is gone")
     (is (empty? (:sim/violations sim)))))
@@ -834,7 +835,7 @@
                          {:event/kind :go :go/goals [:shore]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
-    (is (plan/dry-land? w))
+    (is (trap/dry-land? w))
     (is (= [:water] (map :trap/kind (:world/traps w))))
     (is (= [:wade :swim-out]
            (map :intention/kind (filter #(= :started (:intention/event %)) (memory/intentions w)))))
@@ -861,6 +862,6 @@
                          {:event/kind :go :go/goals [:shore]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
-    (is (plan/dry-land? w))
+    (is (trap/dry-land? w))
     (is (= [:water] (map :trap/kind (:world/traps w))))
     (is (empty? (:sim/violations sim)))))

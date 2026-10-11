@@ -2,7 +2,7 @@
   "Getting out of water and away from lava (issue #5).
 
    Requiring this namespace registers the escape goals' rules: a goal is done when the planner's
-   trap (plan/trapped-tick) is not of its kind, its next intent is :swim-out or :flee, and the
+   trap (trap/trapped-tick) is not of its kind, its next intent is :swim-out or :flee, and the
    two executors are defmethods of intent/run.
 
    :swim-out picks one bank and keeps it (the siblings re-picked every tick and swam in circles):
@@ -26,7 +26,8 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.trap :as trap]))
 
 (def bank-radius 16)                  ; how far on the plane a bank is looked for (gym shore-w1 run 6: none within 12 from mid-sea)
 (def bank-rise 1)                     ; a bank at most this far above the highest feet level afloat (steve's landing set W)
@@ -148,7 +149,7 @@
    planner can see the land held still (a bot that kept jumping on the bank never counted as
    out)."
   [world bank]
-  (cond (plan/dry-land? world) {}
+  (cond (trap/dry-land? world) {}
         (:player/in-water? world)
         (assoc (intent/toward world (physics/centre bank) 0.0) :control/jump? true)
         :else (intent/toward world (physics/centre bank) 0.0)))
