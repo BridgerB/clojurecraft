@@ -12,6 +12,7 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.math :as math]
+            [clojurecraft.cli :as cli]
             [clojurecraft.harness :as harness]
             [clojurecraft.rcon :as rcon]))
 
@@ -138,10 +139,9 @@
   "Build a landing set against a running server: one distinct landing per grid cell that has one,
    each pregenerated. Returns [[x z y] ...]."
   [rc {:keys [center n spacing biome pregen-r]}]
-  (reduce
-   (fn [ls cell]
-     (if-let [l (landing! rc cell biome (set (map (fn [[x z]] [x z]) ls)))]
-       (do (harness/log "landing" l "for cell" cell) (pregenerate! rc l pregen-r) (conj ls l))
-       ls))
-   []
-   (grid center n spacing)))
+  (reduce (fn [ls cell]
+            (if-let [l (landing! rc cell biome (set (map (fn [[x z]] [x z]) ls)))]
+              (do (cli/log "landing" l "for cell" cell) (pregenerate! rc l pregen-r) (conj ls l))
+              ls))
+          []
+          (grid center n spacing)))

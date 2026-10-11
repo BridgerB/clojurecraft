@@ -10,6 +10,7 @@
    The event is {:event/kind :go :go/goals [...] :go/at [x y z]}; the bot's planner waits in
    :landing until it is at :go/at. Logs go to stderr."
   (:require [clojure.string :as str]
+            [clojurecraft.cli :as cli]
             [clojurecraft.plan :as plan]
             [clojurecraft.rcon :as rcon])
   (:gen-class))
@@ -63,13 +64,6 @@
 
 ;;;; RCON: everything below talks to the server ;;;;
 
-(defn log
-  "One timestamped line on stderr; stdout is reserved for the event the bot reads."
-  [& xs]
-  (binding [*out* *err*]
-    (println (str (java.time.LocalTime/now)) (str/join " " xs))
-    (flush)))
-
 (defn position
   "Where the server says the player stands, [x y z], or nil when it is not in the world."
   [rc name]
@@ -90,7 +84,7 @@
   (rcon/command rc (str "clear " name))
   (let [r (rcon/command rc (str "execute at " name " run locate biome minecraft:forest"))
         [_ fx fz] (re-find #"\[(-?\d+), (?:~|-?\d+), (-?\d+)\]" r)]
-    (log "locate:" r)
+    (cli/log "locate:" r)
     (when fx [(Long/parseLong fx) (Long/parseLong fz)])))
 
 (defn wait-loaded!
@@ -107,15 +101,15 @@
   [rc name [x z]]
   (rcon/command rc (str "forceload add " x " " z))
   (wait-loaded! rc x z)
-  (log "tp:"
-       (rcon/command rc
-                     (str "execute positioned "
-                          x
-                          " 0 "
-                          z
-                          " positioned over motion_blocking_no_leaves run tp "
-                          name
-                          " ~0.5 ~ ~0.5")))
+  (cli/log "tp:"
+           (rcon/command rc
+                         (str "execute positioned "
+                              x
+                              " 0 "
+                              z
+                              " positioned over motion_blocking_no_leaves run tp "
+                              name
+                              " ~0.5 ~ ~0.5")))
   (rcon/command rc (str "forceload remove " x " " z)))
 
 (defn land!
@@ -128,24 +122,25 @@
       (let [why (bad-landing (for [[reason test] checks]
                                [reason (rcon/command rc (str "execute at " name " " test))]))]
         (if (and why (seq more))
-          (do (log "bad landing" why "- trying another spot") (recur more))
+          (do (cli/log "bad landing" why "- trying another spot") (recur more))
           (position rc name))))))
 
 (defn -main
   "clojure -M:harness [--host H] --rcon-port P --rcon-pass S --name N --until U"
   [& args]
-  (let [{:strs [--host --rcon-port --rcon-pass --name --until]} (apply hash-map args)
-        host (or --host "127.0.0.1")
-        until (or --until "wood")]
+  (let [{:keys [host rcon-port rcon-pass until] :as opts} (cli/options args)
+        bot (:name opts)
+        host (or host "127.0.0.1")
+        until (or until "wood")]
     (try (let [at (rcon/with-rcon host
-                                  (Long/parseLong --rcon-port)
-                                  --rcon-pass
+                                  (Long/parseLong rcon-port)
+                                  rcon-pass
                                   (fn [rc]
-                                    (when-not (wait-online rc --name online-timeout)
-                                      (throw (ex-info "bot never came online" {:name --name})))
-                                    (land! rc --name)))]
-           (log "landed at" at)
+                                    (when-not (wait-online rc bot online-timeout)
+                                      (throw (ex-info "bot never came online" {:name bot})))
+                                    (land! rc bot)))]
+           (cli/log "landed at" at)
            (prn (go-event until at)))
-         (catch Throwable e (log "harness failed:" e) (prn (go-event until nil))))
+         (catch Throwable e (cli/log "harness failed:" e) (prn (go-event until nil))))
     (flush)
     (shutdown-agents)))

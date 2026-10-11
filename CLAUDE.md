@@ -61,6 +61,7 @@ src/clojurecraft/gym.clj      the gym: registry, land, judge, report (`clojure -
 src/clojurecraft/landings.clj landing sets: grid, biome snap, surface checks, pregeneration
 src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successive worlds, bounded, off-thread
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
+src/clojurecraft/cli.clj      what every entry point shares: --key value options, a timestamped stderr line
 dev/clojurecraft/datagen.clj  vanilla --reports and the inner jar's data → resources/clojurecraft/*.edn
 dev/clojurecraft/jar_probe.clj hardness and tool materials read from the game's own classes, for datagen
 dev/clojurecraft/brain.clj    the brain checker (clojure -M:brain)

@@ -14,6 +14,7 @@
             [clojure.math :as math]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [clojurecraft.cli :as cli]
             [clojurecraft.gym :as gym]
             [clojurecraft.harness :as harness]
             [clojurecraft.rcon :as rcon]
@@ -257,7 +258,7 @@
     (let [row (attempt! t)]
       (if (= :disconnect (:gym/outcome row)) (attempt! (assoc t :dir (io/file dir "retry"))) row))
     (catch Throwable e
-      (harness/log "trial failed:" e)
+      (cli/log "trial failed:" e)
       (let [row {:gym/goal (:gym/goal (gym/gym (:unit/goal unit)))
                  :gym/run run
                  :gym/outcome :harness
@@ -337,12 +338,12 @@
   "Run worker w's assignment of a plan, unit after unit, leaving every result under out."
   [plan w opts]
   (doseq [[i unit] (map-indexed vector (assignment plan w))]
-    (harness/log "unit" (:unit/id unit))
+    (cli/log "unit" (:unit/id unit))
     (try (case (:unit/kind unit)
            :gym (gym-unit! unit (inc i) opts)
            :sim (sim-unit! unit opts))
          (catch Throwable e
-           (harness/log "unit failed:" (:unit/id unit) e)
+           (cli/log "unit failed:" (:unit/id unit) e)
            (spit (io/file (:out opts) (:unit/id unit) "unit-error.txt") (str e))))))
 
 (defn located-in
@@ -385,7 +386,7 @@
      report --dir artifacts
      pull   --run <run id>   download into data/runs/<id>/, print the report and every failure"
   [command & args]
-  (let [{:keys [plan worker out worlds dir busy salt run]} (gym/args->map args)
+  (let [{:keys [plan worker out worlds dir busy salt run]} (cli/options args)
         read (fn [p] (cond-> (read-plan p) salt (assoc :fleet/salt salt)))]
     (case command
       "plan"

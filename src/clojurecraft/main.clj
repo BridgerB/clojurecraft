@@ -13,6 +13,7 @@
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [clojure.string :as str]
+            [clojurecraft.cli :as cli]
             [clojurecraft.conn :as conn]
             [clojurecraft.game :as game]
             [clojurecraft.make]
@@ -31,11 +32,6 @@
   "The whole bot: the world reducer, then the planner. Requiring clojurecraft.wood and
    clojurecraft.make registers the goals."
   (game/compose game/step plan/step))
-
-(defn parse-args
-  "--key value pairs → {:key \"value\"}; values stay strings, a trailing lone flag is dropped."
-  [args]
-  (into {} (map (fn [[k v]] [(keyword (subs k 2)) v]) (partition 2 args))))
 
 (defn goal-fn
   "What counts as done for a --until name: the plan done when it names goals, else being loaded."
@@ -75,19 +71,12 @@
 
 (defn- now [] (System/currentTimeMillis))
 
-(defn stamp
-  "One timestamped line on stderr; stdout carries only RESULT."
-  [& xs]
-  (binding [*out* *err*]
-    (println (str (java.time.LocalTime/now)) (str/join " " xs))
-    (flush)))
-
 (defn perform
-  "Do one effect: :send puts the packet on the socket's out channel (blocking), :log stamps it."
+  "Do one effect: :send puts the packet on the socket's out channel (blocking), :log writes it to stderr."
   [{:effect/keys [kind packet message]} out]
   (case kind
     :send (async/>!! out packet)
-    :log (stamp message)))
+    :log (cli/log message)))
 
 (defn apply-event!
   "The epochal write: swap the world, then perform and clear what it asked for."
@@ -125,7 +114,7 @@
                         :let [line (str/trim line)]
                         :when (seq line)]
                   (try (async/>!! events (edn/read-string {:readers record/readers} line))
-                       (catch Exception e (stamp "unreadable event:" line (.getMessage e)))))))
+                       (catch Exception e (cli/log "unreadable event:" line (.getMessage e)))))))
 
 (defn go-when-loaded!
   "Put a :go on the queue the first time the world says the player is loaded: the run without
@@ -146,7 +135,7 @@
               until "wood"
               timeout-ms "120000"
               hold-ms "0"}}
-        (parse-args args)
+        (cli/options args)
         opts {:host host :port (Long/parseLong port) :name name}
         deadline (+ (now) (Long/parseLong timeout-ms))
         hold (Long/parseLong hold-ms)
@@ -160,7 +149,7 @@
         world* (atom (game/init opts))
         watcher (some->> telemetry
                          (watch/telemetry! world*))]
-    (stamp "connected to" host port "as" name)
+    (cli/log "connected to" host port "as" name)
     (cond (= events "stdin") (read-events! *in* queue) ; a fixture speaks through the pipe
           planned (go-when-loaded! world* queue {:event/kind :go :go/goals planned})) ; no fixture: start where we stand
     (apply-event! world*
@@ -174,9 +163,9 @@
       (flush)
       (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT
       (when (and ok (pos? hold))
-        (stamp "holding" hold "ms for an outside judge")
+        (cli/log "holding" hold "ms for an outside judge")
         (let [until (+ (now) hold)] (run-loop c queue world* (fn [_] (> (now) until)) nil)))
-      (when watcher ((:close watcher)) (stamp "telemetry dropped" ((:dropped watcher)) "lines"))
+      (when watcher ((:close watcher)) (cli/log "telemetry dropped" ((:dropped watcher)) "lines"))
       ((:close! c))
       (shutdown-agents)
       (System/exit (if ok 0 1)))))

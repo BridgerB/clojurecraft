@@ -16,6 +16,7 @@
             [clojure.java.io :as io]
             [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.cli :as cli]
             [clojurecraft.harness :as harness]
             [clojurecraft.landings :as landings]
             [clojurecraft.rcon :as rcon])
@@ -212,11 +213,6 @@
                         "}")))
        "]}"))
 
-(defn args->map
-  "--key value pairs as {:key \"value\"}."
-  [args]
-  (into {} (map (fn [[k v]] [(keyword (str/replace k #"^--" "")) v])) (partition 2 args)))
-
 ;;;; I/O: RCON, files, stdout ;;;;
 
 (defn landing!
@@ -246,7 +242,7 @@
                             :gym/at (harness/position rc name)
                             :gym/started started}))
          (catch Throwable e
-           (harness/log "landing failed:" e)
+           (cli/log "landing failed:" e)
            {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
 
 (defn land!
@@ -256,7 +252,7 @@
   [{:keys [goal out] :as opts}]
   (let [landed (landing! opts)]
     (spit out (pr-str landed))
-    (harness/log "landed" (pr-str landed))
+    (cli/log "landed" (pr-str landed))
     (prn (harness/go-event (:gym/until (gym goal)) (:gym/at landed)))
     (flush)))
 
@@ -289,7 +285,7 @@
                                       (fn [rc]
                                         (mapv #(truth % name (rcon/command rc (truth-cmd % name)))
                                               (:gym/truth row))))
-                      (catch Throwable e (harness/log "truth failed:" e) [])))
+                      (catch Throwable e (cli/log "truth failed:" e) [])))
         judged-row (judged (assoc left
                                   :gym/goal (:gym/goal row)
                                   :gym/run (parse-long (str run))
@@ -320,7 +316,7 @@
      report   --dir artifacts"
   [command & args]
   (let [{:keys [goals runs goal set plan rcon-port rcon-pass host out dir strict] :as opts}
-        (args->map args)]
+        (cli/options args)]
     (case command
       "plan" (println (plan-matrix (str/split goals #",") (parse-long runs)))
       "env"

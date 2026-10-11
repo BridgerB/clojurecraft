@@ -116,7 +116,8 @@
 (deftest window-layouts-map-player-slots-both-ways
   (doseq [[kind l] inventory/layouts
           p (range 36)]
-    (is (= p (inventory/window->player-slot l (inventory/player->window-slot l p))) [kind p]))
+    (is (= p (inventory/window->player-slot l (inventory/player->window-slot l p)))
+        (str kind " " p)))
   (is (= 37 (inventory/player->window-slot (inventory/layouts :table) 0)) "the table's hotbar")
   (is (= 10 (inventory/player->window-slot (inventory/layouts :table) 9)) "the table's main")
   (is (= 45 (inventory/player->window-slot (inventory/layouts :inventory) 40)) "window 0's offhand")
