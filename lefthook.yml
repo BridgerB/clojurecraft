@@ -30,5 +30,12 @@ pre-commit:
       glob: "*.{clj,cljc,cljs}"
       run: scripts/clj -M:splint {staged_files}
 
+commit-msg:
+  commands:
+    message:
+      # No AI attribution anywhere in a message, a subject of at most 72 characters, a blank line
+      # before the body. Only a hook can check this: CI never sees a message before it is history.
+      run: scripts/check-commit-msg {1}
+
 pre-push:
   commands: {}

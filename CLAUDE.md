@@ -93,5 +93,5 @@ Vanilla **26.1.2 = protocol 775**, offline mode, Java 25, compression threshold 
 
 ## Rules
 
-- Conventional-commit prefixes. **Never** add AI attribution (`Co-Authored-By`, "Generated with Claude", session links) anywhere. Never push or open a PR without explicit approval.
+- Conventional-commit prefixes. **Never** add AI attribution (`Co-Authored-By`, "Generated with Claude", session links) anywhere; the commit-msg hook (`scripts/check-commit-msg`) refuses a message that has any. Never push or open a PR without explicit approval.
 - `resources/clojurecraft/*.edn` are generated; regenerate with `scripts/datagen.sh`, don't hand-edit. Two are hand-written: `goals.edn` (the goal table) and `problems.edn` (a problem statement per stage, written before the stage's goal; `problems_test` holds it).
