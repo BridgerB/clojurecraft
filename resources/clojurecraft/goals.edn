@@ -54,6 +54,13 @@
   :goal/doc "three cobblestone, dug with the wooden pickaxe"
   :goal/provides {:item/cobblestone 3}
   :goal/done? :provided?}
+ {:goal/id :stone-pickaxe
+  :goal/priority 6
+  :goal/target? true
+  :goal/until "stone-pickaxe"
+  :goal/doc "a stone pickaxe, from cobblestone and sticks in a placed crafting table"
+  :goal/provides {:item/stone_pickaxe 1}
+  :goal/done? :provided?}
  {:goal/id :shore
   :goal/priority 5
   :goal/target? true

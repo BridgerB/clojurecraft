@@ -116,6 +116,24 @@
   :problem/sources ["docs/issues/06-water-and-lava-survival.md" "brain/bot/plan/roadmap-issues.md"
                     "brain/siblings/sib-water-traps.md" "brain/siblings/sib-water-escape.md"
                     "brain/siblings/sib-lava-safety.md"]}
+ {:problem/stage :stone-pickaxe
+  :problem/issue 6
+  :problem/goals [:stone-pickaxe]
+  :problem/statement
+  "Iron ore drops only for a stone pickaxe or better, so the iron kit starts with one: three cobblestone and two sticks crafted in a placed crafting table, from a wooden pickaxe."
+  :problem/needs ["Cobblestone held, from the stone chain (walk, dig, collect)"
+                  "Sticks held, or the planks and logs to craft them"
+                  "A crafting table placed near, or one held to place"]
+  :problem/risks
+  ["The three cobblestone are spent elsewhere before the craft"
+   "No exposed stone in sight, so the bot cuts stairs down and the table is left far above"
+   "The wooden pickaxe breaks before the third cobblestone"]
+  :problem/done
+  "The server's inventory read shows a stone_pickaxe after a run that started with a wooden pickaxe, two sticks and a crafting table."
+  :problem/last-failure
+  "clojurecraft has never attempted this; #9 stopped at three cobblestone and left the craft to this stage."
+  :problem/sources ["docs/issues/07-furnace-iron-bucket-flint-and-steel.md"
+                    "brain/bot/crafting/make-goals.md" "brain/bot/plan/hardness-and-tools.md"]}
  {:problem/stage :iron-kit
   :problem/issue 6
   :problem/statement

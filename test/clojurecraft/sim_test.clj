@@ -705,6 +705,24 @@
         "three cobblestone in well under the 30 s three collect timeouts used to cost")
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-stone-pickaxe-from-a-wooden-one-sticks-and-a-table
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes forest-over-stone)
+                                    :spawn [8.5 65.0 8.5]
+                                    :inventory
+                                    {36 {:item (get blocks/items :wooden_pickaxe) :count 1}
+                                     37 {:item (get blocks/items :stick) :count 2}
+                                     38 {:item (get blocks/items :crafting_table) :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         240000
+                         {:event/kind :go :go/goals [:stone-pickaxe]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (get (held w) :stone_pickaxe 0)))
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w))
+        (pr-str (filter #(= :failed (:intention/event %)) (memory/intentions w))))
+    (is (empty? (:sim/violations sim)))))
+
 (def walled-ledge
   "Gym batch push70 (landing 18648,18464): the nearest stone's only cell at its own level was
    walled in, so no route reached it, while a cell one block below it was reachable. Here: stone
