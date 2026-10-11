@@ -1,0 +1,13 @@
+;; zprint's settings for this repo, read by dev/clojurecraft/fmt.clj (clojure -M:fmt fix|check).
+;; zprint reflows every form to fit the width, the way deno fmt or Biome do; these settings keep
+;; it from fighting what the code relies on.
+{;; the Clojure style guide's indentation, not zprint's own
+ :style :community
+ ;; the docstrings and comments were written to this
+ :width 100
+ ;; no commas between map entries; keys stay in the order written (:goal/id leads its row)
+ :map {:comma? false :sort? false}
+ ;; never re-wrap comment text: the aligned `; why` after a def stays one line
+ :comment {:wrap? false}
+ ;; a cond/case/cond-> pair shares a line when it fits, else the result drops below its test
+ :pair {:hang? false}}

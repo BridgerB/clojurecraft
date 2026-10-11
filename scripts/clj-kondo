@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# The clj-kondo linter for git hooks, with or without it on PATH.
+#
+#   scripts/clj-kondo --lint src/clojurecraft/plan.clj
+#
+# Without it on PATH, flake.nix's native build, built once into a .nix/ link (scripts/nix-tool).
+# CI has no nix and runs the same version from Maven (the deps.edn :lint alias).
+set -euo pipefail
+
+if command -v clj-kondo >/dev/null 2>&1; then
+  exec clj-kondo "$@"
+fi
+dir=$(cd "$(dirname "$0")" && pwd)
+exec "$("$dir/nix-tool" clj-kondo)/clj-kondo" "$@"

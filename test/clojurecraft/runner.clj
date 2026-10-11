@@ -10,9 +10,7 @@
    The tests are pure functions over values (a world in, a world out), so they share nothing
    and run side by side; the serial suite took eight minutes on a runner and most of it was
    one namespace. Exit code 1 when anything fails or errors."
-  (:require [clojure.java.io :as io]
-            [clojure.spec.test.alpha :as stest]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [clojurecraft.fixtures :as fixtures]
             [eftest.report.pretty]
             [eftest.runner :as eftest]))
@@ -36,7 +34,7 @@
    test directory, less the excluded namespaces."
   [{:keys [namespaces vars exclude]}]
   (let [found (if (or (seq namespaces) (seq vars))
-                (do (doseq [n (concat namespaces (map (comp symbol namespace) vars))] (require n))   ; find-tests wants them loaded
+                (do (doseq [n (concat namespaces (map (comp symbol namespace) vars))] (require n)) ; find-tests wants them loaded
                     (concat (mapcat eftest/find-tests namespaces) (mapcat eftest/find-tests vars)))
                 (eftest/find-tests test-dir))]
     ;; realized here, before the reducers are instrumented: find-tests loads a namespace as its
@@ -50,9 +48,12 @@
   [& args]
   (let [vars (selected (parse args))
         _ (fixtures/instrument!)
-        {:keys [fail error] :as result} (eftest/run-tests vars {:multithread? true
-                                                                :report eftest.report.pretty/report
-                                                                :test-warn-time 60000})]
-    (println (str/join " " (for [[k v] (select-keys result [:test :pass :fail :error :duration])] (str (name k) " " v))))
+        {:keys [fail error] :as result} (eftest/run-tests vars
+                                                          {:multithread? true
+                                                           :report eftest.report.pretty/report
+                                                           :test-warn-time 60000})]
+    (println (str/join " "
+                       (for [[k v] (select-keys result [:test :pass :fail :error :duration])]
+                         (str (name k) " " v))))
     (shutdown-agents)
     (System/exit (if (pos? (+ (or fail 0) (or error 0))) 1 0))))

@@ -11,9 +11,11 @@
   "Every top-level form of every .clj file under dir, as [file form]."
   [dir]
   (for [f (sort (map str (filter #(str/ends-with? (str %) ".clj") (file-seq (io/file dir)))))
-        form (binding [*read-eval* false *ns* (create-ns 'clojurecraft.style-test.scratch)]
+        form (binding [*read-eval* false
+                       *ns* (create-ns 'clojurecraft.style-test.scratch)]
                (with-open [r (java.io.PushbackReader. (io/reader f))]
-                 (doall (take-while #(not= % ::eof) (repeatedly #(read {:eof ::eof :read-cond :allow} r))))))]
+                 (doall (take-while #(not= % ::eof)
+                                    (repeatedly #(read {:eof ::eof :read-cond :allow} r))))))]
     [f form]))
 
 (defn nested-ifs
@@ -24,8 +26,10 @@
         :when (seq? form)
         :let [hits (atom 0)]
         :when (do (walk/postwalk (fn [x]
-                                   (when (and (seq? x) (if-family (first x))
-                                              (some #(and (seq? %) (if-family (first %))) (drop 2 x)))
+                                   (when (and (seq? x)
+                                              (if-family (first x))
+                                              (some #(and (seq? %) (if-family (first %)))
+                                                    (drop 2 x)))
                                      (swap! hits inc))
                                    x)
                                  form)

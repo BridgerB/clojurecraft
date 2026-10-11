@@ -17,7 +17,8 @@
 
    :flee is the lava half: the nearest standable cell with no lava beside or under it, walked to
    with forward and jump; the planner ends it the moment the trap clears."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -42,7 +43,8 @@
 (defn solid-cell?
   "Is the cell loaded and a solid block?"
   [world cell]
-  (boolean (some-> (terrain/block-at world cell) blocks/solid?)))
+  (boolean (some-> (terrain/block-at world cell)
+                   blocks/solid?)))
 
 (defn surface-y
   "The y of the first cell above the feet cell that is not the fluid kind: the water's
@@ -55,7 +57,8 @@
   "The highest feet level the body reaches in this column: float-depth under an open surface
    cell, or the body's height under a roof; rounded to the cell the impulse can lift from."
   [world [x _ z] surface]
-  (Math/round (if (solid-cell? world [x surface z]) (- surface physics/height) (- surface float-depth))))
+  (math/round
+   (if (solid-cell? world [x surface z]) (- surface physics/height) (- surface float-depth))))
 
 (defn banks
   "Cells the feet could stand in, nearest first, within bank-radius of feet on the plane and
@@ -69,21 +72,23 @@
              :let [cell [(+ fx dx) y (+ fz dz)]]
              :when (and (not (blacklist cell)) (path/standable? world cell))]
          cell)
-       (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet) (physics/centre cell)) (- (second cell))]))
+       (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
+                                                         (physics/centre cell)) (- (second cell))]))
        first))
 
 (defn ahead
   "The cell one step from feet toward bank on the plane, along the larger axis of the way."
   [[fx fy fz] [bx _ bz]]
-  (let [dx (- bx fx) dz (- bz fz)]
-    (if (>= (abs dx) (abs dz))
-      [(+ fx (Long/signum dx)) fy fz]
-      [fx fy (+ fz (Long/signum dz))])))
+  (let [dx (- bx fx)
+        dz (- bz fz)]
+    (if (>= (abs dx) (abs dz)) [(+ fx (Long/signum dx)) fy fz] [fx fy (+ fz (Long/signum dz))])))
 
 (defn lid?
   "Is the block over the head a lily pad: a lid that stops the rise (steve's rule)?"
   [world [x y z]]
-  (= :lily_pad (some-> (terrain/block-at world [x (+ y 2) z]) blocks/type-of)))
+  (= :lily_pad
+     (some-> (terrain/block-at world [x (+ y 2) z])
+             blocks/type-of)))
 
 (defn obstacle
   "The cell to dig when the swim makes no progress: a lid over the head, else the cell ahead at
@@ -92,11 +97,10 @@
   [world [x y z :as feet] bank]
   (let [over [x (+ y 2) z]
         head (when bank (update (ahead feet bank) 1 inc))]
-    (cond
-      (lid? world feet) over
-      (and head (solid-cell? world head)) head
-      (solid-cell? world over) over
-      :else nil)))
+    (cond (lid? world feet) over
+          (and head (solid-cell? world head)) head
+          (solid-cell? world over) over
+          :else nil)))
 
 (defn child-dig
   "A :dig child for cell that may expose water: the escape digs beside the water it is in."
@@ -116,21 +120,25 @@
    breath lasts 25."
   [world [x _ z :as feet] cell]
   (when-let [fy (floor-y world feet)]
-    (<= (physics/distance [(+ x 0.5) (+ fy physics/eye-height) (+ z 0.5)] (physics/centre cell)) intent/reach)))
+    (<= (physics/distance [(+ x 0.5) (+ fy physics/eye-height) (+ z 0.5)] (physics/centre cell))
+        intent/reach)))
 
 (defn start-dig
   "Dig cell as a child intent now."
   [world cell why]
-  (-> world
-      (update :plan/intent assoc :intent/child (child-dig cell) :intent/best-tick (:time/tick world))
-      (update :plan/intent dissoc :intent/dig-when-down)
-      (game/say (str "swim-out: " why ", digging " cell))))
+  (->
+    world
+    (update :plan/intent assoc :intent/child (child-dig cell) :intent/best-tick (:time/tick world))
+    (update :plan/intent dissoc :intent/dig-when-down)
+    (game/say (str "swim-out: " why ", digging " cell))))
 
 (defn dig-or-sink
   "Dig cell as a child intent now, or, afloat with the floor in reach of it, remember it as
    :intent/dig-when-down and sink: the dig starts from the floor, where it is not off the ground."
   [world feet cell why]
-  (if (and (:player/in-water? world) (not (:player/on-ground? world)) (dig-from-floor? world feet cell))
+  (if (and (:player/in-water? world)
+           (not (:player/on-ground? world))
+           (dig-from-floor? world feet cell))
     (-> world
         (assoc :player/controls {:control/sneak? true})
         (update :plan/intent assoc :intent/dig-when-down cell)
@@ -143,10 +151,10 @@
    planner can see the land held still (a bot that kept jumping on the bank never counted as
    out)."
   [world bank]
-  (cond
-    (plan/dry-land? world) {}
-    (:player/in-water? world) (assoc (intent/toward world (physics/centre bank) 0.0) :control/jump? true)
-    :else (intent/toward world (physics/centre bank) 0.0)))
+  (cond (plan/dry-land? world) {}
+        (:player/in-water? world)
+        (assoc (intent/toward world (physics/centre bank) 0.0) :control/jump? true)
+        :else (intent/toward world (physics/centre bank) 0.0)))
 
 (defmethod intent/run :swim-out
   [world {:intent/keys [bank started best-dist best-tick child next-search dig-when-down]} event]
@@ -159,47 +167,46 @@
         dist (when bank (physics/horizontal-distance (:player/pos world) (physics/centre bank)))
         nearer? (and dist (< dist (- (or best-dist Double/MAX_VALUE) progress)))
         best-tick (if (or nearer? (nil? best-tick)) tick best-tick)]
-    (cond
-      (> (- tick started) escape-timeout-ticks)
-      (-> world (assoc :player/controls {}) (intent/fail :no-escape))
-
-      (and child (intent/done? child))
-      (drop-i world :intent/child :intent/best-tick)
-
-      (and child (intent/failed? child))
-      (-> world (assoc :player/controls {}) (intent/fail (:intent/reason child)))
-
-      child
-      (stairs/run-child world event)
-
-      (and dig-when-down (or (:player/on-ground? world) (not (:player/in-water? world))))
-      (start-dig world dig-when-down "down")
-
-      dig-when-down
-      (assoc world :player/controls {:control/sneak? true})
-
-      (and (nil? bank) next-search (< tick next-search))
-      (assoc world :player/controls {:control/jump? true})   ; rise until the next look
-
-      (nil? bank)
-      (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
-            b (banks world feet surface (:plan/blacklist world #{}))
-            cap (when-not b (obstacle world feet nil))]
-        (cond
-          b (-> world (set-i :intent/bank b :intent/target b) (game/say (str "swim-out: bank " b)))
-          cap (dig-or-sink world feet cap "no bank")
-          ;; nothing in reach: rise (the roof or a bank comes into reach, or the timeout ends it)
-          :else (-> world (assoc :player/controls {:control/jump? true}) (set-i :intent/next-search (+ tick search-every-ticks)))))
-
-      (> (- tick best-tick) stuck-ticks)
-      (if-let [cell (obstacle world feet bank)]
-        (dig-or-sink world feet cell "stuck")
-        (-> world (assoc :player/controls {}) (intent/fail :stuck)))
-
-      :else
-      (-> world
-          (assoc :player/controls (swim-controls world bank))
-          (set-i :intent/best-dist (if nearer? dist (or best-dist dist)) :intent/best-tick best-tick)))))
+    (cond (> (- tick started) escape-timeout-ticks)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :no-escape))
+          (and child (intent/done? child)) (drop-i world :intent/child :intent/best-tick)
+          (and child (intent/failed? child))
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail (:intent/reason child)))
+          child (stairs/run-child world event)
+          (and dig-when-down (or (:player/on-ground? world) (not (:player/in-water? world))))
+          (start-dig world dig-when-down "down")
+          dig-when-down (assoc world :player/controls {:control/sneak? true})
+          (and (nil? bank) next-search (< tick next-search))
+          (assoc world :player/controls {:control/jump? true}) ; rise until the next look
+          (nil? bank)
+          (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
+                b (banks world feet surface (:plan/blacklist world #{}))
+                cap (when-not b (obstacle world feet nil))]
+            (cond b
+                  (-> world
+                      (set-i :intent/bank b :intent/target b)
+                      (game/say (str "swim-out: bank " b)))
+                  cap (dig-or-sink world feet cap "no bank")
+                  ;; nothing in reach: rise (the roof or a bank comes into reach, or the timeout ends it)
+                  :else
+                  (-> world
+                      (assoc :player/controls {:control/jump? true})
+                      (set-i :intent/next-search (+ tick search-every-ticks)))))
+          (> (- tick best-tick) stuck-ticks)
+          (if-let [cell (obstacle world feet bank)]
+            (dig-or-sink world feet cell "stuck")
+            (-> world
+                (assoc :player/controls {})
+                (intent/fail :stuck)))
+          :else
+          (-> world
+              (assoc :player/controls (swim-controls world bank))
+              (set-i :intent/best-dist (if nearer? dist (or best-dist dist))
+                     :intent/best-tick best-tick)))))
 
 (defn footing
   "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand
@@ -220,27 +227,31 @@
         started (or started tick)
         feet (stairs/feet world)
         world (update world :plan/intent assoc :intent/started started)]
-    (cond
-      (> (- tick started) flee-timeout-ticks)
-      (-> world (assoc :player/controls {}) (intent/fail :no-footing))
-
-      (nil? target)
-      (if-let [cell (footing world feet)]
-        (-> world (update :plan/intent assoc :intent/target cell) (game/say (str "flee: to " cell)))
-        (-> world (assoc :player/controls {}) (intent/fail :no-footing)))
-
-      :else
-      (assoc world :player/controls (assoc (intent/toward world (physics/centre target) 0.0) :control/jump? true)))))
+    (cond (> (- tick started) flee-timeout-ticks)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :no-footing))
+          (nil? target)
+          (if-let [cell (footing world feet)]
+            (-> world
+                (update :plan/intent assoc :intent/target cell)
+                (game/say (str "flee: to " cell)))
+            (-> world
+                (assoc :player/controls {})
+                (intent/fail :no-footing)))
+          :else
+          (assoc world
+                 :player/controls
+                 (assoc (intent/toward world (physics/centre target) 0.0) :control/jump? true)))))
 
 ;; ---------------------------------------------------------------- the goals' rules
 
-(defmethod plan/done-by :not-trapped-in [world goal]
-  (not= (:goal/trap goal) (:plan/trap world)))
+(defmethod plan/done-by :not-trapped-in [world goal] (not= (:goal/trap goal) (:plan/trap world)))
 
-(defmethod plan/next-intent :escape [world goal _]
+(defmethod plan/next-intent :escape
+  [world goal _]
   ;; nothing to plan unless the bot is in the row's trap, like a needs row with nothing needed
-  (when (= (:goal/trap goal) (:plan/trap world))
-    {:intent/kind (:goal/act goal)}))
+  (when (= (:goal/trap goal) (:plan/trap world)) {:intent/kind (:goal/act goal)}))
 
 ;; ---------------------------------------------------------------- walking in on purpose (the gym's :shore)
 
@@ -255,7 +266,8 @@
    across on foot was gym shore-w5 run 1)."
   [world [x y z :as cell]]
   (let [kind (fn [c] (:fluid/kind (blocks/fluid (terrain/block-at world c))))]
-    (and (= :water (kind cell)) (= 0 (:fluid/level (blocks/fluid (terrain/block-at world cell))))
+    (and (= :water (kind cell))
+         (= 0 (:fluid/level (blocks/fluid (terrain/block-at world cell))))
          (= :water (kind [x (dec y) z]))
          (not= :water (kind [x (inc y) z])))))
 
@@ -264,7 +276,9 @@
    stand in with the eye in air."
   [world [x y z :as cell]]
   (let [kind (fn [c] (:fluid/kind (blocks/fluid (terrain/block-at world c))))]
-    (and (= :water (kind cell)) (not= :water (kind [x (inc y) z])) (solid-cell? world [x (dec y) z]))))
+    (and (= :water (kind cell))
+         (not= :water (kind [x (inc y) z]))
+         (solid-cell? world [x (dec y) z]))))
 
 (defn wadeable?
   "Could the feet rest in cell on the way into deep water: a cell they can stand in, or
@@ -282,7 +296,7 @@
    bank lay under a cliff and was chosen three times)."
   [world key [_ fy _ :as feet] blacklist]
   (let [column (get-in world [:world/chunks key])
-        sources (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)
+        sources (for [[x y z] (chunk/find-blocks {key column} blocks/fluid)
                       :when (and (>= y (- fy wade-below)) (water-source? world [x y z]))]
                   [x y z])]
     (->> (for [[x y z :as water] sources
@@ -291,7 +305,8 @@
                :let [bank [(+ x dx) by (+ z dz)]]
                :when (and (not (blacklist bank)) (wadeable? world bank))]
            [bank water])
-         (sort-by (fn [[bank _]] (physics/horizontal-distance (physics/centre feet) (physics/centre bank))))
+         (sort-by (fn [[bank _]]
+                    (physics/horizontal-distance (physics/centre feet) (physics/centre bank))))
          distinct)))
 
 (defn entry
@@ -314,7 +329,8 @@
    reaching it walked a bot that came at the bank from the far side away from the sea for two
    minutes (gym shore-w5 run 9)."
   [[bx _ bz] [wx wy wz :as water] [px _ pz] wet?]
-  (let [dx (- wx bx) dz (- wz bz)]
+  (let [dx (- wx bx)
+        dz (- wz bz)]
     (if wet?
       [(+ px (* wade-beyond dx)) (+ wy 0.5) (+ pz (* wade-beyond dz))]
       (physics/centre water))))
@@ -325,54 +341,62 @@
         started (or started tick)
         wet? (or wet? (boolean (:player/in-water? world)))
         world (update world :plan/intent assoc :intent/started started :intent/wet? wet?)]
-    (cond
-      (> (- tick started) wade-timeout-ticks)
-      (-> world (assoc :player/controls {}) (intent/fail :no-water))
+    (cond (> (- tick started) wade-timeout-ticks)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :no-water))
+          ;; was in the water and walked out the far side on land: a puddle, not a pool (gym
+          ;; shore-w4 run 9); the bank is blacklisted by the failure and the next entry is tried
+          (and wet? (not (:player/in-water? world)) (:player/on-ground? world) (nil? child))
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :shallow))
+          (nil? target)
+          (if-let [[bank w] (entry world (stairs/feet world))]
+            (-> world
+                (update :plan/intent assoc
+                        :intent/target bank
+                        :intent/water w
+                        :intent/child
+                        {:intent/kind :walk :intent/target bank :intent/status :active})
+                (game/say (str "wade: to the bank " bank " into " w)))
+            (-> world
+                (assoc :player/controls {})
+                (intent/fail :no-water)))
+          (and child (intent/done? child)) (update world :plan/intent dissoc :intent/child)
+          (and child (intent/failed? child))
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail (:intent/reason child)))
+          child (stairs/run-child world event)
+          ;; on the bank: straight in and on past the entry, jumping only when blocked with the
+          ;; feet on the ground (a seabed step, shore-w4 runs 1 and 6), never afloat (a jump there
+          ;; is a swim-up that keeps the eye in air against a wall), so it sinks as it deepens and
+          ;; the planner's trap takes over
+          ;; afloat and pressed against something: stop pushing and sink (pressing into a bank
+          ;; fires the out-of-liquid impulse, which kept the eye in air for good)
+          (and (:player/in-water? world)
+               (:player/horizontal-collision? world)
+               (not (:player/on-ground? world)))
+          (assoc world :player/controls {:control/sneak? true})
+          :else
+          (let [controls (intent/toward world (beyond target water (:player/pos world) wet?) 0.0)]
+            (assoc world
+                   :player/controls
+                   (assoc controls
+                          :control/jump?
+                          (boolean (and (:control/jump? controls) (:player/on-ground? world)))))))))
 
-      ;; was in the water and walked out the far side on land: a puddle, not a pool (gym
-      ;; shore-w4 run 9); the bank is blacklisted by the failure and the next entry is tried
-      (and wet? (not (:player/in-water? world)) (:player/on-ground? world) (nil? child))
-      (-> world (assoc :player/controls {}) (intent/fail :shallow))
-
-      (nil? target)
-      (if-let [[bank w] (entry world (stairs/feet world))]
-        (-> world
-            (update :plan/intent assoc :intent/target bank :intent/water w
-                    :intent/child {:intent/kind :walk :intent/target bank :intent/status :active})
-            (game/say (str "wade: to the bank " bank " into " w)))
-        (-> world (assoc :player/controls {}) (intent/fail :no-water)))
-
-      (and child (intent/done? child))
-      (update world :plan/intent dissoc :intent/child)
-
-      (and child (intent/failed? child))
-      (-> world (assoc :player/controls {}) (intent/fail (:intent/reason child)))
-
-      child
-      (stairs/run-child world event)
-
-      ;; on the bank: straight in and on past the entry, jumping only when blocked with the
-      ;; feet on the ground (a seabed step, shore-w4 runs 1 and 6), never afloat (a jump there
-      ;; is a swim-up that keeps the eye in air against a wall), so it sinks as it deepens and
-      ;; the planner's trap takes over
-      ;; afloat and pressed against something: stop pushing and sink (pressing into a bank
-      ;; fires the out-of-liquid impulse, which kept the eye in air for good)
-      (and (:player/in-water? world) (:player/horizontal-collision? world) (not (:player/on-ground? world)))
-      (assoc world :player/controls {:control/sneak? true})
-
-      :else
-      (let [controls (intent/toward world (beyond target water (:player/pos world) wet?) 0.0)]
-        (assoc world :player/controls (assoc controls :control/jump? (boolean (and (:control/jump? controls) (:player/on-ground? world)))))))))
-
-(defmethod plan/done-by :escaped-water? [world _]
+(defmethod plan/done-by :escaped-water?
+  [world _]
   (boolean (some #(= :water (:trap/kind %)) (:world/traps world))))
 
-(defmethod plan/next-intent :wade [world _ _]
+(defmethod plan/next-intent :wade
+  [world _ _]
   ;; already under the water (a landing in the sea): wait, the trap and the escape are a second
   ;; away, and a wade that fails three routes first would end the plan (gym shore-w2 runs 6, 9);
   ;; otherwise a wade needs a way into water it remembers, and with none it waits, as a gather
   ;; with no tree does
-  (cond
-    (:player/eye-in-water? world) {:plan/wait :in-water}
-    (entry world (stairs/feet world)) {:intent/kind :wade}
-    :else {:plan/wait :no-water}))
+  (cond (:player/eye-in-water? world) {:plan/wait :in-water}
+        (entry world (stairs/feet world)) {:intent/kind :wade}
+        :else {:plan/wait :no-water}))

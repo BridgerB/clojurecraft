@@ -45,36 +45,40 @@
    Attributes the bot cannot know yet (:player/pos, :player/entity-id ...) are absent, and so
    are the connection and the name when they are not given: the :start event carries them."
   [{:keys [host port name]}]
-  (cond-> {:bot/phase :handshake
-           :bot/effects []
-           :bot/sequence 0
-           :time/now 0
-           :time/tick 0
-           :player/vel [0.0 0.0 0.0]
-           :player/look [0.0 0.0]
-           :player/on-ground? false
-           :player/horizontal-collision? false
-           :player/jump-ticks 0
-           :player/loaded? false
-           :player/controls {}
-           :player/inventory {}
-           :window/grid {}
-           :player/held-slot 0
-           :world/chunks {}
-           :world/blocks {}
-           :world/entities {}
-           :world/facts (memory/empty-facts)
-           :stats/unknown {}
-           :stats/keep-alives 0
-           :stats/teleports 0
-           :stats/chunks 0}
+  (cond->
+    {:bot/phase :handshake
+     :bot/effects []
+     :bot/sequence 0
+     :time/now 0
+     :time/tick 0
+     :player/vel [0.0 0.0 0.0]
+     :player/look [0.0 0.0]
+     :player/on-ground? false
+     :player/horizontal-collision? false
+     :player/jump-ticks 0
+     :player/loaded? false
+     :player/controls {}
+     :player/inventory {}
+     :window/grid {}
+     :player/held-slot 0
+     :world/chunks {}
+     :world/blocks {}
+     :world/entities {}
+     :world/facts (memory/empty-facts)
+     :stats/unknown {}
+     :stats/keep-alives 0
+     :stats/teleports 0
+     :stats/chunks 0}
     name (assoc :bot/name name :bot/uuid (b/offline-uuid name))
     host (assoc :conn/host host)
     port (assoc :conn/port port)))
 
 ;; ---------------------------------------------------------------- effects
 
-(defn effect "Append one effect map to :bot/effects for the loop to perform." [world e] (update world :bot/effects conj e))
+(defn effect
+  "Append one effect map to :bot/effects for the loop to perform."
+  [world e]
+  (update world :bot/effects conj e))
 
 (defn emit
   "Queue a packet to send; this is the only place the protocol phase advances."
@@ -83,27 +87,46 @@
       (effect {:effect/kind :send :effect/packet pkt})
       (update :bot/phase p/next-state (:packet/name pkt))))
 
-(defn say "Queue a log line; the loop prints it to stderr." [world message] (effect world {:effect/kind :log :effect/message message}))
+(defn say
+  "Queue a log line; the loop prints it to stderr."
+  [world message]
+  (effect world {:effect/kind :log :effect/message message}))
 
 ;; ---------------------------------------------------------------- queries
 
-(defn eye "The player's eye position; :player/pos must be known." [world] (physics/eye (:player/pos world)))
+(defn eye
+  "The player's eye position; :player/pos must be known."
+  [world]
+  (physics/eye (:player/pos world)))
 
 ;; ---------------------------------------------------------------- packets
 
-(defn on-ground-flag "The movement packets' flags byte: 1 when on the ground, else 0." [world] (if (:player/on-ground? world) 1 0))
+(defn on-ground-flag
+  "The movement packets' flags byte: 1 when on the ground, else 0."
+  [world]
+  (if (:player/on-ground? world) 1 0))
 
 (defn send-position
   "Emit move-player-pos-rot with the current pos and look, and remember what was sent."
   [world]
-  (let [[x y z] (:player/pos world) [yaw pitch] (:player/look world)]
+  (let [[x y z] (:player/pos world)
+        [yaw pitch] (:player/look world)]
     (-> world
-        (emit {:packet/name :move-player-pos-rot :x x :y y :z z :yaw yaw :pitch pitch :flags (on-ground-flag world)})
-        (assoc :net/sent-pos (:player/pos world) :net/sent-look (:player/look world) :net/sent-tick (:time/tick world)))))
+        (emit {:packet/name :move-player-pos-rot
+               :x x
+               :y y
+               :z z
+               :yaw yaw
+               :pitch pitch
+               :flags (on-ground-flag world)})
+        (assoc :net/sent-pos (:player/pos world)
+               :net/sent-look (:player/look world)
+               :net/sent-tick (:time/tick world)))))
 
 (defn relative
   "One teleport coordinate: old + new when the flag bit says relative, else new."
-  [flags bit old new] (if (pos? (bit-and flags bit)) (+ old new) new))
+  [flags bit old new]
+  (if (pos? (bit-and flags bit)) (+ old new) new))
 
 (defn apply-teleport
   "The server moved the player: set pos and look (relative per flags), stop, accept the
@@ -122,8 +145,9 @@
         (update :stats/teleports inc)
         (emit {:packet/name :accept-teleportation :teleport-id teleport-id})
         send-position
-        (cond-> (not loaded?) (-> (emit {:packet/name :player-loaded})
-                                  (assoc :player/loaded? true))))))
+        (cond-> (not loaded?)
+                (-> (emit {:packet/name :player-loaded})
+                    (assoc :player/loaded? true))))))
 
 (defn load-chunk
   "A level-chunk packet: the column the reader thread attached, or decoded here from the wire
@@ -134,25 +158,30 @@
         column (:chunk/column (chunk/attach pkt))]
     (if (:chunk/error column)
       (say world (str "bad chunk " key ": " (:chunk/error column)))
-      (-> world (terrain/put-column key column) (update :stats/chunks inc)))))
+      (-> world
+          (terrain/put-column key column)
+          (update :stats/chunks inc)))))
 
 (defn move-entity
   "Shift a tracked entity by a delta in 1/4096 blocks; untracked entities are ignored."
   [world eid dx dy dz]
   (if (get-in world [:world/entities eid])
-    (update-in world [:world/entities eid :entity/pos]
+    (update-in world
+               [:world/entities eid :entity/pos]
                (fn [[x y z]] [(+ x (/ dx 4096.0)) (+ y (/ dy 4096.0)) (+ z (/ dz 4096.0))]))
     world))
 
 (defmulti on-packet
   "Dispatch on [phase packet-name]; the three synthetic packets dispatch on their name alone."
+  {:arglists '([world pkt])}
   (fn [world pkt]
     (let [n (:packet/name pkt)]
       (if (contains? #{:unknown :decode-error :closed} n) n [(:bot/phase world) n]))))
 
 (defmethod on-packet :default [world _] world)
 
-(defmethod on-packet :unknown [world pkt]
+(defmethod on-packet :unknown
+  [world pkt]
   (update-in world [:stats/unknown [(:bot/phase world) (:packet/id pkt)]] (fnil inc 0)))
 
 (defmethod on-packet :decode-error [world pkt] (say world (str "decode error " pkt)))
@@ -161,36 +190,62 @@
 (defmethod on-packet [:login :login-finished] [w _] (emit w {:packet/name :login-acknowledged}))
 (defmethod on-packet [:login :login-disconnect] [w p] (assoc w :bot/disconnected (:reason p)))
 
-(defmethod on-packet [:configuration :select-known-packs] [w _] (emit w {:packet/name :select-known-packs :packs []}))
-(defmethod on-packet [:configuration :keep-alive] [w p]
-  (-> w (emit {:packet/name :keep-alive :id (:id p)}) (update :stats/keep-alives inc)))
+(defmethod on-packet [:configuration :select-known-packs]
+  [w _]
+  (emit w {:packet/name :select-known-packs :packs []}))
+(defmethod on-packet [:configuration :keep-alive]
+  [w p]
+  (-> w
+      (emit {:packet/name :keep-alive :id (:id p)})
+      (update :stats/keep-alives inc)))
 (defmethod on-packet [:configuration :ping] [w p] (emit w {:packet/name :pong :id (:id p)}))
-(defmethod on-packet [:configuration :finish-configuration] [w _] (emit w {:packet/name :finish-configuration}))
-(defmethod on-packet [:configuration :disconnect] [w p]
+(defmethod on-packet [:configuration :finish-configuration]
+  [w _]
+  (emit w {:packet/name :finish-configuration}))
+(defmethod on-packet [:configuration :disconnect]
+  [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
 
-(defmethod on-packet [:play :respawn] [w _]
+(defmethod on-packet [:play :respawn]
+  [w _]
   ;; a new life: fresh menus, no entities, at rest, lungs full; the teleport that follows places it
   (-> w
       inventory/fresh-menus
       (dissoc :player/dead?)
-      (assoc :world/entities {} :player/vel [0.0 0.0 0.0] :player/fall-distance 0.0 :player/air max-air)))
+      (assoc :world/entities {}
+             :player/vel [0.0 0.0 0.0]
+             :player/fall-distance 0.0
+             :player/air max-air)))
 
-(defmethod on-packet [:play :login] [w p]
+(defmethod on-packet [:play :login]
+  [w p]
   (-> w
       inventory/fresh-menus
       (assoc :player/entity-id (:entity-id p))
-      (emit {:packet/name :client-information :locale "en_US" :view-distance 6 :chat-mode 0
-             :chat-colors true :skin-parts 0x7f :main-hand 1 :text-filtering false
-             :server-listing true :particle-status 0})))
-(defmethod on-packet [:play :keep-alive] [w p]
-  (-> w (emit {:packet/name :keep-alive :id (:id p)}) (update :stats/keep-alives inc)))
+      (emit {:packet/name :client-information
+             :locale "en_US"
+             :view-distance 6
+             :chat-mode 0
+             :chat-colors true
+             :skin-parts 0x7f
+             :main-hand 1
+             :text-filtering false
+             :server-listing true
+             :particle-status 0})))
+(defmethod on-packet [:play :keep-alive]
+  [w p]
+  (-> w
+      (emit {:packet/name :keep-alive :id (:id p)})
+      (update :stats/keep-alives inc)))
 (defmethod on-packet [:play :ping] [w p] (emit w {:packet/name :pong :id (:id p)}))
 (defmethod on-packet [:play :player-position] [w p] (apply-teleport w p))
-(defmethod on-packet [:play :chunk-batch-finished] [w _]
+(defmethod on-packet [:play :chunk-batch-finished]
+  [w _]
   (emit w {:packet/name :chunk-batch-received :chunks-per-tick 20.0}))
 (defmethod on-packet [:play :level-chunk-with-light] [w p] (load-chunk w p))
-(defmethod on-packet [:play :forget-level-chunk] [w p] (update w :world/chunks dissoc (terrain/chunk-key (:pos p))))
+(defmethod on-packet [:play :forget-level-chunk]
+  [w p]
+  (update w :world/chunks dissoc (terrain/chunk-key (:pos p))))
 (defmethod on-packet [:play :block-update] [w p] (terrain/set-block w (:pos p) (:state p)))
 (defmethod on-packet [:play :section-blocks-update] [w p] (terrain/section-update w p))
 (defn die
@@ -204,50 +259,85 @@
       (dissoc :plan/intent :plan/last)
       (emit {:packet/name :client-command :action 0})))
 
-(defmethod on-packet [:play :set-health] [w p]
+(defmethod on-packet [:play :set-health]
+  [w p]
   (cond-> (assoc w :player/health (:health p))
     (and (<= (:health p) 0) (not (:player/dead? w))) die))
 
-(defmethod on-packet [:play :container-set-content] [w {:keys [window-id state-id items carried]}]
-  (let [w (cond-> w carried (assoc :window/cursor carried) (nil? carried) (dissoc :window/cursor))]
-    (cond
-      (zero? window-id)
-      (reduce (fn [w [i item]] (inventory/set-window-0-slot w i item)) (assoc w :window/state-id state-id) (map-indexed vector items))
-      (inventory/open? w window-id)
-      (reduce (fn [w [i item]] (inventory/set-open-window-slot w i item))
-              (assoc-in w [:window/open :window/state-id] state-id) (map-indexed vector items))
-      :else w)))
-(defmethod on-packet [:play :container-set-slot] [w {:keys [window-id state-id slot item]}]
-  (cond
-    (zero? window-id) (-> w (assoc :window/state-id state-id) (inventory/set-window-0-slot slot item))
-    (inventory/open? w window-id) (-> w (assoc-in [:window/open :window/state-id] state-id) (inventory/set-open-window-slot slot item))
-    :else w))
-(defmethod on-packet [:play :set-held-slot] [w {:keys [slot]}] (if (<= 0 slot 8) (assoc w :player/held-slot slot) w))
-(defmethod on-packet [:play :set-cursor-item] [w {:keys [item]}]
+(defmethod on-packet [:play :container-set-content]
+  [w {:keys [window-id state-id items carried]}]
+  (let [w (cond-> w
+            carried (assoc :window/cursor carried)
+            (nil? carried) (dissoc :window/cursor))]
+    (cond (zero? window-id)
+          (reduce (fn [w [i item]] (inventory/set-window-0-slot w i item))
+                  (assoc w :window/state-id state-id)
+                  (map-indexed vector items))
+          (inventory/open? w window-id)
+          (reduce (fn [w [i item]] (inventory/set-open-window-slot w i item))
+                  (assoc-in w [:window/open :window/state-id] state-id)
+                  (map-indexed vector items))
+          :else w)))
+(defmethod on-packet [:play :container-set-slot]
+  [w {:keys [window-id state-id slot item]}]
+  (cond (zero? window-id)
+        (-> w
+            (assoc :window/state-id state-id)
+            (inventory/set-window-0-slot slot item))
+        (inventory/open? w window-id)
+        (-> w
+            (assoc-in [:window/open :window/state-id] state-id)
+            (inventory/set-open-window-slot slot item))
+        :else w))
+(defmethod on-packet [:play :set-held-slot]
+  [w {:keys [slot]}]
+  (if (<= 0 slot 8) (assoc w :player/held-slot slot) w))
+(defmethod on-packet [:play :set-cursor-item]
+  [w {:keys [item]}]
   (if item (assoc w :window/cursor item) (dissoc w :window/cursor)))
-(defmethod on-packet [:play :open-screen] [w {:keys [window-id menu-type]}]
+(defmethod on-packet [:play :open-screen]
+  [w {:keys [window-id menu-type]}]
   (assoc w :window/open {:window/id window-id :window/menu-type menu-type :window/slots {}}))
 (defmethod on-packet [:play :container-close] [w _] (dissoc w :window/open))
-(defmethod on-packet [:play :set-player-inventory] [w {:keys [slot item]}] (inventory/set-slot w slot item))
-(defmethod on-packet [:play :add-entity] [w {:keys [entity-id type x y z]}]
+(defmethod on-packet [:play :set-player-inventory]
+  [w {:keys [slot item]}]
+  (inventory/set-slot w slot item))
+(defmethod on-packet [:play :add-entity]
+  [w {:keys [entity-id type x y z]}]
   (if (= type blocks/item-entity-type)
-    (assoc-in w [:world/entities entity-id] {:entity/type type :entity/pos [x y z] :entity/seen-at (:time/now w)})
+    (assoc-in w
+     [:world/entities entity-id]
+     {:entity/type type :entity/pos [x y z] :entity/seen-at (:time/now w)})
     w))
-(defmethod on-packet [:play :move-entity-pos] [w {:keys [entity-id dx dy dz]}] (move-entity w entity-id dx dy dz))
-(defmethod on-packet [:play :move-entity-pos-rot] [w {:keys [entity-id dx dy dz]}] (move-entity w entity-id dx dy dz))
-(defmethod on-packet [:play :entity-position-sync] [w {:keys [entity-id x y z]}]
-  (if (get-in w [:world/entities entity-id]) (assoc-in w [:world/entities entity-id :entity/pos] [x y z]) w))
-(defmethod on-packet [:play :remove-entities] [w {:keys [ids]}] (update w :world/entities #(apply dissoc % ids)))
-(defmethod on-packet [:play :take-item-entity] [w {:keys [collected collector count] :as p}]
+(defmethod on-packet [:play :move-entity-pos]
+  [w {:keys [entity-id dx dy dz]}]
+  (move-entity w entity-id dx dy dz))
+(defmethod on-packet [:play :move-entity-pos-rot]
+  [w {:keys [entity-id dx dy dz]}]
+  (move-entity w entity-id dx dy dz))
+(defmethod on-packet [:play :entity-position-sync]
+  [w {:keys [entity-id x y z]}]
+  (if (get-in w [:world/entities entity-id])
+    (assoc-in w [:world/entities entity-id :entity/pos] [x y z])
+    w))
+(defmethod on-packet [:play :remove-entities]
+  [w {:keys [ids]}]
+  (update w :world/entities #(apply dissoc % ids)))
+(defmethod on-packet [:play :take-item-entity]
+  [w {:keys [collected collector count] :as p}]
   (cond-> (update w :stats/pickups (fnil conj []) p)
     (= collector (:player/entity-id w))
     (memory/remember-answer {:answer/kind :pickup :answer/entity collected :answer/count count})))
-(defmethod on-packet [:play :block-changed-ack] [w p]
+(defmethod on-packet [:play :block-changed-ack]
+  [w p]
   (-> w
       (assoc :stats/last-ack (:sequence p))
       (memory/remember-answer {:answer/kind :ack :answer/sequence (:sequence p)})))
-(defmethod on-packet [:play :start-configuration] [w _] (emit w {:packet/name :configuration-acknowledged}))
-(defmethod on-packet [:play :disconnect] [w p]
+(defmethod on-packet [:play :start-configuration]
+  [w _]
+  (emit w {:packet/name :configuration-acknowledged}))
+(defmethod on-packet [:play :disconnect]
+  [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
 
 ;; ---------------------------------------------------------------- ticks
@@ -263,17 +353,14 @@
 (defn movement-packets
   "pos-rot when something changed, status-only once a second otherwise (vanilla's rule)."
   [world]
-  (cond
-    (or (not= (:player/pos world) (:net/sent-pos world))
-        (not= (:player/look world) (:net/sent-look world)))
-    (send-position world)
-
-    (>= (- (:time/tick world) (or (:net/sent-tick world) 0)) 20)
-    (-> world
-        (emit {:packet/name :move-player-status-only :flags (on-ground-flag world)})
-        (assoc :net/sent-tick (:time/tick world)))
-
-    :else world))
+  (cond (or (not= (:player/pos world) (:net/sent-pos world))
+            (not= (:player/look world) (:net/sent-look world)))
+        (send-position world)
+        (>= (- (:time/tick world) (or (:net/sent-tick world) 0)) 20)
+        (-> world
+            (emit {:packet/name :move-player-status-only :flags (on-ground-flag world)})
+            (assoc :net/sent-tick (:time/tick world)))
+        :else world))
 
 (defn breathe
   "The air estimate after one tick: down one while the eye is in water, up four otherwise,
@@ -281,15 +368,19 @@
    entity metadata; the escape goal keys off time under, never off this reaching zero."
   [world]
   (let [air (:player/air world max-air)]
-    (assoc world :player/air (if (:player/eye-in-water? world)
-                               (max 0 (- air air-lost-per-tick))
-                               (min max-air (+ air air-gained-per-tick))))))
+    (assoc world
+           :player/air
+           (if (:player/eye-in-water? world)
+             (max 0 (- air air-lost-per-tick))
+             (min max-air (+ air air-gained-per-tick))))))
 
 (defn on-tick
   "Advance the clock; when physics-ready?, move the player under :player/controls, breathe,
    and emit the movement packet vanilla would. A dead player does not move."
   [world {:event/keys [now]}]
-  (let [world (-> world (assoc :time/now now) (update :time/tick inc))]
+  (let [world (-> world
+                  (assoc :time/now now)
+                  (update :time/tick inc))]
     (if (and (physics-ready? world) (not (:player/dead? world)))
       (let [controls (:player/controls world)]
         (-> (physics/step (terrain/solid-fn world) (terrain/fluid-fn world) world controls)
@@ -302,6 +393,7 @@
 
 (defmulti on-event
   "Dispatch on :event/kind; kinds with no method leave the world unchanged."
+  {:arglists '([world event])}
   (fn [_world event] (:event/kind event)))
 
 (defmethod on-event :default [world _] world)
@@ -316,11 +408,15 @@
     port (assoc :conn/port port)
     name (assoc :bot/name name :bot/uuid (b/offline-uuid name))))
 
-(defmethod on-event :start [world event]
+(defmethod on-event :start
+  [world event]
   (let [world (connection world event)]
     (-> world
-        (emit {:packet/name :intention :protocol-version protocol-version
-               :host (:conn/host world) :port (:conn/port world) :next-state 2})
+        (emit {:packet/name :intention
+               :protocol-version protocol-version
+               :host (:conn/host world)
+               :port (:conn/port world)
+               :next-state 2})
         (emit {:packet/name :hello :username (:bot/name world) :uuid (:bot/uuid world)}))))
 
 (defmethod on-event :packet [world {:event/keys [packet]}] (on-packet world packet))
@@ -330,7 +426,8 @@
 (defn step
   "The protocol reducer: (step world event) → world'. Pure; the clock and randomness come in
    on the event."
-  [world event] (on-event world event))
+  [world event]
+  (on-event world event))
 
 (defn compose
   "Several reducers with the step signature into one, applied left to right."

@@ -41,7 +41,7 @@ related:
 ## The liquid branch
 In order, as vanilla: a jump on the ground is not a jump in a liquid; `:control/jump?` adds `swim-up` (0.04) to vy and `:control/sneak?` takes `swim-down` (0.04); input acceleration is `liquid-acceleration` (0.02); the sweep moves the box; then `vy = vy × inertia − gravity` with `water-inertia` 0.8 / `water-gravity` 0.005 (a sixteenth of land gravity, 1.13+) or `lava-inertia` 0.5 / `lava-gravity` 0.02; horizontal velocity keeps the same inertia. Last, the impulse: if the body collided horizontally this tick and the box moved by `[vx (+ vy 0.6) vz]` is free of solids, vy becomes `out-of-liquid-impulse` (0.3). That is the only real lift out of water; the swim-up alone never clears a one-block bank ([[sib-water-traps]] item 1), and ruststeve's port tested the free space at the world origin for weeks (item 3).
 
-Fall distance: `:player/fall-distance` accumulates the drop while vy is negative out of a liquid, and resets on landing or in a liquid. Vanilla's damage is the fall less `safe-fall` (3), so three blocks are free; nothing consumes it yet.
+Fall distance: `:player/fall-distance` accumulates the drop while vy is negative out of a liquid, and resets on landing or in a liquid. Vanilla's damage is the fall less three blocks, so three are free; nothing consumes the distance yet.
 
 ## What the step writes
 `:player/in-water?`, `:player/in-lava?`, `:player/eye-in-water?` and `:player/fall-distance`, every tick, by the step alone: typecraft computed in-water and never published it, and every consumer was blind ([[sib-water-traps]] item 2). `game/breathe` turns the eye flag into `:player/air` ([[death-and-respawn]]); `plan/trapped-tick` turns it into the trap ([[water-escape]]).

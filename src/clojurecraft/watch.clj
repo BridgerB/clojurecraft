@@ -5,7 +5,7 @@
    never a half-written one. The diff is a pure function; the watch only offers it to a bounded
    channel and moves on, dropping (and counting) when the writer falls behind, so perception never
    interferes with the process. Nothing in game, plan or intent knows this namespace exists."
-  (:require [clojure.core.async :as a]
+  (:require [clojure.core.async :as async]
             [clojure.java.io :as io]))
 
 (def ignored
@@ -19,10 +19,11 @@
 (defn entry-changes
   "{key new-value} for the entries that differ between two maps; a removed key maps to nil."
   [old new]
-  (into {} (for [k (into (set (keys old)) (keys new))
-                 :let [v (get new k)]
-                 :when (not= (get old k) v)]
-             [k v])))
+  (into {}
+        (for [k (into (set (keys old)) (keys new))
+              :let [v (get new k)]
+              :when (not= (get old k) v)]
+          [k v])))
 
 (defn changes
   "What differs between two world values, minus the ignored attributes:
@@ -32,9 +33,11 @@
    noting changed."
   [old new]
   (reduce (fn [acc k]
-            (let [a (get old k) b (get new k)]
+            (let [a (get old k)
+                  b (get new k)]
               (cond (= a b) acc
-                    (and (map? a) (map? b)) (assoc-in acc [:telemetry/patched k] (entry-changes a b))
+                    (and (map? a) (map? b))
+                    (assoc-in acc [:telemetry/patched k] (entry-changes a b))
                     :else (assoc-in acc [:telemetry/changed k] b))))
           {}
           (remove ignored (into (set (keys old)) (keys new)))))
@@ -51,17 +54,17 @@
   "Watch world* and write one EDN line per change to path on a thread of its own. Returns
    {:dropped (fn [] n) :close (fn [])}; :close stops watching and finishes the file."
   [world* path]
-  (let [ch (a/chan buffer-size)
+  (let [ch (async/chan buffer-size)
         dropped (atom 0)
         w (io/writer path)
-        done (a/thread (loop []
-                         (when-let [l (a/<!! ch)]
-                           (binding [*out* w] (prn l))
-                           (recur)))
-                       (.close w))]
-    (add-watch world* ::telemetry
+        done (async/thread (loop []
+                             (when-let [l (async/<!! ch)]
+                               (binding [*out* w] (prn l))
+                               (recur)))
+                           (.close w))]
+    (add-watch world*
+               ::telemetry
                (fn [_ _ old new]
-                 (when-let [l (line old new)]
-                   (when-not (a/offer! ch l) (swap! dropped inc)))))
+                 (when-let [l (line old new)] (when-not (async/offer! ch l) (swap! dropped inc)))))
     {:dropped (fn [] @dropped)
-     :close (fn [] (remove-watch world* ::telemetry) (a/close! ch) (a/<!! done))}))
+     :close (fn [] (remove-watch world* ::telemetry) (async/close! ch) (async/<!! done))}))

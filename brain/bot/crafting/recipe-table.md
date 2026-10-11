@@ -3,13 +3,12 @@ title: Recipe table
 description: What recipes.edn and item-tags.edn hold, how a recipe map is shaped (shaped vs shapeless, ingredient sets), and the lookups recipe.clj builds over them.
 type: reference
 tags: [bot, crafting, recipes, data]
-aliases: [recipes.edn, item-tags.edn, recipe map, by-result, by-id, ingredient set]
+aliases: [recipes.edn, item-tags.edn, recipe map, by-id, ingredient set]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/recipe.clj#def recipes
-  - src/clojurecraft/recipe.clj#def by-result
   - src/clojurecraft/recipe.clj#defn needs
   - resources/clojurecraft/recipes.edn#{:id :stick, :result :stick, :count 4, :kind :shaped
   - test/clojurecraft/recipe_test.clj#the-table-is-vanilla
@@ -25,7 +24,7 @@ related:
 Crafting is data: `recipe/recipes` is the vanilla crafting table read from `resources/clojurecraft/recipes.edn`, every recipe a namespaced map, and every function in `recipe.clj` is pure over it. The table holds only `crafting_shaped` and `crafting_shapeless` recipes; furnace, smithing and stonecutter recipes are not in it.
 
 ## Key files
-- `recipe.clj`, `recipes`, `tags`, `by-result`, `by-id` - the table, the resolved item tags, and two indexes (`group-by :recipe/result`, `:recipe/id` to recipe).
+- `recipe.clj`, `recipes`, `tags`, `by-id` - the table, the resolved item tags, and the index from `:recipe/id` to recipe.
 - `recipe.clj`, `needs` - `{ingredient-set count}` consumed by one craft.
 - `recipes.edn` - generated; see [[datagen]] and [[mc-recipes-in-jar]].
 - `recipe_test.clj`, `the-table-is-vanilla` - pins the count (1030) and the exact `:stick` map.
@@ -37,7 +36,7 @@ Crafting is data: `recipe/recipes` is the vanilla crafting table read from `reso
 - Every ingredient is a **set of item-name keywords**: tags (`#minecraft:planks`) are resolved at datagen time, so `:stick`'s key is the twelve plank species, and `:oak_planks` takes `#{:oak_log :oak_wood :stripped_oak_log :stripped_oak_wood}`.
 
 ## Gotchas
-- Two recipes can make the same result: `:stick` (4 from two planks) and `:stick_from_bamboo_item` (1 from two bamboo). `by-result` returns both; the needs planner chooses, and the bamboo one loses because nothing provides bamboo ([[make-goals]]).
+- Two recipes can make the same result: `:stick` (4 from two planks) and `:stick_from_bamboo_item` (1 from two bamboo). Each becomes its own producer row; the needs planner chooses, and the bamboo one loses because nothing provides bamboo ([[make-goals]]).
 - `item-name` / `item-id` translate between the numeric item ids on the wire and these name keywords via `blocks/items`; inventory maps carry ids, recipes carry names.
 
 ## Limits

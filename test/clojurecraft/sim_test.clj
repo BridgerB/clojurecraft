@@ -1,7 +1,7 @@
 (ns clojurecraft.sim-test
   "The whole bot against the pure server model: handshake → spawn → chunk → find → walk → dig →
    drop → pickup → done, with no socket and no Java process."
-  (:require [clojure.core.async :as a]
+  (:require [clojure.core.async :as async]
             [clojure.spec.alpha]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.test.check :as tc]
@@ -10,20 +10,20 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
-            [clojurecraft.intent :as intent]
-            [clojurecraft.stairs]
-            [clojurecraft.swim]
-            [clojurecraft.path :as path]
-            [clojurecraft.stone]
             [clojurecraft.gym :as gym]
-            [clojurecraft.terrain :as terrain]
+            [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main :as main]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.stairs]
+            [clojurecraft.stone]
+            [clojurecraft.swim]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.wood]
             [clojurecraft.world :as world]))
 
@@ -34,7 +34,11 @@
 (deftest collects-one-log-against-the-model
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
         sim0 (sim/init {:column column :spawn [0.5 64.0 0.5] :keep-alive-every 3000})
-        [w _] (sim/run step (game/init fx/opts) sim0 #(or (plan/done? %) (plan/failed? %)) 60000
+        [w _] (sim/run step
+                       (game/init fx/opts)
+                       sim0
+                       #(or (plan/done? %) (plan/failed? %))
+                       60000
                        {:event/kind :go :go/goals [:wood]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (inventory/logs-held w)))
@@ -47,7 +51,11 @@
 (deftest crafts-a-table-and-sticks-from-a-tree
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
         sim0 (sim/init {:column column :spawn [0.5 64.0 0.5] :keep-alive-every 3000})
-        [w sim] (sim/run step (game/init fx/opts) sim0 #(or (plan/done? %) (plan/failed? %)) 120000
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         sim0
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
                          {:event/kind :go :go/goals [:kit]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (:crafting_table (held w))))
@@ -56,16 +64,25 @@
     (is (nil? (:window/cursor w)))
     (is (= [] (:sim/violations sim)))
     (testing "the bot's inventory is the server's"
-      (is (= (into {} (for [[s it] (:sim/inv sim) :when (<= 9 s 44)] [(inventory/container->player-slot s) it]))
+      (is (= (into {}
+                   (for [[s it] (:sim/inv sim)
+                         :when (<= 9 s 44)]
+                     [(inventory/container->player-slot s) it]))
              (:player/inventory w))))))
 
 (def kit-items #{:oak_log :oak_planks :stick :crafting_table})
 
-(defn kit-run [lag drop]
+(defn kit-run
+  [lag drop]
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})]
-    (sim/run step (game/init fx/opts)
-             (sim/init {:column column :spawn [0.5 64.0 0.5] :lag-ticks lag :drop-clicks (if drop #{drop} #{})})
-             #(or (plan/done? %) (plan/failed? %)) 150000 {:event/kind :go :go/goals [:kit]})))
+    (sim/run
+     step
+     (game/init fx/opts)
+     (sim/init
+      {:column column :spawn [0.5 64.0 0.5] :lag-ticks lag :drop-clicks (if drop #{drop} #{})})
+     #(or (plan/done? %) (plan/failed? %))
+     150000
+     {:event/kind :go :go/goals [:kit]})))
 
 (deftest no-blind-take-under-lag-or-a-dropped-click
   ;; every single lost click (the kit takes 17-23 clicks) at lags of 0, 3 and 10 ticks, plus no
@@ -79,26 +96,41 @@
                         items (set (keys (held w)))
                         ok (and (= [] (:sim/violations sim))
                                 (every? kit-items items)
-                                (or (and (plan/done? w) (= 1 (:crafting_table (held w))) (<= 4 (:stick (held w) 0)))
+                                (or (and (plan/done? w)
+                                         (= 1 (:crafting_table (held w)))
+                                         (<= 4 (:stick (held w) 0)))
                                     (empty? (:window/grid w))))]
                   :when (not ok)]
-              {:lag lag :drop drop :status (:plan/status w) :reason (:plan/reason w) :held (held w)
-               :grid (:window/grid w) :violations (:sim/violations sim)})]
+              {:lag lag
+               :drop drop
+               :status (:plan/status w)
+               :reason (:plan/reason w)
+               :held (held w)
+               :grid (:window/grid w)
+               :violations (:sim/violations sim)})]
     (is (empty? bad) (pr-str (vec bad)))))
 
 (deftest a-lost-click-is-a-stale-window-never-a-blind-take
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
-        [w sim] (sim/run step (game/init fx/opts)
+        [w sim] (sim/run step
+                         (game/init fx/opts)
                          (sim/init {:column column :spawn [0.5 64.0 0.5] :drop-clicks #{1}})
-                         #(or (plan/done? %) (plan/failed? %)) 120000 {:event/kind :go :go/goals [:kit]})]
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         {:event/kind :go :go/goals [:kit]})]
     (is (plan/done? w) "it recovers: the failed craft reclaims the grid and tries again")
     (is (= [] (:sim/violations sim)))
     (is (= 4 (:stick (held w))))))
 
 (deftest places-a-table-and-crafts-a-wooden-pickaxe
-  (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 136 [6 68 0] 252})
-        [w sim] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
-                         #(or (plan/done? %) (plan/failed? %)) 180000 {:event/kind :go :go/goals [:pickaxe]})]
+  (let [column (world/column-bytes
+                {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 136 [6 68 0] 252})
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                         #(or (plan/done? %) (plan/failed? %))
+                         180000
+                         {:event/kind :go :go/goals [:pickaxe]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (:wooden_pickaxe (held w))))
     (is (= 1 (count (:sim/placed sim))) "one table placed in the world")
@@ -107,39 +139,61 @@
     (is (= [] (:sim/violations sim)))
     (is (zero? (:plan/attempts w)))
     (testing "the table is remembered where the server put it"
-      (let [[pos state] (first (:sim/placed sim))]
-        (is (= state (memory/remembered w pos)))))))
+      (let [[pos state] (first (:sim/placed sim))] (is (= state (memory/remembered w pos)))))))
 
 (deftest a-low-canopy-is-cleared-to-reach-the-drop
   ;; the first CI failure: oak leaves one block above the ground between the bot and the trunk;
   ;; the drop lands under them, out of reach of a 1.8-tall player
   (let [canopy (into {} (for [x [3 4] z [0 1]] [[x 65 z] 252]))
-        column (world/column-bytes (merge canopy {[5 64 0] 136 [5 65 0] 136 [5 66 0] 136 [5 67 0] 252}))
-        [w sim] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
-                         #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})]
+        column (world/column-bytes (merge canopy
+                                          {[5 64 0] 136 [5 65 0] 136 [5 66 0] 136 [5 67 0] 252}))
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                         #(or (plan/done? %) (plan/failed? %))
+                         60000
+                         {:event/kind :go :go/goals [:wood]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (inventory/logs-held w)))
     (is (contains? (:sim/broken sim) [3 65 0]) "it broke the leaf in its way")
     (is (zero? (:plan/attempts w)) "no failed attempts")))
 
 (deftest a-stale-click-gets-the-full-window
-  (let [sim (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]
+  (let [sim (-> (sim/init {:column (world/column-bytes {})
+                           :spawn [0.5 64.0 0.5]
                            :inventory {10 {:item (recipe/item-id :oak_planks) :count 3}}})
                 (assoc :sim/phase :play :sim/window {:id 1 :grid {} :state-id 4})
-                (sim/step {:sim/kind :packet :sim/packet {:packet/name :container-click :window-id 1 :state-id 2
-                                                          :slot 11 :button 0 :mode 0 :changed [] :cursor nil}}))
+                (sim/step {:sim/kind :packet
+                           :sim/packet {:packet/name :container-click
+                                        :window-id 1
+                                        :state-id 2
+                                        :slot 11
+                                        :button 0
+                                        :mode 0
+                                        :changed []
+                                        :cursor nil}}))
         [reply] (:sim/out sim)]
-    (is (= :container-set-content (:packet/name reply)) "a stale state id is answered with the whole window")
+    (is (= :container-set-content (:packet/name reply))
+        "a stale state id is answered with the whole window")
     (is (= 5 (:state-id reply)))
-    (is (= {:item (recipe/item-id :oak_planks) :count 3} (:sim/cursor sim)) "and the click was applied")))
+    (is (= {:item (recipe/item-id :oak_planks) :count 3} (:sim/cursor sim))
+        "and the click was applied")))
 
 (deftest a-pickaxe-from-held-planks-sticks-and-a-table
   ;; issue #2's end state: the table item and the ingredients already held, on bare ground
-  (let [planks (recipe/item-id :oak_planks) stick (recipe/item-id :stick) table (recipe/item-id :crafting_table)
-        [w sim] (sim/run step (game/init fx/opts)
-                         (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]
-                                    :inventory {36 {:item planks :count 4} 37 {:item stick :count 2} 38 {:item table :count 1}}})
-                         #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:pickaxe]})]
+  (let [planks (recipe/item-id :oak_planks)
+        stick (recipe/item-id :stick)
+        table (recipe/item-id :crafting_table)
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes {})
+                                    :spawn [0.5 64.0 0.5]
+                                    :inventory {36 {:item planks :count 4}
+                                                37 {:item stick :count 2}
+                                                38 {:item table :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         60000
+                         {:event/kind :go :go/goals [:pickaxe]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (:wooden_pickaxe (held w))))
     (is (< (:time/now w) 60000) "under 60 simulated seconds")
@@ -149,17 +203,31 @@
 (deftest the-sim-flags-a-click-into-window-0-while-a-container-is-open
   (let [sim (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
                 (assoc :sim/phase :play :sim/window {:id 1 :grid {} :state-id 1})
-                (sim/step {:sim/kind :packet :sim/packet {:packet/name :container-click :window-id 0 :state-id 1
-                                                          :slot 36 :button 0 :mode 0 :changed [] :cursor nil}}))]
+                (sim/step {:sim/kind :packet
+                           :sim/packet {:packet/name :container-click
+                                        :window-id 0
+                                        :state-id 1
+                                        :slot 36
+                                        :button 0
+                                        :mode 0
+                                        :changed []
+                                        :cursor nil}}))]
     (is (= [[:click-inventory-while-open 0]] (:sim/violations sim)))
     (is (= [] (:sim/out sim)) "vanilla ignores it: no answer")))
 
 (deftest an-early-finish-does-not-break-the-block
-  (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] 1}) :spawn [0.5 64.0 0.5]}) :sim/phase :play :sim/now 1000)
-        sim (-> sim0
-                (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
-                (sim/step {:sim/kind :tick :sim/now 2000})
-                (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))]
+  (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] 1}) :spawn [0.5 64.0 0.5]})
+                    :sim/phase :play
+                    :sim/now 1000)
+        sim
+        (-> sim0
+            (sim/step {:sim/kind :packet
+                       :sim/packet
+                       {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
+            (sim/step {:sim/kind :tick :sim/now 2000})
+            (sim/step {:sim/kind :packet
+                       :sim/packet
+                       {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))]
     (is (empty? (:sim/broken sim)))
     (is (= [:block-update :block-changed-ack] (mapv :packet/name (:sim/out sim)))
         "the real server restores the client's view of the block, then acks")
@@ -178,18 +246,25 @@
   (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] id})
                                :spawn [0.5 64.0 0.5]
                                :inventory (if item {36 {:item item :count 1}} {})})
-                    :sim/phase :play :sim/now 1000 :sim/player-pos [0.5 64.0 0.5])]
+                    :sim/phase :play
+                    :sim/now 1000
+                    :sim/player-pos [0.5 64.0 0.5])]
     (-> sim0
         (sim/step {:sim/kind :packet :sim/packet {:packet/name :set-carried-item :slot 0}})
-        (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
+        (sim/step {:sim/kind :packet
+                   :sim/packet
+                   {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
         (sim/step {:sim/kind :tick :sim/now (+ 1000 wait-ms)})
-        (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))))
+        (sim/step {:sim/kind :packet
+                   :sim/packet
+                   {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))))
 
 (deftest stone-by-hand-breaks-and-drops-cobblestone
   ;; the game's tags: stone needs no tier, so a hand harvests it, in 2300 ms
   (let [sim (dig-on-model stone-id nil 2300)]
     (is (contains? (:sim/broken sim) [1 64 0]))
-    (is (= {:item (get blocks/items :cobblestone) :count 1} (:item (first (vals (:sim/items sim))))) "cobblestone, not stone")))
+    (is (= {:item (get blocks/items :cobblestone) :count 1} (:item (first (vals (:sim/items sim)))))
+        "cobblestone, not stone")))
 
 (deftest stone-with-a-wooden-pickaxe-breaks-sooner-and-wears-the-pickaxe
   ;; with the pickaxe held the block's time is 1150 ms, and the server breaks at 70% of it,
@@ -206,17 +281,26 @@
     (is (empty? (:sim/items sim)) "the wrong tier: no drop")))
 
 (deftest a-worn-out-tool-leaves-its-slot
-  (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] stone-id}) :spawn [0.5 64.0 0.5]
+  (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] stone-id})
+                               :spawn [0.5 64.0 0.5]
                                :inventory {36 {:item wooden-pickaxe :count 1 :durability 1}}})
-                    :sim/phase :play :sim/now 1000 :sim/player-pos [0.5 64.0 0.5])
-        sim (-> sim0
-                (sim/step {:sim/kind :packet :sim/packet {:packet/name :set-carried-item :slot 0}})
-                (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
-                (sim/step {:sim/kind :tick :sim/now 2200})
-                (sim/step {:sim/kind :packet :sim/packet {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))]
+                    :sim/phase :play
+                    :sim/now 1000
+                    :sim/player-pos [0.5 64.0 0.5])
+        sim
+        (-> sim0
+            (sim/step {:sim/kind :packet :sim/packet {:packet/name :set-carried-item :slot 0}})
+            (sim/step {:sim/kind :packet
+                       :sim/packet
+                       {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
+            (sim/step {:sim/kind :tick :sim/now 2200})
+            (sim/step {:sim/kind :packet
+                       :sim/packet
+                       {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))]
     (is (contains? (:sim/broken sim) [1 64 0]))
     (is (nil? (get-in sim [:sim/inv 36])) "the last use broke it")
-    (is (some #(and (= :container-set-slot (:packet/name %)) (= 36 (:slot %)) (nil? (:item %))) (:sim/out sim))
+    (is (some #(and (= :container-set-slot (:packet/name %)) (= 36 (:slot %)) (nil? (:item %)))
+              (:sim/out sim))
         "and the client is told the slot is empty")))
 
 (deftest every-packet-the-bot-sends-fits-the-table
@@ -224,13 +308,20 @@
   ;; pickaxe run (handshake, digs, clicks, placement, a table window): every packet it sends has
   ;; every field packet/specs lists, each in its wire range, or the writer could not encode it.
   (let [bad (atom [])
-        checked (fn [w e] (let [w (step w e)]
-                            (doseq [p (sim/sends w) :when (not (clojure.spec.alpha/valid? :clojurecraft.spec/packet p))]
-                              (swap! bad conj p))
-                            w))
-        column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 136 [6 68 0] 252})
-        [w _] (sim/run checked (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
-                       #(or (plan/done? %) (plan/failed? %)) 200000 {:event/kind :go :go/goals [:pickaxe]})]
+        checked (fn [w e]
+                  (let [w (step w e)]
+                    (doseq [p (sim/sends w)
+                            :when (not (clojure.spec.alpha/valid? :clojurecraft.spec/packet p))]
+                      (swap! bad conj p))
+                    w))
+        column (world/column-bytes
+                {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 136 [6 68 0] 252})
+        [w _] (sim/run checked
+                       (game/init fx/opts)
+                       (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                       #(or (plan/done? %) (plan/failed? %))
+                       200000
+                       {:event/kind :go :go/goals [:pickaxe]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= [] @bad))))
 
@@ -247,8 +338,12 @@
    two below its top, with air under it. A bank under a low canopy is the ledge a live run once
    failed on; a branch and a bank above the feet are what the fleet found at 21280,18720 (a 2-high
    bank puts the drop at the top of the pickup box)."
-  (gen/let [x (gen/choose 3 13) z (gen/choose 3 13) h (gen/choose 3 6) id (gen/elements log-species)
-            mound (gen/elements [0 0 1 2]) canopy? gen/boolean
+  (gen/let [x (gen/choose 3 13)
+            z (gen/choose 3 13)
+            h (gen/choose 3 6)
+            id (gen/elements log-species)
+            mound (gen/elements [0 0 1 2])
+            canopy? gen/boolean
             branch (gen/elements [nil [1 0] [-1 0] [0 1] [0 -1]])]
     {:x x :z z :h h :id id :mound mound :canopy? canopy? :branch (when (>= h 4) branch)}))
 
@@ -259,11 +354,21 @@
   [{:keys [x z h id mound canopy? branch]}]
   (let [base (+ 64 mound)
         [bx bz] (when branch [(+ x (first branch)) (+ z (second branch))])]
-    (merge (into {} (for [mx (range (dec x) (+ x 2)) mz (range (dec z) (+ z 2)) :when (and (<= 0 mx 15) (<= 0 mz 15)) y (range 64 base)] [[mx y mz] stone]))
-           (when canopy? (into {} (for [dx (range -2 3) dz (range -2 3)
-                                        :let [cx (+ x dx) cz (+ z dz) d (+ (abs dx) (abs dz))]
-                                        :when (and (<= 1 d 2) (<= 0 cx 15) (<= 0 cz 15))]
-                                    [[cx (inc base) cz] leaf-id])))
+    (merge (into {}
+                 (for [mx (range (dec x) (+ x 2))
+                       mz (range (dec z) (+ z 2))
+                       :when (and (<= 0 mx 15) (<= 0 mz 15))
+                       y (range 64 base)]
+                   [[mx y mz] stone]))
+           (when canopy?
+             (into {}
+                   (for [dx (range -2 3)
+                         dz (range -2 3)
+                         :let [cx (+ x dx)
+                               cz (+ z dz)
+                               d (+ (abs dx) (abs dz))]
+                         :when (and (<= 1 d 2) (<= 0 cx 15) (<= 0 cz 15))]
+                     [[cx (inc base) cz] leaf-id])))
            (into {} (for [y (range base (+ base h))] [[x y z] id]))
            (when (and branch (<= 0 bx 15) (<= 0 bz 15)) {[bx (+ base h -2) bz] id})
            {[x (+ base h) z] leaf-id})))
@@ -292,39 +397,63 @@
   ;; trees up (two tries a trunk) and waits or fails :no-log rather than looping. Either way the
   ;; sim never sees something a real server would punish, within the gym's own time for the goal. FOREST_TRIALS=n overrides the count, FOREST_SEED=s fixes the seed
   ;; (a fleet shard's), FOREST_OUT=f writes the verdict as EDN.
-  (let [r (tc/quick-check
-           (or (some-> (System/getenv "FOREST_TRIALS") Long/parseLong) 2000)
-           (prop/for-all [trees forest-gen sx (gen/choose 0 1) sz (gen/choose 0 1)]
-                         (let [sim0 (sim/init {:column (world/column-bytes (forest trees)) :spawn [(+ sx 0.5) 64.0 (+ sz 0.5)]})
-                               [w sim] (sim/run step (game/init fx/opts) sim0 #(or (plan/done? %) (plan/failed? %))
-                                                (:gym/timeout-ms (gym/gym "wood")) {:event/kind :go :go/goals [:wood]})]
-                           (and (if (some #(<= (:mound %) 1) trees)
-                                  (and (plan/done? w) (= 1 (inventory/logs-held w)))
-                                  (and (not (plan/done? w)) (= :no-log (or (:plan/reason w) (:plan/waiting w))) (zero? (inventory/logs-held w))))
-                                (empty? (:sim/violations sim)))))
-           :seed (or (some-> (System/getenv "FOREST_SEED") Long/parseLong) (System/currentTimeMillis)))]
-    (when-let [out (System/getenv "FOREST_OUT")]               ; a fleet shard reads its verdict as data
-      (spit out (pr-str {:pass? (boolean (:pass? r)) :num-tests (:num-tests r) :seed (:seed r)
-                         :smallest (get-in r [:shrunk :smallest])})))
+  (let [r (tc/quick-check (or (some-> (System/getenv "FOREST_TRIALS")
+                                      Long/parseLong)
+                              2000)
+                          (prop/for-all
+                           [trees forest-gen sx (gen/choose 0 1) sz (gen/choose 0 1)]
+                           (let [sim0 (sim/init {:column (world/column-bytes (forest trees))
+                                                 :spawn [(+ sx 0.5) 64.0 (+ sz 0.5)]})
+                                 [w sim] (sim/run step
+                                                  (game/init fx/opts)
+                                                  sim0
+                                                  #(or (plan/done? %) (plan/failed? %))
+                                                  (:gym/timeout-ms (gym/gym "wood"))
+                                                  {:event/kind :go :go/goals [:wood]})]
+                             (and (if (some #(<= (:mound %) 1) trees)
+                                    (and (plan/done? w) (= 1 (inventory/logs-held w)))
+                                    (and (not (plan/done? w))
+                                         (= :no-log (or (:plan/reason w) (:plan/waiting w)))
+                                         (zero? (inventory/logs-held w))))
+                                  (empty? (:sim/violations sim)))))
+                          :seed
+                          (or (some-> (System/getenv "FOREST_SEED")
+                                      Long/parseLong)
+                              (System/currentTimeMillis)))]
+    (when-let [out (System/getenv "FOREST_OUT")] ; a fleet shard reads its verdict as data
+      (spit out
+            (pr-str {:pass? (boolean (:pass? r))
+                     :num-tests (:num-tests r)
+                     :seed (:seed r)
+                     :smallest (get-in r [:shrunk :smallest])})))
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed])))))
 
 ;; ---------------------------------------------------------------- intentions as facts
 
 (deftest what-the-bot-was-doing-is-a-query-as-of-any-moment
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
-        [w _] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
-                       #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})
+        [w _] (sim/run step
+                       (game/init fx/opts)
+                       (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                       #(or (plan/done? %) (plan/failed? %))
+                       60000
+                       {:event/kind :go :go/goals [:wood]})
         story (memory/intentions w)
         started (filter #(= :started (:intention/event %)) story)]
     (is (plan/done? w))
-    (testing "every intent that started has a fact for how it ended (done, or abandoned once the goal was met), in order"
+    (testing
+      "every intent that started has a fact for how it ended (done, or abandoned once the goal was met), in order"
       (is (= [:walk :dig :collect] (mapv :intention/kind started)))
       (is (= (mapv :intention/id started) (distinct (map :intention/id story))))
-      (is (every? (fn [{:intention/keys [id]}] (some #(and (= id (:intention/id %)) (#{:done :abandoned} (:intention/event %))) story))
+      (is (every? (fn [{:intention/keys [id]}]
+                    (some #(and (= id (:intention/id %)) (#{:done :abandoned} (:intention/event %)))
+                          story))
                   started)))
     (testing "as of each start, that intent is what the bot was doing; after the last end, nothing"
       (doseq [s started]
-        (is (= [(:intention/id s) :started] ((juxt :intention/id :intention/event) (memory/intention-as-of w (:intention/at s))))))
+        (is (= [(:intention/id s) :started]
+               ((juxt :intention/id :intention/event)
+                (memory/intention-as-of w (:intention/at s))))))
       (is (nil? (memory/intention-as-of w (:time/now w))))
       (is (nil? (memory/intention-as-of w -1)) "before anything started"))))
 
@@ -340,12 +469,17 @@
 
 (deftest the-servers-answers-are-facts
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
-        [w _] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
-                       #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})
+        [w _] (sim/run step
+                       (game/init fx/opts)
+                       (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                       #(or (plan/done? %) (plan/failed? %))
+                       60000
+                       {:event/kind :go :go/goals [:wood]})
         acks (memory/answers w :ack)
         pickups (memory/answers w :pickup)]
     (is (plan/done? w))
-    (is (= [(:stats/last-ack w)] (map :answer/sequence (take-last 1 acks))) "the dig's FINISH was acknowledged")
+    (is (= [(:stats/last-ack w)] (map :answer/sequence (take-last 1 acks)))
+        "the dig's FINISH was acknowledged")
     (is (= 1 (count pickups)))
     (is (= 1 (:answer/count (first pickups))))
     (testing "the pickup came after the dig was acknowledged"
@@ -357,9 +491,14 @@
   ;; bot jumped against them for 11 s, three times over
   (let [ledge (into {} (for [x [3 4 5 6] z [0 1]] [[x 64 z] 1]))
         ceiling (into {} (for [x [1 2 3 4] z [0 1]] [[x 66 z] 252]))
-        column (world/column-bytes (merge ledge ceiling {[5 65 0] 136 [5 66 0] 136 [5 67 0] 136 [5 68 0] 252}))
-        [w sim] (sim/run step (game/init fx/opts) (sim/init {:column column :spawn [0.5 64.0 0.5]})
-                         #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})]
+        column (world/column-bytes
+                (merge ledge ceiling {[5 65 0] 136 [5 66 0] 136 [5 67 0] 136 [5 68 0] 252}))
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column column :spawn [0.5 64.0 0.5]})
+                         #(or (plan/done? %) (plan/failed? %))
+                         60000
+                         {:event/kind :go :go/goals [:wood]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (inventory/logs-held w)))
     (is (some (:sim/broken sim) (keys ceiling)) "it broke a leaf over the ledge")))
@@ -377,8 +516,11 @@
   ;; drop came to rest on the bank, above a 1.8-tall player's pickup box. Reach is not enough: a
   ;; log walk arrives only where the drop will land within pickup height; a trunk it cannot
   ;; reach is given up whole.
-  (let [[w sim] (sim/run step (game/init fx/opts) (sim/init {:column (world/column-bytes bank) :spawn [1.5 64.0 0.5]})
-                         #(or (plan/done? %) (plan/failed? %) (= :no-log (:plan/waiting %))) 60000
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes bank) :spawn [1.5 64.0 0.5]})
+                         #(or (plan/done? %) (plan/failed? %) (= :no-log (:plan/waiting %)))
+                         60000
                          {:event/kind :go :go/goals [:wood]})]
     (is (not-any? (:sim/broken sim) [[2 68 0] [2 69 0]]) "no log dug whose drop it could not take")
     (is (pos? (get-in w [:plan/trunk-failures [2 0]] 0)) "the failure is counted against the trunk")
@@ -386,9 +528,13 @@
 
 (deftest a-trunk-on-a-bank-is-taken-from-the-bank
   (let [platform (into {} (for [y (range 64 68) x [0 1] z [0 1]] [[x y z] 1]))
-        [w _] (sim/run step (game/init fx/opts)
-                       (sim/init {:column (world/column-bytes (merge bank platform)) :spawn [0.5 68.0 0.5]})
-                       #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:wood]})]
+        [w _] (sim/run step
+                       (game/init fx/opts)
+                       (sim/init {:column (world/column-bytes (merge bank platform))
+                                  :spawn [0.5 68.0 0.5]})
+                       #(or (plan/done? %) (plan/failed? %))
+                       60000
+                       {:event/kind :go :go/goals [:wood]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (inventory/logs-held w)))))
 
@@ -397,18 +543,22 @@
    the whole of x 4..6 but for a dry strip at z 15, and the plateau's edge is a two-block wall
    except for a one-block step at z 14: the straight line from the spawn ends in the pond or
    against the wall; the route goes along the strip and up the step."
-  (merge (into {} (for [x (range 9 16) y [64 65] z (range 0 16)] [[x y z] 1]))        ; the plateau
-         (into {} (for [x (range 4 7) y [62 63] z (range 0 15)] [[x y z] 86]))        ; the pond, two deep
-         (into {} (for [x (range 4 7) y [64] z (range 0 15)] [[x y z] 86]))           ; its surface
-         {[8 64 14] 1}                                                                ; the step
+  (merge (into {} (for [x (range 9 16) y [64 65] z (range 0 16)] [[x y z] 1])) ; the plateau
+         (into {} (for [x (range 4 7) y [62 63] z (range 0 15)] [[x y z] 86])) ; the pond, two deep
+         (into {} (for [x (range 4 7) y [64] z (range 0 15)] [[x y z] 86]))    ; its surface
+         {[8 64 14] 1}                                                         ; the step
          {[12 66 2] 136 [12 67 2] 136 [12 68 2] 136 [12 69 2] 252}))                  ; the tree
 
 (deftest a-log-across-a-cliff-and-a-pond-is-reached-by-a-route
   ;; issue #4: a pond between the bot and the trunk, and a two-block ledge, each ended in :stuck
   ;; before the pathfinder; now the walk plans a route and nothing is blacklisted
-  (let [[w sim] (sim/run step (game/init fx/opts)
-                         (sim/init {:column (world/column-bytes cliff-and-pond) :spawn [1.5 64.0 1.5]})
-                         #(or (plan/done? %) (plan/failed? %)) 90000 {:event/kind :go :go/goals [:wood]})]
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes cliff-and-pond)
+                                    :spawn [1.5 64.0 1.5]})
+                         #(or (plan/done? %) (plan/failed? %))
+                         90000
+                         {:event/kind :go :go/goals [:wood]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (inventory/logs-held w)))
     (is (zero? (:plan/attempts w)) "no intent failed")
@@ -425,16 +575,25 @@
   ;; drained onto :out, packets read from :in, :go put on the events channel once loaded.
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
         c (sim/connect (sim/init {:column column :spawn [0.5 64.0 0.5] :keep-alive-every 1000}))
-        events (a/chan 16)
+        events (async/chan 16)
         world* (atom (game/init fx/opts))
         deadline (+ (System/currentTimeMillis) 30000)]
-    (main/apply-event! world* {:event/kind :start :start/host "sim" :start/port 0 :start/name "Clj_test"} (:out c) nil)
+    (main/apply-event! world*
+                       {:event/kind :start :start/host "sim" :start/port 0 :start/name "Clj_test"}
+                       (:out c)
+                       nil)
     (main/go-when-loaded! world* events {:event/kind :go :go/goals [:wood]})
-    (let [w (main/run-loop c events world* #(or (plan/done? %) (plan/failed? %) (> (System/currentTimeMillis) deadline)) nil)]
+    (let [w (main/run-loop
+             c
+             events
+             world*
+             #(or (plan/done? %) (plan/failed? %) (> (System/currentTimeMillis) deadline))
+             nil)]
       ((:close! c))
       (is (plan/done? w) (pr-str (plan/summary w)))
       (is (= 1 (inventory/logs-held w)))
-      (is (pos? (:stats/keep-alives w)) "the model's keep-alives arrived through the channel and were answered"))))
+      (is (pos? (:stats/keep-alives w))
+          "the model's keep-alives arrived through the channel and were answered"))))
 
 ;; ---------------------------------------------------------------- stairs down, on the model
 
@@ -443,19 +602,25 @@
    feet at feet-y, with the item in hotbar slot 0, until it ends or max-ms. Returns [world sim]."
   [blocks spawn-y item to-y max-ms]
   (let [column (world/column-bytes blocks)
-        step (fn [w e]
-               (let [w (game/step w e)
-                     i (:plan/intent w)]
-                 (cond
-                   (and (= :go (:event/kind e)))
-                   (assoc w :plan/intent {:intent/kind :stairs-down :intent/to-y to-y :intent/status :active})
-                   (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
-                   (intent/run w i e)
-                   :else w)))
-        sim0 (sim/init {:column column :spawn [8.5 (double spawn-y) 8.5]
+        step
+        (fn [w e]
+          (let [w (game/step w e)
+                i (:plan/intent w)]
+            (cond (= :go (:event/kind e))
+                  (assoc w
+                         :plan/intent
+                         {:intent/kind :stairs-down :intent/to-y to-y :intent/status :active})
+                  (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
+                  (intent/run w i e)
+                  :else w)))
+        sim0 (sim/init {:column column
+                        :spawn [8.5 (double spawn-y) 8.5]
                         :inventory (if item {36 {:item item :count 1}} {})})]
-    (sim/run step (game/init fx/opts) sim0
-             #(contains? #{:done :failed} (:intent/status (:plan/intent %))) max-ms)))
+    (sim/run step
+             (game/init fx/opts)
+             sim0
+             #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
+             max-ms)))
 
 (def deep-stone
   "Stone from y 64 up to y 75 everywhere: a hill to descend into."
@@ -463,7 +628,9 @@
 
 (deftest a-stone-hill-is-descended-five-stairs-with-a-pickaxe
   (let [[w sim] (stairs-run deep-stone 76 (get blocks/items :wooden_pickaxe) 71 120000)]
-    (is (= :done (:intent/status (:plan/intent w))) (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
     (is (<= (second (:player/pos w)) 71.5) "the feet are five stairs down")
     (is (every? #(not= [8 75 8] %) (:sim/broken sim)) "the block under the start was never dug")
     (is (empty? (:sim/violations sim)))))
@@ -473,13 +640,16 @@
   (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
         blocks (assoc deep-stone [10 74 8] lava [10 73 8] lava)
         [w sim] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 74 60000)]
-    (is (= :done (:intent/status (:plan/intent w))) (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
     (is (not= [1 0] (:intent/dir (:plan/intent w))) "it turned away from +x")
     (is (not-any? #(= 10 (first %)) (:sim/broken sim)) "nothing was dug toward the lava")))
 
 (deftest a-water-floor-ahead-refuses-the-stair
   (let [water 86
-        blocks (-> deep-stone (assoc [9 74 8] water))                       ; the first stair's new feet on +x would rest on water
+        blocks (-> deep-stone
+                   (assoc [9 74 8] water)) ; the first stair's new feet on +x would rest on water
         [w _] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 74 60000)]
     (is (= :done (:intent/status (:plan/intent w))))
     (is (not= [1 0] (:intent/dir (:plan/intent w))) "turned")))
@@ -489,9 +659,11 @@
   ;; :needs-tool (a wooden pickaxe drops nothing from it), and the stair failed with it, three
   ;; times in a second. An undroppable cell is a refusal like lava: turn
   (let [iron-ore (first (blocks/states-where (fn [[n]] (= n :iron_ore))))
-        blocks (assoc deep-stone [9 75 8] iron-ore)                              ; the first stair's head cell on +x
+        blocks (assoc deep-stone [9 75 8] iron-ore) ; the first stair's head cell on +x
         [w sim] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 74 60000)]
-    (is (= :done (:intent/status (:plan/intent w))) (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
     (is (not= [1 0] (:intent/dir (:plan/intent w))) "it turned away from the ore")
     (is (not (contains? (:sim/broken sim) [9 75 8])) "the ore was never dug")))
 
@@ -508,16 +680,21 @@
 (def forest-over-stone
   "A tree beside the spawn and stone from y 60 to 63 under a dirt floor at 64, with one face of
    stone exposed in a pit at x 12: the cobblestone goal either walks to the pit or cuts stairs."
-  (merge (into {} (for [x (range 16) y (range 60 64) z (range 16)] [[x y z] 1]))        ; stone
-         (into {} (for [x (range 16) z (range 16)] [[x 64 z] 10]))                         ; dirt on top (10 = dirt)
-         {[12 64 8] 0 [12 63 8] 0}                                                        ; a pit exposing stone at [12 62 8] and its walls
+  (merge (into {} (for [x (range 16) y (range 60 64) z (range 16)] [[x y z] 1])) ; stone
+         (into {} (for [x (range 16) z (range 16)] [[x 64 z] 10])) ; dirt on top (10 = dirt)
+         {[12 64 8] 0 [12 63 8] 0} ; a pit exposing stone at [12 62 8] and its walls
          {[3 65 2] 136 [3 66 2] 136 [3 67 2] 136 [3 68 2] 252}))                         ; a tree
 
 (deftest three-cobblestone-with-a-wooden-pickaxe-and-it-is-kept
-  (let [[w sim] (sim/run step (game/init fx/opts)
-                         (sim/init {:column (world/column-bytes forest-over-stone) :spawn [8.5 65.0 8.5]
-                                    :inventory {36 {:item (get blocks/items :wooden_pickaxe) :count 1}}})
-                         #(or (plan/done? %) (plan/failed? %)) 240000 {:event/kind :go :go/goals [:cobblestone]})]
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes forest-over-stone)
+                                    :spawn [8.5 65.0 8.5]
+                                    :inventory {36 {:item (get blocks/items :wooden_pickaxe)
+                                                    :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         240000
+                         {:event/kind :go :go/goals [:cobblestone]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (>= (get (held w) :cobblestone 0) 3))
     (is (= 1 (get (held w) :wooden_pickaxe 0)) "the pickaxe is still held")
@@ -528,11 +705,15 @@
   ;; what must never happen is a hand dig of stone, which drops cobblestone at 2300 ms a block
   ;; but would cost a race its tool chain. The run ends when a pickaxe is in hand, or the plan
   ;; gives up (:no-log once the one tree is spent)
-  (let [[w sim] (sim/run step (game/init fx/opts)
-                         (sim/init {:column (world/column-bytes forest-over-stone) :spawn [8.5 65.0 8.5]})
-                         #(or (plan/done? %) (plan/failed? %) (pos? (get (held %) :wooden_pickaxe 0))) 120000
-                         {:event/kind :go :go/goals [:cobblestone]})]
-    (is (not-any? #(= 1 (sim/block-at (assoc sim :sim/broken #{}) %)) (:sim/broken sim)) "no stone was dug by hand")
+  (let [[w sim] (sim/run
+                 step
+                 (game/init fx/opts)
+                 (sim/init {:column (world/column-bytes forest-over-stone) :spawn [8.5 65.0 8.5]})
+                 #(or (plan/done? %) (plan/failed? %) (pos? (get (held %) :wooden_pickaxe 0)))
+                 120000
+                 {:event/kind :go :go/goals [:cobblestone]})]
+    (is (not-any? #(= 1 (sim/block-at (assoc sim :sim/broken #{}) %)) (:sim/broken sim))
+        "no stone was dug by hand")
     (is (or (pos? (get (held w) :wooden_pickaxe 0)) (plan/failed? w)) (pr-str (plan/summary w)))))
 
 ;; ---------------------------------------------------------------- death and respawn (issue #5)
@@ -545,10 +726,14 @@
 (deftest held-under-water-the-bot-drowns-and-respawns-with-no-intent
   ;; issue #5: before this the bot could not tell it was in water, set-health only recorded a
   ;; number, and nothing handled death; now the model drowns it and it asks to respawn
-  (let [[w sim] (sim/run step (game/init fx/opts)
-                         (sim/init {:column (world/column-bytes well) :spawn [0.5 64.0 0.5] :respawn [2.5 64.0 0.5]})
-                         #(and (pos? (:stats/deaths % 0)) (not (:player/dead? %)) (:player/on-ground? %))
-                         40000 {:event/kind :go :go/goals []})]
+  (let [[w sim] (sim/run
+                 step
+                 (game/init fx/opts)
+                 (sim/init
+                  {:column (world/column-bytes well) :spawn [0.5 64.0 0.5] :respawn [2.5 64.0 0.5]})
+                 #(and (pos? (:stats/deaths % 0)) (not (:player/dead? %)) (:player/on-ground? %))
+                 40000
+                 {:event/kind :go :go/goals []})]
     (is (= 1 (:stats/deaths w)) "died once")
     (is (not (:player/dead? w)) "and was respawned")
     (is (nil? (:plan/intent w)))
@@ -567,10 +752,15 @@
    [world sim lowest-air]."
   [blocks spawn max-ms & [opts]]
   (let [low (atom game/max-air)
-        watched (fn [w e] (let [w (step w e)] (swap! low min (:player/air w game/max-air)) w))
-        [w sim] (sim/run watched (game/init fx/opts)
+        watched (fn [w e]
+                  (let [w (step w e)]
+                    (swap! low min (:player/air w game/max-air))
+                    w))
+        [w sim] (sim/run watched
+                         (game/init fx/opts)
                          (sim/init (merge {:column (world/column-bytes blocks) :spawn spawn} opts))
-                         #(or (seq (:world/traps %)) (plan/failed? %) (pos? (:stats/deaths % 0))) max-ms
+                         #(or (seq (:world/traps %)) (plan/failed? %) (pos? (:stats/deaths % 0)))
+                         max-ms
                          {:event/kind :go :go/goals [:wood]})]
     [w sim @low]))
 
@@ -617,7 +807,9 @@
 (deftest a-capped-well-is-dug-out-through-its-cap-with-the-pickaxe
   ;; the eyes-in-water and off-ground penalties make the cap 25x slower than on land; without
   ;; them the siblings' capped-cave escape "dug" its cap forever
-  (let [[w sim _] (escape-run capped-well [0.5 60.0 0.5] 90000
+  (let [[w sim _] (escape-run capped-well
+                              [0.5 60.0 0.5]
+                              90000
                               {:inventory {36 {:item wooden-pickaxe :count 1 :durability 1}}})]
     (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
@@ -634,14 +826,18 @@
 (deftest the-shore-goal-wades-in-and-comes-out
   ;; the :shore target: a wade into the nearest remembered pool until the eye is under, the
   ;; escape it provokes, then done, with RESULT saying :escaped
-  (let [[w sim] (sim/run step (game/init fx/opts)
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
                          (sim/init {:column (world/column-bytes shore) :spawn [2.5 64.0 2.5]})
-                         #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:shore]})]
+                         #(or (plan/done? %) (plan/failed? %))
+                         60000
+                         {:event/kind :go :go/goals [:shore]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
     (is (plan/dry-land? w))
     (is (= [:water] (map :trap/kind (:world/traps w))))
-    (is (= [:wade :swim-out] (map :intention/kind (filter #(= :started (:intention/event %)) (memory/intentions w)))))
+    (is (= [:wade :swim-out]
+           (map :intention/kind (filter #(= :started (:intention/event %)) (memory/intentions w)))))
     (is (true? (:escaped (main/result w "shore" true))))
     (is (main/ok? w "shore"))
     (is (empty? (:sim/violations sim)))))
@@ -657,9 +853,12 @@
 (deftest a-dune-over-a-shelving-beach-is-waded-from-and-escaped
   ;; gym batch shore-w1 (set W, 0/10): from a dune the sea was "more than 5 under the eye", a
   ;; mid-sea pool had no route, and a one-deep shelf never put the eye under
-  (let [[w sim] (sim/run step (game/init fx/opts)
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
                          (sim/init {:column (world/column-bytes beach) :spawn [0.5 69.0 2.5]})
-                         #(or (plan/done? %) (plan/failed? %)) 90000 {:event/kind :go :go/goals [:shore]})]
+                         #(or (plan/done? %) (plan/failed? %))
+                         90000
+                         {:event/kind :go :go/goals [:shore]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
     (is (plan/dry-land? w))

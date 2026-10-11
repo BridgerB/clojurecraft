@@ -67,19 +67,28 @@ dev/clojurecraft/brain.clj    the brain checker (clojure -M:brain)
 ## Commands
 
 ```bash
-nix shell nixpkgs#jdk25 nixpkgs#clojure      # this Mac has neither on PATH
+direnv allow                                  # once per clone: entering the directory then loads the flake's shell (.envrc)
+nix develop                                   # Java 25, Clojure, clj-kondo, clojure-lsp, lefthook, zstd (flake.nix,
+                                              # pinned by flake.lock); entering it installs the git hooks
+nix flake update                              # move every tool to today's nixpkgs; match the :lint and :lsp
+                                              # versions in deps.edn, which CI runs from Maven
+bb tasks                                      # every command below as a Babashka task (bb.edn); bb ci is what CI's unit job runs
 clojure -M:test                               # every test, namespaces and vars in parallel (eftest); -n ns, -v ns/var, -x ns
-./local-server.sh start|stop                  # vanilla 26.1.2 on game 25571 / RCON 25581
+bb local-server start|stop                    # vanilla 26.1.2 on game 25571 / RCON 25581 (bb/clojurecraft/server.clj)
 clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)" --name Clj_wood --until wood \
   | clojure -M:run --port 25571 --name Clj_wood --until wood --events stdin   # land in a forest, then run
 clojure -M:run --port 25571 --until play --hold-ms 20000     # just connect and stay in-world
 clojure -M:run ... --record data/runs/x.edn                   # record every event
 clojure -M:replay data/runs/x.edn                             # replay it with no server
 clojure -M:run ... --telemetry data/runs/t.edn                # one EDN line per change of the world
-clojure -M:fmt fix src test dev                               # format (cljfmt)
+clojure -M:fmt fix|check                                      # format (zprint, settings in .zprint.edn); the pre-commit hook does it for staged files
+clojure -M:lint --lint src dev test                           # lint (clj-kondo, held at zero findings); the pre-commit hook lints staged files
+clojure -M:splint src dev test/clojurecraft                   # idioms (Splint, held at zero; rules off in .splint.edn with reasons); the hook too
+clojure -M:lsp clean-ns                                       # sort and prune ns forms (clojure-lsp, settings in .lsp/config.edn); the hook too
+clojure -M:lsp diagnostics --raw                              # no unused public vars (clojure-lsp); the hook checks staged files, CI the repo
 clojure -M:brain                                              # brain checker (must be zero)
 clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data get entity Clj_wood Inventory
-scripts/datagen.sh                            # regenerate the EDN tables (needs the jar)
+bb datagen                            # regenerate the EDN tables (needs the jar)
 ```
 
 The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI: `test.yml` runs the tests and the brain checker on every push; `gym.yml` runs every goal once on push and N runs of one goal on dispatch, one runner and one pregenerated landing per run, judged by RESULT plus the server's truth commands and reported with a 95% interval (`clojure -M:gym`, `brain/bot/tooling/gym-on-runners.md`). Write code, push, and read the runs: the runners do the compute.
@@ -90,5 +99,5 @@ Vanilla **26.1.2 = protocol 775**, offline mode, Java 25, compression threshold 
 
 ## Rules
 
-- Conventional-commit prefixes. **Never** add AI attribution (`Co-Authored-By`, "Generated with Claude", session links) anywhere. Never push or open a PR without explicit approval.
-- `resources/clojurecraft/*.edn` are generated; regenerate with `scripts/datagen.sh`, don't hand-edit. Two are hand-written: `goals.edn` (the goal table) and `problems.edn` (a problem statement per stage, written before the stage's goal; `problems_test` holds it).
+- Conventional-commit prefixes. **Never** add AI attribution (`Co-Authored-By`, "Generated with Claude", session links) anywhere; the commit-msg hook (`scripts/check-commit-msg`) refuses a message that has any. Never push or open a PR without explicit approval.
+- `resources/clojurecraft/*.edn` are generated; regenerate with `bb datagen`, don't hand-edit. Two are hand-written: `goals.edn` (the goal table) and `problems.edn` (a problem statement per stage, written before the stage's goal; `problems_test` holds it).

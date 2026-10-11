@@ -5,12 +5,12 @@ type: reference
 tags: [game, server, login, uuid]
 aliases: [offline mode uuid, OfflinePlayer, nameUUIDFromBytes, hello uuid]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 26.1.2
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/bytes.clj#The UUID an online-mode=false server assigns: MD5 name-UUID (v3) of OfflinePlayer:<name>.
   - test/clojurecraft/bytes_test.clj#MD5 name-uuid of "OfflinePlayer:Steve"
-  - scripts/server.sh#online-mode=false
+  - bb/clojurecraft/server.clj#["online-mode" false]
 related:
   - "[[game/server/_moc|Server]]"
   - "[[bytes-primitives]]"

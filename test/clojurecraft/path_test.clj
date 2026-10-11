@@ -23,7 +23,6 @@
 (def oak-slab 13332)
 (def oak-stairs 3908)
 (def short-grass 2248)
-(def oak-log 136)
 
 (defn world-of
   "A play world standing at pos over a column built from blocks ({[x y z] id}, x and z 0-15)."
@@ -40,8 +39,12 @@
 (defn one-move-apart?
   "Do a and b differ by exactly one move of `path/moves` (a drop may land further down)?"
   [[ax ay az] [bx by bz]]
-  (let [dx (- bx ax) dz (- bz az) dy (- by ay)]
-    (and (<= (abs dx) 1) (<= (abs dz) 1) (not= [dx dz] [0 0])
+  (let [dx (- bx ax)
+        dz (- bz az)
+        dy (- by ay)]
+    (and (<= (abs dx) 1)
+         (<= (abs dz) 1)
+         (not= [dx dz] [0 0])
          (or (= dy 1) (= dy 0) (<= (- path/max-fall) dy -1)))))
 
 (defn sound-route?
@@ -50,7 +53,8 @@
   [w from {:path/keys [waypoints] :as route}]
   (and (every? #(path/standable? w %) waypoints)
        (every? #(not (#{:water :lava :awkward :unknown} (path/classify w %))) waypoints)
-       (every? (fn [[a b]] (one-move-apart? a b)) (partition 2 1 (cons (:path/from route from) waypoints)))))
+       (every? (fn [[a b]] (one-move-apart? a b))
+               (partition 2 1 (cons (:path/from route from) waypoints)))))
 
 ;; ---------------------------------------------------------------- cells
 
@@ -74,7 +78,8 @@
   (let [w (world-of {} [0.5 64.0 0.5])
         ns (path/neighbors w [5 64 5])]
     (is (= 8 (count ns)))
-    (is (= #{[4 64 5] [6 64 5] [5 64 4] [5 64 6] [4 64 4] [4 64 6] [6 64 4] [6 64 6]} (set (map :node ns))))
+    (is (= #{[4 64 5] [6 64 5] [5 64 4] [5 64 6] [4 64 4] [4 64 6] [6 64 4] [6 64 6]}
+           (set (map :node ns))))
     (is (= #{:walk :diagonal} (set (map :move ns))))))
 
 (deftest a-wall-ahead-is-a-jump-up-and-a-two-high-wall-is-not
@@ -83,7 +88,8 @@
     (is (some #(= [[6 65 5] :jump-up] [(:node %) (:move %)]) ns) "one block up over the step")
     (is (not-any? #(= [6 64 5] (:node %)) ns) "not into the step"))
   (let [w (world-of {[6 64 5] stone [6 65 5] stone} [0.5 64.0 0.5])]
-    (is (not-any? #(= 6 (first (:node %))) (path/neighbors w [5 64 5])) "a two-high wall is a wall")))
+    (is (not-any? #(= 6 (first (:node %))) (path/neighbors w [5 64 5]))
+        "a two-high wall is a wall")))
 
 (deftest an-edge-is-a-drop-to-the-floor-below-within-max-fall
   (let [ground (fill stone (range 0 16) [64 65] (range 0 16))
@@ -91,12 +97,14 @@
         w (world-of (merge ground pit) [0.5 66.0 0.5])
         ns (path/neighbors w [5 66 5])]
     (is (some #(= [[6 64 5] :drop] [(:node %) (:move %)]) ns) "two blocks down onto stone")
-    (is (= (+ path/walk-cost (* 2 path/fall-cost-per-block)) (:cost (first (filter #(= :drop (:move %)) ns))))))
+    (is (= (+ path/walk-cost (* 2 path/fall-cost-per-block))
+           (:cost (first (filter #(= :drop (:move %)) ns))))))
   (testing "too far is refused"
     (let [ground (fill stone (range 0 16) (range 64 69) (range 0 16))
           pit (fill 0 [6 7] (range 64 69) (range 0 16))
           w (world-of (merge ground pit) [0.5 69.0 0.5])]
-      (is (not-any? #(= :drop (:move %)) (path/neighbors w [5 69 5])) "a 5-block fall is never offered"))))
+      (is (not-any? #(= :drop (:move %)) (path/neighbors w [5 69 5]))
+          "a 5-block fall is never offered"))))
 
 (deftest lava-beside-or-under-a-cell-forbids-every-move-into-it
   (let [w (world-of {[7 64 5] lava} [0.5 64.0 0.5])
@@ -105,7 +113,8 @@
     (is (not-any? #(= [6 64 4] (:node %)) ns) "nor the diagonal next to it")
     (is (some #(= [4 64 5] (:node %)) ns) "away from it is fine"))
   (let [w (world-of {[6 63 5] lava [6 64 5] 0} [0.5 64.0 0.5])]
-    (is (not-any? #(= 6 (first (:node %))) (path/neighbors w [5 64 5])) "a drop onto lava is refused")))
+    (is (not-any? #(= 6 (first (:node %))) (path/neighbors w [5 64 5]))
+        "a drop onto lava is refused")))
 
 (deftest water-is-a-wall-never-a-floor
   (let [w (world-of {[6 64 5] water} [0.5 64.0 0.5])]
@@ -162,9 +171,12 @@
 
 (def hill
   "One-block steps up to y 68 at x 4..7 and back down at x 8..11 (ground 64 elsewhere)."
-  (merge (fill stone [4] [64] (range 0 16)) (fill stone [5] [64 65] (range 0 16))
-         (fill stone [6] [64 65 66] (range 0 16)) (fill stone [7] [64 65 66 67] (range 0 16))
-         (fill stone [8] [64 65 66] (range 0 16)) (fill stone [9] [64 65] (range 0 16))
+  (merge (fill stone [4] [64] (range 0 16))
+         (fill stone [5] [64 65] (range 0 16))
+         (fill stone [6] [64 65 66] (range 0 16))
+         (fill stone [7] [64 65 66 67] (range 0 16))
+         (fill stone [8] [64 65 66] (range 0 16))
+         (fill stone [9] [64 65] (range 0 16))
          (fill stone [10] [64] (range 0 16))))
 
 (deftest a-hill-is-climbed-by-jumps-and-descended-by-drops
@@ -233,7 +245,8 @@
             pools (gen/vector (gen/tuple (gen/choose 0 15) (gen/choose 0 15)) 0 4)
             from (gen/tuple (gen/choose 0 15) (gen/choose 0 15))
             to (gen/tuple (gen/choose 0 15) (gen/choose 0 15))]
-    (let [heights (vec (for [row rows] (vec (reductions (fn [h d] (max 64 (min 72 (+ h d)))) base row))))
+    (let [heights (vec (for [row rows]
+                         (vec (reductions (fn [h d] (max 64 (min 72 (+ h d)))) base row))))
           surface (fn [x z] (get-in heights [z x]))
           blocks (into {} (for [x (range 16) z (range 16) y (range 64 (surface x z))] [[x y z] 1]))
           blocks (reduce (fn [b [px pz]] (assoc b [px (dec (surface px pz)) pz] 86)) blocks pools)]
@@ -245,31 +258,32 @@
    reached, in order, and the final feet position."
   [w start waypoints]
   (let [solid? (terrain/solid-fn w)]
-    (reduce (fn [[reached pos vel og] wp]
-              (let [[hit? pos vel og]
-                    (reduce (fn [[_ pos vel og] _]
-                              (let [w (assoc w :player/pos pos :player/vel vel :player/on-ground? og)
-                                    w (physics/step solid? w (intent/follow w wp))
-                                    w (assoc w :player/horizontal-collision? (:player/horizontal-collision? w))]
-                                (if (intent/waypoint-reached? w wp)
-                                  (reduced [true (:player/pos w) (:player/vel w) (:player/on-ground? w)])
-                                  [false (:player/pos w) (:player/vel w) (:player/on-ground? w)])))
-                            [false pos vel og]
-                            (range 80))]
-                (if hit?
-                  [(conj reached wp) pos vel og]
-                  (reduced [reached pos vel og]))))
-            [[] [(+ (first start) 0.5) (double (second start)) (+ (nth start 2) 0.5)] [0.0 0.0 0.0] true]
-            waypoints)))
+    (reduce
+     (fn [[reached pos vel og] wp]
+       (let [[hit? pos vel og]
+             (reduce
+              (fn [[_ pos vel og] _]
+                (let [w (assoc w :player/pos pos :player/vel vel :player/on-ground? og)
+                      w (physics/step solid? w (intent/follow w wp))
+                      w (assoc w :player/horizontal-collision? (:player/horizontal-collision? w))]
+                  (if (intent/waypoint-reached? w wp)
+                    (reduced [true (:player/pos w) (:player/vel w) (:player/on-ground? w)])
+                    [false (:player/pos w) (:player/vel w) (:player/on-ground? w)])))
+              [false pos vel og]
+              (range 80))]
+         (if hit? [(conj reached wp) pos vel og] (reduced [reached pos vel og]))))
+     [[] [(+ (first start) 0.5) (double (second start)) (+ (nth start 2) 0.5)] [0.0 0.0 0.0] true]
+     waypoints)))
 
 (defn settle
   "The feet position after up to 20 ticks of physics with no input from pos: where a bot that
    just reached a waypoint mid-step comes to rest (a drop lands only after the fall)."
   [w pos vel]
   (let [solid? (terrain/solid-fn w)]
-    (:player/pos (reduce (fn [w _] (physics/step solid? w {}))
-                         (assoc w :player/pos pos :player/vel [0.0 (second vel) 0.0] :player/on-ground? false) ; the walk stops pressing forward at arrival
-                         (range 20)))))
+    (:player/pos
+     (reduce (fn [w _] (physics/step solid? w {}))
+             (assoc w :player/pos pos :player/vel [0.0 (second vel) 0.0] :player/on-ground? false) ; the walk stops pressing forward at arrival
+             (range 20)))))
 
 (deftest a-found-route-is-walked-by-the-physics-and-ends-in-the-goal
   ;; issue #4's property: over generated terrain, when plan says :found, driving physics/step
@@ -278,26 +292,28 @@
   ;; start, or the standable cell beside it). Worlds with no :found route only check determinism.
   (let [r (tc/quick-check
            200
-           (prop/for-all [{:keys [blocks surface from to]} terrain-gen]
-                         (let [[fx fz] from [tx tz] to
-                               start [fx (surface fx fz) fz]
-                               goal {:goal/kind :near :goal/pos [tx (surface tx tz) tz] :goal/range 1}
-                               w (world-of blocks [(+ fx 0.5) (double (second start)) (+ fz 0.5)])
-                               route (path/plan w start goal)]
-                           (and (= route (path/plan w start goal))
-                                (sound-route? w start route)
-                                (or (not= :found (:path/status route))
-                                    (let [[reached pos vel] (drive w (:path/from route) (:path/waypoints route))]
-                                      (and (= (count reached) (count (:path/waypoints route)))
-                                           (path/goal-done? goal (path/feet-cell (settle w pos vel))))))))))]
+           (prop/for-all
+            [{:keys [blocks surface from to]} terrain-gen]
+            (let [[fx fz] from
+                  [tx tz] to
+                  start [fx (surface fx fz) fz]
+                  goal {:goal/kind :near :goal/pos [tx (surface tx tz) tz] :goal/range 1}
+                  w (world-of blocks [(+ fx 0.5) (double (second start)) (+ fz 0.5)])
+                  route (path/plan w start goal)]
+              (and (= route (path/plan w start goal))
+                   (sound-route? w start route)
+                   (or (not= :found (:path/status route))
+                       (let [[reached pos vel] (drive w (:path/from route) (:path/waypoints route))]
+                         (and (= (count reached) (count (:path/waypoints route)))
+                              (path/goal-done? goal (path/feet-cell (settle w pos vel))))))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed])))))
 
 (deftest a-start-on-a-block-edge-searches-from-the-cell-the-box-rests-on
   ;; gym landing 21280,18720: the feet at x 21281.0 on the edge of a stone step, flooring into
   ;; the step itself; the standable cell is the one beside it. Before this the walk failed
   ;; :no-path three times in half a second and the plan died
-  (let [hill (merge (fill stone (range 8 16) [64 65] (range 0 16)))          ; a two-high step from x 8
-        w (world-of hill [8.0 64.0 5.5])                                      ; feet on the step's edge
+  (let [hill (fill stone (range 8 16) [64 65] (range 0 16)) ; a two-high step from x 8
+        w (world-of hill [8.0 64.0 5.5]) ; feet on the step's edge
         from (path/feet-cell [8.0 64.0 5.5])]
     (is (= [8 64 5] from) "the coordinates floor into the step")
     (is (not (path/standable? w from)))
@@ -305,6 +321,7 @@
     (let [r (path/plan w from {:goal/kind :block :goal/pos [2 64 5]})]
       (is (= :found (:path/status r)))
       (is (sound-route? w [7 64 5] r))))
-  (let [w (world-of (fill stone (range 0 16) [64 65 66] (range 0 16)) [5.5 64.0 5.5])]   ; buried: nothing near stands
+  (let [w (world-of (fill stone (range 0 16) [64 65 66] (range 0 16)) [5.5 64.0 5.5])] ; buried: nothing near stands
     (is (nil? (path/start-cell w [5 64 5])))
-    (is (= {:path/waypoints [] :path/cost 0.0 :path/status :none} (path/plan w [5 64 5] {:goal/kind :block :goal/pos [2 70 5]})))))
+    (is (= {:path/waypoints [] :path/cost 0.0 :path/status :none}
+           (path/plan w [5 64 5] {:goal/kind :block :goal/pos [2 70 5]})))))

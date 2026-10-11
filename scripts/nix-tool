@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Print the bin directory of one of flake.nix's packages, building it into a .nix/ link first when
+# the link is missing or flake.lock has changed since it was built.
+#
+#   PATH="$(scripts/nix-tool clojure):$PATH"
+#
+# The links are GC roots, so nix-collect-garbage leaves them alone, and a `nix shell` (about 11 s
+# of evaluation a call) is never needed in a hook. flake.lock pins every version.
+set -euo pipefail
+
+name=${1:?usage: nix-tool <flake package>}
+root=$(cd "$(dirname "$0")/.." && pwd)
+link=$root/.nix/$name
+stamp=$root/.nix/$name.lock
+if [ ! -e "$link" ] || ! cmp -s "$root/flake.lock" "$stamp"; then
+  mkdir -p "$root/.nix"
+  nix build --out-link "$link" "$root#$name" >&2
+  cp "$root/flake.lock" "$stamp"
+fi
+echo "$link/bin"

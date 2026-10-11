@@ -10,7 +10,8 @@
    divided by 5 for each penalty in force. The tool decides harvestability, never the penalised
    speed. Every number comes from the generated tables (clojurecraft.blocks); nothing here is
    typed in or read from a clock."
-  (:require [clojurecraft.blocks :as blocks]))
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]))
 
 (def tick-ms 50)                      ; one game tick
 (def harvest-divisor 30)              ; damage divisor when the tool harvests the block
@@ -23,17 +24,14 @@
   [id held]
   (let [needs (blocks/needs-tier id)
         tier (:tier (blocks/tool held))]
-    (or (nil? needs)
-        (and (some? tier) (>= (blocks/tier-rank tier) (blocks/tier-rank needs))))))
+    (or (nil? needs) (and (some? tier) (>= (blocks/tier-rank tier) (blocks/tier-rank needs))))))
 
 (defn speed
   "The breaking speed of held (an item id, or nil) against block id: the tool tier's speed when
    the tool's kind is the one that mines the block, else 1.0."
   [id held]
   (let [{:keys [tier kind]} (blocks/tool held)]
-    (if (and kind (= kind (blocks/tool-of id)))
-      (:speed (blocks/materials tier))
-      1.0)))
+    (if (and kind (= kind (blocks/tool-of id))) (:speed (blocks/materials tier)) 1.0)))
 
 (defn ms
   "Milliseconds from START to the server breaking block id with held in hand, under the
@@ -46,9 +44,7 @@
                 eyes-in-water? (/ penalty)
                 off-ground? (/ penalty))
             damage (/ s h (if (harvest? id held) harvest-divisor no-harvest-divisor))]
-        (if (>= damage 1.0)
-          0
-          (long (* tick-ms (Math/ceil (/ 1.0 damage)))))))))
+        (if (>= damage 1.0) 0 (long (* tick-ms (math/ceil (/ 1.0 damage)))))))))
 
 (defn best-tool
   "The player-inventory slot holding the tool to dig block id with, among {slot {:item id ...}}:

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# The Clojure CLI for scripts and git hooks, with or without Java and Clojure on PATH.
+#
+#   scripts/clj -M:fmt fix src/clojurecraft/plan.clj
+#
+# With `clojure` and `java` on PATH (CI, nix develop) it is just `clojure`. Without them it uses
+# flake.nix's jdk and clojure, built once into .nix/ links (scripts/nix-tool).
+set -euo pipefail
+
+if command -v clojure >/dev/null 2>&1 && command -v java >/dev/null 2>&1; then
+  exec clojure "$@"
+fi
+dir=$(cd "$(dirname "$0")" && pwd)
+PATH="$("$dir/nix-tool" jdk):$("$dir/nix-tool" clojure):$PATH" exec clojure "$@"

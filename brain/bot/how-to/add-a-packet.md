@@ -5,8 +5,8 @@ type: how-to
 tags: [bot, how-to, protocol]
 aliases: [new packet, handle a packet, packet spec]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 60b624e
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/packet.clj#def specs
   - src/clojurecraft/game.clj#defmulti on-packet
@@ -19,7 +19,7 @@ related:
 # Add a packet
 
 ## Steps
-1. Find the name and id in `resources/clojurecraft/packets.edn` (kebab-case of the vanilla name). If the id is missing, regenerate with `scripts/datagen.sh`.
+1. Find the name and id in `resources/clojurecraft/packets.edn` (kebab-case of the vanilla name). If the id is missing, regenerate with `bb datagen`.
 2. Add a row to `packet/specs`: `[state dir name] [[field type] ...]`, field names from the wire, never `:name`.
 3. For a server packet, add `(defmethod game/on-packet [:play :the-name] [world pkt] ...)` in the namespace that owns the concern; use `game/emit` to reply.
 4. For a client packet, `game/emit` a map with `:packet/name` and the fields; the roundtrip property test covers every c2s spec automatically.

@@ -5,11 +5,11 @@ type: reference
 tags: [game, server, properties]
 aliases: [pause-when-empty-seconds=0, server paused, empty server stops ticking]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 26.1.2
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
-  - scripts/server.sh#pause-when-empty-seconds=0
-  - local-server.sh#export PORT=25571 RCON_PORT=25581
+  - bb/clojurecraft/server.clj#["pause-when-empty-seconds" 0]
+  - bb/clojurecraft/server.clj#(def local-ports {:port 25571 :rcon-port 25581})
 related:
   - "[[game/server/_moc|Server]]"
   - "[[local-server]]"

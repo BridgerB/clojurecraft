@@ -17,29 +17,48 @@
             [clojurecraft.swim]
             [clojurecraft.world :as world]))
 
-(defn in-play []
-  (first (fx/fold game/step (game/init fx/opts)
+(defn in-play
+  []
+  (first (fx/fold game/step
+                  (game/init fx/opts)
                   [{:event/kind :start} (fx/packet fx/login-finished)
-                   (fx/packet {:packet/name :finish-configuration}) (fx/packet {:packet/name :login :entity-id 7})])))
+                   (fx/packet {:packet/name :finish-configuration})
+                   (fx/packet {:packet/name :login :entity-id 7})])))
 
-(defn field-gen [t]
-  (cond
-    (and (vector? t) (vector? (first t))) (apply gen/hash-map (mapcat (fn [[k ft]] [k (field-gen ft)]) t))
-    (vector? t) (gen/vector (field-gen (second t)) 0 3)
-    :else (case t
-            :bool gen/boolean :i8 (gen/choose -128 127) :u8 (gen/choose 0 255)
-            :i16 (gen/choose -32768 32767) :u16 (gen/choose 0 65535)
-            :i32 (gen/choose -2147483648 2147483647) :u32 (gen/choose 0 4294967295)
-            :i64 gen/large-integer :f32 (gen/double* {:infinite? false :NaN? false :min -1e6 :max 1e6})
-            :f64 (gen/double* {:infinite? false :NaN? false :min -1e6 :max 1e6})
-            :varint (gen/choose -2147483648 2147483647) :varlong gen/large-integer
-            :string gen/string :uuid (gen/return nil) :position (gen/vector (gen/choose -1000 1000) 3)
-            :bytes gen/bytes :rest gen/bytes
-            :hashed-slot (gen/one-of [(gen/return nil) (gen/hash-map :item (gen/choose 0 2000) :count (gen/choose 1 64))])
-            :slot (gen/one-of [(gen/return nil) (gen/hash-map :item (gen/choose 0 2000) :count (gen/choose 1 64))]))))
+(defn field-gen
+  [t]
+  (cond (and (vector? t) (vector? (first t)))
+        (apply gen/hash-map (mapcat (fn [[k ft]] [k (field-gen ft)]) t))
+        (vector? t) (gen/vector (field-gen (second t)) 0 3)
+        :else
+        (case t
+          :bool gen/boolean
+          :i8 (gen/choose -128 127)
+          :u8 (gen/choose 0 255)
+          :i16 (gen/choose -32768 32767)
+          :u16 (gen/choose 0 65535)
+          :i32 (gen/choose -2147483648 2147483647)
+          :u32 (gen/choose 0 4294967295)
+          :i64 gen/large-integer
+          :f32 (gen/double* {:infinite? false :NaN? false :min -1e6 :max 1e6})
+          :f64 (gen/double* {:infinite? false :NaN? false :min -1e6 :max 1e6})
+          :varint (gen/choose -2147483648 2147483647)
+          :varlong gen/large-integer
+          :string gen/string
+          :uuid (gen/return nil)
+          :position (gen/vector (gen/choose -1000 1000) 3)
+          :bytes gen/bytes
+          :rest gen/bytes
+          :hashed-slot
+          (gen/one-of [(gen/return nil)
+                       (gen/hash-map :item (gen/choose 0 2000) :count (gen/choose 1 64))])
+          :slot
+          (gen/one-of [(gen/return nil)
+                       (gen/hash-map :item (gen/choose 0 2000) :count (gen/choose 1 64))]))))
 
 (def s2c-play-packet
-  (gen/one-of (for [[[state dir pkt-name] fields] p/specs :when (and (= state :play) (= dir :s2c))]
+  (gen/one-of (for [[[state dir pkt-name] fields] p/specs
+                    :when (and (= state :play) (= dir :s2c))]
                 (gen/fmap #(assoc % :packet/name pkt-name)
                           (apply gen/hash-map (mapcat (fn [[k t]] [k (field-gen t)]) fields))))))
 
@@ -47,7 +66,9 @@
 
 (deftest every-keep-alive-is-answered-once
   (check (prop/for-all [id gen/large-integer]
-                       (let [[_ fx] (fx/fold game/step (in-play) [(fx/packet {:packet/name :keep-alive :id id})])]
+                       (let [[_ fx] (fx/fold game/step
+                                             (in-play)
+                                             [(fx/packet {:packet/name :keep-alive :id id})])]
                          (= [{:packet/name :keep-alive :id id}] (fx/packets fx))))))
 
 (deftest step-is-total-over-decodable-play-packets
@@ -71,8 +92,13 @@
   ([id] (standing-by id {}))
   ([id inv]
    (assoc (game/init fx/opts)
-          :bot/phase :play :player/pos [5.5 64.0 5.5] :player/vel [0.0 -0.078 0.0] :player/loaded? true
-          :player/on-ground? true :player/inventory inv :world/chunks {[0 0] (world/column {[7 64 5] id})}
+          :bot/phase :play
+          :player/pos [5.5 64.0 5.5]
+          :player/vel [0.0 -0.078 0.0]
+          :player/loaded? true
+          :player/on-ground? true
+          :player/inventory inv
+          :world/chunks {[0 0] (world/column {[7 64 5] id})}
           :plan/intent {:intent/kind :dig :intent/target [7 64 5] :intent/status :active})))
 
 (defn dig-step
@@ -92,22 +118,23 @@
        {:event/kind :tick :event/now t :event/rand 0.5}))))
 
 (deftest a-dig-never-finishes-before-its-deadline
-  (check (prop/for-all [id (gen/elements [log-id leaves-id])
-                        gaps (gen/vector (gen/choose 1 400) 0 60)]
-                       (let [[_ fx] (fx/fold dig-step (standing-by id) (uneven-ticks gaps))
-                             actions (for [[t p] (fx/sent fx) :when (= :player-action (:packet/name p))] [t (:status p)])
-                             [[t0 s0] [t1 s1] :as all] actions]
-                         (and (= 2 (count all)) (= [0 2] [s0 s1])
-                              (>= (- t1 t0) (intent/finish-delay (intent/dig-time id)))
-                              (>= (- t1 t0) (intent/dig-time id)))))))
+  (check (prop/for-all
+          [id (gen/elements [log-id leaves-id]) gaps (gen/vector (gen/choose 1 400) 0 60)]
+          (let [[_ fx] (fx/fold dig-step (standing-by id) (uneven-ticks gaps))
+                actions
+                (for [[t p] (fx/sent fx) :when (= :player-action (:packet/name p))] [t (:status p)])
+                [[t0 s0] [t1 s1] :as all] actions]
+            (and (= 2 (count all))
+                 (= [0 2] [s0 s1])
+                 (>= (- t1 t0) (intent/finish-delay (intent/dig-time id)))
+                 (>= (- t1 t0) (intent/dig-time id)))))))
 
 (def breakable-states
   "Every state id of a block with a hardness above zero: what a dig may be asked for."
-  (vec (for [[n _ lo _] blocks/table :let [h (blocks/hardness-by-name n)] :when (and h (pos? h))] lo)))
+  (vec
+   (for [[n _ lo _] blocks/table :let [h (blocks/hardness-by-name n)] :when (and h (pos? h))] lo)))
 
-(def holdable-items
-  "Every tool item id, and the hand."
-  (into [nil] (keys blocks/tools)))
+(def holdable-items "Every tool item id, and the hand." (into [nil] (keys blocks/tools)))
 
 (deftest a-dig-with-any-tool-on-any-block-keeps-the-rules
   ;; issue #9: for any breakable block, any held item and any tick sequence, FINISH is never
@@ -115,51 +142,73 @@
   ;; held tool of its own kind reaches the tier (the game drops by tier alone, but the dig
   ;; chooses only tools of the block's kind, so an off-kind tool is refused rather than spent on
   ;; a slow dig); and FINISH's sequence is START's plus one
-  (check (prop/for-all [id (gen/elements breakable-states)
-                        held (gen/elements holdable-items)
-                        gaps (gen/vector (gen/choose 1 400) 0 40)]
-                       (let [inv (if held {3 {:item held :count 1}} {})
-                             tool (second (dig/best-tool id inv {}))             ; the dig's own choice: nil is the hand
-                             ms (or (dig/ms id tool {}) intent/dig-ms)
-                             [w fx] (fx/fold dig-step (standing-by id inv) (uneven-ticks gaps (+ (intent/finish-delay ms) 2000)))
-                             actions (for [[t p] (fx/sent fx) :when (= :player-action (:packet/name p))] [t p])
-                             [[t0 start] [t1 finish]] actions
-                             unreachable? (and (blocks/needs-tier id) (nil? tool) (not (dig/harvest? id nil)))]
-                         (cond
-                           (not (blocks/solid? id)) (and (empty? actions) (= :target-gone (:intent/reason (:plan/intent w))))
-                           unreachable? (and (empty? actions) (= :needs-tool (:intent/reason (:plan/intent w))))
-                           :else (and (= 2 (count actions)) (= 0 (:status start)) (= 2 (:status finish))
-                                      (>= (- t1 t0) (intent/finish-delay ms))
-                                      (= (:sequence finish) (inc (:sequence start)))))))))
+  (check
+   (prop/for-all
+    [id (gen/elements breakable-states) held (gen/elements holdable-items) gaps
+     (gen/vector (gen/choose 1 400) 0 40)]
+    (let [inv (if held {3 {:item held :count 1}} {})
+          tool (second (dig/best-tool id inv {})) ; the dig's own choice: nil is the hand
+          ms (or (dig/ms id tool {}) intent/dig-ms)
+          [w fx] (fx/fold dig-step
+                          (standing-by id inv)
+                          (uneven-ticks gaps (+ (intent/finish-delay ms) 2000)))
+          actions (for [[t p] (fx/sent fx) :when (= :player-action (:packet/name p))] [t p])
+          [[t0 start] [t1 finish]] actions
+          unreachable? (and (blocks/needs-tier id) (nil? tool) (not (dig/harvest? id nil)))]
+      (cond (not (blocks/solid? id))
+            (and (empty? actions) (= :target-gone (:intent/reason (:plan/intent w))))
+            unreachable? (and (empty? actions) (= :needs-tool (:intent/reason (:plan/intent w))))
+            :else
+            (and (= 2 (count actions))
+                 (= 0 (:status start))
+                 (= 2 (:status finish))
+                 (>= (- t1 t0) (intent/finish-delay ms))
+                 (= (:sequence finish) (inc (:sequence start)))))))))
 
 (deftest step-is-total-after-a-death
   ;; issue #5: a set-health of 0 followed by any packets never throws, and the intent that was
   ;; running is gone (a new life plans afresh)
-  (check (prop/for-all [pkts (gen/vector s2c-play-packet 0 20)]
-                       (let [w0 (assoc (in-play) :plan/intent {:intent/kind :walk :intent/target [1 64 1]}
-                                       :plan/last {:intent/kind :walk :intent/target [1 64 1]})
-                             [w fx] (fx/fold game/step w0
-                                             (cons (fx/packet {:packet/name :set-health :health 0.0 :food 20 :saturation 5.0})
-                                                   (map fx/packet pkts)))]
-                         (and (s/valid? :clojurecraft.spec/world w)
-                              (not (contains? w :plan/intent))
-                              (not (contains? w :plan/last))
-                              (some #(= % {:packet/name :client-command :action 0}) (fx/packets fx)))))))
+  (check (prop/for-all
+          [pkts (gen/vector s2c-play-packet 0 20)]
+          (let [w0 (assoc (in-play)
+                          :plan/intent {:intent/kind :walk :intent/target [1 64 1]}
+                          :plan/last {:intent/kind :walk :intent/target [1 64 1]})
+                [w fx] (fx/fold game/step
+                                w0
+                                (cons
+                                 (fx/packet
+                                  {:packet/name :set-health :health 0.0 :food 20 :saturation 5.0})
+                                 (map fx/packet pkts)))]
+            (and (s/valid? :clojurecraft.spec/world w)
+                 (not (contains? w :plan/intent))
+                 (not (contains? w :plan/last))
+                 (some #(= % {:packet/name :client-command :action 0}) (fx/packets fx)))))))
 
 (def pond-column
   "A pond two deep around the player (x 4-6, z 4-6) with a bank all round at y 64."
-  (world/column (into {} (for [x (range 4 7) y [62 63] z (range 4 7)] [[x y z] blocks/water-base]))))
+  (world/column (into {}
+                      (for [x (range 4 7) y [62 63] z (range 4 7)] [[x y z] blocks/water-base]))))
 
 (defn afloat-with
   "Planning for :wood with intent i running, the eye under water for one tick short of a
    trap; physics is not running (not loaded), so what the physics would overwrite stays put."
   [i]
   (assoc (game/init fx/opts)
-         :bot/phase :play :player/pos [5.5 62.0 5.5] :player/vel [0.0 0.0 0.0] :player/look [0.0 0.0]
-         :player/on-ground? false :player/in-water? true :player/eye-in-water? true
+         :bot/phase :play
+         :player/pos [5.5 62.0 5.5]
+         :player/vel [0.0 0.0 0.0]
+         :player/look [0.0 0.0]
+         :player/on-ground? false
+         :player/in-water? true
+         :player/eye-in-water? true
          :world/chunks {[0 0] pond-column}
-         :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/trunk-failures {} :plan/attempts 0
-         :plan/goals #{:wood} :plan/wet-ticks (dec plan/trap-after-ticks)
+         :plan/status :active
+         :plan/since 0
+         :plan/blacklist #{}
+         :plan/trunk-failures {}
+         :plan/attempts 0
+         :plan/goals #{:wood}
+         :plan/wet-ticks (dec plan/trap-after-ticks)
          :plan/intent (assoc i :intent/status :active :intent/id 1 :intent/goal :wood)
          :plan/last {:intent/kind :walk :intent/target (:intent/target i)}
          :player/controls {:control/forward? true :control/look [33.0 1.0]}))
@@ -173,8 +222,11 @@
   ;; issue #5: a running walk or dig yields to :swim-out the tick the trap is called, the old
   ;; intent is abandoned :preempted, and its controls are gone
   (check (prop/for-all [i running-intent]
-                       (let [[w _] (fx/fold plan/step (afloat-with i) [{:event/kind :tick :event/now 1000 :event/rand 0.5}])
-                             abandoned (filter #(= :abandoned (:intention/event %)) (memory/intentions w))]
+                       (let [[w _] (fx/fold plan/step
+                                            (afloat-with i)
+                                            [{:event/kind :tick :event/now 1000 :event/rand 0.5}])
+                             abandoned (filter #(= :abandoned (:intention/event %))
+                                               (memory/intentions w))]
                          (and (= :swim-out (get-in w [:plan/intent :intent/kind]))
                               (= :water (:plan/trap w))
                               (= [(:intent/kind i)] (map :intention/kind abandoned))

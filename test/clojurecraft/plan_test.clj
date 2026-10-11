@@ -1,14 +1,15 @@
 (ns clojurecraft.plan-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [clojurecraft.fixtures :as fx :refer [fold packets sent packet ticks]]
+            [clojurecraft.blocks :as blocks]
+            [clojurecraft.fixtures :as fx :refer [fold packet packets sent ticks]]
             [clojurecraft.game :as game]
-            [clojurecraft.terrain :as terrain]
             [clojurecraft.intent :as intent]
+            [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.spec]
-            [clojurecraft.make]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.wood :as wood]
             [clojurecraft.world :as world]))
 
@@ -36,21 +37,28 @@
     (is (nil? (memory/nearest-log w (game/eye w) 48 #{[3 64 0]})) "blacklist")
     (is (= [3 65 0] (memory/nearest-log (memory/observe w [3 64 0] 0) (game/eye w) 48 #{}))
         "once the bottom is observed as air, the log above is the trunk bottom")
-    (is (= 4 (intent/face-toward (game/eye w) [3 64 0])) "eye is west of the block, so its west face")))
+    (is (= 4 (intent/face-toward (game/eye w) [3 64 0]))
+        "eye is west of the block, so its west face")))
 
 (deftest a-branch-is-not-a-trunk-bottom
   ;; recorded by the gym and the fleet at landing 21280,18720 (wood-a2 run 5, smoke2 run 5): a
   ;; branch log with air under it passed for a trunk bottom, and its drop came to rest on the
   ;; trunk below it, out of reach. A trunk bottom stands on ground, or over its own dug base.
-  (let [col (world/column {[3 64 0] 136 [3 65 0] 136 [3 66 0] 136 [3 67 0] 136 [2 67 0] 136 [3 68 0] 252})
+  (let [col (world/column
+             {[3 64 0] 136 [3 65 0] 136 [3 66 0] 136 [3 67 0] 136 [2 67 0] 136 [3 68 0] 252})
         w (-> (game/init fx/opts)
-              (assoc :bot/phase :play :player/pos [0.5 70.0 0.5] :player/loaded? true :player/on-ground? true)
+              (assoc :bot/phase :play
+                     :player/pos [0.5 70.0 0.5]
+                     :player/loaded? true
+                     :player/on-ground? true)
               (assoc :world/chunks {[0 0] col})
               (memory/remember-column [0 0] col))
         eye (game/eye w)]
-    (is (= [2 67 0] (memory/nearest-log w eye 48 #{} memory/trunk-bottom?)) "the old rule takes the branch")
+    (is (= [2 67 0] (memory/nearest-log w eye 48 #{} memory/trunk-bottom?))
+        "the old rule takes the branch")
     (is (= [3 64 0] (memory/nearest-log w eye 48 #{} wood/standing-trunk?)))
-    (is (= [3 65 0] (memory/nearest-log (memory/observe w [3 64 0] 0) eye 48 #{} wood/standing-trunk?))
+    (is (= [3 65 0]
+           (memory/nearest-log (memory/observe w [3 64 0] 0) eye 48 #{} wood/standing-trunk?))
         "over its own dug base a trunk still stands: the drop falls to where the base was")))
 
 (deftest face-is-the-side-nearest-the-eye
@@ -71,14 +79,15 @@
       (is (<= 500 t-start 2000))
       (is (>= (- t-finish t-start) (+ (* 3000 1.35) 200)))
       (is (= (:sequence finish) (inc (:sequence start)))))
-    (testing "swings every 350 ms while digging"
-      (is (<= 11 (count swings) 14)))
+    (testing "swings every 350 ms while digging" (is (<= 11 (count swings) 14)))
     (testing "the broken block is air locally and in memory"
       (is (= 0 (terrain/block-at w [3 64 0])))
       (is (= 0 (memory/remembered w [3 64 0]))))
     (testing "done once the inventory shows a log"
-      (let [[w2 _] (run w [(packet {:packet/name :set-player-inventory :slot 0 :item {:item 134 :count 1}})
-                           {:event/kind :tick :event/now 8050 :event/rand 0.5}])]
+      (let [[w2 _] (run w
+                        [(packet
+                          {:packet/name :set-player-inventory :slot 0 :item {:item 134 :count 1}})
+                         {:event/kind :tick :event/now 8050 :event/rand 0.5}])]
         (is (plan/done? w2))
         (is (= {} (:player/controls w2)))))))
 
@@ -96,26 +105,53 @@
 
 (deftest a-failed-intent-is-blacklisted-and-retried
   (let [w (world-state [0.5 64.0 0.5])
-        w (assoc w :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0 :time/tick 1300 ; past the walk's timeout
-                 :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/status :active
-                               :intent/started 0 :intent/best-tick 0})
+        w (assoc w
+                 :plan/status :active
+                 :plan/since 0
+                 :plan/blacklist #{}
+                 :plan/attempts 0
+                 :time/tick 1300 ; past the walk's timeout
+                 :plan/intent
+                 {:intent/kind :walk
+                  :intent/target [13 64 0]
+                  :intent/status :active
+                  :intent/started 0
+                  :intent/best-tick 0})
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
-    (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/trunk [3 64 0] :intent/status :active
-            :intent/id 1 :intent/goal :wood} (:plan/intent w))
+    (is (= {:intent/kind :walk
+            :intent/target [3 64 0]
+            :intent/for :log
+            :intent/trunk [3 64 0]
+            :intent/status :active
+            :intent/id 1
+            :intent/goal :wood}
+           (:plan/intent w))
         "re-planned in the same tick toward the next log")
     (is (= #{[13 64 0]} (:plan/blacklist w)))
     (is (= 1 (:plan/attempts w)))))
 
 (deftest a-trunk-that-fails-twice-is-given-up-whole
-  (let [failing {:intent/kind :walk :intent/target [13 65 0] :intent/for :log :intent/trunk [3 64 0]
-                 :intent/status :active :intent/started 0 :intent/best-tick 0}
-        w (assoc (world-state [0.5 64.0 0.5]) :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0
-                 :time/tick 1300 :plan/intent failing)   ; past the walk's timeout: it fails at once
+  (let [failing {:intent/kind :walk
+                 :intent/target [13 65 0]
+                 :intent/for :log
+                 :intent/trunk [3 64 0]
+                 :intent/status :active
+                 :intent/started 0
+                 :intent/best-tick 0}
+        w (assoc (world-state [0.5 64.0 0.5])
+                 :plan/status :active
+                 :plan/since 0
+                 :plan/blacklist #{}
+                 :plan/attempts 0
+                 :time/tick 1300
+                 :plan/intent failing) ; past the walk's timeout: it fails at once
         [w1 _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (= {[3 0] 1} (:plan/trunk-failures w1)))
     (is (= [3 64 0] (:intent/trunk (:plan/intent w1))) "once is chance: the same trunk again")
-    (let [[w2 _] (run (assoc w1 :plan/intent (assoc failing :intent/target [13 66 0])) [{:event/kind :tick :event/now 100 :event/rand 0.5}])]
-      (is (= {[3 0] 2} (:plan/trunk-failures w2)) "counted by column, whichever log of it the chain was at")
+    (let [[w2 _] (run (assoc w1 :plan/intent (assoc failing :intent/target [13 66 0]))
+                      [{:event/kind :tick :event/now 100 :event/rand 0.5}])]
+      (is (= {[3 0] 2} (:plan/trunk-failures w2))
+          "counted by column, whichever log of it the chain was at")
       (is (nil? (:plan/intent w2)) "twice: given up, and there is no other trunk"))))
 
 (deftest digs-the-log-at-feet-height
@@ -127,32 +163,41 @@
     (is (= [3 66 0] (clojurecraft.wood/trunk-target (world-state [0.5 70.0 0.5]) [3 64 0])))))
 
 (deftest a-success-ends-the-failure-streak
-  (let [w (assoc (world-state [0.5 64.0 0.5]) :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 2
-                 :plan/goals #{:wood}
-                 :plan/intent {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/status :active})
+  (let [w (assoc
+           (world-state [0.5 64.0 0.5])
+           :plan/status :active
+           :plan/since 0
+           :plan/blacklist #{}
+           :plan/attempts 2
+           :plan/goals #{:wood}
+           :plan/intent
+           {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/status :active})
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (= 0 (:plan/attempts w)) "the walk succeeded, so two earlier failures no longer count")
     (is (= :dig (get-in w [:plan/intent :intent/kind])))))
 
 (deftest a-go-with-a-landing-waits-until-the-bot-is-there
-  (let [w (assoc (world-state [12.5 64.0 12.5]) :time/now 0)            ; same loaded chunk, 17 blocks away
+  (let [w (assoc (world-state [12.5 64.0 12.5]) :time/now 0) ; same loaded chunk, 17 blocks away
         go-at (assoc go :go/at [0.5 64.0 0.5])
         [w _] (run w [go-at])]
     (is (= :landing (:plan/status w)) "the fixture's :go names a landing")
     (is (= [0.5 64.0 0.5] (:plan/go-at w)))
     (let [[w' _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
-      (is (= :landing (:plan/status w')) "in a loaded chunk but far from the landing: no planning yet")
+      (is (= :landing (:plan/status w'))
+          "in a loaded chunk but far from the landing: no planning yet")
       (is (nil? (:plan/intent w'))))
-    (let [[w' _] (run (assoc w :player/pos [0.5 64.0 0.5]) [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (let [[w' _] (run (assoc w :player/pos [0.5 64.0 0.5])
+                      [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
       (is (= :active (:plan/status w')) "at the landing with the chunk loaded: planning starts"))
-    (let [[w' _] (run (assoc w :player/pos [0.5 64.0 200.5]) [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (let [[w' _] (run (assoc w :player/pos [0.5 64.0 200.5])
+                      [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
       (is (= :landing (:plan/status w')) "far away in an unloaded chunk: still waiting"))
-    (let [[w' _] (run w [{:event/kind :tick :event/now (+ 50 plan/landing-timeout) :event/rand 0.5}])]
+    (let [[w' _] (run w
+                      [{:event/kind :tick :event/now (+ 50 plan/landing-timeout) :event/rand 0.5}])]
       (is (= [:failed :no-landing] [(:plan/status w') (:plan/reason w')]) "never arrived"))))
 
 (deftest a-go-without-a-landing-starts-where-the-bot-stands
-  (let [[w _] (run (world-state [0.5 64.0 0.5]) [go])]
-    (is (= :active (:plan/status w)))))
+  (let [[w _] (run (world-state [0.5 64.0 0.5]) [go])] (is (= :active (:plan/status w)))))
 
 (deftest until-names-come-from-the-goal-table
   (is (= [:wood] (plan/goals-for "wood")))
@@ -162,66 +207,104 @@
 
 (def superseding-table
   "A table where :wood was fixed as :wood-2 and :wood-2 again as :wood-3."
-  [{:goal/id :wood :goal/priority 1 :goal/target? true :goal/provides {:tag/logs 1} :goal/done? :provided?
+  [{:goal/id :wood
+    :goal/priority 1
+    :goal/target? true
+    :goal/provides {:tag/logs 1}
+    :goal/done? :provided?
     :goal/superseded-by :wood-2}
-   {:goal/id :wood-2 :goal/priority 1 :goal/target? true :goal/provides {:tag/logs 1} :goal/done? :provided?
+   {:goal/id :wood-2
+    :goal/priority 1
+    :goal/target? true
+    :goal/provides {:tag/logs 1}
+    :goal/done? :provided?
     :goal/superseded-by :wood-3}
-   {:goal/id :wood-3 :goal/priority 1 :goal/target? true :goal/until "wood" :goal/provides {:tag/logs 1}
+   {:goal/id :wood-3
+    :goal/priority 1
+    :goal/target? true
+    :goal/until "wood"
+    :goal/provides {:tag/logs 1}
     :goal/done? :provided?}])
 
 (deftest a-retired-goal-stays-and-points-at-its-replacement
-  (is (= :wood-3 (plan/current-id superseding-table :wood)) "the chain is followed to the row in force")
+  (is (= :wood-3 (plan/current-id superseding-table :wood))
+      "the chain is followed to the row in force")
   (is (= :wood-3 (plan/current-id superseding-table :wood-3)))
-  (is (= :other (plan/current-id superseding-table :other)) "an id the table does not know is itself")
+  (is (= :other (plan/current-id superseding-table :other))
+      "an id the table does not know is itself")
   (is (= [:wood-3] (map :goal/id (plan/targets-of superseding-table))) "only live rows are chosen")
-  (is (= :a (plan/current-id [{:goal/id :a :goal/superseded-by :b} {:goal/id :b :goal/superseded-by :a}] :a))
+  (is (= :a
+         (plan/current-id [{:goal/id :a :goal/superseded-by :b}
+                           {:goal/id :b :goal/superseded-by :a}]
+                          :a))
       "a cycle ends instead of hanging")
   (testing "a recorded :go naming the old id plans for the replacement"
     (let [[w _] (fold (game/compose game/step (partial plan/step-over superseding-table))
-                      (world-state [0.5 64.0 0.5]) [{:event/kind :go :go/goals [:wood]}])]
+                      (world-state [0.5 64.0 0.5])
+                      [{:event/kind :go :go/goals [:wood]}])]
       (is (= #{:wood-3} (:plan/goals w)) "no redefinition: the table is an argument")))
   (is (true? clojurecraft.spec/goals-valid?) "the real table's replacements all exist"))
 
 (deftest the-leaf-over-a-step-is-a-blocker
   (let [col (world/column {[0 64 1] 1 [0 66 1] 252})
         w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
-    (is (= [0 66 1] (clojurecraft.intent/blocker w [0.5 65.0 3.5])) "a step at the feet, leaves where the jump goes"))
+    (is (= [0 66 1] (clojurecraft.intent/blocker w [0.5 65.0 3.5]))
+        "a step at the feet, leaves where the jump goes"))
   (let [col (world/column {[0 66 1] 252})
         w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
-    (is (nil? (clojurecraft.intent/blocker w [0.5 64.0 3.5])) "no step: a leaf above the head is not in the way")))
+    (is (nil? (clojurecraft.intent/blocker w [0.5 64.0 3.5]))
+        "no step: a leaf above the head is not in the way")))
 
 (deftest a-wall-is-not-a-step
   (let [col (world/column {[0 64 1] 136 [0 65 1] 136 [0 66 1] 252})
         w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
     (is (not (clojurecraft.intent/step? w [0 64 1])) "a trunk is a wall")
-    (is (nil? (clojurecraft.intent/blocker w [0.5 64.0 3.5])) "so the leaf on top of it is not in the way")))
+    (is (nil? (clojurecraft.intent/blocker w [0.5 64.0 3.5]))
+        "so the leaf on top of it is not in the way")))
 
 (deftest a-jump-onto-a-step-needs-headroom-over-the-player-too
   (let [col (world/column {[0 64 1] 1 [0 66 0] 252})
         w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})]
-    (is (= [0 66 0] (clojurecraft.intent/blocker w [0.5 65.0 3.5])) "the leaf over the bot caps the jump")))
+    (is (= [0 66 0] (clojurecraft.intent/blocker w [0.5 65.0 3.5]))
+        "the leaf over the bot caps the jump")))
 
 (defn walking
   "Active plan over goals, mid-walk toward a point out of reach, the walk serving goal."
   [goals goal]
-  (assoc (world-state [0.5 64.0 0.5]) :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0
-         :plan/goals goals :plan/intents 1
-         :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/for :log :intent/status :active
-                       :intent/id 1 :intent/goal goal :intent/started 0 :intent/best-tick 0}))
+  (assoc (world-state [0.5 64.0 0.5])
+         :plan/status :active
+         :plan/since 0
+         :plan/blacklist #{}
+         :plan/attempts 0
+         :plan/goals goals
+         :plan/intents 1
+         :plan/intent
+         {:intent/kind :walk
+          :intent/target [13 64 0]
+          :intent/for :log
+          :intent/status :active
+          :intent/id 1
+          :intent/goal goal
+          :intent/started 0
+          :intent/best-tick 0}))
 
 (deftest done-is-re-derived-every-tick-even-mid-intent
-  (let [w (assoc (walking #{:wood} :wood) :player/inventory {0 {:item 134 :count 1}})   ; a log arrived
+  (let [w (assoc (walking #{:wood} :wood) :player/inventory {0 {:item 134 :count 1}}) ; a log arrived
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (plan/done? w) "the world says the goal is met, so the plan is done this tick")
     (is (nil? (:plan/intent w)) "the walk is dropped")
-    (is (= [:abandoned :goal-met] ((juxt :intention/event :intention/reason) (last (memory/intentions w)))))))
+    (is (= [:abandoned :goal-met]
+           ((juxt :intention/event :intention/reason) (last (memory/intentions w)))))))
 
 (deftest a-regressed-target-preempts-the-running-intent
   ;; the walk serves :kit, but :wood (priority 1) is in play and no log is held: :wood comes first
-  (let [[w _] (run (walking #{:wood :kit} :kit) [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
-    (is (= [:abandoned :preempted] ((juxt :intention/event :intention/reason)
-                                    (first (filter #(= 1 (:intention/id %)) (reverse (memory/intentions w)))))))
-    (is (= :wood (get-in w [:plan/intent :intent/goal])) "the next intent serves the regressed target")))
+  (let [[w _] (run (walking #{:wood :kit} :kit)
+                   [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (= [:abandoned :preempted]
+           ((juxt :intention/event :intention/reason)
+            (first (filter #(= 1 (:intention/id %)) (reverse (memory/intentions w)))))))
+    (is (= :wood (get-in w [:plan/intent :intent/goal]))
+        "the next intent serves the regressed target")))
 
 (deftest nothing-is-dropped-with-an-item-on-the-cursor
   (let [w (-> (walking #{:wood} :wood)
@@ -240,14 +323,17 @@
   (let [w (walking #{:wood} :wood)
         [w1 _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])
         i1 (:plan/intent w1)
-        arrivals (reduce (fn [w n] (first (run (assoc w :stats/chunks (+ n (:stats/chunks w 0)))
-                                               [{:event/kind :tick :event/now (* 100 n) :event/rand 0.5}])))
-                         w1 (range 1 7))]
+        arrivals (reduce (fn [w n]
+                           (first (run (assoc w :stats/chunks (+ n (:stats/chunks w 0)))
+                                       [{:event/kind :tick :event/now (* 100 n) :event/rand 0.5}])))
+                         w1
+                         (range 1 7))]
     (is (= 1 (:intent/replans i1)) "the first tick plans")
     (is (= :found (:intent/route i1)))
-    (is (= 1 (:intent/replans (:plan/intent arrivals))) "six chunk arrivals, the route intact: no plan spent")
+    (is (= 1 (:intent/replans (:plan/intent arrivals)))
+        "six chunk arrivals, the route intact: no plan spent")
     (let [i (:plan/intent arrivals)
-          broken (terrain/set-block arrivals (get (:intent/waypoints i) (:intent/at i)) 1)   ; stone where the next step is
+          broken (terrain/set-block arrivals (get (:intent/waypoints i) (:intent/at i)) 1) ; stone where the next step is
           [w2 _] (run broken [{:event/kind :tick :event/now 1000 :event/rand 0.5}])]
       (is (= 2 (:intent/replans (:plan/intent w2))) "a waypoint ahead gone solid: plan again"))))
 
@@ -257,18 +343,32 @@
         cage (merge cage (into {} (for [z [-1 1] y [64 65]] [[2 y (+ 2 z)] 1])))
         col (world/column (merge cage {[13 64 0] 136 [13 65 0] 136 [13 66 0] 252}))
         w (-> (game/init fx/opts)
-              (assoc :bot/phase :play :player/pos [2.5 64.0 2.5] :player/loaded? true :player/on-ground? true)
+              (assoc :bot/phase :play
+                     :player/pos [2.5 64.0 2.5]
+                     :player/loaded? true
+                     :player/on-ground? true)
               (assoc :world/chunks {[0 0] col})
               (memory/remember-column [0 0] col)
-              (assoc :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0 :plan/goals #{:wood}
+              (assoc :plan/status :active
+                     :plan/since 0
+                     :plan/blacklist #{}
+                     :plan/attempts 0
+                     :plan/goals #{:wood}
                      :plan/intents 1
-                     :plan/intent {:intent/kind :walk :intent/target [13 64 0] :intent/for :log :intent/status :active
-                                   :intent/id 1 :intent/goal :wood}))
+                     :plan/intent
+                     {:intent/kind :walk
+                      :intent/target [13 64 0]
+                      :intent/for :log
+                      :intent/status :active
+                      :intent/id 1
+                      :intent/goal :wood}))
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (= 1 (:plan/attempts w)) "the walk failed on its first tick")
     (is (= #{[13 64 0]} (:plan/blacklist w)) "and its target is blacklisted")
-    (is (= :no-path (:intent/reason (first (filter #(= :failed (:intention/event %)) (memory/intentions w)))
-                                    (:intention/reason (first (filter #(= :failed (:intention/event %)) (memory/intentions w))))))
+    (is (= :no-path
+           (:intent/reason (first (filter #(= :failed (:intention/event %)) (memory/intentions w)))
+                           (:intention/reason (first (filter #(= :failed (:intention/event %))
+                                                             (memory/intentions w))))))
         "for :no-path")))
 
 ;; ---------------------------------------------------------------- digging with tools
@@ -279,19 +379,34 @@
   [id inv]
   (let [col (world/column {[3 64 0] id [3 63 0] 1})]
     (-> (game/init fx/opts)
-        (assoc :bot/phase :play :player/pos [0.5 64.0 0.5] :player/vel [0.0 -0.078 0.0] :player/loaded? true
-               :player/on-ground? true :player/inventory inv :world/chunks {[0 0] col})
+        (assoc :bot/phase :play
+               :player/pos [0.5 64.0 0.5]
+               :player/vel [0.0 -0.078 0.0]
+               :player/loaded? true
+               :player/on-ground? true
+               :player/inventory inv
+               :world/chunks {[0 0] col})
         (memory/remember-column [0 0] col)
-        (assoc :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/attempts 0 :plan/goals #{:wood}
+        (assoc :plan/status :active
+               :plan/since 0
+               :plan/blacklist #{}
+               :plan/attempts 0
+               :plan/goals #{:wood}
                :plan/intents 1
-               :plan/intent {:intent/kind :dig :intent/target [3 64 0] :intent/status :active :intent/id 1 :intent/goal :wood}))))
+               :plan/intent
+               {:intent/kind :dig
+                :intent/target [3 64 0]
+                :intent/status :active
+                :intent/id 1
+                :intent/goal :wood}))))
 
-(def wooden-pickaxe (get clojurecraft.blocks/items :wooden_pickaxe))
-(def stone-pickaxe (get clojurecraft.blocks/items :stone_pickaxe))
-(def iron-ore (first (clojurecraft.blocks/states-where (fn [[n]] (= n :iron_ore)))))
+(def wooden-pickaxe (get blocks/items :wooden_pickaxe))
+(def stone-pickaxe (get blocks/items :stone_pickaxe))
+(def iron-ore (first (blocks/states-where (fn [[n]] (= n :iron_ore)))))
 
 (deftest stone-is-dug-with-the-pickaxe-in-its-slot
-  (let [[w fx] (run (digging 1 {3 {:item wooden-pickaxe :count 1} 0 {:item 1 :count 2}}) (ticks 50 4000))   ; slot 0 holds stone, not a log: :wood stays wanted
+  (let [[w fx] (run (digging 1 {3 {:item wooden-pickaxe :count 1} 0 {:item 1 :count 2}})
+                    (ticks 50 4000)) ; slot 0 holds stone, not a log: :wood stays wanted
         carried (filter #(= :set-carried-item (:packet/name (second %))) (sent fx))
         actions (filter #(= :player-action (:packet/name (second %))) (sent fx))
         [[t-start start] [t-finish finish]] actions]
@@ -302,32 +417,44 @@
     (is (>= (- t-finish t-start) (+ (* 1150 1.35) 200)) "stone with a wooden pickaxe is 1150 ms")
     (is (< (- t-finish t-start) (+ (* 3000 1.35) 200)) "and not a log's 3000")
     (is (= (:sequence finish) (inc (:sequence start))))
-    (is (= [3 wooden-pickaxe 1150] ((juxt :intent/slot :intent/tool :intent/dig-ms) (:plan/last w))))))
+    (is (= [3 wooden-pickaxe 1150]
+           ((juxt :intent/slot :intent/tool :intent/dig-ms) (:plan/last w))))))
 
 (deftest a-restored-block-after-finish-is-a-refused-break
   (let [[w _] (run (digging 1 {3 {:item wooden-pickaxe :count 1}}) (ticks 50 2500))
         i (:plan/intent w)]
     (is (= :confirm (:intent/stage i)) "FINISH sent, waiting for the server")
     (is (= 0 (terrain/block-at w [3 64 0])) "air locally meanwhile")
-    (let [[w2 _] (run w [(packet {:packet/name :block-update :pos [3 64 0] :state 1})
-                         {:event/kind :tick :event/now 2550 :event/rand 0.5}])]
+    (let [[w2 _] (run w
+                      [(packet {:packet/name :block-update :pos [3 64 0] :state 1})
+                       {:event/kind :tick :event/now 2550 :event/rand 0.5}])]
       (is (= 1 (:plan/attempts w2)) "the dig failed")
-      (is (= :rejected (:intention/reason (last (filter #(= :failed (:intention/event %)) (memory/intentions w2)))))))
-    (let [[w3 _] (run w [(packet {:packet/name :block-changed-ack :sequence (:intent/sequence i)})
-                         {:event/kind :tick :event/now 2550 :event/rand 0.5}])]
+      (is (= :rejected
+             (:intention/reason (last (filter #(= :failed (:intention/event %))
+                                              (memory/intentions w2)))))))
+    (let [[w3 _] (run w
+                      [(packet {:packet/name :block-changed-ack :sequence (:intent/sequence i)})
+                       {:event/kind :tick :event/now 2550 :event/rand 0.5}])]
       (is (= :done (:intent/status (:plan/last w3))) "the ack confirms it"))))
 
 (deftest a-tiered-block-with-no-reaching-tool-is-refused-before-start
   (let [[w fx] (run (digging iron-ore {3 {:item wooden-pickaxe :count 1}}) (ticks 50 1000))]
-    (is (empty? (filter #(= :player-action (:packet/name (second %))) (sent fx))) "no START: it would drop nothing")
-    (is (= :needs-tool (:intention/reason (last (filter #(= :failed (:intention/event %)) (memory/intentions w)))))))
+    (is (empty? (filter #(= :player-action (:packet/name (second %))) (sent fx)))
+        "no START: it would drop nothing")
+    (is (= :needs-tool
+           (:intention/reason (last (filter #(= :failed (:intention/event %))
+                                            (memory/intentions w)))))))
   (let [[w fx] (run (digging iron-ore {3 {:item stone-pickaxe :count 1}}) (ticks 50 1000))]
-    (is (seq (filter #(= :player-action (:packet/name (second %))) (sent fx))) "a stone pickaxe reaches it")
+    (is (seq (filter #(= :player-action (:packet/name (second %))) (sent fx)))
+        "a stone pickaxe reaches it")
     (is (= 1150 (:intent/dig-ms (:plan/intent w))))))
 
 (deftest a-tool-that-vanishes-mid-dig-fails-tool-broke
   (let [[w _] (run (digging 1 {3 {:item wooden-pickaxe :count 1}}) (ticks 50 1200))]
     (is (= :digging (:intent/stage (:plan/intent w))))
-    (let [[w2 _] (run w [(packet {:packet/name :set-player-inventory :slot 3 :item nil})
-                         {:event/kind :tick :event/now 1250 :event/rand 0.5}])]
-      (is (= :tool-broke (:intention/reason (last (filter #(= :failed (:intention/event %)) (memory/intentions w2)))))))))
+    (let [[w2 _] (run w
+                      [(packet {:packet/name :set-player-inventory :slot 3 :item nil})
+                       {:event/kind :tick :event/now 1250 :event/rand 0.5}])]
+      (is (= :tool-broke
+             (:intention/reason (last (filter #(= :failed (:intention/event %))
+                                              (memory/intentions w2)))))))))

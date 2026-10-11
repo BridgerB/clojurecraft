@@ -5,8 +5,8 @@ type: reference
 tags: [game, blocks, ids]
 aliases: [state ids, block ids, log ids, water ids]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 26.1.2
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - resources/clojurecraft/blocks.edn#[:oak_log :rotated_pillar 136 138]
   - resources/clojurecraft/blocks.edn#[:water :liquid 86 101]
@@ -29,7 +29,7 @@ Generated from the vanilla `--reports` into `blocks.edn` as `[name type min-stat
 - items: oak_log 134; entity type item 71.
 
 ## Gotchas
-- Ids change with every game version; the pin is the game version, and `scripts/datagen.sh` regenerates the tables.
+- Ids change with every game version; the pin is the game version, and `bb datagen` regenerates the tables.
 
 ## See also
 - [[grass-type-is-grass]]

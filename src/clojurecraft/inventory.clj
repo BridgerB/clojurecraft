@@ -12,27 +12,34 @@
 (defn logs-held
   "How many logs of any species the player holds (inventory only, never the grid)."
   [world]
-  (reduce + 0 (for [[_ {:keys [item count]}] (:player/inventory world) :when (blocks/log-item? item)] count)))
+  (reduce
+   +
+   0
+   (for [[_ {:keys [item count]}] (:player/inventory world) :when (blocks/log-item? item)] count)))
 
 (defn container->player-slot
   "Window-0 slot → player-inventory slot (the key space of :player/inventory), or nil."
   [s]
   (cond (<= 36 s 44) (- s 36)
         (<= 9 s 35) s
-        (<= 5 s 8) (- 44 s)                ; window 5-8 are head..feet; player 36-39 are feet..head
+        (<= 5 s 8) (- 44 s) ; window 5-8 are head..feet; player 36-39 are feet..head
         (= s 45) 40
         :else nil))
 
 (defn set-slot
   "Put item in a player-inventory slot; a nil item empties it (the key is removed, never nil)."
   [world slot item]
-  (if item (assoc-in world [:player/inventory slot] item) (update world :player/inventory dissoc slot)))
+  (if item
+    (assoc-in world [:player/inventory slot] item)
+    (update world :player/inventory dissoc slot)))
 
 (defn fresh-menus
   "A login or respawn gives the player a fresh menu: nothing open, an empty cursor, and a grid
    the server empties back into the inventory (it then sends the window's contents)."
   [w]
-  (-> w (dissoc :window/open :window/cursor) (assoc :window/grid {})))
+  (-> w
+      (dissoc :window/open :window/cursor)
+      (assoc :window/grid {})))
 
 (def menus
   "Container layouts by menu type id (registry minecraft:menu). :menu/grid are the crafting
@@ -58,14 +65,16 @@
           item (assoc-in w [:window/open :window/slots s] item)
           :else (update-in w [:window/open :window/slots] dissoc s))))
 
-(defn open? "Is window-id the container the player has open?" [w window-id] (= window-id (get-in w [:window/open :window/id])))
+(defn open?
+  "Is window-id the container the player has open?"
+  [w window-id]
+  (= window-id (get-in w [:window/open :window/id])))
 
 (defn set-window-0-slot
   "Window 0 is the player's own screen: slots 0-4 are the crafting grid (0 is the result) and
    are kept verbatim in :window/grid, so nothing in the grid is ever invisible; the rest map to
    :player/inventory."
   [w i item]
-  (cond
-    (<= 0 i 4) (if item (assoc-in w [:window/grid i] item) (update w :window/grid dissoc i))
-    (container->player-slot i) (set-slot w (container->player-slot i) item)
-    :else w))
+  (cond (<= 0 i 4) (if item (assoc-in w [:window/grid i] item) (update w :window/grid dissoc i))
+        (container->player-slot i) (set-slot w (container->player-slot i) item)
+        :else w))

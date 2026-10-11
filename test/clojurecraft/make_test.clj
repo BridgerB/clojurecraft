@@ -11,13 +11,13 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.make :as make]
-            [clojurecraft.stone]
-            [clojurecraft.stairs :as stairs]
-            [clojurecraft.swim :as swim]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.spec]
+            [clojurecraft.stairs :as stairs]
+            [clojurecraft.stone]
+            [clojurecraft.swim :as swim]
             [clojurecraft.world :as world]))
 
 (def pickaxe (first (filter #(= :pickaxe (:goal/id %)) plan/goals)))
@@ -29,16 +29,26 @@
   (plan/next-intent w goal plan/goals))
 
 (def held-gen
-  (gen/hash-map :oak_log (gen/choose 0 3) :oak_planks (gen/choose 0 9) :stick (gen/choose 0 5)
-                :crafting_table (gen/choose 0 1) :wooden_pickaxe (gen/frequency [[9 (gen/return 0)] [1 (gen/return 1)]])))
+  (gen/hash-map :oak_log (gen/choose 0 3)
+                :oak_planks (gen/choose 0 9)
+                :stick (gen/choose 0 5)
+                :crafting_table (gen/choose 0 1)
+                :wooden_pickaxe (gen/frequency [[9 (gen/return 0)] [1 (gen/return 1)]])))
 
 (defn world-holding
   "Standing on bare ground with no trees; optionally a remembered table one block away."
   [held table?]
-  (let [inv (into {} (keep-indexed (fn [i [item n]] (when (pos? n) [i {:item (recipe/item-id item) :count n}])) held))]
+  (let [inv (into {}
+                  (keep-indexed (fn [i [item n]]
+                                  (when (pos? n) [i {:item (recipe/item-id item) :count n}]))
+                                held))]
     (cond-> (-> (game/init fx/opts)
-                (assoc :bot/phase :play :player/pos [5.5 64.0 5.5] :player/loaded? true :player/on-ground? true
-                       :player/inventory inv :world/chunks {[0 0] (world/column {})}))
+                (assoc :bot/phase :play
+                       :player/pos [5.5 64.0 5.5]
+                       :player/loaded? true
+                       :player/on-ground? true
+                       :player/inventory inv
+                       :world/chunks {[0 0] (world/column {})}))
       table? (memory/observe [7 64 5] memory/crafting-table))))
 
 (defn executable?
@@ -46,31 +56,32 @@
   [w i]
   (let [counts (recipe/counts (:player/inventory w))]
     (case (:intent/kind i)
-      :craft (let [r (recipe/by-id (:intent/recipe i))]
-               (and (= :inventory (:intent/window i))            ; a table window is never open here
-                    (recipe/fits? r 2)
-                    (some? (recipe/clicks (:player/inventory w) r 2))))
+      :craft
+      (let [r (recipe/by-id (:intent/recipe i))]
+        (and (= :inventory (:intent/window i))           ; a table window is never open here
+             (recipe/fits? r 2)
+             (some? (recipe/clicks (:player/inventory w) r 2))))
       :place (and (= :crafting_table (:intent/item i)) (pos? (get counts :crafting_table 0)))
       :open-container (some? (memory/remembered w (:intent/target i)))
-      :stairs-down (pos? (get counts :wooden_pickaxe 0))         ; down to stone, with nothing remembered: only with a pickaxe
-      :wade (some? (swim/entry w (stairs/feet w)))             ; into water the bot remembers, from a bank it can stand on
-      nil (contains? #{:no-log :no-water :in-water} (:plan/wait i))   ; gathering with no tree known, wading with no water or from inside it: wait
+      :stairs-down (pos? (get counts :wooden_pickaxe 0)) ; down to stone, with nothing remembered: only with a pickaxe
+      :wade (some? (swim/entry w (stairs/feet w))) ; into water the bot remembers, from a bank it can stand on
+      nil (contains? #{:no-log :no-water :in-water} (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it: wait
       false)))
 
 (deftest the-planner-only-picks-executable-intents
-  (let [r (tc/quick-check
-           400
-           (prop/for-all [held held-gen table? gen/boolean goal (gen/elements plan/targets)]
-                         (let [w (world-holding held table?)
-                               i (decide w goal)
-                               counts (recipe/counts (:player/inventory w))]
-                           (cond
-                             (plan/done-by w goal) (nil? i)
-                             (nil? i) false
-                             :else (and (executable? w i)
-                            ;; gather (wait :no-log) only when no craft could make progress
-                                        (or (not= :no-log (:plan/wait i))
-                                            (zero? (get counts :oak_log 0))))))))]
+  (let [r (tc/quick-check 400
+                          (prop/for-all [held held-gen table? gen/boolean goal
+                                         (gen/elements plan/targets)]
+                                        (let [w (world-holding held table?)
+                                              i (decide w goal)
+                                              counts (recipe/counts (:player/inventory w))]
+                                          (cond (plan/done-by w goal) (nil? i)
+                                                (nil? i) false
+                                                :else
+                                                (and (executable? w i)
+                                                     ;; gather (wait :no-log) only when no craft could make progress
+                                                     (or (not= :no-log (:plan/wait i))
+                                                         (zero? (get counts :oak_log 0))))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
 
 (deftest goals-are-data
@@ -81,21 +92,29 @@
       (is (= :provided? (:goal/done? row)))
       (is (= :craft (:goal/act row)))))
   (testing "a 2x2 recipe needs no table"
-    (is (= {:tag/planks 2} (:goal/needs (first (filter #(= :craft/stick (:goal/id %)) make/craft-rows))))))
+    (is (= {:tag/planks 2}
+           (:goal/needs (first (filter #(= :craft/stick (:goal/id %)) make/craft-rows))))))
   (testing "every row, hand-written or generated, satisfies ::goal"
-    (is (every? #(clojure.spec.alpha/valid? :clojurecraft.spec/goal %) (concat plan/goals make/craft-rows))))
+    (is (every? #(clojure.spec.alpha/valid? :clojurecraft.spec/goal %)
+                (concat plan/goals make/craft-rows))))
   (testing "the table is printable and reads back as the same value"
     (is (= plan/goals (clojure.edn/read-string (pr-str plan/goals)))))
-  (testing "no item target needs a per-goal method: wood, kit and pickaxe all plan through the same registries;
+  (testing
+    "no item target needs a per-goal method: wood, kit and pickaxe all plan through the same registries;
             the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
-    (is (every? #(contains? #{:not-trapped-in :escaped-water?} (:goal/done? %)) (remove :goal/provides plan/targets)))
+    (is (every? #(contains? #{:not-trapped-in :escaped-water?} (:goal/done? %))
+                (remove :goal/provides plan/targets)))
     (is (= #{:needs :escape :wade} (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
 
-(defn intent-for [held goal]
-  (let [i (decide (world-holding (merge {:oak_log 0 :oak_planks 0 :stick 0 :crafting_table 0 :wooden_pickaxe 0} held) false)
+(defn intent-for
+  [held goal]
+  (let [i (decide (world-holding
+                   (merge {:oak_log 0 :oak_planks 0 :stick 0 :crafting_table 0 :wooden_pickaxe 0}
+                          held)
+                   false)
                   goal)]
     (or (:intent/recipe i) (:plan/wait i) (:intent/kind i))))
 
@@ -106,7 +125,9 @@
   (is (= :stick (intent-for {:crafting_table 1 :oak_planks 2} kit)))
   (is (= :no-log (intent-for {:crafting_table 1} kit)) "the table is kept; sticks need another log")
   (is (nil? (intent-for {:crafting_table 1 :stick 4} kit)))
-  (is (= :stick (intent-for {:oak_planks 2 :crafting_table 1 :stick 0} {:goal/id :sticks :goal/provides {:item/stick 4}}))
+  (is (= :stick
+         (intent-for {:oak_planks 2 :crafting_table 1 :stick 0}
+                     {:goal/id :sticks :goal/provides {:item/stick 4}}))
       "sticks from planks, never the bamboo stick"))
 
 (deftest the-needs-planner-uses-the-species-it-holds
@@ -119,18 +140,23 @@
   ;; the plan failed :stuck while the bot held planks enough for a new table
   (let [w (-> (world-holding {:oak_planks 6 :stick 4} false)
               (memory/observe [20 64 5] memory/crafting-table))]
-    (is (= {:intent/kind :walk :intent/target [20 64 5]} (decide w pickaxe)) "first, the table it remembers")
+    (is (= {:intent/kind :walk :intent/target [20 64 5]} (decide w pickaxe))
+        "first, the table it remembers")
     (testing "after the walk failed, the table no longer counts"
       (is (= {:plan/wait :no-log} (decide (assoc w :plan/blacklist #{[20 64 5]}) pickaxe))
           "six planks are one short of a new table (4) and the pickaxe (3): get a log first")
-      (is (= :crafting_table (:intent/recipe (decide (-> w (assoc :plan/blacklist #{[20 64 5]})
-                                                         (assoc-in [:player/inventory 0 :count] 7))
-                                                     pickaxe)))
+      (is (= :crafting_table
+             (:intent/recipe (decide (-> w
+                                         (assoc :plan/blacklist #{[20 64 5]})
+                                         (assoc-in [:player/inventory 0 :count] 7))
+                                     pickaxe)))
           "with seven, craft the new table"))))
 
 (deftest the-needs-planner-plans-over-the-table-it-is-given
   (let [w (world-holding {} false)
         wood (first (filter #(= :wood (:goal/id %)) plan/goals))
         without-gathering (vec (remove #(= :gather-log (:goal/id %)) plan/goals))]
-    (is (= {:plan/wait :no-log} (make/decide w wood plan/goals)) "the shipped table gathers: no tree known yet")
-    (is (= {:plan/wait :stuck} (make/decide w wood without-gathering)) "a table with no way to get a log is stuck")))
+    (is (= {:plan/wait :no-log} (make/decide w wood plan/goals))
+        "the shipped table gathers: no tree known yet")
+    (is (= {:plan/wait :stuck} (make/decide w wood without-gathering))
+        "a table with no way to get a log is stuck")))

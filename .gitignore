@@ -4,3 +4,8 @@ data/
 *.log
 work/
 cache/
+.nix/
+.clj-kondo/.cache/
+.lsp/.cache/
+.direnv/
+.clj-kondo/imports/

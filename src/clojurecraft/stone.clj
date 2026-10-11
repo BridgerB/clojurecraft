@@ -3,20 +3,22 @@
    stand beside, dig it, pick the drop up; with no stone in sight, cut a staircase down to
    where stone begins. The :mine act of the goal table (clojurecraft.make) runs this, the way
    :gather runs clojurecraft.wood. Requiring this namespace registers the act."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
-            [clojurecraft.stairs]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.stairs]))
 
 (def search-radius 24)                ; blocks from the eye searched for exposed stone
 (def search-height 12)                ; blocks above or below the eye searched
 (def stair-depth 6)                   ; stairs cut when no stone is in sight, before looking again
-(def stone-states "Every state of the blocks that drop cobblestone: stone." (blocks/states-where (fn [[n]] (= n :stone))))
+(def stone-states
+  "Every state of the blocks that drop cobblestone: stone."
+  (blocks/states-where (fn [[n]] (= n :stone))))
 
 (defn pickaxe
   "[slot item-id] of the pickaxe the bot can dig stone with, or nil: stone needs no tier, but
@@ -28,16 +30,19 @@
   "Can a player stand beside stone at pos and dig it: one of its horizontal neighbours is a
    cell a route could stand in."
   [world [x y z]]
-  (boolean (some #(path/standable? world %) (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ x dx) y (+ z dz)]))))
+  (boolean (some #(path/standable? world %)
+                 (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ x dx) y (+ z dz)]))))
 
 (defn near-chunks
   "The loaded chunk columns within search-radius of the feet: the terrain a stone search reads."
   [world]
   (let [[x _ z] (:player/pos world)
-        cx (bit-shift-right (long (Math/floor x)) 4)
-        cz (bit-shift-right (long (Math/floor z)) 4)
+        cx (bit-shift-right (long (math/floor x)) 4)
+        cz (bit-shift-right (long (math/floor z)) 4)
         r (inc (quot search-radius 16))]
-    (into {} (filter (fn [[[kx kz] _]] (and (<= (abs (- kx cx)) r) (<= (abs (- kz cz)) r))) (:world/chunks world)))))
+    (into {}
+          (filter (fn [[[kx kz] _]] (and (<= (abs (- kx cx)) r) (<= (abs (- kz cz)) r)))
+                  (:world/chunks world)))))
 
 (defn nearest-stone
   "The nearest exposed stone within search-radius of the eye and search-height of its height
@@ -48,8 +53,10 @@
   (let [eye (game/eye world)
         ey (second eye)
         blacklist (:plan/blacklist world #{})
-        lo (- ey search-height) hi (+ ey search-height)]
-    (memory/nearest-of eye search-radius
+        lo (- ey search-height)
+        hi (+ ey search-height)]
+    (memory/nearest-of eye
+                       search-radius
                        (->> (chunk/find-blocks (near-chunks world) #(contains? stone-states %))
                             (map (fn [[x y z _]] [x y z]))
                             (filter (fn [[_ y _]] (<= lo y hi)))
@@ -72,10 +79,11 @@
    nearest exposed stone or cut stairs down toward stone; with no pickaxe, wait :no-pickaxe."
   [world]
   (or (continue-mine world)
-      (cond
-        (nil? (pickaxe world)) {:plan/wait :no-pickaxe}
-        :else (if-let [stone (nearest-stone world)]
-                {:intent/kind :walk :intent/target stone :intent/for :stone}
-                {:intent/kind :stairs-down :intent/to-y (- (long (Math/floor (second (:player/pos world)))) stair-depth)}))))
+      (cond (nil? (pickaxe world)) {:plan/wait :no-pickaxe}
+            :else
+            (if-let [stone (nearest-stone world)]
+              {:intent/kind :walk :intent/target stone :intent/for :stone}
+              {:intent/kind :stairs-down
+               :intent/to-y (- (long (math/floor (second (:player/pos world)))) stair-depth)}))))
 
 (defmethod plan/act :mine [world _] (mine-next world))

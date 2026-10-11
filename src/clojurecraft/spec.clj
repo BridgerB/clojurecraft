@@ -6,20 +6,19 @@
             [clojure.string :as str]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
-            [clojurecraft.gym :as gym]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
-            [clojurecraft.physics :as physics]
-            [clojurecraft.path :as path]
-            [clojurecraft.place :as place]
-            [clojurecraft.terrain :as terrain]
-            [clojurecraft.window :as window]
-            [clojurecraft.wood :as wood]
             [clojurecraft.packet :as p]
+            [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
+            [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.sim :as sim]))
+            [clojurecraft.sim :as sim]
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.window :as window]
+            [clojurecraft.wood :as wood]))
 
 (s/def ::vec3 (s/coll-of double? :kind vector? :count 3))
 (s/def ::block-pos (s/coll-of int? :kind vector? :count 3))
@@ -74,7 +73,8 @@
 (s/def :control/jump? boolean?)
 (s/def :control/yaw double?)
 (s/def :control/look :player/look)
-(s/def :player/controls (s/keys :opt [:control/forward? :control/jump? :control/sneak? :control/yaw :control/look]))
+(s/def :player/controls
+  (s/keys :opt [:control/forward? :control/jump? :control/sneak? :control/yaw :control/look]))
 
 ;; window 0 (the player's own screen) and any open container
 (s/def ::slot-item (s/keys :req-un [::item ::count]))
@@ -84,7 +84,8 @@
 (s/def :window/id int?)
 (s/def :window/menu-type int?)
 (s/def :window/slots (s/map-of int? ::slot-item))
-(s/def :window/open (s/keys :req [:window/id :window/menu-type] :opt [:window/state-id :window/slots]))
+(s/def :window/open
+  (s/keys :req [:window/id :window/menu-type] :opt [:window/state-id :window/slots]))
 (s/def :player/held-slot (s/int-in 0 9))
 
 ;; world
@@ -101,31 +102,42 @@
 (s/def :packet/name keyword?)
 (defn int-in? "Is x an integer in [lo, hi]?" [lo hi x] (and (int? x) (<= lo x hi)))
 
-(def slot? "A decoded slot: nil when empty, else at least {:item id :count n}." #(or (nil? %) (and (map? %) (int? (:item %)) (int? (:count %)))))
+(defn slot?
+  "A decoded slot: nil when empty, else at least {:item id :count n}."
+  [x]
+  (or (nil? x) (and (map? x) (int? (:item x)) (int? (:count x)))))
 
 (def wire-types
   "What a value of each wire type in packet/specs must be, with the wire's own range."
   {:bool boolean?
-   :i8 (partial int-in? -128 127) :u8 (partial int-in? 0 255)
-   :i16 (partial int-in? -32768 32767) :u16 (partial int-in? 0 65535)
-   :i32 (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE) :u32 (partial int-in? 0 4294967295)
-   :i64 int? :varint (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE) :varlong int?
-   :f32 number? :f64 number?
-   :string string? :uuid #(or (nil? %) (uuid? %))
+   :i8 (partial int-in? -128 127)
+   :u8 (partial int-in? 0 255)
+   :i16 (partial int-in? -32768 32767)
+   :u16 (partial int-in? 0 65535)
+   :i32 (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE)
+   :u32 (partial int-in? 0 4294967295)
+   :i64 int?
+   :varint (partial int-in? Integer/MIN_VALUE Integer/MAX_VALUE)
+   :varlong int?
+   :f32 number?
+   :f64 number?
+   :string string?
+   :uuid #(or (nil? %) (uuid? %))
    :position #(and (vector? %) (= 3 (count %)) (every? int? %))
-   :bytes bytes? :rest bytes?
-   :slot slot? :hashed-slot slot?})
+   :bytes bytes?
+   :rest bytes?
+   :slot slot?
+   :hashed-slot slot?})
 
 (declare fields-ok?)
 
 (defn value-ok?
   "Does v fit wire type t: a primitive, [:vec T], or a struct (a vector of [key type] pairs)?"
   [t v]
-  (cond
-    (and (vector? t) (vector? (first t))) (and (map? v) (fields-ok? t v))
-    (vector? t) (and (sequential? v) (every? #(value-ok? (second t) %) v))
-    (empty? (str t)) false
-    :else ((wire-types t) v)))
+  (cond (and (vector? t) (vector? (first t))) (and (map? v) (fields-ok? t v))
+        (vector? t) (and (sequential? v) (every? #(value-ok? (second t) %) v))
+        (empty? (str t)) false
+        :else ((wire-types t) v)))
 
 (defn fields-ok?
   "Does map m carry every field of a spec, each fitting its type? Extra keys are fine."
@@ -159,8 +171,11 @@
 (s/def :start/host string?)
 (s/def :start/port int?)
 (s/def :start/name string?)
-(s/def ::event (s/keys :req [:event/kind] :opt [:event/now :event/rand :event/packet :event/reason :go/goals :go/at
-                                                :start/host :start/port :start/name]))
+(s/def ::event
+  (s/keys :req [:event/kind]
+          :opt
+          [:event/now :event/rand :event/packet :event/reason :go/goals :go/at :start/host
+           :start/port :start/name]))
 
 ;; plan and intents
 (s/def :intent/kind keyword?)
@@ -177,8 +192,12 @@
 (s/def :intent/recipe keyword?)
 (s/def :intent/window #{:inventory :table})
 (s/def :intent/item keyword?)
-(s/def ::need-key (s/or :named keyword? :set (s/coll-of keyword? :kind set?)))
-(s/def ::amount (s/or :count pos-int? :near #{:near}))
+(s/def ::need-key
+  (s/or :named keyword?
+        :set (s/coll-of keyword? :kind set?)))
+(s/def ::amount
+  (s/or :count pos-int?
+        :near #{:near}))
 (s/def :goal/needs (s/map-of ::need-key ::amount))
 (s/def :goal/holds (s/map-of ::need-key ::amount))    ; needs a row keeps rather than spends (a tool)
 (s/def :goal/provides (s/map-of ::need-key ::amount :min-count 1))
@@ -192,23 +211,43 @@
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
-(s/def ::goal (s/keys :req [:goal/id :goal/priority :goal/done?]
-                      :opt [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by
-                            :goal/always? :goal/trap :goal/plan]))
+(s/def ::goal
+  (s/keys :req [:goal/id :goal/priority :goal/done?]
+          :opt
+          [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by
+           :goal/always? :goal/trap :goal/plan]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
-          :opt [:bot/name :bot/sequence :bot/closed :bot/disconnected
-                :player/pos :player/vel :player/look :player/on-ground? :player/horizontal-collision?
-                :player/jump-ticks :player/loaded? :player/entity-id :player/inventory :player/controls
-                :world/chunks :world/blocks :world/facts :world/entities
-                :window/state-id :window/grid :window/cursor :window/open :player/held-slot
-                :plan/intent :plan/status :plan/blacklist :plan/trunk-failures]))
+          :opt
+          [:bot/name :bot/sequence :bot/closed :bot/disconnected :player/pos :player/vel
+           :player/look :player/on-ground? :player/horizontal-collision? :player/jump-ticks
+           :player/loaded? :player/entity-id :player/inventory :player/controls :world/chunks
+           :world/blocks :world/facts :world/entities :window/state-id :window/grid :window/cursor
+           :window/open :player/held-slot :plan/intent :plan/status :plan/blacklist
+           :plan/trunk-failures]))
 
-(s/fdef game/step :args (s/cat :world ::world :event ::event) :ret ::world)
-(s/fdef plan/step :args (s/cat :world ::world :event ::event) :ret ::world)
-(s/fdef intent/run :args (s/cat :world ::world :intent ::intent :event ::event) :ret ::world)
-(s/fdef plan/choose :args (s/cat :world ::world :table (s/coll-of ::goal)) :ret (s/nilable ::goal))
+(s/fdef game/step
+  :args
+  (s/cat :world ::world
+         :event ::event)
+  :ret ::world)
+(s/fdef plan/step
+  :args
+  (s/cat :world ::world
+         :event ::event)
+  :ret ::world)
+(s/fdef intent/run
+  :args
+  (s/cat :world ::world
+         :intent ::intent
+         :event ::event)
+  :ret ::world)
+(s/fdef plan/choose
+  :args
+  (s/cat :world ::world
+         :table (s/coll-of ::goal))
+  :ret (s/nilable ::goal))
 
 (def goals-valid?
   "Every row of the goal table conforms, ids are unique, and every :goal/superseded-by names a
@@ -229,11 +268,13 @@
 (s/def :recipe/width (s/int-in 1 4))
 (s/def :recipe/height (s/int-in 1 4))
 (s/def :recipe/ingredients (s/coll-of ::item-set :kind vector? :min-count 1 :max-count 9))
-(s/def ::recipe (s/and (s/keys :req [:recipe/id :recipe/result :recipe/count :recipe/kind]
-                               :opt [:recipe/pattern :recipe/key :recipe/width :recipe/height :recipe/ingredients])
-                       #(if (= :shaped (:recipe/kind %))
-                          (every? % [:recipe/pattern :recipe/key :recipe/width :recipe/height])
-                          (contains? % :recipe/ingredients))))
+(s/def ::recipe
+  (s/and (s/keys :req [:recipe/id :recipe/result :recipe/count :recipe/kind]
+                 :opt
+                 [:recipe/pattern :recipe/key :recipe/width :recipe/height :recipe/ingredients])
+         #(if (= :shaped (:recipe/kind %))
+            (every? % [:recipe/pattern :recipe/key :recipe/width :recipe/height])
+            (contains? % :recipe/ingredients))))
 (s/def :click/slot (s/int-in 0 46))
 (s/def :click/button (s/int-in 0 9))
 (s/def :click/mode #{0 1 2})
@@ -242,7 +283,11 @@
 (def recipes-valid? (every? #(s/valid? ::recipe %) recipe/recipes))
 
 (s/fdef recipe/clicks
-  :args (s/cat :inventory :player/inventory :recipe ::recipe :size #{2 3} :slot-of (s/? fn?))
+  :args
+  (s/cat :inventory :player/inventory
+         :recipe ::recipe
+         :size #{2 3}
+         :slot-of (s/? fn?))
   :ret (s/nilable (s/coll-of ::click :kind vector?)))
 
 ;; ---------------------------------------------------------------- the rest of the model
@@ -361,9 +406,11 @@
 (s/def :problem/done ::text)
 (s/def :problem/last-failure ::text)
 (s/def :problem/sources (s/coll-of ::text :kind vector? :min-count 1))
-(s/def ::problem (s/keys :req [:problem/stage :problem/statement :problem/needs :problem/risks :problem/done
-                               :problem/last-failure :problem/sources]
-                         :opt [:problem/issue :problem/goals]))
+(s/def ::problem
+  (s/keys :req
+          [:problem/stage :problem/statement :problem/needs :problem/risks :problem/done
+           :problem/last-failure :problem/sources]
+          :opt [:problem/issue :problem/goals]))
 (s/def :intent/goal keyword?)
 
 ;; the server model (sim): a reducer too, so it is specced and instrumented like the bot's
@@ -392,7 +439,11 @@
 (s/def :sim/next-keep-alive int?)
 (s/def :sim/keep-alives-pending set?)
 (s/def ::sim (s/keys :req [:sim/phase :sim/now :sim/out]))
-(s/fdef sim/step :args (s/cat :sim ::sim :event ::sim-event) :ret ::sim)
+(s/fdef sim/step
+  :args
+  (s/cat :sim ::sim
+         :event ::sim-event)
+  :ret ::sim)
 
 ;; ---------------------------------------------------------------- selection
 ;; Maybe Not: schema (what an attribute is, the specs above) and selection (which attributes a
@@ -405,31 +456,85 @@
   [& ks]
   (s/and map? (fn has-every-key [m] (every? #(contains? m %) ks))))
 
-(s/fdef game/eye :args (s/cat :world (requires :player/pos)))
-(s/fdef physics/step :args (s/cat :solid? fn? :fluid-at (s/? fn?) :world (requires :player/pos) :controls map?))
-(s/fdef terrain/fluid-fn :args (s/cat :world (requires :world/chunks)))
-(s/fdef inventory/item-count :args (s/cat :world (requires :player/inventory) :id int?))
-(s/fdef inventory/logs-held :args (s/cat :world (requires :player/inventory)))
-(s/fdef terrain/block-at :args (s/cat :world (requires :world/chunks) :pos (s/coll-of number? :count 3)))
-(s/fdef terrain/solid-fn :args (s/cat :world (requires :world/chunks)))
-(s/fdef memory/positions-now :args (s/cat :world (requires :world/facts) :states coll?))
-(s/fdef memory/nearest-surface-water :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number?))
-(s/fdef memory/nearest-log :args (s/cat :world (requires :world/facts) :eye ::vec3 :radius number? :blacklist any?
-                                        :bottom? (s/? ifn?)))
-(s/fdef make/near :args (s/cat :world (requires :player/pos :world/facts) :block keyword?))
-(s/fdef make/decide :args (s/cat :world (requires :player/inventory :player/pos :world/facts) :goal map? :table vector?))
-(s/fdef wood/gather-next :args (s/cat :world (requires :player/pos :world/facts)))
-(s/fdef place/spot :args (s/cat :world (requires :player/pos :world/chunks)))
-(s/fdef path/plan :args (s/cat :world (requires :world/chunks) :from ::block-pos :goal ::path-goal :opts (s/? (s/keys :opt [:path/max-nodes])))
+(s/fdef game/eye
+  :args
+  (s/cat :world (requires :player/pos)))
+(s/fdef physics/step
+  :args
+  (s/cat :solid? fn?
+         :fluid-at (s/? fn?)
+         :world (requires :player/pos)
+         :controls map?))
+(s/fdef terrain/fluid-fn
+  :args
+  (s/cat :world (requires :world/chunks)))
+(s/fdef inventory/item-count
+  :args
+  (s/cat :world (requires :player/inventory)
+         :id int?))
+(s/fdef inventory/logs-held
+  :args
+  (s/cat :world (requires :player/inventory)))
+(s/fdef terrain/block-at
+  :args
+  (s/cat :world (requires :world/chunks)
+         :pos (s/coll-of number? :count 3)))
+(s/fdef terrain/solid-fn
+  :args
+  (s/cat :world (requires :world/chunks)))
+(s/fdef memory/positions-now
+  :args
+  (s/cat :world (requires :world/facts)
+         :states coll?))
+(s/fdef memory/nearest-surface-water
+  :args
+  (s/cat :world (requires :world/facts)
+         :eye ::vec3
+         :radius number?))
+(s/fdef memory/nearest-log
+  :args
+  (s/cat :world (requires :world/facts)
+         :eye ::vec3
+         :radius number?
+         :blacklist any?
+         :bottom? (s/? ifn?)))
+(s/fdef make/near
+  :args
+  (s/cat :world (requires :player/pos :world/facts)
+         :block keyword?))
+(s/fdef make/decide
+  :args
+  (s/cat :world (requires :player/inventory :player/pos :world/facts)
+         :goal map?
+         :table vector?))
+(s/fdef wood/gather-next
+  :args
+  (s/cat :world (requires :player/pos :world/facts)))
+(s/fdef place/spot
+  :args
+  (s/cat :world (requires :player/pos :world/chunks)))
+(s/fdef path/plan
+  :args
+  (s/cat :world (requires :world/chunks)
+         :from ::block-pos
+         :goal ::path-goal
+         :opts (s/? (s/keys :opt [:path/max-nodes])))
   :ret ::route)
-(s/fdef path/classify :args (s/cat :world (requires :world/chunks) :pos ::block-pos))
-(s/fdef window/view :args (s/cat :world (requires :window/grid) :which #{:inventory :table}))
+(s/fdef path/classify
+  :args
+  (s/cat :world (requires :world/chunks)
+         :pos ::block-pos))
+(s/fdef window/view
+  :args
+  (s/cat :world (requires :window/grid)
+         :which #{:inventory :table}))
 
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
-   `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water `memory/nearest-log `make/near `make/decide
-   `wood/gather-next `place/spot `window/view `path/plan `path/classify])
+   `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
+   `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `window/view `path/plan
+   `path/classify])
 (s/def :stats/deaths pos-int?)
 
 ;; ---------------------------------------------------------------- the gym
@@ -452,8 +557,9 @@
 (s/def :gym/truths (s/coll-of (s/keys :req [:truth/cmd :truth/reply :truth/ok?]) :kind vector?))
 (s/def :gym/commit (s/nilable string?))
 (s/def :gym/result (s/nilable map?))
-(s/def ::gym-result (s/keys :req [:gym/goal :gym/run :gym/landed? :gym/outcome :gym/truths]
-                            :opt [:gym/landing :gym/ms :gym/reason :gym/commit :gym/result]))
+(s/def ::gym-result
+  (s/keys :req [:gym/goal :gym/run :gym/landed? :gym/outcome :gym/truths]
+          :opt [:gym/landing :gym/ms :gym/reason :gym/commit :gym/result]))
 
 ;; ---------------------------------------------------------------- the fleet
 (s/def :fleet/label string?)
@@ -477,10 +583,13 @@
 (s/def :exp/worlds pos-int?)
 (s/def ::experiment
   (s/and (s/keys :req [:exp/name :exp/kind :exp/est-s]
-                 :opt [:exp/goal :exp/set :exp/runs :exp/bots :exp/arms :exp/property :exp/shards :exp/worlds])
+                 :opt
+                 [:exp/goal :exp/set :exp/runs :exp/bots :exp/arms :exp/property :exp/shards
+                  :exp/worlds])
          #(case (:exp/kind %)
             :gym (and (:exp/goal %) (:exp/runs %))
             :sim (and (:exp/property %) (:exp/shards %) (:exp/worlds %)))))
 (s/def :fleet/experiments (s/coll-of ::experiment :kind vector? :min-count 1))
-(s/def ::fleet-plan (s/keys :req [:fleet/label :fleet/workers :fleet/experiments]
-                            :opt [:fleet/max-parallel :fleet/max-worker-s :fleet/issue :fleet/salt]))
+(s/def ::fleet-plan
+  (s/keys :req [:fleet/label :fleet/workers :fleet/experiments]
+          :opt [:fleet/max-parallel :fleet/max-worker-s :fleet/issue :fleet/salt]))

@@ -6,4 +6,9 @@
  :fleet/issue 20
  :fleet/experiments
  [{:exp/name "wood" :exp/kind :gym :exp/goal "wood" :exp/runs 8 :exp/bots 2 :exp/est-s 180}
-  {:exp/name "forests" :exp/kind :sim :exp/property "forests" :exp/shards 2 :exp/worlds 4000 :exp/est-s 600}]}
+  {:exp/name "forests"
+   :exp/kind :sim
+   :exp/property "forests"
+   :exp/shards 2
+   :exp/worlds 4000
+   :exp/est-s 600}]}

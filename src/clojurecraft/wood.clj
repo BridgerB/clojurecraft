@@ -2,7 +2,8 @@
   "Getting a log: walk to the nearest remembered trunk, dig the log nearest the bot's own feet
    height (so the drop lands where the bot can stand, not in a hole under the rest of the
    trunk), pick up the drop. The :gather act of the goal table (clojurecraft.make) runs this."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]
             [clojurecraft.terrain :as terrain]))
@@ -32,8 +33,9 @@
   "Of the remembered logs stacked on bottom, the one whose height is closest to the player's
    feet (lower on ties)."
   [world [x y z]]
-  (let [feet (long (Math/floor (second (:player/pos world))))
-        column (take-while #(memory/log-at? world %) (map (fn [dy] [x (+ y dy) z]) (range max-trunk)))]
+  (let [feet (long (math/floor (second (:player/pos world))))
+        column (take-while #(memory/log-at? world %)
+                           (map (fn [dy] [x (+ y dy) z]) (range max-trunk)))]
     (apply min-key (fn [[_ ly _]] (abs (- ly feet))) (reverse column))))
 
 (def max-trunk-failures 2)            ; a trunk that failed twice is given up; once is chance
@@ -50,10 +52,15 @@
       (case kind
         :walk (of-trunk {:intent/kind :dig :intent/target target :intent/for :log})
         :dig (or resume (of-trunk {:intent/kind :collect :intent/target target :intent/for :log}))
-        :collect (when (and blocked-by (< (or clears 0) max-clears))
-                   (of-trunk {:intent/kind :dig :intent/target blocked-by :intent/for :log
-                              :intent/resume (of-trunk {:intent/kind :collect :intent/target target :intent/for :log
-                                                        :intent/clears (inc (or clears 0))})}))
+        :collect
+        (when (and blocked-by (< (or clears 0) max-clears))
+          (of-trunk {:intent/kind :dig
+                     :intent/target blocked-by
+                     :intent/for :log
+                     :intent/resume (of-trunk {:intent/kind :collect
+                                               :intent/target target
+                                               :intent/for :log
+                                               :intent/clears (inc (or clears 0))})}))
         nil))))
 
 (defn skipped
@@ -62,15 +69,23 @@
   [world]
   (let [blacklist (:plan/blacklist world #{})
         failures (:plan/trunk-failures world {})]
-    (fn [[x _ z :as pos]] (or (contains? blacklist pos) (>= (get failures [x z] 0) max-trunk-failures)))))
+    (fn [[x _ z :as pos]]
+      (or (contains? blacklist pos) (>= (get failures [x z] 0) max-trunk-failures)))))
 
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
    trunk. Any goal that needs a log uses this."
   [world]
   (or (continue-gather world)
-      (if-let [bottom (memory/nearest-log world (game/eye world) search-radius (skipped world) standing-trunk?)]
-        {:intent/kind :walk :intent/target (trunk-target world bottom) :intent/for :log :intent/trunk bottom}
+      (if-let [bottom (memory/nearest-log world
+                                          (game/eye world)
+                                          search-radius
+                                          (skipped world)
+                                          standing-trunk?)]
+        {:intent/kind :walk
+         :intent/target (trunk-target world bottom)
+         :intent/for :log
+         :intent/trunk bottom}
         {:plan/wait :no-log})))
 
 

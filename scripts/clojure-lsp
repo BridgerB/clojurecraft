@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# clojure-lsp for git hooks, with or without it (and Java and Clojure) on PATH.
+#
+#   scripts/clojure-lsp clean-ns --filenames a.clj,b.clj
+#   scripts/clojure-lsp diagnostics --raw --filenames a.clj
+#
+# clojure-lsp asks `clojure` for the project's classpath and `bb` for bb.edn's, so Java, Clojure
+# and Babashka must be on PATH too (a missing bb fails the analysis). Whatever is missing comes from
+# flake.nix, built once into .nix/ links (scripts/nix-tool). CI has
+# no nix and runs the same version from Maven (the deps.edn :lsp alias).
+set -euo pipefail
+
+dir=$(cd "$(dirname "$0")" && pwd)
+command -v java >/dev/null 2>&1 || PATH="$("$dir/nix-tool" jdk):$PATH"
+command -v clojure >/dev/null 2>&1 || PATH="$("$dir/nix-tool" clojure):$PATH"
+command -v bb >/dev/null 2>&1 || PATH="$("$dir/nix-tool" babashka):$PATH"
+export PATH
+if command -v clojure-lsp >/dev/null 2>&1; then
+  exec clojure-lsp "$@"
+fi
+exec "$("$dir/nix-tool" clojure-lsp)/clojure-lsp" "$@"

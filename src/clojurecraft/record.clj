@@ -5,7 +5,7 @@
    no server; `verify` also checks that the reducer, given the same events, asks for exactly the
    same effects. Byte arrays print as #clojurecraft/bytes \"base64\". Recordings made before
    effects were recorded are read unchanged; they just have nothing to verify."
-  (:require [clojure.core.async :as a]
+  (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str])
@@ -13,7 +13,8 @@
            [java.util Base64]
            [java.util.zip GZIPInputStream]))
 
-(defmethod print-method (Class/forName "[B") [^bytes b ^Writer w]
+(defmethod print-method (Class/forName "[B")
+  [^bytes b ^Writer w]
   (.write w "#clojurecraft/bytes \"")
   (.write w (.encodeToString (Base64/getEncoder) b))
   (.write w "\""))
@@ -43,17 +44,17 @@
    dropping a line (unlike telemetry). Events are written as they came off the wire (see wire).
    :close waits until every line is on disk."
   [path]
-  (let [ch (a/chan tap-buffer)
-        done (a/thread (with-open [w (io/writer path)]
-                         (binding [*out* w]
-                           (loop []
-                             (when-let [line (a/<!! ch)]
-                               (prn line)
-                               (recur))))))]
-    {:write (fn [event] (a/>!! ch (wire event)))
-     :effects (fn [effects] (when (seq effects) (a/>!! ch {:record/effects effects})))
-     :result (fn [r] (a/>!! ch {:record/result r}))
-     :close (fn [] (a/close! ch) (a/<!! done))}))
+  (let [ch (async/chan tap-buffer)
+        done (async/thread (with-open [w (io/writer path)]
+                             (binding [*out* w]
+                               (loop []
+                                 (when-let [line (async/<!! ch)]
+                                   (prn line)
+                                   (recur))))))]
+    {:write (fn [event] (async/>!! ch (wire event)))
+     :effects (fn [effects] (when (seq effects) (async/>!! ch {:record/effects effects})))
+     :result (fn [r] (async/>!! ch {:record/result r}))
+     :close (fn [] (async/close! ch) (async/<!! done))}))
 
 (defn entries
   "Every line of a recording, in order: event maps, {:record/effects ...} and {:record/result
@@ -62,15 +63,15 @@
   (with-open [r (PushbackReader. (io/reader (if (str/ends-with? (str path) ".gz")
                                               (GZIPInputStream. (io/input-stream path))
                                               path)))]
-    (into [] (take-while some? (repeatedly #(edn/read {:readers readers :eof nil} r))))))
+    (vec (take-while some? (repeatedly #(edn/read {:readers readers :eof nil} r))))))
 
 (defn accretes?
   "Does later hold every fact earlier holds? Maps compare key by key, so attributes added since
    (accretion) are allowed; a value that changed or an attribute that went missing is not."
   [earlier later]
-  (cond
-    (and (map? earlier) (map? later)) (every? (fn [[k v]] (and (contains? later k) (accretes? v (get later k)))) earlier)
-    :else (= earlier later)))
+  (cond (and (map? earlier) (map? later))
+        (every? (fn [[k v]] (and (contains? later k) (accretes? v (get later k)))) earlier)
+        :else (= earlier later)))
 
 (defn recorded-result
   "The RESULT a recording says its run printed, or nil for recordings made before results were
@@ -78,10 +79,7 @@
   [path]
   (some :record/result (entries path)))
 
-(defn events
-  "The events in a recording, in order."
-  [path]
-  (filterv :event/kind (entries path)))
+(defn events "The events in a recording, in order." [path] (filterv :event/kind (entries path)))
 
 (defn effects
   "The recorded effects of each event, aligned with `events` ([] where none were produced), or
@@ -90,10 +88,11 @@
   (let [es (entries path)]
     (when (some :record/effects es)
       (reduce (fn [acc e]
-                (cond (:event/kind e) (conj acc [])                              ; an event: no effects yet
-                      (:record/effects e) (conj (pop acc) (:record/effects e))   ; its effects follow it
+                (cond (:event/kind e) (conj acc [])                            ; an event: no effects yet
+                      (:record/effects e) (conj (pop acc) (:record/effects e)) ; its effects follow it
                       :else acc))
-              [] es))))
+              []
+              es))))
 
 (defn replay
   "Fold step over the recorded events from world0; returns the final world."
@@ -117,7 +116,10 @@
                               produced (:bot/effects w)]
                           (if (= (sent produced) (sent r))
                             (assoc w :bot/effects [])
-                            (reduced {:record/mismatch {:index i :event e :recorded (sent r) :replayed (sent produced)}}))))
-                      world0 (map vector (range) (events path) recorded))]
+                            (reduced
+                             {:record/mismatch
+                              {:index i :event e :recorded (sent r) :replayed (sent produced)}}))))
+                      world0
+                      (map vector (range) (events path) recorded))]
       (when (:record/mismatch end) end))
     :record/no-effects))

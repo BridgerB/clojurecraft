@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# The commit-msg hook (lefthook.yml): refuse a message that breaks the repo's commit rules.
+#
+#   scripts/check-commit-msg .git/COMMIT_EDITMSG
+#
+# 1. No AI attribution anywhere: no co-author trailer naming Claude or Anthropic, no
+#    "Generated with Claude" line, no session link or session trailer. The owner's absolute rule;
+#    this makes it mechanical, whoever or whatever writes the commit.
+# 2. The shape the history has: a subject of at most 72 characters, then a blank line before
+#    any body.
+# Comment lines (#...) are ignored, as git strips them.
+set -euo pipefail
+
+file=${1:?usage: check-commit-msg <message-file>}
+msg=$(grep -v '^#' "$file" || true)
+fail=0
+
+attribution='co-authored-by:.*(claude|anthropic)|generated (with|by) .*claude|claude\.ai/code|claude\.com/claude-code|claude-session:|noreply@anthropic\.com'
+if printf '%s\n' "$msg" | grep -qiE "$attribution"; then
+  echo "commit-msg: AI attribution is not allowed in a commit message:" >&2
+  printf '%s\n' "$msg" | grep -niE "$attribution" | sed 's/^/  line /' >&2
+  fail=1
+fi
+
+subject=$(printf '%s\n' "$msg" | sed -n 1p)
+if [ "${#subject}" -gt 72 ]; then
+  echo "commit-msg: the subject is ${#subject} characters; keep it to 72 or fewer:" >&2
+  echo "  $subject" >&2
+  fail=1
+fi
+
+second=$(printf '%s\n' "$msg" | sed -n 2p)
+if [ -n "$second" ]; then
+  echo "commit-msg: the subject must be followed by a blank line before the body" >&2
+  fail=1
+fi
+
+exit $fail

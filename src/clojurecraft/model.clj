@@ -9,7 +9,8 @@
 (def attributes
   "[attribute meaning when] rows, grouped by what the fact is about."
   [;; ---- the bot itself and its connection
-   [:bot/phase "protocol phase: :handshake, :login, :configuration or :play; moves only in game/emit" "always"]
+   [:bot/phase
+    "protocol phase: :handshake, :login, :configuration or :play; moves only in game/emit" "always"]
    [:bot/name "player name" "once given, by init or the :start event"]
    [:bot/uuid "offline UUID derived from the name" "once the name is given"]
    [:bot/effects "effects the last event asked for; the loop performs and clears them" "always"]
@@ -19,8 +20,7 @@
    [:conn/host "server host" "once given, by init or the :start event"]
    [:conn/port "server port" "once given, by init or the :start event"]
    ;; ---- time, which enters only on ticks
-   [:time/now "ms of the last tick event" "always"]
-   [:time/tick "ticks seen so far" "always"]
+   [:time/now "ms of the last tick event" "always"] [:time/tick "ticks seen so far" "always"]
    ;; ---- facts about itself
    [:player/pos "feet-centre position [x y z]" "from the first teleport"]
    [:player/vel "velocity per tick [vx vy vz]; vy is about -0.078 at rest" "always"]
@@ -28,25 +28,36 @@
    [:player/on-ground? "last vertical move hit ground while falling" "always"]
    [:player/horizontal-collision? "last horizontal move was blocked" "always"]
    [:player/jump-ticks "ticks until a jump is allowed again" "always"]
-   [:player/fall-distance "blocks fallen since the last landing or liquid; vanilla hurts past 3" "after the first physics tick"]
-   [:player/in-water? "the body (contracted) overlaps water, by the physics this tick" "after the first physics tick"]
-   [:player/in-lava? "the body (contracted) overlaps lava, by the physics this tick" "after the first physics tick"]
-   [:player/eye-in-water? "the eye (y + 1.62) is inside water, by the physics this tick" "after the first physics tick"]
+   [:player/fall-distance "blocks fallen since the last landing or liquid; vanilla hurts past 3"
+    "after the first physics tick"]
+   [:player/in-water? "the body (contracted) overlaps water, by the physics this tick"
+    "after the first physics tick"]
+   [:player/in-lava? "the body (contracted) overlaps lava, by the physics this tick"
+    "after the first physics tick"]
+   [:player/eye-in-water? "the eye (y + 1.62) is inside water, by the physics this tick"
+    "after the first physics tick"]
    [:plan/wet-ticks "consecutive ticks the eye has been under water" "while planning"]
    [:plan/dry-ticks "consecutive ticks on dry land (plan/dry-land?)" "while planning"]
-   [:plan/trap "the trap the player is in, :water or :lava, with hysteresis (plan/trapped-tick)" "while trapped"]
-   [:plan/trap-at "the [x z] column where the current trap began" "while trapped"]
-   [:world/traps "every trap escaped: {:trap/pos [x z] :trap/kind :trap/at}, for routes to keep away from" "after the first escape"]
-   [:trap/pos "the column [x z] a trap began in" "inside :world/traps"]
+   [:plan/trap "the trap the player is in, :water or :lava, with hysteresis (plan/trapped-tick)"
+    "while trapped"] [:plan/trap-at "the [x z] column where the current trap began" "while trapped"]
+   [:world/traps
+    "every trap escaped: {:trap/pos [x z] :trap/kind :trap/at}, for routes to keep away from"
+    "after the first escape"] [:trap/pos "the column [x z] a trap began in" "inside :world/traps"]
    [:trap/kind "what the trap was, :water or :lava" "inside :world/traps"]
    [:trap/at "ms the trap cleared" "inside :world/traps"]
    [:intent/bank "the cell a :swim-out swims to, chosen once" "while a :swim-out has one"]
    [:intent/wet? "a :wade has had the body in water at some point" "while a :wade runs"]
-   [:intent/water "the water cell a :wade enters from its bank (:intent/target)" "while a :wade has an entry"]
-   [:intent/dig-when-down "the cell a :swim-out will dig once it has sunk to the floor" "while a :swim-out sinks"]
-   [:intent/next-search "the tick a :swim-out with no bank yet looks for one again" "while a :swim-out rises with no bank"]
-   [:intent/exposes-ok? "a :dig that may open a cell beside water or lava (an escape digs beside the water it is in)" "on an escape's child dig"]
-   [:player/air "breath left, 0-300 ticks: an estimate, down 1 under water, up 4 out" "after the first physics tick"]
+   [:intent/water "the water cell a :wade enters from its bank (:intent/target)"
+    "while a :wade has an entry"]
+   [:intent/dig-when-down "the cell a :swim-out will dig once it has sunk to the floor"
+    "while a :swim-out sinks"]
+   [:intent/next-search "the tick a :swim-out with no bank yet looks for one again"
+    "while a :swim-out rises with no bank"]
+   [:intent/exposes-ok?
+    "a :dig that may open a cell beside water or lava (an escape digs beside the water it is in)"
+    "on an escape's child dig"]
+   [:player/air "breath left, 0-300 ticks: an estimate, down 1 under water, up 4 out"
+    "after the first physics tick"]
    [:player/dead? "health reached zero; cleared by the server's respawn" "while dead"]
    [:player/loaded? "player_loaded was sent: the server lets the bot act" "always"]
    [:player/controls "what the planner wants physics to do next tick (:control/*)" "always"]
@@ -72,7 +83,8 @@
    ;; ---- the world as last seen, and as remembered
    [:world/chunks "{[cx cz] column}: chunks the server has sent and not forgotten" "always"]
    [:world/blocks "{[x y z] state}: block updates and own breaks over the chunks" "always"]
-   [:world/entities "{entity-id {:entity/type :entity/pos :entity/seen-at}}: tracked items" "always"]
+   [:world/entities "{entity-id {:entity/type :entity/pos :entity/seen-at}}: tracked items"
+    "always"]
    [:world/facts "memory: DataScript value of append-only observations, never retracted" "always"]
    [:entity/type "entity type id (71 is an item)" "inside :world/entities"]
    [:entity/pos "last known entity position" "inside :world/entities"]
@@ -82,24 +94,25 @@
    [:sight/at "ms of the observation" "a fact in :world/facts"]
    [:pool/chunk "the chunk [cx cz] a pool fact summarises" "a fact in :world/facts"]
    [:pool/kind "the pool's fluid, :water or :lava" "a fact in :world/facts"]
-   [:pool/pos "the chunk's highest surface source of that fluid, nearest its centre" "a fact in :world/facts"]
-   [:pool/at "ms the pool was seen" "a fact in :world/facts"]
+   [:pool/pos "the chunk's highest surface source of that fluid, nearest its centre"
+    "a fact in :world/facts"] [:pool/at "ms the pool was seen" "a fact in :world/facts"]
    [:intention/id "which intent a fact is about (its :intent/id)" "a fact in :world/facts"]
-   [:intention/event "what happened to it: :started :done :failed or :abandoned" "a fact in :world/facts"]
-   [:intention/kind "the intent's kind" "a fact in :world/facts"]
+   [:intention/event "what happened to it: :started :done :failed or :abandoned"
+    "a fact in :world/facts"] [:intention/kind "the intent's kind" "a fact in :world/facts"]
    [:intention/at "ms it happened" "a fact in :world/facts"]
    [:intention/target "the intent's target" "a fact, when the intent had one"]
    [:intention/recipe "the intent's recipe" "a fact, when the intent had one"]
-   [:intention/reason "why it failed or was abandoned (:goal-met, :preempted)" "a :failed or :abandoned fact"]
-   [:answer/kind "which server answer to the bot's own action: :ack, :pickup, or :death (health reached zero)" "a fact in :world/facts"]
-   [:answer/at "ms the answer arrived" "a fact in :world/facts"]
+   [:intention/reason "why it failed or was abandoned (:goal-met, :preempted)"
+    "a :failed or :abandoned fact"]
+   [:answer/kind
+    "which server answer to the bot's own action: :ack, :pickup, or :death (health reached zero)"
+    "a fact in :world/facts"] [:answer/at "ms the answer arrived" "a fact in :world/facts"]
    [:answer/sequence "the block-interaction sequence the server acknowledged" "an :ack fact"]
    [:answer/entity "the item entity the bot picked up" "a :pickup fact"]
    [:answer/count "how many items that pickup gave" "a :pickup fact"]
    ;; ---- the server's answers to the bot's own actions, and counts
    [:stats/keep-alives "keep-alives answered" "always"]
-   [:stats/teleports "teleports accepted" "always"]
-   [:stats/chunks "chunk columns loaded" "always"]
+   [:stats/teleports "teleports accepted" "always"] [:stats/chunks "chunk columns loaded" "always"]
    [:stats/unknown "{[phase id] n}: packets with no handler" "always"]
    [:stats/last-ack "last block-changed-ack sequence from the server" "after the first ack"]
    [:stats/pickups "take-item-entity packets seen" "after the first pickup"]
@@ -113,23 +126,29 @@
    [:plan/go-at "the landing a fixture named" "from a :go with :go/at"]
    [:plan/since "ms the status last changed" "from the :go event"]
    [:plan/blacklist "targets that failed, skipped when choosing" "from the :go event"]
-   [:plan/trunk-failures "failed gather intents per trunk column [x z]; a column that failed twice is skipped when choosing a log" "from the :go event"]
-   [:plan/attempts "intent failures in a row" "from the :go event"]
+   [:plan/trunk-failures
+    "failed gather intents per trunk column [x z]; a column that failed twice is skipped when choosing a log"
+    "from the :go event"] [:plan/attempts "intent failures in a row" "from the :go event"]
    [:plan/intents "intents started so far; the next one's :intent/id" "after the first intent"]
    [:plan/intent "the intent being executed" "while one runs"]
    [:plan/last "the last intent that ended, with its outcome" "after one ends"]
    [:plan/reason "why the plan failed" "after it failed"]
    [:plan/waiting "why the planner is waiting" "after the first wait"]
    [:plan/waiting-since "ms the current wait began" "while waiting"]
-   [:plan/wait "a planner answer meaning: nothing to do yet, for this reason" "returned by next-intent, never stored"]
-   [:intent/kind "executor: :walk :dig :collect :craft :place :open-container :stairs-down" "every intent"]
-   [:intent/status ":active, :done or :failed" "every intent"]
-   [:intent/id "the intent's number in this run, linking its facts in memory" "every started intent"]
-   [:intent/goal "the target goal id the intent serves; another target chosen preempts it" "intents the planner starts"]
+   [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
+    "returned by next-intent, never stored"]
+   [:intent/kind "executor: :walk :dig :collect :craft :place :open-container :stairs-down"
+    "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
+   [:intent/id "the intent's number in this run, linking its facts in memory"
+    "every started intent"]
+   [:intent/goal "the target goal id the intent serves; another target chosen preempts it"
+    "intents the planner starts"]
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
    [:intent/target "block position it acts on or walks to" "most intents"]
-   [:intent/for "what the intent serves (:log), so chains continue only their own" "gather-chain intents"]
-   [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole" "gather-chain intents"]
+   [:intent/for "what the intent serves (:log), so chains continue only their own"
+    "gather-chain intents"]
+   [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"
+    "gather-chain intents"]
    [:intent/stage "executor stage, e.g. :settle :digging :click :verify :take" "staged intents"]
    [:intent/since "ms the stage began" "staged intents"]
    [:intent/started "ms the intent began" "walk and dig"]
@@ -140,59 +159,63 @@
    [:intent/slot "hotbar slot the dig holds its tool in (0 for the hand)" "dig, from START"]
    [:intent/tool "item id of the tool the dig holds, nil for the hand" "dig, from START"]
    [:intent/dig-ms "ms the server needs to break the target with that tool" "dig, from START"]
-   [:intent/state "the target's state id at START; the same state after FINISH means the server refused" "dig, from START"]
-   [:intent/confirm-left "ticks left to wait for the server's ack after FINISH" "dig, :confirm stage"]
+   [:intent/state
+    "the target's state id at START; the same state after FINISH means the server refused"
+    "dig, from START"]
+   [:intent/confirm-left "ticks left to wait for the server's ack after FINISH"
+    "dig, :confirm stage"]
    [:intent/to-y "feet height at or below which the staircase is done" "stairs-down"]
    [:intent/dir "[dx dz] heading the next stair is cut toward" "stairs-down, once planned"]
-   [:intent/turns "quarter turns taken after refused stairs; four fail :boxed" "stairs-down, after a refusal"]
-   [:intent/cells "the three cells the current stair opens, top first" "stairs-down, while a stair is cut"]
-   [:intent/child "the :dig intent cutting one cell, run by the dig executor" "stairs-down, while digging"]
-   [:intent/started-y "feet height when the current stair began; a step is judged by going below it" "stairs-down, per stair"]
+   [:intent/turns "quarter turns taken after refused stairs; four fail :boxed"
+    "stairs-down, after a refusal"]
+   [:intent/cells "the three cells the current stair opens, top first"
+    "stairs-down, while a stair is cut"]
+   [:intent/child "the :dig intent cutting one cell, run by the dig executor"
+    "stairs-down, while digging"]
+   [:intent/started-y "feet height when the current stair began; a step is judged by going below it"
+    "stairs-down, per stair"]
    [:intent/started-tick "tick the current stair or its step began" "stairs-down, per stair"]
    [:intent/best-dist "closest it has come to the target" "walk and collect"]
    [:intent/best-tick "tick of the last progress" "walk and collect"]
    [:intent/detour-until "tick a detour ends" "walk, while detouring"]
    [:intent/detour-yaw "heading offset of the detour" "walk, while detouring"]
    [:intent/detours "detours taken" "walk"]
-   [:intent/waypoints "the route's feet cells still to walk, from clojurecraft.path" "walk, once planned"]
-   [:intent/route "how the route ended: :found, :partial (budget spent) or :none (no way on)" "walk, once planned"]
-   [:intent/at "index of the next waypoint" "walk, once planned"]
-   [:intent/replans "routes planned for this walk; more than intent/max-replans fails :no-path" "walk, once planned"]
-   [:intent/planned-chunks "chunk columns loaded when the route was made (kept for the record; a new chunk no longer replans by itself)" "walk, once planned"]
-   [:intent/logs-before "logs held when collecting began" "collect"]
+   [:intent/waypoints "the route's feet cells still to walk, from clojurecraft.path"
+    "walk, once planned"]
+   [:intent/route "how the route ended: :found, :partial (budget spent) or :none (no way on)"
+    "walk, once planned"] [:intent/at "index of the next waypoint" "walk, once planned"]
+   [:intent/replans "routes planned for this walk; more than intent/max-replans fails :no-path"
+    "walk, once planned"]
+   [:intent/planned-chunks
+    "chunk columns loaded when the route was made (kept for the record; a new chunk no longer replans by itself)"
+    "walk, once planned"] [:intent/logs-before "logs held when collecting began" "collect"]
    [:intent/blocked-by "leaf block over the drop" "collect, when the drop is covered"]
    [:intent/clears "leaf blocks cleared for this drop" "a collect resumed after clearing"]
    [:intent/resume "the intent to run after clearing a blocker" "a dig that clears a blocker"]
-   [:intent/recipe "recipe id to craft" "craft"]
-   [:intent/window ":inventory or :table" "craft"]
+   [:intent/recipe "recipe id to craft" "craft"] [:intent/window ":inventory or :table" "craft"]
    [:intent/clicks "clicks still to send" "craft, :click stage"]
-   [:intent/result "result item id" "craft"]
-   [:intent/makes "items one craft yields" "craft"]
+   [:intent/result "result item id" "craft"] [:intent/makes "items one craft yields" "craft"]
    [:intent/before "result items held before crafting" "craft"]
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
-   [:intent/item "item to place" "place"]
-   [:intent/against "block the placement is against" "place"]
+   [:intent/item "item to place" "place"] [:intent/against "block the placement is against" "place"]
    [:intent/sequence "sequence number of the placement" "place, after sending"]
    ;; ---- events: everything the reducer is given
    [:event/kind ":start :packet :tick :go :closed" "every event"]
    [:event/now "wall-clock ms of a tick" "tick"]
    [:event/rand "a random double in [0, 1] for this tick" "tick"]
-   [:event/packet "the decoded packet" "packet"]
-   [:event/reason "why the socket closed" "closed"]
-   [:start/host "server host" "start"]
-   [:start/port "server port" "start"]
-   [:start/name "player name" "start"]
-   [:go/goals "target goal ids to pursue" "go"]
+   [:event/packet "the decoded packet" "packet"] [:event/reason "why the socket closed" "closed"]
+   [:start/host "server host" "start"] [:start/port "server port" "start"]
+   [:start/name "player name" "start"] [:go/goals "target goal ids to pursue" "go"]
    [:go/at "where the fixture landed the bot" "go, from a fixture"]
    ;; ---- effects: everything the reducer asks for
-   [:effect/kind ":send or :log" "every effect"]
-   [:effect/packet "packet to send" "send"]
+   [:effect/kind ":send or :log" "every effect"] [:effect/packet "packet to send" "send"]
    [:effect/message "line to log" "log"]
    ;; ---- packets
    [:packet/name "which packet; its other fields are the wire's names, unqualified" "every packet"]
-   [:chunk/column "the decoded column, added on the reader thread; never recorded" "level-chunk packets"]])
+   [:chunk/column "the decoded column, added on the reader thread; never recorded"
+    "level-chunk packets"]])
 
 (def by-attribute
   "attribute → {:doc meaning :when lifetime}."

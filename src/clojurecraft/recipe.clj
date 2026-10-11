@@ -16,7 +16,6 @@
 
 (def recipes "[recipe ...]" (resource "recipes"))
 (def tags "{tag-name #{item-name}}" (resource "item-tags"))
-(def by-result (group-by :recipe/result recipes))
 (def by-id (into {} (map (juxt :recipe/id identity) recipes)))
 
 (def item-names (into {} (map (fn [[n id]] [id n]) blocks/items)))
@@ -45,9 +44,7 @@
 (defn needs
   "{ingredient-set count} consumed by one craft."
   [{:recipe/keys [kind ingredients] :as r}]
-  (if (= kind :shaped)
-    (frequencies (map second (cells r)))
-    (frequencies ingredients)))
+  (if (= kind :shaped) (frequencies (map second (cells r))) (frequencies ingredients)))
 
 (defn placement
   "{grid-slot ingredient-set} for one craft laid at the top-left of a size×size grid."
@@ -62,15 +59,20 @@
   "Does the occupied part of grid (non-empty, {slot item-name}) equal r's pattern, as drawn or
    mirrored left to right? The pattern may sit anywhere in the grid, as in vanilla."
   [r grid size]
-  (let [occupied (keep (fn [[slot item]] (when item [(quot (dec slot) size) (rem (dec slot) size)])) grid)
-        rows (map first occupied) cols (map second occupied)
-        r0 (apply min rows) c0 (apply min cols)
-        h (inc (- (apply max rows) r0)) w (inc (- (apply max cols) c0))
+  (let [occupied (keep (fn [[slot item]] (when item [(quot (dec slot) size) (rem (dec slot) size)]))
+                       grid)
+        rows (map first occupied)
+        cols (map second occupied)
+        r0 (apply min rows)
+        c0 (apply min cols)
+        h (inc (- (apply max rows) r0))
+        w (inc (- (apply max cols) c0))
         {:recipe/keys [pattern key width height]} r
-        at (fn [row col] (get grid (+ 1 (* (+ r0 row) size) (+ c0 col))))
+        at (fn [row col] (get grid (+ 1 (* (+ r0 row) size) c0 col)))
         fits (fn [mirror?]
                (every? true?
-                       (for [row (range height) col (range width)]
+                       (for [row (range height)
+                             col (range width)]
                          (let [ch (get-in pattern [row (if mirror? (- width 1 col) col)] \space)
                                item (at row col)]
                            (if (= ch \space) (nil? item) (contains? (key (str ch)) item))))))]
@@ -85,8 +87,11 @@
          (letfn [(assign [items sets]
                    (or (empty? items)
                        (let [[item & more] items]
-                         (some (fn [i] (and (contains? (nth sets i) item)
-                                            (assign more (vec (concat (subvec sets 0 i) (subvec sets (inc i)))))))
+                         (some (fn [i]
+                                 (and (contains? (nth sets i) item)
+                                      (assign more
+                                              (vec (concat (subvec sets 0 i)
+                                                           (subvec sets (inc i)))))))
                                (range (count sets))))))]
            (boolean (assign items (vec sets)))))))
 
@@ -95,8 +100,11 @@
   [grid size]
   (let [grid (into {} (filter val grid))]
     (when (seq grid)
-      (first (filter (fn [r] (and (fits? r size)
-                                  (if (= :shaped (:recipe/kind r)) (shaped-match? r grid size) (shapeless-match? r grid))))
+      (first (filter (fn [r]
+                       (and (fits? r size)
+                            (if (= :shaped (:recipe/kind r))
+                              (shaped-match? r grid size)
+                              (shapeless-match? r grid))))
                      recipes)))))
 
 ;; ---------------------------------------------------------------- inventory
@@ -104,12 +112,17 @@
 (defn player->container-slot
   "Player-inventory slot → window-0 slot."
   [^long s]
-  (cond (<= 0 s 8) (+ 36 s) (<= 9 s 35) s (= s 40) 45 :else nil))
+  (cond (<= 0 s 8) (+ 36 s)
+        (<= 9 s 35) s
+        (= s 40) 45
+        :else nil))
 
 (defn counts
   "{item-name n} over a {slot {:item id :count n}} inventory."
   [inventory]
-  (reduce (fn [m {:keys [item count]}] (update m (item-name item) (fnil + 0) count)) {} (vals inventory)))
+  (reduce (fn [m {:keys [item count]}] (update m (item-name item) (fnil + 0) count))
+          {}
+          (vals inventory)))
 
 (defn have
   "How many items of any name in set s the counts hold."
@@ -125,7 +138,8 @@
                      (reduced [counts n])
                      (let [k (min n (get counts item 0))]
                        [(update counts item (fnil - 0) k) (- n k)])))
-                 [counts n] (sort s))))
+                 [counts n]
+                 (sort s))))
 
 ;; ---------------------------------------------------------------- clicks
 
@@ -152,7 +166,10 @@
                            [(update used source (fnil + 0) n)
                             (-> acc
                                 (conj {:click/slot cs :click/button 0 :click/mode 0})
-                                (into (for [[g _] (sort-by key cells)] {:click/slot g :click/button 1 :click/mode 0}))
-                                (cond-> (pos? left) (conj {:click/slot cs :click/button 0 :click/mode 0})))]))))
-                   [{} []] (group-by val (placement r size)))
+                                (into (for [[g _] (sort-by key cells)]
+                                        {:click/slot g :click/button 1 :click/mode 0}))
+                                (cond-> (pos? left)
+                                        (conj {:click/slot cs :click/button 0 :click/mode 0})))]))))
+                   [{} []]
+                   (group-by val (placement r size)))
            second)))

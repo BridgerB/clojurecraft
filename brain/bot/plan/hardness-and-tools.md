@@ -5,8 +5,8 @@ type: reference
 tags: [bot, plan, dig, data, tools]
 aliases: [dig/ms, hardness.edn, harvest.edn, materials.edn, best-tool, harvest?, tier-rank, jar-probe]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 56441f5
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/dig.clj#defn ms
   - src/clojurecraft/dig.clj#defn harvest?
@@ -32,7 +32,7 @@ related:
 Three generated tables, and one pure formula over them.
 
 ## The tables
-- `hardness.edn` `{block hardness}` and `materials.edn` `{tier {:speed :durability :incorrect}}` come from `clojurecraft.jar-probe`: a JVM with the inner server jar and the bundler's libraries boots the game's registries and reads `BlockState.getDestroySpeed` for every block and every `ToolMaterial` constant. Neither is in the `--reports` output or any data file, and the inner jar is not obfuscated, so this is the game's own number at the version `datagen.sh` downloads. Datagen throws when a block of `blocks.edn` has no hardness: a version bump can never default one silently, which is the placeholder-hardness bug ruststeve paid for ([[sib-dig-hardness]]).
+- `hardness.edn` `{block hardness}` and `materials.edn` `{tier {:speed :durability :incorrect}}` come from `clojurecraft.jar-probe`: a JVM with the inner server jar and the bundler's libraries boots the game's registries and reads `BlockState.getDestroySpeed` for every block and every `ToolMaterial` constant. Neither is in the `--reports` output or any data file, and the inner jar is not obfuscated, so this is the game's own number at the version `bb datagen` (`bb/clojurecraft/gen_tables.clj`) downloads. Datagen throws when a block of `blocks.edn` has no hardness: a version bump can never default one silently, which is the placeholder-hardness bug ruststeve paid for ([[sib-dig-hardness]]).
 - `harvest.edn` `{block {:tool kind :needs tier}}` comes from the inner jar's `mineable/*` and `needs_*_tool` block tags, nested tags resolved.
 
 ## The formula (`dig/ms`)

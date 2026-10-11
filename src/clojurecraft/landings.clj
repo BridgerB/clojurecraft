@@ -11,6 +11,7 @@
    released. The result is [[x z y] ...], saved with the world in the gym's cache."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojurecraft.harness :as harness]
             [clojurecraft.rcon :as rcon]))
 
@@ -21,10 +22,12 @@
 (defn grid
   "n cell centres around centre, spacing apart, row by row on a square as small as fits n."
   [[cx cz] n spacing]
-  (let [side (long (Math/ceil (Math/sqrt n)))
+  (let [side (long (math/ceil (math/sqrt n)))
         half (quot side 2)]
-    (vec (take n (for [row (range side) col (range side)]
-                   [(+ cx (* spacing (- col half))) (+ cz (* spacing (- row half)))])))))
+    (vec (take n
+               (for [row (range side)
+                     col (range side)]
+                 [(+ cx (* spacing (- col half))) (+ cz (* spacing (- row half)))])))))
 
 (defn parse-located
   "[x z] from a `locate` reply, or nil when nothing was found."
@@ -40,8 +43,8 @@
 (defn chunk-count
   "How many chunk columns a block square touches."
   [[x0 z0 x1 z1]]
-  (* (inc (- (Math/floorDiv (long x1) 16) (Math/floorDiv (long x0) 16)))
-     (inc (- (Math/floorDiv (long z1) 16) (Math/floorDiv (long z0) 16)))))
+  (* (inc (- (math/floor-div (long x1) 16) (math/floor-div (long x0) 16)))
+     (inc (- (math/floor-div (long z1) 16) (math/floor-div (long z0) 16)))))
 
 (defn fit?
   "Is a surface position a landing? High enough, and no landing check (answers to
@@ -72,14 +75,24 @@
    read with a marker entity that is removed again; nil when the column would not load."
   [rc [x z]]
   (rcon/command rc (str "forceload add " x " " z))
-  (try
-    (when (harness/wait-loaded! rc x z)
-      (rcon/command rc (str "execute positioned " x " 0 " z " positioned over motion_blocking_no_leaves"
-                            " run summon minecraft:marker ~ ~ ~ {Tags:[\"" marker-tag "\"]}"))
-      (let [pos (harness/parse-pos (rcon/command rc (str "data get entity @e[type=minecraft:marker,tag=" marker-tag ",limit=1] Pos")))]
-        (rcon/command rc (str "kill @e[type=minecraft:marker,tag=" marker-tag "]"))
-        (when pos (mapv #(long (Math/floor %)) pos))))
-    (finally (rcon/command rc (str "forceload remove " x " " z)))))
+  (try (when (harness/wait-loaded! rc x z)
+         (rcon/command rc
+                       (str "execute positioned "
+                            x
+                            " 0 "
+                            z
+                            " positioned over motion_blocking_no_leaves"
+                            " run summon minecraft:marker ~ ~ ~ {Tags:[\""
+                            marker-tag
+                            "\"]}"))
+         (let [pos (harness/parse-pos (rcon/command rc
+                                                    (str
+                                                     "data get entity @e[type=minecraft:marker,tag="
+                                                     marker-tag
+                                                     ",limit=1] Pos")))]
+           (rcon/command rc (str "kill @e[type=minecraft:marker,tag=" marker-tag "]"))
+           (when pos (mapv #(long (math/floor %)) pos))))
+       (finally (rcon/command rc (str "forceload remove " x " " z)))))
 
 (defn answers!
   "The landing checks run at a surface position, with its column held loaded while the server
@@ -87,19 +100,20 @@
    reads as a landing with nothing wrong with it (gym shore-w2: two landings in the open sea)."
   [rc [x y z]]
   (rcon/command rc (str "forceload add " x " " z))
-  (try
-    (harness/wait-loaded! rc x z)
-    (vec (for [[reason test] harness/checks]
-           [reason (rcon/command rc (str "execute positioned " x " " y " " z " " test))]))
-    (finally (rcon/command rc (str "forceload remove " x " " z)))))
+  (try (harness/wait-loaded! rc x z)
+       (vec (for [[reason test] harness/checks]
+              [reason (rcon/command rc (str "execute positioned " x " " y " " z " " test))]))
+       (finally (rcon/command rc (str "forceload remove " x " " z)))))
 
 (defn landing!
   "The first fit surface near grid cell, after snapping it to the set's biome, that is not one
    of taken (two cells can snap to the same biome point): [x z y], or nil."
   [rc cell biome taken]
   (let [[cx cz] cell
-        snapped (or (parse-located (rcon/command rc (str "execute positioned " cx " 64 " cz " run locate biome " biome)))
-                    cell)]
+        snapped
+        (or (parse-located
+             (rcon/command rc (str "execute positioned " cx " 64 " cz " run locate biome " biome)))
+            cell)]
     (some (fn [[ox oz]]
             (let [[x z] [(+ (first snapped) ox) (+ (second snapped) oz)]
                   pos (surface! rc [x z])]
@@ -114,20 +128,20 @@
   [rc [x z _] r]
   (let [[x0 z0 x1 z1 :as sq] (square [x z] r)]
     (when (> (chunk-count sq) max-forceload-chunks)
-      (throw (ex-info "pregen square too large for one forceload" {:square sq :chunks (chunk-count sq)})))
+      (throw (ex-info "pregen square too large for one forceload"
+                      {:square sq :chunks (chunk-count sq)})))
     (rcon/command rc (str "forceload add " x0 " " z0 " " x1 " " z1))
-    (try
-      (doseq [[cx cz] [[x0 z0] [x1 z0] [x0 z1] [x1 z1]]] (harness/wait-loaded! rc cx cz))
-      (finally (rcon/command rc (str "forceload remove " x0 " " z0 " " x1 " " z1))))))
+    (try (doseq [[cx cz] [[x0 z0] [x1 z0] [x0 z1] [x1 z1]]] (harness/wait-loaded! rc cx cz))
+         (finally (rcon/command rc (str "forceload remove " x0 " " z0 " " x1 " " z1))))))
 
 (defn landings!
   "Build a landing set against a running server: one distinct landing per grid cell that has one,
    each pregenerated. Returns [[x z y] ...]."
   [rc {:keys [center n spacing biome pregen-r]}]
-  (reduce (fn [ls cell]
-            (if-let [l (landing! rc cell biome (set (map (fn [[x z]] [x z]) ls)))]
-              (do (harness/log "landing" l "for cell" cell)
-                  (pregenerate! rc l pregen-r)
-                  (conj ls l))
-              ls))
-          [] (grid center n spacing)))
+  (reduce
+   (fn [ls cell]
+     (if-let [l (landing! rc cell biome (set (map (fn [[x z]] [x z]) ls)))]
+       (do (harness/log "landing" l "for cell" cell) (pregenerate! rc l pregen-r) (conj ls l))
+       ls))
+   []
+   (grid center n spacing)))
