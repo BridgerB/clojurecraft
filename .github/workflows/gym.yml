@@ -43,7 +43,7 @@ jobs:
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Refuse when the runners are full
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,7 +55,7 @@ jobs:
           done
           echo "jobs in progress across this repository: $busy"
           if [ "$busy" -gt 20 ]; then echo "::error::more than 20 jobs already running"; exit 1; fi
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -63,7 +63,7 @@ jobs:
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.m2/repository
@@ -92,14 +92,14 @@ jobs:
       max-parallel: 20
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: The pregenerated world (never built here)
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: cache/worlds/${{ env.SET }}
           key: ${{ inputs.world-key || needs.world.outputs.key }}
           fail-on-cache-miss: true
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -107,13 +107,13 @@ jobs:
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.m2/repository
             ~/.gitlibs
           key: clj-${{ hashFiles('deps.edn') }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: data/local-server/server-26.1.2.jar
           key: server-jar-97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51
@@ -141,7 +141,7 @@ jobs:
         run: |
           clojure -M:rcon --host 127.0.0.1 --port 25575 --pass "$RCON_PASS" forceload query | tee forceload-stop.txt || true
           WORLD=$PWD/work/world scripts/server.sh stop
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: gym-${{ env.LABEL }}-${{ matrix.goal }}-${{ matrix.run }}
@@ -164,12 +164,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: gym-${{ env.LABEL }}-*
           path: artifacts
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -177,7 +177,7 @@ jobs:
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.m2/repository
@@ -196,7 +196,7 @@ jobs:
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
           pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number --jq '.[0].number // empty')
           if [ -n "$pr" ]; then gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body-file summary.md; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gym-${{ env.LABEL }}-summary
           path: |

@@ -33,7 +33,7 @@ jobs:
       width: ${{ steps.plan.outputs.width }}
       label: ${{ steps.plan.outputs.label }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - id: pick
@@ -60,7 +60,7 @@ jobs:
           done
           echo "jobs in progress across this repository (this one included): $busy"
           echo "BUSY=$busy" >> "$GITHUB_ENV"
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -68,7 +68,7 @@ jobs:
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.m2/repository
@@ -97,14 +97,14 @@ jobs:
       max-parallel: ${{ fromJSON(needs.plan.outputs.width) }}
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: The pregenerated world (never built here)
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: cache/worlds/A
           key: ${{ needs.world.outputs.key }}
           fail-on-cache-miss: true
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -112,13 +112,13 @@ jobs:
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.m2/repository
             ~/.gitlibs
           key: clj-${{ hashFiles('deps.edn') }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: data/local-server/server-26.1.2.jar
           key: server-jar-97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51
@@ -126,7 +126,7 @@ jobs:
         env:
           SALT: ${{ inputs.salt }}
         run: clojure -M:fleet work --plan "${{ needs.plan.outputs.plan }}" --worker "${{ matrix.worker }}" --out out --worlds cache/worlds ${SALT:+--salt "$SALT"}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: fleet-${{ needs.plan.outputs.label }}-w${{ matrix.worker }}
@@ -140,12 +140,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           pattern: fleet-${{ needs.plan.outputs.label }}-w*
           path: artifacts
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -153,7 +153,7 @@ jobs:
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             ~/.m2/repository
@@ -174,7 +174,7 @@ jobs:
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
           issue=$(clojure -M -e "(println (or (:fleet/issue (clojure.edn/read-string (slurp \"$PLAN\"))) \"\"))")
           if [ -n "$issue" ]; then gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body-file summary.md; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: fleet-${{ needs.plan.outputs.label }}-summary
           path: |
