@@ -75,15 +75,15 @@
    rc
    [x z]
    #(when (fixture/wait-loaded! rc x z)
-      (rcon/command
+      (rcon/command!
        rc
        (fixture/on-surface x z (str "summon minecraft:marker ~ ~ ~ {Tags:[\"" marker-tag "\"]}")))
-      (let [pos (fixture/parse-pos (rcon/command rc
-                                                 (str
-                                                  "data get entity @e[type=minecraft:marker,tag="
-                                                  marker-tag
-                                                  ",limit=1] Pos")))]
-        (rcon/command rc (str "kill @e[type=minecraft:marker,tag=" marker-tag "]"))
+      (let [pos (fixture/parse-pos (rcon/command! rc
+                                                  (str
+                                                   "data get entity @e[type=minecraft:marker,tag="
+                                                   marker-tag
+                                                   ",limit=1] Pos")))]
+        (rcon/command! rc (str "kill @e[type=minecraft:marker,tag=" marker-tag "]"))
         (when pos (mapv (fn [c] (long (math/floor c))) pos))))))
 
 (defn answers!
@@ -97,8 +97,8 @@
    (fn []
      (fixture/wait-loaded! rc x z)
      (mapv (fn [[reason test]] [reason
-                                (rcon/command rc
-                                              (str "execute positioned " x " " y " " z " " test))])
+                                (rcon/command! rc
+                                               (str "execute positioned " x " " y " " z " " test))])
            fixture/checks))))
 
 (defn landing!
@@ -108,7 +108,7 @@
   (let [[cx cz] cell
         snapped
         (or (fixture/parse-located
-             (rcon/command rc (str "execute positioned " cx " 64 " cz " run locate biome " biome)))
+             (rcon/command! rc (str "execute positioned " cx " 64 " cz " run locate biome " biome)))
             cell)]
     (some (fn [[ox oz]]
             (let [[x z] [(+ (first snapped) ox) (+ (second snapped) oz)]

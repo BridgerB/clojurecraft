@@ -263,13 +263,14 @@
                          (parse-long (str rcon-port))
                          rcon-pass
                          (fn [rc]
-                           (when-not (fixture/wait-online rc name fixture/online-timeout)
+                           (when-not (fixture/wait-online! rc name fixture/online-timeout)
                              (throw (ex-info "bot never came online" {:name name})))
-                           (rcon/command rc (str "gamemode survival " name))
-                           (rcon/command rc (str "clear " name))
-                           (doseq [p (:gym/prereqs row)] (rcon/command rc (str "give " name " " p)))
+                           (rcon/command! rc (str "gamemode survival " name))
+                           (rcon/command! rc (str "clear " name))
+                           (doseq [p (:gym/prereqs row)]
+                             (rcon/command! rc (str "give " name " " p)))
                            (fixture/teleport! rc name [x z])
-                           (rcon/command rc (str "spawnpoint " name " " x " " y " " z))
+                           (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
                            (Thread/sleep (long fixture/settle-ms))
                            {:gym/landed? true
                             :gym/landing landing
@@ -306,7 +307,7 @@
                                       (parse-long (str rcon-port))
                                       rcon-pass
                                       (fn [rc]
-                                        (mapv #(truth % name (rcon/command rc (truth-cmd % name)))
+                                        (mapv #(truth % name (rcon/command! rc (truth-cmd % name)))
                                               (:gym/truth row))))
                       (catch Exception e (cli/log "truth failed:" e) [])))
         judged-row (judged (assoc left

@@ -40,7 +40,7 @@
 
 (deftest a-forceload-is-released-even-when-the-work-throws
   (let [sent (atom [])]
-    (with-redefs [rcon/command (fn [_ s] (swap! sent conj s) "")]
+    (with-redefs [rcon/command! (fn [_ s] (swap! sent conj s) "")]
       (is (= :done (fixture/with-forceload {:next-id (atom 0)} [1 2] (constantly :done))))
       (is (thrown?
            clojure.lang.ExceptionInfo

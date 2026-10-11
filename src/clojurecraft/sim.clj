@@ -14,7 +14,7 @@
    loaded cursor.
 
    Two ways to drive it: run folds bot and model together, deterministic and fast (generated
-   worlds); connect puts the model on a thread behind a channel pair shaped like conn/open's,
+   worlds); connect puts the model on a thread behind a channel pair shaped like conn/open!'s,
    so main's own loop (its clock, its effects, its tap) runs against it with no Java process."
   (:refer-clojure :exclude [send])
   (:require [clojure.core.async :as async]
@@ -702,8 +702,8 @@
 
 (def tick-ms 50)                        ; the model's tick, as the vanilla server's
 
-(defn connect
-  "The model behind a channel pair shaped like conn/open's: {:in chan :out chan :close! fn}.
+(defn connect!
+  "The model behind a channel pair shaped like conn/open!'s: {:in chan :out chan :close! fn}.
    Packet maps the client puts on :out are stepped into the model; every tick-ms of wall time
    the model ticks; whatever it says for the client goes onto :in, in order. Both channels are
    bounded, as conn's are. :in closes when the client closes :out or calls :close!, which the

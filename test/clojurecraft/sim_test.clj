@@ -575,7 +575,7 @@
   ;; simulation with no Java process." The loop here is main's: wall-clock ticks, effects
   ;; drained onto :out, packets read from :in, :go put on the events channel once loaded.
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
-        c (sim/connect (sim/init {:column column :spawn [0.5 64.0 0.5] :keep-alive-every 1000}))
+        c (sim/connect! (sim/init {:column column :spawn [0.5 64.0 0.5] :keep-alive-every 1000}))
         events (async/chan 16)
         world* (atom (game/init fx/opts))
         deadline (+ (System/currentTimeMillis) 30000)]
@@ -584,7 +584,7 @@
                        (:out c)
                        nil)
     (main/go-when-loaded! world* events {:event/kind :go :go/goals [:wood]})
-    (let [w (main/run-loop
+    (let [w (main/run-loop!
              c
              events
              world*

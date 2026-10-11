@@ -52,7 +52,7 @@
       (.readFully in rest)
       (decode-packet (ByteBuffer/wrap (byte-array (concat head rest)))))))
 
-(defn connect
+(defn connect!
   "Open and authenticate; returns {:sock :in :out :next-id}. Throws when the
    password is refused (the server answers with id -1)."
   [host port pass]
@@ -65,7 +65,7 @@
       (when (= -1 (:id r)) (throw (ex-info "rcon auth failed" {:host host :port port}))))
     {:sock sock :in in :out out :next-id (atom 10)}))
 
-(defn command
+(defn command!
   "Send one command, return the server's text response."
   [{:keys [^DataInputStream in ^DataOutputStream out next-id]} ^String s]
   (let [id (swap! next-id inc)]
@@ -74,13 +74,13 @@
     (loop [acc ""]
       (let [r (read-response in)] (if (= id (:id r)) (str acc (:body r)) (recur acc))))))
 
-(defn close "Close the connection's socket." [{:keys [^Socket sock]}] (.close sock))
+(defn close! "Close the connection's socket." [{:keys [^Socket sock]}] (.close sock))
 
 (defn with-rcon
   "Call (f conn) on an authenticated connection and close it afterwards, even on
    a throw; returns what f returns."
   [host port pass f]
-  (let [c (connect host port pass)] (try (f c) (finally (close c)))))
+  (let [c (connect! host port pass)] (try (f c) (finally (close! c)))))
 
 (defn -main
   "clojure -M:rcon --host H --port P --pass S <command...>"
@@ -88,5 +88,5 @@
   (let [[{:keys [host port pass]} words] (cli/split-options args)
         cmd (str/join " " words)]
     (println
-     (with-rcon (or host "127.0.0.1") (Long/parseLong (or port "25575")) pass #(command % cmd)))
+     (with-rcon (or host "127.0.0.1") (Long/parseLong (or port "25575")) pass #(command! % cmd)))
     (shutdown-agents)))

@@ -230,7 +230,7 @@
     (try (when-not (zero? (cli/exec! ["bb" "server" "start"] {:env env :log log}))
            (throw (ex-info "server did not start" {:unit (:unit/id unit)})))
          (spit (io/file dir "forceload-start.txt")
-               (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command % "forceload query")))
+               (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command! % "forceload query")))
          (let [landings (str (io/file world "landings.edn"))
                rows (mapv deref
                           (mapv (fn [run]
@@ -249,7 +249,7 @@
                                                               :fleet/unit (:unit/id unit)}})))
                                 (:unit/runs unit)))]
            (spit (io/file dir "forceload-stop.txt")
-                 (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command % "forceload query")))
+                 (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command! % "forceload query")))
            rows)
          (finally (cli/exec! ["bb" "server" "stop"] {:env env :log log})
                   (cli/exec! ["cp" (str (io/file world "logs" "latest.log"))

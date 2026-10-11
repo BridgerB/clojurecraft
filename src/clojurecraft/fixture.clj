@@ -75,9 +75,9 @@
 (defn position
   "Where the server says the player stands, [x y z], or nil when it is not in the world."
   [rc name]
-  (parse-pos (rcon/command rc (str "data get entity " name " Pos"))))
+  (parse-pos (rcon/command! rc (str "data get entity " name " Pos"))))
 
-(defn wait-online
+(defn wait-online!
   "Block until the server knows the player (it is in the world), up to ms."
   [rc name ms]
   (let [until (+ (System/currentTimeMillis) ms)]
@@ -90,7 +90,7 @@
    true when it loaded."
   [rc x z]
   (loop [i 0]
-    (cond (passed? (rcon/command rc (str "execute if loaded " x " 0 " z))) true
+    (cond (passed? (rcon/command! rc (str "execute if loaded " x " 0 " z))) true
           (>= i 150) false
           :else (do (Thread/sleep 200) (recur (inc i))))))
 
@@ -100,8 +100,8 @@
    chunks ticking for every later run on the world. Returns what f returns."
   [rc coords f]
   (let [where (str/join " " coords)]
-    (rcon/command rc (str "forceload add " where))
-    (try (f) (finally (rcon/command rc (str "forceload remove " where))))))
+    (rcon/command! rc (str "forceload add " where))
+    (try (f) (finally (rcon/command! rc (str "forceload remove " where))))))
 
 (defn teleport!
   "Load the column at x z and teleport the bot onto its surface."
@@ -111,4 +111,4 @@
                   (fn []
                     (wait-loaded! rc x z)
                     (cli/log "tp:"
-                             (rcon/command rc (on-surface x z (str "tp " name " ~0.5 ~ ~0.5")))))))
+                             (rcon/command! rc (on-surface x z (str "tp " name " ~0.5 ~ ~0.5")))))))

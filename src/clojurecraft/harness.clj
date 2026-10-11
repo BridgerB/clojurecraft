@@ -19,25 +19,25 @@
 
 ;;;; RCON: everything below talks to the server ;;;;
 
-(defn locate-forest
+(defn locate-forest!
   "The nearest forest from the bot, [x z], or nil."
   [rc name]
-  (rcon/command rc (str "gamemode survival " name))
-  (rcon/command rc (str "clear " name))
-  (let [r (rcon/command rc (str "execute at " name " run locate biome minecraft:forest"))]
+  (rcon/command! rc (str "gamemode survival " name))
+  (rcon/command! rc (str "clear " name))
+  (let [r (rcon/command! rc (str "execute at " name " run locate biome minecraft:forest"))]
     (cli/log "locate:" r)
     (fixture/parse-located r)))
 
 (defn land!
   "Land the bot in a forest on ground the fixture can use; returns where it stands, or nil."
   [rc name]
-  (when-let [[fx fz] (locate-forest rc name)]
+  (when-let [[fx fz] (locate-forest! rc name)]
     (loop [[[ox oz] & more] fixture/landing-offsets]
       (fixture/teleport! rc name [(+ fx ox) (+ fz oz)])
       (Thread/sleep (long fixture/settle-ms))
       (let [why (fixture/bad-landing (mapv (fn [[reason test]]
                                              [reason
-                                              (rcon/command rc (str "execute at " name " " test))])
+                                              (rcon/command! rc (str "execute at " name " " test))])
                                            fixture/checks))]
         (if (and why (seq more))
           (do (cli/log "bad landing" why "- trying another spot") (recur more))
@@ -54,7 +54,7 @@
                                   (Long/parseLong rcon-port)
                                   rcon-pass
                                   (fn [rc]
-                                    (when-not (fixture/wait-online rc bot fixture/online-timeout)
+                                    (when-not (fixture/wait-online! rc bot fixture/online-timeout)
                                       (throw (ex-info "bot never came online" {:name bot})))
                                     (land! rc bot)))]
            (cli/log "landed at" at)

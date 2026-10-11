@@ -9,8 +9,8 @@ lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/harness.clj#defn -main
-  - src/clojurecraft/fixture.clj#defn wait-online
-  - src/clojurecraft/harness.clj#defn locate-forest
+  - src/clojurecraft/fixture.clj#defn wait-online!
+  - src/clojurecraft/harness.clj#defn locate-forest!
   - src/clojurecraft/fixture.clj#defn teleport!
   - src/clojurecraft/fixture.clj#defn with-forceload
   - src/clojurecraft/fixture.clj#def checks
@@ -40,7 +40,7 @@ clojure -M:harness --rcon-port 25581 --rcon-pass "$P" --name Clj_wood --until wo
 ```
 
 ## Key files
-- `harness.clj`, `-main` - the sequence below; logs go to stderr because stdout is the queue. `locate-forest` and `land!` are the forest search; everything it asks the server is `fixture.clj`'s, shared with the gym's `land` and the landing-set builder.
+- `harness.clj`, `-main` - the sequence below; logs go to stderr because stdout is the queue. `locate-forest!` and `land!` are the forest search; everything it asks the server is `fixture.clj`'s, shared with the gym's `land` and the landing-set builder.
 - `fixture.clj`, `checks` - the landing tests as data: `[reason "if|unless block ..."]`, each run as `execute at <bot> <test>`; `bad-landing` names the first that passed.
 - `fixture.clj`, `landing-offsets` - 17 points: the located point, then rings of eight at 24 and 48 blocks.
 - `fixture.clj`, `with-forceload` - every column a fixture loads is released in a `finally`.
@@ -49,8 +49,8 @@ clojure -M:harness --rcon-port 25581 --rcon-pass "$P" --name Clj_wood --until wo
 - `plan.clj`, `landed?` and `landing-tick` - the bot side of the wait.
 
 ## Sequence
-1. `wait-online`: poll `data get entity <name> Pos` every 250 ms (up to 120 s) until the server knows the player.
-2. `locate-forest`: `gamemode survival`, `clear` (an empty inventory every run), `execute at <name> run locate biome minecraft:forest`, parse `[x, y, z]`.
+1. `wait-online!`: poll `data get entity <name> Pos` every 250 ms (up to 120 s) until the server knows the player.
+2. `locate-forest!`: `gamemode survival`, `clear` (an empty inventory every run), `execute at <name> run locate biome minecraft:forest`, parse `[x, y, z]`.
 3. For each offset: `teleport!` forceloads the column, polls `execute if loaded x 0 z`, runs `execute positioned x 0 z positioned over motion_blocking_no_leaves run tp <name> ~0.5 ~ ~0.5` (the highest non-leaf motion-blocking block), and unforceloads. After 1 s it runs every check; a passing one logs "bad landing <reason> - trying another spot" and moves on. The last offset is used whatever it says.
 4. Read the final position from `data get entity <name> Pos` and print the `:go` event. On any failure it logs "harness failed:" and still prints `:go` without `:go/at`, so the bot plans where it stands.
 5. In the bot, `plan/begin` with `:go/at` sets `:plan/status :landing` and `:plan/go-at`. Each tick `landing-tick` turns it `:active` (logging "landed") once the bot is within 2 blocks horizontally of `:go/at`, loaded, in a loaded chunk; after 30 s it fails with `:no-landing`.

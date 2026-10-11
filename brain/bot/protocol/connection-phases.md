@@ -9,7 +9,7 @@ lastUpdated: 2026-10-09
 verifiedAgainst: 60b624e
 sourceRefs:
   - src/clojurecraft/packet.clj#def transitions
-  - src/clojurecraft/conn.clj#defn open
+  - src/clojurecraft/conn.clj#defn open!
   - src/clojurecraft/conn.clj#defn read-frame
   - src/clojurecraft/game.clj#defmulti on-packet
   - src/clojurecraft/game.clj#(def protocol-version
@@ -27,7 +27,7 @@ Phases are `:handshake → :login → :configuration → :play` (and back to `:c
 
 ## Key files
 - `packet.clj`, `transitions` - `intention → login`, `login-acknowledged → configuration`, `finish-configuration → play`, `configuration-acknowledged → configuration`.
-- `conn.clj`, `open` - reader thread decodes with the phase current when a frame has fully arrived; writer thread flips then writes; `login-compression` sets the threshold inside `conn` and never reaches the game.
+- `conn.clj`, `open!` - reader thread decodes with the phase current when a frame has fully arrived; writer thread flips then writes; `login-compression` sets the threshold inside `conn` and never reaches the game.
 - `conn.clj`, `read-frame` - a frame is `[varint len][data]`, or with compression `[varint len][varint size][payload]` where size 0 means raw.
 - `game.clj`, `on-packet` - the replies: `login-finished → login-acknowledged`, `select-known-packs → empty packs`, `finish-configuration → echo`, `login → client-information`, `player-position → accept-teleportation + move-player-pos-rot + player-loaded (once)`, keep-alive and ping echoed in both phases, `chunk-batch-finished → chunk-batch-received 20.0`.
 

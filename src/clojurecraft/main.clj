@@ -73,7 +73,7 @@
 
 (defn- now [] (System/currentTimeMillis))
 
-(defn perform
+(defn perform!
   "Do one effect: :send puts the packet on the socket's out channel (blocking), :log writes it to stderr."
   [{:effect/keys [kind packet message]} out]
   (case kind
@@ -88,9 +88,9 @@
   (let [effects (:bot/effects @world*)]
     (when tap ((:effects tap) effects))
     (swap! world* assoc :bot/effects [])
-    (doseq [e effects] (perform e out))))
+    (doseq [e effects] (perform! e out))))
 
-(defn run-loop
+(defn run-loop!
   "Drive the reducer over socket packets, 50 ms ticks and external events until (stop? world)
    or the socket closes. Returns the final world."
   [{:keys [in out]} events world* stop? tap]
@@ -145,8 +145,8 @@
         goal? (goal-fn until)
         stop? (fn [w] (or (goal? w) (and planned (plan/failed? w)) (> (now) deadline)))
         tap (some-> record
-                    record/tap)
-        c (conn/open opts)
+                    record/tap!)
+        c (conn/open! opts)
         queue (async/chan 16)
         world* (atom (game/init opts))
         watcher (some->> telemetry
@@ -158,7 +158,7 @@
                   {:event/kind :start :start/host host :start/port (:port opts) :start/name name}
                   (:out c)
                   tap)
-    (let [final (run-loop c queue world* stop? tap)
+    (let [final (run-loop! c queue world* stop? tap)
           ok (ok? final until)
           r (result final until ok)]
       (prn 'RESULT r)
@@ -166,7 +166,7 @@
       (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT
       (when (and ok (pos? hold))
         (cli/log "holding" hold "ms for an outside judge")
-        (let [until (+ (now) hold)] (run-loop c queue world* (fn [_] (> (now) until)) nil)))
+        (let [until (+ (now) hold)] (run-loop! c queue world* (fn [_] (> (now) until)) nil)))
       (when watcher ((:close watcher)) (cli/log "telemetry dropped" ((:dropped watcher)) "lines"))
       ((:close! c))
       (shutdown-agents)
