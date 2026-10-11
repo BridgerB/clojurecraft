@@ -116,3 +116,15 @@
                  :world/chunks {[0 0] (world/column rock)}
                  :player/inventory {0 {:item (blocks/items :wooden_pickaxe) :count 1}})]
     (is (nil? (place/niche w)) "iron ore all round, and only a wooden pickaxe")))
+
+(deftest a-block-is-never-placed-on-a-table
+  ;; gym batch iron-a5 run 4: the only spot was on its crafting table, and a right-click on a
+  ;; table opens it, so the gravel was never placed and the intent failed :rejected three times
+  (let [walls
+        (into {}
+              (for [dx [-1 0 1] dz [-1 0 1] :when (not= [dx dz] [0 0])] [[(+ 8 dx) 64 (+ 8 dz)] 1]))
+        w (assoc (standing [8.5 64.0 8.5])
+                 :world/chunks
+                 {[0 0] (world/column
+                         (assoc walls [7 64 7] (blocks/default-state :crafting_table)))})]
+    (is (= [[7 65 8] [7 64 8]] (place/spot w)) "on the wall beside the table, not on the table")))

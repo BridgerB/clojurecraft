@@ -18,6 +18,7 @@ sourceRefs:
   - test/clojurecraft/place_test.clj#a-niche-is-cut-in-the-side-wall-not-ahead
   - src/clojurecraft/place.clj#defmethod intent/run :equip
   - test/clojurecraft/place_test.clj#no-niche-where-the-tools-cannot-drop
+  - test/clojurecraft/place_test.clj#a-block-is-never-placed-on-a-table
   - src/clojurecraft/place.clj#defn use-item-on
   - test/clojurecraft/place_test.clj#a-rejected-placement-fails-instead-of-believing
 related:
@@ -47,6 +48,7 @@ related:
 - `place_test.clj` - a property (300 cases) that a spot always exists on flat ground, never overlaps the player, sits on its support, and is in reach; and that a rejection (block-update with air, then the ack) fails `:rejected` while a confirming block-update is done and remembered.
 
 ## Gotchas
+- **Never on a table.** A right-click on a crafting table or a furnace opens it instead of placing against it, so `spot` never takes one as support: gym batch iron-a5 run 4's only spot was on its table, and the gravel it meant to dig again for flint was never placed (`:rejected` three times, `a-block-is-never-placed-on-a-table`).
 - The local world is never written by the intent; only the server's `block-update` makes the table appear, and then memory records it (`memory/watched?` includes tables and furnaces, `memory/placed-kinds`), and `make/near` finds either within 24 blocks.
 - A swap click's answer changes slot state ids exactly like a craft click; the intent waits for it.
 

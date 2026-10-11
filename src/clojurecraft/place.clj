@@ -65,8 +65,10 @@
 
 (defn spot
   "[target support] for placing a block near the player: target empty (air or a plant, not
-   liquid) and no passage, support solid, not inside the player, within reach. Pure; nil when
-   there is none."
+   liquid) and no passage, support solid and not a block a click opens (a table, a furnace:
+   right-clicked, it opens instead of taking the block; gym batch iron-a5 run 4 clicked its
+   table three times to place a gravel and failed :rejected), not inside the player, within
+   reach. Pure; nil when there is none."
   [world]
   (let [[px py pz] (:player/pos world)
         fx (long (math/floor px))
@@ -83,6 +85,7 @@
                             (not (blocks/solid? t))
                             (not= :liquid (blocks/type-of t))
                             (blocks/solid? s)
+                            (not (contains? memory/placed-kinds (blocks/name-of s)))
                             (not (passage? world target))
                             (not (inside-player? world target))
                             (<= (physics/distance eye (physics/centre target)) place-reach))]
