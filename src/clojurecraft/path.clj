@@ -46,16 +46,13 @@
     :weathering_copper_grate :bamboo_stalk :chorus_plant :chorus_flower :mangrove_roots :heavy_core
     :vault :trial_spawner :spawner :conduit :beacon :shelf})
 
-(def water-states "Every state of water." (blocks/states-where (fn [[n]] (= n :water))))
-(def lava-states "Every state of lava." (blocks/states-where (fn [[n]] (= n :lava))))
-
 (defn classify-id
   "What a block state means to a route: :water, :lava, :awkward (a shape the physics cannot
    simulate), :solid (a full cube), or :clear (passable, not a liquid). nil → :unknown."
   [id]
   (cond (nil? id) :unknown
-        (contains? water-states id) :water
-        (contains? lava-states id) :lava
+        (contains? blocks/water-states id) :water
+        (contains? blocks/lava-states id) :lava
         (contains? awkward-types (blocks/type-of id)) :awkward
         (blocks/solid? id) :solid
         :else :clear))
