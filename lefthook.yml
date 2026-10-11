@@ -25,11 +25,14 @@ pre-commit:
       run: scripts/clj -M:fmt fix {staged_files}
       stage_fixed: true
     lint:
-      # clj-kondo, the native binary (about a second for the whole repo): unresolved symbols and
-      # namespaces, wrong arities, unused bindings and requires. Any warning refuses the commit.
+      # clj-kondo, the native binary: unresolved symbols and namespaces, wrong arities, unused
+      # bindings and requires. Any warning refuses the commit. The whole repo, not the staged
+      # files: about a second, it catches a change that breaks a caller in a file not staged, and
+      # a file linted alone against a stale .clj-kondo/.cache once reported a type error in
+      # fleet.clj that was not there (the whole-repo run was right every time).
       priority: 3
       glob: "*.{clj,cljc,cljs}"
-      run: scripts/clj-kondo --lint {staged_files}
+      run: scripts/clj-kondo --lint src dev test bb --parallel
     idioms:
       # Splint: the idiomatic form of what was written ((mapv f xs), not (vec (map f xs)); inc,
       # not (+ x 1); clojure.math, not Math interop). Rules that fight the code are off in
