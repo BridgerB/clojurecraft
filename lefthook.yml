@@ -1,6 +1,6 @@
 # Git hooks, run by lefthook (a standalone binary: no Node in a Clojure repo).
 #
-#   nix shell nixpkgs#lefthook --command lefthook install   # once per clone
+#   nix develop   # once per clone: the flake's shell installs these hooks on entry
 #
 # pre-commit stays fast (seconds, staged files only); slower JVM work belongs in pre-push, and
 # CI (test.yml) stays the real enforcement, since a hook can be skipped with --no-verify.
@@ -19,7 +19,7 @@ pre-commit:
       priority: 2
       # Formats what is being committed and stages the result, so a commit is never refused for
       # formatting. The same zprint as CI (the deps.edn :fmt alias and .zprint.edn); scripts/clj
-      # finds Java and Clojure on PATH or builds them through nix once.
+      # finds Java and Clojure on PATH or takes flake.nix's.
       glob: "*.{clj,cljc,cljs,edn}"                   # clojurecraft.fmt itself skips the generated tables
       run: scripts/clj -M:fmt fix {staged_files}
       stage_fixed: true

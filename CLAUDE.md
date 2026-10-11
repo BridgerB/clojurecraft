@@ -67,8 +67,10 @@ dev/clojurecraft/brain.clj    the brain checker (clojure -M:brain)
 ## Commands
 
 ```bash
-nix shell nixpkgs#jdk25 nixpkgs#clojure      # this Mac has neither on PATH
-nix shell nixpkgs#lefthook --command lefthook install   # git hooks from lefthook.yml, once per clone
+nix develop                                   # Java 25, Clojure, clj-kondo, clojure-lsp, lefthook, zstd (flake.nix,
+                                              # pinned by flake.lock); entering it installs the git hooks
+nix flake update                              # move every tool to today's nixpkgs; match the :lint and :lsp
+                                              # versions in deps.edn, which CI runs from Maven
 clojure -M:test                               # every test, namespaces and vars in parallel (eftest); -n ns, -v ns/var, -x ns
 ./local-server.sh start|stop                  # vanilla 26.1.2 on game 25571 / RCON 25581
 clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)" --name Clj_wood --until wood \

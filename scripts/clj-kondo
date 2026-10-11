@@ -3,15 +3,12 @@
 #
 #   scripts/clj-kondo --lint src/clojurecraft/plan.clj
 #
-# With clj-kondo on PATH it is just that. Without it (this Mac), it fetches the native binary
-# through nix once into a .nix/ link in the repo (a GC root) and runs that; CI has no nix and
-# runs the same version from Maven (the deps.edn :lint alias).
+# Without it on PATH, flake.nix's native build, built once into a .nix/ link (scripts/nix-tool).
+# CI has no nix and runs the same version from Maven (the deps.edn :lint alias).
 set -euo pipefail
 
 if command -v clj-kondo >/dev/null 2>&1; then
   exec clj-kondo "$@"
 fi
-
-root=$(cd "$(dirname "$0")/.." && pwd)
-[ -x "$root/.nix/clj-kondo/bin/clj-kondo" ] || nix build --out-link "$root/.nix/clj-kondo" nixpkgs#clj-kondo
-exec "$root/.nix/clj-kondo/bin/clj-kondo" "$@"
+dir=$(cd "$(dirname "$0")" && pwd)
+exec "$("$dir/nix-tool" clj-kondo)/clj-kondo" "$@"

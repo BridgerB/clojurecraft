@@ -3,18 +3,12 @@
 #
 #   scripts/clj -M:fmt fix src/clojurecraft/plan.clj
 #
-# With `clojure` and `java` on PATH (CI, a nix shell), it is just `clojure`. Without them (this
-# Mac), it builds Java 25 and the Clojure CLI through nix once, into .nix/ links in the repo, and
-# uses those: a `nix shell` costs about 11 s of evaluation on every call, too slow for a hook,
-# while the links are GC roots that a nix-collect-garbage leaves alone.
+# With `clojure` and `java` on PATH (CI, nix develop) it is just `clojure`. Without them it uses
+# flake.nix's jdk and clojure, built once into .nix/ links (scripts/nix-tool).
 set -euo pipefail
 
 if command -v clojure >/dev/null 2>&1 && command -v java >/dev/null 2>&1; then
   exec clojure "$@"
 fi
-
-root=$(cd "$(dirname "$0")/.." && pwd)
-links=$root/.nix
-[ -x "$links/jdk/bin/java" ] || nix build --out-link "$links/jdk" nixpkgs#jdk25
-[ -x "$links/clojure/bin/clojure" ] || nix build --out-link "$links/clojure" nixpkgs#clojure
-PATH="$links/jdk/bin:$links/clojure/bin:$PATH" exec clojure "$@"
+dir=$(cd "$(dirname "$0")" && pwd)
+PATH="$("$dir/nix-tool" jdk):$("$dir/nix-tool" clojure):$PATH" exec clojure "$@"
