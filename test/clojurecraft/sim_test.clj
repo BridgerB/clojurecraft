@@ -1394,6 +1394,34 @@
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
     (is (empty? (:sim/violations sim)))))
 
+(deftest from-a-pit-below-the-water-the-bot-climbs-to-the-bank
+  ;; live run 10 came up its stairs into a pit two below a pond's surface: the water was in reach
+  ;; but behind the pit's wall, no walk was taken to water in reach, and it waited :no-water
+  (let [pit {[11 63 8] blocks/water-base ; one source, in reach of the pit
+             [9 62 8] blocks/air
+             [9 63 8] blocks/air
+             [8 63 8] blocks/air}
+        [w sim] (sim/run (game/compose game/step
+                                       (partial plan/step-over
+                                                (conj plan/goals
+                                                      {:goal/id :bucket-test
+                                                       :goal/priority 7
+                                                       :goal/target? true
+                                                       :goal/provides {:item/water_bucket 1}
+                                                       :goal/done? :provided?})))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes pit)
+                                    :spawn [9.5 62.0 8.5]
+                                    :inventory {36 {:item (item :wooden_pickaxe) :count 1}
+                                                40 {:item (item :bucket) :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %) (:player/in-water? %))
+                         60000
+                         {:event/kind :go :go/goals [:bucket-test]})]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= 1 (:water_bucket (held w))))
+    (is (not (:player/in-water? w)))
+    (is (empty? (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- the iron kit, end to end
 
 (def kit-column

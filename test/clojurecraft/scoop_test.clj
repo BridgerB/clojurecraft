@@ -100,9 +100,9 @@
   (is (= {:plan/wait :no-water}
          (scoop/scoop-next (standing {[10 64 8] water [10 65 8] 1} [8.5 8.5])))
       "a pocket under stone: no surface to look into")
-  (is (= {:plan/wait :no-water}
+  (is (= {:intent/kind :walk :intent/target [10 63 8] :intent/for :scoop}
          (scoop/scoop-next (standing {[10 63 8] water [9 64 8] 1 [9 65 8] 1 [9 66 8] 1} [8.5 8.5])))
-      "open to the sky, in reach, behind a wall: the ray meets the wall first")
+      "open to the sky, in reach, behind a wall: the ray meets the wall, so round it to the bank")
   (is (= {:intent/kind :scoop :intent/target [10 63 8]}
          (scoop/scoop-next (standing {[10 63 8] water} [8.5 8.5])))
       "the same source with the wall gone"))

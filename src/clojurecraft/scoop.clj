@@ -87,9 +87,8 @@
 
 (defn sources
   "The surface water sources in the loaded terrain within search-radius of the eye, no more than
-   memory/surface-water-below under it, not blacklisted, and, when in reach, in sight (sees?:
-   one in reach but hidden is no target, or the walk to it would end at once), nearest first.
-   Asked of the terrain through the block overlay, so a source just scooped is air."
+   memory/surface-water-below under it, not blacklisted, nearest first. Asked of the terrain
+   through the block overlay, so a source just scooped is air."
   [world]
   (let [eye (game/eye world)
         lo (- (second eye) memory/surface-water-below)
@@ -100,8 +99,7 @@
                                (map (fn [[x y z _]] [x y z]))
                                (filter (fn [[_ y _]] (>= y lo)))
                                (remove blacklist)
-                               (filter #(surface-source? world %))
-                               (remove #(and (in-reach? world %) (not (sees? world %))))))))
+                               (filter #(surface-source? world %))))))
 
 (defn pools-near
   "The remembered water pools within pool-radius, no deeper than surface water, not blacklisted,
@@ -159,15 +157,18 @@
 (def underground-depth 8)             ; feet this far under the landing are underground: climb out before a hunt
 
 (defn first-walk
-  "A walk tagged for to the first of targets (the max-candidates first, out of reach) a route
-   reaches (intent/routable?), or nil. A target already in reach is no walk: it would end
-   before it began, and start again every tick (gym batch water-a3 run 5 did, for four
-   minutes, at a remembered pool under stone)."
+  "A walk tagged for to the first of targets (the max-candidates first that it has not already
+   arrived at) a route reaches (intent/routable?), or nil. A walk already arrived would end
+   before it began, and start again every tick (gym batch water-a3 run 5 did, for four minutes,
+   at a remembered pool under stone)."
   [world for targets]
   (->> targets
-       (remove #(in-reach? world %))
-       (take max-candidates)
        (map (fn [t] {:intent/kind :walk :intent/target t :intent/for for}))
+       (remove #(intent/arrived? world
+                                 %
+                                 (physics/distance (game/eye world)
+                                                   (physics/centre (:intent/target %)))))
+       (take max-candidates)
        (filter #(intent/routable? world %))
        first))
 
@@ -192,13 +193,13 @@
            :intent/for :surface}))))
 
 (defn scoop-next
-  "The next step toward a filled bucket: scoop the nearest surface source when it is in reach,
-   else walk to the nearest one in sight a route reaches, or to such a remembered pool, or climb
+  "The next step toward a filled bucket: scoop the nearest surface source in reach and in sight,
+   else walk to the bank of the nearest one a route reaches, or to such a remembered pool, or climb
    out (to the landing, or by stairs cut up) when deep under it, or hunt for one (hunt-targets); else wait :no-water."
   [world]
   (let [srcs (sources world)
-        src (first srcs)]
-    (cond (and src (in-reach? world src)) {:intent/kind :scoop :intent/target src}
+        src (first (filter #(and (in-reach? world %) (sees? world %)) srcs))]
+    (cond src {:intent/kind :scoop :intent/target src}
           :else
           (or (first-walk world :scoop srcs)
               (first-walk world :scoop (pools-near world))

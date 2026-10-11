@@ -24,6 +24,8 @@
 (def jump-near 1.3)                   ; a waypoint above the feet is jumped for from this close
 (def pickup-range 1.5)               ; octile cells from a dug block's own cell where its drop is in the
                                       ; pickup box (1.3 each way): a neighbour, diagonals too
+(def scoop-range 1)                   ; cells from a water source where a scoop walk ends: right beside it on its
+                                      ; bank, where nothing stands between the eyes and its surface
 (def pickup-rise 2)                   ; a drop resting more than 2 blocks above the feet is above
                                       ; the pickup box (1.8 tall, grown 0.5 up)
 (def settle-ms 500)                   ; let the server catch up before START
@@ -157,12 +159,17 @@
    for a block mined from beside (:intent/pickup?: stone, ore), neither above it (the drop would
    lie under the box) nor more than pickup-rise below it, and within pickup-range of its cell on
    the plane: the drop lands in the block's own cell, and a collect walks straight at it, so
-   from farther, round a tunnel's corner, it walked into the wall until it failed."
+   from farther, round a tunnel's corner, it walked into the wall until it failed. For water to
+   scoop, on its bank: the feet level with the cell over the source or a block lower, within
+   scoop-range on the plane, where the eyes look down on its surface; the tenth live run's walk
+   ended in reach but in its own stair pit two below the surface, and saw no water."
   [world {:intent/keys [target for pickup?]} d]
   (let [rise (- (second target) (long (math/floor (second (:player/pos world)))))]
     (and (<= d reach)
          (cond pickup?
                (and (<= 0 rise pickup-rise) (<= (path/octile (feet world) target) pickup-range))
+               (= :scoop for)
+               (and (<= -1 rise 0) (<= (path/octile (feet world) target) scoop-range))
                (= :log for) (<= rise pickup-rise)
                :else true))))
 
@@ -170,11 +177,14 @@
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell
    within pickup-range of it whose feet are where the drop lands in reach (path's :pickup goal:
    the block at or up to pickup-rise above them; no single cell beside it, which a wall may
-   close off); else anywhere within goal-range."
-  [{:intent/keys [target pickup?]}]
-  (if pickup?
-    {:goal/kind :pickup :goal/pos target :goal/range pickup-range :goal/rise pickup-rise}
-    {:goal/kind :near :goal/pos target :goal/range goal-range}))
+   close off); for water to scoop, its bank (arrived?: path's :pickup goal at the cell over the
+   source, rise 1); else anywhere within goal-range."
+  [{:intent/keys [target for pickup?]}]
+  (cond pickup?
+        {:goal/kind :pickup :goal/pos target :goal/range pickup-range :goal/rise pickup-rise}
+        (= :scoop for)
+        {:goal/kind :pickup :goal/pos (update target 1 inc) :goal/range scoop-range :goal/rise 1}
+        :else {:goal/kind :near :goal/pos target :goal/range goal-range}))
 
 (defn routable?
   "Is there a way to walk intent i's goal from the feet: the planner's route is :found, or
