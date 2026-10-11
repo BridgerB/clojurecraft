@@ -188,7 +188,7 @@
     "stairs-down, after a level step"]
    [:intent/child
     "the child intent run in the intent's place by its own executor (stairs: the :dig cutting one cell; redig: the place, dig or collect it is on)"
-    "stairs-down, while digging; redig"]
+    "stairs-down, while digging; redig; place, while digging a niche"]
    [:intent/started-y "feet height when the current stair began; a step is judged by going below it"
     "stairs-down, per stair"]
    [:intent/started-tick "tick the current stair or its step began" "stairs-down, per stair"]

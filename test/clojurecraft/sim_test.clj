@@ -702,6 +702,38 @@
         "no stair was cut over the water")
     (is (empty? (:sim/violations sim)))))
 
+(def staircase
+  "The deep-stone hill with a one-wide staircase cut down it along +x: feet cells [x (80 - x) 8]
+   from x 4 (y 76, the top) to x 8 (y 72), each with its head cell."
+  (reduce (fn [b x] (assoc b [x (- 80 x) 8] blocks/air [x (- 81 x) 8] blocks/air))
+          deep-stone
+          (range 4 9)))
+
+(deftest a-table-and-a-furnace-placed-in-a-staircase-never-plug-it
+  ;; gym batch iron-a1 run 2: at the bottom of its staircase the bot put the table on the stair
+  ;; behind it (the way back up), then found no spot for the furnace and failed :no-spot
+  (let [table (conj plan/goals
+                    {:goal/id :both-near
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:block/crafting_table :near :block/furnace :near}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes staircase)
+                                    :spawn [8.5 72.0 8.5]
+                                    :inventory {36 {:item (get blocks/items :crafting_table)
+                                                    :count 1}
+                                                37 {:item (get blocks/items :furnace) :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         60000
+                         {:event/kind :go :go/goals [:both-near]})
+        stairs (set (for [x (range 4 9) dy [0 1]] [x (+ (- 80 x) dy) 8]))]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= #{:crafting_table :furnace} (set (map blocks/name-of (vals (:sim/placed sim))))))
+    (is (not-any? stairs (keys (:sim/placed sim))) "nothing placed on the staircase")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest boxed-in-by-lava-on-every-side-fails-boxed
   ;; lava under every first stair, and beside the feet on all four sides, so no level step is
   ;; allowed either (lava under the stairs alone is now stepped around)
