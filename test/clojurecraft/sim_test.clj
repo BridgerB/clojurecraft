@@ -163,7 +163,7 @@
   (let [sim (-> (sim/init {:column (world/column-bytes {})
                            :spawn [0.5 64.0 0.5]
                            :inventory {10 {:item (recipe/item-id :oak_planks) :count 3}}})
-                (assoc :sim/phase :play :sim/window {:id 1 :grid {} :state-id 4})
+                (assoc :sim/phase :play :sim/window {:id 1 :kind :table :grid {} :state-id 4})
                 (sim/step {:sim/kind :packet
                            :sim/packet {:packet/name :container-click
                                         :window-id 1
@@ -203,7 +203,7 @@
 
 (deftest the-sim-flags-a-click-into-window-0-while-a-container-is-open
   (let [sim (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
-                (assoc :sim/phase :play :sim/window {:id 1 :grid {} :state-id 1})
+                (assoc :sim/phase :play :sim/window {:id 1 :kind :table :grid {} :state-id 1})
                 (sim/step {:sim/kind :packet
                            :sim/packet {:packet/name :container-click
                                         :window-id 0
@@ -743,6 +743,148 @@
     (is (= [:furnace] (map blocks/name-of (vals (:sim/placed sim)))) "the server has it")
     (is (zero? (get (held w) :furnace 0)) "and it left the hand")
     (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- the furnace, on the model
+
+(def furnace-pos [2 64 0])
+(defn item [n] (get blocks/items n))
+
+(defn furnace-sim
+  "A model in play with a placed furnace at furnace-pos and inv as window 0's slots."
+  [inv]
+  (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5] :inventory inv})
+      (assoc :sim/phase :play)
+      (assoc-in [:sim/placed furnace-pos] (blocks/default-state :furnace))))
+
+(defn client-sends
+  "The model after the client sends pkt."
+  [sim pkt]
+  (sim/step sim {:sim/kind :packet :sim/packet pkt}))
+
+(defn open-furnace
+  "The model after the client right-clicks the furnace."
+  [sim]
+  (client-sends sim
+                {:packet/name :use-item-on
+                 :hand 0
+                 :pos furnace-pos
+                 :face 1
+                 :cursor-x 0.5
+                 :cursor-y 1.0
+                 :cursor-z 0.5
+                 :inside-block false
+                 :world-border-hit false
+                 :sequence 1}))
+
+(defn click-in
+  "The model after one click into its open window, at the window's current state id."
+  [sim slot button mode]
+  (client-sends sim
+                {:packet/name :container-click
+                 :window-id (get-in sim [:sim/window :id])
+                 :state-id (get-in sim [:sim/window :state-id])
+                 :slot slot
+                 :button button
+                 :mode mode
+                 :changed []
+                 :cursor nil}))
+
+(defn game-ticks
+  "The model after n game ticks, 50 ms apart."
+  [sim n]
+  (reduce (fn [sim k] (sim/step sim {:sim/kind :tick :sim/now (+ (:sim/now sim) (* 50 k))}))
+          sim
+          (repeat n 1)))
+
+(defn furnace [sim] (get-in sim [:sim/furnaces furnace-pos]))
+
+(defn loaded
+  "A furnace opened with input in hotbar slot 0 and fuel in hotbar slot 1 (furnace window slots
+   30 and 31), the fuel then the input laid in with left clicks."
+  [input fuel]
+  (-> (furnace-sim {36 input 37 fuel})
+      open-furnace
+      (click-in 31 0 0)
+      (click-in 1 0 0)
+      (click-in 30 0 0)
+      (click-in 0 0 0)))
+
+(deftest a-furnace-opens-with-its-slots-and-properties
+  (let [sim (open-furnace (furnace-sim {36 {:item (item :raw_iron) :count 4}}))
+        out (:sim/out sim)]
+    (is (= [:block-changed-ack :open-screen :container-set-content :container-set-data
+            :container-set-data :container-set-data :container-set-data]
+           (mapv :packet/name out)))
+    (is (= (blocks/menus :furnace) (:menu-type (second out))))
+    (is (= 39 (count (:items (nth out 2)))) "three of its own, then the player's 36")
+    (is (= {:item (item :raw_iron) :count 4} (get (:items (nth out 2)) 30)) "hotbar 0 at 30")
+    (is (= #{0 1 2 3} (set (map :property (drop 3 out)))))))
+
+(deftest four-raw-iron-cook-on-one-coal-in-200-ticks-each
+  (let [sim (loaded {:item (item :raw_iron) :count 4} {:item (item :coal) :count 1})
+        sim (assoc sim :sim/out [])]
+    (is (= {0 {:item (item :raw_iron) :count 4} 1 {:item (item :coal) :count 1}}
+           (:slots (furnace sim)))
+        "four clicks put the fuel and the input in")
+    (is (= 3 (get-in (furnace (game-ticks sim 799)) [:slots 2 :count])) "three at tick 799")
+    (let [done (game-ticks sim 800)
+          slot-2 (last (filter #(and (= :container-set-slot (:packet/name %)) (= 2 (:slot %)))
+                               (:sim/out done)))]
+      (is (= {2 {:item (item :iron_ingot) :count 4}} (:slots (furnace done)))
+          "four ingots at tick 800, the coal burned, the input gone")
+      (is (= {0 801 1 1600 2 0 3 200} (sim/furnace-data (furnace done)))
+          "one coal lit at the first tick and burns on")
+      (is (= {:item (item :iron_ingot) :count 4} (:item slot-2)) "the client was told")
+      (let [taken (-> done
+                      (click-in 2 0 1)
+                      (client-sends {:packet/name :container-close
+                                     :window-id (get-in done [:sim/window :id])}))]
+        (is (= 4
+               (:count (some #(when (= (item :iron_ingot) (:item %)) %) (vals (:sim/inv taken))))))
+        (is (empty? (:slots (furnace taken))))
+        (is (nil? (:sim/window taken)))
+        (is (empty? (:sim/violations taken)))))))
+
+(deftest a-plank-runs-dry-after-one-ingot-and-the-progress-unwinds
+  (let [sim (loaded {:item (item :raw_iron) :count 3} {:item (item :oak_planks) :count 1})]
+    (is (= 300 (blocks/fuel-by-name :oak_planks)))
+    (let [at-300 (furnace (game-ticks sim 300))]
+      (is (= 1 (get-in at-300 [:slots 2 :count])) "one ingot from 300 ticks of fuel")
+      (is (= [1 100] [(:lit at-300) (:cook at-300)]) "the second halfway"))
+    (is (= [0 98] ((juxt :lit :cook) (furnace (game-ticks sim 301))))
+        "out: progress unwinds by two")
+    (is (= 0 (:cook (furnace (game-ticks sim 350)))))
+    (is (= {:item (item :raw_iron) :count 2} (get-in (furnace (game-ticks sim 350)) [:slots 0]))
+        "the rest waits for fuel")))
+
+(deftest a-furnace-cooks-with-its-window-closed
+  (let [sim (-> (loaded {:item (item :raw_iron) :count 1} {:item (item :coal) :count 1})
+                (client-sends {:packet/name :container-close :window-id 1})
+                (game-ticks 200)
+                (assoc :sim/out [])
+                open-furnace)
+        content (some #(when (= :container-set-content (:packet/name %)) %) (:sim/out sim))]
+    (is (= {:item (item :iron_ingot) :count 1} (get (:items content) 2))
+        "opened again, the output holds what cooked meanwhile")))
+
+(deftest the-furnace-click-rules
+  (let [f (inventory/layouts :furnace)
+        ingot {:item (item :iron_ingot) :count 3}
+        ore {:item (item :raw_iron) :count 2}
+        coal {:item (item :coal) :count 1}]
+    (is (= :left (sim/click-kind f {:slot 0 :button 0 :mode 0})) "slot 0 is the input, no result")
+    (is (= {:view {} :cursor coal} (sim/click-view f {} coal {:slot 2 :button 0 :mode 0}))
+        "nothing is put into the output")
+    (is (= {:view {} :cursor ore} (sim/click-view f {} ore {:slot 1 :button 1 :mode 0}))
+        "the fuel slot refuses what does not burn")
+    (is (= {:view {1 coal} :cursor nil} (sim/click-view f {} coal {:slot 1 :button 0 :mode 0})))
+    (is (= {:view {} :cursor {:item (item :iron_ingot) :count 5}}
+           (sim/click-view f {2 ingot} (assoc ingot :count 2) {:slot 2 :button 0 :mode 0}))
+        "a cursor of the output's item takes the output onto it")
+    (is (= {:view {30 ore} :cursor nil} (sim/click-view f {30 ore} nil {:slot 1 :button 0 :mode 2}))
+        "a hotbar swap cannot put ore into the fuel slot")
+    (is (= {:view {3 ore} :cursor nil} (sim/click-view f {0 ore} nil {:slot 0 :button 0 :mode 1}))
+        "a shift-click on the input moves it into the store")))
 
 (def walled-ledge
   "Gym batch push70 (landing 18648,18464): the nearest stone's only cell at its own level was

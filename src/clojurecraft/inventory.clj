@@ -92,6 +92,24 @@
   [{:keys [size]}]
   (range 1 (inc (* size size))))
 
+(defn crafting?
+  "Does a window with layout craft: a grid whose slot 0 shows what it makes? A furnace does not."
+  [layout]
+  (pos? (:size layout)))
+
+(defn own-slots
+  "The slots of a window with layout that hold the container's own items, not the player's: a
+   crafting grid's 1..size² (its slot 0 is computed, never held), or a furnace's input, fuel and
+   output."
+  [layout]
+  (if (crafting? layout) (grid-slots layout) ((juxt :input :fuel :output) layout)))
+
+(defn slot-count
+  "How many slots a window with layout shows: its own, then the player's 36, then (window 0
+   only) the offhand."
+  [{:keys [inventory offhand]}]
+  (if offhand (inc offhand) (+ inventory main-slots hotbar-slots)))
+
 (defn translate
   "Slot s of the window with layout from, as the slot of the window with layout to that shows
    the same player slot; nil when to does not show it."

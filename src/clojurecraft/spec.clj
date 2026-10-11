@@ -401,6 +401,7 @@
 (s/def :sim/state-id int?)
 (s/def :sim/held int?)
 (s/def :sim/placed map?)
+(s/def :sim/furnaces (s/map-of ::block-pos map?))
 (s/def :sim/next-window int?)
 (s/def :sim/clicks nat-int?)
 (s/def :sim/drop-clicks set?)
