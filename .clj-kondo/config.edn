@@ -1,0 +1,4 @@
+;; clj-kondo's settings: its defaults, held at zero findings. The pre-commit hook lints the staged
+;; files and CI lints the repo (clojure -M:lint --lint src dev test); a warning fails both, so
+;; the count never climbs back up.
+{}

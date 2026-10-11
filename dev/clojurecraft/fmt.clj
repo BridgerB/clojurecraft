@@ -9,7 +9,6 @@
    corpus, which their writers own."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojure.string :as str]
             [zprint.core :as zprint]))
 
 (def paths

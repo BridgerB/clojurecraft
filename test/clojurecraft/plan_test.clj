@@ -1,5 +1,6 @@
 (ns clojurecraft.plan-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx :refer [fold packets sent packet ticks]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -399,9 +400,9 @@
                 :intent/id 1
                 :intent/goal :wood}))))
 
-(def wooden-pickaxe (get clojurecraft.blocks/items :wooden_pickaxe))
-(def stone-pickaxe (get clojurecraft.blocks/items :stone_pickaxe))
-(def iron-ore (first (clojurecraft.blocks/states-where (fn [[n]] (= n :iron_ore)))))
+(def wooden-pickaxe (get blocks/items :wooden_pickaxe))
+(def stone-pickaxe (get blocks/items :stone_pickaxe))
+(def iron-ore (first (blocks/states-where (fn [[n]] (= n :iron_ore)))))
 
 (deftest stone-is-dug-with-the-pickaxe-in-its-slot
   (let [[w fx] (run (digging 1 {3 {:item wooden-pickaxe :count 1} 0 {:item 1 :count 2}})

@@ -1,6 +1,7 @@
 (ns clojurecraft.rcon
   "Minimal RCON client, used by the harness for fixtures and by CI as the independent judge.
    `clojure -M:rcon --host H --port P --pass S <command words>` prints the response."
+  (:require [clojure.string :as str])
   (:import [java.io DataInputStream DataOutputStream]
            [java.net InetSocketAddress Socket]
            [java.nio ByteBuffer ByteOrder]
@@ -81,10 +82,9 @@
 (defn -main
   "clojure -M:rcon --host H --port P --pass S <command...>"
   [& args]
-  (let [[flags words] (split-with (fn [[k _]] (clojure.string/starts-with? k "--"))
-                                  (partition-all 2 args))
+  (let [[flags words] (split-with (fn [[k _]] (str/starts-with? k "--")) (partition-all 2 args))
         {:strs [--host --port --pass]} (into {} (map vec flags))
-        cmd (clojure.string/join " " (apply concat words))]
+        cmd (str/join " " (apply concat words))]
     (println (with-rcon (or --host "127.0.0.1")
                         (Long/parseLong (or --port "25575"))
                         --pass

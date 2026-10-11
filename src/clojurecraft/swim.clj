@@ -295,7 +295,7 @@
    bank lay under a cliff and was chosen three times)."
   [world key [_ fy _ :as feet] blacklist]
   (let [column (get-in world [:world/chunks key])
-        sources (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)
+        sources (for [[x y z] (chunk/find-blocks {key column} blocks/fluid)
                       :when (and (>= y (- fy wade-below)) (water-source? world [x y z]))]
                   [x y z])]
     (->> (for [[x y z :as water] sources

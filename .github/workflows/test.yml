@@ -41,6 +41,8 @@ jobs:
         run: clojure -M:brain
       - name: Formatting (the pre-commit hook fixes it; this catches a --no-verify)
         run: clojure -M:fmt check
+      - name: Lint (clj-kondo; a warning fails it, as in the pre-commit hook)
+        run: clojure -M:lint --lint src dev test
 
   forests:
     runs-on: ubuntu-24.04

@@ -10,8 +10,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
-            [clojurecraft.stairs]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.stairs]))
 
 (def search-radius 24)                ; blocks from the eye searched for exposed stone
 (def search-height 12)                ; blocks above or below the eye searched

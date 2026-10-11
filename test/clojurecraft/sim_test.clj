@@ -606,7 +606,7 @@
         (fn [w e]
           (let [w (game/step w e)
                 i (:plan/intent w)]
-            (cond (and (= :go (:event/kind e)))
+            (cond (= :go (:event/kind e))
                   (assoc w
                          :plan/intent
                          {:intent/kind :stairs-down :intent/to-y to-y :intent/status :active})

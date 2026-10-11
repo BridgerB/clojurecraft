@@ -99,8 +99,6 @@
 
 (declare resolve-need)
 
-(declare resolve-need)
-
 (defn resolve-holds
   "[counts action] for what a row must hold but does not spend (:goal/holds, a tool): each is
    resolved once, however many times the row runs, and the count is handed back unconsumed,

@@ -119,7 +119,7 @@
 (defn follow
   "Controls that walk to a waypoint: face its centre, forward, and jump only when it is above
    the feet and near (jumping from afar bounces in open air), or when blocked."
-  [world [wx wy wz :as wp]]
+  [world [wx wy wz]]
   (let [[px py pz] (:player/pos world)
         centre [(+ wx 0.5) (+ wy 0.5) (+ wz 0.5)]
         near? (< (physics/horizontal-distance [px 0 pz] centre) jump-near)
@@ -155,7 +155,7 @@
         (and (empty? ahead) (not= :found route)))))
 
 (defmethod run :walk
-  [world {:intent/keys [target started waypoints at replans route] :or {replans 0} :as i} _]
+  [world {:intent/keys [target started waypoints at replans] :or {replans 0}} _]
   (let [tick (:time/tick world)
         started (or started tick)
         d (physics/distance (game/eye world) (physics/centre target))
@@ -333,15 +333,15 @@
         fz (long (Math/floor pz))
         feet (long (Math/floor py))
         cx (long (Math/floor (+ px (* 0.8 (Math/signum (double (- gx px)))))))
-        cz (long (Math/floor (+ pz (* 0.8 (Math/signum (double (- gz pz)))))))]
-    (let [ahead (remove #{[fx fz]} (distinct [[cx fz] [fx cz] [cx cz]]))
-          steps (filter (fn [[x z]] (step? world [x feet z])) ahead)
-          spots (concat (for [[x z] ahead y [(inc feet) feet]] [x y z])
-                        (for [[x z] steps] [x (+ feet 2) z])
-                        (when (seq steps) [[fx (+ feet 2) fz]]))]
-      (first (filter #(some-> (terrain/block-at world %)
-                              blocks/leaves?)
-                     spots)))))
+        cz (long (Math/floor (+ pz (* 0.8 (Math/signum (double (- gz pz)))))))
+        ahead (remove #{[fx fz]} (distinct [[cx fz] [fx cz] [cx cz]]))
+        steps (filter (fn [[x z]] (step? world [x feet z])) ahead)
+        spots (concat (for [[x z] ahead y [(inc feet) feet]] [x y z])
+                      (for [[x z] steps] [x (+ feet 2) z])
+                      (when (seq steps) [[fx (+ feet 2) fz]]))]
+    (first (filter #(some-> (terrain/block-at world %)
+                            blocks/leaves?)
+                   spots))))
 
 (defmethod run :collect
   [world

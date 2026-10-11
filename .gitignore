@@ -5,3 +5,4 @@ data/
 work/
 cache/
 .nix/
+.clj-kondo/.cache/

@@ -16,8 +16,7 @@
    beside or over lava is ever entered (the siblings' rule, applied to every move kind), and
    blocks the physics cannot simulate (slabs, stairs, fences, doors ...) are :awkward: neither
    floor nor clear, so routes go around them. Nothing here reads a clock or the atom."
-  (:require [clojure.set :as set]
-            [clojurecraft.blocks :as blocks]
+  (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.terrain :as terrain]))
 
 (def max-fall 3)                      ; blocks a drop may fall; vanilla damage starts above 3

@@ -271,16 +271,16 @@
   "Put a stack into the given slots, stacking first. Returns [view leftover]."
   [view slots {:keys [item count]}]
   (let [order (concat (filter #(= item (:item (get view %))) slots)
-                      (filter #(nil? (get view %)) slots))]
-    (let [[view n] (reduce (fn [[view n] s]
-                             (if (zero? n)
-                               (reduced [view n])
-                               (let [have (:count (get view s) 0)
-                                     k (min n (- max-stack have))]
-                                 [(assoc view s {:item item :count (+ have k)}) (- n k)])))
-                           [view count]
-                           order)]
-      [view (when (pos? n) {:item item :count n})])))
+                      (filter #(nil? (get view %)) slots))
+        [view n] (reduce (fn [[view n] s]
+                           (if (zero? n)
+                             (reduced [view n])
+                             (let [have (:count (get view s) 0)
+                                   k (min n (- max-stack have))]
+                               [(assoc view s {:item item :count (+ have k)}) (- n k)])))
+                         [view count]
+                         order)]
+    [view (when (pos? n) {:item item :count n})]))
 
 (defn take-one
   "view with one item removed from slot s; the slot empties at zero. s must hold an item."

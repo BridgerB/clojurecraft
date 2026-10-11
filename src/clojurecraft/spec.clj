@@ -5,7 +5,6 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.game :as game]
-            [clojurecraft.gym :as gym]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]

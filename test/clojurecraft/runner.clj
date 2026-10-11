@@ -10,9 +10,7 @@
    The tests are pure functions over values (a world in, a world out), so they share nothing
    and run side by side; the serial suite took eight minutes on a runner and most of it was
    one namespace. Exit code 1 when anything fails or errors."
-  (:require [clojure.java.io :as io]
-            [clojure.spec.test.alpha :as stest]
-            [clojure.string :as str]
+  (:require [clojure.string :as str]
             [clojurecraft.fixtures :as fixtures]
             [eftest.report.pretty]
             [eftest.runner :as eftest]))

@@ -19,7 +19,6 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
-            [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
 
 (def max-turns 4)                     ; refusals before the intent fails :boxed (one full turn)
@@ -95,8 +94,7 @@
 (defmethod intent/run :stairs-down
   [world
    {:intent/keys [to-y dir turns stage child cells started-y started-tick]
-    :or {turns 0 stage :plan}
-    :as i} event]
+    :or {turns 0 stage :plan}} event]
   (let [tick (:time/tick world)
         set-i (fn [w & kvs] (apply update w :plan/intent assoc kvs))
         drop-i (fn [w & ks] (apply update w :plan/intent dissoc ks)) ; what is over is absent, never nil

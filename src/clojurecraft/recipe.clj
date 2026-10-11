@@ -69,7 +69,7 @@
         h (inc (- (apply max rows) r0))
         w (inc (- (apply max cols) c0))
         {:recipe/keys [pattern key width height]} r
-        at (fn [row col] (get grid (+ 1 (* (+ r0 row) size) (+ c0 col))))
+        at (fn [row col] (get grid (+ 1 (* (+ r0 row) size) c0 col)))
         fits (fn [mirror?]
                (every? true?
                        (for [row (range height)

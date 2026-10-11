@@ -166,7 +166,6 @@
         dx (clip box boxes 0 vx)
         box (shift box 0 dx)
         dz (clip box boxes 2 vz)
-        box (shift box 2 dz)
         landed? (and (not= dy vy) (neg? vy))
         hit? (or (not= dx vx) (not= dz vz))
         [x y z] pos]
