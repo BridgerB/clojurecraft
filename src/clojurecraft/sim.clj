@@ -305,10 +305,26 @@
       (cond (or (nil? out) left) view
             :else (recur (craft-once view' layout))))))
 
-(defn click-result
-  "A click on the result slot (0): vanilla crafts onto the cursor, or with a shift-click into the
-   store; a click when the grid matches nothing is recorded as a violation."
-  [layout view cursor mode]
+(defn click-kind
+  "Which vanilla rule a click falls under: :result (slot 0), :swap (mode 2, with a hotbar slot),
+   :shift (mode 1), :left (button 0) or :right."
+  [{:keys [slot button mode]}]
+  (cond (= slot 0) :result
+        (= mode 2) :swap
+        (= mode 1) :shift
+        (= button 0) :left
+        :else :right))
+
+(defmulti click-view
+  "Vanilla click rules over one window's slots, one method per kind of click (click-kind).
+   Returns {:view :cursor :violation}."
+  {:arglists '([layout view cursor click])}
+  (fn [_layout _view _cursor click] (click-kind click)))
+
+(defmethod click-view :result
+  ;; vanilla crafts onto the cursor, or with a shift-click into the store; a click when the grid
+  ;; matches nothing is recorded as a violation
+  [layout view cursor {:keys [mode]}]
   (let [out (result-of view layout)]
     (cond (nil? out) {:view view :cursor cursor :violation [:click-on-empty-result mode]}
           (= mode 1) {:view (craft-all view layout) :cursor cursor}
@@ -317,46 +333,55 @@
           {:view (craft-once view layout) :cursor (update out :count + (:count cursor 0))}
           :else {:view view :cursor cursor})))
 
-(defn click-view
-  "Vanilla click rules over one window's slots. Returns {:view :cursor :violation}."
-  [layout view cursor {:keys [slot button mode]}]
+(defmethod click-view :swap
+  ;; the slot and hotbar slot (hotbar + button) trade places
+  [layout view cursor {:keys [slot button]}]
   (let [at (get view slot)
-        store (:store layout)]
-    (cond (= slot 0) (click-result layout view cursor mode)
-          (= mode 2)
-          (let [h (+ (:hotbar layout) button)
-                other (get view h)]
-            {:view (-> view
-                       (dissoc slot h)
-                       (cond-> other (assoc slot other)
-                               at (assoc h at)))
-             :cursor cursor})
-          (= mode 1)
-          (if (and at (some #{slot} (grid-slots layout)))
-            (let [[view' left] (insert (dissoc view slot) store at)]
-              {:view (cond-> view' left (assoc slot left)) :cursor cursor})
-            {:view view :cursor cursor})
-          (= button 0)
-          (cond (nil? cursor) {:view (dissoc view slot) :cursor at}
-                (nil? at) {:view (assoc view slot cursor) :cursor nil}
-                (= (:item at) (:item cursor))
-                (let [k (min (:count cursor) (- max-stack (:count at)))
-                      left (- (:count cursor) k)]
-                  {:view (assoc view slot (update at :count + k))
-                   :cursor (when (pos? left) (assoc cursor :count left))})
-                :else {:view (assoc view slot cursor) :cursor at})
-          :else
-          (cond (and (nil? cursor) at)
-                (let [half (long (math/ceil (/ (:count at) 2)))
-                      rest (- (:count at) half)]
-                  {:cursor (assoc at :count half)
-                   :view
-                   (if (pos? rest) (assoc view slot (assoc at :count rest)) (dissoc view slot))})
-                (nil? cursor) {:view view :cursor nil}
-                (or (nil? at) (and (= (:item at) (:item cursor)) (< (:count at) max-stack)))
-                {:view (assoc view slot {:item (:item cursor) :count (inc (:count at 0))})
-                 :cursor (when (> (:count cursor) 1) (update cursor :count dec))}
-                :else {:view view :cursor cursor}))))
+        h (+ (:hotbar layout) button)
+        other (get view h)]
+    {:view (-> view
+               (dissoc slot h)
+               (cond-> other (assoc slot other)
+                       at (assoc h at)))
+     :cursor cursor}))
+
+(defmethod click-view :shift
+  ;; a grid cell's stack moves into the store, what does not fit stays; anywhere else nothing
+  [layout view cursor {:keys [slot]}]
+  (let [at (get view slot)]
+    (if (and at (some #{slot} (grid-slots layout)))
+      (let [[view' left] (insert (dissoc view slot) (:store layout) at)]
+        {:view (cond-> view' left (assoc slot left)) :cursor cursor})
+      {:view view :cursor cursor})))
+
+(defmethod click-view :left
+  ;; pick up, put down, merge up to a full stack (the rest stays on the cursor), or swap
+  [_layout view cursor {:keys [slot]}]
+  (let [at (get view slot)]
+    (cond (nil? cursor) {:view (dissoc view slot) :cursor at}
+          (nil? at) {:view (assoc view slot cursor) :cursor nil}
+          (= (:item at) (:item cursor))
+          (let [k (min (:count cursor) (- max-stack (:count at)))
+                left (- (:count cursor) k)]
+            {:view (assoc view slot (update at :count + k))
+             :cursor (when (pos? left) (assoc cursor :count left))})
+          :else {:view (assoc view slot cursor) :cursor at})))
+
+(defmethod click-view :right
+  ;; an empty cursor picks up half (rounded up); a loaded one places one into an empty or
+  ;; same-item slot that is not full
+  [_layout view cursor {:keys [slot]}]
+  (let [at (get view slot)]
+    (cond (and (nil? cursor) at)
+          (let [half (long (math/ceil (/ (:count at) 2)))
+                rest (- (:count at) half)]
+            {:cursor (assoc at :count half)
+             :view (if (pos? rest) (assoc view slot (assoc at :count rest)) (dissoc view slot))})
+          (nil? cursor) {:view view :cursor nil}
+          (or (nil? at) (and (= (:item at) (:item cursor)) (< (:count at) max-stack)))
+          {:view (assoc view slot {:item (:item cursor) :count (inc (:count at 0))})
+           :cursor (when (> (:count cursor) 1) (update cursor :count dec))}
+          :else {:view view :cursor cursor})))
 
 (defn state-id-path
   "Where the sim keeps the state id of window kind."

@@ -8,7 +8,8 @@ status: verified
 lastUpdated: 2026-10-09
 verifiedAgainst: 5c7d6c1
 sourceRefs:
-  - src/clojurecraft/sim.clj#defn click-view
+  - src/clojurecraft/sim.clj#defmulti click-view
+  - src/clojurecraft/sim.clj#defn click-kind
   - src/clojurecraft/sim.clj#def layouts
   - src/clojurecraft/sim.clj#defn result-of
   - src/clojurecraft/sim.clj#defn insert
@@ -30,7 +31,7 @@ The sim stores the player's window-0 slots in `:sim/inv` (1-44 meaningful), the 
 | `:inventory` | 2 (slots 1-4) | 9-44 | 36 |
 | `:table` | 3 (slots 1-9) | 10-45 | 37 |
 
-## Rules (`click-view`, returns `{:view :cursor :violation}`)
+## Rules (`click-view`, one method per `click-kind`, returns `{:view :cursor :violation}`)
 - **Slot 0, mode 1 (shift)**: craft repeatedly, inserting each result into the store, until the grid stops matching or the result does not fit.
 - **Slot 0, other modes**: with an empty or same-item cursor that can hold it, craft once onto the cursor; else nothing.
 - **Slot 0 with no result**: violation `[:click-on-empty-result mode]`.
