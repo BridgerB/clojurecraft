@@ -5,6 +5,7 @@
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.terrain :as terrain]))
 
@@ -47,27 +48,22 @@
    walk → dig → collect; a collect blocked by leaves → dig the leaf → the same collect again."
   [world]
   (let [{:intent/keys [kind target blocked-by resume clears trunk] :as last} (:plan/last world)
-        of-trunk (fn [i] (cond-> i trunk (assoc :intent/trunk trunk)))]
-    (when (= :log (:intent/for last))
-      (case kind
-        :walk (of-trunk {:intent/kind :dig :intent/target target :intent/for :log})
-        :dig
-        (or resume
-            (of-trunk {:intent/kind :collect
-                       :intent/target target
-                       :intent/for :log
-                       :intent/drops blocks/log-items}))
-        :collect
-        (when (and blocked-by (< (or clears 0) max-clears))
-          (of-trunk {:intent/kind :dig
-                     :intent/target blocked-by
-                     :intent/for :log
-                     :intent/resume (of-trunk {:intent/kind :collect
-                                               :intent/target target
-                                               :intent/for :log
-                                               :intent/drops blocks/log-items
-                                               :intent/clears (inc (or clears 0))})}))
-        nil))))
+        extra (if trunk {:intent/trunk trunk} {})]
+    (cond (not= :log (:intent/for last)) nil
+          (and (= :dig kind) resume) resume ; a leaf dug: back to the collect it cleared for
+          (= :collect kind)
+          (when (and blocked-by (< (or clears 0) max-clears))
+            (merge {:intent/kind :dig
+                    :intent/target blocked-by
+                    :intent/for :log
+                    :intent/resume (merge {:intent/kind :collect
+                                           :intent/target target
+                                           :intent/for :log
+                                           :intent/drops blocks/log-items
+                                           :intent/clears (inc (or clears 0))}
+                                          extra)}
+                   extra))
+          :else (intent/chain-next last :log blocks/log-items extra))))
 
 (defn skipped
   "The logs not to choose: blacklisted positions, and every log in a trunk column that has failed

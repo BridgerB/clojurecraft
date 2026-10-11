@@ -8,6 +8,7 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
@@ -78,13 +79,7 @@
   "The next intent of a stone chain in flight, or nil: walk → dig → collect, tagged
    :intent/for :stone so a walk for another purpose is never continued as a dig."
   [world]
-  (let [{:intent/keys [kind target] :as last} (:plan/last world)]
-    (when (= :stone (:intent/for last))
-      (case kind
-        :walk {:intent/kind :dig :intent/target target :intent/for :stone}
-        :dig
-        {:intent/kind :collect :intent/target target :intent/for :stone :intent/drops cobblestone}
-        nil))))
+  (intent/chain-next (:plan/last world) :stone cobblestone {}))
 
 (defn mine-next
   "The next step of getting cobblestone: continue the chain; else, with a pickaxe, walk to the

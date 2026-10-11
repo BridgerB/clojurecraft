@@ -119,6 +119,23 @@
   [target]
   {:intent/kind :dig :intent/target target :intent/status :active})
 
+(defn chain-next
+  "The next link of a walk → dig → collect chain toward one drop, from the intent that just
+   ended (last), or nil: after the walk, dig its target; after the dig, collect the drop
+   (counting drops). Only a link of the chain for `for` continues, so a walk for another
+   purpose (to a crafting table) is never taken for one. Every link carries extra (a trunk)."
+  [last for drops extra]
+  (when (= for (:intent/for last))
+    (case (:intent/kind last)
+      :walk (merge {:intent/kind :dig :intent/target (:intent/target last) :intent/for for} extra)
+      :dig
+      (merge {:intent/kind :collect
+              :intent/target (:intent/target last)
+              :intent/for for
+              :intent/drops drops}
+             extra)
+      nil)))
+
 (defn run-child
   "One tick of the child intent at :intent/child by its own executor: the child stands in as
    :plan/intent for the tick, then returns to its place. Returns the world."
