@@ -160,3 +160,19 @@
         "the shipped table gathers: no tree known yet")
     (is (= {:plan/wait :stuck} (make/decide w wood without-gathering))
         "a table with no way to get a log is stuck")))
+
+(deftest a-need-already-being-resolved-is-a-dead-end
+  ;; the recipes alone hold the iron cycle: ingots from a block of nine ingots, and from nine
+  ;; nuggets cut from an ingot
+  (is (make/cycle? [#{:iron_block} #{:iron_ingot}] #{:iron_ingot}))
+  (is (not (make/cycle? [#{:iron_block}] #{:iron_ingot})))
+  (is (= :stuck
+         (make/next-row (world-holding {} false) {:goal/provides {:item/iron_ingot 4}} plan/goals))
+      "no iron anywhere: stuck, after trying each way round once"))
+
+(deftest a-need-keyed-by-an-item-set-is-counted-not-a-block
+  (is (make/block-need? :block/furnace))
+  (is (not (make/block-need? :item/coal)))
+  (is (not (make/block-need? #{:dried_kelp_block :coal_block})) "a set has no namespace to ask")
+  (is (= [{} :stuck]
+         (make/resolve-need (world-holding {} false) plan/goals {} #{:diamond :emerald} 1 []))))

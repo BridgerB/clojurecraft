@@ -1,6 +1,6 @@
 ---
 title: Make goals
-description: The needs planner - how a target's provides are traced back through producer rows (gather a log, place a table, one generated row per recipe) to the row whose needs are met, with one netted inventory - and the :gather, :place and :craft acts.
+description: The needs planner - how a target's provides are traced back through producer rows (gather a log, place a table, one generated row per recipe) to the row whose needs are met, with one netted inventory and no cycles - and the :gather, :place and :craft acts.
 type: reference
 tags: [bot, crafting, plan, goals]
 aliases: [needs planner, make.clj, craft-rows, producers, next-row, resolve-need, provided?, table ladder, decide]
@@ -9,6 +9,8 @@ lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/make.clj#defn craft-row
+  - src/clojurecraft/make.clj#defn cycle?
+  - test/clojurecraft/make_test.clj#a-need-already-being-resolved-is-a-dead-end
   - src/clojurecraft/make.clj#defn resolve-need
   - src/clojurecraft/make.clj#defn resolve-item-need
   - src/clojurecraft/make.clj#defn resolve-block-need
@@ -31,7 +33,7 @@ related:
 
 ## Key files
 - `make.clj`, `craft-row` - a recipe as a goal row: ingredients become needs (named `:tag/planks`, `:item/stick`, or the item set when no tag matches), the result becomes what it provides, and a recipe that does not fit the 2x2 grid also needs `{:block/crafting_table :near}`. All 1,030 recipes become rows (`craft-rows`).
-- `make.clj`, `resolve-need` - one need, by its kind: `resolve-item-need` nets a counted need in the working inventory and tries its producers in `producer-order` (most of their own needs held, then no table needed, then the larger yield); `resolve-block-need` meets `:block/... :near` with a remembered placed block within 24 blocks, else the `:place-table` row. Both try candidates through `first-resolved`.
+- `make.clj`, `resolve-need` - one need, by its kind: `resolve-item-need` nets a counted need in the working inventory and tries its producers in `producer-order` (most of their own needs held, then no table needed, then the larger yield); `resolve-block-need` meets `:block/... :near` with a remembered placed block within 24 blocks, else the `:place-table` row. Both try candidates through `first-resolved`. Each item need carries the path of item sets being resolved above it: past `max-depth` (8) of them, or when the need is already on the path (`cycle?`: an ingot from a block made of ingots, from nuggets cut from an ingot), it is `:stuck` rather than searched deeper. The recipes alone hold that iron cycle: `next-row` toward four ingots with nothing held took 0.84 ms a call searching it to depth eight, 0.13 ms with the cut (measured 2026-10-11, 200 calls after warm-up).
 - `make.clj`, `decide` - a log chain in flight first ([[gather-chain]]), else `plan/act` on the row `next-row` reaches; `:stuck` becomes `{:plan/wait :stuck}`.
 - `make.clj`, the acts - `:gather` runs the log chain, `:place` puts the held table down ([[place-intent]]), `:craft` crafts in the 2x2 grid, or for a table recipe: in the open table window, else open the table in reach ([[open-container-intent]]), else walk to it.
 
@@ -40,6 +42,7 @@ related:
 
 ## Gotchas
 - Provides are resolved in the order written (EDN array maps keep it), so `:kit` reserves planks for the table before the sticks.
+- A need with no tag (not one item, and no tag names its set) is keyed by the item set itself; `block-need?` tells such a key from a `:block/` one.
 - The bamboo stick and other dead ends lose because nothing provides their needs (`:stuck` for that branch), not because they are filtered out.
 - The planner property in `make_test` (400 generated inventories) checks that every chosen intent is executable; it was mutation-checked against a planner that places without a table.
 
