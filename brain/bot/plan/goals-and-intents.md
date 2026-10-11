@@ -5,8 +5,8 @@ type: reference
 tags: [bot, plan, goals, intents]
 aliases: [planner, plan/step, intent/run, goal table, goals.edn, done-by, plan/act, blacklist, retries]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 3452f18
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/plan.clj#def goals
   - resources/clojurecraft/goals.edn#{:goal/id :wood :goal/priority 1 :goal/target? true :goal/until "wood" :goal/doc "hold one log"
@@ -42,15 +42,15 @@ The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id
 
 ## How it works
 1. Each tick: choose first. With nothing left, the plan is done; if the running intent serves another target, it is preempted. Otherwise run it; if it ended, plan again in the same tick (finish or fail, then choose).
-2. With no intent: `choose` takes the highest-priority target in play (`:plan/goals` from the `:go` event, or every target) whose `done-by` is false, and `next-intent` turns it into an intent, `{:plan/wait reason}`, or nil. A wait longer than `wait-timeout` (20 s) fails the plan.
+2. With no intent: `choose` takes the highest-priority target in play (`:plan/goals` from the `:go` event, or every target, plus every row marked `:goal/always?`: the two escapes) whose `done-by` is false, and `next-intent` turns it into an intent, `{:plan/wait reason}`, or nil. A wait longer than `wait-timeout` (20 s) fails the plan. Before choosing, `trapped-tick` re-derives `:plan/trap` ([[water-escape]]).
 3. A failed intent blacklists its target (when it has one) and counts an attempt; a success resets the count, so `max-attempts` (3) means three failures in a row.
 4. No target left means `:plan/status :done`.
 
 ## Gotchas
-- No goal needs a method of its own: wood, kit and pickaxe are rows that differ only in data, and `make_test` asserts `:needs` is the only `next-intent` registered.
+- No item goal needs a method of its own: wood, kit and pickaxe are rows that differ only in data; `make_test` asserts the registered planners are `:needs`, `:escape` and `:wade` (the escapes and the shore trial, [[water-escape]]).
 - Rows are retired, never rewritten: a superseded row (`:goal/superseded-by`) stays in the table and is never chosen, and a `:go` that names it is mapped to its replacement by `plan/current-id` ([[add-a-goal]]).
 - Completion is re-derived from the world each tick, so a lost log is simply planned for again; nothing remembers "done".
-- The planner re-chooses every active tick, even while an intent runs (`plan-tick`): no target left means `:done` and the running intent is abandoned `:goal-met`; a running intent whose `:intent/goal` is not the target chosen now (a higher-priority target regressed) is abandoned `:preempted` and the new target planned. Neither happens while the cursor holds an item (`can-abandon?`): the intent puts it down first. `abandon-intent` closes any open container, so the server is never left with one. A live pickaxe run ended with the craft abandoned `:goal-met` the tick the pickaxe arrived, and the table window closed. Escaping water (issue #5) will be a target that preempts this way.
+- The planner re-chooses every active tick, even while an intent runs (`plan-tick`): no target left means `:done` and the running intent is abandoned `:goal-met`; a running intent whose `:intent/goal` is not the target chosen now (a higher-priority target regressed) is abandoned `:preempted` and the new target planned. Neither happens while the cursor holds an item (`can-abandon?`): the intent puts it down first. `abandon-intent` closes any open container, so the server is never left with one. A live pickaxe run ended with the craft abandoned `:goal-met` the tick the pickaxe arrived, and the table window closed. Escaping water is a target that preempts this way ([[water-escape]]): a running walk or dig yields to `:swim-out` the tick the trap is called. An abandon also drops `:plan/last`, so the next goal never continues a chain from it.
 
 ## See also
 - [[make-goals]] - the needs planner, the generated recipe rows and the acts.

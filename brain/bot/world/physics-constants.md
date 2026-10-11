@@ -5,8 +5,8 @@ type: reference
 tags: [bot, world, physics, constants, index]
 aliases: [gravity 0.08, jump velocity, eye height 1.62, ground inertia, walking speed, player hitbox]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/physics.clj#def gravity 0.08
   - src/clojurecraft/physics.clj#def ground-acceleration
@@ -36,6 +36,13 @@ related:
 | `negligible` | 0.003 | velocity components below this snap to 0 at the start of a tick |
 | jump cooldown | 10 ticks | `:player/jump-ticks` set on a jump, counted down each tick |
 | forward input | 0.98 | multiplier on acceleration when `:control/forward?` |
+| `liquid-acceleration` | 0.02 | input acceleration in water or lava |
+| `water-inertia` / `lava-inertia` | 0.8 / 0.5 | velocity kept per tick in a liquid (both axes) |
+| `water-gravity` / `lava-gravity` | 0.005 / 0.02 | gravity in a liquid (water's is a sixteenth of land's) |
+| `swim-up` / `swim-down` | 0.04 | vy added per tick with jump held, taken with sneak held, in a liquid |
+| `out-of-liquid-impulse` | 0.3 | vy when colliding horizontally in a liquid with the box free 0.6 up |
+| `water-contract` / `lava-contract` | (0.001, 0.401, 0.001) / (0.1, 0.4, 0.1) | the box shrinks by this before asking "in water?" / "in lava?" |
+| `safe-fall` | 3.0 | blocks of fall vanilla forgives |
 
 ## Behaviour the tests pin
 - A fall settles at y 64.0 with vy in (-0.08, 0): the resting -0.0784 ([[resting-vertical-velocity]]).
@@ -45,7 +52,8 @@ related:
 
 ## Gotchas
 - `on-ground?` is "this tick's vertical move was clipped while falling"; it drives which inertia the next tick uses.
-- The forward multiplier is 0.98 and there is no sprint, sneak or strafe input.
+- The forward multiplier is 0.98 and there is no sprint or strafe input; sneak only acts in a liquid.
 
 ## See also
 - [[land-physics]] - the step and the solidity oracle.
+- [[fluid-physics]] - the liquid branch these constants drive.

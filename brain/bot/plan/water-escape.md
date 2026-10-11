@@ -1,0 +1,84 @@
+---
+title: Water escape
+description: How the bot gets out of water and away from lava (issue #5) - the planner's trap with hysteresis, the two always-on priority-zero goals that preempt whatever runs, the :swim-out executor (one bank kept, forward and jump, dig what is in the way from the floor), :flee for lava, the :wade intent the gym uses to walk in on purpose, the trap facts routes keep away from, and the dig refusals beside water and lava.
+type: reference
+tags: [bot, plan, water, lava, survival, intents, goals]
+aliases: [:escape-water, :escape-lava, :swim-out, :flee, :wade, :shore, trapped-tick, dry-land?, :plan/trap, :world/traps, :goal/always?, bank, roofed pool, capped well, exposes-fluid?, never-dug]
+status: verified
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
+sourceRefs:
+  - src/clojurecraft/plan.clj#defn dry-land?
+  - src/clojurecraft/plan.clj#defn trapped-tick
+  - src/clojurecraft/plan.clj#def trap-after-ticks 20
+  - src/clojurecraft/plan.clj#def dry-ticks-to-clear 6
+  - src/clojurecraft/plan.clj#defn choose
+  - "resources/clojurecraft/goals.edn#{:goal/id :escape-water :goal/priority 0 :goal/target? true :goal/always? true"
+  - src/clojurecraft/swim.clj#defn banks
+  - src/clojurecraft/swim.clj#defn float-top
+  - src/clojurecraft/swim.clj#defn obstacle
+  - src/clojurecraft/swim.clj#defn dig-or-sink
+  - src/clojurecraft/swim.clj#defn dig-from-floor?
+  - src/clojurecraft/swim.clj#defn swim-controls
+  - src/clojurecraft/swim.clj#defmethod intent/run :swim-out
+  - src/clojurecraft/swim.clj#defmethod intent/run :flee
+  - src/clojurecraft/swim.clj#defmethod intent/run :wade
+  - src/clojurecraft/swim.clj#defmethod plan/done-by :not-trapped-in
+  - src/clojurecraft/path.clj#defn trap-factor
+  - src/clojurecraft/intent.clj#defn exposes-fluid?
+  - src/clojurecraft/intent.clj#def never-dug
+  - test/clojurecraft/sim_test.clj#dropped-in-a-pond-the-bot-swims-out-onto-the-bank
+  - test/clojurecraft/sim_test.clj#a-roofed-pool-is-left-through-its-side-pocket
+  - test/clojurecraft/sim_test.clj#a-capped-well-is-dug-out-through-its-cap-with-the-pickaxe
+  - test/clojurecraft/sim_test.clj#the-shore-goal-wades-in-and-comes-out
+  - test/clojurecraft/props_test.clj#water-over-the-eye-preempts-whatever-runs
+related:
+  - "[[bot/plan/_moc|Plan]]"
+  - "[[fluid-physics]]"
+  - "[[goals-and-intents]]"
+  - "[[memory-sightings]]"
+  - "[[death-and-respawn]]"
+  - "[[sib-water-escape]]"
+  - "[[sib-water-traps]]"
+  - "[[sib-lava-safety]]"
+---
+
+# Water escape
+
+Survival is two goal rows and one rule in the planner, not a watchdog thread. The siblings' lessons are in [[sib-water-escape]] and [[sib-water-traps]]; this is what the bot does with them.
+
+## The trap (plan.clj)
+`trapped-tick` runs at the top of every planning tick and re-derives `:plan/trap` with hysteresis. Lava is a trap on any contact (`:player/in-lava?`). Water is a trap once `:plan/wet-ticks` (consecutive ticks with `:player/eye-in-water?`) reaches `trap-after-ticks` (20, ruststeve's one-second watchdog): wading a stream never preempts a walk. Either trap holds until `dry-land?` has been true for `dry-ticks-to-clear` (6) consecutive ticks (`:plan/dry-ticks`): a one-tick bob above the surface is not out (steve's 300 ms settle). `dry-land?` is steve's `isOnDryLand`: on the ground, no part of the body in water, the eye in air, the block under the feet a solid that is not a lily pad. When a trap clears, `{:trap/pos [x z] :trap/kind :trap/at}` is appended to `:world/traps` (the column it began in, `:plan/trap-at`), and `path/trap-factor` makes a route into any column within two of it ten times dearer for ten minutes, so a resumed goal does not walk straight back in ([[sib-water-traps]] item 10).
+
+## The goals (goals.edn)
+`:escape-water` and `:escape-lava` are targets at priority 0 with `:goal/always? true`: `plan/choose` puts them in play whatever `--until` asked for. Each is done by `:not-trapped-in` (the trap is not its kind) and planned by `:escape` into `:swim-out` or `:flee`, only while the trap is its kind. Preemption is the planner's existing rule ([[goals-and-intents]]): the running intent's `:intent/goal` is not the goal chosen now, so it is abandoned `:preempted`, controls cleared, `:plan/last` dropped (a chain must not continue from it), and the escape starts in the same tick. The property `water-over-the-eye-preempts-whatever-runs` holds it for any running walk or dig.
+
+## :swim-out (swim.clj)
+1. **One bank, kept.** `banks` lists cells the feet could stand in (`path/standable?`) within `bank-radius` 12 on the plane, between `bank-drop` 3 under the `float-top` and `bank-rise` 1 over it, nearest first; the first not blacklisted is `:intent/bank` and `:intent/target`, and it is never re-picked (re-picking every tick swam the siblings in circles). `float-top` is the highest feet level the body reaches in the column: `float-depth` 1.03 under an open surface, the body's height under a roof, rounded; a ledge higher than that is beyond the impulse's lift.
+2. **No bank in reach:** dig the cap over the head if there is one, else hold jump and rise, looking again every `search-every-ticks` (20); a roof or a bank comes into reach, or `escape-timeout-ticks` (2400, 120 s) fails it `:no-escape`.
+3. **Swim:** `swim-controls` holds forward and jump toward the bank's centre while in water, walks without jump once out, and does nothing on dry land, so the planner can see the land held (a bot that kept jumping on the bank never counted as out).
+4. **Stuck** (`stuck-ticks` 40 without `progress` 0.05 toward the bank): `obstacle` names what to dig: a lily pad over the head first (a lid, steve's rule), else the cell ahead at head height, else the cell over the head; never the cell ahead at feet height, which is the bank the impulse needs to collide with. The dig is a child `:dig` with `:intent/exposes-ok?` run by `stairs/run-child` (intents composing intents, as [[stairs-down]]).
+5. **From the floor.** `dig-or-sink`: off the ground a dig is five times slower and under water five times again, so a cap dug from the water takes 28 s with a wooden pickaxe and the breath lasts 25. When the cap is within reach of the eye standing on the floor (`dig-from-floor?`), the escape holds sneak, remembers the cell as `:intent/dig-when-down`, and starts the dig once on the ground: 5.75 s.
+
+## :flee
+The lava half: `footing` is the nearest standable cell with no lava beside or under it within `flee-radius` 6, at most one up or down; forward and jump toward it; `flee-timeout-ticks` (200) fails it `:no-footing`. The planner ends it the moment the trap clears.
+
+## :wade and :shore
+The gym's water trial. `:shore` (priority 5, `--until shore`) is done by `:escaped-water?` (a water trap in `:world/traps`) and planned by `:wade`: a child `:walk` to the nearest remembered pool (`memory/nearest-surface-water`, radius 64; with none, `{:plan/wait :no-water}`), then straight in with jump off, sinking until the trap preempts it. RESULT carries `:escaped true` once a trap was escaped.
+
+## Dig refusals
+`:dig` fails `:unsafe` in `:settle` when any of the target's six neighbours is a fluid (`exposes-fluid?`, steve's `digExposesWater`) unless the intent says `:intent/exposes-ok?`, or when the target is in `never-dug` (obsidian: ruststeve dug its own portal frame). `intent/still?` accepts a body afloat as still, so an escape dig can start under water.
+
+## What the tests hold
+Three model fixtures from the issue and the siblings' deaths: a two-deep pond with a bank three blocks away is left within 10 s with the air never under 200; ruststeve's roofed pool (water six deep under stone, the only air a pocket one block west and one down) is left through the pocket; a capped well is dug out through its cap with the pickaxe from the floor. The shore goal wades in, is preempted, escapes, and ends done with `:escaped true`.
+
+## Gotchas
+- With `:go/goals []` nothing is in play but the escapes, and an untrapped bot's plan is done at once; the escape tests keep `:wood` in play (no tree, so it only waits).
+- A deep well whose floor is out of reach of its cap is still a death by vanilla arithmetic; there is no faster answer than the floor.
+- Lava deaths are modelled in the trap only: fire and the burning state are not in the server model yet.
+- Bank search is a terrain scan (25 × 25 × 5 cells) once per pick and every 20 ticks while rising; memory is not consulted, because what is beside the body now is the terrain's question ([[memory-sightings]]).
+
+## See also
+- [[fluid-physics]] - the flags this reads.
+- [[death-and-respawn]] - what happens when it fails.
+- [[sib-lava-safety]] - the lava rules still to port (footing veto for every step).

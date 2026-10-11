@@ -5,8 +5,8 @@ type: reference
 tags: [bot, tooling, ci, gym]
 aliases: [gym.yml, gym-world.yml, test.yml, wood.yml, clojure -M:gym, GYMRESULT, result.edn, landing set, landings.edn, truth command, outcome, Wilson, paired landings, CI]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 78b853c
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/gym.clj#def gyms
   - src/clojurecraft/gym.clj#defn outcome
@@ -15,7 +15,8 @@ sourceRefs:
   - src/clojurecraft/gym.clj#defn judge!
   - src/clojurecraft/landings.clj#defn landings!
   - src/clojurecraft/landings.clj#defn landing-for
-  - ci/gym.edn#{:landing-sets {"A" {:center [20000 20000] :n 20 :spacing 640 :biome "#minecraft:is_forest" :pregen-r 96}}}
+  - ci/gym.edn#{:landing-sets {"A" {:center [20000 20000] :n 20 :spacing 640 :biome "#minecraft:is_forest" :pregen-r 96}
+  - ci/gym.edn#"W" {:center [26000 20000] :n 20 :spacing 640 :biome "#minecraft:is_beach" :pregen-r 96}
   - scripts/ci/gym-run.sh#disconnected: running once more on the same landing
   - scripts/ci/prepare-world.sh#a forceload was left behind
   - ".github/workflows/gym.yml#fail-on-cache-miss: true"
@@ -43,7 +44,7 @@ Three workflows. `test.yml` runs `clojure -M:test` and the brain checker on ever
 `gym/gyms` is the registry, data like the goal table: goal, `--until`, prerequisites, timeout, and truth commands that count items without removing them (`clear <name> <item> 0` answers "Found N matching item(s)"). `gym/outcome` is one pure function: `:harness` when the landing failed, `:disconnect` when the bot never printed RESULT or lost its socket, `:death`, `:timeout`, `:pass` only when RESULT is ok and every truth passes, else `:fail`. The bot saying ok while the server disagrees is `:fail`, with the server's reply in the row. `:harness` and `:disconnect` are not counted.
 
 ## Landing sets
-`ci/gym.edn` names each set: a centre far from world spawn (20000, 20000), n grid cells spacing apart, the biome cells snap to, and a pregeneration radius. `landings/landings!` snaps each cell with `locate biome`, finds the surface with a marker entity, keeps it when y >= 55 and no harness landing check passes (else tries the harness's nearby offsets), and pregenerates the chunks around it. Run k always lands on `landings[k]` (`landing-for`, wrapping), so batches are paired.
+`ci/gym.edn` names each set: a centre far from world spawn, n grid cells spacing apart, the biome cells snap to, and a pregeneration radius. A is forests (20000, 20000); W is beaches (26000, 20000), steve's landing set W for the water trial (`:shore`, [[water-escape]]), whose truth commands are the server's own dry-land test (`execute ... unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water`) and `OnGround 1b`. `landings/landings!` snaps each cell with `locate biome`, finds the surface with a marker entity, keeps it when y >= 55 and no harness landing check passes (else tries the harness's nearby offsets), and pregenerates the chunks around it. Run k always lands on `landings[k]` (`landing-for`, wrapping), so batches are paired.
 
 ## Recordings as regression inputs
 A gym run's recording can be promoted into `test/recordings/<name>/` (`run.edn.gz`, gzip because `record/entries` reads it natively, plus the run's `result.edn`); the corpus stays under 10 MB. `recordings_test` folds each one: every intermediate world must satisfy the world spec, and the fold must reach exactly the RESULT the run printed, which must also be the one the gym judged. The first entry is run 3 of batch wood-a1 (1.2 MB). A replay is open-loop, so when the bot's behaviour changes on purpose a diverging recording is re-promoted from the next batch.

@@ -5,8 +5,8 @@ type: reference
 tags: [bot, world, physics]
 aliases: [movement, collision, solid?, controls]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 60b624e
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/physics.clj#defn step
   - src/clojurecraft/physics.clj#def ground-acceleration
@@ -31,14 +31,15 @@ related:
 ## How it works
 1. Steady walking speed is 0.216 blocks per tick (4.3 m/s), reached after about a second.
 2. A one-block ledge needs a jump; there is no step-up.
-3. Liquids are passable, so the bot sinks and walks along the bottom; water physics is issue #5.
+3. Liquids are passable to the sweep; what the body does in them is the liquid branch of the same step ([[fluid-physics]]).
 
 ## Gotchas
 - `grass_block`'s definition type is `grass`; it must stay solid ([[grass-type-is-grass]]).
 - The on-ground flag sent to the server is `0x01`; typecraft writes `0x80`, which is wrong.
 
 ## Limits
-No fluids, no step-up, no sneaking, no non-full-cube shapes (slabs, fences are treated as full cubes).
+No step-up, no non-full-cube shapes (slabs, fences are treated as full cubes); sneaking only sinks in a liquid. Fluids are [[fluid-physics]].
 
 ## See also
 - [[goals-and-intents]] - who writes the controls.
+- [[fluid-physics]] - the step in water and lava.

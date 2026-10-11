@@ -3,8 +3,8 @@ title: Protocol
 type: moc
 tags: [bot, protocol]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 related:
   - "[[bot/_moc|Bot pillar]]"
 ---
@@ -16,6 +16,7 @@ related:
 - [[packet-table]] - every modelled packet: phase, direction, fields, who handles or emits it.
 - [[conn-framing]] - frames, zlib, the threshold switch, the reader and writer threads.
 - [[bytes-primitives]] - varint sign rules, the x/z/y position bitfield, strings, UUIDs.
+- [[death-and-respawn]] - set-health at zero, client-command 0, what respawn resets, the breath estimate, the model's drowning.
 
 ## See also
 - [[bot/_moc|Bot pillar]]

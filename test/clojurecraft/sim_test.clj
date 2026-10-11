@@ -12,6 +12,8 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.stairs]
+            [clojurecraft.swim]
+            [clojurecraft.path :as path]
             [clojurecraft.stone]
             [clojurecraft.gym :as gym]
             [clojurecraft.terrain :as terrain]
@@ -555,4 +557,91 @@
     (is (= [:death] (map :answer/kind (memory/answers w :death))) "the death is a fact")
     (is (= 1 (:sim/respawns sim)) "the bot asked to respawn, once")
     (is (= 2.5 (first (:player/pos w))) "on the world spawn, beside the well")
+    (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- escaping water (issue #5)
+
+(defn escape-run
+  "Run the bot for :wood (a goal it can only wait on: there is no tree) from a spawn inside
+   blocks, until a trap has been escaped, the plan fails, the bot dies or max-ms pass. Returns
+   [world sim lowest-air]."
+  [blocks spawn max-ms & [opts]]
+  (let [low (atom game/max-air)
+        watched (fn [w e] (let [w (step w e)] (swap! low min (:player/air w game/max-air)) w))
+        [w sim] (sim/run watched (game/init fx/opts)
+                         (sim/init (merge {:column (world/column-bytes blocks) :spawn spawn} opts))
+                         #(or (seq (:world/traps %)) (plan/failed? %) (pos? (:stats/deaths % 0))) max-ms
+                         {:event/kind :go :go/goals [:wood]})]
+    [w sim @low]))
+
+(def pond
+  "A pond six by six and two deep (y 62-63 water, the floor at 61) in a plain at y 64; the
+   nearest bank is three blocks from the spawn at its middle."
+  (into {} (for [x (range 0 6) y [62 63] z (range 0 6)] [[x y z] blocks/water-base])))
+
+(deftest dropped-in-a-pond-the-bot-swims-out-onto-the-bank
+  ;; issue #5 acceptance: a bank three blocks away is reached within 10 s of sim time and the
+  ;; air never falls below 200
+  (let [[w sim low] (escape-run pond [2.5 62.0 2.5] 30000)]
+    (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (nil? (:plan/trap w)))
+    (is (plan/dry-land? w))
+    (is (< (:time/now w) 10000) "out within 10 s")
+    (is (>= low 200) (str "lowest air " low))
+    (is (some #(= :swim-out (:intention/kind %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))))
+
+(def roofed-pool
+  "ruststeve's water_roofed: a 5x5 pool six deep (y 23-28) under solid stone, the only air a
+   pocket one block west of the pool and one down from its top (y 27-28 at x 0), with a floor."
+  (merge (into {} (for [x (range 1 6) y (range 23 29) z (range 0 5)] [[x y z] blocks/water-base]))
+         {[0 27 2] 0 [0 28 2] 0}))
+
+(deftest a-roofed-pool-is-left-through-its-side-pocket
+  ;; rust-race-003 drowned here: every escape move went up into stone while air was one block
+  ;; west and one down
+  (let [[w sim low] (escape-run roofed-pool [3.5 23.0 2.5] 90000)]
+    (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (plan/dry-land? w))
+    (is (= [0 27 2] (path/feet-cell (:player/pos w))) "standing in the pocket")
+    (is (pos? low))
+    (is (empty? (:sim/violations sim)))))
+
+(def capped-well
+  "A one-wide well of water four deep (y 60-63) in the ground under a stone cap at y 64, the
+   sky above it: no bank in reach under the cap, the only way out is through it."
+  (assoc (into {} (for [y (range 60 64)] [[0 y 0] blocks/water-base])) [0 64 0] 1))
+
+(deftest a-capped-well-is-dug-out-through-its-cap-with-the-pickaxe
+  ;; the eyes-in-water and off-ground penalties make the cap 25x slower than on land; without
+  ;; them the siblings' capped-cave escape "dug" its cap forever
+  (let [[w sim _] (escape-run capped-well [0.5 60.0 0.5] 90000
+                              {:inventory {36 {:item wooden-pickaxe :count 1 :durability 1}}})]
+    (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (plan/dry-land? w))
+    (is (>= (second (:player/pos w)) 64.0) "up on the surface")
+    (is (= 0 (terrain/block-at w [0 64 0])) "the cap is gone")
+    (is (empty? (:sim/violations sim)))))
+
+(def shore
+  "A plain at y 64 with a pond six by six and two deep eight blocks east of the spawn: the
+   gym's shore trial, in the model."
+  (into {} (for [x (range 8 14) y [62 63] z (range 0 6)] [[x y z] blocks/water-base])))
+
+(deftest the-shore-goal-wades-in-and-comes-out
+  ;; the :shore target: a wade into the nearest remembered pool until the eye is under, the
+  ;; escape it provokes, then done, with RESULT saying :escaped
+  (let [[w sim] (sim/run step (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes shore) :spawn [2.5 64.0 2.5]})
+                         #(or (plan/done? %) (plan/failed? %)) 60000 {:event/kind :go :go/goals [:shore]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (plan/dry-land? w))
+    (is (= [:water] (map :trap/kind (:world/traps w))))
+    (is (= [:wade :swim-out] (map :intention/kind (filter #(= :started (:intention/event %)) (memory/intentions w)))))
+    (is (true? (:escaped (main/result w "shore" true))))
+    (is (main/ok? w "shore"))
     (is (empty? (:sim/violations sim)))))

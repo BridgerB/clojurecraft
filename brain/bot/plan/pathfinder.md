@@ -5,8 +5,8 @@ type: reference
 tags: [bot, plan, path, intents]
 aliases: [path/plan, A*, route, waypoints, :awkward, lava rule, node budget, path.clj]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 439b9ce
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/path.clj#defn plan
   - src/clojurecraft/path.clj#defn search
@@ -18,6 +18,7 @@ sourceRefs:
   - src/clojurecraft/path.clj#defn lava-near?
   - src/clojurecraft/path.clj#defmulti goal-done?
   - src/clojurecraft/path.clj#def default-max-nodes 6000
+  - src/clojurecraft/path.clj#defn trap-factor
   - test/clojurecraft/path_test.clj#a-cliff-is-descended-by-its-stair-never-by-the-six-block-drop
   - test/clojurecraft/path_test.clj#a-found-route-is-walked-by-the-physics-and-ends-in-the-goal
 related:
@@ -39,7 +40,7 @@ related:
 - `path.clj`, `landing` - where a drop comes to rest: the first floor within `max-fall`, with only clear cells on the way; water, lava, an awkward block or an unloaded chunk under the fall refuse it.
 - `path.clj`, `start-cell` - where the search begins: the feet cell when it is standable, else the nearest standable cell within one block on the plane and one up or down; `plan` reports it as `:path/from`.
 - `path.clj`, `goal-done?` / `heuristic` - multimethods on `:goal/kind`: `:near` (within `:goal/range`, default 3), `:block`, `:xz` (any height), `:away` (farther than range). The heuristic is octile on the plane plus the height difference.
-- `path.clj`, `search` - A* with a sorted set of `[f g node]` (ties break on the node, so the search is deterministic), g and parent maps, a closed set, and the nearest node seen by the heuristic.
+- `path.clj`, `search` - A* with a sorted set of `[f g node]` (ties break on the node, so the search is deterministic), g and parent maps, a closed set, and the nearest node seen by the heuristic. Each move's cost is multiplied by `trap-factor`: 10 within two columns of a trap in `:world/traps` younger than ten minutes ([[water-escape]]).
 
 ## How it works
 1. A node is the feet cell `[x y z]`. `from` is `(path/feet-cell pos)`.
@@ -55,7 +56,7 @@ related:
 
 ## Gotchas
 - **A start on a block edge floors into the wrong column.** Gym landing 21280,18720 (batch path-a1 run 5): the fixture teleports to the column's `~0.5`, which on a steep hillside put the feet at x 21281.0 exactly, on the edge of a stone step; `feet-cell` floored into the step, every plan was `:none` from inside solid rock, and three `:no-path` failures in half a second killed the plan. The player's box rests on the cell beside it, which is standable; `start-cell` searches from there. The old straight-line walk never noticed because it never asked where it stood.
-- Water is a wall, never a floor, because the physics has no fluid model ([[land-physics]]); swimming is issue #5.
+- Water is a wall, never a floor: the bot can swim ([[fluid-physics]]) but a route never asks it to; getting out is the escape's job ([[water-escape]]).
 - The lava rule is applied by `clear?`, so every move kind has it; ruststeve's diagonal lacked one and put a bot over lava ([[sib-pathfinder-movements]]).
 - No parkour, no digging through, no scaffolding: a one-wide gap with no ramp is `:none`, by design.
 - `:awkward` is conservative: a slab or stair is routed around, not stood on, until the physics can collide with its shape (a `shapes.edn` would be an accretion).

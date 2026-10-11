@@ -5,12 +5,12 @@ type: reference
 tags: [bot, tooling, sim, tests, crafting]
 aliases: [drop-clicks, lag-ticks, network lag, sim/violations, click-inventory-while-open, click-on-empty-result, close-with-cursor, place-into-player, fault injection]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 2d7f669
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#Fault knobs are inputs, not hidden state
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :container-close]
-  - src/clojurecraft/sim.clj#[{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks]
+  - src/clojurecraft/sim.clj#[{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn]
   - src/clojurecraft/sim.clj#:sim/lag-ticks in sim0 delays every server→client packet by that many ticks,
   - test/clojurecraft/sim_test.clj#no-blind-take-under-lag-or-a-dropped-click
   - src/clojurecraft/sim.clj#(update :sim/violations conj [:place-into-player dest])
