@@ -947,6 +947,34 @@
       (is (= {:iron_ingot 4} (held w)) (str "lost click " n))
       (is (empty? (:sim/violations sim)) (str "lost click " n)))))
 
+(def ore-field
+  "Coal and two iron ores standing on the stone floor around the spawn, each with a cell beside
+   it at its own level."
+  {[11 64 8] (blocks/default-state :iron_ore)
+   [11 64 10] (blocks/default-state :iron_ore)
+   [8 64 12] (blocks/default-state :coal_ore)})
+
+(deftest coal-and-iron-are-mined-where-they-lie
+  (let [table (conj plan/goals
+                    {:goal/id :ore-test
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:item/raw_iron 2 :item/coal 1}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes ore-field)
+                                    :spawn [8.5 64.0 8.5]
+                                    :inventory {36 {:item (item :stone_pickaxe) :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         {:event/kind :go :go/goals [:ore-test]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= {:raw_iron 2 :coal 1 :stone_pickaxe 1} (held w)))
+    (is (= #{[11 64 8] [11 64 10] [8 64 12]} (:sim/broken sim)) "the three ores, nothing else")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))))
+
 (def walled-ledge
   "Gym batch push70 (landing 18648,18464): the nearest stone's only cell at its own level was
    walled in, so no route reached it, while a cell one block below it was reachable. Here: stone

@@ -152,22 +152,22 @@
 (defn arrived?
   "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
    the pickup box: for a log, no more than pickup-rise below it (not on a bank above the box);
-   for stone, neither above it (the drop would lie under the box) nor more than pickup-rise
-   below it."
-  [world {:intent/keys [target for]} d]
+   for a block mined from beside (:intent/pickup?: stone, ore), neither above it (the drop would
+   lie under the box) nor more than pickup-rise below it."
+  [world {:intent/keys [target for pickup?]} d]
   (let [rise (- (second target) (long (math/floor (second (:player/pos world)))))]
     (and (<= d reach)
-         (case for
-           :log (<= rise pickup-rise)
-           :stone (<= 0 rise pickup-rise)
-           true))))
+         (cond pickup? (<= 0 rise pickup-rise)
+               (= :log for) (<= rise pickup-rise)
+               :else true))))
 
 (defn walk-goal
-  "Where a walk's route may end: for stone, any cell within goal-range whose feet are where the
-   drop lands in reach (path's :pickup goal: the stone at or up to pickup-rise above them; no
-   single cell beside it, which a wall may close off); else anywhere within goal-range."
-  [{:intent/keys [target for]}]
-  (if (= :stone for)
+  "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell
+   within goal-range whose feet are where the drop lands in reach (path's :pickup goal: the
+   block at or up to pickup-rise above them; no single cell beside it, which a wall may close
+   off); else anywhere within goal-range."
+  [{:intent/keys [target pickup?]}]
+  (if pickup?
     {:goal/kind :pickup :goal/pos target :goal/range goal-range :goal/rise pickup-rise}
     {:goal/kind :near :goal/pos target :goal/range goal-range}))
 

@@ -40,7 +40,7 @@ src/clojurecraft/path.clj     a route for the feet over the block grid: A* with 
 src/clojurecraft/dig.clj      a block's break time and drop as a pure function of block, held item and penalties, over the generated tables
 src/clojurecraft/intent.clj   open executors (multimethod on :intent/kind): :walk (follows a route) :dig (with the best tool) :collect, and the leaf blocker
 src/clojurecraft/stairs.clj   the :stairs-down executor: a staircase of child :dig intents, refusing water, lava and drops
-src/clojurecraft/stone.clj    the :mine act: the stone chain toward cobblestone, or stairs down to stone
+src/clojurecraft/stone.clj    the :mine act: a row's blocks (stone, ore, gravel) walk → dig → collect, or stairs down to its depth
 src/clojurecraft/swim.clj     the escape goals' rules and executors: :swim-out, :flee, and :wade (the shore trial)
 src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with clicks, verify, take
 src/clojurecraft/place.clj    the :place and :open-container executors: a spot, use-item-on, the server's answer

@@ -1,8 +1,10 @@
 (ns clojurecraft.stone
-  "Getting cobblestone: with a pickaxe in hand, walk to the nearest remembered stone the bot can
-   stand beside, dig it, pick the drop up; with no stone in sight, cut a staircase down to
-   where stone begins. The :mine act of the goal table (clojurecraft.make) runs this, the way
-   :gather runs clojurecraft.wood. Requiring this namespace registers the act."
+  "The :mine act of the goal table (clojurecraft.make runs it, as :gather runs clojurecraft.wood):
+   get what a row's blocks drop. A mining row names its blocks as data (:goal/blocks, stone for
+   cobblestone, coal or iron ore, gravel) and how deep it may cut looking for them
+   (:goal/depth, none for stone). With the tool the blocks need in hand, walk to the nearest of
+   them the bot can stand beside, dig it, pick the drop up; with none in sight, cut a staircase
+   down, never below the row's depth. Requiring this namespace registers the act."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
@@ -17,23 +19,34 @@
 
 (set! *warn-on-reflection* true)
 
-(def search-radius 24)                ; blocks from the eye searched for exposed stone
+(def search-radius 24)                ; blocks from the eye searched for an exposed target
 (def search-height 12)                ; blocks above or below the eye searched
-(def stair-depth 6)                   ; stairs cut when no stone is in sight, before looking again
-(def cobblestone #{(blocks/items :cobblestone)}) ; what stone dug with a pickaxe drops: a collect's :intent/drops
-(def stone-states
-  "Every state of the blocks that drop cobblestone: stone."
-  (blocks/states-where (fn [[n]] (= n :stone))))
+(def stair-depth 6)                   ; stairs cut when no target is in sight, before looking again
+(def default-blocks [:stone])         ; a :mine row that names no blocks mines stone, as the first one did
 
-(defn pickaxe
-  "[slot item-id] of the pickaxe the bot can dig stone with, or nil: stone needs no tier, but
-   without a pickaxe the dig takes 2300 ms and a race cannot afford the hand."
-  [world]
-  (dig/best-tool (first stone-states) (:player/inventory world) {}))
+(def states-of-row
+  "row → every state id of the blocks it mines. Memoized: a row is a value."
+  (memoize (fn [row] (into #{} (mapcat blocks/states-of) (:goal/blocks row default-blocks)))))
+
+(def drops-of-row
+  "row → the item ids its blocks can drop (every try of their loot tables: gravel's flint and
+   gravel both), what a collect waits for one more of. Memoized like states-of-row."
+  (memoize (fn [row]
+             (set (for [b (:goal/blocks row default-blocks)
+                        [item _] (dig/drop-tries (blocks/default-state b))]
+                    (blocks/items item))))))
+
+(defn tool-missing
+  "The wait reason when the bot holds no tool the row's blocks drop for (:no-pickaxe for stone
+   or ore), or nil when it can dig them: blocks that drop to anything need nothing."
+  [world row]
+  (let [s (first (states-of-row row))]
+    (when (and (blocks/drops-need-tool? s) (nil? (dig/best-tool s (:player/inventory world) {})))
+      (keyword (str "no-" (name (blocks/tool-of s)))))))
 
 (defn beside
-  "A cell a route could stand in beside stone at pos, at its level (one of its horizontal
-   neighbours), or nil: standing there, the stone is dug from the side and its drop comes to
+  "A cell a route could stand in beside a block at pos, at its level (one of its horizontal
+   neighbours), or nil: standing there, the block is dug from the side and its drop comes to
    rest at the feet, inside the pickup box. Dug from the surface above, the drop lies a block
    under the feet and is never picked up."
   [world [x y z]]
@@ -41,12 +54,12 @@
                  (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ x dx) y (+ z dz)]))))
 
 (defn exposed?
-  "Can a player stand beside stone at pos and dig it?"
+  "Can a player stand beside the block at pos and dig it?"
   [world pos]
   (some? (beside world pos)))
 
 (defn near-chunks
-  "The loaded chunk columns within search-radius of the feet: the terrain a stone search reads."
+  "The loaded chunk columns within search-radius of the feet: the terrain a search reads."
   [world]
   (let [[x _ z] (:player/pos world)
         cx (bit-shift-right (long (math/floor x)) 4)
@@ -56,13 +69,14 @@
           (filter (fn [[[kx kz] _]] (and (<= (abs (- kx cx)) r) (<= (abs (- kz cz)) r)))
                   (:world/chunks world)))))
 
-(defn nearest-stone
-  "The nearest exposed stone within search-radius of the eye and search-height of its height
+(defn nearest-of-states
+  "The nearest block of states within search-radius of the eye and search-height of its height
    that the bot can stand beside, not blacklisted; nil when none. Read from the loaded terrain
-   (the live view), not memory: stone is most of the world, and only what is exposed now is
-   worth a route. The chunks are scanned as they arrived, so each candidate is asked again
-   through the overlay of block updates and the bot's own breaks: a stone just dug is air."
-  [world]
+   (the live view), not memory: stone is most of the world and ore is in every chunk, and only
+   what is exposed now is worth a route. The chunks are scanned as they arrived, so each
+   candidate is asked again through the overlay of block updates and the bot's own breaks: a
+   block just dug is air."
+  [world states]
   (let [eye (game/eye world)
         ey (second eye)
         blacklist (:plan/blacklist world #{})
@@ -70,29 +84,41 @@
         hi (+ ey search-height)]
     (memory/nearest-of eye
                        search-radius
-                       (->> (chunk/find-blocks (near-chunks world) #(contains? stone-states %))
+                       (->> (chunk/find-blocks (near-chunks world) #(contains? states %))
                             (map (fn [[x y z _]] [x y z]))
                             (filter (fn [[_ y _]] (<= lo y hi)))
                             (remove blacklist)
-                            (filter #(contains? stone-states (terrain/block-at world %)))
+                            (filter #(contains? states (terrain/block-at world %)))
                             (filter #(exposed? world %))))))
 
 (defn continue-mine
-  "The next intent of a stone chain in flight, or nil: walk → dig → collect, tagged
-   :intent/for :stone so a walk for another purpose is never continued as a dig."
-  [world]
-  (intent/chain-next (:plan/last world) :stone cobblestone {}))
+  "The next intent of the row's chain in flight, or nil: walk → dig → collect, tagged
+   :intent/for the row's id so neither a walk for another purpose nor another row's chain is
+   ever continued as this one's dig."
+  [world row]
+  (intent/chain-next (:plan/last world) (:goal/id row) (drops-of-row row) {}))
+
+(defn stairs
+  "The staircase to cut when nothing is in sight: stair-depth down from the feet, never below
+   the row's :goal/depth; nil when the feet are already there."
+  [world {:goal/keys [depth]}]
+  (let [feet (long (math/floor (second (:player/pos world))))
+        to (cond-> (- feet stair-depth) depth (max depth))]
+    (when (< to feet) {:intent/kind :stairs-down :intent/to-y to})))
 
 (defn mine-next
-  "The next step of getting cobblestone: continue the chain; else, with a pickaxe, walk to the
-   nearest exposed stone or cut stairs down toward stone; with no pickaxe, wait :no-pickaxe."
-  [world]
-  (or (continue-mine world)
-      (cond (nil? (pickaxe world)) {:plan/wait :no-pickaxe}
-            :else
-            (if-let [stone (nearest-stone world)]
-              {:intent/kind :walk :intent/target stone :intent/for :stone}
-              {:intent/kind :stairs-down
-               :intent/to-y (- (long (math/floor (second (:player/pos world)))) stair-depth)}))))
+  "The next step of mining a row: continue its chain; else, holding the tool its blocks need,
+   walk to the nearest exposed one (a walk that ends where the drop lands in reach,
+   :intent/pickup?), or cut stairs down toward them; wait for the tool, or :none-in-sight at
+   the row's depth."
+  [world row]
+  (or (continue-mine world row)
+      (let [missing (tool-missing world row)
+            target (when-not missing (nearest-of-states world (states-of-row row)))]
+        (cond
+          missing {:plan/wait missing}
+          target
+          {:intent/kind :walk :intent/target target :intent/for (:goal/id row) :intent/pickup? true}
+          :else (or (stairs world row) {:plan/wait :none-in-sight})))))
 
-(defmethod plan/act :mine [world _] (mine-next world))
+(defmethod plan/act :mine [world row] (mine-next world row))

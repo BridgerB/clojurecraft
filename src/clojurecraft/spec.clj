@@ -188,13 +188,15 @@
 (s/def :goal/trap #{:water :lava})
 (s/def :goal/plan keyword?)                ; which next-intent planner the row uses (default :needs)
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
+(s/def :goal/blocks (s/coll-of keyword? :kind vector? :min-count 1)) ; what a :mine row digs
+(s/def :goal/depth int?)                   ; the lowest feet height a :mine row cuts stairs to
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
 (s/def ::goal
   (s/keys :req [:goal/id :goal/priority :goal/done?]
           :opt
           [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by
-           :goal/always? :goal/trap :goal/plan]))
+           :goal/always? :goal/trap :goal/plan :goal/blocks :goal/depth]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
@@ -305,6 +307,7 @@
 (s/def :plan/wait some?)
 (s/def :intent/reason some?)
 (s/def :intent/for keyword?)
+(s/def :intent/pickup? boolean?)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)

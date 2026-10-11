@@ -2,7 +2,9 @@
 ;; a function; executing is open). A row says what it needs, what it provides, which registered
 ;; predicate decides it is done, and which registered act satisfies it once its needs are met.
 ;; Need and provide keys: :item/<name> n, :tag/<item-tag> n, :block/<name> :near. A row's :goal/holds
-;; are needs it keeps rather than spends (a tool): planned for once, never netted per run.
+;; are needs it keeps rather than spends (a tool): planned for once, never netted per run. A :mine
+;; row names the blocks it digs (:goal/blocks, stone when absent) and how deep it may cut stairs
+;; looking for them (:goal/depth, unbounded when absent); what it collects is their loot table's.
 ;; Targets (:goal/target? true) are what a run is for; --until <:goal/until> puts one in play. Producers are
 ;; how a need is met; recipes add one generated producer row each (clojurecraft.make/craft-rows).
 ;; A row is never edited into a different meaning or deleted: to fix one, add the fixed row under
@@ -82,6 +84,35 @@
   :goal/holds {:item/wooden_pickaxe 1}
   :goal/provides {:item/cobblestone 1}
   :goal/act :mine
+  :goal/blocks [:stone]
+  :goal/done? :provided?}
+ {:goal/id :mine-coal
+  :goal/priority 10
+  :goal/doc
+  "dig the nearest exposed coal ore with any pickaxe, or cut stairs down toward it (coal is common down to y 0)"
+  :goal/holds {:tag/pickaxes 1}
+  :goal/provides {:item/coal 1}
+  :goal/act :mine
+  :goal/blocks [:coal_ore :deepslate_coal_ore]
+  :goal/depth 0
+  :goal/done? :provided?}
+ {:goal/id :mine-iron
+  :goal/priority 10
+  :goal/doc
+  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it (it is most common around y 16)"
+  :goal/holds {:item/stone_pickaxe 1}
+  :goal/provides {:item/raw_iron 1}
+  :goal/act :mine
+  :goal/blocks [:iron_ore :deepslate_iron_ore]
+  :goal/depth 16
+  :goal/done? :provided?}
+ {:goal/id :dig-gravel
+  :goal/priority 10
+  :goal/doc "dig the nearest exposed gravel, by hand or with a shovel"
+  :goal/provides {:item/gravel 1}
+  :goal/act :mine
+  :goal/blocks [:gravel]
+  :goal/depth 40
   :goal/done? :provided?}
  {:goal/id :place-table
   :goal/priority 10

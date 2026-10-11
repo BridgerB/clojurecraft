@@ -34,11 +34,11 @@ related:
 
 ## Key files
 - `intent.clj`, `run :walk` - the whole intent. Its bookkeeping lives on the intent map: `:intent/waypoints`, `:intent/route` (how the plan ended), `:intent/at` (the next waypoint's index), `:intent/replans`, `:intent/planned-chunks`, `:intent/best-tick` (the tick a waypoint was last reached), `:intent/started`.
-- `intent.clj`, `walk-goal` and `route!` - plans from the feet cell toward `{:goal/kind :near :goal/pos target :goal/range 3}`, or, for a walk to stone, `:goal/kind :pickup` (within 3 on the plane, the stone at the feet's height or up to `pickup-rise` above), and counts the plan.
+- `intent.clj`, `walk-goal` and `route!` - plans from the feet cell toward `{:goal/kind :near :goal/pos target :goal/range 3}`, or, for a walk to a block mined from beside (`:intent/pickup?`, [[mine-act]]), `:goal/kind :pickup` (within 3 on the plane, the block at the feet's height or up to `pickup-rise` above), and counts the plan.
 - `intent.clj`, `waypoint-reached?` - within `waypoint-reach` (0.35) of the waypoint's centre on the plane, and the feet within half a block of its height in both directions.
 - `intent.clj`, `follow` - `toward` the waypoint's centre, jumping when it is above the feet and within `jump-near` (1.3), or when blocked.
 - `intent.clj`, `route-stale?` - the three reasons to plan again.
-- `intent.clj`, `arrived?` - within reach, and for a log the feet no more than `pickup-rise` (2) below it, for stone neither above it nor more than `pickup-rise` below it: where the drop comes to rest inside the pickup box.
+- `intent.clj`, `arrived?` - within reach, and for a log the feet no more than `pickup-rise` (2) below it, for a block mined from beside (`:intent/pickup?`) neither above it nor more than `pickup-rise` below it: where the drop comes to rest inside the pickup box.
 
 ## How it works
 1. Arrived (`arrived?`): set only `:control/look` at the target and finish, so the next intent starts already looking.

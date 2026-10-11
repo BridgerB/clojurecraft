@@ -1,6 +1,6 @@
 ---
 title: Collect intent
-description: How :collect walks onto the drop until the bot holds one more of what it is for (:intent/drops: any log, or cobblestone) than when it began, how it detects a stall against leaves and ends naming the blocker (:intent/blocked-by) so the gather chain can dig it, and its 10 s timeout.
+description: How :collect walks onto the drop until the bot holds one more of what it is for (:intent/drops: any log, or what a mined block's loot table drops) than when it began, how it detects a stall against leaves and ends naming the blocker (:intent/blocked-by) so the gather chain can dig it, and its 10 s timeout.
 type: reference
 tags: [bot, plan, intents, pickup]
 aliases: [:collect, pickup intent, not-picked-up, nearest-item, blocked-by, blocker]
@@ -32,7 +32,7 @@ related:
 
 ## How it works
 1. Progress is horizontal distance to the goal beating the best so far by 0.1; its tick is `:intent/best-tick`.
-2. Done when `inventory/held` of its `:intent/drops` is greater than `:intent/drops-before`, the count taken on the collect's first tick: one more of its drop than when it began. The wood chain's drops are every log item, the stone chain's cobblestone; a collect with no drops counts logs, as every collect did before stone (one that counted only logs never finished on cobblestone).
+2. Done when `inventory/held` of its `:intent/drops` is greater than `:intent/drops-before`, the count taken on the collect's first tick: one more of its drop than when it began. The wood chain's drops are every log item, a mining row's every item its blocks' loot tables can drop (cobblestone; coal; raw iron; gravel or flint, [[mine-act]]); a collect with no drops counts logs, as every collect did before stone (one that counted only logs never finished on cobblestone).
 3. Stalled = horizontal collision and no progress for more than `collect-stall-ticks` (20, one second). If stalled and `blocker` finds a leaf, the intent ends **done** with `:intent/blocked-by [x y z]`; the gather chain then digs that leaf and resumes the same collect ([[gather-chain]]).
 4. Failure `:not-picked-up` after `collect-timeout` (10 s) since the intent began.
 5. Otherwise walk toward the goal until within 0.4 horizontally, then stand.
