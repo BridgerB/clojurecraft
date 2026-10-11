@@ -1375,6 +1375,20 @@
     (is (= :gravel (blocks/name-of (sim/block-at sim [9 68 8]))))
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-retreat-out-of-water-ends-on-dry-land
+  ;; gym batch iron-a6 run 3 stood in its flooded tunnel with every tunnel and stair refused; a
+  ;; swim-out for a retreat, unlike an escape's, ends itself once the feet are on dry land
+  (let [[w sim] (intent-run {:intent/kind :swim-out :intent/for :retreat}
+                            {[8 63 8] blocks/water-base}
+                            63
+                            nil
+                            60000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/bank])))
+    (is (not (:player/in-water? w)))
+    (is (:player/on-ground? w))
+    (is (empty? (:sim/violations sim)))))
+
 (deftest gravel-over-the-head-is-never-dug-under
   ;; a stair up opens the cell over the head first; gravel over that cell would fall through it
   ;; onto the bot, so every stair from here is refused and a level step leads out from under it

@@ -64,13 +64,27 @@
       (is (= [-1 0] (stone/tunnel-heading w))
           "north is an open tunnel, east borders lava, so west (south is lava itself)")
       (is (= {:intent/kind :stairs-down :intent/to-y 10}
-             (stone/mine-next (assoc w
-                                     :world/chunks
-                                     {[0 0]
-                                      (world/column
-                                       {[7 16 5] lava [5 16 6] lava [3 16 5] lava [5 16 3] lava})})
-                              (row :mine-iron)))
-          "lava two along every heading: stairs six deeper")))
+             (stone/mine-next
+              (assoc w
+                     :world/chunks
+                     {[0 0] (world/column
+                             (into {} (for [x [4 5 6] y [16 17] z [4 5 6]] [[x y z] 0])))})
+              (row :mine-iron)))
+          "a room with no rock round it to tunnel: stairs six deeper")))
+  (testing
+    "nothing to tunnel and no stair to cut: away along the way out, or out of the water first"
+    (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
+          corridor (merge (into {} (for [x (range 5 16) y [16 17]] [[x y 5] 0]))
+                          (into {} (for [z (range 5 16) y [16 17]] [[15 y z] 0]))
+                          {[5 16 7] lava [3 16 5] lava [5 16 3] lava [6 14 5] lava})
+          w (assoc (standing 16 :stone_pickaxe) :world/chunks {[0 0] (world/column corridor)})
+          r (stone/mine-next w (row :mine-iron))]
+      (is (= [:walk :retreat] [(:intent/kind r) (:intent/for r)]) (pr-str r))
+      (is (< 12 (+ (abs (- (first (:intent/target r)) 5)) (abs (- (nth (:intent/target r) 2) 5))))
+          "to the far end of the corridor")
+      (is (= {:intent/kind :swim-out :intent/for :retreat}
+             (stone/mine-next (assoc w :player/in-water? true) (row :mine-iron)))
+          "wading in a flooded tunnel: out of the water first")))
   (testing "stone has no depth: always down"
     (is (= {:intent/kind :stairs-down :intent/to-y -40}
            (stone/mine-next (standing -34 :wooden_pickaxe) (row :mine-stone))))))

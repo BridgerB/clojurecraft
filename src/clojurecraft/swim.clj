@@ -157,7 +157,10 @@
         :else (intent/toward world (physics/centre bank) 0.0)))
 
 (defmethod intent/run :swim-out
-  [world {:intent/keys [bank started best-dist best-tick child next-search dig-when-down]} event]
+  ;; an escape's swim-out is ended by its goal, when the trap clears; one for a :retreat (out of a
+  ;; flooded tunnel) ends itself on dry land
+  [world {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for]}
+   event]
   (let [tick (:time/tick world)
         started (or started tick)
         feet (intent/feet world)
@@ -165,7 +168,11 @@
         dist (when bank (physics/horizontal-distance (:player/pos world) (physics/centre bank)))
         nearer? (and dist (< dist (- (or best-dist Double/MAX_VALUE) progress)))
         best-tick (if (or nearer? (nil? best-tick)) tick best-tick)]
-    (cond (> (- tick started) escape-timeout-ticks)
+    (cond (and (= :retreat for) (trap/dry-land? world))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (> (- tick started) escape-timeout-ticks)
           (-> world
               (assoc :player/controls {})
               (intent/fail :no-escape))

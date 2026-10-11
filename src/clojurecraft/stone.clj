@@ -144,22 +144,42 @@
                                   cells))))
                    ranked))))
 
+(def retreat-distance 12)             ; blocks a retreat walks from where nothing could be cut
+
 (defn deeper
   "Stairs stair-depth below the feet when no tunnel can be cut here, the row's depth notwithstanding
-   (ore lies below it too), or a wait :boxed near the bottom of the world."
+   (ore lies below it too), when a stair from here can be cut at all and the bottom of the world is
+   not near; else nil. Gym batch iron-a6 run 3 was sent down stairs that could not be cut and
+   failed :boxed three times in a second."
   [world]
-  (let [feet (second (intent/feet world))
-        to (- feet stair-depth)]
-    (if (> to (+ chunk/min-y floor-margin))
-      {:intent/kind :stairs-down :intent/to-y to}
-      {:plan/wait :boxed})))
+  (let [feet (intent/feet world)
+        to (- (second feet) stair-depth)]
+    (when (and (> to (+ chunk/min-y floor-margin))
+               (some #(stairs/safe? world (stairs/stair-cells feet %)) stairs/directions))
+      {:intent/kind :stairs-down :intent/to-y to})))
+
+(defn retreat
+  "Away from where nothing can be cut: out of water first when the feet are in it (a :swim-out for
+   :retreat, done on dry land), else a walk to the end of a route at least retreat-distance
+   away (path's :away goal), where the rock is new; nil when there is no way. Gym batch iron-a6
+   run 3's tunnel at y 16 ran along an aquifer until water filled its floor, and every tunnel and
+   stair from there was refused."
+  [world]
+  (if (:player/in-water? world)
+    {:intent/kind :swim-out :intent/for :retreat}
+    (let [r (path/plan
+             world
+             (path/feet-cell (:player/pos world))
+             {:goal/kind :away :goal/pos (intent/feet world) :goal/range retreat-distance})]
+      (when (= :found (:path/status r))
+        {:intent/kind :walk :intent/target (last (:path/waypoints r)) :intent/for :retreat}))))
 
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
    (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
    ends where the drop lands in reach, :intent/pickup?), or cut stairs down toward them, or at
-   the row's depth a tunnel (tunnel-heading), or deeper stairs when none can be cut; wait for the
-   tool. The live runs that waited at the depth
+   the row's depth a tunnel (tunnel-heading), or deeper stairs when none can be cut, or a retreat
+   when neither can; wait for the tool. The live runs that waited at the depth
    with nothing in sight failed there; a tunnel's walls are where the ore shows."
   [world row]
   (or (continue-mine world row)
@@ -181,7 +201,9 @@
               (or (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
-                  (deeper world))))))
+                  (deeper world)
+                  (retreat world)
+                  {:plan/wait :boxed})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
 
