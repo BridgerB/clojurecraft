@@ -34,11 +34,11 @@ related:
 
 ## Key files
 - `intent.clj`, `run :walk` - the whole intent. Its bookkeeping lives on the intent map: `:intent/waypoints`, `:intent/route` (how the plan ended), `:intent/at` (the next waypoint's index), `:intent/replans`, `:intent/planned-chunks`, `:intent/best-tick` (the tick a waypoint was last reached), `:intent/started`.
-- `intent.clj`, `route!` - plans from the feet cell toward `{:goal/kind :near :goal/pos target :goal/range 3}` and counts the plan.
+- `intent.clj`, `walk-goal` and `route!` - plans from the feet cell toward `{:goal/kind :near :goal/pos target :goal/range 3}`, or, when the walk names a cell to stand in (`:intent/stand`), exactly that cell (`:goal/kind :block`), and counts the plan.
 - `intent.clj`, `waypoint-reached?` - within `waypoint-reach` (0.35) of the waypoint's centre on the plane, and the feet within half a block of its height in both directions.
 - `intent.clj`, `follow` - `toward` the waypoint's centre, jumping when it is above the feet and within `jump-near` (1.3), or when blocked.
 - `intent.clj`, `route-stale?` - the three reasons to plan again.
-- `intent.clj`, `arrived?` - within reach, and for a log, the feet no more than `pickup-rise` (2) below it.
+- `intent.clj`, `arrived?` - within reach, and the feet in `:intent/stand` when the walk names one, or for a log no more than `pickup-rise` (2) below it.
 
 ## How it works
 1. Arrived (`arrived?`): set only `:control/look` at the target and finish, so the next intent starts already looking.

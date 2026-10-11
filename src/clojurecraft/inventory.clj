@@ -9,13 +9,15 @@
   [world id]
   (reduce + 0 (for [[_ {:keys [item count]}] (:player/inventory world) :when (= item id)] count)))
 
+(defn held
+  "How many items whose ids are in the set ids the player holds (inventory only, never the grid)."
+  [world ids]
+  (reduce + 0 (for [[_ {:keys [item count]}] (:player/inventory world) :when (ids item)] count)))
+
 (defn logs-held
   "How many logs of any species the player holds (inventory only, never the grid)."
   [world]
-  (reduce
-   +
-   0
-   (for [[_ {:keys [item count]}] (:player/inventory world) :when (blocks/log-item? item)] count)))
+  (held world blocks/log-items))
 
 (defn set-slot
   "Put item in a player-inventory slot; a nil item empties it (the key is removed, never nil)."

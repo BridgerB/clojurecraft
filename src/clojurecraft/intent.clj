@@ -131,12 +131,23 @@
 ;; ---------------------------------------------------------------- walk
 
 (defn arrived?
-  "Is a walk over: the target within reach, and, for a log, the feet no more than pickup-rise
-   below it, so the drop comes to rest inside the pickup box rather than on a bank above it."
-  [world {:intent/keys [target for]} d]
+  "Is a walk over: the target within reach, and the feet where the drop will be within the
+   pickup box: in the cell the walk names to stand in (:intent/stand), or, for a log, no more
+   than pickup-rise below it (so the drop does not come to rest on a bank above the box)."
+  [world {:intent/keys [target for stand]} d]
   (and (<= d reach)
-       (or (not= :log for)
-           (<= (- (second target) (long (math/floor (second (:player/pos world))))) pickup-rise))))
+       (cond stand (= stand (feet world))
+             (= :log for)
+             (<= (- (second target) (long (math/floor (second (:player/pos world))))) pickup-rise)
+             :else true)))
+
+(defn walk-goal
+  "Where a walk's route ends: exactly the cell it names to stand in (:intent/stand), else
+   anywhere within goal-range of its target."
+  [{:intent/keys [target stand]}]
+  (if stand
+    {:goal/kind :block :goal/pos stand}
+    {:goal/kind :near :goal/pos target :goal/range goal-range}))
 
 (defn waypoint-reached?
   "Is the player at waypoint [x y z]: within waypoint-reach of its centre on the plane, and the
@@ -159,12 +170,10 @@
     (update (toward world centre 0.0) :control/jump? #(or % (and up? near?)))))
 
 (defn route!
-  "The intent with a fresh route from the feet toward the target (goal :near target within
-   goal-range), counting the plan and noting how many chunks were loaded when it was made."
-  [world {:intent/keys [target replans] :or {replans 0}}]
-  (let [r (path/plan world
-                     (path/feet-cell (:player/pos world))
-                     {:goal/kind :near :goal/pos target :goal/range goal-range})]
+  "The intent with a fresh route from the feet toward its walk-goal, counting the plan and
+   noting how many chunks were loaded when it was made."
+  [world {:intent/keys [replans] :or {replans 0} :as i}]
+  (let [r (path/plan world (path/feet-cell (:player/pos world)) (walk-goal i))]
     (assoc-intent world
                   :intent/waypoints (:path/waypoints r)
                   :intent/route (:path/status r)
@@ -382,7 +391,8 @@
 
 (defmethod run :collect
   [world
-   {:intent/keys [target since best-dist best-tick logs-before] :or {best-dist Double/MAX_VALUE}} _]
+   {:intent/keys [target since best-dist best-tick drops drops-before]
+    :or {best-dist Double/MAX_VALUE drops blocks/log-items}} _] ; a collect made before :intent/drops collected a log
   (let [now (:time/now world)
         tick (:time/tick world)
         since (or since now)
@@ -390,15 +400,15 @@
         d (physics/horizontal-distance (:player/pos world) goal)
         progressed? (< d (- best-dist 0.1))
         best-tick (if (or progressed? (nil? best-tick)) tick best-tick)
-        logs-before (or logs-before (inventory/logs-held world))
+        drops-before (or drops-before (inventory/held world drops))
         world (assoc-intent world
                             :intent/since since
                             :intent/best-tick best-tick
-                            :intent/logs-before logs-before
+                            :intent/drops-before drops-before
                             :intent/best-dist (if progressed? d best-dist))
         stalled? (and (:player/horizontal-collision? world)
                       (> (- tick best-tick) collect-stall-ticks))]
-    (cond (> (inventory/logs-held world) logs-before) ; one more log than when the collect began
+    (cond (> (inventory/held world drops) drops-before) ; one more of its drop than when it began
           (-> world
               (assoc :player/controls {})
               done)

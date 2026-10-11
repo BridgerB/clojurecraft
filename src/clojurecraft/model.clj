@@ -188,7 +188,13 @@
     "walk, once planned"]
    [:intent/planned-chunks
     "chunk columns loaded when the route was made (kept for the record; a new chunk no longer replans by itself)"
-    "walk, once planned"] [:intent/logs-before "logs held when collecting began" "collect"]
+    "walk, once planned"]
+   [:intent/logs-before "logs held when collecting began" "collect, before :intent/drops"]
+   [:intent/stand "the cell a walk must end in, when it names one (stone: beside it, at its level)"
+    "a walk to stone"]
+   [:intent/drops
+    "the item ids a collect is for: one more of any of them than it began with ends it" "collect"]
+   [:intent/drops-before "items of :intent/drops held when collecting began" "collect"]
    [:intent/blocked-by "leaf block over the drop" "collect, when the drop is covered"]
    [:intent/clears "leaf blocks cleared for this drop" "a collect resumed after clearing"]
    [:intent/resume "the intent to run after clearing a blocker" "a dig that clears a blocker"]

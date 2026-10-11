@@ -51,7 +51,12 @@
     (when (= :log (:intent/for last))
       (case kind
         :walk (of-trunk {:intent/kind :dig :intent/target target :intent/for :log})
-        :dig (or resume (of-trunk {:intent/kind :collect :intent/target target :intent/for :log}))
+        :dig
+        (or resume
+            (of-trunk {:intent/kind :collect
+                       :intent/target target
+                       :intent/for :log
+                       :intent/drops blocks/log-items}))
         :collect
         (when (and blocked-by (< (or clears 0) max-clears))
           (of-trunk {:intent/kind :dig
@@ -60,6 +65,7 @@
                      :intent/resume (of-trunk {:intent/kind :collect
                                                :intent/target target
                                                :intent/for :log
+                                               :intent/drops blocks/log-items
                                                :intent/clears (inc (or clears 0))})}))
         nil))))
 

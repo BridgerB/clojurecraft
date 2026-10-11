@@ -699,6 +699,10 @@
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (>= (get (held w) :cobblestone 0) 3))
     (is (= 1 (get (held w) :wooden_pickaxe 0)) "the pickaxe is still held")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w))
+        "every collect ends on its cobblestone, none times out")
+    (is (< (:time/now w) 20000)
+        "three cobblestone in well under the 30 s three collect timeouts used to cost")
     (is (empty? (:sim/violations sim)))))
 
 (deftest bare-handed-the-cobblestone-goal-never-digs-stone
