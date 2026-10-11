@@ -1,8 +1,8 @@
 (ns clojurecraft.window
   "Clicking in a window, as values. A view describes one window the way the click rules need
-   it: which window id, its latest state id, its crafting grid, and where each player-inventory
-   slot appears in it. Window 0 (the player's own screen) and an open crafting table share
-   every rule here.
+   it: which window id, its latest state id, its own slots (a crafting grid, a furnace's input,
+   fuel and output), and where each player-inventory slot appears in it. Window 0 (the
+   player's own screen), an open crafting table and an open furnace share every rule here.
 
    775 click semantics, all verified live: a click carries the client's prediction (changed
    slots and cursor); the server adopts it and then sends only what differs. We predict no
@@ -17,32 +17,35 @@
 (def answer-timeout 3000)             ; a click the server never answers fails the intent
 
 (defn view
-  "The window an intent clicks in: :inventory (window 0, 2x2 grid) or :table (the open
-   crafting table, 3x3 grid). nil when that window is not open."
+  "The window an intent clicks in: :inventory (window 0, 2x2 grid), or a container kind of
+   inventory/layouts when that container is the open window (:table, the crafting table's 3x3
+   grid; :furnace, size 0, its own slots input, fuel and output). nil when it is not open."
   [world which]
-  (case which
-    :inventory
-    {:view/id 0
-     :view/state-id (:window/state-id world)
-     :view/size (:size (inventory/layouts :inventory))
-     :view/grid (:window/grid world)
-     :view/slot-of #(inventory/player->window-slot (inventory/layouts :inventory) %)}
-    :table
-    (let [{:window/keys [id menu-type state-id slots]} (:window/open world)]
-      (when (= (:menu-type (inventory/layouts :table)) menu-type)
-        {:view/id id
-         :view/state-id state-id
-         :view/size (:size (inventory/layouts :table))
-         :view/grid slots
-         :view/slot-of #(inventory/player->window-slot (inventory/layouts :table) %)}))))
+  (let [layout (inventory/layouts which)]
+    (if (= which :inventory)
+      {:view/id 0
+       :view/state-id (:window/state-id world)
+       :view/size (:size layout)
+       :view/grid (:window/grid world)
+       :view/slot-of #(inventory/player->window-slot layout %)}
+      (let [{:window/keys [id menu-type state-id slots]} (:window/open world)]
+        (when (= (:menu-type layout) menu-type)
+          {:view/id id
+           :view/state-id state-id
+           :view/size (:size layout)
+           :view/grid slots
+           :view/slot-of #(inventory/player->window-slot layout %)})))))
 
-(defn click
-  "Send one click into a view and remember which state id the answer must move."
-  [world {:view/keys [id state-id]} {:click/keys [slot button mode]}]
+(def stale-state-id -1)               ; a state id no window ever has
+
+(defn send-click
+  "Send one click into a view carrying sent-id as its state id, and remember which state id the
+   answer must move (the view's)."
+  [world {:view/keys [id state-id]} {:click/keys [slot button mode]} sent-id]
   (-> world
       (game/emit {:packet/name :container-click
                   :window-id id
-                  :state-id state-id
+                  :state-id sent-id
                   :slot slot
                   :button button
                   :mode mode
@@ -52,6 +55,19 @@
       (intent/assoc-intent :intent/awaiting state-id
                            :intent/awaiting-window id
                            :intent/sent-at (:time/now world))))
+
+(defn click
+  "Send one click into a view and remember which state id the answer must move."
+  [world v c]
+  (send-click world v c (:view/state-id v)))
+
+(defn resync-click
+  "Send one click with a state id the server's window never has, so that, whatever the click
+   changes, the server answers with the whole window and the real cursor (26.1.2's
+   handleContainerClick: a state id that differs from the menu's gets broadcastFullState). The
+   way to learn the cursor after a lost click, since click forgets it as it sends."
+  [world v c]
+  (send-click world v c stale-state-id))
 
 (defn state-id-of
   "The latest state id the server sent for window-id: window 0's, or the open container's

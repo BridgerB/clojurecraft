@@ -4,22 +4,25 @@
    A need is a key and an amount: :item/<name> n and :tag/<item-tag> n are counted in the
    inventory, :block/<name> :near is a remembered block within reach of a walk. A goal is met
    when its provides are held. When it is not, the planner walks back through producer rows -
-   the table's own (gather a log, place a table) and one generated row per recipe - until it
-   reaches a row whose needs are all met, and acts on it. Every tick this is re-derived from
-   the inventory and the world, so a lost or consumed item is simply planned for again; needs
-   are netted against one working inventory so two needs never count the same item twice.
+   the table's own (gather a log, place a table) and one generated row per recipe and per
+   furnace recipe - until it reaches a row whose needs are all met, and acts on it. Every tick
+   this is re-derived from the inventory and the world, so a lost or consumed item is simply
+   planned for again; needs are netted against one working inventory so two needs never count
+   the same item twice.
 
    Requiring this namespace registers the :needs planner, the :provided? predicate and the
-   :gather, :place and :craft acts."
+   :gather, :place, :craft and :smelt acts."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.craft]
             [clojurecraft.game :as game]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.smelt :as smelt]
             [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
@@ -27,6 +30,7 @@
 ;; the :mine act lives in clojurecraft.stone, required by main (and by tests that plan for stone)
 
 (def table-search 24)                 ; how far a remembered crafting table counts as :near
+(def block-window {:crafting_table :table :furnace :furnace}) ; the window a placed block opens
 (def max-depth 8)                     ; item needs the needs planner may chain before it is :stuck
 
 ;; ---------------------------------------------------------------- needs as data
@@ -73,10 +77,27 @@
 
 (def craft-rows (mapv craft-row recipe/recipes))
 
+(defn smelt-row
+  "A furnace recipe as a goal row: its input as a need, a furnace nearby, its result as what it
+   provides."
+  [r]
+  {:goal/id (keyword "smelt" (name (:smelt/id r)))
+   :goal/priority 10
+   :goal/needs (array-map (need-key (:smelt/input r)) 1 :block/furnace :near)
+   :goal/provides {(keyword "item" (name (:smelt/result r))) (:smelt/count r)}
+   :goal/done? :provided?
+   :goal/act :smelt
+   :goal/smelt (:smelt/id r)})
+
+(def smelt-rows (mapv smelt-row recipe/smelting))
+
 (def producers
   "table → every row that can provide something: the table's live acting rows, then one per
-   recipe. Memoized: a table is a value, so its producers are too."
-  (memoize (fn [table] (into (filterv #(and (:goal/act %) (plan/live? %)) table) craft-rows))))
+   recipe and one per furnace recipe. Memoized: a table is a value, so its producers are too."
+  (memoize (fn [table]
+             (-> (filterv #(and (:goal/act %) (plan/live? %)) table)
+                 (into craft-rows)
+                 (into smelt-rows)))))
 
 (def by-item
   "table → {item name → producer rows that provide it}. Memoized like producers."
@@ -248,15 +269,34 @@
 
 (defmethod plan/act :place [_ row] {:intent/kind :place :intent/item (:goal/item row)})
 
+(defn at-container
+  "The intent i once the window of the placed block (a table, a furnace) is open; before that,
+   open the remembered one within reach, walk to it, or wait for one (reason wait)."
+  [world block wait i]
+  (let [pos (near world block)]
+    (cond (= (:menu-type (inventory/layouts (block-window block)))
+             (get-in world [:window/open :window/menu-type]))
+          i
+          (and pos (<= (physics/distance (game/eye world) (physics/centre pos)) place/open-reach))
+          {:intent/kind :open-container :intent/target pos}
+          pos {:intent/kind :walk :intent/target pos}
+          :else {:plan/wait wait})))
+
 (defmethod plan/act :craft
   [world {:goal/keys [recipe]}]
   (if (recipe/fits? (recipe/by-id recipe) 2)
     {:intent/kind :craft :intent/recipe recipe :intent/window :inventory}
-    (let [eye (game/eye world)
-          table (near world :crafting_table)]
-      (cond (= 12 (get-in world [:window/open :window/menu-type]))
-            {:intent/kind :craft :intent/recipe recipe :intent/window :table}
-            (and table (<= (physics/distance eye (mapv #(+ % 0.5) table)) place/open-reach))
-            {:intent/kind :open-container :intent/target table}
-            table {:intent/kind :walk :intent/target table}
-            :else {:plan/wait :no-table}))))
+    (at-container world
+                  :crafting_table
+                  :no-table
+                  {:intent/kind :craft :intent/recipe recipe :intent/window :table})))
+
+(defmethod plan/act :smelt
+  [world {:goal/keys [smelt]}]
+  (let [n (smelt/batch (counts world) (recipe/smelt-by-id smelt))]
+    (if (pos? n)
+      (at-container world
+                    :furnace
+                    :no-furnace
+                    {:intent/kind :smelt :intent/smelt smelt :intent/count n})
+      {:plan/wait :no-fuel})))

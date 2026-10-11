@@ -142,7 +142,7 @@
    [:plan/waiting-since "ms the current wait began" "while waiting"]
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
-   [:intent/kind "executor: :walk :dig :collect :craft :place :open-container :stairs-down"
+   [:intent/kind "executor: :walk :dig :collect :craft :place :open-container :stairs-down :smelt"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -202,9 +202,18 @@
    [:intent/clears "leaf blocks cleared for this drop" "a collect resumed after clearing"]
    [:intent/resume "the intent to run after clearing a blocker" "a dig that clears a blocker"]
    [:intent/recipe "recipe id to craft" "craft"] [:intent/window ":inventory or :table" "craft"]
-   [:intent/clicks "clicks still to send" "craft, :click stage"]
-   [:intent/result "result item id" "craft"] [:intent/makes "items one craft yields" "craft"]
-   [:intent/before "result items held before crafting" "craft"]
+   [:intent/clicks "clicks still to send" "craft, :click stage; smelt, :load stage"]
+   [:intent/result "result item id" "craft, smelt"]
+   [:intent/makes "items one craft yields; for a smelt, the batch" "craft, smelt"]
+   [:intent/before "result items held before crafting or smelting" "craft, smelt"]
+   [:intent/smelt "furnace recipe id to cook (smelting.edn)" "smelt"]
+   [:intent/count "how many of the input the batch cooks" "smelt"]
+   [:intent/lost "clicks the server lost in this smelt; the intent resumed from its slots"
+    "smelt, after a lost click"]
+   [:intent/resync "the next click is a resync: the cursor after a lost click is unknown"
+    "smelt, from a lost click until the resync is sent"]
+   [:intent/cook-by "ms by which the batch must be cooked; the cook stage fails after it"
+    "smelt, :cook stage, once the furnace is loaded"]
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
    [:intent/sent-at "ms a click or placement was sent" "after sending"]

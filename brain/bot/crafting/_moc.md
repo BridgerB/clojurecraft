@@ -25,6 +25,7 @@ Crafting as data (issues #2 and #7): the recipe table, the graph from wants to t
 - [[window-zero-model]] - window 0, the open container, the held slot, and the packets that write them.
 - [[place-intent]] - equip, pick a spot, right-click, done only on the server's block update.
 - [[open-container-intent]] - right-click within 4.5, done when the window and its contents arrive.
+- [[smelt-intent]] - settle, load, cook, take, close in a furnace; fuel only as much as the batch burns, coal first; a lost click recovered by a resync.
 
 ## The sim's window
 - [[sim-window-clicks]] - vanilla click rules in the model, slot 0 computed by match.

@@ -165,6 +165,11 @@
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :intent/recipe keyword?)
 (s/def :intent/window #{:inventory :table})
+(s/def :intent/smelt keyword?)
+(s/def :intent/count pos-int?)
+(s/def :intent/cook-by int?)
+(s/def :intent/lost pos-int?)
+(s/def :intent/resync boolean?)
 (s/def :intent/item keyword?)
 (s/def ::need-key
   (s/or :named keyword?
@@ -505,7 +510,7 @@
 (s/fdef window/view
   :args
   (s/cat :world (requires :window/grid)
-         :which #{:inventory :table}))
+         :which #{:inventory :table :furnace}))
 
 (def selected
   "Every function whose selection is stated above, for instrument."

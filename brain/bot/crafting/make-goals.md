@@ -1,6 +1,6 @@
 ---
 title: Make goals
-description: The needs planner - how a target's provides are traced back through producer rows (gather a log, place a table, one generated row per recipe) to the row whose needs are met, with one netted inventory and no cycles - and the :gather, :place and :craft acts.
+description: The needs planner - how a target's provides are traced back through producer rows (gather a log, place a table, one generated row per recipe and per furnace recipe) to the row whose needs are met, with one netted inventory and no cycles - and the :gather, :place, :craft and :smelt acts.
 type: reference
 tags: [bot, crafting, plan, goals]
 aliases: [needs planner, make.clj, craft-rows, producers, next-row, resolve-need, provided?, table ladder, decide]
@@ -10,6 +10,8 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/make.clj#defn craft-row
   - src/clojurecraft/make.clj#defn cycle?
+  - src/clojurecraft/make.clj#defn smelt-row
+  - src/clojurecraft/make.clj#defn at-container
   - test/clojurecraft/make_test.clj#a-need-already-being-resolved-is-a-dead-end
   - src/clojurecraft/make.clj#defn resolve-need
   - src/clojurecraft/make.clj#defn resolve-item-need
@@ -33,9 +35,10 @@ related:
 
 ## Key files
 - `make.clj`, `craft-row` - a recipe as a goal row: ingredients become needs (named `:tag/planks`, `:item/stick`, or the item set when no tag matches), the result becomes what it provides, and a recipe that does not fit the 2x2 grid also needs `{:block/crafting_table :near}`. All 1,030 recipes become rows (`craft-rows`).
-- `make.clj`, `resolve-need` - one need, by its kind: `resolve-item-need` nets a counted need in the working inventory and tries its producers in `producer-order` (most of their own needs held, then no table needed, then the larger yield); `resolve-block-need` meets `:block/... :near` with a remembered placed block within 24 blocks, else the `:place-table` row. Both try candidates through `first-resolved`. Each item need carries the path of item sets being resolved above it: past `max-depth` (8) of them, or when the need is already on the path (`cycle?`: an ingot from a block made of ingots, from nuggets cut from an ingot), it is `:stuck` rather than searched deeper. The recipes alone hold that iron cycle: `next-row` toward four ingots with nothing held took 0.84 ms a call searching it to depth eight, 0.13 ms with the cut (measured 2026-10-11, 200 calls after warm-up).
+- `make.clj`, `smelt-row` - a furnace recipe as a goal row: its input as a need, `{:block/furnace :near}`, its result as what it provides, act `:smelt` (`smelt-rows`, one per `smelting.edn` row, after the craft rows in `producers`).
+- `make.clj`, `resolve-need` - one need, by its kind: `resolve-item-need` nets a counted need in the working inventory and tries its producers in `producer-order` (most of their own needs held, then no table needed, then the larger yield); `resolve-block-need` meets `:block/... :near` with a remembered placed block within 24 blocks, else the `:place-table` row. Both try candidates through `first-resolved`. Each item need carries the path of item sets being resolved above it: past `max-depth` (8) of them, or when the need is already on the path (`cycle?`: an ingot from a block made of ingots, from nuggets cut from an ingot), it is `:stuck` rather than searched deeper. The recipes alone hold that iron cycle: `next-row` toward four ingots with nothing held took 0.84 ms a call searching it to depth eight, 0.13 ms with the cut (measured 2026-10-11, 200 calls after warm-up). The smelt rows add more ways round (ingots from raw iron or iron ore, nuggets from smelted iron tools): toward four ingots holding two raw iron, 20.8 ms a call without the cut, 0.15 ms with it.
 - `make.clj`, `decide` - a log chain in flight first ([[gather-chain]]), else `plan/act` on the row `next-row` reaches; `:stuck` becomes `{:plan/wait :stuck}`.
-- `make.clj`, the acts - `:gather` runs the log chain, `:place` puts the held table down ([[place-intent]]), `:craft` crafts in the 2x2 grid, or for a table recipe: in the open table window, else open the table in reach ([[open-container-intent]]), else walk to it.
+- `make.clj`, the acts - `:gather` runs the log chain, `:place` puts the held table or furnace down ([[place-intent]]), `:craft` crafts in the 2x2 grid, or for a table recipe goes through `at-container`: in the open table window, else open the table in reach ([[open-container-intent]]), else walk to it; `:smelt` sizes a batch from the held input and fuel and goes through `at-container` to the furnace ([[smelt-intent]]).
 
 ## Example: the pickaxe
 `:pickaxe` provides `{:item/wooden_pickaxe 1}`. Its producer is the generated row `:craft/wooden_pickaxe` with needs `{:tag/planks 3 :item/stick 2 :block/crafting_table :near}`. Planks come from `:craft/oak_planks` (or the species held), whose need `:tag/oak_logs` comes from `:gather-log`; the table need comes from `:place-table`, whose need `:item/crafting_table` comes from `:craft/crafting_table`. In the sim this runs from one tree to a held pickaxe with no failed attempts and no violations.

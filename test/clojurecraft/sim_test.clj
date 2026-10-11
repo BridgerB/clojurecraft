@@ -886,6 +886,66 @@
     (is (= {:view {3 ore} :cursor nil} (sim/click-view f {0 ore} nil {:slot 0 :button 0 :mode 1}))
         "a shift-click on the input moves it into the store")))
 
+(defn ingots-target
+  "A target of n iron ingots, over the shipped goal table."
+  [n]
+  (conj plan/goals
+        {:goal/id :ingots-test
+         :goal/priority 7
+         :goal/target? true
+         :goal/provides {:item/iron_ingot n}
+         :goal/done? :provided?}))
+
+(defn smelt-run
+  "The bot with inv (window-0 slots) on bare ground, after n iron ingots, and the clicks the
+   server loses."
+  [inv n drop-clicks]
+  (sim/run
+   (game/compose game/step (partial plan/step-over (ingots-target n)))
+   (game/init fx/opts)
+   (sim/init
+    {:column (world/column-bytes {}) :spawn [8.5 64.0 8.5] :inventory inv :drop-clicks drop-clicks})
+   #(or (plan/done? %) (plan/failed? %))
+   120000
+   {:event/kind :go :go/goals [:ingots-test]}))
+
+(def furnace-and-iron
+  {36 {:item (item :furnace) :count 1}
+   37 {:item (item :raw_iron) :count 4}
+   38 {:item (item :coal) :count 1}})
+
+(deftest four-raw-iron-and-a-coal-become-four-ingots-in-a-placed-furnace
+  (let [[w sim] (smelt-run furnace-and-iron 4 #{})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= {:iron_ingot 4} (held w)) "the coal burned, the iron cooked, the furnace was placed")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (nil? (:window/open w)))
+    (is (nil? (:sim/window sim)) "closed on both sides")
+    (is (every? (comp empty? :slots) (vals (:sim/furnaces sim))) "nothing left in the furnace")
+    (is (< (:time/now w) 60000) "800 ticks of cooking and the walking around them")
+    (is (empty? (:sim/violations sim)))))
+
+(deftest a-second-stack-of-fuel-is-loaded-when-the-first-burns-out
+  ;; birch before oak in burn-order: one birch plank cooks one and a half, then the oak one
+  (let [[w sim] (smelt-run {36 {:item (item :furnace) :count 1}
+                            37 {:item (item :raw_iron) :count 2}
+                            38 {:item (item :birch_planks) :count 1}
+                            39 {:item (item :oak_planks) :count 1}}
+                           2
+                           #{})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= {:iron_ingot 2} (held w)) "both planks burned, both iron cooked")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))))
+
+(deftest every-lost-smelt-click-is-recovered-from-the-servers-slots
+  ;; clicks 0-4 are the smelt's: coal up, coal down, iron up, iron down, the take
+  (doseq [n (range 6)]
+    (let [[w sim] (smelt-run furnace-and-iron 4 #{n})]
+      (is (plan/done? w) (str "lost click " n ": " (pr-str (plan/summary w))))
+      (is (= {:iron_ingot 4} (held w)) (str "lost click " n))
+      (is (empty? (:sim/violations sim)) (str "lost click " n)))))
+
 (def walled-ledge
   "Gym batch push70 (landing 18648,18464): the nearest stone's only cell at its own level was
    walled in, so no route reached it, while a cell one block below it was reachable. Here: stone

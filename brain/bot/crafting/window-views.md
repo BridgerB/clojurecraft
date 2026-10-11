@@ -1,6 +1,6 @@
 ---
 title: Window views
-description: How window.clj gives the craft and place intents one click layer for window 0 and an open crafting table - a view map (id, state id, size, grid, slot map), click, waiting and free-slot.
+description: How window.clj gives the craft, smelt and place intents one click layer for window 0, an open crafting table and an open furnace - a view map (id, state id, size, own slots, slot map), click, resync-click, waiting and free-slot.
 type: reference
 tags: [bot, crafting, windows]
 aliases: [window.clj, view, view/slot-of, player->window-slot, free-slot, window/click]
@@ -10,6 +10,7 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/window.clj#defn view
   - src/clojurecraft/window.clj#defn click
+  - src/clojurecraft/window.clj#defn resync-click
   - src/clojurecraft/window.clj#defn waiting
   - src/clojurecraft/window.clj#defn free-slot
   - src/clojurecraft/inventory.clj#defn player->window-slot
@@ -22,7 +23,7 @@ related:
 
 # Window views
 
-A view is a plain map describing one window the way the click rules need it, so window 0 and an open crafting table share every rule.
+A view is a plain map describing one window the way the click rules need it, so window 0, an open crafting table and an open furnace share every rule. A furnace's view is built the table's way from its layout: size 0, and its `:view/grid` holds the furnace's own slots (input 0, fuel 1, output 2).
 
 | Key | `:inventory` (window 0) | `:table` (open crafting table) |
 |---|---|---|
@@ -33,8 +34,9 @@ A view is a plain map describing one window the way the click rules need it, so 
 | `:view/slot-of` | `inventory/player->window-slot` over window 0's layout | the same over the table's: hotbar 0-8 → 37-45, main 9-35 → 10-36 |
 
 ## Key files
-- `window.clj`, `view` - builds the map; `:table` is nil unless the open window's menu type is 12 (crafting).
+- `window.clj`, `view` - builds the map from `inventory/layouts`; a container kind (`:table`, `:furnace`) is nil unless the open window's menu type is that layout's (12, 14).
 - `window.clj`, `click` - emits `container-click` with the view's id and state id, `:changed []`, `:cursor nil`; drops `:window/cursor`; records `:intent/awaiting`, `:intent/awaiting-window` and `:intent/sent-at` on the current intent.
+- `window.clj`, `resync-click` - the same click carrying state id -1, which the server always answers with the whole window and the real cursor ([[mc-state-ids-prediction]]); the smelt intent's way to learn the cursor after a lost click ([[smelt-intent]]).
 - `window.clj`, `waiting` - nil when nothing is unanswered, `:waiting` while that window's state id has not moved, `:overdue` after `answer-timeout` (3000 ms).
 - `window.clj`, `free-slot` - the first empty player slot, main inventory before hotbar, as a slot of this view.
 

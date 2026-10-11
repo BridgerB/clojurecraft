@@ -24,6 +24,7 @@
   "[{:smelt/id :smelt/input #{item-name} :smelt/result :smelt/count :smelt/ticks} ...]: the
    furnace's recipes (resources/clojurecraft/smelting.edn)"
   (resource "smelting"))
+(def smelt-by-id (into {} (map (juxt :smelt/id identity) smelting)))
 
 (def item-names (into {} (map (fn [[n id]] [id n]) blocks/items)))
 (defn item-name "The item keyword for a numeric item id, or nil." [id] (item-names id))

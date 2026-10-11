@@ -46,3 +46,4 @@ The "about 3 ingots" cap is steve's race record, cited in the code comment and t
 ## See also
 - [[sib-wood-lock]] - the same undercount family at the crafting grid.
 - [[craft-intent]] - our click discipline.
+- [[smelt-intent]] - how these rules became the `:smelt` intent.
