@@ -1,9 +1,9 @@
 ---
 title: Hardness and tools
-description: Where a block's break time comes from (hardness, harvest tags and tool materials read from the game itself at datagen), the vanilla formula dig/ms reproduces, how a tool is chosen, and the two numbers the issue had wrong.
+description: Where a block's break time and drop come from (hardness, the tool-only drops, harvest tags and tool materials read from the game itself at datagen), the vanilla formula dig/ms reproduces, how a tool is chosen, and the stone-by-hand number that took two tries.
 type: reference
 tags: [bot, plan, dig, data, tools]
-aliases: [dig/ms, hardness.edn, harvest.edn, materials.edn, best-tool, harvest?, tier-rank, jar-probe]
+aliases: [dig/ms, hardness.edn, harvest.edn, materials.edn, needs-tool.edn, best-tool, harvest?, drops-need-tool?, requiresCorrectToolForDrops, tier-rank, jar-probe]
 status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
@@ -14,6 +14,8 @@ sourceRefs:
   - src/clojurecraft/blocks.clj#defn hardness
   - src/clojurecraft/blocks.clj#defn tool-of
   - src/clojurecraft/blocks.clj#defn needs-tier
+  - src/clojurecraft/blocks.clj#defn drops-need-tool?
+  - dev/clojurecraft/jar_probe.clj#defn needs-tool
   - src/clojurecraft/blocks.clj#def tier-rank
   - src/clojurecraft/blocks.clj#def tools
   - dev/clojurecraft/jar_probe.clj#defn hardness
@@ -36,13 +38,13 @@ Three generated tables, and one pure formula over them.
 - `harvest.edn` `{block {:tool kind :needs tier}}` comes from the inner jar's `mineable/*` and `needs_*_tool` block tags, nested tags resolved.
 
 ## The formula (`dig/ms`)
-`damage per tick = speed / hardness / (30 when the held item harvests the block, else 100)`; `ticks = ceil(1 / damage)`, 0 when damage is 1 or more; `nil` for an unbreakable block. `speed` is the tier's speed when the held tool's kind is the block's `:tool`, else 1.0, divided by 5 for each penalty (`:eyes-in-water?`, `:off-ground?`). `harvest?` is by tier alone: a block with no `:needs` drops for anything; one with `:needs` drops when the tool's `tier-rank` reaches it. Copper ranks with stone because the game's `incorrect_for_copper_tool` tag equals stone's; its speed is 5.0, read from `ToolMaterial`.
+`damage per tick = speed / hardness / (30 when the held item harvests the block, else 100)`; `ticks = ceil(1 / damage)`, 0 when damage is 1 or more; `nil` for an unbreakable block. `speed` is the tier's speed when the held tool's kind is the block's `:tool`, else 1.0, divided by 5 for each penalty (`:eyes-in-water?`, `:off-ground?`). `harvest?` is the game's `Player.hasCorrectToolForDrops`: a block not in `needs-tool.edn` (the game's `requiresCorrectToolForDrops`, read by `jar-probe`) drops for anything; one in it drops only for a tool of the kind that mines it (its `:tool`) whose `tier-rank` reaches its `:needs`, if it has one. So stone, coal ore and a furnace need any pickaxe, iron ore a stone one, and an axe of any tier drops none of them. Copper ranks with stone because the game's `incorrect_for_copper_tool` tag equals stone's; its speed is 5.0, read from `ToolMaterial`.
 
 ## Choosing a tool (`dig/best-tool`)
 The fastest held tool of the block's own kind that harvests it, as `[slot item]`; nil when no held tool is of that kind (the hand is as good), or when the block needs a tier no held tool of its kind reaches. A tool of another kind is never chosen: a diamond axe would, by the game's rule, drop a netherite block after 75 s, and the dig refuses rather than spend that.
 
 ## Gotchas
-- **Stone needs no tier.** The issue said stone by hand takes 7500 ms and drops nothing; the tags say otherwise, and the formula gives 2300 ms with cobblestone dropped. The pickaxe is only faster (1150 ms wooden, 600 stone).
+- **Stone by hand drops nothing, in 7500 ms.** The issue said so; reading only the tags (no `needs_*_tool` tag on stone) had made it 2300 ms with cobblestone dropped, and the sim handed out cobblestone to a bare hand. The tags carry the tier, not whether the block needs its tool at all: that is `requiresCorrectToolForDrops`, a property of the block in code (411 blocks in 26.1.2), now read from the game's classes.
 - **A penalty divides the speed before the ceiling.** Stone with a wooden pickaxe off the ground is 5650 ms (speed 0.4, ceil(112.5) = 113 ticks), not 5750 (5 × 1150).
 - Leaves' hardness is `0.20000000298023224`: the game's float widened. Kept as the game has it; the ceiling makes it 6 ticks either way.
 - `materials.edn` names tiers as item names spell them (`:wooden`, `:golden`), not as `ToolMaterial` does (`WOOD`, `GOLD`).

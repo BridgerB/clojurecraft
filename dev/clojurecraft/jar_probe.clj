@@ -1,8 +1,9 @@
 (ns clojurecraft.jar-probe
   "Ask the vanilla server itself what the --reports output does not say: every block's
    hardness (BlockState.getDestroySpeed, the number the server divides by when it breaks a
-   block), every tool material's speed, durability and harvest tag (ToolMaterial), and every
-   fuel's burn ticks (FuelValues). Run by
+   block), which blocks drop only to their correct tool (requiresCorrectToolForDrops: stone
+   dug by hand drops nothing), every tool material's speed, durability and harvest tag
+   (ToolMaterial), and every fuel's burn ticks (FuelValues). Run by
    bb datagen in a JVM whose classpath is the inner server jar plus the libraries the
    bundler ships, since the server's classes need them to boot:
 
@@ -44,6 +45,16 @@
                                        EmptyBlockGetter/INSTANCE
                                        BlockPos/ZERO))]))))
 
+(defn needs-tool
+  "[\"minecraft:stone\" ...]: every block whose default state drops only when broken with its
+   correct tool (BlockState.requiresCorrectToolForDrops, which Player.hasCorrectToolForDrops
+   asks before it asks the tool), sorted."
+  []
+  (let [reg BuiltInRegistries/BLOCK]
+    (vec (sort (for [^Block b reg
+                     :when (.requiresCorrectToolForDrops (.defaultBlockState b))]
+                 (str (.getKey reg b)))))))
+
 (defn materials
   "{\"WOOD\" {\"speed\" 2.0 \"durability\" 59 \"incorrect\" \"minecraft:incorrect_for_wooden_tool\"} ...}
    for every ToolMaterial constant."
@@ -73,12 +84,14 @@
             (for [[^Item i ticks] values] [(str (.getKey BuiltInRegistries/ITEM i)) ticks])))))
 
 (defn -main
-  "Boot the game's registries and write {\"hardness\" ... \"materials\" ... \"fuel\" ...} as
-   JSON to out."
+  "Boot the game's registries and write {\"hardness\" ... \"needs-tool\" ... \"materials\" ...
+   \"fuel\" ...} as JSON to out."
   [out]
   (SharedConstants/tryDetectVersion)
   (Bootstrap/bootStrap)
   (with-open [w (io/writer out)]
-    (json/write {"hardness" (hardness) "materials" (materials) "fuel" (fuel)} w))
+    (json/write
+     {"hardness" (hardness) "needs-tool" (needs-tool) "materials" (materials) "fuel" (fuel)}
+     w))
   (println "wrote" out)
   (shutdown-agents))

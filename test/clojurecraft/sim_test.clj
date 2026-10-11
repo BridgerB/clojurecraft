@@ -260,12 +260,13 @@
                    :sim/packet
                    {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))))
 
-(deftest stone-by-hand-breaks-and-drops-cobblestone
-  ;; the game's tags: stone needs no tier, so a hand harvests it, in 2300 ms
-  (let [sim (dig-on-model stone-id nil 2300)]
+(deftest stone-by-hand-breaks-slowly-and-drops-nothing
+  ;; the game's requiresCorrectToolForDrops: stone drops only to a pickaxe; by hand it breaks
+  ;; at the no-harvest rate, 7500 ms
+  (is (empty? (:sim/broken (dig-on-model stone-id nil 2300))) "not yet at 2300 ms")
+  (let [sim (dig-on-model stone-id nil 7500)]
     (is (contains? (:sim/broken sim) [1 64 0]))
-    (is (= {:item (get blocks/items :cobblestone) :count 1} (:item (first (vals (:sim/items sim)))))
-        "cobblestone, not stone")))
+    (is (empty? (:sim/items sim)) "nothing dropped")))
 
 (deftest stone-with-a-wooden-pickaxe-breaks-sooner-and-wears-the-pickaxe
   ;; with the pickaxe held the block's time is 1150 ms, and the server breaks at 70% of it,

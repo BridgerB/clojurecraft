@@ -21,12 +21,18 @@
 (def penalty 5.0)                     ; the eyes in water, or the feet off the ground: speed / 5 each
 
 (defn harvest?
-  "Does a block state drop when broken with held (an item id, or nil for the hand)? Yes unless
-   the block needs a tier and the held tool's tier ranks below it."
+  "Does a block state drop when broken with held (an item id, or nil for the hand)? The game's
+   Player.hasCorrectToolForDrops: always for a block that does not need its tool
+   (blocks/drops-need-tool?); else only for a tool of the kind that mines it whose tier ranks
+   at or above the block's (stone takes any pickaxe, iron ore a stone one, neither the hand or
+   an axe)."
   [id held]
-  (let [needs (blocks/needs-tier id)
-        tier (:tier (blocks/tool held))]
-    (or (nil? needs) (and (some? tier) (>= (blocks/tier-rank tier) (blocks/tier-rank needs))))))
+  (let [{:keys [tier kind]} (blocks/tool held)
+        needs (blocks/needs-tier id)]
+    (or (not (blocks/drops-need-tool? id))
+        (boolean (and kind
+                      (= kind (blocks/tool-of id))
+                      (or (nil? needs) (>= (blocks/tier-rank tier) (blocks/tier-rank needs))))))))
 
 (defn speed
   "The breaking speed of held (an item id, or nil) against block id: the tool tier's speed when

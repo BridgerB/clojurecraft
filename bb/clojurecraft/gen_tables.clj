@@ -2,7 +2,8 @@
   "Regenerate every generated table in resources/clojurecraft/ from the vanilla 26.1.2 server: the
    --reports output (blocks, items, packets, entity types, menus), the inner jar's data files
    (version, recipes, item tags, harvest, smelting, block drops), and, by reflection against the
-   game's own classes (clojurecraft.jar-probe), block hardness, tool materials and fuel. Needs Java 25 (the flake's shell).
+   game's own classes (clojurecraft.jar-probe), block hardness, the blocks that drop only to
+   their correct tool, tool materials and fuel. Needs Java 25 (the flake's shell).
 
      bb datagen      ; the jar (sha1-checked) -> its reports -> the probe -> the EDN tables
 
@@ -76,7 +77,7 @@
 
 (defn probe!
   "Boot the game's classes in their own JVM (the inner jar, its libraries, and the datagen alias's
-   classpath) and write hardness, tool materials and fuel to probe.json."
+   classpath) and write hardness, the tool-only drops, tool materials and fuel to probe.json."
   [{:keys [inner libs probe]}]
   (let [lib-jars (map str (fs/glob libs "**.jar"))
         datagen-cp

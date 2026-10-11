@@ -40,6 +40,7 @@ related:
 | `harvest.edn` | inner jar `data/minecraft/tags/block/{mineable/*,needs_*_tool}.json` | `harvest`: `{block {:tool kind :needs tier}}` |
 | `hardness.edn` | the game's classes, by `clojurecraft.jar-probe` | `hardness`: `BlockState.getDestroySpeed` per block; throws when a block has none |
 | `materials.edn` | the game's classes, by `clojurecraft.jar-probe` | `materials`: every `ToolMaterial`'s speed, durability and harvest tag |
+| `needs-tool.edn` | the game's classes, by `clojurecraft.jar-probe` | `needs-tool`: the set of blocks whose default state has `requiresCorrectToolForDrops` (stone, ores, a furnace: nothing drops to a hand) |
 | `fuel.edn` | the game's classes, by `clojurecraft.jar-probe` | `fuel`: `FuelValues`' burn ticks per item, with the vanilla data pack's item tags bound first (fuel is partly given by tag) |
 | `smelting.edn` | inner jar `data/minecraft/recipe/*.json` of type smelting | `smelting`: input item set, result, count, cooking ticks |
 | `drops.edn` | inner jar `data/minecraft/loot_table/blocks/*.json` | `drops`: per block, the `[item chance]` tries of its first pool for a breaker with no enchanted tool (tool-gated entries and pools skipped) |

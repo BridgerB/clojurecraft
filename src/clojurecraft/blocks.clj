@@ -15,6 +15,10 @@
 (def entity-types "{name id}" (resource "entity-types"))
 (def hardness-by-name "{block-name hardness}; -1.0 is unbreakable" (resource "hardness"))
 (def harvest-by-name "{block-name {:tool kind :needs tier}}" (resource "harvest"))
+(def needs-tool-names
+  "#{block-name}: the blocks that drop only when broken with their correct tool (the game's
+   requiresCorrectToolForDrops: stone by hand drops nothing)"
+  (resource "needs-tool"))
 (def drops-by-name
   "{block-name [[item-name chance] ...]}: what a broken block drops to a bare hand or a plain
    tool, the tries in order (the game's loot tables)"
@@ -128,6 +132,11 @@
   (some-> (name-of id)
           harvest-by-name
           :tool))
+
+(defn drops-need-tool?
+  "Does a block state drop only to its correct tool (needs-tool-names)?"
+  [id]
+  (contains? needs-tool-names (name-of id)))
 
 (defn needs-tier
   "The lowest tool tier (:stone :iron :diamond) a block state drops for, or nil when it drops

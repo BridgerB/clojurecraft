@@ -36,10 +36,10 @@
   (testing "by hand"
     (is (= 3000 (dig/ms oak-log nil none)) "today's constant, now derived")
     (is (= 750 (dig/ms dirt nil none)))
-    (is
-     (= 2300 (dig/ms stone nil none))
-     "the issue said 7500 and no drop; the game's tags say stone needs no tier, so a hand harvests it, only slower (45 ticks)")
-    (is (dig/harvest? stone nil)))
+    (is (= 7500 (dig/ms stone nil none))
+        "the game's requiresCorrectToolForDrops: stone needs a pickaxe to drop, so a hand is /100")
+    (is (not (dig/harvest? stone nil)))
+    (is (dig/harvest? dirt nil) "dirt drops to anything"))
   (testing "with the mining tool"
     (is (= 1500 (dig/ms oak-log (item :wooden_axe) none)))
     (is (= 1150 (dig/ms stone (item :wooden_pickaxe) none)))
@@ -55,7 +55,8 @@
     (is (= 9400 (dig/ms obsidian (item :diamond_pickaxe) none)))
     (is (dig/harvest? obsidian (item :diamond_pickaxe))))
   (testing "a tool of the wrong kind is a hand"
-    (is (= 2300 (dig/ms stone (item :wooden_axe) none))))
+    (is (= 7500 (dig/ms stone (item :wooden_axe) none)))
+    (is (not (dig/harvest? iron-ore (item :stone_axe))) "the tier is right, the kind is not"))
   (testing "copper harvests what stone does"
     (is (dig/harvest? iron-ore (item :copper_pickaxe)))
     (is (not (dig/harvest? obsidian (item :copper_pickaxe)))))
