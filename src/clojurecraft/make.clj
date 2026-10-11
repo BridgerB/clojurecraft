@@ -2,13 +2,14 @@
   "The needs planner and the acts of the goal table.
 
    A need is a key and an amount: :item/<name> n and :tag/<item-tag> n are counted in the
-   inventory, :block/<name> :near is a remembered block within reach of a walk. A goal is met
-   when its provides are held. When it is not, the planner walks back through producer rows -
-   the table's own (gather a log, place a table) and one generated row per recipe and per
-   furnace recipe - until it reaches a row whose needs are all met, and acts on it. Every tick
-   this is re-derived from the inventory and the world, so a lost or consumed item is simply
-   planned for again; needs are netted against one working inventory so two needs never count
-   the same item twice.
+   inventory, :block/<name> :near is a remembered block within reach of a walk, and :fuel/ticks
+   n is fuel that burns n game ticks (a smelt's), counted from what the inventory would burn.
+   A goal is met when its provides are held. When it is not, the planner walks back through
+   producer rows - the table's own (gather a log, place a table) and one generated row per
+   recipe and per furnace recipe - until it reaches a row whose needs are all met, and acts on
+   it. Every tick this is re-derived from the inventory and the world, so a lost or consumed
+   item is simply planned for again; needs are netted against one working inventory so two
+   needs never count the same item twice.
 
    Requiring this namespace registers the :needs planner, the :provided? predicate and the
    :gather, :place, :craft and :smelt acts."
@@ -54,8 +55,10 @@
   [k]
   (and (keyword? k) (= "block" (namespace k))))
 
+(defn fuel-need? "Is need key k a :fuel/ticks need?" [k] (= k :fuel/ticks))
+
 (defn need-set
-  "The item set a counted need key stands for (nil for a :block/ need)."
+  "The item set a counted need key stands for (nil for a :block/ or :fuel/ticks need)."
   [k]
   (cond (set? k) k
         (= "item" (namespace k)) #{(keyword (name k))}
@@ -78,12 +81,14 @@
 (def craft-rows (mapv craft-row recipe/recipes))
 
 (defn smelt-row
-  "A furnace recipe as a goal row: its input as a need, a furnace nearby, its result as what it
+  "A furnace recipe as a goal row: its input and the fuel to cook it as needs (after the input,
+   so the input is never counted as its own fuel), a furnace nearby, its result as what it
    provides."
   [r]
   {:goal/id (keyword "smelt" (name (:smelt/id r)))
    :goal/priority 10
-   :goal/needs (array-map (need-key (:smelt/input r)) 1 :block/furnace :near)
+   :goal/needs
+   (array-map (need-key (:smelt/input r)) 1 :fuel/ticks (:smelt/ticks r) :block/furnace :near)
    :goal/provides {(keyword "item" (name (:smelt/result r))) (:smelt/count r)}
    :goal/done? :provided?
    :goal/act :smelt
@@ -223,14 +228,50 @@
                             (fn [row] (long (math/ceil (/ missing (yield row)))))
                             (conj path s))))))
 
+(def fuel-sources
+  "Where fuel the inventory lacks comes from, in order: coal (mined beside the iron), then
+   planks (from logs); each with the ticks one burns. Charcoal is not made: it burns wood to
+   save wood."
+  [[:item/coal (smelt/burn-ticks :coal)] [:tag/planks (smelt/burn-ticks :oak_planks)]])
+
+(defn burn
+  "[counts' ticks-left]: the fuel in counts that burns ticks taken out in the order the smelt
+   intent burns it (smelt/burn-order, coal first), whole items only; ticks-left is what it
+   could not cover."
+  [counts ticks]
+  (let [[counts left] (reduce (fn [[counts left] [n c]]
+                                (if (<= left 0)
+                                  (reduced [counts left])
+                                  (let [b (smelt/burn-ticks n)
+                                        k (min c (long (math/ceil (/ left b))))]
+                                    [(update counts n - k) (- left (* k b))])))
+                              [counts ticks]
+                              (smelt/fuels counts nil))]
+    [counts (max 0 left)]))
+
+(defn resolve-fuel-need
+  "[counts action] for a :fuel/ticks n need: met (nil) when the fuel in counts burns n ticks,
+   taken out as the smelt will burn it; else what is held is taken and the rest is planned from
+   the first of fuel-sources that can be done, or :stuck."
+  [world table counts n path]
+  (let [[counts left] (burn counts n)]
+    (if (<= left 0)
+      [counts nil]
+      (or (some (fn [[k b]]
+                  (let [[c a]
+                        (resolve-item-need world table counts k (long (math/ceil (/ left b))) path)]
+                    (when (not= a :stuck) [c a])))
+                fuel-sources)
+          [counts :stuck]))))
+
 (defn resolve-need
   "[counts' action] for a need: action nil when it is already met (counts' has it consumed), a
    producer row to act on, or :stuck when nothing in the table can provide it. path is the
    item sets being resolved above it, [] for a goal's own provides."
   [world table counts k n path]
-  (if (block-need? k)
-    (resolve-block-need world table counts k path)
-    (resolve-item-need world table counts k n path)))
+  (cond (block-need? k) (resolve-block-need world table counts k path)
+        (fuel-need? k) (resolve-fuel-need world table counts n path)
+        :else (resolve-item-need world table counts k n path)))
 
 (defn next-row
   "The producer row of table to act on next for a goal, nil when its provides are all held, or

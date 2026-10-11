@@ -9,11 +9,12 @@
 (def iron (recipe/smelt-by-id :iron_ingot_from_smelting_raw_iron))
 (def charcoal (recipe/smelt-by-id :charcoal))
 
-(deftest coal-burns-first-then-planks-logs-and-sticks
+(deftest coal-burns-first-then-planks-and-sticks
   (is (= #{:coal :charcoal} (first smelt/burn-order)))
   (is (= #{:stick} (last smelt/burn-order)))
   (is (not-any? #(contains? % :crimson_planks) smelt/burn-order) "the game does not burn it")
   (is (not-any? #(contains? % :crafting_table) smelt/burn-order) "a table burns, but is kept")
+  (is (not-any? #(contains? % :oak_log) smelt/burn-order) "a log is worth four planks")
   (is (= [[:coal 1] [:oak_planks 2] [:stick 3]]
          (smelt/fuels {:stick 3 :oak_planks 2 :coal 1 :wooden_pickaxe 1} :raw_iron))))
 
@@ -24,7 +25,7 @@
   (is (= 0 (smelt/batch {:raw_iron 2} iron)) "no fuel")
   (is (= 0 (smelt/batch {:coal 5} iron)) "no input")
   (is (= 0 (smelt/batch {:oak_log 3} charcoal)) "the input is never its own fuel")
-  (is (= 2 (smelt/batch {:oak_log 2 :oak_planks 2} charcoal))))
+  (is (= 3 (smelt/batch {:oak_log 3 :oak_planks 2} charcoal))))
 
 (deftest a-stack-is-laid-whole-or-one-at-a-time
   (let [v {:view/slot-of #(inventory/player->window-slot (inventory/layouts :furnace) %)}]

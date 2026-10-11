@@ -8,6 +8,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -15,6 +16,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.smelt :as smelt]
             [clojurecraft.spec]
             [clojurecraft.stone]
             [clojurecraft.swim :as swim]
@@ -176,3 +178,45 @@
   (is (not (make/block-need? #{:dried_kelp_block :coal_block})) "a set has no namespace to ask")
   (is (= [{} :stuck]
          (make/resolve-need (world-holding {} false) plan/goals {} #{:diamond :emerald} 1 []))))
+
+(defn with-furnace
+  "w with a furnace remembered two blocks from the bot."
+  [w]
+  (memory/observe w [7 64 5] (blocks/default-state :furnace)))
+
+(defn ingots [n] {:goal/id :ingots :goal/provides {:item/iron_ingot n} :goal/done? :provided?})
+
+(deftest fuel-is-planned-before-a-smelt
+  (let [row #(:goal/id
+              (make/next-row (with-furnace (world-holding % false)) (ingots 2) plan/goals))]
+    (is (= :smelt/iron_ingot_from_smelting_raw_iron (row {:raw_iron 2 :coal 1})))
+    (is (= :smelt/iron_ingot_from_smelting_raw_iron (row {:raw_iron 2 :oak_planks 2}))
+        "two planks burn 600 ticks, the 400 two ingots need")
+    (is (= :craft/oak_planks (row {:raw_iron 2 :oak_planks 1 :oak_log 1}))
+        "one plank is short: the log becomes planks to burn")
+    (is (= :gather-log (row {:raw_iron 2})) "nothing to burn: wood, until coal can be mined"))
+  (testing "fuel is netted after the row's other needs and the target's earlier provides"
+    (is (= [{:coal 0 :oak_planks 1} 0] (make/burn {:coal 1 :oak_planks 1} 1600)) "coal first")
+    (is (= [{:oak_planks 0 :stick 1} 0] (make/burn {:oak_planks 2 :stick 1} 500))
+        "whole planks: two for 500 ticks")))
+
+(def fuel-held-gen
+  (gen/hash-map :raw_iron (gen/choose 0 9)
+                :coal (gen/choose 0 2)
+                :oak_planks (gen/choose 0 9)
+                :oak_log (gen/choose 0 3)
+                :stick (gen/choose 0 5)))
+
+(deftest the-planner-never-smelts-without-the-fuel-for-it
+  ;; issue #6: steve's races stalled at three ingots when planks ran out mid-smelt; here a
+  ;; smelt is chosen only when the netted inventory burns 200 ticks for every ingot asked
+  (let [r (tc/quick-check 400
+                          (prop/for-all [held fuel-held-gen n (gen/choose 1 8)]
+                                        (let [w (with-furnace (world-holding held false))
+                                              row (make/next-row w (ingots n) plan/goals)
+                                              counts (recipe/counts (:player/inventory w))]
+                                          (or (not= :smelt (:goal/act row))
+                                              (and
+                                               (>= (smelt/fuel-ticks counts :raw_iron) (* 200 n))
+                                               (not= {:plan/wait :no-fuel} (plan/act w row)))))))]
+    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))

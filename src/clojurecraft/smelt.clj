@@ -48,11 +48,11 @@
   (get blocks/fuel-by-name n))
 
 (def burn-order
-  "What the bot burns, in the order it burns it: coal and charcoal, then planks, logs and
-   sticks, each only where the game burns it (crimson planks do not). Never a tool, a table or
-   anything else the fuel table lists: those are kept."
+  "What the bot burns, in the order it burns it: coal and charcoal, then planks, then sticks,
+   each only where the game burns it (crimson planks do not). Never a log (it burns 300 ticks,
+   the four planks it makes 1200), a tool, a table or anything else the fuel table lists."
   (mapv (fn [s] (into (sorted-set) (filter burn-ticks) s))
-        [(recipe/tags :coals) (recipe/tags :planks) (recipe/tags :logs) #{:stick}]))
+        [(recipe/tags :coals) (recipe/tags :planks) #{:stick}]))
 
 (defn fuels
   "The fuel in counts ({item-name n}), in burn-order: [[item-name n] ...]. except (an item
