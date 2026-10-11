@@ -1360,6 +1360,21 @@
     (is (<= 75.0 (second (:player/pos w))) "up to the hilltop, out of the shaft")
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-tunnel-never-cuts-under-gravel-under-water
+  ;; gym batch iron-a4 run 1 tunnelled under a riverbed: the gravel over a cell it cut fell into
+  ;; it and the river followed. Gravel with water on it over the first cell ahead: refused
+  (let [blocks (assoc pocket [9 68 8] gravel-state [9 69 8] blocks/water-base)
+        [w sim] (intent-run {:intent/kind :tunnel :intent/dir [1 0] :intent/length 4}
+                            blocks
+                            66
+                            (get blocks/items :wooden_pickaxe)
+                            60000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/side])))
+    (is (not (contains? (:sim/broken sim) [9 67 8])) "the cell under the gravel never cut")
+    (is (= :gravel (blocks/name-of (sim/block-at sim [9 68 8]))))
+    (is (empty? (:sim/violations sim)))))
+
 (deftest gravel-over-the-head-is-never-dug-under
   ;; a stair up opens the cell over the head first; gravel over that cell would fall through it
   ;; onto the bot, so every stair from here is refused and a level step leads out from under it

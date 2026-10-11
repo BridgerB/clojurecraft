@@ -43,12 +43,26 @@
 
 (def never-dug #{:obsidian})          ; a portal frame is never a dig target (ruststeve dug its own frame)
 
-(defn exposes-fluid?
-  "Would breaking target let water or lava in: is any of its six neighbours a fluid
-   (steve's digExposesWater)?"
+(def falling-reach 16)                ; gravel or sand stacked over a cell that a fluid on top is looked for through
+
+(defn fluid-over-falling?
+  "Is there water or lava resting on gravel or sand stacked straight over pos: opening pos lets
+   the stack fall and the fluid follow it down. Gym batch iron-a4 run 1 tunnelled under a
+   riverbed, the gravel over a cell it cut fell into it, and the river came down the tunnel."
   [world [x y z]]
-  (boolean (some (fn [[dx dy dz]] (terrain/fluid-at world [(+ x dx) (+ y dy) (+ z dz)]))
-                 [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
+  (let [over (map (fn [dy] [x (+ y dy) z]) (range 1 (inc falling-reach)))
+        stack (take-while #(some-> (terrain/block-at world %)
+                                   blocks/falls?)
+                          over)]
+    (boolean (and (seq stack) (terrain/fluid-at world (nth over (count stack)))))))
+
+(defn exposes-fluid?
+  "Would breaking target let water or lava in: is any of its six neighbours a fluid (steve's
+   digExposesWater), or does a fluid rest on gravel or sand over it (fluid-over-falling?)?"
+  [world [x y z :as target]]
+  (boolean (or (some (fn [[dx dy dz]] (terrain/fluid-at world [(+ x dx) (+ y dy) (+ z dz)]))
+                     [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+               (fluid-over-falling? world target))))
 
 (defn dig-time
   "ms to break block id with held (an item id, or nil for the hand) under the world's penalties:
