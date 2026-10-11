@@ -15,12 +15,37 @@
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.math :as math]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.cli :as cli]
             [clojurecraft.fixture :as fixture]
             [clojurecraft.landings :as landings]
             [clojurecraft.rcon :as rcon])
   (:gen-class))
+
+;; the shape of a registry row and of a judged result row
+(s/def :gym/goal keyword?)
+(s/def :gym/until string?)
+(s/def :gym/prereqs (s/coll-of string? :kind vector?))
+(s/def :gym/timeout-ms pos-int?)
+(s/def :truth/cmd string?)
+(s/def :truth/re string?)
+(s/def :truth/reply string?)
+(s/def :truth/ok? boolean?)
+(s/def :gym/truth (s/coll-of (s/keys :req [:truth/cmd :truth/re]) :kind vector? :min-count 1))
+(s/def ::row (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]))
+(s/def :gym/run pos-int?)
+(s/def :gym/landing (s/coll-of int? :kind vector? :count 3))
+(s/def :gym/landed? boolean?)
+(s/def :gym/outcome #{:pass :fail :timeout :death :disconnect :harness})
+(s/def :gym/ms int?)
+(s/def :gym/reason (s/nilable keyword?))
+(s/def :gym/truths (s/coll-of (s/keys :req [:truth/cmd :truth/reply :truth/ok?]) :kind vector?))
+(s/def :gym/commit (s/nilable string?))
+(s/def :gym/result (s/nilable map?))
+(s/def ::result
+  (s/keys :req [:gym/goal :gym/run :gym/landed? :gym/outcome :gym/truths]
+          :opt [:gym/landing :gym/ms :gym/reason :gym/commit :gym/result]))
 
 (def gyms
   "The gym registry. Truth commands count items without removing any (`clear <name> <item> 0`

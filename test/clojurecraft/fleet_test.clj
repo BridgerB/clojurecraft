@@ -25,8 +25,8 @@
      :exp/est-s 300}]})
 
 (deftest a-plan-is-data
-  (is (s/valid? :clojurecraft.spec/fleet-plan plan))
-  (is (not (s/valid? :clojurecraft.spec/fleet-plan
+  (is (s/valid? :clojurecraft.fleet/plan plan))
+  (is (not (s/valid? :clojurecraft.fleet/plan
                      (assoc-in plan [:fleet/experiments 2 :exp/kind] :gym)))
       "a gym experiment needs a goal and runs"))
 
@@ -88,7 +88,7 @@
 (deftest a-salt-gives-a-repeated-plan-fresh-seeds-and-nothing-else
   (let [seeds (fn [p] (map :unit/seed (filter :unit/seed (fleet/units p))))
         salted (assoc plan :fleet/salt "run-7")]
-    (is (s/valid? :clojurecraft.spec/fleet-plan salted))
+    (is (s/valid? :clojurecraft.fleet/plan salted))
     (is (not-any? (set (seeds plan)) (seeds salted)))
     (is (= (seeds salted) (seeds (assoc plan :fleet/salt "run-7"))) "the same salt, the same seeds")
     (is (= (map :unit/id (fleet/units plan)) (map :unit/id (fleet/units salted))))))
