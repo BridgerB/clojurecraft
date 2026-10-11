@@ -29,9 +29,20 @@
 (def confirm-ticks 10)                ; after FINISH, ticks to wait for the server's ack or its refusal
 
 (defn penalties
-  "The dig penalties in force for the player: off the ground (the eyes in water is issue #5)."
+  "The dig penalties in force for the player: off the ground, the eyes in water; each divides
+   the dig speed by five, so an escape dig under water is slow as vanilla makes it."
   [world]
-  {:off-ground? (not (:player/on-ground? world))})
+  {:off-ground? (not (:player/on-ground? world))
+   :eyes-in-water? (boolean (:player/eye-in-water? world))})
+
+(def never-dug #{:obsidian})          ; a portal frame is never a dig target (ruststeve dug its own frame)
+
+(defn exposes-fluid?
+  "Would breaking target let water or lava in: is any of its six neighbours a fluid
+   (steve's digExposesWater)?"
+  [world [x y z]]
+  (boolean (some (fn [[dx dy dz]] (blocks/fluid (terrain/block-at world [(+ x dx) (+ y dy) (+ z dz)])))
+                 [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
 
 (defn dig-time
   "ms to break block id with held (an item id, or nil for the hand) under the world's penalties:
@@ -170,10 +181,12 @@
 ;; ---------------------------------------------------------------- dig
 
 (defn still?
-  "On the ground and not moving horizontally (vertical velocity is never zero at rest)."
+  "On the ground, or afloat in a liquid, and not moving horizontally (vertical velocity is
+   never zero at rest)."
   [world]
   (let [[vx _ vz] (:player/vel world)]
-    (and (:player/on-ground? world) (< (abs vx) 0.05) (< (abs vz) 0.05))))
+    (and (or (:player/on-ground? world) (:player/in-water? world) (:player/in-lava? world))
+         (< (abs vx) 0.05) (< (abs vz) 0.05))))
 
 (defn hotbar
   "The hotbar slots of the inventory, {slot item}: the only slots a dig can hold a tool from."
@@ -192,7 +205,7 @@
       :else [0 nil])))
 
 (defmethod run :dig
-  [world {:intent/keys [target stage since still next-swing finish-at face slot tool state]
+  [world {:intent/keys [target stage since still next-swing finish-at face slot tool state exposes-ok?]
           :or {stage :settle still 0}} _]
   (let [now (:time/now world)
         since (or since now)
@@ -210,6 +223,10 @@
 
         (= :needs-tool (choose-tool world at-target))
         (fail world :needs-tool)
+
+        (or (contains? never-dug (blocks/name-of at-target))
+            (and (not exposes-ok?) (exposes-fluid? world target)))
+        (fail world :unsafe)
 
         (and (>= still 3) (> (- now since) settle-ms))
         (let [seq (inc (:bot/sequence world))

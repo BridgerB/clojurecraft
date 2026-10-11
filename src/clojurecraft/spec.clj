@@ -45,6 +45,19 @@
 (s/def :player/fall-distance (s/double-in :min 0.0 :NaN? false :infinite? false))
 (s/def :player/in-water? boolean?)
 (s/def :player/air (s/int-in 0 301))
+(s/def :plan/wet-ticks nat-int?)
+(s/def :plan/dry-ticks nat-int?)
+(s/def :plan/trap #{:water :lava})
+(s/def :plan/trap-at (s/tuple int? int?))
+(s/def :trap/pos (s/tuple int? int?))
+(s/def :trap/kind #{:water :lava})
+(s/def :trap/at int?)
+(s/def ::trap (s/keys :req [:trap/pos :trap/kind :trap/at]))
+(s/def :world/traps (s/coll-of ::trap :kind vector?))
+(s/def :intent/bank ::block-pos)
+(s/def :intent/next-search int?)
+(s/def :intent/dig-when-down ::block-pos)
+(s/def :intent/exposes-ok? boolean?)
 (s/def :player/dead? boolean?)
 (s/def :player/in-lava? boolean?)
 (s/def :player/eye-in-water? boolean?)
@@ -59,7 +72,7 @@
 (s/def :control/jump? boolean?)
 (s/def :control/yaw double?)
 (s/def :control/look :player/look)
-(s/def :player/controls (s/keys :opt [:control/forward? :control/jump? :control/yaw :control/look]))
+(s/def :player/controls (s/keys :opt [:control/forward? :control/jump? :control/sneak? :control/yaw :control/look]))
 
 ;; window 0 (the player's own screen) and any open container
 (s/def ::slot-item (s/keys :req-un [::item ::count]))
@@ -170,12 +183,16 @@
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
 (s/def :goal/target? boolean?)
-(s/def :goal/until string?)                ; the --until name that selects a target row
+(s/def :goal/until string?)
+(s/def :goal/always? boolean?)
+(s/def :goal/trap #{:water :lava})
+(s/def :goal/plan keyword?)                ; the --until name that selects a target row
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
-(s/def ::goal (s/keys :req [:goal/id :goal/priority :goal/provides :goal/done?]
-                      :opt [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by]))
+(s/def ::goal (s/keys :req [:goal/id :goal/priority :goal/done?]
+                      :opt [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by
+                            :goal/always? :goal/trap :goal/plan]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]

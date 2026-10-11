@@ -12,6 +12,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.make :as make]
             [clojurecraft.stone]
+            [clojurecraft.swim]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -20,7 +21,11 @@
 
 (def pickaxe (first (filter #(= :pickaxe (:goal/id %)) plan/goals)))
 
-(defn decide "The needs planner over the shipped goal table." [w goal] (make/decide w goal plan/goals))
+(defn decide
+  "The planner registry over the shipped goal table: the needs planner for item rows, the
+   escape and wade planners for theirs (each row names its own under :goal/plan)."
+  [w goal]
+  (plan/next-intent w goal plan/goals))
 
 (def held-gen
   (gen/hash-map :oak_log (gen/choose 0 3) :oak_planks (gen/choose 0 9) :stick (gen/choose 0 5)
@@ -47,7 +52,8 @@
       :place (and (= :crafting_table (:intent/item i)) (pos? (get counts :crafting_table 0)))
       :open-container (some? (memory/remembered w (:intent/target i)))
       :stairs-down (pos? (get counts :wooden_pickaxe 0))         ; down to stone, with nothing remembered: only with a pickaxe
-      nil (= :no-log (:plan/wait i))                            ; gathering with no tree known: wait
+      :wade (some? (memory/nearest-surface-water w (game/eye w) 64))   ; into water the bot remembers
+      nil (contains? #{:no-log :no-water} (:plan/wait i))       ; gathering with no tree known, wading with no water: wait
       false)))
 
 (deftest the-planner-only-picks-executable-intents
@@ -79,9 +85,11 @@
     (is (every? #(clojure.spec.alpha/valid? :clojurecraft.spec/goal %) (concat plan/goals make/craft-rows))))
   (testing "the table is printable and reads back as the same value"
     (is (= plan/goals (clojure.edn/read-string (pr-str plan/goals)))))
-  (testing "no target needs a per-goal method: wood, kit and pickaxe all plan through the same registries"
-    (is (every? #(= :provided? (:goal/done? %)) plan/targets))
-    (is (= #{:needs} (set (keys (dissoc (methods plan/next-intent) :default)))))))
+  (testing "no item target needs a per-goal method: wood, kit and pickaxe all plan through the same registries;
+            the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes"
+    (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
+    (is (every? #(contains? #{:not-trapped-in :escaped-water?} (:goal/done? %)) (remove :goal/provides plan/targets)))
+    (is (= #{:needs :escape :wade} (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
 

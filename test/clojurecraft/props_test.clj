@@ -10,8 +10,11 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
+            [clojurecraft.plan :as plan]
             [clojurecraft.spec]
+            [clojurecraft.swim]
             [clojurecraft.world :as world]))
 
 (defn in-play []
@@ -142,3 +145,39 @@
                               (not (contains? w :plan/intent))
                               (not (contains? w :plan/last))
                               (some #(= % {:packet/name :client-command :action 0}) (fx/packets fx)))))))
+
+(def pond-column
+  "A pond two deep around the player (x 4-6, z 4-6) with a bank all round at y 64."
+  (world/column (into {} (for [x (range 4 7) y [62 63] z (range 4 7)] [[x y z] blocks/water-base]))))
+
+(defn afloat-with
+  "Planning for :wood with intent i running, the eye under water for one tick short of a
+   trap; physics is not running (not loaded), so what the physics would overwrite stays put."
+  [i]
+  (assoc (game/init fx/opts)
+         :bot/phase :play :player/pos [5.5 62.0 5.5] :player/vel [0.0 0.0 0.0] :player/look [0.0 0.0]
+         :player/on-ground? false :player/in-water? true :player/eye-in-water? true
+         :world/chunks {[0 0] pond-column}
+         :plan/status :active :plan/since 0 :plan/blacklist #{} :plan/trunk-failures {} :plan/attempts 0
+         :plan/goals #{:wood} :plan/wet-ticks (dec plan/trap-after-ticks)
+         :plan/intent (assoc i :intent/status :active :intent/id 1 :intent/goal :wood)
+         :plan/last {:intent/kind :walk :intent/target (:intent/target i)}
+         :player/controls {:control/forward? true :control/look [33.0 1.0]}))
+
+(def running-intent
+  (gen/let [kind (gen/elements [:walk :dig])
+            target (gen/tuple (gen/choose 0 15) (gen/choose 60 70) (gen/choose 0 15))]
+    {:intent/kind kind :intent/target target}))
+
+(deftest water-over-the-eye-preempts-whatever-runs
+  ;; issue #5: a running walk or dig yields to :swim-out the tick the trap is called, the old
+  ;; intent is abandoned :preempted, and its controls are gone
+  (check (prop/for-all [i running-intent]
+                       (let [[w _] (fx/fold plan/step (afloat-with i) [{:event/kind :tick :event/now 1000 :event/rand 0.5}])
+                             abandoned (filter #(= :abandoned (:intention/event %)) (memory/intentions w))]
+                         (and (= :swim-out (get-in w [:plan/intent :intent/kind]))
+                              (= :water (:plan/trap w))
+                              (= [(:intent/kind i)] (map :intention/kind abandoned))
+                              (= [:preempted] (map :intention/reason abandoned))
+                              (not (contains? w :plan/last))
+                              (not= [33.0 1.0] (get-in w [:player/controls :control/look])))))))
