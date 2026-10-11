@@ -249,7 +249,7 @@
       tagged)))
 
 (defn trial!
-  "One trial, as gym-run.sh runs it: a run that loses its connection says nothing about the goal,
+  "One trial, as bb gym-run runs it: a run that loses its connection says nothing about the goal,
    so it is attempted once more on the same landing. A trial that throws is a :harness row, never
    a lost unit."
   [{:keys [unit run dir] :as t}]

@@ -136,7 +136,7 @@ jobs:
           clojure -M:gym env --goal "${{ matrix.goal }}" > goal.env
           set -a; . ./goal.env; set +a
           GOAL=${{ matrix.goal }} RUN=${{ matrix.run }} BOT=Clj_g${{ matrix.run }} LANDINGS=work/world/landings.edn \
-          STRICT=${{ github.event_name == 'push' }} COMMIT=${{ github.sha }} scripts/ci/gym-run.sh
+          STRICT=${{ github.event_name == 'push' }} COMMIT=${{ github.sha }} bb gym-run
       - name: Compress the recording
         if: always()
         run: if [ -f work/run.edn ]; then zstd -19 -q work/run.edn -o run.edn.zst; fi

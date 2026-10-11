@@ -17,7 +17,7 @@ sourceRefs:
   - src/clojurecraft/landings.clj#defn landing-for
   - ci/gym.edn#{:landing-sets {"A" {:center [20000 20000] :n 20 :spacing 640 :biome "#minecraft:is_forest" :pregen-r 96}
   - ci/gym.edn#"W" {:center [26000 20000] :n 20 :spacing 640 :biome "#minecraft:is_beach" :pregen-r 96}
-  - scripts/ci/gym-run.sh#disconnected: running once more on the same landing
+  - bb/clojurecraft/gym_run.clj#disconnected: running once more on the same landing
   - scripts/ci/prepare-world.sh#a forceload was left behind
   - ".github/workflows/gym.yml#fail-on-cache-miss: true"
   - ".github/workflows/gym.yml#max-parallel: 20"
@@ -37,7 +37,7 @@ Three workflows. `test.yml` runs the suite and the brain checker on every push, 
 ## How a batch runs
 1. **plan**: refuses when more than 20 jobs are already running in the repository, then `clojure -M:gym plan --goals ... --runs N` prints the shard matrix; only goal, run number and job minutes cross the job boundary.
 2. **world** (`gym-world.yml`): restores the world cache for the set, or on a miss builds it with `scripts/ci/prepare-world.sh` and saves it. The key hashes `ci/gym.edn`, `bb/clojurecraft/server.clj`, the prepare script, `landings.clj` and `harness.clj`. A weekly run restores it to keep it from eviction.
-3. **shard** (one runner per run, up to 20 at once, `fail-fast: false`): restores the world with `fail-on-cache-miss` (shards never build terrain), starts the server, insists `forceload query` is empty, then `scripts/ci/gym-run.sh`: `clojure -M:gym land` (the fixture: wait for the bot, survival, clear, give prerequisites, teleport onto `landings[run]`, spawnpoint, print `:go` with `:go/at`) piped into the bot (`--events stdin --record`), and `clojure -M:gym judge` (wait for RESULT, run every truth command while the bot holds, write `result.edn`, print one `GYMRESULT` line). A `:disconnect` is run once more on the same landing. The recording is compressed with zstd and uploaded with the result, logs and the forceload checks.
+3. **shard** (one runner per run, up to 20 at once, `fail-fast: false`): restores the world with `fail-on-cache-miss` (shards never build terrain), starts the server, insists `forceload query` is empty, then `bb gym-run` (`bb/clojurecraft/gym_run.clj`): `clojure -M:gym land` (the fixture: wait for the bot, survival, clear, give prerequisites, teleport onto `landings[run]`, spawnpoint, print `:go` with `:go/at`) piped into the bot (`--events stdin --record`), and `clojure -M:gym judge` (wait for RESULT, run every truth command while the bot holds, write `result.edn`, print one `GYMRESULT` line). A `:disconnect` is run once more on the same landing. The recording is compressed with zstd and uploaded with the result, logs and the forceload checks.
 4. **aggregate**: downloads every shard's artifact, `clojure -M:gym report` folds the `result.edn` files into markdown (per goal: pass k/n with a 95% Wilson interval, a row per run with its truth replies, the outcome and reason tallies), writes it to the run summary and comments it on the branch's open PR.
 
 ## Judging
