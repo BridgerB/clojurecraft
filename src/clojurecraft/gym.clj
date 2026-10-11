@@ -117,12 +117,14 @@
     :gym/prereqs ["minecraft:iron_ingot 1" "minecraft:gravel 1"]
     :gym/timeout-ms 300000
     :gym/truth [{:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
-   ;; the whole stage from what #9 ends with, as the sim's end-to-end run starts
+   ;; the whole stage from what #9 ends with, as the sim's end-to-end run starts. Forty minutes:
+   ;; down to y 16, iron, coal, gravel and the smelts there, then the stairs back up to water; batch
+   ;; iron-a5's three runs that held flint and steel and the bucket were still climbing at twenty
    {:gym/goal :iron-kit
     :gym/until "iron-kit"
     :gym/prereqs ["minecraft:stone_pickaxe 1" "minecraft:crafting_table 1" "minecraft:cobblestone 8"
                   "minecraft:oak_log 4"]
-    :gym/timeout-ms 1200000
+    :gym/timeout-ms 2400000
     :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}
                 {:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
    ;; issue #5: wade in, get out; the server must see the bot on dry land (steve's onDryLand judge)
