@@ -12,6 +12,7 @@
    the world, from a watch on the atom (clojurecraft.watch) that never slows the loop."
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.cli :as cli]
             [clojurecraft.conn :as conn]
@@ -21,6 +22,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.record :as record]
+            [clojurecraft.spec]
             [clojurecraft.stairs]
             [clojurecraft.stone]
             [clojurecraft.swim]
@@ -45,6 +47,17 @@
    neither closed nor disconnected. The live run and its replay judge with this one rule."
   [world until]
   (boolean (and ((goal-fn until) world) (not (:bot/closed world)) (not (:bot/disconnected world)))))
+
+(defn external-event
+  "An event line from outside the bot (the fixture's stdout, piped in), read and checked against
+   the event spec: [event nil] when it is one, [nil why] when it does not read or is not an
+   event. What comes from another process is checked here, at the edge, before it is queued."
+  [line]
+  (try (let [e (edn/read-string {:readers record/readers} line)]
+         (if (s/valid? :clojurecraft.spec/event e)
+           [e nil]
+           [nil (str "not an event: " (s/explain-str :clojurecraft.spec/event e))]))
+       (catch Exception e [nil (str "unreadable: " (ex-message e))])))
 
 (defn result
   "The RESULT map: :ok, :until, the reason, the game summary, held items, the nearest
@@ -115,8 +128,8 @@
   (async/thread (doseq [line (line-seq (java.io.BufferedReader. reader))
                         :let [line (str/trim line)]
                         :when (seq line)]
-                  (try (async/>!! events (edn/read-string {:readers record/readers} line))
-                       (catch Exception e (cli/log "unreadable event:" line (.getMessage e)))))))
+                  (let [[e why] (external-event line)]
+                    (if e (async/>!! events e) (cli/log "dropped event" line why))))))
 
 (defn go-when-loaded!
   "Put a :go on the queue the first time the world says the player is loaded: the run without

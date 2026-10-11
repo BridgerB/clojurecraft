@@ -13,6 +13,7 @@ sourceRefs:
   - src/clojurecraft/main.clj#defn -main
   - src/clojurecraft/main.clj#(game/compose game/step plan/step))
   - src/clojurecraft/main.clj#defn read-events!
+  - src/clojurecraft/main.clj#defn external-event
   - src/clojurecraft/main.clj#defn go-when-loaded!
 related:
   - "[[bot/runtime/_moc|Runtime]]"
@@ -31,7 +32,7 @@ related:
 - `main.clj`, `-main` - argument parsing, wiring, RESULT, hold, exit.
 
 ## How it works
-1. `-main` parses `--key value` pairs (host 127.0.0.1, port 25571, name `Clj_wood`, until `wood`, timeout 120 s, hold 0), opens the connection, creates the events channel (buffer 16) and the atom from `game/init`. With `--events stdin` it starts `read-events!`, which feeds EDN lines from stdin (the fixture's pipe, [[harness-landing]]) onto the channel; otherwise, when `--until` names goals (`plan/goals-for`), `go-when-loaded!` watches the atom and puts `{:event/kind :go :go/goals ...}` there the first time `:player/loaded?` holds (perception, not coordination: the watch never writes the world). Then it applies the `:start` event carrying the connection (`:start/host :start/port :start/name`).
+1. `-main` parses `--key value` pairs (host 127.0.0.1, port 25571, name `Clj_wood`, until `wood`, timeout 120 s, hold 0), opens the connection, creates the events channel (buffer 16) and the atom from `game/init`. With `--events stdin` it starts `read-events!`, which feeds EDN lines from stdin (the fixture's pipe, [[harness-landing]]) onto the channel, each checked by `external-event` against the event spec first (a line that does not read or is not an event is logged and dropped); otherwise, when `--until` names goals (`plan/goals-for`), `go-when-loaded!` watches the atom and puts `{:event/kind :go :go/goals ...}` there the first time `:player/loaded?` holds (perception, not coordination: the watch never writes the world). Then it applies the `:start` event carrying the connection (`:start/host :start/port :start/name`).
 2. `run-loop!`: a packet from `:in` becomes a `:packet` event (nil, the closed channel, becomes `:closed` "socket closed"); anything from the events channel is applied as-is (the fixture's `:go`); a timeout becomes `{:event/kind :tick :event/now (System/currentTimeMillis) :event/rand (rand)}`. Ticks are scheduled on a fixed 50 ms grid (`next-tick` advances only after a tick), so packet bursts do not delay the clock.
 3. It stops when `stop?` holds, or the world has `:bot/closed` or `:bot/disconnected`. `stop?` is: the goal predicate (`plan/done?` for planned goals, `:player/loaded?` for `--until play`), a planned plan that failed, or the wall-clock deadline.
 4. `-main` prints `RESULT` ([[result-line]]), writes it into the recording and closes the recorder: the recording is the run. `ok` is `main/ok?`, the one rule a replay also uses. If ok and `--hold-ms` is positive, it runs the loop again, unrecorded, until the hold expires so an outside judge can read the live player. Then it closes the socket and exits 0 when ok, else 1.
