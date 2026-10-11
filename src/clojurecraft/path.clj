@@ -20,6 +20,8 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.terrain :as terrain]))
 
+(set! *warn-on-reflection* true)
+
 (def max-fall 3)                      ; blocks a drop may fall; vanilla damage starts above 3
 (def default-max-nodes 6000)          ; expansions one plan may spend
 (def walk-cost 1.0)                   ; one cell on the level

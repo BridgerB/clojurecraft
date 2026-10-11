@@ -9,6 +9,8 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.terrain :as terrain]))
 
+(set! *warn-on-reflection* true)
+
 (def search-radius 48)                ; blocks from the eye searched for a remembered log
 (def max-trunk 8)                     ; logs followed up one trunk column
 

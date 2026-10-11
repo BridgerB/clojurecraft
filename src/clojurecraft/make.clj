@@ -21,6 +21,8 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.wood :as wood]))
 
+(set! *warn-on-reflection* true)
+
 ;; the :mine act lives in clojurecraft.stone, required by main (and by tests that plan for stone)
 
 (def table-search 24)                 ; how far a remembered crafting table counts as :near

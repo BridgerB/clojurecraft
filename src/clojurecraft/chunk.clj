@@ -8,6 +8,8 @@
             [clojurecraft.bytes :as b])
   (:import [java.nio ByteBuffer]))
 
+(set! *warn-on-reflection* true)
+
 (def min-y -64)                       ; the lowest block y of an overworld column
 (def section-count 24)                ; 16-block sections per overworld column (y -64..319)
 

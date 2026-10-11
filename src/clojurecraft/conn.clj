@@ -13,6 +13,8 @@
            [java.net InetSocketAddress Socket]
            [java.util.zip Deflater Inflater]))
 
+(set! *warn-on-reflection* true)
+
 (defn inflate
   "zlib-decompress data into exactly size bytes, the uncompressed length the frame
    declared."

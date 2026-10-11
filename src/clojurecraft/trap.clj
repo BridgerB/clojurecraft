@@ -9,6 +9,8 @@
             [clojurecraft.game :as game]
             [clojurecraft.terrain :as terrain]))
 
+(set! *warn-on-reflection* true)
+
 (def trap-after-ticks 20)             ; the eye under water this long is a trap (ruststeve's 1 s watchdog); wading is not
 (def dry-ticks-to-clear 6)            ; dry land held this long ends a trap (steve's settle: a one-tick bob is not out)
 

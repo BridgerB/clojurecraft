@@ -29,6 +29,8 @@
             [clojurecraft.physics :as physics]
             [datascript.core :as d]))
 
+(set! *warn-on-reflection* true)
+
 (def schema
   "Positions and states are indexed, so lookups by place and Datalog by kind are direct;
    intention ids too, so an intention's story is one lookup."

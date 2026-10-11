@@ -18,6 +18,8 @@
             [clojurecraft.gym :as gym]
             [clojurecraft.rcon :as rcon]))
 
+(set! *warn-on-reflection* true)
+
 ;; the shape of a plan file
 (s/def :fleet/label string?)
 (s/def :fleet/workers (s/int-in 1 257))              ; a matrix holds at most 256 jobs

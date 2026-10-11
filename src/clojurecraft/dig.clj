@@ -13,6 +13,8 @@
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]))
 
+(set! *warn-on-reflection* true)
+
 (def tick-ms 50)                      ; one game tick
 (def harvest-divisor 30)              ; damage divisor when the tool harvests the block
 (def no-harvest-divisor 100)          ; when it does not: the block breaks but drops nothing

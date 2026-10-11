@@ -13,6 +13,8 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
 
+(set! *warn-on-reflection* true)
+
 (def reach 4.0)                       ; eye → block centre; the server allows ~4.5
 (def walk-timeout-ticks 1200)         ; 60 s
 (def stuck-ticks 40)                  ; no waypoint reached for 2 s → plan again

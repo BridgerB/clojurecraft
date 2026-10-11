@@ -26,6 +26,8 @@
             [clojurecraft.rcon :as rcon])
   (:gen-class))
 
+(set! *warn-on-reflection* true)
+
 ;; the shape of a registry row and of a judged result row
 (s/def :gym/goal keyword?)
 (s/def :gym/until string?)

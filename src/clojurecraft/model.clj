@@ -6,6 +6,8 @@
    every world attribute listed has a spec. An attribute never changes meaning; a new meaning is
    a new name beside it.")
 
+(set! *warn-on-reflection* true)
+
 (def attributes
   "[attribute meaning when] rows, grouped by what the fact is about."
   [;; ---- the bot itself and its connection

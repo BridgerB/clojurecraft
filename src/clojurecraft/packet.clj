@@ -12,6 +12,8 @@
             [clojure.java.io :as io]
             [clojurecraft.bytes :as b]))
 
+(set! *warn-on-reflection* true)
+
 (def ids
   "{state {:s2c {name id} :c2s {name id}}}"
   (edn/read-string (slurp (io/resource "clojurecraft/packets.edn"))))

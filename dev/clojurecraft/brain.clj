@@ -12,6 +12,8 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]))
 
+(set! *warn-on-reflection* true)
+
 (defn frontmatter
   "The YAML between the opening \"---\" line and the next \"---\", or nil when the note has none."
   [text]
@@ -77,7 +79,7 @@
   [^String hay ^String needle]
   (loop [from 0
          acc []]
-    (let [i (str/index-of hay needle from)] (if (nil? i) acc (recur (inc i) (conj acc i))))))
+    (let [i (str/index-of hay needle from)] (if (nil? i) acc (recur (inc (long i)) (conj acc i))))))
 
 (defn hub?
   "Is the note a hub (an _moc, the _index, or a top-level manual note)? Hubs need no inbound link
@@ -165,7 +167,7 @@
           (let [[path anchor] (if-let [i (str/index-of ref "#")]
                                 [(subs ref 0 i) (subs ref (inc i))]
                                 [ref ""])
-                f (resolve-path repo path)]
+                ^java.io.File f (resolve-path repo path)]
             (cond (sibling-missing? path) (swap! unchecked conj [(:rel n) ref])
                   (not (.exists f)) (swap! unresolved conj [(:rel n) ref "no such file"])
                   (str/blank? anchor) (swap! unresolved conj [(:rel n) ref "no anchor"])

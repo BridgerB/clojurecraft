@@ -15,6 +15,8 @@
             [clojurecraft.stairs]
             [clojurecraft.terrain :as terrain]))
 
+(set! *warn-on-reflection* true)
+
 (def search-radius 24)                ; blocks from the eye searched for exposed stone
 (def search-height 12)                ; blocks above or below the eye searched
 (def stair-depth 6)                   ; stairs cut when no stone is in sight, before looking again

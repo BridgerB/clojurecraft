@@ -25,6 +25,8 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.recipe :as recipe]))
 
+(set! *warn-on-reflection* true)
+
 (def dig-ms 3000)                       ; a log by hand (hardness 2), the fallback for an unknown block
 (def break-threshold 0.7)               ; the server breaks once this share of the block's time has passed
 

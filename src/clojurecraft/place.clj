@@ -19,6 +19,8 @@
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
+(set! *warn-on-reflection* true)
+
 (def place-reach 4.0)                 ; eye → target centre
 (def open-reach 4.5)                  ; eye → container centre for opening it; the server allows about 4.5
 (def settle-ms 300)                   ; standing still this long before using an item on a block

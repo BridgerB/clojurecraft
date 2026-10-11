@@ -21,6 +21,8 @@
             [clojurecraft.path :as path]
             [clojurecraft.terrain :as terrain]))
 
+(set! *warn-on-reflection* true)
+
 (def max-turns 4)                     ; refusals before the intent fails :boxed (one full turn)
 (def step-timeout-ticks 200)          ; ticks a walk down one stair may take (10 s)
 (def directions [[1 0] [0 1] [-1 0] [0 -1]]) ; the four headings, each a quarter turn from the last

@@ -8,6 +8,8 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.memory :as memory]))
 
+(set! *warn-on-reflection* true)
+
 (defn block-at
   "State id at [x y z]: local overlay first, then the chunk; nil when unloaded."
   [world pos]

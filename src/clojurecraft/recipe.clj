@@ -13,6 +13,8 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.inventory :as inventory]))
 
+(set! *warn-on-reflection* true)
+
 (defn- resource [n] (edn/read-string (slurp (io/resource (str "clojurecraft/" n ".edn")))))
 
 (def recipes "[recipe ...]" (resource "recipes"))

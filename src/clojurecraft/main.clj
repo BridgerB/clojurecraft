@@ -28,6 +28,8 @@
             [clojurecraft.wood])
   (:gen-class))
 
+(set! *warn-on-reflection* true)
+
 (def step
   "The whole bot: the world reducer, then the planner. Requiring clojurecraft.wood and
    clojurecraft.make registers the goals."

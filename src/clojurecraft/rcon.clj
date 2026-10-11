@@ -8,6 +8,8 @@
            [java.nio ByteBuffer ByteOrder]
            [java.nio.charset StandardCharsets]))
 
+(set! *warn-on-reflection* true)
+
 (defn encode-packet
   "One RCON packet: little-endian length, id, type (3 login, 2 command), the
    UTF-8 payload and two null bytes."

@@ -16,6 +16,8 @@
             [clojurecraft.fixture :as fixture]
             [clojurecraft.rcon :as rcon]))
 
+(set! *warn-on-reflection* true)
+
 (def min-y 55)                          ; lower surfaces are ravines and caves, not ground
 (def max-forceload-chunks 256)          ; the most chunks one forceload command accepts
 (def marker-tag "clj_gym")              ; tags the marker used to read a surface height

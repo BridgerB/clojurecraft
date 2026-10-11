@@ -12,6 +12,8 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]))
 
+(set! *warn-on-reflection* true)
+
 (def answer-timeout 3000)             ; a click the server never answers fails the intent
 
 (defn view

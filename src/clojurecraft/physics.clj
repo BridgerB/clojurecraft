@@ -14,6 +14,8 @@
    :player/in-lava?, :player/eye-in-water? and :player/fall-distance."
   (:require [clojure.math :as math]))
 
+(set! *warn-on-reflection* true)
+
 (def gravity 0.08)                    ; blocks per tick², subtracted from vy each tick
 (def vertical-drag 0.98)              ; vy is multiplied by this each tick
 (def half-width 0.3)                  ; the player box is 0.6 wide

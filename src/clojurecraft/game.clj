@@ -28,6 +28,8 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
 
+(set! *warn-on-reflection* true)
+
 (def version
   "The server version the generated tables describe (resources/clojurecraft/version.edn)."
   (edn/read-string (slurp (io/resource "clojurecraft/version.edn"))))

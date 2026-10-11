@@ -5,6 +5,8 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as str]))
 
+(set! *warn-on-reflection* true)
+
 (defn options
   "--key value pairs → {:key \"value\"}; values stay strings, a trailing lone flag is dropped."
   [args]

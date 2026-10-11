@@ -18,6 +18,8 @@
             [clojurecraft.terrain :as terrain]
             [clojurecraft.trap :as trap]))
 
+(set! *warn-on-reflection* true)
+
 (def goals
   "The goal table, loaded from resources/clojurecraft/goals.edn."
   (edn/read-string (slurp (io/resource "clojurecraft/goals.edn"))))

@@ -4,6 +4,8 @@
    holds. Pure functions of the world; the packet handlers in game call them."
   (:require [clojurecraft.blocks :as blocks]))
 
+(set! *warn-on-reflection* true)
+
 (defn item-count
   "How many of an item (by id) the player holds; the crafting grid is not the inventory."
   [world id]

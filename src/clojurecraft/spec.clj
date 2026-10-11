@@ -20,6 +20,8 @@
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
 
+(set! *warn-on-reflection* true)
+
 (s/def ::vec3 (s/coll-of double? :kind vector? :count 3))
 (s/def ::block-pos (s/coll-of int? :kind vector? :count 3))
 

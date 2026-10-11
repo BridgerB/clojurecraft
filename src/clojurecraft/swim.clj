@@ -29,6 +29,8 @@
             [clojurecraft.terrain :as terrain]
             [clojurecraft.trap :as trap]))
 
+(set! *warn-on-reflection* true)
+
 (def bank-radius 16)                  ; how far on the plane a bank is looked for (gym shore-w1 run 6: none within 12 from mid-sea)
 (def bank-rise 1)                     ; a bank at most this far above the highest feet level afloat (steve's landing set W)
 (def bank-drop 3)                     ; or this far below it: a roofed pool's air pocket is sideways and down

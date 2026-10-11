@@ -15,6 +15,8 @@
             [clojurecraft.rcon :as rcon])
   (:gen-class))
 
+(set! *warn-on-reflection* true)
+
 ;;;; RCON: everything below talks to the server ;;;;
 
 (defn locate-forest

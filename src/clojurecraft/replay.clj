@@ -3,6 +3,8 @@
   (:require [clojurecraft.main :as main])
   (:gen-class))
 
+(set! *warn-on-reflection* true)
+
 (defn -main
   "Replay the recording at path with no server and print RESULT."
   [& [path]]

@@ -9,6 +9,8 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.rcon :as rcon]))
 
+(set! *warn-on-reflection* true)
+
 (def online-timeout 120000)           ; ms a fixture waits for the bot to join
 (def settle-ms 1000)                  ; after a teleport, before asking about the landing
 

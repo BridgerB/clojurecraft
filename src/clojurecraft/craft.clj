@@ -21,6 +21,8 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.window :as window]))
 
+(set! *warn-on-reflection* true)
+
 (def stage-timeout 5000)              ; ms a craft stage waits on the server before it fails
 
 (defn- now [world] (:time/now world))

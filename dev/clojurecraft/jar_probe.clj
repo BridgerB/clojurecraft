@@ -12,12 +12,16 @@
    here is a number someone typed."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io])
-  (:import [net.minecraft SharedConstants]
+  (:import [java.lang.reflect Field]
+           [net.minecraft SharedConstants]
            [net.minecraft.core BlockPos]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.server Bootstrap]
            [net.minecraft.world.item ToolMaterial]
-           [net.minecraft.world.level EmptyBlockGetter]))
+           [net.minecraft.world.level EmptyBlockGetter]
+           [net.minecraft.world.level.block Block]))
+
+(set! *warn-on-reflection* true)
 
 (defn hardness
   "{\"minecraft:stone\" 1.5 ...} for every registered block: its default state's destroy speed;
@@ -25,7 +29,7 @@
   []
   (let [reg BuiltInRegistries/BLOCK]
     (into (sorted-map)
-          (for [b reg]
+          (for [^Block b reg]
             [(str (.getKey reg b))
              (double (.getDestroySpeed (.defaultBlockState b)
                                        EmptyBlockGetter/INSTANCE
@@ -36,9 +40,9 @@
    for every ToolMaterial constant."
   []
   (into (sorted-map)
-        (for [f (.getDeclaredFields ToolMaterial)
+        (for [^Field f (.getDeclaredFields ToolMaterial)
               :when (= ToolMaterial (.getType f))
-              :let [m (.get f nil)]]
+              :let [^ToolMaterial m (.get f nil)]]
           [(.getName f)
            {"speed" (double (.speed m))
             "durability" (.durability m)

@@ -11,6 +11,8 @@
             [clojure.java.io :as io]
             [zprint.core :as zprint]))
 
+(set! *warn-on-reflection* true)
+
 (def paths
   "Where a bare fix or check looks: the code, the tests, the tooling and the hand-written data."
   ["src" "dev" "test/clojurecraft" "bb" "bb.edn" "deps.edn" "ci" ".zprint.edn"

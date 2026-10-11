@@ -13,6 +13,8 @@
            [java.util Base64]
            [java.util.zip GZIPInputStream]))
 
+(set! *warn-on-reflection* true)
+
 (defmethod print-method (Class/forName "[B")
   [^bytes b ^Writer w]
   (.write w "#clojurecraft/bytes \"")
