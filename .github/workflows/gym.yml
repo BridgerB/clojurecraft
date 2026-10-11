@@ -133,13 +133,12 @@ jobs:
           grep -q 'No force loaded' forceload-start.txt || { echo "::error::the world starts with a forceload"; exit 1; }
       - name: Run and judge
         run: |
-          clojure -M:gym env --goal "${{ matrix.goal }}" > goal.env
-          set -a; . ./goal.env; set +a
-          GOAL=${{ matrix.goal }} RUN=${{ matrix.run }} BOT=Clj_g${{ matrix.run }} LANDINGS=work/world/landings.edn \
-          STRICT=${{ github.event_name == 'push' }} COMMIT=${{ github.sha }} bb gym-run
-      - name: Compress the recording
+          clojure -M:gym trial --goal "${{ matrix.goal }}" --run "${{ matrix.run }}" --name "Clj_g${{ matrix.run }}" \
+            --rcon-pass "$RCON_PASS" --landings work/world/landings.edn --dir trial \
+            --strict "${{ github.event_name == 'push' }}" --commit "${{ github.sha }}"
+      - name: Compress the recordings
         if: always()
-        run: if [ -f work/run.edn ]; then zstd -19 -q work/run.edn -o run.edn.zst; fi
+        run: if [ -d trial ]; then find trial -name run.edn -exec zstd -19 -q --rm {} ;; fi
       - name: Stop the server
         if: always()
         run: |
@@ -151,11 +150,7 @@ jobs:
           name: gym-${{ env.LABEL }}-${{ matrix.goal }}-${{ matrix.run }}
           retention-days: 3
           path: |
-            result.edn
-            run.edn.zst
-            landed.edn
-            bot.log
-            land.log
+            trial
             forceload-start.txt
             forceload-stop.txt
             work/world/server.log

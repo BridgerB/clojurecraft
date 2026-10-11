@@ -3,9 +3,12 @@
    landing, judged twice, by the bot's RESULT and by the server's own answer to a truth
    command. Runs are processes speaking data, like everything else:
 
-     clojure -M:gym land ...  | clojure -M:run ... --events stdin --record run.edn > bot.log
-     clojure -M:gym judge ... (reads bot.log and landed.edn, asks the server, writes result.edn)
+     clojure -M:gym trial ...   start the bot as its own JVM, land it over RCON, send its :go
+                                through its stdin, judge it from its log and the server; one
+                                more attempt on the same landing if it lost its connection
      clojure -M:gym report --dir artifacts/   (folds every result.edn into one summary)
+
+   gym.yml runs one trial per runner; the fleet runs several on one server, tagging each row.
 
    `gyms` is the registry, a table like plan/goals: which goal, the --until that runs it, what
    to give the bot first, how long it may take, and the truth commands that must all pass.
@@ -88,6 +91,10 @@
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
   #{:pass :fail :timeout :death})
+
+(def strict-failures #{:fail :timeout :death}) ; the outcomes that fail a strict (push) trial
+(def bot-heap "-Xmx1g")                 ; each bot is its own JVM; one fits several on a runner
+(def hold-ms 60000)                     ; how long an ok bot stays online for the judge's truth commands
 
 (def z95 1.959964)                      ; the normal quantile for a two-sided 95% interval
 (def judge-poll-ms 500)                 ; how often the judge looks for the RESULT line
@@ -270,17 +277,6 @@
            (cli/log "landing failed:" e)
            {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
 
-(defn land!
-  "The fixture as a process: landing!, then write what happened to the landed file and print the
-   :go event for the bot's stdin. A landing that fails still prints :go (without :go/at), and
-   the judge will call the run :harness."
-  [{:keys [goal out] :as opts}]
-  (let [landed (landing! opts)]
-    (spit out (pr-str landed))
-    (cli/log "landed" (pr-str landed))
-    (prn (fixture/go-event (:gym/until (gym goal)) (:gym/at landed)))
-    (flush)))
-
 (defn wait-result!
   "The RESULT map from the bot log once it appears, or nil after wait-ms."
   [log-path wait-ms]
@@ -323,31 +319,101 @@
     (flush)
     judged-row))
 
+(defn attempt!
+  "One bot on a running server: start it as its own JVM (classpath cp, in bot-dir), land it
+   (landing!) and send its :go through its stdin, judge it from its log and the server
+   (judge!), and leave result.edn, landed.edn, bot.log and run.edn in dir. Returns the result
+   row with tags merged in (the fleet's experiment, arm and unit)."
+  [{:keys [goal run name dir cp bot-dir port rcon-port pass landings commit tags]
+    :or {bot-dir "." port 25565 rcon-port 25575}}]
+  (.mkdirs (io/file dir))
+  (let [row (gym goal)
+        bot-log (io/file dir "bot.log")
+        ^java.util.List cmd ["java" bot-heap "-cp" cp "clojure.main" "-m" "clojurecraft.main"
+                             "--host" "127.0.0.1" "--port" (str port) "--name" name "--until"
+                             (:gym/until row) "--events" "stdin" "--timeout-ms"
+                             (str (:gym/timeout-ms row)) "--hold-ms" (str hold-ms) "--record"
+                             (str (io/file dir "run.edn"))]
+        p (.start (doto (ProcessBuilder. cmd)
+                    (.directory (io/file bot-dir))
+                    (.redirectErrorStream true)
+                    (.redirectOutput bot-log)))
+        landed
+        (landing!
+         {:goal goal :run run :name name :rcon-port rcon-port :rcon-pass pass :landings landings})
+        landed-file (io/file dir "landed.edn")]
+    (spit landed-file (pr-str landed))
+    (cli/log "landed" (pr-str landed))
+    (with-open [w (io/writer (.getOutputStream p))]
+      (.write w (str (pr-str (fixture/go-event (:gym/until row) (:gym/at landed))) "\n")))
+    (let [tagged (merge (judge! {:goal goal
+                                 :run run
+                                 :name name
+                                 :rcon-port rcon-port
+                                 :rcon-pass pass
+                                 :bot-log (str bot-log)
+                                 :landed (str landed-file)
+                                 :out (str (io/file dir "result.edn"))
+                                 :commit commit})
+                        tags)]
+      (.destroy p)
+      (.waitFor p)
+      (spit (io/file dir "result.edn") (pr-str tagged))
+      tagged)))
+
+(defn trial!
+  "One trial: an attempt!, and when it lost its connection (which says nothing about the goal)
+   one more on the same landing, under dir/retry. A trial that throws leaves a :harness row,
+   never nothing. Returns the row that counts."
+  [{:keys [goal run dir tags] :as t}]
+  (try
+    (let [row (attempt! t)]
+      (if (= :disconnect (:gym/outcome row)) (attempt! (assoc t :dir (io/file dir "retry"))) row))
+    (catch Throwable e
+      (cli/log "trial failed:" e)
+      (let [row (merge {:gym/goal (:gym/goal (gym goal))
+                        :gym/run run
+                        :gym/outcome :harness
+                        :gym/reason :harness-error
+                        :gym/error (ex-message e)}
+                       tags)]
+        (.mkdirs (io/file dir))
+        (spit (io/file dir "result.edn") (pr-str row))
+        row))))
+
+(defn located-in
+  "Every result file under dir whose name is in names, read, with the directory it came from:
+   [{:row :path}]. A retried trial keeps only its retry: the first attempt lost its connection
+   and says nothing about the goal."
+  [dir names]
+  (let [files (filter #(names (.getName ^java.io.File %)) (file-seq (io/file dir)))
+        retried (set (for [^java.io.File f files
+                           :when (= "retry" (.getName (.getParentFile f)))]
+                       (str (.getParentFile (.getParentFile f)))))]
+    (vec (for [^java.io.File f files
+               :let [d (str (.getParentFile f))]
+               :when (not (retried d))]
+           {:row (edn/read-string (slurp f)) :path d}))))
+
 (defn results-in
-  "Every result.edn under dir, read."
+  "Every result.edn under dir that counts, read (a retried trial's retry, not its first attempt)."
   [dir]
-  (->> (file-seq (io/file dir))
-       (filter #(= "result.edn" (.getName ^java.io.File %)))
-       (mapv #(edn/read-string (slurp %)))))
+  (mapv :row (located-in dir #{"result.edn"})))
 
 (defn -main
   "clojure -M:gym <command> --key value ...
      plan     --goals wood,table --runs N       the shard matrix as JSON
-     env      --goal wood                       UNTIL= and TIMEOUT_MS= lines for $GITHUB_ENV
      landings --set A --plan ci/gym.edn --rcon-port P --rcon-pass S --out landings.edn
-     land     --goal wood --run 3 --name N --rcon-port P --rcon-pass S --landings f --out landed.edn
-     judge    --goal wood --run 3 --name N --rcon-port P --rcon-pass S --bot-log bot.log
-              --landed landed.edn --out result.edn [--commit sha] [--strict true]
+     trial    --goal wood --run 3 --name N --rcon-pass S --landings f --dir trial
+              [--port 25565] [--rcon-port 25575] [--commit sha] [--strict true]
      report   --dir artifacts"
   [command & args]
-  (let [{:keys [goals runs goal set plan rcon-port rcon-pass host out dir strict] :as opts}
+  (let [{:keys [goals runs goal run set plan port rcon-port rcon-pass host out dir strict landings
+                commit]
+         :as opts}
         (cli/options args)]
     (case command
       "plan" (println (plan-matrix (str/split goals #",") (parse-long runs)))
-      "env"
-      (let [row (gym goal)]
-        (println (str "UNTIL=" (:gym/until row)))
-        (println (str "TIMEOUT_MS=" (:gym/timeout-ms row))))
       "landings"
       (let [ls (rcon/with-rcon (or host "127.0.0.1")
                                (parse-long (str rcon-port))
@@ -355,10 +421,18 @@
                                #(landings/landings! % (landings/read-set plan set)))]
         (spit out (pr-str ls))
         (println (count ls) "landings in set" set))
-      "land" (land! opts)
-      "judge"
-      (let [{:gym/keys [outcome]} (judge! opts)]
+      "trial"
+      (let [{:gym/keys [outcome]} (trial! {:goal goal
+                                           :run (parse-long run)
+                                           :name (:name opts)
+                                           :dir (or dir "trial")
+                                           :cp (cli/classpath! ".")
+                                           :port (parse-long (or port "25565"))
+                                           :rcon-port (parse-long (or rcon-port "25575"))
+                                           :pass rcon-pass
+                                           :landings landings
+                                           :commit commit})]
         (shutdown-agents)
-        (System/exit (if (and (= "true" strict) (#{:fail :timeout :death} outcome)) 1 0)))
+        (System/exit (if (and (= "true" strict) (strict-failures outcome)) 1 0)))
       "report" (println (report (results-in dir))))
     (shutdown-agents)))

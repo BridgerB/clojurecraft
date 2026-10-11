@@ -38,7 +38,7 @@
         :task (apply clojure "-M:rcon" *command-line-args*)}
   harness {:doc "The landing fixture as its own process (clojure -M:harness)"
            :task (apply clojure "-M:harness" *command-line-args*)}
-  gym {:doc "The gym: plan, land, judge, report (clojure -M:gym <command> ...)"
+  gym {:doc "The gym: plan, landings, trial, report (clojure -M:gym <command> ...)"
        :task (apply clojure "-M:gym" *command-line-args*)}
   fleet {:doc "The fleet: plan, work, report, pull (clojure -M:fleet <command> ...)"
          :task (apply clojure "-M:fleet" *command-line-args*)}
@@ -46,11 +46,6 @@
           "A vanilla 26.1.2 server: bb server start|stop, set up by PORT RCON_PORT RCON_PASS WORLD"
           :requires ([clojurecraft.server :as server])
           :task (server/command! (first *command-line-args*) (server/env-opts))}
-  gym-run
-  {:doc
-   "One gym run on a running server (gym.yml's shards): GOAL RUN BOT UNTIL TIMEOUT_MS LANDINGS RCON_PASS"
-   :requires ([clojurecraft.gym-run :as gym-run])
-   :task (gym-run/-main)}
   prepare-world
   {:doc "Build a gym landing set's world into cache/worlds/<set> (gym-world.yml): SET RCON_PASS"
    :requires ([clojurecraft.gym-world :as gym-world])

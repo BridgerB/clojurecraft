@@ -15,7 +15,6 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.cli :as cli]
-            [clojurecraft.fixture :as fixture]
             [clojurecraft.gym :as gym]
             [clojurecraft.rcon :as rcon]))
 
@@ -206,100 +205,10 @@
 
 ;;;; I/O: processes, servers, files ;;;;
 
-(defn exec!
-  "Run a command to completion in dir with extra env; its output goes to log (a file). Returns
-   the exit code."
-  [cmd {:keys [dir env log]}]
-  (let [pb (ProcessBuilder. ^java.util.List (mapv str cmd))]
-    (when dir (.directory pb (io/file dir)))
-    (doseq [[k v] env] (.put (.environment pb) (str k) (str v)))
-    (.redirectErrorStream pb true)
-    (if log
-      (.redirectOutput pb (java.lang.ProcessBuilder$Redirect/appendTo (io/file log)))
-      (.redirectOutput pb java.lang.ProcessBuilder$Redirect/INHERIT))
-    (.waitFor (.start pb))))
-
-(defn classpath!
-  "The bot's classpath in dir (`clojure -Spath`), computed once per worker so each bot starts as
-   a plain java process."
-  [dir]
-  (let [f (java.io.File/createTempFile "classpath" ".txt")]
-    (exec! ["clojure" "-Spath"] {:dir dir :log f})
-    (str/trim (last (str/split-lines (slurp f))))))
-
 (defn rcon-pass
   "A fresh RCON password for one server."
   []
   (str/join (repeatedly 32 #(rand-nth "0123456789abcdef"))))
-
-(defn attempt!
-  "One bot on a running server: start it as its own JVM, land it (the gym's fixture) and send
-   its :go through its stdin, judge it from its log and the server, and leave result.edn,
-   landed.edn, bot.log and run.edn in dir. Returns the result row, tagged with the experiment
-   and arm."
-  [{:keys [unit unit-index run dir cp bot-dir pass landings commit]}]
-  (.mkdirs (io/file dir))
-  (let [row (gym/gym (:unit/goal unit))
-        name (bot-name unit-index run)
-        bot-log (io/file dir "bot.log")
-        ^java.util.List cmd
-        ["java" "-Xmx1g" "-cp" cp "clojure.main" "-m" "clojurecraft.main" "--host" "127.0.0.1"
-         "--port" "25565" "--name" name "--until" (:gym/until row) "--events" "stdin" "--timeout-ms"
-         (str (:gym/timeout-ms row)) "--hold-ms" "60000" "--record" (str (io/file dir "run.edn"))]
-        pb (doto (ProcessBuilder. cmd)
-             (.directory (io/file bot-dir))
-             (.redirectErrorStream true)
-             (.redirectOutput bot-log))
-        p (.start pb)
-        landed (gym/landing! {:goal (:unit/goal unit)
-                              :run run
-                              :name name
-                              :rcon-port 25575
-                              :rcon-pass pass
-                              :landings landings})
-        landed-file (io/file dir "landed.edn")]
-    (spit landed-file (pr-str landed))
-    (with-open [w (io/writer (.getOutputStream p))]
-      (.write w (str (pr-str (fixture/go-event (:gym/until row) (:gym/at landed))) "\n")))
-    (let [judged (gym/judge! {:goal (:unit/goal unit)
-                              :run run
-                              :name name
-                              :rcon-port 25575
-                              :rcon-pass pass
-                              :bot-log (str bot-log)
-                              :landed (str landed-file)
-                              :out (str (io/file dir "result.edn"))
-                              :commit commit})
-          tagged (assoc judged
-                        :fleet/exp (:unit/exp unit)
-                        :fleet/arm (:arm/name (:unit/arm unit))
-                        :fleet/unit (:unit/id unit))]
-      (.destroy p)
-      (.waitFor p)
-      (spit (io/file dir "result.edn") (pr-str tagged))
-      tagged)))
-
-(defn trial!
-  "One trial, as bb gym-run runs it: a run that loses its connection says nothing about the goal,
-   so it is attempted once more on the same landing. A trial that throws is a :harness row, never
-   a lost unit."
-  [{:keys [unit run dir] :as t}]
-  (try
-    (let [row (attempt! t)]
-      (if (= :disconnect (:gym/outcome row)) (attempt! (assoc t :dir (io/file dir "retry"))) row))
-    (catch Throwable e
-      (cli/log "trial failed:" e)
-      (let [row {:gym/goal (:gym/goal (gym/gym (:unit/goal unit)))
-                 :gym/run run
-                 :gym/outcome :harness
-                 :gym/reason :harness-error
-                 :gym/error (ex-message e)
-                 :fleet/exp (:unit/exp unit)
-                 :fleet/arm (:arm/name (:unit/arm unit))
-                 :fleet/unit (:unit/id unit)}]
-        (.mkdirs (io/file dir))
-        (spit (io/file dir "result.edn") (pr-str row))
-        row))))
 
 (defn gym-unit!
   "A gym unit: a fresh copy of the set's world, one server, its trials' bots side by side, the
@@ -315,34 +224,38 @@
              "WORLD" (str world)
              "HEAP_MB" (or heap-mb 6144)}]
     (.mkdirs dir)
-    (exec! ["cp" "-r" (str (io/file worlds (:unit/set unit))) (str world)] {:log log})
-    (try (when-not (zero? (exec! ["bb" "server" "start"] {:env env :log log}))
+    (cli/exec! ["cp" "-r" (str (io/file worlds (:unit/set unit))) (str world)] {:log log})
+    (try (when-not (zero? (cli/exec! ["bb" "server" "start"] {:env env :log log}))
            (throw (ex-info "server did not start" {:unit (:unit/id unit)})))
          (spit (io/file dir "forceload-start.txt")
                (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command % "forceload query")))
          (let [landings (str (io/file world "landings.edn"))
                rows (mapv deref
                           (doall (for [run (:unit/runs unit)]
-                                   (future (trial! {:unit unit
-                                                    :unit-index unit-index
-                                                    :run run
-                                                    :dir (io/file dir (str "run-" run))
-                                                    :cp cp
-                                                    :bot-dir bot-dir
-                                                    :pass pass
-                                                    :landings landings
-                                                    :commit commit})))))]
+                                   (future (gym/trial! {:goal (:unit/goal unit)
+                                                        :run run
+                                                        :name (bot-name unit-index run)
+                                                        :dir (io/file dir (str "run-" run))
+                                                        :cp cp
+                                                        :bot-dir bot-dir
+                                                        :pass pass
+                                                        :landings landings
+                                                        :commit commit
+                                                        :tags {:fleet/exp (:unit/exp unit)
+                                                               :fleet/arm (:arm/name (:unit/arm
+                                                                                      unit))
+                                                               :fleet/unit (:unit/id unit)}})))))]
            (spit (io/file dir "forceload-stop.txt")
                  (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command % "forceload query")))
            rows)
-         (finally (exec! ["bb" "server" "stop"] {:env env :log log})
-                  (exec! ["cp" (str (io/file world "logs" "latest.log"))
-                          (str (io/file dir "server.log"))]
-                         {:log log})
-                  (exec! ["rm" "-rf" (str world)] {:log log})
+         (finally (cli/exec! ["bb" "server" "stop"] {:env env :log log})
+                  (cli/exec! ["cp" (str (io/file world "logs" "latest.log"))
+                              (str (io/file dir "server.log"))]
+                             {:log log})
+                  (cli/exec! ["rm" "-rf" (str world)] {:log log})
                   (doseq [f (file-seq dir)
                           :when (= "run.edn" (.getName ^java.io.File f))]
-                    (exec! ["zstd" "-19" "-q" "--rm" (str f)] {:log log}))))))
+                    (cli/exec! ["zstd" "-19" "-q" "--rm" (str f)] {:log log}))))))
 
 (defn sim-unit!
   "A sim unit: one seeded shard of a property, run as its test with the fleet's seed and size;
@@ -351,11 +264,11 @@
   (let [dir (io/file out (:unit/id unit))
         verdict (io/file dir "sim.edn")]
     (.mkdirs dir)
-    (exec! ["clojure" "-M:test" "-v" (properties (:unit/property unit))]
-           {:env {"FOREST_TRIALS" (:unit/worlds unit)
-                  "FOREST_SEED" (:unit/seed unit)
-                  "FOREST_OUT" (str verdict)}
-            :log (io/file dir "sim.log")})
+    (cli/exec! ["clojure" "-M:test" "-v" (properties (:unit/property unit))]
+               {:env {"FOREST_TRIALS" (:unit/worlds unit)
+                      "FOREST_SEED" (:unit/seed unit)
+                      "FOREST_OUT" (str verdict)}
+                :log (io/file dir "sim.log")})
     (let [row (assoc (if (.exists verdict)
                        (edn/read-string (slurp verdict))
                        {:pass? false :num-tests 0 :seed (:unit/seed unit)})
@@ -376,24 +289,10 @@
            (cli/log "unit failed:" (:unit/id unit) e)
            (spit (io/file (:out opts) (:unit/id unit) "unit-error.txt") (str e))))))
 
-(defn located-in
-  "Every result row under dir with the directory it came from: [{:row :path}]. A retried trial
-   keeps only its retry."
-  [dir]
-  (let [files (filter #(#{"result.edn" "sim.edn"} (.getName ^java.io.File %))
-                      (file-seq (io/file dir)))
-        retried (set (for [^java.io.File f files
-                           :when (= "retry" (.getName (.getParentFile f)))]
-                       (str (.getParentFile (.getParentFile f)))))]
-    (vec (for [^java.io.File f files
-               :let [d (str (.getParentFile f))]
-               :when (not (retried d))]
-           {:row (edn/read-string (slurp f)) :path d}))))
-
 (defn rows-in
   "Every result row under dir, gym rows (result.edn) and sim rows (sim.edn) apart."
   [dir]
-  (let [rows (map :row (located-in dir))]
+  (let [rows (map :row (gym/located-in dir #{"result.edn" "sim.edn"}))]
     [(filterv :gym/outcome rows) (vec (remove :gym/outcome rows))]))
 
 (defn pull!
@@ -402,9 +301,9 @@
   [run-id]
   (let [dir (io/file "data" "runs" (str run-id))]
     (.mkdirs dir)
-    (exec! ["gh" "run" "download" (str run-id) "--pattern" "fleet-*-w*" "--dir" (str dir)] {}) ; workers only: the summary repeats their rows
+    (cli/exec! ["gh" "run" "download" (str run-id) "--pattern" "fleet-*-w*" "--dir" (str dir)] {}) ; workers only: the summary repeats their rows
     (let [[g s] (rows-in dir)
-          fs (failures (located-in dir))]
+          fs (failures (gym/located-in dir #{"result.edn" "sim.edn"}))]
       (println (report g s))
       (println (str "### failures (" (count fs) ")\n"))
       (doseq [f fs] (println (failure-line f))))))
@@ -430,7 +329,7 @@
              {:out out
               :worlds (or worlds "cache/worlds")
               :bot-dir "."
-              :cp (classpath! ".")
+              :cp (cli/classpath! ".")
               :commit (System/getenv "GITHUB_SHA")})
       "report" (let [[g s] (rows-in dir)] (println (report g s)))
       "pull" (pull! run))

@@ -58,7 +58,7 @@ src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin
 src/clojurecraft/fixture.clj  what every fixture asks the server over RCON: wait, load, teleport, judge a landing; the :go event
 src/clojurecraft/rcon.clj     RCON client (fixtures, CI judge); `clojure -M:rcon`
-src/clojurecraft/gym.clj      the gym: registry, land, judge, report (`clojure -M:gym`)
+src/clojurecraft/gym.clj      the gym: registry, one trial (land, judge, retry a disconnect), report (`clojure -M:gym`)
 src/clojurecraft/landings.clj landing sets: grid, biome snap, surface checks, pregeneration
 src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successive worlds, bounded, off-thread
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
