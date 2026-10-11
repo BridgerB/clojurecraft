@@ -15,7 +15,7 @@
 
 (def paths
   "Where a bare fix or check looks: the code, the tests, the tooling and the hand-written data."
-  ["src" "dev" "test/clojurecraft" "bb" "bb.edn" "deps.edn" "ci" ".zprint.edn"
+  ["src" "dev" "test/clojurecraft" "repl" "bb" "bb.edn" "deps.edn" "ci" ".zprint.edn"
    "resources/clojurecraft/goals.edn" "resources/clojurecraft/problems.edn"])
 
 (def formatted? #"\.(clj|cljc|cljs|edn)$")      ; what a path must end in to be formatted

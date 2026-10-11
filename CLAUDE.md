@@ -77,6 +77,7 @@ nix develop                                   # Java 25, Clojure, clj-kondo, clo
 nix flake update                              # move every tool to today's nixpkgs; match the :lint and :lsp
                                               # versions in deps.edn, which CI runs from Maven
 bb tasks                                      # every command below as a Babashka task (bb.edn); bb ci is what CI's unit job runs
+bb nrepl                                      # nREPL with the bot, the tests and repl/user.clj (clojure -M:dev:nrepl); its comment block runs the bot against the model
 clojure -M:test                               # every test, namespaces and vars in parallel (eftest); -n ns, -v ns/var, -x ns
 bb local-server start|stop                    # vanilla 26.1.2 on game 25571 / RCON 25581 (bb/clojurecraft/server.clj)
 clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)" --name Clj_wood --until wood \

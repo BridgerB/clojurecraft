@@ -14,9 +14,10 @@
   fmt:check {:doc "Fail when a file is not as zprint lays it out" :task (clojure "-M:fmt" "check")}
   lint {:doc "clj-kondo, held at zero findings"
         :task (apply t/tool "clj-kondo" "lint" "--lint" t/source-paths)}
-  idioms {:doc "Splint, held at zero findings (.splint.edn)"
-          :task
-          (apply clojure "-M:splint" "src" "dev" "test/clojurecraft" "bb" *command-line-args*)}
+  idioms
+  {:doc "Splint, held at zero findings (.splint.edn)"
+   :task
+   (apply clojure "-M:splint" "src" "dev" "test/clojurecraft" "repl" "bb" *command-line-args*)}
   ns {:doc "Sort and prune every ns form (clojure-lsp clean-ns, .lsp/config.edn)"
       :task (t/tool "clojure-lsp" "lsp" "clean-ns")}
   ns:check {:doc "Fail when an ns form is not as clean-ns leaves it"
@@ -36,6 +37,9 @@
           :task (apply clojure "-M:replay" *command-line-args*)}
   rcon {:doc "One RCON command: bb rcon --port 25581 --pass P <command words>"
         :task (apply clojure "-M:rcon" *command-line-args*)}
+  nrepl {:doc
+         "An nREPL server with the bot, the tests and repl/user.clj loaded (clojure -M:dev:nrepl)"
+         :task (clojure "-M:dev:nrepl")}
   harness {:doc "The landing fixture as its own process (clojure -M:harness)"
            :task (apply clojure "-M:harness" *command-line-args*)}
   gym {:doc "The gym: plan, landings, trial, report (clojure -M:gym <command> ...)"

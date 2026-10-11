@@ -9,8 +9,9 @@
             [babashka.tasks :as tasks]))
 
 (def source-paths
-  "Where the Clojure the checks look at lives: the bot, its tooling, its tests and these tasks."
-  ["src" "dev" "test" "bb"])
+  "Where the Clojure the checks look at lives: the bot, its tooling, its tests, the REPL's user
+   namespace and these tasks."
+  ["src" "dev" "test" "repl" "bb"])
 
 (defn tool
   "Run native (a program name) with args when it is on PATH, else `clojure -M:<alias>` with the
