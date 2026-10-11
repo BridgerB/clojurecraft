@@ -10,7 +10,7 @@
    fixture (clojure -M:harness, its own process) tells it to go. Without it, a planned --until
    starts where the bot stands, once it is loaded. --telemetry writes one EDN line per change of
    the world, from a watch on the atom (clojurecraft.watch) that never slows the loop."
-  (:require [clojure.core.async :as a]
+  (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [clojure.string :as str]
             [clojurecraft.conn :as conn]
@@ -86,7 +86,7 @@
   "Do one effect: :send puts the packet on the socket's out channel (blocking), :log stamps it."
   [{:effect/keys [kind packet message]} out]
   (case kind
-    :send (a/>!! out packet)
+    :send (async/>!! out packet)
     :log (stamp message)))
 
 (defn apply-event!
@@ -104,7 +104,7 @@
    or the socket closes. Returns the final world."
   [{:keys [in out]} events world* stop? tap]
   (loop [next-tick (+ (now) 50)]
-    (let [[v ch] (a/alts!! [in events (a/timeout (max 0 (- next-tick (now))))])
+    (let [[v ch] (async/alts!! [in events (async/timeout (max 0 (- next-tick (now))))])
           event (cond (= ch in)
                       (if (nil? v)
                         {:event/kind :closed :event/reason "socket closed"}
@@ -121,11 +121,11 @@
   "Feed EDN events from a reader (the fixture's stdout, piped in) onto the events channel until
    end of input. The only way anything outside the bot reaches it."
   [reader events]
-  (a/thread (doseq [line (line-seq (java.io.BufferedReader. reader))
-                    :let [line (str/trim line)]
-                    :when (seq line)]
-              (try (a/>!! events (edn/read-string {:readers record/readers} line))
-                   (catch Exception e (stamp "unreadable event:" line (.getMessage e)))))))
+  (async/thread (doseq [line (line-seq (java.io.BufferedReader. reader))
+                        :let [line (str/trim line)]
+                        :when (seq line)]
+                  (try (async/>!! events (edn/read-string {:readers record/readers} line))
+                       (catch Exception e (stamp "unreadable event:" line (.getMessage e)))))))
 
 (defn go-when-loaded!
   "Put a :go on the queue the first time the world says the player is loaded: the run without
@@ -133,7 +133,7 @@
   [world* queue go]
   (add-watch world*
              ::go
-             (fn [k r _ w] (when (:player/loaded? w) (remove-watch r k) (a/put! queue go)))))
+             (fn [k r _ w] (when (:player/loaded? w) (remove-watch r k) (async/put! queue go)))))
 
 (defn -main
   "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,
@@ -156,7 +156,7 @@
         tap (some-> record
                     record/tap)
         c (conn/open opts)
-        queue (a/chan 16)
+        queue (async/chan 16)
         world* (atom (game/init opts))
         watcher (some->> telemetry
                          (watch/telemetry! world*))]

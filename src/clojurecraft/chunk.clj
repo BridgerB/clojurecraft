@@ -4,7 +4,8 @@
    {:single id} or {:bits n :palette [ids] :longs long[]} (palette nil when direct). Nothing is
    expanded to 4096 entries; block-at indexes the bits on demand. The long[] is never mutated
    after decode, so a section is a value."
-  (:require [clojurecraft.bytes :as b])
+  (:require [clojure.math :as math]
+            [clojurecraft.bytes :as b])
   (:import [java.nio ByteBuffer]))
 
 (def min-y -64)                       ; the lowest block y of an overworld column
@@ -21,7 +22,7 @@
       (let [palette (when (<= bits max-bits)
                       (let [n (b/read-varint buf)] (vec (repeatedly n #(b/read-varint buf)))))
             per-long (quot 64 bits)
-            n (long (Math/ceil (/ (double entries) per-long)))
+            n (long (math/ceil (/ (double entries) per-long)))
             longs (long-array n)]
         (dotimes [i n] (aset longs i (.getLong buf)))
         {:bits bits :palette palette :longs longs}))))

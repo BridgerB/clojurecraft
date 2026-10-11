@@ -37,7 +37,7 @@
   "A pond three wide at x 2..4, two deep, with a flowing edge cell; a lava pool at x 12 z 12
    under one lava block above it (the top is the surface); a lone cave source far below."
   (merge (into {} (for [x (range 2 5) y [62 63] z (range 4 7)] [[x y z] blocks/water-base]))
-         {[5 63 5] (+ blocks/water-base 1)} ; flowing, not a source
+         {[5 63 5] (inc blocks/water-base)} ; flowing, not a source
          {[12 60 12] blocks/lava-base [12 61 12] blocks/lava-base} ; a lava column: 61 is its surface
          {[9 20 9] blocks/water-base}))                           ; cave water, 40 below
 

@@ -4,7 +4,7 @@
    Chunk columns are decoded here, on the reader thread (chunk/attach), so a burst of chunks
    costs the reader, never the loop that answers keep-alives.
    This is one of the three namespaces that do I/O (with rcon and main)."
-  (:require [clojure.core.async :as a]
+  (:require [clojure.core.async :as async]
             [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.packet :as p])
@@ -83,30 +83,31 @@
         in (DataInputStream. (BufferedInputStream. (.getInputStream sock) 65536))
         out (DataOutputStream. (BufferedOutputStream. (.getOutputStream sock) 65536))
         proto (atom {:state :handshake :threshold -1})
-        inbox (a/chan 1024)
-        outbox (a/chan 256)
-        closed
-        (fn [reason] (a/>!! inbox {:packet/name :closed :packet/reason reason}) (a/close! inbox))]
-    (a/thread (try (loop []
-                     (let [frame (read-frame in (:threshold @proto))
-                           state (:state @proto)
-                           pkt (try (chunk/attach (p/decode state :s2c frame))
-                                    (catch Exception e
-                                      {:packet/name :decode-error
-                                       :packet/state state
-                                       :packet/error (str e)
-                                       :packet/len (alength ^bytes frame)}))]
-                       (when (and (= state :login) (= :login-compression (:packet/name pkt)))
-                         (swap! proto assoc :threshold (:threshold pkt)))
-                       (a/>!! inbox pkt)
-                       (recur)))
-                   (catch Throwable e (closed (str e)))))
-    (a/thread (try (loop []
-                     (when-let [pkt (a/<!! outbox)]
-                       (let [state (:state @proto)
-                             payload (p/encode state pkt)]
-                         (swap! proto update :state p/next-state (:packet/name pkt))
-                         (write-frame out payload (:threshold @proto))
-                         (recur))))
-                   (catch Throwable e (closed (str e)))))
-    {:in inbox :out outbox :close! (fn [] (a/close! outbox) (.close sock))}))
+        inbox (async/chan 1024)
+        outbox (async/chan 256)
+        closed (fn [reason]
+                 (async/>!! inbox {:packet/name :closed :packet/reason reason})
+                 (async/close! inbox))]
+    (async/thread (try (loop []
+                         (let [frame (read-frame in (:threshold @proto))
+                               state (:state @proto)
+                               pkt (try (chunk/attach (p/decode state :s2c frame))
+                                        (catch Exception e
+                                          {:packet/name :decode-error
+                                           :packet/state state
+                                           :packet/error (str e)
+                                           :packet/len (alength ^bytes frame)}))]
+                           (when (and (= state :login) (= :login-compression (:packet/name pkt)))
+                             (swap! proto assoc :threshold (:threshold pkt)))
+                           (async/>!! inbox pkt)
+                           (recur)))
+                       (catch Throwable e (closed (str e)))))
+    (async/thread (try (loop []
+                         (when-let [pkt (async/<!! outbox)]
+                           (let [state (:state @proto)
+                                 payload (p/encode state pkt)]
+                             (swap! proto update :state p/next-state (:packet/name pkt))
+                             (write-frame out payload (:threshold @proto))
+                             (recur))))
+                       (catch Throwable e (closed (str e)))))
+    {:in inbox :out outbox :close! (fn [] (async/close! outbox) (.close sock))}))

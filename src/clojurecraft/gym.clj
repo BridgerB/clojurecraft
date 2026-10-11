@@ -14,6 +14,7 @@
    (:disconnect) says nothing about the goal and is not counted."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojure.string :as str]
             [clojurecraft.harness :as harness]
             [clojurecraft.landings :as landings]
@@ -97,8 +98,7 @@
    command agrees; the bot saying ok while the server disagrees is :fail, the most useful row."
   [{:gym/keys [landed? result truths]}]
   (cond (not landed?) :harness
-        (nil? result) :disconnect
-        (or (:disconnected result) (:closed result)) :disconnect
+        (or (nil? result) (:disconnected result) (:closed result)) :disconnect
         (pos? (get-in result [:stats :stats/deaths] 0)) :death
         (= :timeout (:reason result)) :timeout
         (and (:ok result) (seq truths) (every? :truth/ok? truths)) :pass
@@ -125,12 +125,12 @@
     [0.0 1.0]
     (let [p (/ (double k) n)
           z2 (* z95 z95)
-          d (+ 1 (/ z2 n))
+          d (inc (/ z2 n))
           c (/ (+ p (/ z2 (* 2 n))) d)
-          m (/ (* z95 (Math/sqrt (+ (/ (* p (- 1 p)) n) (/ z2 (* 4 n n))))) d)]
+          m (/ (* z95 (math/sqrt (+ (/ (* p (- 1 p)) n) (/ z2 (* 4 n n))))) d)]
       [(max 0.0 (- c m)) (min 1.0 (+ c m))])))
 
-(defn pct "A fraction as a whole percent." [x] (Math/round (* 100.0 (double x))))
+(defn pct "A fraction as a whole percent." [x] (math/round (* 100.0 (double x))))
 
 (defn summary-line
   "One goal's verdict: pass k/n with its interval, and the runs not counted."

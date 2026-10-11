@@ -102,9 +102,10 @@
 (s/def :packet/name keyword?)
 (defn int-in? "Is x an integer in [lo, hi]?" [lo hi x] (and (int? x) (<= lo x hi)))
 
-(def slot?
+(defn slot?
   "A decoded slot: nil when empty, else at least {:item id :count n}."
-  #(or (nil? %) (and (map? %) (int? (:item %)) (int? (:count %)))))
+  [x]
+  (or (nil? x) (and (map? x) (int? (:item x)) (int? (:count x)))))
 
 (def wire-types
   "What a value of each wire type in packet/specs must be, with the wire's own range."

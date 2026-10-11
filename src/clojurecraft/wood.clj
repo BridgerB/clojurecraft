@@ -2,7 +2,8 @@
   "Getting a log: walk to the nearest remembered trunk, dig the log nearest the bot's own feet
    height (so the drop lands where the bot can stand, not in a hole under the rest of the
    trunk), pick up the drop. The :gather act of the goal table (clojurecraft.make) runs this."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]
             [clojurecraft.terrain :as terrain]))
@@ -32,7 +33,7 @@
   "Of the remembered logs stacked on bottom, the one whose height is closest to the player's
    feet (lower on ties)."
   [world [x y z]]
-  (let [feet (long (Math/floor (second (:player/pos world))))
+  (let [feet (long (math/floor (second (:player/pos world))))
         column (take-while #(memory/log-at? world %)
                            (map (fn [dy] [x (+ y dy) z]) (range max-trunk)))]
     (apply min-key (fn [[_ ly _]] (abs (- ly feet))) (reverse column))))

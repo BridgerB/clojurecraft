@@ -1,7 +1,7 @@
 (ns clojurecraft.sim-test
   "The whole bot against the pure server model: handshake → spawn → chunk → find → walk → dig →
    drop → pickup → done, with no socket and no Java process."
-  (:require [clojure.core.async :as a]
+  (:require [clojure.core.async :as async]
             [clojure.spec.alpha]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.test.check :as tc]
@@ -575,7 +575,7 @@
   ;; drained onto :out, packets read from :in, :go put on the events channel once loaded.
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
         c (sim/connect (sim/init {:column column :spawn [0.5 64.0 0.5] :keep-alive-every 1000}))
-        events (a/chan 16)
+        events (async/chan 16)
         world* (atom (game/init fx/opts))
         deadline (+ (System/currentTimeMillis) 30000)]
     (main/apply-event! world*

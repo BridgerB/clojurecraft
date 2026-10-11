@@ -11,6 +11,7 @@
    released. The result is [[x z y] ...], saved with the world in the gym's cache."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojurecraft.harness :as harness]
             [clojurecraft.rcon :as rcon]))
 
@@ -21,7 +22,7 @@
 (defn grid
   "n cell centres around centre, spacing apart, row by row on a square as small as fits n."
   [[cx cz] n spacing]
-  (let [side (long (Math/ceil (Math/sqrt n)))
+  (let [side (long (math/ceil (math/sqrt n)))
         half (quot side 2)]
     (vec (take n
                (for [row (range side)
@@ -42,8 +43,8 @@
 (defn chunk-count
   "How many chunk columns a block square touches."
   [[x0 z0 x1 z1]]
-  (* (inc (- (Math/floorDiv (long x1) 16) (Math/floorDiv (long x0) 16)))
-     (inc (- (Math/floorDiv (long z1) 16) (Math/floorDiv (long z0) 16)))))
+  (* (inc (- (math/floor-div (long x1) 16) (math/floor-div (long x0) 16)))
+     (inc (- (math/floor-div (long z1) 16) (math/floor-div (long z0) 16)))))
 
 (defn fit?
   "Is a surface position a landing? High enough, and no landing check (answers to
@@ -90,7 +91,7 @@
                                                      marker-tag
                                                      ",limit=1] Pos")))]
            (rcon/command rc (str "kill @e[type=minecraft:marker,tag=" marker-tag "]"))
-           (when pos (mapv #(long (Math/floor %)) pos))))
+           (when pos (mapv #(long (math/floor %)) pos))))
        (finally (rcon/command rc (str "forceload remove " x " " z)))))
 
 (defn answers!

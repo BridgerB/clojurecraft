@@ -17,7 +17,8 @@
 
    :flee is the lava half: the nearest standable cell with no lava beside or under it, walked to
    with forward and jump; the planner ends it the moment the trap clears."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -56,7 +57,7 @@
   "The highest feet level the body reaches in this column: float-depth under an open surface
    cell, or the body's height under a roof; rounded to the cell the impulse can lift from."
   [world [x _ z] surface]
-  (Math/round
+  (math/round
    (if (solid-cell? world [x surface z]) (- surface physics/height) (- surface float-depth))))
 
 (defn banks

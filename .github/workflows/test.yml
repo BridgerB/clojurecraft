@@ -43,6 +43,8 @@ jobs:
         run: clojure -M:fmt check
       - name: Lint (clj-kondo; a warning fails it, as in the pre-commit hook)
         run: clojure -M:lint --lint src dev test
+      - name: Idioms (Splint; a warning fails it, as in the pre-commit hook)
+        run: clojure -M:splint src dev test/clojurecraft
 
   forests:
     runs-on: ubuntu-24.04

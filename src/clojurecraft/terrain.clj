@@ -3,7 +3,8 @@
    updates and the bot's own breaks over them, and the questions physics and the planner ask of
    both. Every change here is also handed to memory, so what was seen outlives the chunk. Pure
    functions of the world; game's packet handlers call them."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.memory :as memory]))
 
@@ -26,7 +27,7 @@
   "Is the chunk column holding block or feet position [x y z] in :world/chunks?"
   [world [x _ z]]
   (contains? (:world/chunks world)
-             [(bit-shift-right (long (Math/floor x)) 4) (bit-shift-right (long (Math/floor z)) 4)]))
+             [(bit-shift-right (long (math/floor x)) 4) (bit-shift-right (long (math/floor z)) 4)]))
 
 (defn chunk-key
   "[cx cz] from a packed chunk position (x in the low 32 bits, z in the high 32)."

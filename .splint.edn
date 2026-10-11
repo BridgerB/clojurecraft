@@ -1,0 +1,12 @@
+;; Splint's settings: its defaults, held at zero findings, but for these. The pre-commit hook runs
+;; it on staged files and CI on the repo (clojure -M:splint src dev test/clojurecraft).
+{;; (Class/.method x) at every interop call names a class each time: type information everywhere,
+ ;; which docs/hickey.md asks for only where a measurement does.
+ lint/prefer-method-values {:enabled false}
+ ;; (zero? x) throws on nil where (= 0 x) is false, and the code relies on that: blocks/source? is
+ ;; (= 0 (:fluid/level (fluid id))) and fluid is nil for every block that is not one.
+ style/eq-zero {:enabled false}
+ ;; Catching everything is the job at the I/O edges: a socket thread or a fleet trial that dies
+ ;; must be reported, not lost. Pure code catches nothing, and there the rule stays.
+ lint/catch-throwable {:excludes ["glob:**/conn.clj" "glob:**/fleet.clj" "glob:**/gym.clj"
+                                  "glob:**/harness.clj"]}}

@@ -4,7 +4,8 @@
    :player/controls and effects updated. The set of kinds is open: a new kind is a defmethod in a
    new namespace. Every deadline is an absolute ms value compared against :time/now; the only
    randomness comes in on the tick event."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
             [clojurecraft.inventory :as inventory]
@@ -92,6 +93,7 @@
 
 (defmulti run
   "Advance the current intent by one tick."
+  {:arglists '([world intent event])}
   (fn [_world intent _event] (:intent/kind intent)))
 
 (defmethod run :default [world i _] (fail world [:unknown-intent (:intent/kind i)]))
@@ -104,7 +106,7 @@
   [world {:intent/keys [target for]} d]
   (and (<= d reach)
        (or (not= :log for)
-           (<= (- (second target) (long (Math/floor (second (:player/pos world))))) pickup-rise))))
+           (<= (- (second target) (long (math/floor (second (:player/pos world))))) pickup-rise))))
 
 (defn waypoint-reached?
   "Is the player at waypoint [x y z]: within waypoint-reach of its centre on the plane, and the
@@ -123,7 +125,7 @@
   (let [[px py pz] (:player/pos world)
         centre [(+ wx 0.5) (+ wy 0.5) (+ wz 0.5)]
         near? (< (physics/horizontal-distance [px 0 pz] centre) jump-near)
-        up? (> wy (+ (Math/floor py) 0.5))]
+        up? (> wy (+ (math/floor py) 0.5))]
     (update (toward world centre 0.0) :control/jump? #(or % (and up? near?)))))
 
 (defn route!
@@ -294,8 +296,10 @@
       (let [left (:intent/confirm-left (:plan/intent world))
             restored? (and at-target (= at-target state))]
         (cond restored? (fail world :rejected) ; the server put the block back: the break was refused
-              (>= (:stats/last-ack world -1) (:intent/sequence (:plan/intent world))) (done world)
-              (zero? left) (done world)        ; no word either way in time: trust the overlay
+              ;; the server acknowledged, or no word either way in time: trust the overlay
+              (or (>= (:stats/last-ack world -1) (:intent/sequence (:plan/intent world)))
+                  (zero? left))
+              (done world)
               :else (intent world assoc :intent/confirm-left (dec left)))))))
 
 ;; ---------------------------------------------------------------- collect
@@ -329,11 +333,11 @@
   [world goal]
   (let [[px py pz] (:player/pos world)
         [gx _ gz] goal
-        fx (long (Math/floor px))
-        fz (long (Math/floor pz))
-        feet (long (Math/floor py))
-        cx (long (Math/floor (+ px (* 0.8 (Math/signum (double (- gx px)))))))
-        cz (long (Math/floor (+ pz (* 0.8 (Math/signum (double (- gz pz)))))))
+        fx (long (math/floor px))
+        fz (long (math/floor pz))
+        feet (long (math/floor py))
+        cx (long (math/floor (+ px (* 0.8 (math/signum (double (- gx px)))))))
+        cz (long (math/floor (+ pz (* 0.8 (math/signum (double (- gz pz)))))))
         ahead (remove #{[fx fz]} (distinct [[cx fz] [fx cz] [cx cz]]))
         steps (filter (fn [[x z]] (step? world [x feet z])) ahead)
         spots (concat (for [[x z] ahead y [(inc feet) feet]] [x y z])

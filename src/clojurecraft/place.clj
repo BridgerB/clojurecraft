@@ -8,7 +8,8 @@
    that shows the block (placing), or an open-screen with the window's contents (opening).
    Nothing is predicted; a rejected placement comes back as a block update with the old state
    and an ack, and the intent fails rather than believing the block is there."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
@@ -47,9 +48,9 @@
    liquid), support solid, not inside the player, within reach. Pure; nil when there is none."
   [world]
   (let [[px py pz] (:player/pos world)
-        fx (long (Math/floor px))
-        fy (long (Math/floor py))
-        fz (long (Math/floor pz))
+        fx (long (math/floor px))
+        fy (long (math/floor py))
+        fz (long (math/floor pz))
         eye (game/eye world)]
     (first (for [[dx dy dz] around
                  :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
@@ -97,6 +98,7 @@
 (defmulti place-stage
   "Advance a :place intent one tick in its :intent/stage (:equip :spot :settle :sent). Called
    only when no inventory click is unanswered."
+  {:arglists '([world intent])}
   (fn [_world i] (:intent/stage i)))
 
 (defmethod place-stage :equip

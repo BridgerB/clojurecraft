@@ -35,6 +35,7 @@
 (defmulti stage
   "Advance a :craft intent one tick in its current :intent/stage (:settle :click :verify :take)
    against view v. Called only when no click is unanswered."
+  {:arglists '([world intent view])}
   (fn [_world i _view] (:intent/stage i)))
 
 (defmethod stage :settle

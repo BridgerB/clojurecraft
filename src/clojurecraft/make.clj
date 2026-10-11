@@ -11,7 +11,8 @@
 
    Requiring this namespace registers the :needs planner, the :provided? predicate and the
    :gather, :place and :craft acts."
-  (:require [clojurecraft.craft]
+  (:require [clojure.math :as math]
+            [clojurecraft.craft]
             [clojurecraft.game :as game]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
@@ -158,7 +159,7 @@
                                               (- (val (first (:goal/provides row))))])))]
             (or (some (fn [row]
                         (let [per (val (first (:goal/provides row)))
-                              times (long (Math/ceil (/ missing per)))
+                              times (long (math/ceil (/ missing per)))
                               [c a] (resolve-row world table counts row times depth)]
                           (when (not= a :stuck) [c a])))
                       rows)

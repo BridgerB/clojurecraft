@@ -1,5 +1,6 @@
 (ns clojurecraft.record-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
@@ -72,7 +73,7 @@
 
 (deftest an-old-recording-still-reads
   (let [path (tmp "record-old")]
-    (spit path (apply str (map #(str (pr-str %) "\n") events)))
+    (spit path (str/join (map #(str (pr-str %) "\n") events)))
     (is (= 7 (count (record/events path))))
     (is (nil? (record/effects path)))
     (is (= :record/no-effects (record/verify game/step (game/init fx/opts) path)))))

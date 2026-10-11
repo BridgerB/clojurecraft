@@ -3,7 +3,8 @@
    stand beside, dig it, pick the drop up; with no stone in sight, cut a staircase down to
    where stone begins. The :mine act of the goal table (clojurecraft.make) runs this, the way
    :gather runs clojurecraft.wood. Requiring this namespace registers the act."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
@@ -36,8 +37,8 @@
   "The loaded chunk columns within search-radius of the feet: the terrain a stone search reads."
   [world]
   (let [[x _ z] (:player/pos world)
-        cx (bit-shift-right (long (Math/floor x)) 4)
-        cz (bit-shift-right (long (Math/floor z)) 4)
+        cx (bit-shift-right (long (math/floor x)) 4)
+        cz (bit-shift-right (long (math/floor z)) 4)
         r (inc (quot search-radius 16))]
     (into {}
           (filter (fn [[[kx kz] _]] (and (<= (abs (- kx cx)) r) (<= (abs (- kz cz)) r)))
@@ -83,6 +84,6 @@
             (if-let [stone (nearest-stone world)]
               {:intent/kind :walk :intent/target stone :intent/for :stone}
               {:intent/kind :stairs-down
-               :intent/to-y (- (long (Math/floor (second (:player/pos world)))) stair-depth)}))))
+               :intent/to-y (- (long (math/floor (second (:player/pos world)))) stair-depth)}))))
 
 (defmethod plan/act :mine [world _] (mine-next world))

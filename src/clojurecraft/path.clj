@@ -16,14 +16,15 @@
    beside or over lava is ever entered (the siblings' rule, applied to every move kind), and
    blocks the physics cannot simulate (slabs, stairs, fences, doors ...) are :awkward: neither
    floor nor clear, so routes go around them. Nothing here reads a clock or the atom."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.terrain :as terrain]))
 
 (def max-fall 3)                      ; blocks a drop may fall; vanilla damage starts above 3
 (def default-max-nodes 6000)          ; expansions one plan may spend
 (def walk-cost 1.0)                   ; one cell on the level
 (def jump-cost 2.0)                   ; one cell up
-(def diagonal-cost (Math/sqrt 2.0))   ; one cell on the level, cornerwise
+(def diagonal-cost (math/sqrt 2.0))   ; one cell on the level, cornerwise
 (def fall-cost-per-block 0.5)         ; added to walk-cost for each block of a drop
 
 ;; ---------------------------------------------------------------- cells
@@ -184,10 +185,12 @@
 
 (defmulti goal-done?
   "Is node where the goal wants the feet? Open on :goal/kind."
+  {:arglists '([goal node])}
   (fn [goal _node] (:goal/kind goal)))
 
 (defmulti heuristic
   "An admissible estimate of the cost from node to the goal. Open on :goal/kind."
+  {:arglists '([goal node])}
   (fn [goal _node] (:goal/kind goal)))
 
 (defn octile
@@ -290,7 +293,7 @@
 (defn feet-cell
   "The node a player at feet position [x y z] stands in."
   [[x y z]]
-  [(long (Math/floor x)) (long (Math/floor y)) (long (Math/floor z))])
+  [(long (math/floor x)) (long (math/floor y)) (long (math/floor z))])
 
 (defn start-cell
   "Where a search from the feet at cell from begins: from itself when it is standable, else the

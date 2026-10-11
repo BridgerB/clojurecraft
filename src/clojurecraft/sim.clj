@@ -17,7 +17,8 @@
    worlds); connect puts the model on a thread behind a channel pair shaped like conn/open's,
    so main's own loop (its clock, its effects, its tap) runs against it with no Java process."
   (:refer-clojure :exclude [send])
-  (:require [clojure.core.async :as a]
+  (:require [clojure.core.async :as async]
+            [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
@@ -30,6 +31,7 @@
 (defn block-at
   "The server's view of a block: placed blocks, broken positions (air), else the fixture column."
   [sim pos]
+  #_{:splint/disable [style/prefer-condp]} ; two maps asked about one pos: a condp would hide that
   (cond (contains? (:sim/placed sim) pos) (get-in sim [:sim/placed pos])
         (contains? (:sim/broken sim) pos) 0
         :else (chunk/block-at {[0 0] (:sim/chunk sim)} pos)))
@@ -118,6 +120,7 @@
 (defmulti on-packet
   "The server's answer to one client packet, by [phase packet-name]; unknown packets are
    ignored."
+  {:arglists '([sim pkt])}
   (fn [sim pkt] [(:sim/phase sim) (:packet/name pkt)]))
 (defmethod on-packet :default [sim _] sim)
 
@@ -300,8 +303,7 @@
   (loop [view view]
     (let [out (result-of view layout)
           [view' left] (when out (insert view (:store layout) out))]
-      (cond (nil? out) view
-            left view
+      (cond (or (nil? out) left) view
             :else (recur (craft-once view' layout))))))
 
 (defn click-result
@@ -346,7 +348,7 @@
                 :else {:view (assoc view slot cursor) :cursor at})
           :else
           (cond (and (nil? cursor) at)
-                (let [half (long (Math/ceil (/ (:count at) 2)))
+                (let [half (long (math/ceil (/ (:count at) 2)))
                       rest (- (:count at) half)]
                   {:cursor (assoc at :count half)
                    :view
@@ -423,7 +425,7 @@
         sim (cond-> sim
               (and (= kind :inventory) (:sim/window sim))
               (update :sim/violations conj [:click-inventory-while-open window-id]))
-        kind (if (and (= kind :inventory) (:sim/window sim)) nil kind)]
+        kind (when-not (and (= kind :inventory) (:sim/window sim)) kind)]
     (if (or (nil? kind) (contains? (:sim/drop-clicks sim) n))
       sim
       (let [layout (layouts kind)
@@ -569,8 +571,8 @@
   (when-let [[x y z] (:sim/player-pos sim)]
     (= :water
        (:fluid/kind (blocks/fluid (block-at sim
-                                            [(long (Math/floor x)) (long (Math/floor (+ y 1.62)))
-                                             (long (Math/floor z))]))))))
+                                            [(long (math/floor x)) (long (math/floor (+ y 1.62)))
+                                             (long (math/floor z))]))))))
 
 (defn drown
   "One tick of breath: air falls while the eye is under and refills otherwise; at zero, a hurt
@@ -578,7 +580,7 @@
    player (health at zero) is left for client-command to respawn."
   [sim]
   (let [under? (eye-under? sim)
-        air (if under? (max 0 (- (:sim/air sim) 1)) (min max-air (+ (:sim/air sim) 4)))
+        air (if under? (max 0 (dec (:sim/air sim))) (min max-air (+ (:sim/air sim) 4)))
         hurt? (and under?
                    (zero? air)
                    (zero? (mod (quot (:sim/now sim) 50) drown-every))
@@ -669,21 +671,21 @@
    bounded, as conn's are. :in closes when the client closes :out or calls :close!, which the
    loop reads as the socket closing."
   [sim0]
-  (let [in (a/chan 1024)
-        out (a/chan 256)
-        stop (a/chan)
+  (let [in (async/chan 1024)
+        out (async/chan 256)
+        stop (async/chan)
         t0 (System/currentTimeMillis)]
-    (a/thread (loop [sim sim0
-                     next-tick tick-ms]
-                (let [wait (max 0 (- next-tick (- (System/currentTimeMillis) t0)))
-                      [v ch] (a/alts!! [stop out (a/timeout wait)] :priority true)
-                      closed? (or (= ch stop) (and (= ch out) (nil? v)))
-                      sim (cond closed? sim
-                                (= ch out) (step sim {:sim/kind :packet :sim/packet v})
-                                :else (step sim {:sim/kind :tick :sim/now next-tick}))
-                      [sim said] (drain sim)]
-                  (doseq [p said] (a/>!! in p))
-                  (cond closed? (a/close! in)
-                        (= ch out) (recur sim next-tick)
-                        :else (recur sim (+ next-tick tick-ms))))))
-    {:in in :out out :close! (fn [] (a/close! stop) (a/close! out))}))
+    (async/thread (loop [sim sim0
+                         next-tick tick-ms]
+                    (let [wait (max 0 (- next-tick (- (System/currentTimeMillis) t0)))
+                          [v ch] (async/alts!! [stop out (async/timeout wait)] :priority true)
+                          closed? (or (= ch stop) (and (= ch out) (nil? v)))
+                          sim (cond closed? sim
+                                    (= ch out) (step sim {:sim/kind :packet :sim/packet v})
+                                    :else (step sim {:sim/kind :tick :sim/now next-tick}))
+                          [sim said] (drain sim)]
+                      (doseq [p said] (async/>!! in p))
+                      (cond closed? (async/close! in)
+                            (= ch out) (recur sim next-tick)
+                            :else (recur sim (+ next-tick tick-ms))))))
+    {:in in :out out :close! (fn [] (async/close! stop) (async/close! out))}))

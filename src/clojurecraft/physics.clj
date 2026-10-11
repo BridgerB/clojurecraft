@@ -11,7 +11,8 @@
    vanilla's liquid rules (the siblings' ports of the client): no buoyancy to speak of, a swim-up
    of 0.04 a tick while jumping, and the one real lift, an impulse of 0.3 when pressing into a
    bank whose top is free. Every tick the step also writes what it found: :player/in-water?,
-   :player/in-lava?, :player/eye-in-water? and :player/fall-distance.")
+   :player/in-lava?, :player/eye-in-water? and :player/fall-distance."
+  (:require [clojure.math :as math]))
 
 (def gravity 0.08)                    ; blocks per tick², subtracted from vy each tick
 (def vertical-drag 0.98)              ; vy is multiplied by this each tick
@@ -22,7 +23,7 @@
 (def ground-inertia (* 0.6 0.91))                     ; slipperiness × 0.91
 (def air-inertia 0.91)                ; horizontal velocity kept per tick in the air
 (def air-acceleration 0.02)           ; horizontal input acceleration in the air
-(def ground-acceleration (* 0.1 (/ 0.16277136 (Math/pow ground-inertia 3)))) ; ≈ 0.1
+(def ground-acceleration (* 0.1 (/ 0.16277136 (math/pow ground-inertia 3)))) ; ≈ 0.1
 (def negligible 0.003)                                ; velocities below this snap to zero
 (def liquid-acceleration 0.02)        ; horizontal input acceleration in a liquid
 (def water-inertia 0.8)               ; velocity kept per tick in water
@@ -57,9 +58,9 @@
 (defn solid-boxes
   "Unit boxes of every solid block touching the region."
   [solid? [x0 y0 z0 x1 y1 z1]]
-  (for [x (range (long (Math/floor x0)) (inc (long (Math/floor x1))))
-        y (range (long (Math/floor y0)) (inc (long (Math/floor y1))))
-        z (range (long (Math/floor z0)) (inc (long (Math/floor z1))))
+  (for [x (range (long (math/floor x0)) (inc (long (math/floor x1))))
+        y (range (long (math/floor y0)) (inc (long (math/floor y1))))
+        z (range (long (math/floor z0)) (inc (long (math/floor z1))))
         :when (solid? x y z)]
     [(double x) (double y) (double z) (+ x 1.0) (+ y 1.0) (+ z 1.0)]))
 
@@ -117,9 +118,9 @@
               (fn [[bx by bz]]
                 (let [f (fluid-at bx by bz)]
                   (and f (= kind (:fluid/kind f)) (< y0 (+ by (fluid-height (:fluid/level f)))))))
-              (for [bx (range (long (Math/floor x0)) (inc (long (Math/floor x1))))
-                    by (range (long (Math/floor y0)) (inc (long (Math/floor y1))))
-                    bz (range (long (Math/floor z0)) (inc (long (Math/floor z1))))]
+              (for [bx (range (long (math/floor x0)) (inc (long (math/floor x1))))
+                    by (range (long (math/floor y0)) (inc (long (math/floor y1))))
+                    bz (range (long (math/floor z0)) (inc (long (math/floor z1))))]
                 [bx by bz])))))
 
 (defn eye-in-water?
@@ -127,10 +128,10 @@
    counting the block only up to the height its level fills?"
   [fluid-at [x y z]]
   (let [ey (+ y eye-height)
-        f (fluid-at (long (Math/floor x)) (long (Math/floor ey)) (long (Math/floor z)))]
+        f (fluid-at (long (math/floor x)) (long (math/floor ey)) (long (math/floor z)))]
     (boolean (and f
                   (= :water (:fluid/kind f))
-                  (< (- ey (Math/floor ey)) (fluid-height (:fluid/level f)))))))
+                  (< (- ey (math/floor ey)) (fluid-height (:fluid/level f)))))))
 
 (defn no-fluid "A fluid oracle for a dry world." [_ _ _] nil)
 
@@ -196,9 +197,9 @@
                      on-ground? ground-acceleration
                      :else air-acceleration)
          f (if forward? 0.98 0.0)
-         rad (Math/toRadians (double (or yaw 0.0)))
-         vx (- vx (* f accel (Math/sin rad)))
-         vz (+ vz (* f accel (Math/cos rad)))
+         rad (math/to-radians (double (or yaw 0.0)))
+         vx (- vx (* f accel (math/sin rad)))
+         vz (+ vz (* f accel (math/cos rad)))
          [pos' [vx vy vz] landed? hit?] (land-tick solid? pos [vx vy vz])
          inertia (cond in-lava? lava-inertia
                        in-water? water-inertia
@@ -212,8 +213,7 @@
          vy' (if (and liquid? hit? (free? solid? fluid-at (aabb pos') [vx (+ vy' 0.6) vz]))
                out-of-liquid-impulse
                vy')
-         fall (cond liquid? 0.0
-                    landed? 0.0
+         fall (cond (or liquid? landed?) 0.0
                     (neg? vy) (+ fall-distance (- (second pos) (second pos')))
                     :else fall-distance)]
      (assoc world
@@ -233,15 +233,15 @@
   (let [dx (- tx ex)
         dy (- ty ey)
         dz (- tz ez)
-        horiz (Math/sqrt (+ (* dx dx) (* dz dz)))]
-    [(Math/toDegrees (Math/atan2 (- dx) dz)) (Math/toDegrees (- (Math/atan2 dy horiz)))]))
+        horiz (math/sqrt (+ (* dx dx) (* dz dz)))]
+    [(math/to-degrees (math/atan2 (- dx) dz)) (math/to-degrees (- (math/atan2 dy horiz)))]))
 
 (defn distance
   "Euclidean distance between two points."
   [[ax ay az] [bx by bz]]
-  (Math/sqrt (+ (Math/pow (- ax bx) 2) (Math/pow (- ay by) 2) (Math/pow (- az bz) 2))))
+  (math/sqrt (+ (math/pow (- ax bx) 2) (math/pow (- ay by) 2) (math/pow (- az bz) 2))))
 
 (defn horizontal-distance
   "Distance between two points ignoring y."
   [[ax _ az] [bx _ bz]]
-  (Math/sqrt (+ (Math/pow (- ax bx) 2) (Math/pow (- az bz) 2))))
+  (math/sqrt (+ (math/pow (- ax bx) 2) (math/pow (- az bz) 2))))

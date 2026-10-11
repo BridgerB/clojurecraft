@@ -5,7 +5,7 @@
    no server; `verify` also checks that the reducer, given the same events, asks for exactly the
    same effects. Byte arrays print as #clojurecraft/bytes \"base64\". Recordings made before
    effects were recorded are read unchanged; they just have nothing to verify."
-  (:require [clojure.core.async :as a]
+  (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str])
@@ -44,17 +44,17 @@
    dropping a line (unlike telemetry). Events are written as they came off the wire (see wire).
    :close waits until every line is on disk."
   [path]
-  (let [ch (a/chan tap-buffer)
-        done (a/thread (with-open [w (io/writer path)]
-                         (binding [*out* w]
-                           (loop []
-                             (when-let [line (a/<!! ch)]
-                               (prn line)
-                               (recur))))))]
-    {:write (fn [event] (a/>!! ch (wire event)))
-     :effects (fn [effects] (when (seq effects) (a/>!! ch {:record/effects effects})))
-     :result (fn [r] (a/>!! ch {:record/result r}))
-     :close (fn [] (a/close! ch) (a/<!! done))}))
+  (let [ch (async/chan tap-buffer)
+        done (async/thread (with-open [w (io/writer path)]
+                             (binding [*out* w]
+                               (loop []
+                                 (when-let [line (async/<!! ch)]
+                                   (prn line)
+                                   (recur))))))]
+    {:write (fn [event] (async/>!! ch (wire event)))
+     :effects (fn [effects] (when (seq effects) (async/>!! ch {:record/effects effects})))
+     :result (fn [r] (async/>!! ch {:record/result r}))
+     :close (fn [] (async/close! ch) (async/<!! done))}))
 
 (defn entries
   "Every line of a recording, in order: event maps, {:record/effects ...} and {:record/result
@@ -63,7 +63,7 @@
   (with-open [r (PushbackReader. (io/reader (if (str/ends-with? (str path) ".gz")
                                               (GZIPInputStream. (io/input-stream path))
                                               path)))]
-    (into [] (take-while some? (repeatedly #(edn/read {:readers readers :eof nil} r))))))
+    (vec (take-while some? (repeatedly #(edn/read {:readers readers :eof nil} r))))))
 
 (defn accretes?
   "Does later hold every fact earlier holds? Maps compare key by key, so attributes added since

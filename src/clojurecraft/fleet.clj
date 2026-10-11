@@ -11,6 +11,7 @@
    and leaves a result file per trial. The aggregate folds every result into one report."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.gym :as gym]
@@ -55,7 +56,7 @@
           :unit/exp name
           :unit/property property
           :unit/seed (seed-for label name s)
-          :unit/worlds (long (Math/ceil (/ worlds shards)))
+          :unit/worlds (long (math/ceil (/ worlds shards)))
           :unit/est-s est-s})))
 
 (defn units
@@ -198,7 +199,7 @@
 (defn rcon-pass
   "A fresh RCON password for one server."
   []
-  (apply str (repeatedly 32 #(rand-nth "0123456789abcdef"))))
+  (str/join (repeatedly 32 #(rand-nth "0123456789abcdef"))))
 
 (defn attempt!
   "One bot on a running server: start it as its own JVM, land it (the gym's fixture) and send
@@ -362,7 +363,7 @@
   "Every result row under dir, gym rows (result.edn) and sim rows (sim.edn) apart."
   [dir]
   (let [rows (map :row (located-in dir))]
-    [(vec (filter :gym/outcome rows)) (vec (remove :gym/outcome rows))]))
+    [(filterv :gym/outcome rows) (vec (remove :gym/outcome rows))]))
 
 (defn pull!
   "Download a fleet run's worker artifacts into data/runs/<run-id>/ (gh run download), print its report

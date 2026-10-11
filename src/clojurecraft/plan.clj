@@ -11,6 +11,7 @@
    under :plan/*."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -62,15 +63,18 @@
 (defmulti done-by
   "Is the goal satisfied in this world? A registry keyed by the row's :goal/done? (a predicate
    name), so the table stays data and another namespace can add predicates."
+  {:arglists '([world goal])}
   (fn [_world goal] (:goal/done? goal)))
 
 (defmulti act
   "The intent that satisfies a row whose needs are met, keyed by its :goal/act."
+  {:arglists '([world goal])}
   (fn [_world goal] (:goal/act goal)))
 
 (defmulti next-intent
   "The next intent toward a goal in play, planned over the goal table: an intent map,
    {:plan/wait reason}, or nil when there is nothing to do. Keyed by :goal/plan (default :needs)."
+  {:arglists '([world goal table])}
   (fn [_world goal _table] (:goal/plan goal :needs)))
 
 (defmethod done-by :default [_ _] false)
@@ -82,7 +86,7 @@
    in air, and the block under the feet a solid that is not a lily pad (steve's isOnDryLand)."
   [world]
   (let [[x y z] (:player/pos world)
-        support (terrain/block-at world [(Math/floor x) (Math/floor (- y 0.5)) (Math/floor z)])]
+        support (terrain/block-at world [(math/floor x) (math/floor (- y 0.5)) (math/floor z)])]
     (boolean (and (:player/on-ground? world)
                   (not (:player/in-water? world))
                   (not (:player/eye-in-water? world))
@@ -107,7 +111,7 @@
         [x _ z] (:player/pos world)]
     (cond-> (assoc world :plan/wet-ticks wet :plan/dry-ticks dry)
       (and trap (not was))
-      (assoc :plan/trap trap :plan/trap-at [(long (Math/floor x)) (long (Math/floor z))])
+      (assoc :plan/trap trap :plan/trap-at [(long (math/floor x)) (long (math/floor z))])
       (and was (nil? trap))
       (-> (dissoc :plan/trap :plan/trap-at)
           (update :world/traps

@@ -131,7 +131,7 @@
    recipe: [\" # \" \" X \"] is a 1-wide recipe that fits anywhere a 1-wide recipe fits."
   [pattern]
   (let [width (apply max (map count pattern))
-        rows (mapv #(apply str (take width (concat % (repeat \space)))) pattern)
+        rows (mapv #(str/join (take width (concat % (repeat \space)))) pattern)
         blank-row? (fn [r] (every? #{\space} r))
         blank-col? (fn [c] (every? #(= \space (nth % c)) rows))
         rows (->> rows

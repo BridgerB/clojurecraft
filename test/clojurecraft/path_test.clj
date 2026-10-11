@@ -313,7 +313,7 @@
   ;; gym landing 21280,18720: the feet at x 21281.0 on the edge of a stone step, flooring into
   ;; the step itself; the standable cell is the one beside it. Before this the walk failed
   ;; :no-path three times in half a second and the plan died
-  (let [hill (merge (fill stone (range 8 16) [64 65] (range 0 16))) ; a two-high step from x 8
+  (let [hill (fill stone (range 8 16) [64 65] (range 0 16)) ; a two-high step from x 8
         w (world-of hill [8.0 64.0 5.5]) ; feet on the step's edge
         from (path/feet-cell [8.0 64.0 5.5])]
     (is (= [8 64 5] from) "the coordinates floor into the step")

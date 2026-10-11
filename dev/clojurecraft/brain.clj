@@ -29,15 +29,14 @@
   "The items of the \"- \" list under field k in frontmatter fm, unquoted, or nil when k
    has no list."
   [fm k]
-  (let [m (re-find (re-pattern (str "(?m)^" k ":\\s*\\n((?:\\s+- .*\\n?)*)")) fm)]
-    (when m
-      (->> (str/split-lines (second m))
-           (map str/trim)
-           (filter #(str/starts-with? % "- "))
-           (map #(subs % 2))
-           (map str/trim)
-           (map #(str/replace % #"^\"|\"$" ""))
-           vec))))
+  (when-let [m (re-find (re-pattern (str "(?m)^" k ":\\s*\\n((?:\\s+- .*\\n?)*)")) fm)]
+    (->> (str/split-lines (second m))
+         (map str/trim)
+         (filter #(str/starts-with? % "- "))
+         (map #(subs % 2))
+         (map str/trim)
+         (map #(str/replace % #"^\"|\"$" ""))
+         vec)))
 
 (defn strip-code
   "text without fenced blocks and inline code, so [[links]] inside code are not counted."
@@ -163,8 +162,9 @@
         (when (and (= status "verified") (not (hub? (:rel n))) (str/blank? (str pin)))
           (swap! meta-errors conj [(:rel n) "verified without verifiedAgainst"]))
         (doseq [ref refs]
-          (let [[path anchor] (let [i (str/index-of ref "#")]
-                                (if i [(subs ref 0 i) (subs ref (inc i))] [ref ""]))
+          (let [[path anchor] (if-let [i (str/index-of ref "#")]
+                                [(subs ref 0 i) (subs ref (inc i))]
+                                [ref ""])
                 f (resolve-path repo path)]
             (cond (sibling-missing? path) (swap! unchecked conj [(:rel n) ref])
                   (not (.exists f)) (swap! unresolved conj [(:rel n) ref "no such file"])

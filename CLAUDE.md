@@ -79,6 +79,7 @@ clojure -M:replay data/runs/x.edn                             # replay it with n
 clojure -M:run ... --telemetry data/runs/t.edn                # one EDN line per change of the world
 clojure -M:fmt fix|check                                      # format (zprint, settings in .zprint.edn); the pre-commit hook does it for staged files
 clojure -M:lint --lint src dev test                           # lint (clj-kondo, held at zero findings); the pre-commit hook lints staged files
+clojure -M:splint src dev test/clojurecraft                   # idioms (Splint, held at zero; rules off in .splint.edn with reasons); the hook too
 clojure -M:brain                                              # brain checker (must be zero)
 clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data get entity Clj_wood Inventory
 scripts/datagen.sh                            # regenerate the EDN tables (needs the jar)

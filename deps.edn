@@ -15,6 +15,8 @@
            :rcon {:main-opts ["-m" "clojurecraft.rcon"]}
            :replay {:main-opts ["-m" "clojurecraft.replay"]}
            :run {:main-opts ["-m" "clojurecraft.main"]}
+           :splint {:extra-deps {io.github.noahtheduke/splint {:mvn/version "1.25.0"}}
+                    :main-opts ["-m" "noahtheduke.splint"]}
            :test {:extra-deps {eftest/eftest {:mvn/version "0.6.0"}
                                org.clojure/test.check {:mvn/version "1.1.1"}}
                   :extra-paths ["test"]

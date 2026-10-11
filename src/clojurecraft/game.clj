@@ -173,6 +173,7 @@
 
 (defmulti on-packet
   "Dispatch on [phase packet-name]; the three synthetic packets dispatch on their name alone."
+  {:arglists '([world pkt])}
   (fn [world pkt]
     (let [n (:packet/name pkt)]
       (if (contains? #{:unknown :decode-error :closed} n) n [(:bot/phase world) n]))))
@@ -392,6 +393,7 @@
 
 (defmulti on-event
   "Dispatch on :event/kind; kinds with no method leave the world unchanged."
+  {:arglists '([world event])}
   (fn [_world event] (:event/kind event)))
 
 (defmethod on-event :default [world _] world)

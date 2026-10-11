@@ -1,5 +1,6 @@
 (ns clojurecraft.physics-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.math :as math]
+            [clojure.test :refer [deftest is testing]]
             [clojurecraft.physics :as ph]))
 
 (defn floor-at
@@ -55,9 +56,9 @@
     (is (< 1.2 (- (apply max ys) 64.0) 1.3) "vanilla jump peaks about 1.25 blocks up")))
 
 (deftest look-at-conventions
-  (is (= [-90.0 0.0] (mapv #(Math/rint %) (ph/look-at [0 0 0] [10 0 0]))) "east is yaw -90")
-  (is (= [0.0 0.0] (mapv #(Math/rint %) (ph/look-at [0 0 0] [0 0 10]))) "south is yaw 0")
-  (is (= [0.0 45.0] (mapv #(Math/rint %) (ph/look-at [0 10 0] [0 0 10]))) "down is positive pitch"))
+  (is (= [-90.0 0.0] (mapv math/rint (ph/look-at [0 0 0] [10 0 0]))) "east is yaw -90")
+  (is (= [0.0 0.0] (mapv math/rint (ph/look-at [0 0 0] [0 0 10]))) "south is yaw 0")
+  (is (= [0.0 45.0] (mapv math/rint (ph/look-at [0 10 0] [0 0 10]))) "down is positive pitch"))
 
 ;; ---------------------------------------------------------------- fluids
 

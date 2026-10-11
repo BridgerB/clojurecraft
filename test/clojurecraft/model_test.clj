@@ -19,7 +19,7 @@
   "Every namespace-qualified keyword used as a map key anywhere inside x."
   [x]
   (cond (map? x) (into (set (filter qualified-keyword? (keys x))) (mapcat qualified-keys (vals x)))
-        (and (coll? x) (not (instance? datascript.db.DB x))) (into #{} (mapcat qualified-keys x))
+        (and (coll? x) (not (instance? datascript.db.DB x))) (set (mapcat qualified-keys x))
         :else #{}))
 
 (defn keys-of-a-pickaxe-run

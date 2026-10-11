@@ -15,7 +15,8 @@
    executor itself (intents composing intents: no second rule for breaking blocks), and the
    descent is judged by the feet having actually gone down, never by a packet having been
    sent, since a dig the server refused leaves the bot where it stood."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
@@ -35,13 +36,13 @@
    just under the integer (ruststeve's (p.y - 0.5).floor())."
   [world]
   (let [[x y z] (:player/pos world)]
-    [(long (Math/floor x)) (long (Math/floor (+ y 0.5))) (long (Math/floor z))]))
+    [(long (math/floor x)) (long (math/floor (+ y 0.5))) (long (math/floor z))]))
 
 (defn stair-cells
   "The three cells a stair ahead of feet [x y z] in direction [dx dz] opens, top first:
    head-up, head and the new feet cell one block down."
   [[x y z] [dx dz]]
-  [[(+ x dx) (+ y 1) (+ z dz)] [(+ x dx) y (+ z dz)] [(+ x dx) (- y 1) (+ z dz)]])
+  [[(+ x dx) (inc y) (+ z dz)] [(+ x dx) y (+ z dz)] [(+ x dx) (dec y) (+ z dz)]])
 
 (defn exposed
   "Every cell a stair's digging exposes to the body: the three it opens, the floor under the
@@ -84,6 +85,7 @@
                           blocks/solid?)
                  cells)))
 
+#_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
   "The first of the stair's cells (top first) still solid, or nil when the stair is open."
   [world cells]

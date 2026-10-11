@@ -10,7 +10,8 @@
    divided by 5 for each penalty in force. The tool decides harvestability, never the penalised
    speed. Every number comes from the generated tables (clojurecraft.blocks); nothing here is
    typed in or read from a clock."
-  (:require [clojurecraft.blocks :as blocks]))
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]))
 
 (def tick-ms 50)                      ; one game tick
 (def harvest-divisor 30)              ; damage divisor when the tool harvests the block
@@ -43,7 +44,7 @@
                 eyes-in-water? (/ penalty)
                 off-ground? (/ penalty))
             damage (/ s h (if (harvest? id held) harvest-divisor no-harvest-divisor))]
-        (if (>= damage 1.0) 0 (long (* tick-ms (Math/ceil (/ 1.0 damage)))))))))
+        (if (>= damage 1.0) 0 (long (* tick-ms (math/ceil (/ 1.0 damage)))))))))
 
 (defn best-tool
   "The player-inventory slot holding the tool to dig block id with, among {slot {:item id ...}}:

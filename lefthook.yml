@@ -22,6 +22,13 @@ pre-commit:
       priority: 2
       glob: "*.{clj,cljc,cljs}"
       run: scripts/clj-kondo --lint {staged_files}
+    idioms:
+      # Splint: the idiomatic form of what was written ((mapv f xs), not (vec (map f xs)); inc,
+      # not (+ x 1); clojure.math, not Math interop). Rules that fight the code are off in
+      # .splint.edn, each with its reason. Any warning refuses the commit.
+      priority: 3
+      glob: "*.{clj,cljc,cljs}"
+      run: scripts/clj -M:splint {staged_files}
 
 pre-push:
   commands: {}
