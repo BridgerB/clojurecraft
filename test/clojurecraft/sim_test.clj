@@ -601,20 +601,16 @@
 
 ;; ---------------------------------------------------------------- stairs down, on the model
 
-(defn staircase-run
-  "Run a staircase intent of kind (:stairs-down, :stairs-up) alone against the model from a spawn
-   over column blocks, the feet at feet-y, with the item in hotbar slot 0, until it ends or
-   max-ms. Returns [world sim]."
-  [kind blocks spawn-y item to-y max-ms]
+(defn intent-run
+  "Run intent it alone against the model from a spawn at [8.5 spawn-y 8.5] over column blocks,
+   with the item in hotbar slot 0, until it ends or max-ms. Returns [world sim]."
+  [it blocks spawn-y item max-ms]
   (let [column (world/column-bytes blocks)
         step
         (fn [w e]
           (let [w (game/step w e)
                 i (:plan/intent w)]
-            (cond (= :go (:event/kind e))
-                  (assoc w
-                         :plan/intent
-                         {:intent/kind kind :intent/to-y to-y :intent/status :active})
+            (cond (= :go (:event/kind e)) (assoc w :plan/intent (assoc it :intent/status :active))
                   (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
                   (intent/run w i e)
                   :else w)))
@@ -626,6 +622,11 @@
              sim0
              #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
              max-ms)))
+
+(defn staircase-run
+  "Run a staircase intent of kind (:stairs-down, :stairs-up) toward to-y (intent-run)."
+  [kind blocks spawn-y item to-y max-ms]
+  (intent-run {:intent/kind kind :intent/to-y to-y} blocks spawn-y item max-ms))
 
 (defn stairs-run
   "A :stairs-down run (staircase-run)."
@@ -1240,6 +1241,25 @@
                              [:intent/status :intent/reason :intent/stage :intent/turns])))
     (is (<= 72.0 (second (:player/pos w))) "six stairs up")
     (is (:player/on-ground? w))
+    (is (empty? (:sim/violations sim)))))
+
+(deftest a-tunnel-goes-round-what-refuses-it
+  ;; live run 8, refused east at y 16, turned and tunnelled back west beside its own tunnel; batch
+  ;; iron-a2 run 4 walked its tunnel back and forth for eight minutes. Lava two cells ahead: the
+  ;; tunnel steps aside, keeps its heading, and passes it
+  (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
+        blocks (assoc pocket [11 66 8] lava [11 67 8] lava)
+        [w sim] (intent-run {:intent/kind :tunnel :intent/dir [1 0] :intent/length 8}
+                            blocks
+                            66
+                            (get blocks/items :wooden_pickaxe)
+                            120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/side])))
+    (is (<= 12.0 (first (:player/pos w))) "past the lava, still heading east")
+    (is (= [1 0] (:intent/dir (:plan/intent w))))
+    (is (not-any? #(< (first %) 8) (:sim/broken sim)) "nothing dug back west")
+    (is (= lava (sim/block-at sim [11 66 8])))
     (is (empty? (:sim/violations sim)))))
 
 (deftest gravel-over-the-head-is-never-dug-under

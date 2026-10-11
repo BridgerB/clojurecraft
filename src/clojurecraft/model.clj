@@ -187,6 +187,8 @@
     "level steps this staircase (past stairs/max-level-steps it fails :boxed) or tunnel (done at its length) has taken"
     "stairs-down and tunnel, after a level step"]
    [:intent/length "level steps a tunnel cuts" "tunnel"]
+   [:intent/side "the side a tunnel steps to, keeping its heading, where the heading is refused"
+    "tunnel, once one is taken"]
    [:intent/child
     "the child intent run in the intent's place by its own executor (stairs: the :dig cutting one cell; redig: the place, dig or collect it is on)"
     "stairs-down, while digging; redig; place, while digging a niche"]

@@ -31,6 +31,8 @@ sourceRefs:
   - src/clojurecraft/terrain.clj#defn under-sky?
   - test/clojurecraft/sim_test.clj#stairs-up-cut-a-way-out-of-the-rock
   - test/clojurecraft/sim_test.clj#gravel-over-the-head-is-never-dug-under
+  - src/clojurecraft/stairs.clj#defn tunnel-plan
+  - test/clojurecraft/sim_test.clj#a-tunnel-goes-round-what-refuses-it
   - test/clojurecraft/sim_test.clj#gravel-that-refills-a-stair-is-dug-again
 related:
   - "[[bot/plan/_moc|Plan]]"
@@ -63,7 +65,7 @@ Each stage is a method of `stairs-stage`; `run :stairs-down` only checks whether
 `{:intent/kind :stairs-up :intent/to-y n}` is the same staircase climbed (`shapes`: each kind's cells, rule and rise). A stair up opens `up-cells`: the cell over the head, which the jump needs, then the new head and the new feet one block up and ahead; the block ahead at the feet's height is the step. It is cut under `up-safe?`: `safe?`'s rules, and no gravel or sand over the cell above the head, which would fall through it onto the bot (`gravel-over-the-head-is-never-dug-under`: every heading refused, a level step out from under it). `:step` walks into the step, which jumps; `taken?` going up also needs the feet on the ground, since halfway up a jump the feet are already half a block higher and the next stair was once planned from the air. Done standing at `to-y`, or under the open sky (`terrain/under-sky?`: nothing but air, plants or leaves over the feet to the top of the world). The scoop's `climb` cuts these when no route leads back to the landing ([[scoop-intent]]).
 
 ## Tunnels
-`{:intent/kind :tunnel :intent/dir d :intent/length n}` is level steps alone: `tunnel-plan` takes the next along its heading when `level-safe?`, else turns a quarter, `:boxed` after a full turn; the `:level` stage is the staircase's own. Done after n steps. The mine act cuts one at a row's depth ([[mine-act]]).
+`{:intent/kind :tunnel :intent/dir d :intent/length n}` is level steps alone: `tunnel-plan` takes the next along its heading when `level-safe?`, else a step to one side, keeping the heading, so the tunnel goes round what refused it; the side is the first of the two allowed and then the only one (`:intent/side`), so it never steps back and forth; `:boxed` when neither the heading nor that side allows a step. It never turns back down itself: when it turned a quarter at each refusal, live run 8 (refused east at y 16) tunnelled west beside its own tunnel and gym batch iron-a2 run 4 walked its tunnel back and forth for eight minutes (`a-tunnel-goes-round-what-refuses-it`). The `:level` stage is the staircase's own. Done after n steps. The mine act cuts one at a row's depth ([[mine-act]]).
 
 ## Gotchas
 - Keys that are over (`:intent/child`, `:intent/cells`) are removed, never nil: the world spec refuses a nil vector.

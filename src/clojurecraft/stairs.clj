@@ -278,21 +278,28 @@
              (intent/toward world [(+ fx 0.5) (double fy) (+ fz 0.5)] 0.0)))))
 
 (defn tunnel-plan
-  "Plan a tunnel's next level step: along its heading when level-safe?, else a quarter turn,
-   and :boxed after a full one."
-  [world {:intent/keys [dir turns level-steps] :or {turns 0 level-steps 0}}]
+  "Plan a tunnel's next level step: along its heading when level-safe?; else a step to one side,
+   keeping the heading, so the tunnel goes round what refused it. The side is the first of the
+   two allowed and, once taken, the only one (:intent/side), so it never steps back and forth;
+   :boxed when neither the heading nor that side allows a step. It never turns back down itself:
+   the eighth live run, refused east at y 16, turned and tunnelled west beside the tunnel it had
+   cut, and batch iron-a2 run 4 walked its own tunnel back and forth for eight minutes."
+  [world {:intent/keys [dir side level-steps] :or {level-steps 0}}]
   (let [dir (or dir (first directions))
-        cells (level-cells (intent/feet world) dir)]
-    (cond (level-safe? world cells)
-          (intent/assoc-intent world
-                               :intent/dir dir
-                               :intent/turns 0
-                               :intent/level-cells cells
-                               :intent/level-steps (inc level-steps)
-                               :intent/stage :level
-                               :intent/started-tick (:time/tick world))
-          (boxed? turns) (box world)
-          :else (turned world dir turns (str "tunnel: refused toward " dir ", turning")))))
+        feet (intent/feet world)
+        sides (if side [side] [(turn dir) (turn (turn (turn dir)))])
+        d (first (filter #(level-safe? world (level-cells feet %)) (cons dir sides)))]
+    (if d
+      (cond-> (intent/assoc-intent world
+                                   :intent/dir dir
+                                   :intent/level-cells (level-cells feet d)
+                                   :intent/level-steps (inc level-steps)
+                                   :intent/stage :level
+                                   :intent/started-tick (:time/tick world))
+        (not= d dir)
+        (-> (intent/assoc-intent :intent/side d)
+            (game/say (str "tunnel: refused toward " dir ", a step toward " d))))
+      (box world))))
 
 (defmethod intent/run :tunnel
   [world {:intent/keys [length level-steps stage] :or {level-steps 0} :as i} event]
