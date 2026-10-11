@@ -415,6 +415,8 @@
 (s/def :sim/placed map?)
 (s/def :sim/rng int?)
 (s/def :sim/furnaces (s/map-of ::block-pos map?))
+(s/def :sim/falls (s/map-of ::block-pos int?))
+(s/def :sim/falling (s/map-of ::block-pos map?))
 (s/def :sim/next-window int?)
 (s/def :sim/clicks nat-int?)
 (s/def :sim/drop-clicks set?)

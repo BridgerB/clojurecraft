@@ -8,7 +8,9 @@
    within the inflated pickup box after the 10-tick delay, window 0 (the player's inventory
    with its 2x2 crafting grid) with vanilla click rules and state ids, block placement, and the
    containers a right-click opens: a crafting table, and a furnace that cooks by the game's
-   smelting and fuel tables every tick, open or not.
+   smelting and fuel tables every tick, open or not. Gravel and sand fall: a block of a falling
+   type whose neighbour below changed falls two ticks later if the cell under it is free, and
+   lands where the game's gravity brings it.
 
    Fault knobs are inputs, not hidden state: :sim/drop-clicks is a set of click ordinals
    (0-based) the server silently loses, and the loot table's chances (gravel's flint) roll from
@@ -42,7 +44,7 @@
         (contains? (:sim/broken sim) pos) 0
         :else (chunk/block-at {[0 0] (:sim/chunk sim)} pos)))
 
-(declare full sync-window)
+(declare disturb full sync-window)
 
 (defn held-item
   "The item id in the slot the client last selected (set-carried-item), or nil for an empty
@@ -114,6 +116,8 @@
    :sim/held 0
    :sim/placed {}
    :sim/furnaces {}
+   :sim/falls {}
+   :sim/falling {}
    :sim/next-window 1
    :sim/clicks 0
    :sim/drop-clicks (or drop-clicks #{})
@@ -216,7 +220,8 @@
                       ;; observed live on 26.1.2: the breaker gets the block update, then the ack
                       (send {:packet/name :block-update :pos pos :state 0})
                       (send {:packet/name :block-changed-ack :sequence sequence})
-                      (update :sim/inv wear slot))
+                      (update :sim/inv wear slot)
+                      (disturb pos))
               sim (sync-window sim :inventory before (:sim/cursor sim) false)]
           (if drop
             (-> sim
@@ -789,6 +794,7 @@
       (let [before (full (:sim/inv sim) (inventory/layouts :inventory))]
         (-> sim
             (assoc-in [:sim/placed dest] placing)
+            (disturb dest)
             (update :sim/inv take-one slot)
             (send {:packet/name :block-update :pos dest :state placing})
             (sync-window :inventory before (:sim/cursor sim) false)
@@ -854,11 +860,92 @@
                                  filled)))]
         (-> sim
             (assoc-in [:sim/placed src] blocks/air)
+            (disturb src)
             (assoc :sim/inv inv)
             (send {:packet/name :block-update :pos src :state blocks/air})
             (sync-window :inventory before (:sim/cursor sim) false)
             (send ack)))
       (send sim ack))))
+
+;; ---------------------------------------------------------------- falling blocks
+
+(def fall-delay-ms 100)               ; a falling block looks under itself 2 game ticks after a neighbour changed (FallingBlock.getDelayAfterPlace)
+(def fall-gravity 0.04)               ; blocks per tick a falling block gains each tick (FallingBlockEntity.getDefaultGravity)
+(def fall-drag 0.98)                  ; the share of its speed it keeps each tick
+
+(defn falls?
+  "Is block state id of a type that falls (blocks/falling-types)?"
+  [id]
+  (contains? blocks/falling-types (blocks/type-of id)))
+
+(defn free?
+  "Is the cell holding state id nothing a falling block rests on (FallingBlock.isFree: air, a
+   liquid, fire, a plant)? An unloaded cell is not."
+  [id]
+  (boolean (and id (not (blocks/solid? id)))))
+
+(defn disturb
+  "The block at pos changed: a falling block over it looks under itself fall-delay-ms from now,
+   as vanilla schedules its tick on the neighbour update."
+  [sim [x y z]]
+  (let [above [x (inc y) z]]
+    (if (falls? (block-at sim above))
+      (assoc-in sim [:sim/falls above] (+ (:sim/now sim) fall-delay-ms))
+      sim)))
+
+(defn rest-y
+  "The lowest height a block falling in column x z, its bottom in cell y, can come down to: the
+   bottom of the free cells straight under it."
+  [sim x y z]
+  (last (cons y (take-while #(free? (block-at sim [x % z])) (iterate dec (dec y))))))
+
+(defn start-fall
+  "The block at pos falls when it still falls and the cell under it is free: its cell becomes air
+   for the client, the block above it is disturbed in turn, and it is in the air from its own
+   cell (FallingBlockEntity.fall), keyed by where it fell from."
+  [sim [x y z :as pos]]
+  (let [state (block-at sim pos)]
+    (if (and (falls? state) (free? (block-at sim [x (dec y) z])))
+      (-> sim
+          (assoc-in [:sim/placed pos] blocks/air)
+          (send {:packet/name :block-update :pos pos :state blocks/air})
+          (assoc-in [:sim/falling pos] {:state state :y (double y) :v 0.0})
+          (disturb pos))
+      sim)))
+
+(defn land
+  "A falling block comes to rest in cell to: placed there when the cell is free (vanilla drops it
+   as an item otherwise, which the model does not), and it looks under itself again."
+  [sim [x y z :as to] state]
+  (if (free? (block-at sim to))
+    (-> sim
+        (assoc-in [:sim/placed to] state)
+        (send {:packet/name :block-update :pos to :state state})
+        (disturb [x (dec y) z]))
+    sim))
+
+(defn fall-tick
+  "One game tick of the block in the air that fell from origin (FallingBlockEntity.tick): it gains
+   fall-gravity of speed and moves down, landing on whatever is under it now (a block that
+   landed before it included), else keeps fall-drag of its speed."
+  [sim [x _ z :as origin] {:keys [state y v] :as f}]
+  (let [v (+ v fall-gravity)
+        y' (- y v)
+        bottom (rest-y sim x (long (math/floor y)) z)]
+    (if (<= y' bottom)
+      (land (update sim :sim/falling dissoc origin) [x bottom z] state)
+      (assoc-in sim [:sim/falling origin] (assoc f :y y' :v (* v fall-drag))))))
+
+(defn tick-falls
+  "One game tick of falling blocks: every block whose look is due falls or stays, then every one in
+   the air moves, the lowest first; in position order, so a run replays."
+  [sim]
+  (let [now (:sim/now sim)
+        due (sort (keep (fn [[p at]] (when (<= at now) p)) (:sim/falls sim)))
+        sim (reduce (fn [sim p] (start-fall (update sim :sim/falls dissoc p) p)) sim due)]
+    (reduce (fn [sim [origin f]] (fall-tick sim origin f))
+            sim
+            (sort-by (comp second key) (:sim/falling sim)))))
 
 (defn within-pickup?
   "Is an item at [ix iy iz] inside the pickup box of a player at [px py pz] (its box inflated
@@ -893,10 +980,10 @@
 
 (defn tick
   "Advance the server clock to now, one game tick: send a keep-alive when one is due, breathe
-   or drown, cook in every furnace, and hand over every item whose pickup delay has passed and
+   or drown, cook in every furnace, let gravel and sand fall, and hand over every item whose pickup delay has passed and
    that the player stands within reach of."
   [sim now]
-  (let [sim (tick-furnaces (drown (assoc sim :sim/now now)))
+  (let [sim (tick-falls (tick-furnaces (drown (assoc sim :sim/now now))))
         sim (if (>= now (:sim/next-keep-alive sim))
               (-> sim
                   (send {:packet/name :keep-alive :id now})

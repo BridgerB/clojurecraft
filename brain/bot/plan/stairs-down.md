@@ -23,6 +23,8 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn step-aside
   - src/clojurecraft/stairs.clj#defn level-safe?
   - test/clojurecraft/sim_test.clj#water-under-every-stair-is-stepped-around
+  - src/clojurecraft/stairs.clj#defn fell?
+  - test/clojurecraft/sim_test.clj#gravel-that-refills-a-stair-is-dug-again
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[dig-timeline]]"
@@ -45,9 +47,9 @@ related:
 ## How it works
 Each stage is a method of `stairs-stage`; `run :stairs-down` only checks whether the feet are down far enough.
 1. `:plan`: with the current heading (`+x` first), compute the stair; `safe?` → `:open`; else turn a quarter and count. Four refusals → `step-aside`: a level step (`level-cells`: head and feet one block along, same height) toward the first heading `level-safe?` allows (a stair's rules, and no opened cell bordering a fluid, which the child dig would refuse), then `:plan` again from there with the turns counted afresh. No heading allows one, or `max-level-steps` (12) are spent: fail `:boxed`.
-2. `:open`: while any of the three cells is solid, run a child dig of the topmost. A child refused for one of `refusals` turns the stair like an unsafe plan: `:needs-tool` (ore the pickaxe cannot drop) or `:unsafe` (a cell beside water or lava, which the dig executor will not open, since it would let the fluid in). Any other failure fails the stair with its reason.
+2. `:open`: while any of the three cells is solid, run a child dig of the topmost. A child that finds its cell already open (`:target-gone`, `fell?`) is as good as done: gravel or sand fell out of it. A child refused for one of `refusals` turns the stair like an unsafe plan: `:needs-tool` (ore the pickaxe cannot drop) or `:unsafe` (a cell beside water or lava, which the dig executor will not open, since it would let the fluid in). Any other failure fails the stair with its reason.
 3. `:level`: dig the level step's cells with child digs, then walk until the feet are in its feet cell; 10 s from the step's start without that fails `:stair-not-taken`.
-4. `:step`: walk toward the new feet cell; done with the stair when the feet are half a block below where it began, which is the only proof the server broke what the bot asked for; 10 s without that fails `:stair-not-taken`.
+4. `:step`: walk toward the new feet cell; done with the stair when the feet are half a block below where it began, which is the only proof the server broke what the bot asked for. A stair cell solid again (gravel fell into it) goes back to `:open`; 10 s without either fails `:stair-not-taken`.
 5. Done when the feet are at or below `to-y`.
 
 ## Tunnels
@@ -57,7 +59,7 @@ Each stage is a method of `stairs-stage`; `run :stairs-down` only checks whether
 - Keys that are over (`:intent/child`, `:intent/cells`) are removed, never nil: the world spec refuses a nil vector.
 - Water beside a stair is allowed, lava is not: the siblings found refusing water wedged descents in wet biomes. A cell that itself borders water is still never dug (the dig's `exposes-fluid?`): the stair turns instead. Before it turned, a live iron-kit descent (local landing 2360,2360) met an aquifer at y 36 and failed `:unsafe` three times in a moment, the planner restarting the same refused stair (`water-beside-a-stair-cell-turns-the-stairs`).
 - **A lake under every stair is stepped around.** The fifth live iron-kit run (local landing 3024,2360) stood at y 52 over an underground lake filling y 48-51: every stair's new feet had water under or beside them, and the staircase failed `:boxed` three times in a moment. A level step leads along until a stair is safe; `boxed-in-by-lava-on-every-side-fails-boxed` now needs lava beside the feet too.
-- No gravel or sand rule yet: a falling block above an opened head cell is an open question in issue #9.
+- **Gravel falls into the stair.** The seventh live iron-kit run (local landing 2360,3000) cut its staircase through gravel at y 37-40: the gravel over the cells it opened fell into them, the walk onto the stair failed `:stair-not-taken`, then two digs found their cell already emptied and failed `:target-gone`, ending the plan. A cell refilled is dug again, a cell emptied counts as open, and the step goes back to digging; the server model drops gravel the way the game does ([[server-model]]), and `gravel-that-refills-a-stair-is-dug-again` cuts two stairs into a gravel cliff (it fails with the old stages). A falling block that lands on the bot's head is not handled.
 
 ## See also
 - [[dig-timeline]] - the child.

@@ -51,6 +51,12 @@
     :standing_sign :wall_sign :ceiling_hanging_sign :wall_hanging_sign :ladder :snow_layer :web
     :fire :soul_fire :lily_pad :small_dripleaf :moving_piston})
 
+(def falling-types
+  "Block definition types that fall when the cell under them is free: the game's FallingBlock
+   (sand and red sand, gravel, concrete powder, anvils, the dragon egg) and BrushableBlock
+   (suspicious sand and gravel), read in the 26.1.2 jar."
+  #{:sand :colored_falling :concrete_powder :anvil :dragon_egg :brushable})
+
 (defn states-where
   "The set of every state id of the table rows matching pred."
   [pred]

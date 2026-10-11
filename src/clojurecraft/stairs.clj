@@ -155,34 +155,39 @@
           (boxed? turns) (step-aside world (assoc i :intent/dir dir))
           :else (turned world dir turns (str "stairs: refused toward " dir ", turning")))))
 
+(defn fell?
+  "Did a child dig find its cell already open (:target-gone)? Gravel or sand above fell out of it
+   (or into the one below): the cell is open, which is what the dig was for."
+  [child]
+  (and (intent/failed? child) (= :target-gone (:intent/reason child))))
+
 (defmethod stairs-stage :open
   [world {:intent/keys [dir turns child cells] :or {turns 0} :as i} event]
-  (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
-        ;; a cell the child will not dig refuses this way, like lava: turn. :needs-tool is ore the
-        ;; pickaxe cannot drop; :unsafe a cell beside water or lava, which the dig would let in (a
-        ;; live descent through an aquifer at y 36 failed three times on it before this)
-        (and child (contains? refusals (:intent/reason child)))
-        (if (boxed? turns)
-          (step-aside world i)
-          (->
-            world
-            (turned
-             dir
-             turns
-             (str "stairs: " (:intent/target child) " refused " (:intent/reason child) ", turning"))
-            (intent/assoc-intent :intent/stage :plan)
-            (intent/dissoc-intent :intent/child :intent/cells)))
-        (and child (intent/failed? child))
-        (-> world
-            (assoc :player/controls {})
-            (intent/fail (:intent/reason child)))
-        child (intent/run-child world event)
-        (next-to-open world cells)
-        (intent/run-child
-         (intent/assoc-intent world :intent/child (intent/child-dig (next-to-open world cells)))
-         event)
-        :else
-        (intent/assoc-intent world :intent/stage :step :intent/started-tick (:time/tick world))))
+  (cond
+    (and child (or (intent/done? child) (fell? child))) (intent/dissoc-intent world :intent/child)
+    ;; a cell the child will not dig refuses this way, like lava: turn. :needs-tool is ore the
+    ;; pickaxe cannot drop; :unsafe a cell beside water or lava, which the dig would let in (a
+    ;; live descent through an aquifer at y 36 failed three times on it before this)
+    (and child (contains? refusals (:intent/reason child)))
+    (if (boxed? turns)
+      (step-aside world i)
+      (-> world
+          (turned
+           dir
+           turns
+           (str "stairs: " (:intent/target child) " refused " (:intent/reason child) ", turning"))
+          (intent/assoc-intent :intent/stage :plan)
+          (intent/dissoc-intent :intent/child :intent/cells)))
+    (and child (intent/failed? child))
+    (-> world
+        (assoc :player/controls {})
+        (intent/fail (:intent/reason child)))
+    child (intent/run-child world event)
+    (next-to-open world cells)
+    (intent/run-child
+     (intent/assoc-intent world :intent/child (intent/child-dig (next-to-open world cells)))
+     event)
+    :else (intent/assoc-intent world :intent/stage :step :intent/started-tick (:time/tick world))))
 
 (defmethod stairs-stage :step
   [world {:intent/keys [cells started-y started-tick]} _]
@@ -193,6 +198,10 @@
               (assoc :player/controls {})
               (intent/assoc-intent :intent/stage :plan)
               (intent/dissoc-intent :intent/child :intent/cells))
+          (next-to-open world cells) ; gravel or sand fell into the stair: dig it again
+          (-> world
+              (assoc :player/controls {})
+              (intent/assoc-intent :intent/stage :open :intent/started-tick (:time/tick world)))
           (> (- (:time/tick world) started-tick) step-timeout-ticks)
           (-> world
               (assoc :player/controls {})
@@ -204,31 +213,30 @@
   ;; the stairs again from there
   [world {:intent/keys [child level-cells started-tick]} event]
   (let [[fx fy fz] (last level-cells)]
-    (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
-          (and child (intent/failed? child))
-          (-> world
-              (assoc :player/controls {})
-              (intent/fail (:intent/reason child)))
-          child (intent/run-child world event)
-          (next-to-open world level-cells)
-          (intent/run-child (intent/assoc-intent world
-                                                 :intent/child
-                                                 (intent/child-dig (next-to-open world
-                                                                                 level-cells)))
-                            event)
-          (= (intent/feet world) [fx fy fz])
-          (-> world
-              (assoc :player/controls {})
-              (intent/assoc-intent :intent/stage :plan)
-              (intent/dissoc-intent :intent/level-cells))
-          (> (- (:time/tick world) started-tick) step-timeout-ticks)
-          (-> world
-              (assoc :player/controls {})
-              (intent/fail :stair-not-taken))
-          :else
-          (assoc world
-                 :player/controls
-                 (intent/toward world [(+ fx 0.5) (double fy) (+ fz 0.5)] 0.0)))))
+    (cond
+      (and child (or (intent/done? child) (fell? child))) (intent/dissoc-intent world :intent/child)
+      (and child (intent/failed? child))
+      (-> world
+          (assoc :player/controls {})
+          (intent/fail (:intent/reason child)))
+      child (intent/run-child world event)
+      (next-to-open world level-cells)
+      (intent/run-child
+       (intent/assoc-intent world :intent/child (intent/child-dig (next-to-open world level-cells)))
+       event)
+      (= (intent/feet world) [fx fy fz])
+      (-> world
+          (assoc :player/controls {})
+          (intent/assoc-intent :intent/stage :plan)
+          (intent/dissoc-intent :intent/level-cells))
+      (> (- (:time/tick world) started-tick) step-timeout-ticks)
+      (-> world
+          (assoc :player/controls {})
+          (intent/fail :stair-not-taken))
+      :else
+      (assoc world
+             :player/controls
+             (intent/toward world [(+ fx 0.5) (double fy) (+ fz 0.5)] 0.0)))))
 
 (defn tunnel-plan
   "Plan a tunnel's next level step: along its heading when level-safe?, else a quarter turn,

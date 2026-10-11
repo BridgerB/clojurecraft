@@ -1,14 +1,15 @@
 ---
 title: Block tables
-description: How blocks.clj turns the generated tables into a state→row map and sets of state ids (row, name-of, type-of, solid?, log?, leaves?), what passable-types contains, and how log items are recognised.
+description: How blocks.clj turns the generated tables into a state→row map and sets of state ids (row, name-of, type-of, solid?, log?, leaves?), what passable-types and falling-types contain, and how log items are recognised.
 type: reference
 tags: [bot, world, blocks, data]
-aliases: [blocks.clj, solid?, log?, passable-types, name-of, items table, entity-types]
+aliases: [blocks.clj, solid?, log?, passable-types, falling-types, name-of, items table, entity-types]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/blocks.clj#def passable-types
+  - src/clojurecraft/blocks.clj#def falling-types
   - src/clojurecraft/blocks.clj#defn solid?
   - src/clojurecraft/blocks.clj#defn states-where
   - src/clojurecraft/blocks.clj#defn log-name?
@@ -31,6 +32,7 @@ related:
 - `blocks.clj`, `row`, `name-of`, `type-of` - `rows`, a map from state id to its row.
 - `blocks.clj`, `solid?` - `solid-states`: every state whose definition type is not in `passable-types`; an id the table does not know is not solid.
 - `blocks.clj`, `passable-types` - about 100 definition types with no full-cube collision: air, liquids, plants, crops, torches, rails, buttons, pressure plates, carpets, signs, ladders, snow layers, fire, lily pads and similar.
+- `blocks.clj`, `falling-types` - the definition types that fall when the cell under them is free: the 26.1.2 jar's `FallingBlock` subclasses (sand and red sand, gravel, concrete powder, anvils, the dragon egg) and `BrushableBlock` (suspicious sand and gravel). The server model makes them fall ([[server-model]]).
 - `blocks.clj`, `log?` / `log-items` - a block state or item is a log when its name ends in `_log`.
 - `blocks.clj`, `leaves?` - a block state whose name ends in `_leaves`; used for the leaf dig time and the collect blocker ([[leaf-canopy-over-the-drop]]).
 

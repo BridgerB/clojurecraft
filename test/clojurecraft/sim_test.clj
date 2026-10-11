@@ -1139,6 +1139,57 @@
     (is (empty? (:sim/violations sim)))
     (is (= (:time/now w) (:time/now (first (flint-run seed)))) "the same seed, the same run")))
 
+;; ---------------------------------------------------------------- gravel and sand fall
+
+(deftest gravel-over-a-broken-block-falls-into-it
+  ;; FallingBlock in the 26.1.2 jar: two ticks after the block under it changed, gravel with a
+  ;; free cell under it falls, a column one block at a time, and lands where
+  ;; FallingBlockEntity's gravity brings it
+  (let [broken
+        (-> (sim/init {:column (world/column-bytes
+                                {[1 64 0] stone-id [1 65 0] gravel-state [1 66 0] gravel-state})
+                       :spawn [0.5 64.0 0.5]
+                       :inventory {36 {:item (item :wooden_pickaxe) :count 1}}})
+            (assoc :sim/phase :play :sim/now 1000 :sim/player-pos [0.5 64.0 0.5])
+            (client-sends {:packet/name :set-carried-item :slot 0})
+            (client-sends {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1})
+            (sim/step {:sim/kind :tick :sim/now 2200})
+            (client-sends
+             {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}))
+        at #(mapv (fn [y] (blocks/name-of (sim/block-at %1 [1 y 0]))) [64 65 66])]
+    (is (= [:air :gravel :gravel] (at broken)) "the stone is gone")
+    (is (= [:air :gravel :gravel] (at (game-ticks broken 1))) "nothing falls in the first tick")
+    (is (= [:air :air :gravel] (at (game-ticks broken 2))) "the lower gravel is in the air")
+    (is (= [:air :air :air] (at (game-ticks broken 4))) "the upper one two ticks after it")
+    (is (= [:air :air :air] (at (game-ticks broken 7))) "both still falling")
+    (is (= [:gravel :air :air] (at (game-ticks broken 8))) "one block down in seven ticks")
+    (is (= [:gravel :gravel :air] (at (game-ticks broken 20)))
+        "the upper one lands on the lower, not in its cell")
+    (is (every? #{:gravel :air}
+                (for [p (filter #(= :block-update (:packet/name %))
+                                (:sim/out (game-ticks broken 20)))
+                      :when (not= [1 64 0] (:pos p))]
+                  (blocks/name-of (:state p))))
+        "the client is told each cell it leaves and lands in")))
+
+(def gravel-cliff
+  "deep-stone with gravel four high on it from x 9 east: every stair cut east opens cells with
+   gravel over them."
+  (merge deep-stone
+         (into {} (for [x (range 9 16) y (range 76 80) z (range 16)] [[x y z] gravel-state]))))
+
+(deftest gravel-that-refills-a-stair-is-dug-again
+  ;; live iron-kit run 7 (local landing 3, y 37-40): gravel over the staircase fell into the cells
+  ;; it had opened; the walk onto the stair failed :stair-not-taken, then two digs found their
+  ;; cell already emptied and failed :target-gone
+  (let [[w sim] (stairs-run gravel-cliff 76 (get blocks/items :wooden_pickaxe) 74 180000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (<= (second (:player/pos w)) 74.5) "two stairs down, through the gravel")
+    (is (empty? (:sim/falling sim)) "nothing left in the air")
+    (is (empty? (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- a bucket of water
 
 (def bank-pond
