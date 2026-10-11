@@ -41,10 +41,13 @@
    its own, 27 main then 9 hotbar, from window slot :inventory on; slot 0 is a crafting result
    and 1..size² the grid. Window 0 (the player's own screen, :inventory) also shows the armour
    at :armour..:armour+3 (head to feet) and the offhand at :offhand; a container is known by
-   its :menu-type (registry minecraft:menu, 12 the crafting table). The bot's views and the
-   server model's windows are both read from here."
+   its :menu-type (registry minecraft:menu: 12 the crafting table, 14 the furnace, whose own
+   slots are :input, :fuel and :output). The bot's views and the server model's windows are
+   both read from here."
   {:inventory {:size 2 :inventory 9 :armour 5 :offhand 45}
-   :table {:size 3 :inventory 10 :menu-type (blocks/menus :crafting)}})
+   :table {:size 3 :inventory 10 :menu-type (blocks/menus :crafting)}
+   ;; a furnace has no grid: its own slots are the input, the fuel and the output
+   :furnace {:size 0 :inventory 3 :menu-type (blocks/menus :furnace) :input 0 :fuel 1 :output 2}})
 
 (defn layout-of-menu
   "The layout of a container by its menu type, or nil for one the bot does not know."

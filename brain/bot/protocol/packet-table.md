@@ -60,6 +60,7 @@ Every row of `packet/specs` at 18afddc (58 specs; paired s2c/c2s rows share a li
 | set-cursor-item | item slot | game |
 | open-screen | window-id, menu-type, title rest | game `:window/open` |
 | container-close | window-id | game |
+| container-set-data | window-id varint, property i16, value i16 | game `:window/data` of the open window (a furnace: fuel left, fuel total, cook progress, cook total) |
 | set-held-slot | slot | game `:player/held-slot` (0-8 only) |
 | add-entity | entity-id, uuid, type, x y z (rest ignored) | game (items only) |
 | remove-entities | ids [varint] | game |
@@ -86,13 +87,14 @@ Every row of `packet/specs` at 18afddc (58 specs; paired s2c/c2s rows share a li
 | use-item-on | hand, pos, face varint, cursor-x/y/z f32, inside-block, world-border-hit, sequence | `:place`, `:open-container` |
 | player-action | status, pos, face i8, sequence | intent `:dig` |
 | swing | hand | intent `:dig` |
+| use-item | hand, sequence, y-rot f32, x-rot f32 | nobody yet (a bucket fills or pours with it, aimed by look) |
 | container-click | window-id, state-id, slot i16, button i8, mode, changed [slot hashed-slot], cursor hashed-slot | `window/click` (craft, place equip) |
 | container-close | window-id | craft (`:settle` for window 0, `:take` for a table) |
 
 ## Gotchas
 - A spec decodes only its listed fields; "rest ignored" rows rely on that.
 - A `:slot` with data components truncates the rest of its packet (`:truncated true`); a damaged tool in `container-set-content` loses every later slot today.
-- Not modelled yet but in `packets.edn`: `use-item` 67, `attack` 1, `place-recipe` 39, `respawn` (s2c 82).
+- Not modelled yet but in `packets.edn`: `attack` 1, `place-recipe` 39, `respawn` (s2c 82).
 
 ## See also
 - [[add-a-packet]] - adding a row.

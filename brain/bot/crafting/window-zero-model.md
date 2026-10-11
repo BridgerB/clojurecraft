@@ -30,12 +30,12 @@ related:
 | `:window/grid` | window-0 slots 0-4 verbatim (0 = result, 1-4 = 2x2 grid) | `container-set-content`, `container-set-slot` for window 0 |
 | `:window/state-id` | window 0's latest state id | same, window 0 |
 | `:window/cursor` | the item on the cursor, absent when empty | `carried` of any `container-set-content`, `set-cursor-item`; dropped by `window/click` |
-| `:window/open` | `{:window/id :window/menu-type :window/slots {} :window/state-id}` of another open screen | `open-screen` creates it with empty slots; content and slot packets for that id fill it; `container-close` either way drops it |
+| `:window/open` | `{:window/id :window/menu-type :window/slots {} :window/state-id}` of another open screen, plus `:window/data {property value}` once the server sends a property (a furnace's fuel and cook progress) | `open-screen` creates it with empty slots; content and slot packets for that id fill it; `container-set-data` for that id writes its data; `container-close` either way drops it |
 | `:player/held-slot` | selected hotbar slot 0-8, starts 0 | `set-held-slot` (ignored outside 0-8), and the bot's own `set-carried-item` |
 
 ## Key files
 - `inventory.clj`, `set-window-0-slot` - slots 0-4 to `:window/grid`, others via `window->player-slot` over window 0's layout to `:player/inventory`.
-- `inventory.clj`, `layouts` - every window the bot clicks in as data: window 0 (grid size 2, player inventory from slot 9, armour 5-8, offhand 45) and the crafting table (size 3, player inventory from slot 10, menu type 12); `layout-of-menu` finds a container's by its menu type. The server model reads the same table.
+- `inventory.clj`, `layouts` - every window the bot clicks in as data: window 0 (grid size 2, player inventory from slot 9, armour 5-8, offhand 45), the crafting table (size 3, player inventory from slot 10, menu type 12) and the furnace (no grid: input 0, fuel 1, output 2, player inventory from slot 3, menu type 14), the menu types read from `menus.edn`; `layout-of-menu` finds a container's by its menu type. The server model reads the same table.
 - `inventory.clj`, `window->player-slot` - a window slot to the player slot it shows: from the layout's `:inventory` on, 27 main slots then 9 hotbar map to player slots 9-35 then 0-8; anything before is the container's own.
 - `inventory.clj`, `set-open-window-slot` - the container's own slots go to `:window/open`'s `:window/slots`; slots that are the player's inventory update `:player/inventory`.
 - `game.clj`, `on-packet` for `container-set-content` / `container-set-slot` - dispatch on window id: 0, the open window's id, or ignored.

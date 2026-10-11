@@ -82,6 +82,9 @@
    [:window/id "container window id" "inside :window/open"]
    [:window/menu-type "container menu type id (12 is a crafting table)" "inside :window/open"]
    [:window/slots "the open container's slots" "inside :window/open"]
+   [:window/data
+    "the open container's numbered properties {property value} (a furnace: 0 fuel left, 1 fuel total, 2 cook progress, 3 cook total)"
+    "inside :window/open, once the server sends one"]
    ;; ---- the world as last seen, and as remembered
    [:world/chunks "{[cx cz] column}: chunks the server has sent and not forgotten" "always"]
    [:world/blocks "{[x y z] state}: block updates and own breaks over the chunks" "always"]

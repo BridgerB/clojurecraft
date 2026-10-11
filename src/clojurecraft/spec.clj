@@ -86,8 +86,9 @@
 (s/def :window/id int?)
 (s/def :window/menu-type int?)
 (s/def :window/slots (s/map-of int? ::slot-item))
+(s/def :window/data (s/map-of int? int?))
 (s/def :window/open
-  (s/keys :req [:window/id :window/menu-type] :opt [:window/state-id :window/slots]))
+  (s/keys :req [:window/id :window/menu-type] :opt [:window/state-id :window/slots :window/data]))
 (s/def :player/held-slot (s/int-in 0 9))
 
 ;; world

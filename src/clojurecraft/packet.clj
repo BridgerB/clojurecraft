@@ -73,6 +73,9 @@
    [:play :s2c :block-changed-ack] [[:sequence :varint]]
    [:play :s2c :disconnect] [[:reason :rest]]
    [:play :s2c :open-screen] [[:window-id :varint] [:menu-type :varint] [:title :rest]] ; title is NBT, kept raw
+   ;; a container's numbered properties (a furnace: 0 fuel left, 1 fuel total, 2 cook progress,
+   ;; 3 cook total), field order read from the game's ClientboundContainerSetDataPacket
+   [:play :s2c :container-set-data] [[:window-id :varint] [:property :i16] [:value :i16]]
    [:play :s2c :container-close] [[:window-id :varint]]
    [:play :s2c :set-cursor-item] [[:item :slot]]
    [:play :s2c :set-held-slot] [[:slot :varint]]
@@ -105,6 +108,9 @@
    [:play :c2s :set-carried-item] [[:slot :i16]]
    [:play :c2s :player-action] [[:status :varint] [:pos :position] [:face :i8] [:sequence :varint]]
    [:play :c2s :swing] [[:hand :varint]]
+   ;; right-click with the held item, aimed by look: a bucket fills or pours here, not through
+   ;; use-item-on; field order read from the game's ServerboundUseItemPacket
+   [:play :c2s :use-item] [[:hand :varint] [:sequence :varint] [:y-rot :f32] [:x-rot :f32]]
    [:play :c2s :client-command] [[:action :varint]] ; 0: perform respawn
    ;; 775 clicks carry the client's prediction as hashed slots; we always predict nothing
    ;; (:changed [] :cursor nil) so the server answers every click with authoritative slots.
