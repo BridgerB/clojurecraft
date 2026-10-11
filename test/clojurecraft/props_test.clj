@@ -10,6 +10,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
             [clojurecraft.plan :as plan]
@@ -234,3 +235,110 @@
                               (= [:preempted] (map :intention/reason abandoned))
                               (not (contains? w :plan/last))
                               (not= [33.0 1.0] (get-in w [:player/controls :control/look])))))))
+
+;; ---------------------------------------------------------------- the furnace window
+
+(def furnace-window 3)                ; the open furnace's window id in these properties
+
+(def window-item
+  (gen/one-of [(gen/return nil)
+               (gen/let [n (gen/elements [:raw_iron :coal :iron_ingot :oak_planks])
+                         c (gen/choose 1 64)]
+                 {:item (blocks/items n) :count c})]))
+
+(def furnace-packet
+  "Anything the server may say about the open furnace, in any order: the whole window, one slot,
+   the cursor, a property."
+  (gen/one-of
+   [(gen/let [s (gen/choose 1 1000)
+              items (gen/vector window-item 39)
+              c window-item]
+      {:packet/name :container-set-content
+       :window-id furnace-window
+       :state-id s
+       :items items
+       :carried c})
+    (gen/let [s (gen/choose 1 1000)
+              slot (gen/choose 0 38)
+              it window-item]
+      {:packet/name :container-set-slot :window-id furnace-window :state-id s :slot slot :item it})
+    (gen/fmap (fn [it] {:packet/name :set-cursor-item :item it}) window-item)
+    (gen/let [p (gen/choose 0 3)
+              v (gen/choose 0 1600)]
+      {:packet/name :container-set-data :window-id furnace-window :property p :value v})]))
+
+(def furnace-events
+  "Ticks 50 ms apart with furnace packets between them, then 20 s of ticks."
+  (gen/fmap (fn [xs]
+              (second (reduce (fn [[t evs] x]
+                                (if (= :tick x)
+                                  [(+ t 50)
+                                   (conj evs {:event/kind :tick :event/now t :event/rand 0.5})]
+                                  [t (conj evs (fx/packet x))]))
+                              [1000 []]
+                              (concat xs (repeat 400 :tick)))))
+            (gen/vector (gen/one-of [(gen/return :tick) furnace-packet]) 0 120)))
+
+(def held-for-smelting
+  "Raw iron, coal and planks in the main inventory, any of them maybe absent."
+  (gen/fmap (fn [counts]
+              (into {}
+                    (for [[slot [n c]] (map vector (range 9 12) counts)
+                          :when (pos? c)]
+                      [slot {:item (blocks/items n) :count c}])))
+            (gen/tuple (gen/tuple (gen/return :raw_iron) (gen/choose 0 9))
+                       (gen/tuple (gen/return :coal) (gen/choose 0 2))
+                       (gen/tuple (gen/return :oak_planks) (gen/choose 0 9)))))
+
+(defn at-a-furnace
+  "In play with the furnace window open (empty, state id 1), inv held, and a smelt of n raw iron
+   running."
+  [inv n]
+  (assoc (in-play)
+         :player/inventory inv
+         :window/open
+         {:window/id furnace-window
+          :window/menu-type (blocks/menus :furnace)
+          :window/slots {}
+          :window/state-id 1}
+         :plan/intent
+         {:intent/kind :smelt
+          :intent/smelt :iron_ingot_from_smelting_raw_iron
+          :intent/count n
+          :intent/status :active}))
+
+(defn smelt-ticks
+  "Fold events through game/step and one tick of the smelt while it is active: for every tick it
+   ran, the cursor it saw and the packets it sent."
+  [w events]
+  (second (reduce (fn [[w seen] e]
+                    (let [w (assoc (game/step w e) :bot/effects [])
+                          i (:plan/intent w)]
+                      (if (and (= :tick (:event/kind e)) (= :active (:intent/status i)))
+                        (let [w' (intent/run w i e)]
+                          [(assoc w' :bot/effects [])
+                           (conj seen
+                                 [(:window/cursor w)
+                                  (for [{:effect/keys [kind packet]} (:bot/effects w')
+                                        :when (= :send kind)]
+                                    packet)])])
+                        [w seen])))
+                  [w []]
+                  events)))
+
+(deftest the-smelt-never-closes-with-a-loaded-cursor-or-clicks-outside-the-window
+  ;; issue #6: whatever the server says about the furnace, and in whatever order, the :smelt
+  ;; intent closes it only with nothing on the cursor (vanilla would drop the item) and clicks
+  ;; only slots the furnace window has
+  (check (prop/for-all [inv held-for-smelting n (gen/choose 1 8) events furnace-events]
+                       (let [slots (inventory/slot-count (inventory/layouts :furnace))]
+                         (every? (fn [[cursor pkts]]
+                                   (every? (fn [p]
+                                             (case (:packet/name p)
+                                               :container-close (nil? cursor)
+                                               :container-click
+                                               (and (= furnace-window (:window-id p))
+                                                    (< -1 (:slot p) slots))
+                                               true))
+                                           pkts))
+                                 (smelt-ticks (at-a-furnace inv n) events))))))

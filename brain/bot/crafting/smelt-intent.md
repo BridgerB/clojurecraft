@@ -21,6 +21,7 @@ sourceRefs:
   - test/clojurecraft/sim_test.clj#four-raw-iron-and-a-coal-become-four-ingots-in-a-placed-furnace
   - test/clojurecraft/sim_test.clj#a-second-stack-of-fuel-is-loaded-when-the-first-burns-out
   - test/clojurecraft/sim_test.clj#every-lost-smelt-click-is-recovered-from-the-servers-slots
+  - test/clojurecraft/props_test.clj#the-smelt-never-closes-with-a-loaded-cursor-or-clicks-outside-the-window
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[craft-intent]]"
@@ -53,7 +54,7 @@ A furnace's own ticks move the window's state id, and what a failed smelt leaves
 
 The resync (`resync`, `window/resync-click`) puts the cursor down into a free slot with state id -1. 26.1.2's `handleContainerClick` applies any click and, when its state id is not the menu's, answers with `broadcastFullState`: the whole window and the real cursor, under a fresh state id ([[mc-state-ids-prediction]]). So the bot learns the cursor whether the click moved anything or not; `window/click` had forgotten it as it sent. Without the resync, losing the click that lays the coal left the coal on the server's cursor, unseen, and the plan failed `:no-fuel`.
 
-`every-lost-smelt-click-is-recovered-from-the-servers-slots` loses each of the smelt's clicks in turn and requires four ingots and no violation every time.
+`every-lost-smelt-click-is-recovered-from-the-servers-slots` loses each of the smelt's clicks in turn and requires four ingots and no violation every time. `the-smelt-never-closes-with-a-loaded-cursor-or-clicks-outside-the-window` (200 cases) feeds the intent any furnace packets in any order and holds that it closes only with an empty cursor and clicks only the furnace window's own slots ([[property-tests]]).
 
 ## Gotchas
 - The planner plans the whole target at once: two raw iron never start a smelt toward four ingots; the batch only covers what the planner chose.
