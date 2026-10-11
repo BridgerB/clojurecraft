@@ -1,6 +1,7 @@
 # Git hooks, run by lefthook (a standalone binary: no Node in a Clojure repo).
 #
-#   nix develop   # once per clone: the flake's shell installs these hooks on entry
+#   direnv allow   # once per clone: entering the directory loads the flake's shell (.envrc),
+#                  # which installs these hooks; or nix develop without direnv
 #
 # pre-commit stays fast (seconds, staged files only); slower JVM work belongs in pre-push, and
 # CI (test.yml) stays the real enforcement, since a hook can be skipped with --no-verify.

@@ -67,6 +67,7 @@ dev/clojurecraft/brain.clj    the brain checker (clojure -M:brain)
 ## Commands
 
 ```bash
+direnv allow                                  # once per clone: entering the directory then loads the flake's shell (.envrc)
 nix develop                                   # Java 25, Clojure, clj-kondo, clojure-lsp, lefthook, zstd (flake.nix,
                                               # pinned by flake.lock); entering it installs the git hooks
 nix flake update                              # move every tool to today's nixpkgs; match the :lint and :lsp
