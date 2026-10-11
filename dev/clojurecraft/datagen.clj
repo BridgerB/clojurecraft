@@ -366,4 +366,7 @@
     (write-map (io/file out "items.edn") hdr (registry reports "minecraft:item"))
     (write-map (io/file out "entity-types.edn") hdr (registry reports "minecraft:entity_type"))
     (write-map (io/file out "menus.edn") hdr (registry reports "minecraft:menu"))
-    (println "wrote" (str out "/{blocks,packets,items,entity-types,menus}.edn"))))
+    (write-map (io/file out "components.edn")
+               hdr
+               (registry reports "minecraft:data_component_type"))
+    (println "wrote" (str out "/{blocks,packets,items,entity-types,menus,components}.edn"))))

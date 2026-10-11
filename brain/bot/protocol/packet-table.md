@@ -5,8 +5,8 @@ type: reference
 tags: [bot, protocol, packets, index]
 aliases: [packet index, which packets are modelled, specs table, who sends this packet]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 5c7d6c1
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/packet.clj#def specs
   - src/clojurecraft/game.clj#defmulti on-packet
@@ -93,7 +93,7 @@ Every row of `packet/specs` at 18afddc (58 specs; paired s2c/c2s rows share a li
 
 ## Gotchas
 - A spec decodes only its listed fields; "rest ignored" rows rely on that.
-- A `:slot` with data components truncates the rest of its packet (`:truncated true`); a damaged tool in `container-set-content` loses every later slot today.
+- A `:slot`'s data components are read when their codec is known (a tool's damage among them); a component of another type truncates the rest of its packet (`:truncated true`) ([[packet-specs]]).
 - Not modelled yet but in `packets.edn`: `attack` 1, `place-recipe` 39, `respawn` (s2c 82).
 
 ## See also

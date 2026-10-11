@@ -45,6 +45,7 @@ related:
 | `smelting.edn` | inner jar `data/minecraft/recipe/*.json` of type smelting | `smelting`: input item set, result, count, cooking ticks |
 | `drops.edn` | inner jar `data/minecraft/loot_table/blocks/*.json` | `drops`: per block, the `[item chance]` tries of its first pool for a breaker with no enchanted tool (tool-gated entries and pools skipped) |
 | `menus.edn` | `reports/registries.json`, `minecraft:menu` | `registry`: menu type ids (12 crafting, 14 furnace) |
+| `components.edn` | `reports/registries.json`, `minecraft:data_component_type` | `registry`: item component type ids, which a slot's components are keyed by on the wire ([[packet-specs]]) |
 
 ## How it works
 0. `bb datagen` (`bb/clojurecraft/gen_tables.clj`) first unzips the inner jar and the bundler's `META-INF/libraries/*` and runs `clojurecraft.jar-probe` in a JVM with them on the classpath: it boots the game's registries (`Bootstrap/bootStrap`) and writes hardness, materials and fuel as JSON for the step below. The inner jar is not obfuscated, so the classes are named as in the source.

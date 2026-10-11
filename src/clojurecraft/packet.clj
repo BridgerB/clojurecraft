@@ -172,16 +172,55 @@
     (b/write-varint out 0)
     (b/write-varint out 0)))
 
+(def component-ids
+  "{component-type-name id}: the registry minecraft:data_component_type, generated from the
+   vanilla reports."
+  (edn/read-string (slurp (io/resource "clojurecraft/components.edn"))))
+
+(def component-codecs
+  "How the components the bot can read are written on the wire, by type name, as the game's
+   DataComponents registers their stream codecs (read in the 26.1.2 jar with javap): a varint,
+   or :unit, nothing at all. A worn tool carries damage, and the game answers every use-item with
+   the whole inventory, so a slot after a worn tool must still be read."
+  {:max_stack_size :varint
+   :max_damage :varint
+   :damage :varint
+   :unbreakable :unit
+   :repair_cost :varint})
+
+(def component-by-id
+  "id → [type-name codec] for every component in component-codecs."
+  (into {} (for [[k codec] component-codecs] [(component-ids k) [k codec]])))
+
+(defn read-component
+  "One component's value from buf by its codec: a varint, or true for :unit."
+  [codec buf]
+  (case codec
+    :varint (b/read-varint buf)
+    :unit true))
+
 (defn read-slot
-  "{:item :count} or nil for an empty slot. Components are not parsed: a slot with
-   any is marked :components? and ends what can be read of the frame."
+  "{:item :count} (plus :components {type-name value} when the slot carries any) or nil for an
+   empty slot. The components patch is a count added, a count removed, each added type id with
+   its value, then each removed type id (the game's DataComponentPatch.STREAM_CODEC). A component
+   whose codec is not in component-codecs cannot be stepped over: the slot is marked :components?
+   and ends what can be read of the frame."
   [buf]
   (let [n (b/read-varint buf)]
     (when (pos? n)
       (let [item (b/read-varint buf)
             added (b/read-varint buf)
-            removed (b/read-varint buf)]
-        (cond-> {:item item :count n} (pos? (+ added removed)) (assoc :components? true))))))
+            removed (b/read-varint buf)
+            comps (reduce (fn [m _]
+                            (if-let [[k codec] (component-by-id (b/read-varint buf))]
+                              (assoc m k (read-component codec buf))
+                              (reduced nil)))
+                          {}
+                          (range added))]
+        (cond (nil? comps) {:item item :count n :components? true}
+              :else
+              (do (dotimes [_ removed] (b/read-varint buf))
+                  (cond-> {:item item :count n} (seq comps) (assoc :components comps))))))))
 
 (defn int-in? "Is x an integer in [lo, hi]?" [lo hi x] (and (int? x) (<= lo x hi)))
 
