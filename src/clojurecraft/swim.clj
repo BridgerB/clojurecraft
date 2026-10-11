@@ -18,6 +18,7 @@
    :flee is the lava half: the nearest standable cell with no lava beside or under it, walked to
    with forward and jump; the planner ends it the moment the trap clears."
   (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.chunk :as chunk]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
@@ -27,7 +28,7 @@
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
-(def bank-radius 12)                  ; how far on the plane a bank is looked for
+(def bank-radius 16)                  ; how far on the plane a bank is looked for (gym shore-w1 run 6: none within 12 from mid-sea)
 (def bank-rise 1)                     ; a bank at most this far above the highest feet level afloat (steve's landing set W)
 (def bank-drop 3)                     ; or this far below it: a roofed pool's air pocket is sideways and down
 (def float-depth 1.03)                ; feet below an open surface when afloat with jump held (vanilla's equilibrium)
@@ -244,10 +245,56 @@
 ;; ---------------------------------------------------------------- walking in on purpose (the gym's :shore)
 
 (def wade-radius 64)                  ; how far a remembered pool may be to wade into
+(def wade-below 16)                   ; a pool this far under the eye is still waded to (the bucket's 5 is for scooping; a dune over the sea is fine)
+(def wade-beyond 8)                   ; blocks past the entry the wade keeps heading: a one-deep shelf never puts the eye under
 (def wade-timeout-ticks 2400)         ; 120 s to find water and get the eye under it
 
+(defn water-source?
+  "Is the state id a water source with no water over it: the top of a pool."
+  [world [x y z :as cell]]
+  (let [f (blocks/fluid (terrain/block-at world cell))]
+    (and (= :water (:fluid/kind f)) (= 0 (:fluid/level f))
+         (not= :water (:fluid/kind (blocks/fluid (terrain/block-at world [x (inc y) z])))))))
+
+(defn entries
+  "Where the bot could walk into the water of chunk key: [bank water] pairs, the bank a cell
+   the feet can stand in beside a surface source of the column, nearest the feet first."
+  [world key feet]
+  (let [column (get-in world [:world/chunks key])
+        sources (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)
+                      :when (water-source? world [x y z])]
+                  [x y z])]
+    (->> (for [[x y z :as water] sources
+               [dx _ dz] path/around
+               by [(inc y) y]
+               :let [bank [(+ x dx) by (+ z dz)]]
+               :when (path/standable? world bank)]
+           [bank water])
+         (sort-by (fn [[bank _]] (physics/horizontal-distance (physics/centre feet) (physics/centre bank))))
+         distinct)))
+
+(defn entry
+  "The nearest way into water: over the remembered pools within wade-radius and no more than
+   wade-below under the eye, nearest first, the first chunk with an entry gives its nearest.
+   [bank water], or nil."
+  [world feet]
+  (let [eye (physics/eye (:player/pos world))
+        ey (second eye)]
+    (->> (memory/pools world :water)
+         (filter (fn [[_ [_ y _]]] (>= y (- ey wade-below))))
+         (filter (fn [[_ pos]] (<= (physics/distance eye (physics/centre pos)) wade-radius)))
+         (sort-by (fn [[_ pos]] (physics/distance eye (physics/centre pos))))
+         (some (fn [[key _]] (first (entries world key feet)))))))
+
+(defn beyond
+  "A point wade-beyond blocks past water, away from bank on the plane: where the wade heads
+   so a shallow shelf is crossed into depth."
+  [[bx _ bz] [wx wy wz]]
+  (let [dx (- wx bx) dz (- wz bz)]
+    [(+ wx 0.5 (* wade-beyond dx)) (+ wy 0.5) (+ wz 0.5 (* wade-beyond dz))]))
+
 (defmethod intent/run :wade
-  [world {:intent/keys [target started child]} event]
+  [world {:intent/keys [target water started child]} event]
   (let [tick (:time/tick world)
         started (or started tick)
         world (update world :plan/intent assoc :intent/started started)]
@@ -256,10 +303,11 @@
       (-> world (assoc :player/controls {}) (intent/fail :no-water))
 
       (nil? target)
-      (if-let [pool (memory/nearest-surface-water world (game/eye world) wade-radius)]
+      (if-let [[bank w] (entry world (stairs/feet world))]
         (-> world
-            (update :plan/intent assoc :intent/target pool :intent/child {:intent/kind :walk :intent/target pool :intent/status :active})
-            (game/say (str "wade: toward the pool at " pool)))
+            (update :plan/intent assoc :intent/target bank :intent/water w
+                    :intent/child {:intent/kind :walk :intent/target bank :intent/status :active})
+            (game/say (str "wade: to the bank " bank " into " w)))
         (-> world (assoc :player/controls {}) (intent/fail :no-water)))
 
       (and child (intent/done? child))
@@ -271,15 +319,16 @@
       child
       (stairs/run-child world event)
 
-      ;; at the pool: walk straight in with jump off, and sink; the planner's trap takes over
+      ;; on the bank: straight in and on past the entry with jump off, sinking as it deepens;
+      ;; the planner's trap takes over
       :else
-      (assoc world :player/controls (assoc (intent/toward world (physics/centre target) 0.0) :control/jump? false)))))
+      (assoc world :player/controls (assoc (intent/toward world (beyond target water) 0.0) :control/jump? false)))))
 
 (defmethod plan/done-by :escaped-water? [world _]
   (boolean (some #(= :water (:trap/kind %)) (:world/traps world))))
 
 (defmethod plan/next-intent :wade [world _ _]
-  ;; a wade needs water the bot remembers; with none it waits, as a gather with no tree does
-  (if (memory/nearest-surface-water world (game/eye world) wade-radius)
+  ;; a wade needs a way into water it remembers; with none it waits, as a gather with no tree does
+  (if (entry world (stairs/feet world))
     {:intent/kind :wade}
     {:plan/wait :no-water}))

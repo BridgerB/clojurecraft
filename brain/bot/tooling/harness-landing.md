@@ -5,8 +5,8 @@ type: reference
 tags: [bot, tooling, harness, rcon]
 aliases: [clojure -M:harness, --events stdin, go/at, plan/go-at, :landing, landed?, land!, locate-forest, teleport!, checks, bad-landing, parse-pos, go-event, landing-offsets, wait-online, read-events!, locate biome forest, forceload, forest landing, landed in water, fixture process]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 96ac5ed
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/harness.clj#defn -main
   - src/clojurecraft/harness.clj#defn wait-online
@@ -55,7 +55,7 @@ clojure -M:harness --rcon-port 25581 --rcon-pass "$P" --name Clj_wood --until wo
 
 ## Gotchas
 - The checks replace bot-side predicates over the bot's own chunks. The fixture now asks the server, which is the authority on what is at the bot's feet, and needs no access to the bot at all.
-- Three bad landings were each seen in CI before the checks existed: a pond (the heightmap counts water as a surface), a log inside an oak canopy (the heightmap skips leaves but not a trunk top), and inside stone (the heightmap was not ready). The first live run of this process tried water, then buried, then landed.
+- Three bad landings were each seen in CI before the checks existed: a pond (the heightmap counts water as a surface), a log inside an oak canopy (the heightmap skips leaves but not a trunk top), and inside stone (the heightmap was not ready). The first live run of this process tried water, then buried, then landed. A fourth came with the beach set (gym shore-w1 run 6): the heightmap stops on seagrass and kelp, which are water to the physics, so the checks also refuse `#minecraft:underwater_bonemeals` at the feet or under them and water one above.
 - That run read y 57 one second after a teleport to y 63; the bot still walked to and dug a log at y 64. The checks only look at the feet and the block under them.
 - Without `--events stdin` and with a planned `--until`, `main` sends `:go` itself once the player is loaded (`go-when-loaded!`): no fixture, no landing.
 - The `:go` event, `:go/at` included, is recorded like any other, so a replay needs neither RCON nor the harness ([[record-replay]]).

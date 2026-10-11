@@ -12,7 +12,8 @@
             [clojurecraft.game :as game]
             [clojurecraft.make :as make]
             [clojurecraft.stone]
-            [clojurecraft.swim]
+            [clojurecraft.stairs :as stairs]
+            [clojurecraft.swim :as swim]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -52,7 +53,7 @@
       :place (and (= :crafting_table (:intent/item i)) (pos? (get counts :crafting_table 0)))
       :open-container (some? (memory/remembered w (:intent/target i)))
       :stairs-down (pos? (get counts :wooden_pickaxe 0))         ; down to stone, with nothing remembered: only with a pickaxe
-      :wade (some? (memory/nearest-surface-water w (game/eye w) 64))   ; into water the bot remembers
+      :wade (some? (swim/entry w (stairs/feet w)))             ; into water the bot remembers, from a bank it can stand on
       nil (contains? #{:no-log :no-water} (:plan/wait i))       ; gathering with no tree known, wading with no water: wait
       false)))
 

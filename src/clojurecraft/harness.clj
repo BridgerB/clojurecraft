@@ -30,6 +30,10 @@
    not a trunk top), and inside stone (the heightmap was not ready)."
   [[:water "if block ~ ~ ~ minecraft:water"]
    [:water "if block ~ ~-1 ~ minecraft:water"]
+   [:water "if block ~ ~1 ~ minecraft:water"]
+   ;; the heightmap stops on sea plants, which are water to the physics (gym shore-w1 run 6 landed on one)
+   [:water "if block ~ ~ ~ #minecraft:underwater_bonemeals"]
+   [:water "if block ~ ~-1 ~ #minecraft:underwater_bonemeals"]
    [:lava "if block ~ ~-1 ~ minecraft:lava"]
    [:tree "if block ~ ~-1 ~ #minecraft:logs"]
    [:tree "if block ~ ~-1 ~ #minecraft:leaves"]

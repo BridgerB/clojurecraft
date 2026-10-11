@@ -645,3 +645,23 @@
     (is (true? (:escaped (main/result w "shore" true))))
     (is (main/ok? w "shore"))
     (is (empty? (:sim/violations sim)))))
+
+(def beach
+  "A dune sloping down one block a step from y 68 at x 0 to the sand at y 64 by x 4, a
+   one-deep shelf at x 8-9 (water at y 63 only) and the sea three deep from x 10: the gym's
+   beach landings in the model. The pool fact is mid-sea; the entry is the shelf's edge."
+  (merge (into {} (for [x (range 0 4) y (range 64 (- 69 x)) z (range 0 6)] [[x y z] 1]))
+         (into {} (for [x (range 8 10) z (range 0 6)] [[x 63 z] blocks/water-base]))
+         (into {} (for [x (range 10 16) y [61 62 63] z (range 0 6)] [[x y z] blocks/water-base]))))
+
+(deftest a-dune-over-a-shelving-beach-is-waded-from-and-escaped
+  ;; gym batch shore-w1 (set W, 0/10): from a dune the sea was "more than 5 under the eye", a
+  ;; mid-sea pool had no route, and a one-deep shelf never put the eye under
+  (let [[w sim] (sim/run step (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes beach) :spawn [0.5 69.0 2.5]})
+                         #(or (plan/done? %) (plan/failed? %)) 90000 {:event/kind :go :go/goals [:shore]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (plan/dry-land? w))
+    (is (= [:water] (map :trap/kind (:world/traps w))))
+    (is (empty? (:sim/violations sim)))))

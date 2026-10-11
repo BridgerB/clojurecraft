@@ -57,6 +57,7 @@
 (s/def :intent/bank ::block-pos)
 (s/def :intent/next-search int?)
 (s/def :intent/dig-when-down ::block-pos)
+(s/def :intent/water ::block-pos)
 (s/def :intent/exposes-ok? boolean?)
 (s/def :player/dead? boolean?)
 (s/def :player/in-lava? boolean?)

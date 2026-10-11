@@ -23,6 +23,9 @@ sourceRefs:
   - src/clojurecraft/swim.clj#defmethod intent/run :swim-out
   - src/clojurecraft/swim.clj#defmethod intent/run :flee
   - src/clojurecraft/swim.clj#defmethod intent/run :wade
+  - src/clojurecraft/swim.clj#defn entry
+  - src/clojurecraft/swim.clj#defn entries
+  - test/clojurecraft/sim_test.clj#a-dune-over-a-shelving-beach-is-waded-from-and-escaped
   - src/clojurecraft/swim.clj#defmethod plan/done-by :not-trapped-in
   - src/clojurecraft/path.clj#defn trap-factor
   - src/clojurecraft/intent.clj#defn exposes-fluid?
@@ -54,7 +57,7 @@ Survival is two goal rows and one rule in the planner, not a watchdog thread. Th
 `:escape-water` and `:escape-lava` are targets at priority 0 with `:goal/always? true`: `plan/choose` puts them in play whatever `--until` asked for. Each is done by `:not-trapped-in` (the trap is not its kind) and planned by `:escape` into `:swim-out` or `:flee`, only while the trap is its kind. Preemption is the planner's existing rule ([[goals-and-intents]]): the running intent's `:intent/goal` is not the goal chosen now, so it is abandoned `:preempted`, controls cleared, `:plan/last` dropped (a chain must not continue from it), and the escape starts in the same tick. The property `water-over-the-eye-preempts-whatever-runs` holds it for any running walk or dig.
 
 ## :swim-out (swim.clj)
-1. **One bank, kept.** `banks` lists cells the feet could stand in (`path/standable?`) within `bank-radius` 12 on the plane, between `bank-drop` 3 under the `float-top` and `bank-rise` 1 over it, nearest first; the first not blacklisted is `:intent/bank` and `:intent/target`, and it is never re-picked (re-picking every tick swam the siblings in circles). `float-top` is the highest feet level the body reaches in the column: `float-depth` 1.03 under an open surface, the body's height under a roof, rounded; a ledge higher than that is beyond the impulse's lift.
+1. **One bank, kept.** `banks` lists cells the feet could stand in (`path/standable?`) within `bank-radius` 16 on the plane (12 found nothing from a mid-sea pool cell in gym batch shore-w1), between `bank-drop` 3 under the `float-top` and `bank-rise` 1 over it, nearest first; the first not blacklisted is `:intent/bank` and `:intent/target`, and it is never re-picked (re-picking every tick swam the siblings in circles). `float-top` is the highest feet level the body reaches in the column: `float-depth` 1.03 under an open surface, the body's height under a roof, rounded; a ledge higher than that is beyond the impulse's lift.
 2. **No bank in reach:** dig the cap over the head if there is one, else hold jump and rise, looking again every `search-every-ticks` (20); a roof or a bank comes into reach, or `escape-timeout-ticks` (2400, 120 s) fails it `:no-escape`.
 3. **Swim:** `swim-controls` holds forward and jump toward the bank's centre while in water, walks without jump once out, and does nothing on dry land, so the planner can see the land held (a bot that kept jumping on the bank never counted as out).
 4. **Stuck** (`stuck-ticks` 40 without `progress` 0.05 toward the bank): `obstacle` names what to dig: a lily pad over the head first (a lid, steve's rule), else the cell ahead at head height, else the cell over the head; never the cell ahead at feet height, which is the bank the impulse needs to collide with. The dig is a child `:dig` with `:intent/exposes-ok?` run by `stairs/run-child` (intents composing intents, as [[stairs-down]]).
@@ -64,7 +67,7 @@ Survival is two goal rows and one rule in the planner, not a watchdog thread. Th
 The lava half: `footing` is the nearest standable cell with no lava beside or under it within `flee-radius` 6, at most one up or down; forward and jump toward it; `flee-timeout-ticks` (200) fails it `:no-footing`. The planner ends it the moment the trap clears.
 
 ## :wade and :shore
-The gym's water trial. `:shore` (priority 5, `--until shore`) is done by `:escaped-water?` (a water trap in `:world/traps`) and planned by `:wade`: a child `:walk` to the nearest remembered pool (`memory/nearest-surface-water`, radius 64; with none, `{:plan/wait :no-water}`), then straight in with jump off, sinking until the trap preempts it. RESULT carries `:escaped true` once a trap was escaped.
+The gym's water trial. `:shore` (priority 5, `--until shore`) is done by `:escaped-water?` (a water trap in `:world/traps`) and planned by `:wade`. `entry` finds the way in: over the remembered pools within `wade-radius` 64 and no more than `wade-below` 16 under the eye (the bucket's 5 is for scooping; a dune over the sea is a fine start), nearest first, the first chunk whose column holds a surface water source with a standable cell beside it gives `[bank water]` (`entries`, nearest the feet). A child `:walk` goes to the bank; then the wade heads `wade-beyond` 8 blocks past the water cell with jump off, sinking as it deepens, until the trap preempts it. With no entry, `{:plan/wait :no-water}`. RESULT carries `:escaped true` once a trap was escaped. Gym batch shore-w1 (set W, 0/10) taught all three rules: from a dune the sea was "more than 5 under the eye"; a pool fact (the chunk's centre-most source) sat mid-sea with no route within 3 of it; a one-deep shelf at the first water cell never put the eye under.
 
 ## Dig refusals
 `:dig` fails `:unsafe` in `:settle` when any of the target's six neighbours is a fluid (`exposes-fluid?`, steve's `digExposesWater`) unless the intent says `:intent/exposes-ok?`, or when the target is in `never-dug` (obsidian: ruststeve dug its own portal frame). `intent/still?` accepts a body afloat as still, so an escape dig can start under water.
@@ -76,7 +79,7 @@ Three model fixtures from the issue and the siblings' deaths: a two-deep pond wi
 - With `:go/goals []` nothing is in play but the escapes, and an untrapped bot's plan is done at once; the escape tests keep `:wood` in play (no tree, so it only waits).
 - A deep well whose floor is out of reach of its cap is still a death by vanilla arithmetic; there is no faster answer than the floor.
 - Lava deaths are modelled in the trap only: fire and the burning state are not in the server model yet.
-- Bank search is a terrain scan (25 × 25 × 5 cells) once per pick and every 20 ticks while rising; memory is not consulted, because what is beside the body now is the terrain's question ([[memory-sightings]]).
+- Bank search is a terrain scan (33 × 33 × 5 cells) once per pick and every 20 ticks while rising; memory is not consulted, because what is beside the body now is the terrain's question ([[memory-sightings]]).
 
 ## See also
 - [[fluid-physics]] - the flags this reads.
