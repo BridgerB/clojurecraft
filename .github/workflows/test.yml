@@ -29,26 +29,22 @@ jobs:
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
+      - name: Install Babashka (the flake's version, as bb.edn's :min-bb-version)
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
       - uses: actions/cache@v6
         with:
           path: |
             ~/.m2/repository
             ~/.gitlibs
+            ~/.deps.clj
           key: clj-${{ hashFiles('deps.edn') }}
-      - name: Unit, property and simulation tests
-        run: clojure -M:test
-      - name: Brain checker
-        run: clojure -M:brain
-      - name: Formatting (the pre-commit hook fixes it; this catches a --no-verify)
-        run: clojure -M:fmt check
-      - name: Lint (clj-kondo; a warning fails it, as in the pre-commit hook)
-        run: clojure -M:lint --lint src dev test
-      - name: Idioms (Splint; a warning fails it, as in the pre-commit hook)
-        run: clojure -M:splint src dev test/clojurecraft
-      - name: Namespaces tidy (clojure-lsp clean-ns; the pre-commit hook fixes it)
-        run: clojure -M:lsp clean-ns --dry
-      - name: No unused public vars (clojure-lsp diagnostics, over the whole repo)
-        run: clojure -M:lsp diagnostics --raw
+      # bb ci, in two steps so a red one says which half failed; the same tasks as on a Mac
+      - name: Unit, property and simulation tests (bb test)
+        run: bb test
+      - name: Static checks (bb check - format, lint, idioms, ns forms, unused vars, brain)
+        run: bb check
 
   forests:
     runs-on: ubuntu-24.04

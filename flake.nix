@@ -21,6 +21,7 @@
         clojure-lsp = pkgs.clojure-lsp;                   # clean-ns and unused public vars
         lefthook = pkgs.lefthook;                         # runs the git hooks in lefthook.yml
         zstd = pkgs.zstd;                                 # gym recordings are .edn.zst
+        babashka = pkgs.babashka;                         # bb.edn: the task list, and the scripts
       };
     in {
       packages = forEach tools;

@@ -1,0 +1,48 @@
+;; The repo's commands, as Babashka tasks: `bb tasks` lists them, `bb <task> [args]` runs one.
+;; Each task is the command it names, so CI and the shell run exactly the same thing; `bb ci` is
+;; what test.yml's unit job runs. The bot itself never runs under Babashka: tasks that need it
+;; start the JVM (`clojure -M:...`).
+{:min-bb-version "1.13.225"
+ :paths ["bb"]
+ :tasks
+ {:requires ([clojurecraft.tasks :as t])
+  ;; ---------------------------------------------------------------- checks, as CI runs them
+  test {:doc "Every test, in parallel; args select: -n ns, -v ns/var, -x ns"
+        :task (apply clojure "-M:test" *command-line-args*)}
+  fmt {:doc "Format with zprint (.zprint.edn); args: files, else the whole repo"
+       :task (apply clojure "-M:fmt" "fix" *command-line-args*)}
+  fmt:check {:doc "Fail when a file is not as zprint lays it out" :task (clojure "-M:fmt" "check")}
+  lint {:doc "clj-kondo, held at zero findings"
+        :task (apply t/tool "clj-kondo" "lint" "--lint" t/source-paths)}
+  idioms {:doc "Splint, held at zero findings (.splint.edn)"
+          :task
+          (apply clojure "-M:splint" "src" "dev" "test/clojurecraft" "bb" *command-line-args*)}
+  ns {:doc "Sort and prune every ns form (clojure-lsp clean-ns, .lsp/config.edn)"
+      :task (t/tool "clojure-lsp" "lsp" "clean-ns")}
+  ns:check {:doc "Fail when an ns form is not as clean-ns leaves it"
+            :task (t/tool "clojure-lsp" "lsp" "clean-ns" "--dry")}
+  unused {:doc "Fail on a public var nothing calls (clojure-lsp diagnostics)"
+          :task (t/tool "clojure-lsp" "lsp" "diagnostics" "--raw")}
+  brain {:doc "The brain checker: every note's links and source anchors resolve"
+         :task (clojure "-M:brain")}
+  check {:doc "Every static check CI runs, in its order"
+         :depends [fmt:check lint idioms ns:check unused brain]}
+  ci {:doc "What test.yml's unit job runs: the tests, then every static check"
+      :depends [test check]}
+  ;; ---------------------------------------------------------------- running things
+  bot {:doc "The bot: clojure -M:run with these args (--port, --name, --until, --record ...)"
+       :task (apply clojure "-M:run" *command-line-args*)}
+  replay {:doc "Fold a recording with no server: bb replay data/runs/x.edn"
+          :task (apply clojure "-M:replay" *command-line-args*)}
+  rcon {:doc "One RCON command: bb rcon --port 25581 --pass P <command words>"
+        :task (apply clojure "-M:rcon" *command-line-args*)}
+  harness {:doc "The landing fixture as its own process (clojure -M:harness)"
+           :task (apply clojure "-M:harness" *command-line-args*)}
+  gym {:doc "The gym: plan, land, judge, report (clojure -M:gym <command> ...)"
+       :task (apply clojure "-M:gym" *command-line-args*)}
+  fleet {:doc "The fleet: plan, work, report, pull (clojure -M:fleet <command> ...)"
+         :task (apply clojure "-M:fleet" *command-line-args*)}
+  local-server {:doc "This Mac's vanilla server on 25571 / RCON 25581: bb local-server start|stop"
+                :task (apply shell "./local-server.sh" *command-line-args*)}
+  datagen {:doc "Regenerate the EDN tables in resources/clojurecraft/ from the server jar"
+           :task (shell "scripts/datagen.sh")}}}
