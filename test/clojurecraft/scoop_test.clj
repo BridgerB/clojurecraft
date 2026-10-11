@@ -114,3 +114,18 @@
         w (memory/remember-pools (standing blocks [8.5 8.5]) [0 0] (world/column blocks))]
     (is (= [[10 64 8]] (vals (memory/pools w :water))) "memory keeps it: no water above it")
     (is (= {:plan/wait :no-water} (scoop/scoop-next w)))))
+
+(def mine
+  "A stone hill from y 64 to 75 with a one-wide staircase cut down it along +x from [4 76 8] to
+   [14 66 8]: feet cells [x (80 - x) 8] with the two above each, as stairs-down opens them."
+  (merge (into {} (for [x (range 16) y (range 64 76) z (range 16)] [[x y z] 1]))
+         (into {} (for [x (range 4 15) dy [0 1 2]] [[x (+ (- 80 x) dy) 8] blocks/air]))))
+
+(deftest deep-in-the-mine-with-no-water-the-bot-climbs-out-first
+  ;; gym batch iron-a1 runs 3 and 5: the bucket was made down in the mine, where no water was in
+  ;; sight and the hunt looked for ground near the bot's own height; both failed :no-water
+  (let [w (assoc (standing mine [14.5 8.5]) :player/pos [14.5 66.0 8.5] :plan/go-at [4.5 76.0 8.5])]
+    (is (= {:intent/kind :walk :intent/target [4 76 8] :intent/for :surface} (scoop/scoop-next w))))
+  (is (= {:plan/wait :no-water}
+         (scoop/scoop-next (assoc (standing mine [14.5 8.5]) :player/pos [14.5 66.0 8.5])))
+      "no landing to climb to"))

@@ -156,6 +156,7 @@
          (sort-by second))))
 
 (def max-candidates 3)                ; the nearest of each kind a route is planned to
+(def underground-depth 8)             ; feet this far under the landing are underground: climb out before a hunt
 
 (defn first-walk
   "A walk tagged for to the first of targets (the max-candidates first, out of reach) a route
@@ -170,10 +171,20 @@
        (filter #(intent/routable? world %))
        first))
 
+(defn climb
+  "A walk back to the landing (:plan/go-at) when the feet are more than underground-depth under
+   it and a route reaches it, or nil. A bot that needs water deep in its mine sees none and its
+   hunt looks for ground near its own height, underground: gym batch iron-a1 runs 3 and 5 got
+   the bucket down there and failed :no-water. The siblings climbed out first too."
+  [world]
+  (let [home (:plan/go-at world)]
+    (when (and home (< (second (:player/pos world)) (- (second home) underground-depth)))
+      (first-walk world :surface [(mapv #(long (math/floor %)) home)]))))
+
 (defn scoop-next
   "The next step toward a filled bucket: scoop the nearest surface source when it is in reach,
-   else walk to the nearest one in sight a route reaches, or to such a remembered pool, or hunt
-   for one (hunt-targets); else wait :no-water."
+   else walk to the nearest one in sight a route reaches, or to such a remembered pool, or climb
+   out to the landing when deep under it, or hunt for one (hunt-targets); else wait :no-water."
   [world]
   (let [srcs (sources world)
         src (first srcs)]
@@ -181,6 +192,7 @@
           :else
           (or (first-walk world :scoop srcs)
               (first-walk world :scoop (pools-near world))
+              (climb world)
               (first-walk world :water-hunt (hunt-targets world))
               {:plan/wait :no-water}))))
 
