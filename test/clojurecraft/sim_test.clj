@@ -19,6 +19,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.scoop]
             [clojurecraft.sim :as sim]
             [clojurecraft.stairs]
             [clojurecraft.stone]
@@ -1036,6 +1037,36 @@
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
     (is (empty? (:sim/violations sim)))
     (is (= (:time/now w) (:time/now (first (flint-run seed)))) "the same seed, the same run")))
+
+;; ---------------------------------------------------------------- a bucket of water
+
+(def bank-pond
+  "A pond of nine water sources sunk in the floor at x 11-13, z 7-9; the spawn is on the bank."
+  (into {} (for [x (range 11 14) z (range 7 10)] [[x 63 z] blocks/water-base])))
+
+(deftest an-empty-bucket-is-filled-at-a-pond-from-its-bank
+  (let [[w sim] (sim/run (game/compose game/step
+                                       (partial plan/step-over
+                                                (conj plan/goals
+                                                      {:goal/id :bucket-test
+                                                       :goal/priority 7
+                                                       :goal/target? true
+                                                       :goal/provides {:item/water_bucket 1}
+                                                       :goal/done? :provided?})))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes bank-pond)
+                                    :spawn [5.5 64.0 8.5]
+                                    :inventory {40 {:item (item :bucket) :count 1}}})
+                         ;; a step into the pond ends the run, so done means never in it
+                         #(or (plan/done? %) (plan/failed? %) (:player/in-water? %))
+                         60000
+                         {:event/kind :go :go/goals [:bucket-test]})]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= {:water_bucket 1} (held w)) "the bucket in hotbar slot 4 was selected and filled")
+    (is (= 1 (count (filter #(= blocks/air %) (vals (:sim/placed sim))))) "one source taken")
+    (is (not (:player/in-water? w)) "never in the pond")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))))
 
 (def walled-ledge
   "Gym batch push70 (landing 18648,18464): the nearest stone's only cell at its own level was

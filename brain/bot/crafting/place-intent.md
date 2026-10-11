@@ -27,7 +27,7 @@ related:
 `{:intent/kind :place :intent/item :crafting_table}` places one held block next to the bot. Stages dispatch through `place-stage` on `:intent/stage`; like `:craft`, the whole intent is gated on `window/waiting` because equipping can be a click.
 
 ## Stages
-1. **`:equip`**: find the lowest player slot holding the item (none fails `:not-held`). Already the held slot → `:spot`. In the hotbar → `set-carried-item` to it, set `:player/held-slot`, `:spot`. In the main inventory → a mode-2 click on that slot with `button` = the held slot (swap into the hand), and stay in `:equip` until the answer arrives.
+1. **`:equip`** (`place/equip`, shared with the scoop): find the lowest player slot holding the item (none fails `:not-held`). Already the held slot → `:spot`. In the hotbar → `set-carried-item` to it, set `:player/held-slot`, `:spot`. In the main inventory → a mode-2 click on that slot with `button` = the held slot (swap into the hand), and stay in `:equip` until the answer arrives.
 2. **`:spot`**: `spot` picks `[target support]` (none fails `:no-spot`).
 3. **`:settle`**: look at the target's centre; after 3 still ticks and 300 ms, send `use-item-on` against the **support** block, face 1 (top), cursor `[0.5 1.0 0.5]`, with the next `:bot/sequence`, plus a swing; → `:sent`.
 4. **`:sent`**: done when `terrain/block-at` at the target is a state of the item's block, by name (the server's `block-update` wrote it; a furnace's state depends on which way the server faced it). Fails `:rejected` once `:stats/last-ack` has reached our sequence and 500 ms have passed without the block. Fails `:no-answer` after 3000 ms.

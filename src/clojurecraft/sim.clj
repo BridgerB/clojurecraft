@@ -26,6 +26,7 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]))
 
 (set! *warn-on-reflection* true)
@@ -811,6 +812,57 @@
           (send ack)
           (open-furnace pos))
       (place sim pos face ack))))
+
+(def use-range 4.5)                   ; how far the eyes reach for a block, as the server's interaction range
+(def ray-step 0.05)                   ; the length of one step along a ray
+
+(defn ray-cells
+  "The cells a ray from the player's eye (its last reported position) along look [yaw pitch]
+   passes through within use-range, in order, without repeats."
+  [sim look]
+  (let [[px py pz] (:sim/player-pos sim)
+        eye [px (+ py 1.62) pz]
+        dir (physics/direction look)]
+    (dedupe (for [k (range 0 (/ use-range ray-step))
+                  :let [d (* k ray-step)]]
+              (mapv #(long (math/floor (+ %1 (* d %2)))) eye dir)))))
+
+(defn scooped
+  "The water source a bucket used along look takes: the first water source on the ray, unless a
+   solid block comes first (the eyes do not see through it); nil when none."
+  [sim look]
+  (reduce (fn [_ cell]
+            (let [id (block-at sim cell)]
+              (cond (= id blocks/water-base) (reduced cell)
+                    (and id (blocks/solid? id)) (reduced nil)
+                    :else nil)))
+          nil
+          (ray-cells sim look)))
+
+(defmethod on-packet [:play :use-item]
+  ;; a held empty bucket aimed by the look at a water source fills: the source becomes air and
+  ;; the bucket a water bucket; anything else does nothing here. Either way, the ack.
+  [sim {:keys [sequence y-rot x-rot]}]
+  (let [ack {:packet/name :block-changed-ack :sequence sequence}
+        slot (+ 36 (:sim/held sim 0))
+        held (get-in sim [:sim/inv slot])
+        src (when (and (:sim/player-pos sim) (= (:item held) (get blocks/items :bucket)))
+              (scooped sim [y-rot x-rot]))]
+    (if src
+      (let [before (full (:sim/inv sim) (inventory/layouts :inventory))
+            filled {:item (get blocks/items :water_bucket) :count 1}
+            inv (if (= 1 (:count held))
+                  (assoc (:sim/inv sim) slot filled)
+                  (first (insert (take-one (:sim/inv sim) slot)
+                                 (inventory/store-slots (inventory/layouts :inventory))
+                                 filled)))]
+        (-> sim
+            (assoc-in [:sim/placed src] blocks/air)
+            (assoc :sim/inv inv)
+            (send {:packet/name :block-update :pos src :state blocks/air})
+            (sync-window :inventory before (:sim/cursor sim) false)
+            (send ack)))
+      (send sim ack))))
 
 (defn within-pickup?
   "Is an item at [ix iy iz] inside the pickup box of a player at [px py pz] (its box inflated

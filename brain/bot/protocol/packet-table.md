@@ -87,7 +87,7 @@ Every row of `packet/specs` at 18afddc (58 specs; paired s2c/c2s rows share a li
 | use-item-on | hand, pos, face varint, cursor-x/y/z f32, inside-block, world-border-hit, sequence | `:place`, `:open-container` |
 | player-action | status, pos, face i8, sequence | intent `:dig` |
 | swing | hand | intent `:dig` |
-| use-item | hand, sequence, y-rot f32, x-rot f32 | nobody yet (a bucket fills or pours with it, aimed by look) |
+| use-item | hand, sequence, y-rot f32, x-rot f32 | `:scoop` (a bucket fills with it, aimed by the look it carries) |
 | container-click | window-id, state-id, slot i16, button i8, mode, changed [slot hashed-slot], cursor hashed-slot | `window/click` (craft, place equip) |
 | container-close | window-id | craft (`:settle` for window 0, `:take` for a table) |
 

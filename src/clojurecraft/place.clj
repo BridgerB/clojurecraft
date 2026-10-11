@@ -102,18 +102,21 @@
   {:arglists '([world intent])}
   (fn [_world i] (:intent/stage i)))
 
-(defmethod place-stage :equip
-  [world {:intent/keys [item]}]
-  (let [id (recipe/item-id item)
-        p (held-slot-of world id)
+(defn equip
+  "One step toward holding item (a name) in the hand, for an intent whose next stage is then:
+   already held, go on; in the hotbar, select it and go on; in the main inventory, swap it into
+   the held slot with a window-0 click and stay (the answer moves it); held nowhere, fail
+   :not-held."
+  [world item then]
+  (let [p (held-slot-of world (recipe/item-id item))
         held (:player/held-slot world)]
     (cond (nil? p) (intent/fail world :not-held)
-          (= p held) (intent/assoc-intent world :intent/stage :spot)
+          (= p held) (intent/assoc-intent world :intent/stage then)
           (<= 0 p 8)
           (-> world
               (game/emit {:packet/name :set-carried-item :slot p})
               (assoc :player/held-slot p)
-              (intent/assoc-intent :intent/stage :spot))
+              (intent/assoc-intent :intent/stage then))
           :else
           (window/click world
                         (window/view world :inventory) ; swap into the held slot
@@ -121,6 +124,8 @@
                                                                     p)
                          :click/button held
                          :click/mode 2}))))
+
+(defmethod place-stage :equip [world {:intent/keys [item]}] (equip world item :spot))
 
 (defmethod place-stage :spot
   [world _]

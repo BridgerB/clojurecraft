@@ -237,6 +237,13 @@
         horiz (math/sqrt (+ (* dx dx) (* dz dz)))]
     [(math/to-degrees (math/atan2 (- dx) dz)) (math/to-degrees (- (math/atan2 dy horiz)))]))
 
+(defn direction
+  "The unit vector the eyes look along at [yaw pitch] in degrees: the inverse of look-at."
+  [[yaw pitch]]
+  (let [y (math/to-radians yaw)
+        p (math/to-radians pitch)]
+    [(- (* (math/sin y) (math/cos p))) (- (math/sin p)) (* (math/cos y) (math/cos p))]))
+
 (defn distance
   "Euclidean distance between two points."
   [[ax ay az] [bx by bz]]

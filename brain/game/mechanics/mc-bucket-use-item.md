@@ -22,7 +22,7 @@ related:
 - Consequence for our build plans: a pour op carries an aim, not a face.
 
 ## Limits
-Draft until a `:use-item` spec exists in `packet/specs` and a live scoop/pour is observed in this repo.
+Draft until a live scoop or pour is observed in this repo. The `:use-item` spec exists (hand, sequence, y-rot, x-rot, field order read from `ServerboundUseItemPacket`), the `:scoop` intent sends it ([[scoop-intent]]), and the sim fills a bucket by ray along its look; neither is a run on the real server.
 
 ## See also
 - [[sib-portal-mold]]

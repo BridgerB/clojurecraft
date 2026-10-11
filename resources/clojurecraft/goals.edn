@@ -124,6 +124,14 @@
   :goal/item :gravel
   :goal/blocks [:gravel]
   :goal/done? :provided?}
+ {:goal/id :fill-bucket
+  :goal/priority 10
+  :goal/doc
+  "scoop a surface water source with an empty bucket, walking to the nearest one in sight or remembered"
+  :goal/needs {:item/bucket 1}
+  :goal/provides {:item/water_bucket 1}
+  :goal/act :scoop
+  :goal/done? :provided?}
  {:goal/id :place-table
   :goal/priority 10
   :goal/doc "put a held crafting table down near the player"

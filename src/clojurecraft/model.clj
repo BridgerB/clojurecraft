@@ -143,7 +143,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :smelt :redig"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :smelt :redig :scoop"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -212,7 +212,7 @@
    [:intent/clicks "clicks still to send" "craft, :click stage; smelt, :load stage"]
    [:intent/result "result item id" "craft, smelt"]
    [:intent/makes "items one craft yields; for a smelt, the batch" "craft, smelt"]
-   [:intent/before "result items held before crafting or smelting" "craft, smelt"]
+   [:intent/before "result items held before crafting, smelting or scooping" "craft, smelt, scoop"]
    [:intent/smelt "furnace recipe id to cook (smelting.edn)" "smelt"]
    [:intent/count "how many of the input the batch cooks" "smelt"]
    [:intent/lost "clicks the server lost in this smelt; the intent resumed from its slots"
@@ -226,7 +226,10 @@
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
    [:intent/item "item to place" "place, redig"]
    [:intent/against "block the placement is against" "place"]
-   [:intent/sequence "sequence number of the placement" "place, after sending"]
+   [:intent/sequence "sequence number of the placement, or of the bucket's use"
+    "place and scoop, after sending"]
+   [:intent/tries "scoops sent at this source; the last of scoop/max-tries fails :no-scoop"
+    "scoop, after a scoop went unanswered"]
    ;; ---- events: everything the reducer is given
    [:event/kind ":start :packet :tick :go :closed" "every event"]
    [:event/now "wall-clock ms of a tick" "tick"]

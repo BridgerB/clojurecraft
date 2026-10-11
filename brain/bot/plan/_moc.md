@@ -20,6 +20,7 @@ related:
 - [[walk-intent]] - plan a route on the first tick, follow it waypoint by waypoint, plan again when the world changes, fail :no-path after six plans.
 - [[collect-intent]] - walk onto the drop until any log is held; name a blocking leaf; 10 s timeout.
 - [[gather-chain]] - walk, dig, collect tagged for :log, continued from :plan/last, up to six leaf digs.
+- [[scoop-intent]] - fill a bucket at surface water in sight or remembered, never cave water; aim at the surface, use-item, done when the water bucket is held.
 - [[mine-act]] - mining rows as data (stone, coal, iron, gravel): the tool, the drops, the walk beside the block, stairs down to the row's depth.
 - [[roadmap-issues]] - which GitHub issue number is which roadmap step and draft.
 

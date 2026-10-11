@@ -169,6 +169,7 @@
 (s/def :intent/count pos-int?)
 (s/def :intent/cook-by int?)
 (s/def :intent/lost pos-int?)
+(s/def :intent/tries pos-int?)
 (s/def :intent/resync boolean?)
 (s/def :intent/item keyword?)
 (s/def ::need-key
