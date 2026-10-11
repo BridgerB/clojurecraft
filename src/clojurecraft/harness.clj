@@ -96,21 +96,31 @@
           (>= i 150) false
           :else (do (Thread/sleep 200) (recur (inc i))))))
 
+(defn with-forceload
+  "Call (f) with the chunks of coords forceloaded ([x z] for one column, [x0 z0 x1 z1] for a
+   square), and release them afterwards even when f throws: a forceload left behind keeps its
+   chunks ticking for every later run on the world. Returns what f returns."
+  [rc coords f]
+  (let [where (str/join " " coords)]
+    (rcon/command rc (str "forceload add " where))
+    (try (f) (finally (rcon/command rc (str "forceload remove " where))))))
+
 (defn teleport!
   "Load the column at x z and teleport the bot onto its surface."
   [rc name [x z]]
-  (rcon/command rc (str "forceload add " x " " z))
-  (wait-loaded! rc x z)
-  (cli/log "tp:"
-           (rcon/command rc
-                         (str "execute positioned "
-                              x
-                              " 0 "
-                              z
-                              " positioned over motion_blocking_no_leaves run tp "
-                              name
-                              " ~0.5 ~ ~0.5")))
-  (rcon/command rc (str "forceload remove " x " " z)))
+  (with-forceload rc
+                  [x z]
+                  (fn []
+                    (wait-loaded! rc x z)
+                    (cli/log "tp:"
+                             (rcon/command rc
+                                           (str "execute positioned "
+                                                x
+                                                " 0 "
+                                                z
+                                                " positioned over motion_blocking_no_leaves run tp "
+                                                name
+                                                " ~0.5 ~ ~0.5"))))))
 
 (defn land!
   "Land the bot in a forest on ground the fixture can use; returns where it stands, or nil."

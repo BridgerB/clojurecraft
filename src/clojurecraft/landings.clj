@@ -75,36 +75,39 @@
   "[x y z] of the ground at column x z (the highest motion-blocking block that is not leaves),
    read with a marker entity that is removed again; nil when the column would not load."
   [rc [x z]]
-  (rcon/command rc (str "forceload add " x " " z))
-  (try (when (harness/wait-loaded! rc x z)
-         (rcon/command rc
-                       (str "execute positioned "
-                            x
-                            " 0 "
-                            z
-                            " positioned over motion_blocking_no_leaves"
-                            " run summon minecraft:marker ~ ~ ~ {Tags:[\""
-                            marker-tag
-                            "\"]}"))
-         (let [pos (harness/parse-pos (rcon/command rc
-                                                    (str
-                                                     "data get entity @e[type=minecraft:marker,tag="
-                                                     marker-tag
-                                                     ",limit=1] Pos")))]
-           (rcon/command rc (str "kill @e[type=minecraft:marker,tag=" marker-tag "]"))
-           (when pos (mapv #(long (math/floor %)) pos))))
-       (finally (rcon/command rc (str "forceload remove " x " " z)))))
+  (harness/with-forceload
+   rc
+   [x z]
+   #(when (harness/wait-loaded! rc x z)
+      (rcon/command rc
+                    (str "execute positioned "
+                         x
+                         " 0 "
+                         z
+                         " positioned over motion_blocking_no_leaves"
+                         " run summon minecraft:marker ~ ~ ~ {Tags:[\""
+                         marker-tag
+                         "\"]}"))
+      (let [pos (harness/parse-pos (rcon/command rc
+                                                 (str
+                                                  "data get entity @e[type=minecraft:marker,tag="
+                                                  marker-tag
+                                                  ",limit=1] Pos")))]
+        (rcon/command rc (str "kill @e[type=minecraft:marker,tag=" marker-tag "]"))
+        (when pos (mapv (fn [c] (long (math/floor c))) pos))))))
 
 (defn answers!
   "The landing checks run at a surface position, with its column held loaded while the server
    is asked: [[reason reply] ...]. On an unloaded column every `if block` test fails, which
    reads as a landing with nothing wrong with it (gym shore-w2: two landings in the open sea)."
   [rc [x y z]]
-  (rcon/command rc (str "forceload add " x " " z))
-  (try (harness/wait-loaded! rc x z)
-       (vec (for [[reason test] harness/checks]
-              [reason (rcon/command rc (str "execute positioned " x " " y " " z " " test))]))
-       (finally (rcon/command rc (str "forceload remove " x " " z)))))
+  (harness/with-forceload
+   rc
+   [x z]
+   (fn []
+     (harness/wait-loaded! rc x z)
+     (vec (for [[reason test] harness/checks]
+            [reason (rcon/command rc (str "execute positioned " x " " y " " z " " test))])))))
 
 (defn landing!
   "The first fit surface near grid cell, after snapping it to the set's biome, that is not one
@@ -131,9 +134,10 @@
     (when (> (chunk-count sq) max-forceload-chunks)
       (throw (ex-info "pregen square too large for one forceload"
                       {:square sq :chunks (chunk-count sq)})))
-    (rcon/command rc (str "forceload add " x0 " " z0 " " x1 " " z1))
-    (try (doseq [[cx cz] [[x0 z0] [x1 z0] [x0 z1] [x1 z1]]] (harness/wait-loaded! rc cx cz))
-         (finally (rcon/command rc (str "forceload remove " x0 " " z0 " " x1 " " z1))))))
+    (harness/with-forceload rc
+                            sq
+                            #(doseq [[cx cz] [[x0 z0] [x1 z0] [x0 z1] [x1 z1]]]
+                               (harness/wait-loaded! rc cx cz)))))
 
 (defn landings!
   "Build a landing set against a running server: one distinct landing per grid cell that has one,
