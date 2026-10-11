@@ -37,7 +37,7 @@ The bot prints exactly one line `RESULT {...}` on stdout (everything else goes t
 | `:plan` | every `plan/*` attribute except the blacklist (status, goals, landing `:plan/go-at`, attempts, last intent, current intent, waiting reason), present once a plan began |
 
 ## --until values
-`plan/goals-for` reads `:goal/until` from the target rows: `"wood"` → goals `[:wood]`, `"table"` → `[:kit]`, `"pickaxe"` → `[:pickaxe]`, `"cobblestone"` → `[:cobblestone]`, `"stone-pickaxe"` → `[:stone-pickaxe]`, `"shore"` → `[:shore]`. Any other value (e.g. `"play"`) plans nothing and succeeds once `:player/loaded?`.
+`plan/goals-for` reads `:goal/until` from the target rows: `"wood"` → goals `[:wood]`, `"table"` → `[:kit]`, `"pickaxe"` → `[:pickaxe]`, `"cobblestone"` → `[:cobblestone]`, `"stone-pickaxe"` → `[:stone-pickaxe]`, `"furnace"`, `"ingots"`, `"bucket"`, `"water-bucket"`, `"flint-and-steel"` and `"iron-kit"` → the iron kit's stages, `"shore"` → `[:shore]`. Any other value (e.g. `"play"`) plans nothing and succeeds once `:player/loaded?`.
 
 ## Gotchas
 - Map key order is arbitrary; CI greps for `:ok true` anywhere on a line starting with `RESULT {`.

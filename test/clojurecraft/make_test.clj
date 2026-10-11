@@ -235,3 +235,23 @@
                                   {:goal/provides {:item/iron_ingot 4}}
                                   plan/goals)))
       "with the pickaxe and the fuel: mine the ore"))
+
+(deftest the-iron-kit-is-planned-in-order
+  ;; the kit's provides are netted against one inventory: three ingots go to the bucket, one to
+  ;; the flint and steel, so iron already spent is never mined again
+  (let [kit (first (filter #(= :iron-kit (:goal/id %)) plan/goals))
+        row (fn [held & {:keys [table? furnace?]}]
+              (let [w (cond-> (world-holding held table?) furnace? with-furnace)
+                    r (make/next-row w kit plan/goals)]
+                (if (map? r) (:goal/id r) r)))]
+    (is (= :mine-iron (row {:stone_pickaxe 1})) "the ore first, with the stone pickaxe")
+    (is (= :craft/furnace (row {:stone_pickaxe 1 :raw_iron 4 :coal 1 :cobblestone 8} :table? true))
+        "iron and fuel held: the furnace, from eight cobblestone")
+    (is (= :smelt/iron_ingot_from_smelting_raw_iron
+           (row {:raw_iron 4 :coal 1} :table? true :furnace? true)))
+    (is (= :craft/bucket (row {:iron_ingot 4 :flint 1} :table? true)))
+    (is (= :fill-bucket (row {:bucket 1 :iron_ingot 1 :flint 1})) "the bucket is iron spent")
+    (is (= :craft/flint_and_steel (row {:water_bucket 1 :iron_ingot 1 :flint 1})))
+    (is (= :flint-from-gravel (row {:water_bucket 1 :iron_ingot 1 :gravel 1})))
+    (is (= :dig-gravel (row {:water_bucket 1 :iron_ingot 1})))
+    (is (nil? (row {:water_bucket 1 :flint_and_steel 1})) "the kit held: nothing to do")))

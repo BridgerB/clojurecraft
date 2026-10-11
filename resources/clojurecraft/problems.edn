@@ -136,6 +136,7 @@
                     "brain/bot/crafting/make-goals.md" "brain/bot/plan/hardness-and-tools.md"]}
  {:problem/stage :iron-kit
   :problem/issue 6
+  :problem/goals [:furnace :ingots :bucket :water-bucket :flint-and-steel :iron-kit]
   :problem/statement
   "Between the stone pickaxe and the portal the bot must turn ore into ingots, buckets, a filled water bucket and flint and steel, and both siblings stalled here because fuel was never planned, furnace-window items went uncounted, and scoopable water was not found."
   :problem/needs

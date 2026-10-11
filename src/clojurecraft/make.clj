@@ -32,7 +32,7 @@
 
 (def table-search 24)                 ; how far a remembered crafting table counts as :near
 (def block-window {:crafting_table :table :furnace :furnace}) ; the window a placed block opens
-(def max-depth 8)                     ; item needs the needs planner may chain before it is :stuck
+(def max-depth 12)                    ; item needs the needs planner may chain before it is :stuck
 
 ;; ---------------------------------------------------------------- needs as data
 

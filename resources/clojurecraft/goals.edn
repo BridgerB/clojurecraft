@@ -63,6 +63,50 @@
   :goal/doc "a stone pickaxe, from cobblestone and sticks in a placed crafting table"
   :goal/provides {:item/stone_pickaxe 1}
   :goal/done? :provided?}
+ {:goal/id :furnace
+  :goal/priority 7
+  :goal/target? true
+  :goal/until "furnace"
+  :goal/doc "a furnace placed near, crafted from eight cobblestone in a placed crafting table"
+  :goal/provides {:block/furnace :near}
+  :goal/done? :provided?}
+ {:goal/id :ingots
+  :goal/priority 8
+  :goal/target? true
+  :goal/until "ingots"
+  :goal/doc
+  "four iron ingots, the iron kit's: raw iron mined with a stone pickaxe and smelted with planned fuel"
+  :goal/provides {:item/iron_ingot 4}
+  :goal/done? :provided?}
+ {:goal/id :bucket
+  :goal/priority 9
+  :goal/target? true
+  :goal/until "bucket"
+  :goal/doc "an empty bucket, from three iron ingots"
+  :goal/provides {:item/bucket 1}
+  :goal/done? :provided?}
+ {:goal/id :water-bucket
+  :goal/priority 10
+  :goal/target? true
+  :goal/until "water-bucket"
+  :goal/doc "a bucket filled at surface water, never cave water"
+  :goal/provides {:item/water_bucket 1}
+  :goal/done? :provided?}
+ {:goal/id :flint-and-steel
+  :goal/priority 11
+  :goal/target? true
+  :goal/until "flint-and-steel"
+  :goal/doc "flint and steel, from an iron ingot and flint dug out of gravel"
+  :goal/provides {:item/flint_and_steel 1}
+  :goal/done? :provided?}
+ {:goal/id :iron-kit
+  :goal/priority 12
+  :goal/target? true
+  :goal/until "iron-kit"
+  :goal/doc
+  "the iron kit the portal needs: a filled water bucket and flint and steel (four ingots in all: three in the bucket, one in the flint and steel)"
+  :goal/provides {:item/water_bucket 1 :item/flint_and_steel 1}
+  :goal/done? :provided?}
  {:goal/id :shore
   :goal/priority 5
   :goal/target? true
