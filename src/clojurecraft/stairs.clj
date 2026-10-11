@@ -26,7 +26,7 @@
 
    Stairs up are the same staircase climbed: each opens the cell over the head (the jump needs
    it), then the new head and feet a block up and ahead, with the same refusals, and none under
-   gravel or sand that would fall onto the bot. Done standing at to-y or under the open sky: the
+   gravel or sand that would fall onto the bot. Done standing at to-y or out of the ground: the
    way out of a mine whose way down no longer leads back up.
    Each dig is a child :dig intent run by the dig
    executor itself (intents composing intents: no second rule for breaking blocks), and the
@@ -348,12 +348,35 @@
         (= :level stage) (stairs-stage world i event)
         :else (tunnel-plan world i)))
 
+(defn open-step?
+  "Can the body walk onto a step's cells with nothing to dig: every one loaded and not solid, and
+   a floor under the last (the new feet)?"
+  [world cells]
+  (let [[fx fy fz] (last cells)
+        open? #(some-> (terrain/block-at world %)
+                       blocks/solid?
+                       not)]
+    (boolean (and (every? open? cells)
+                  (some-> (terrain/block-at world [fx (dec fy) fz])
+                          blocks/solid?)))))
+
+(defn out?
+  "Is the bot out of the ground at feet: the open sky over it, and a level step it can walk onto
+   with nothing to dig, under the open sky too (not the stair it just cut, nor a tunnel). The
+   open sky alone is a pit: the eleventh live run's stairs up stopped under the sky two below
+   the ground, in a shaft one wide, and found no route to water."
+  [world feet]
+  (and (terrain/under-sky? world feet)
+       (boolean (some (fn [d]
+                        (let [cells (level-cells feet d)]
+                          (and (open-step? world cells) (terrain/under-sky? world (last cells)))))
+                      directions))))
+
 (defmethod intent/run :stairs-up
-  ;; done standing at to-y, or out under the open sky, whichever comes first
+  ;; done standing at to-y, or out of the ground (out?), whichever comes first
   [world {:intent/keys [to-y] :as i} event]
   (if (and (:player/on-ground? world)
-           (or (>= (second (intent/feet world)) to-y)
-               (terrain/under-sky? world (intent/feet world))))
+           (or (>= (second (intent/feet world)) to-y) (out? world (intent/feet world))))
     (-> world
         (assoc :player/controls {})
         intent/done)

@@ -1349,6 +1349,17 @@
     (is (< (:time/now w) 20000) "dug with it, not by hand")
     (is (empty? (:sim/violations sim)))))
 
+(deftest stairs-up-end-on-the-ground-not-in-a-shaft
+  ;; live run 11's stairs up stopped under the open sky two below the ground, in a shaft one wide,
+  ;; and no route led out to water. A shaft open to the sky from the pocket to the hilltop: the
+  ;; stairs go on until a way on needs no digging
+  (let [shaft (merge pocket (into {} (for [y (range 68 76)] [[8 y 8] blocks/air])))
+        [w sim] (staircase-run :stairs-up shaft 66 (get blocks/items :wooden_pickaxe) 90 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage])))
+    (is (<= 75.0 (second (:player/pos w))) "up to the hilltop, out of the shaft")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest gravel-over-the-head-is-never-dug-under
   ;; a stair up opens the cell over the head first; gravel over that cell would fall through it
   ;; onto the bot, so every stair from here is refused and a level step leads out from under it
