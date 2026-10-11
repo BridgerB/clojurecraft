@@ -5,8 +5,8 @@ type: reference
 tags: [bot, protocol, packets]
 aliases: [packet table, packets.edn, decode encode, unknown packet]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 60b624e
+lastUpdated: 2026-10-11
+verifiedAgainst: HEAD
 sourceRefs:
   - test/clojurecraft/packet_test.clj#packet-specs-only-grow
   - src/clojurecraft/packet.clj#def specs
@@ -41,7 +41,7 @@ A packet is a flat map with `:packet/name`; its other keys are the wire's own fi
 
 ## Gotchas
 - Field keys must not be `:name`; see [[packet-name-collision]].
-- `packets.edn` is generated; regenerate with `scripts/datagen.sh`, never hand-edit.
+- `packets.edn` is generated; regenerate with `bb datagen`, never hand-edit.
 
 ## Limits
 Compression and framing are in `conn.clj`, not here; see [[connection-phases]].

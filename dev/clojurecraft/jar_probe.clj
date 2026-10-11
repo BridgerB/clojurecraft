@@ -2,13 +2,13 @@
   "Ask the vanilla server itself what the --reports output does not say: every block's
    hardness (BlockState.getDestroySpeed, the number the server divides by when it breaks a
    block) and every tool material's speed, durability and harvest tag (ToolMaterial). Run by
-   scripts/datagen.sh in a JVM whose classpath is the inner server jar plus the libraries the
+   bb datagen in a JVM whose classpath is the inner server jar plus the libraries the
    bundler ships, since the server's classes need them to boot:
 
      java -cp <inner.jar>:<libs>:<clojure> clojure.main -m clojurecraft.jar-probe out.json
 
    The inner jar is not obfuscated (net.minecraft.world.level.block.Blocks is its real name),
-   so this is reflection against the game at the version datagen.sh downloads, and nothing
+   so this is reflection against the game at the version bb datagen downloads, and nothing
    here is a number someone typed."
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io])

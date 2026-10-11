@@ -19,7 +19,7 @@
 (def formatted? #"\.(clj|cljc|cljs|edn)$")      ; what a path must end in to be formatted
 
 (def generated
-  "Files their writers own: the tables scripts/datagen.sh writes, and recorded runs."
+  "Files their writers own: the tables bb datagen writes, and recorded runs."
   #"resources/clojurecraft/(blocks|entity-types|hardness|harvest|item-tags|items|materials|packets|recipes|version)\.edn$|test/recordings/")
 
 (defn files

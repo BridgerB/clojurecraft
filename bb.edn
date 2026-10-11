@@ -60,4 +60,5 @@
                 :task (server/command! (or (first *command-line-args*) "start")
                                        (server/local-opts))}
   datagen {:doc "Regenerate the EDN tables in resources/clojurecraft/ from the server jar"
-           :task (shell "scripts/datagen.sh")}}}
+           :requires ([clojurecraft.gen-tables :as gen-tables])
+           :task (gen-tables/-main)}}}
