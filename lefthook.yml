@@ -1,0 +1,13 @@
+# Git hooks, run by lefthook (a standalone binary: no Node in a Clojure repo).
+#
+#   nix shell nixpkgs#lefthook --command lefthook install   # once per clone
+#
+# pre-commit stays fast (seconds, staged files only); slower JVM work belongs in pre-push, and
+# CI (test.yml) stays the real enforcement, since a hook can be skipped with --no-verify.
+
+pre-commit:
+  parallel: true
+  commands: {}
+
+pre-push:
+  commands: {}
