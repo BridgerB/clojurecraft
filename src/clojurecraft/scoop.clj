@@ -105,7 +105,9 @@
 
 (defn pools-near
   "The remembered water pools within pool-radius, no deeper than surface water, not blacklisted,
-   nearest first."
+   nearest first, leaving out one in a loaded chunk that is not a surface source to scoop
+   (memory's pool is the highest source with no water above it, which may be under stone):
+   what is loaded near it, the terrain search sees."
   [world]
   (let [eye (game/eye world)
         lo (- (second eye) memory/surface-water-below)
@@ -114,7 +116,9 @@
                           pool-radius
                           (->> (vals (memory/pools world :water))
                                (filter (fn [[_ y _]] (>= y lo)))
-                               (remove blacklist)))))
+                               (remove blacklist)
+                               (remove #(and (terrain/chunk-loaded? world %)
+                                             (not (surface-source? world %))))))))
 
 (defn ground
   "The highest cell of column [x z] the feet could stand in, from surface-above over the eye down
@@ -154,10 +158,14 @@
 (def max-candidates 3)                ; the nearest of each kind a route is planned to
 
 (defn first-walk
-  "A walk tagged for to the first of targets (the max-candidates first) a route reaches
-   (intent/routable?), or nil."
+  "A walk tagged for to the first of targets (the max-candidates first, out of reach) a route
+   reaches (intent/routable?), or nil. A target already in reach is no walk: it would end
+   before it began, and start again every tick (gym batch water-a3 run 5 did, for four
+   minutes, at a remembered pool under stone)."
   [world for targets]
-  (->> (take max-candidates targets)
+  (->> targets
+       (remove #(in-reach? world %))
+       (take max-candidates)
        (map (fn [t] {:intent/kind :walk :intent/target t :intent/for for}))
        (filter #(intent/routable? world %))
        first))

@@ -35,7 +35,7 @@ The `:fill-bucket` row needs an empty bucket and provides a water bucket; its ac
 
 ## Where the water is (`scoop-next`)
 1. `sources`: the plain water sources (`blocks/water-base`: not a waterlogged block) open to the air above it (`surface-source?`) in the loaded terrain, within 24 of the eye, no more than `memory/surface-water-below` (5) under it, not blacklisted, and when in reach, in sight (`sees?`: no solid or unloaded cell on the ray from the eye to its surface before it). nearest first. The nearest in reach (4 blocks, eye to centre): `{:intent/kind :scoop :intent/target src}`; else a walk to the first of the three nearest that a route reaches (`first-walk`, `intent/routable?`), which the pathfinder ends on the bank, since water is a wall to it ([[pathfinder]]).
-2. With none in sight, a walk to the first of the three nearest remembered pools within 96 a route reaches, the same depth rule ([[memory-sightings]]): one fact per chunk, so a far pond is known without a fact per water cell.
+2. With none in sight, a walk to the first of the three nearest remembered pools within 96 a route reaches (`pools-near` leaves out a pool in a loaded chunk that is not a surface source: memory's pool is the highest source with no water above it, which can be under stone), the same depth rule ([[memory-sightings]]): one fact per chunk, so a far pond is known without a fact per water cell.
 3. Else a hunt (`hunt-targets`, the first a route reaches): of eight bearings, the ground 40 blocks out (the highest cell the feet could stand in, 16 over to 24 under the eye, in a loaded chunk), leaving out any nearer the landing (`:plan/go-at`) than the bot is now, lowest first, since water lies low; a walk there tagged `:intent/for :water-hunt`. The chunks it loads are remembered as they arrive, pools included, so the next pass finds the water in sight or remembered. Nothing is stored for the hunt: going outward from the landing is what keeps it from walking back over dry ground. This is the siblings' directional hunt, downhill first ([[sib-bucket-water-find]]).
 4. With no bearing that has ground, `{:plan/wait :no-water}`.
 
@@ -52,6 +52,8 @@ No flag stands for "the bucket is in use" (steve's `usingHeldItem`): only the in
 `sim/scooped` casts a ray from the reported eye along the packet's look, in 0.05 steps up to 4.5: the first water source fills the held bucket (the source becomes air), a solid block first stops it. The pond test fills a bucket from hotbar slot 4, from the bank, without entering the water.
 
 ## Gotchas
+- **No walk to what is in reach.** `first-walk` leaves out targets already in reach: gym batch water-a3 run 5 walked to a remembered pool under stone, in reach, and the walk ended the tick it began and began again every tick for four minutes until the trial timed out (`a-remembered-pool-under-stone-is-no-walk`).
+- **A route that only half gets there is no route.** `intent/routable?` accepts a `:partial` route only toward a target in a chunk not loaded yet; in loaded terrain a search that spent its budget short of the target meant walks failing `:no-path` again and again (water-a3 run 3).
 - **Water under stone is no target.** The third live iron-kit run (local landing 2360,2360) reached the bucket and then scooped three times at aquifer sources beside it at y 23, each with stone directly above: the server acked every `use-item` and filled nothing, since the ray met the wall before any water. The rule had been "no water above"; it is now air above, and a source in reach must be in sight.
 
 ## Limits

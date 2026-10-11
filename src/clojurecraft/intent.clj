@@ -173,13 +173,16 @@
 
 (defn routable?
   "Is there a way to walk intent i's goal from the feet: the planner's route is :found, or
-   :partial (its budget ran out, or the goal is in a chunk not loaded), but not :none, the
-   search exhausted with the goal never reached (its waypoints then only approach it). An act
-   asks before it chooses a target, so one with no way to it is passed over, not walked at:
-   three such walks in a row, each failing :no-path, ended live runs among ore and water in
-   caves."
-  [world i]
-  (not= :none (:path/status (path/plan world (path/feet-cell (:player/pos world)) (walk-goal i)))))
+   :partial toward a target in a chunk not loaded yet (the walk plans again as chunks arrive).
+   Not :none, the search exhausted with the goal never reached, nor :partial toward a target in
+   loaded terrain, the budget spent on it: walks to such targets failed :no-path again and
+   again. An act asks before it chooses a target, so one with no way to it is passed over, not
+   walked at: three such walks in a row ended live runs among ore and water in caves."
+  [world {:intent/keys [target] :as i}]
+  (case (:path/status (path/plan world (path/feet-cell (:player/pos world)) (walk-goal i)))
+    :found true
+    :partial (not (terrain/chunk-loaded? world target))
+    false))
 
 (defn waypoint-reached?
   "Is the player at waypoint [x y z]: within waypoint-reach of its centre on the plane, and the

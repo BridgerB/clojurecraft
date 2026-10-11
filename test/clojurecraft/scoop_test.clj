@@ -6,6 +6,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
             [clojurecraft.world :as world]))
@@ -105,3 +106,11 @@
   (is (= {:intent/kind :scoop :intent/target [10 63 8]}
          (scoop/scoop-next (standing {[10 63 8] water} [8.5 8.5])))
       "the same source with the wall gone"))
+
+(deftest a-remembered-pool-under-stone-is-no-walk
+  ;; gym batch water-a3 run 5: the pool memory kept was a source under stone, in reach; the walk
+  ;; to it ended the tick it began and began again, every tick, for four minutes
+  (let [blocks {[10 64 8] water [10 65 8] 1}
+        w (memory/remember-pools (standing blocks [8.5 8.5]) [0 0] (world/column blocks))]
+    (is (= [[10 64 8]] (vals (memory/pools w :water))) "memory keeps it: no water above it")
+    (is (= {:plan/wait :no-water} (scoop/scoop-next w)))))
