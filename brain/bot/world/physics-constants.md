@@ -42,7 +42,6 @@ related:
 | `swim-up` / `swim-down` | 0.04 | vy added per tick with jump held, taken with sneak held, in a liquid |
 | `out-of-liquid-impulse` | 0.3 | vy when colliding horizontally in a liquid with the box free 0.6 up |
 | `water-contract` / `lava-contract` | (0.001, 0.401, 0.001) / (0.1, 0.4, 0.1) | the box shrinks by this before asking "in water?" / "in lava?" |
-| `safe-fall` | 3.0 | blocks of fall vanilla forgives |
 
 ## Behaviour the tests pin
 - A fall settles at y 64.0 with vy in (-0.08, 0): the resting -0.0784 ([[resting-vertical-velocity]]).

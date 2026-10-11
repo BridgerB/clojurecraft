@@ -25,7 +25,6 @@
             [clojurecraft.recipe :as recipe]))
 
 (def dig-ms 3000)                       ; a log by hand (hardness 2), the fallback for an unknown block
-(def leaf-dig-ms 300)                   ; leaves by hand (hardness 0.2); dig/break-ms derives both now
 (def break-threshold 0.7)               ; the server breaks once this share of the block's time has passed
 
 (defn block-at

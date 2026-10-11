@@ -2,12 +2,12 @@
   "Selection, apart from schema (Maybe Not): each function in spec/selected states which world
    attributes it needs, and instrumented calls are refused without them."
   (:require [clojure.spec.alpha :as s]
-            [clojurecraft.plan :as plan]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
+            [clojurecraft.plan :as plan]
             [clojurecraft.spec :as spec]))
 
 (use-fixtures :once fx/instrumented)

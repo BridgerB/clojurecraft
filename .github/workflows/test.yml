@@ -45,6 +45,10 @@ jobs:
         run: clojure -M:lint --lint src dev test
       - name: Idioms (Splint; a warning fails it, as in the pre-commit hook)
         run: clojure -M:splint src dev test/clojurecraft
+      - name: Namespaces tidy (clojure-lsp clean-ns; the pre-commit hook fixes it)
+        run: clojure -M:lsp clean-ns --dry
+      - name: No unused public vars (clojure-lsp diagnostics, over the whole repo)
+        run: clojure -M:lsp diagnostics --raw
 
   forests:
     runs-on: ubuntu-24.04

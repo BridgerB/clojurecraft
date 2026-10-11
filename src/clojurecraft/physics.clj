@@ -35,7 +35,6 @@
 (def out-of-liquid-impulse 0.3)       ; the lift when pressing into a bank whose top is free
 (def water-contract [0.001 0.401 0.001]) ; the box shrinks by this before asking "in water?"
 (def lava-contract [0.1 0.4 0.1])     ; and by this for "in lava?"
-(def safe-fall 3.0)                   ; blocks of fall vanilla forgives
 
 (defn aabb
   "[x0 y0 z0 x1 y1 z1] of a player whose feet centre is pos."

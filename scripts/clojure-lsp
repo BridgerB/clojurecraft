@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# clojure-lsp for git hooks, with or without it (and Java and Clojure) on PATH.
+#
+#   scripts/clojure-lsp clean-ns --filenames a.clj,b.clj
+#   scripts/clojure-lsp diagnostics --raw --filenames a.clj
+#
+# clojure-lsp asks `clojure` for the project's classpath, so Java and Clojure must be on PATH too.
+# Anything missing is fetched through nix once into .nix/ links in the repo (GC roots), as
+# scripts/clj does. CI has no nix and runs the same version from Maven (the deps.edn :lsp alias).
+set -euo pipefail
+
+root=$(cd "$(dirname "$0")/.." && pwd)
+links=$root/.nix
+command -v java >/dev/null 2>&1 || { [ -x "$links/jdk/bin/java" ] || nix build --out-link "$links/jdk" nixpkgs#jdk25; PATH="$links/jdk/bin:$PATH"; }
+command -v clojure >/dev/null 2>&1 || { [ -x "$links/clojure/bin/clojure" ] || nix build --out-link "$links/clojure" nixpkgs#clojure; PATH="$links/clojure/bin:$PATH"; }
+export PATH
+if command -v clojure-lsp >/dev/null 2>&1; then
+  exec clojure-lsp "$@"
+fi
+[ -x "$links/clojure-lsp/bin/clojure-lsp" ] || nix build --out-link "$links/clojure-lsp" nixpkgs#clojure-lsp
+exec "$links/clojure-lsp/bin/clojure-lsp" "$@"

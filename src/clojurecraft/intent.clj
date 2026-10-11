@@ -26,7 +26,6 @@
 (def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks (dig/ms derives it now)
 (def finish-margin 1.35)              ; FINISH is sent this late: an early one aborts the break
 (def finish-slack 200)                ; ms added to the margin
-(def finish-after (+ (* dig-ms finish-margin) finish-slack)) ; a log by hand, for the tests that pin it
 (def confirm-ticks 10)                ; after FINISH, ticks to wait for the server's ack or its refusal
 
 (defn penalties

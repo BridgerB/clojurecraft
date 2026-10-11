@@ -1,7 +1,7 @@
 (ns clojurecraft.plan-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
-            [clojurecraft.fixtures :as fx :refer [fold packets sent packet ticks]]
+            [clojurecraft.fixtures :as fx :refer [fold packet packets sent ticks]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.make]

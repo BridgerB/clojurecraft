@@ -6,3 +6,4 @@ work/
 cache/
 .nix/
 .clj-kondo/.cache/
+.lsp/.cache/

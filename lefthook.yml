@@ -6,10 +6,17 @@
 # CI (test.yml) stays the real enforcement, since a hook can be skipped with --no-verify.
 
 pre-commit:
-  piped: true                                       # format first, then lint what it wrote
+  piped: true                                       # tidy and format first, then check what they wrote
   commands:
-    format:
+    tidy-ns:
+      # clojure-lsp clean-ns: sorts :require/:import entries and :refer lists, drops unused ones,
+      # and stages the result (.lsp/config.edn; the layout is left to zprint, which runs next).
       priority: 1
+      glob: "*.{clj,cljc,cljs}"
+      run: scripts/clojure-lsp clean-ns --filenames "$(echo {staged_files} | tr ' ' ',')"
+      stage_fixed: true
+    format:
+      priority: 2
       # Formats what is being committed and stages the result, so a commit is never refused for
       # formatting. The same zprint as CI (the deps.edn :fmt alias and .zprint.edn); scripts/clj
       # finds Java and Clojure on PATH or builds them through nix once.
@@ -19,16 +26,23 @@ pre-commit:
     lint:
       # clj-kondo, the native binary (about a second for the whole repo): unresolved symbols and
       # namespaces, wrong arities, unused bindings and requires. Any warning refuses the commit.
-      priority: 2
+      priority: 3
       glob: "*.{clj,cljc,cljs}"
       run: scripts/clj-kondo --lint {staged_files}
     idioms:
       # Splint: the idiomatic form of what was written ((mapv f xs), not (vec (map f xs)); inc,
       # not (+ x 1); clojure.math, not Math interop). Rules that fight the code are off in
       # .splint.edn, each with its reason. Any warning refuses the commit.
-      priority: 3
+      priority: 4
       glob: "*.{clj,cljc,cljs}"
       run: scripts/clj -M:splint {staged_files}
+    unused:
+      # clojure-lsp diagnostics: a public var nothing in the project calls is dead code (raised to
+      # a warning in .lsp/config.edn). The staged files' vars here; CI checks the whole repo,
+      # which also catches a var left unused by deleting its last caller elsewhere.
+      priority: 5
+      glob: "*.{clj,cljc,cljs}"
+      run: scripts/clojure-lsp diagnostics --raw --filenames "$(echo {staged_files} | tr ' ' ',')"
 
 commit-msg:
   commands:

@@ -1,6 +1,6 @@
 (ns clojurecraft.game-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
-            [clojurecraft.fixtures :as fx :refer [fold names packets packet ticks]]
+            [clojurecraft.fixtures :as fx :refer [fold names packet packets ticks]]
             [clojurecraft.game :as game]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]

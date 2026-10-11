@@ -23,7 +23,6 @@
 (def oak-slab 13332)
 (def oak-stairs 3908)
 (def short-grass 2248)
-(def oak-log 136)
 
 (defn world-of
   "A play world standing at pos over a column built from blocks ({[x y z] id}, x and z 0-15)."

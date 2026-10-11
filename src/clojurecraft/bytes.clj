@@ -82,8 +82,6 @@
   [^ByteBuffer b]
   (unpack-position (.getLong b)))
 
-(defn remaining "Bytes left after the cursor." ^long [^ByteBuffer b] (.remaining b))
-
 (defn read-rest
   "Every byte left after the cursor; the buffer is then exhausted."
   ^bytes [^ByteBuffer b]

@@ -78,13 +78,6 @@
         child (:plan/intent world)]
     (assoc world :plan/intent (assoc parent :intent/child child))))
 
-(defn solid-ahead?
-  "Is any of the stair's three cells still a solid block the stair must open?"
-  [world cells]
-  (boolean (some #(some-> (terrain/block-at world %)
-                          blocks/solid?)
-                 cells)))
-
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
   "The first of the stair's cells (top first) still solid, or nil when the stair is open."

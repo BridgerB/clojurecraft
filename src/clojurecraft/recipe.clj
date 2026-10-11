@@ -16,7 +16,6 @@
 
 (def recipes "[recipe ...]" (resource "recipes"))
 (def tags "{tag-name #{item-name}}" (resource "item-tags"))
-(def by-result (group-by :recipe/result recipes))
 (def by-id (into {} (map (juxt :recipe/id identity) recipes)))
 
 (def item-names (into {} (map (fn [[n id]] [id n]) blocks/items)))

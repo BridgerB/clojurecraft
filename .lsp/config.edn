@@ -1,0 +1,10 @@
+;; clojure-lsp's settings: shared by every editor that opens the repo, and by the pre-commit hook
+;; and CI (scripts/clojure-lsp diagnostics, clean-ns).
+{;; a public var nothing calls is dead code: raised from info so the hook and CI refuse it
+ :linters {:clojure-lsp/unused-public-var {:level :warning}}
+ ;; clean-ns sorts the :require and :import entries and :refer lists, and drops unused ones. The
+ ;; layout is zprint's: entries stay on the :require line, and the classes inside one package
+ ;; import are left as written, since clean-ns would split a long one and zprint pack it back.
+ :clean {:ns-inner-blocks-indentation :same-line
+         :sort
+         {:ns true :require true :import true :import-classes nil :refer {:max-line-length 100}}}}
