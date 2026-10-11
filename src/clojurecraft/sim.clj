@@ -11,7 +11,8 @@
    smelting and fuel tables every tick, open or not.
 
    Fault knobs are inputs, not hidden state: :sim/drop-clicks is a set of click ordinals
-   (0-based) the server silently loses. :sim/violations records anything a real server would
+   (0-based) the server silently loses, and the loot table's chances (gravel's flint) roll from
+   :sim/rng, a pure generator whose start is the :seed input, so a run's luck replays. :sim/violations records anything a real server would
    punish or a careful client must never do: a click on an empty result slot, a close with a
    loaded cursor.
 
@@ -56,12 +57,29 @@
   [id held]
   (* break-threshold (or (dig/ms id held {}) dig-ms)))
 
-(defn drop-of
-  "The item a broken block gives, {:item id :count 1}, or nil when it drops nothing: the item
-   the game's loot table surely drops (dig/drop-item) when the held item harvests the block."
-  [id held]
-  (when (dig/harvest? id held)
-    (when-let [item-id (get blocks/items (dig/drop-item id))] {:item item-id :count 1})))
+(defn roll
+  "[sim' r]: the model's next roll, r in [0, 1), from :sim/rng by one 64-bit linear congruential
+   step (Knuth's MMIX constants); pure, so the same :seed rolls the same luck."
+  [sim]
+  (let [s (unchecked-add (unchecked-multiply (long (:sim/rng sim)) 6364136223846793005)
+                         1442695040888963407)]
+    [(assoc sim :sim/rng s) (/ (double (unsigned-bit-shift-right s 11)) 9007199254740992.0)]))
+
+(defn loot
+  "[sim' item] for breaking block id with held: the item (an id) its loot table drops, or nil
+   when the held item does not harvest the block or nothing drops. The table's tries go in
+   order (dig/drop-tries); one of chance 1.0 always drops, one below takes a roll and drops
+   when the roll is under its chance (gravel: flint one time in ten, else gravel)."
+  [sim id held]
+  (if (dig/harvest? id held)
+    (reduce (fn [[sim _] [item chance]]
+              (if (>= chance 1.0)
+                (reduced [sim (get blocks/items item)])
+                (let [[sim r] (roll sim)]
+                  (if (< r chance) (reduced [sim (get blocks/items item)]) [sim nil]))))
+            [sim nil]
+            (dig/drop-tries id))
+    [sim nil]))
 
 (defn wear
   "The inventory after one accepted dig with the tool in slot: its durability counts down from
@@ -83,10 +101,10 @@
 
 (defn init
   "A fresh server before the handshake, from {:column bytes :spawn [x y z]} plus optional
-   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {window-0-slot item}, :lag-ticks and
+   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {window-0-slot item}, :lag-ticks,
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
-   from the world spawn)."
-  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn]
+   from the world spawn) and :seed (where the loot rolls start, 0 when absent)."
+  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed]
     :or {keep-alive-every keep-alive-every}}]
   {:sim/phase :handshake
    :sim/lag-ticks (or lag-ticks 0)
@@ -98,6 +116,7 @@
    :sim/next-window 1
    :sim/clicks 0
    :sim/drop-clicks (or drop-clicks #{})
+   :sim/rng (or seed 0)
    :sim/violations []
    :sim/keep-alive-every keep-alive-every
    :sim/now 0
@@ -186,9 +205,11 @@
         (let [eid (:sim/next-eid sim)
               [x y z] pos
               item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
-              drop (drop-of id held)
+              [sim item] (loot sim id held)
+              drop (when item {:item item :count 1})
               before (full (:sim/inv sim) (inventory/layouts :inventory))
               sim (-> sim
+                      (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
                       (update :sim/broken conj pos)
                       (dissoc :sim/dig)
                       ;; observed live on 26.1.2: the breaker gets the block update, then the ack

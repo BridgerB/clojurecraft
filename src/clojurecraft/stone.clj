@@ -4,7 +4,10 @@
    cobblestone, coal or iron ore, gravel) and how deep it may cut looking for them
    (:goal/depth, none for stone). With the tool the blocks need in hand, walk to the nearest of
    them the bot can stand beside, dig it, pick the drop up; with none in sight, cut a staircase
-   down, never below the row's depth. Requiring this namespace registers the act."
+   down, never below the row's depth. The :redig act gets a block's chancy drop from one held
+   (gravel, for flint): one :redig intent places it, digs it and picks up what drops, as child
+   intents, and the planner starts another until the drop is held. Requiring this namespace
+   registers both acts and the :redig executor."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
@@ -13,6 +16,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
+            [clojurecraft.place]
             [clojurecraft.plan :as plan]
             [clojurecraft.stairs]
             [clojurecraft.terrain :as terrain]))
@@ -122,3 +126,59 @@
           :else (or (stairs world row) {:plan/wait :none-in-sight})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
+
+;; ---------------------------------------------------------------- dig a held block again
+
+(defmethod plan/act :redig
+  [_ {:goal/keys [item] :as row}]
+  {:intent/kind :redig :intent/item item :intent/drops (drops-of-row row)})
+
+(defn link
+  "One tick of the link a :redig is in: start the child intent first when there is none, run it,
+   and when it is done, then (on its world and the finished child); when it fails, fail with
+   its reason. One intent from placing to picking up, so the need the placing spends (the held
+   gravel) cannot send the planner elsewhere before the dig."
+  [world {:intent/keys [child]} event first then]
+  (cond (nil? child)
+        (intent/run-child
+         (intent/assoc-intent world :intent/child (assoc first :intent/status :active))
+         event)
+        (intent/done? child) (then (intent/dissoc-intent world :intent/child) child)
+        (intent/failed? child)
+        (-> world
+            (assoc :player/controls {})
+            (intent/fail (:intent/reason child)))
+        :else (intent/run-child world event)))
+
+(defmulti redig-stage
+  "Advance a :redig intent one tick in its :intent/stage: :place (put the held block down),
+   :dig (break it), :collect (pick up whatever it dropped)."
+  {:arglists '([world intent event])}
+  (fn [_world i _event] (:intent/stage i :place)))
+
+(defmethod redig-stage :place
+  [world {:intent/keys [item] :as i} event]
+  (link world
+        i
+        event
+        {:intent/kind :place :intent/item item}
+        (fn [w placed]
+          (intent/assoc-intent w :intent/stage :dig :intent/target (:intent/target placed)))))
+
+(defmethod redig-stage :dig
+  [world {:intent/keys [target] :as i} event]
+  (link world
+        i
+        event
+        (intent/child-dig target)
+        (fn [w _] (intent/assoc-intent w :intent/stage :collect))))
+
+(defmethod redig-stage :collect
+  [world {:intent/keys [target drops] :as i} event]
+  (link world
+        i
+        event
+        {:intent/kind :collect :intent/target target :intent/drops drops}
+        (fn [w _] (intent/done w))))
+
+(defmethod intent/run :redig [world i event] (redig-stage world i event))

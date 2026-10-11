@@ -975,6 +975,68 @@
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
     (is (empty? (:sim/violations sim)))))
 
+;; ---------------------------------------------------------------- flint, by the loot table's luck
+
+(def gravel-state (blocks/default-state :gravel))
+
+(deftest gravel-drops-flint-when-its-roll-comes-under-a-tenth
+  (let [sim0 (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
+        rolls (fn [seed n]
+                (->> (assoc sim0 :sim/rng seed)
+                     (iterate (comp first sim/roll))
+                     (map (comp second sim/roll))
+                     (take n)))]
+    (is (= (rolls 7 20) (rolls 7 20)) "the same seed, the same luck")
+    (is (not= (rolls 7 20) (rolls 8 20)))
+    (is (every? #(and (<= 0.0 %) (< % 1.0)) (rolls 7 1000)))
+    (is (< 70 (count (filter #(< % 0.1) (rolls 7 1000))) 130) "about one in ten under 0.1")
+    (doseq [seed (range 200)]
+      (let [s (assoc sim0 :sim/rng seed)
+            [_ dropped] (sim/loot s gravel-state nil)]
+        (is (= (if (< (second (sim/roll s)) 0.1) (item :flint) (item :gravel)) dropped)
+            (str "seed " seed))))))
+
+(defn flint-run
+  "The bot holding one gravel on bare ground, after one flint, its luck from seed."
+  [seed]
+  (sim/run (game/compose game/step
+                         (partial plan/step-over
+                                  (conj plan/goals
+                                        {:goal/id :flint-test
+                                         :goal/priority 7
+                                         :goal/target? true
+                                         :goal/provides {:item/flint 1}
+                                         :goal/done? :provided?})))
+           (game/init fx/opts)
+           (sim/init {:column (world/column-bytes {})
+                      :spawn [8.5 64.0 8.5]
+                      :inventory {36 {:item (item :gravel) :count 1}}
+                      :seed seed})
+           #(or (plan/done? %) (plan/failed? %))
+           600000
+           {:event/kind :go :go/goals [:flint-test]}))
+
+(deftest one-gravel-is-placed-and-dug-again-until-it-drops-flint
+  ;; the last redig is abandoned :goal-met the tick its flint is held, so count those started
+  (let [seed 4
+        [w sim] (flint-run seed)
+        redigs (count (filter #(and (= :redig (:intention/kind %))
+                                    (= :started (:intention/event %)))
+                              (memory/intentions w)))
+        rolls (->> (assoc (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
+                          :sim/rng
+                          seed)
+                   (iterate (comp first sim/roll))
+                   (map (comp second sim/roll)))]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= {:flint 1} (held w)) "the gravel became flint")
+    (is (= (inc (count (take-while #(>= % 0.1) rolls))) redigs)
+        "one place, dig and pick-up per roll, up to the first under a tenth")
+    (is (= 5 redigs) "this seed rolls gravel four times first")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))
+    (is (= (:time/now w) (:time/now (first (flint-run seed)))) "the same seed, the same run")))
+
 (def walled-ledge
   "Gym batch push70 (landing 18648,18464): the nearest stone's only cell at its own level was
    walled in, so no route reached it, while a cell one block below it was reachable. Here: stone

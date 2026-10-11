@@ -114,6 +114,16 @@
   :goal/blocks [:gravel]
   :goal/depth 40
   :goal/done? :provided?}
+ {:goal/id :flint-from-gravel
+  :goal/priority 10
+  :goal/doc
+  "place a held gravel and dig it, again until it drops flint (the game's loot table: one time in ten)"
+  :goal/needs {:item/gravel 1}
+  :goal/provides {:item/flint 1}
+  :goal/act :redig
+  :goal/item :gravel
+  :goal/blocks [:gravel]
+  :goal/done? :provided?}
  {:goal/id :place-table
   :goal/priority 10
   :goal/doc "put a held crafting table down near the player"

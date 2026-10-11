@@ -142,7 +142,8 @@
    [:plan/waiting-since "ms the current wait began" "while waiting"]
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
-   [:intent/kind "executor: :walk :dig :collect :craft :place :open-container :stairs-down :smelt"
+   [:intent/kind
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :smelt :redig"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -179,8 +180,9 @@
     "stairs-down, after a refusal"]
    [:intent/cells "the three cells the current stair opens, top first"
     "stairs-down, while a stair is cut"]
-   [:intent/child "the :dig intent cutting one cell, run by the dig executor"
-    "stairs-down, while digging"]
+   [:intent/child
+    "the child intent run in the intent's place by its own executor (stairs: the :dig cutting one cell; redig: the place, dig or collect it is on)"
+    "stairs-down, while digging; redig"]
    [:intent/started-y "feet height when the current stair began; a step is judged by going below it"
     "stairs-down, per stair"]
    [:intent/started-tick "tick the current stair or its step began" "stairs-down, per stair"]
@@ -200,7 +202,8 @@
     "walk, once planned"]
    [:intent/logs-before "logs held when collecting began" "collect, before :intent/drops"]
    [:intent/drops
-    "the item ids a collect is for: one more of any of them than it began with ends it" "collect"]
+    "the item ids a collect is for: one more of any of them than it began with ends it"
+    "collect, redig"]
    [:intent/drops-before "items of :intent/drops held when collecting began" "collect"]
    [:intent/blocked-by "leaf block over the drop" "collect, when the drop is covered"]
    [:intent/clears "leaf blocks cleared for this drop" "a collect resumed after clearing"]
@@ -221,7 +224,8 @@
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
-   [:intent/item "item to place" "place"] [:intent/against "block the placement is against" "place"]
+   [:intent/item "item to place" "place, redig"]
+   [:intent/against "block the placement is against" "place"]
    [:intent/sequence "sequence number of the placement" "place, after sending"]
    ;; ---- events: everything the reducer is given
    [:event/kind ":start :packet :tick :go :closed" "every event"]

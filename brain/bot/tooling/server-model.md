@@ -11,6 +11,8 @@ sourceRefs:
   - src/clojurecraft/sim.clj#defn init
   - src/clojurecraft/sim.clj#defn run
   - src/clojurecraft/sim.clj#defn connect!
+  - src/clojurecraft/sim.clj#defn loot
+  - src/clojurecraft/sim.clj#defn roll
   - "test/clojurecraft/sim_test.clj#main's-own-loop-against-the-model-through-channels"
   - src/clojurecraft/sim.clj#def dig-ms
   - src/clojurecraft/sim.clj#observed live on 26.1.2: the breaker gets the block update, then the ack
@@ -24,7 +26,7 @@ related:
 
 # Server model
 
-`sim.clj` is a reducer too: `(sim/step sim event)` where the event is a client packet or a tick, with packets for the client accumulating in `:sim/out`. It models the login and configuration handshake, one teleport to spawn, one chunk column, keep-alives, block breaking with the vanilla timing per block (logs 3000 ms, leaves 300 ms; an early FINISH is ignored) answered with `block-update` then `block-changed-ack` as observed live, an item drop at a broken log (leaves drop nothing), the server's own block view (`sim/block-at`: the fixture column minus broken positions), pickup after a 500 ms delay when the player is within the inflated pickup box, window 0, an opened crafting table and an opened furnace with vanilla click rules, state ids and the prediction-based answer ([[sim-window-clicks]], [[sim-window-sync]]), furnaces that cook by the game's tables every tick ([[sim-furnace]]), and `use-item-on` placing a held block or opening a container ([[sim-placement]]), breath and drowning from the reported position with a respawn on `client-command` ([[death-and-respawn]]). Faults are inputs ([[sim-faults]]).
+`sim.clj` is a reducer too: `(sim/step sim event)` where the event is a client packet or a tick, with packets for the client accumulating in `:sim/out`. It models the login and configuration handshake, one teleport to spawn, one chunk column, keep-alives, block breaking with the vanilla timing per block (logs 3000 ms, leaves 300 ms; an early FINISH is ignored) answered with `block-update` then `block-changed-ack` as observed live, an item drop by the block's loot table (`loot`: stone by hand and leaves drop nothing, gravel gives flint when its roll comes under 0.1; the rolls come from `:sim/rng`, a pure generator seeded by the `:seed` input, so a run's luck replays), the server's own block view (`sim/block-at`: placed blocks, then the fixture column minus broken positions; a placed block that is broken is gone), pickup after a 500 ms delay when the player is within the inflated pickup box, window 0, an opened crafting table and an opened furnace with vanilla click rules, state ids and the prediction-based answer ([[sim-window-clicks]], [[sim-window-sync]]), furnaces that cook by the game's tables every tick ([[sim-furnace]]), and `use-item-on` placing a held block or opening a container ([[sim-placement]]), breath and drowning from the reported position with a respawn on `client-command` ([[death-and-respawn]]). Faults are inputs ([[sim-faults]]).
 
 ## Two ways to drive it
 - `sim/run` folds the bot's reducer and the model together on one thread, 50 ms per tick of model time: deterministic and fast, so the generated-worlds property can run thousands of worlds.
@@ -39,7 +41,7 @@ related:
 ## Gotchas
 - The model knows window 0, the crafting table and the furnace: no other containers, no buckets, no dimensions yet; every roadmap issue extends it first.
 - The sim uses `recipe/match` for slot 0, so bot and model agree on recipes by construction; only a live run checks the matcher against vanilla.
-- Pickup always gives an `oak_log`, whatever block was broken.
+- A pickup gives the item the broken block's loot table dropped, which the model stores with the item entity.
 
 ## See also
 - [[early-finish-aborts]]
