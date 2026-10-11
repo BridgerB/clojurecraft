@@ -84,6 +84,8 @@
       (assoc :player/controls {})
       (intent/fail :boxed)))
 
+(def refusals #{:needs-tool :unsafe})  ; a child dig failing for these turns the stairs
+
 (defmulti stairs-stage
   "Advance a :stairs-down intent one tick in its :intent/stage: :plan (choose a safe stair or
    turn), :open (dig its cells, one child :dig at a time) or :step (walk down onto it)."
@@ -106,25 +108,32 @@
 
 (defmethod stairs-stage :open
   [world {:intent/keys [dir turns child cells] :or {turns 0}} event]
-  (cond
-    (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
-    (and child (= :needs-tool (:intent/reason child))) ; ore the pickaxe cannot drop: this way is refused, turn
-    (if (boxed? turns)
-      (box world)
-      (-> world
-          (turned dir turns (str "stairs: " (:intent/target child) " needs a better tool, turning"))
-          (intent/assoc-intent :intent/stage :plan)
-          (intent/dissoc-intent :intent/child :intent/cells)))
-    (and child (intent/failed? child))
-    (-> world
-        (assoc :player/controls {})
-        (intent/fail (:intent/reason child)))
-    child (intent/run-child world event)
-    (next-to-open world cells)
-    (intent/run-child
-     (intent/assoc-intent world :intent/child (intent/child-dig (next-to-open world cells)))
-     event)
-    :else (intent/assoc-intent world :intent/stage :step :intent/started-tick (:time/tick world))))
+  (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
+        ;; a cell the child will not dig refuses this way, like lava: turn. :needs-tool is ore the
+        ;; pickaxe cannot drop; :unsafe a cell beside water or lava, which the dig would let in (a
+        ;; live descent through an aquifer at y 36 failed three times on it before this)
+        (and child (contains? refusals (:intent/reason child)))
+        (if (boxed? turns)
+          (box world)
+          (->
+            world
+            (turned
+             dir
+             turns
+             (str "stairs: " (:intent/target child) " refused " (:intent/reason child) ", turning"))
+            (intent/assoc-intent :intent/stage :plan)
+            (intent/dissoc-intent :intent/child :intent/cells)))
+        (and child (intent/failed? child))
+        (-> world
+            (assoc :player/controls {})
+            (intent/fail (:intent/reason child)))
+        child (intent/run-child world event)
+        (next-to-open world cells)
+        (intent/run-child
+         (intent/assoc-intent world :intent/child (intent/child-dig (next-to-open world cells)))
+         event)
+        :else
+        (intent/assoc-intent world :intent/stage :step :intent/started-tick (:time/tick world))))
 
 (defmethod stairs-stage :step
   [world {:intent/keys [cells started-y started-tick]} _]

@@ -18,6 +18,8 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defmulti stairs-stage
   - test/clojurecraft/sim_test.clj#a-stone-hill-is-descended-five-stairs-with-a-pickaxe
   - test/clojurecraft/sim_test.clj#boxed-in-by-lava-on-every-side-fails-boxed
+  - test/clojurecraft/sim_test.clj#water-beside-a-stair-cell-turns-the-stairs
+  - src/clojurecraft/stairs.clj#def refusals
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[dig-timeline]]"
@@ -40,13 +42,13 @@ related:
 ## How it works
 Each stage is a method of `stairs-stage`; `run :stairs-down` only checks whether the feet are down far enough.
 1. `:plan`: with the current heading (`+x` first), compute the stair; `safe?` → `:open`; else turn a quarter and count; four refusals → fail `:boxed`.
-2. `:open`: while any of the three cells is solid, run a child dig of the topmost; a failed child fails the stair with its reason.
+2. `:open`: while any of the three cells is solid, run a child dig of the topmost. A child refused for one of `refusals` turns the stair like an unsafe plan: `:needs-tool` (ore the pickaxe cannot drop) or `:unsafe` (a cell beside water or lava, which the dig executor will not open, since it would let the fluid in). Any other failure fails the stair with its reason.
 3. `:step`: walk toward the new feet cell; done with the stair when the feet are half a block below where it began, which is the only proof the server broke what the bot asked for; 10 s without that fails `:stair-not-taken`.
 4. Done when the feet are at or below `to-y`.
 
 ## Gotchas
 - Keys that are over (`:intent/child`, `:intent/cells`) are removed, never nil: the world spec refuses a nil vector.
-- Water beside a stair is allowed, lava is not: the siblings found refusing water wedged descents in wet biomes.
+- Water beside a stair is allowed, lava is not: the siblings found refusing water wedged descents in wet biomes. A cell that itself borders water is still never dug (the dig's `exposes-fluid?`): the stair turns instead. Before it turned, a live iron-kit descent (local landing 2360,2360) met an aquifer at y 36 and failed `:unsafe` three times in a moment, the planner restarting the same refused stair (`water-beside-a-stair-cell-turns-the-stairs`).
 - No gravel or sand rule yet: a falling block above an opened head cell is an open question in issue #9.
 
 ## See also

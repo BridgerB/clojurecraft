@@ -671,6 +671,19 @@
     (is (not= [1 0] (:intent/dir (:plan/intent w))) "it turned away from the ore")
     (is (not (contains? (:sim/broken sim) [9 75 8])) "the ore was never dug")))
 
+(deftest water-beside-a-stair-cell-turns-the-stairs
+  ;; live iron-kit trial (local landing 2360,2360, 2026-10-11): at y 36 an aquifer lay beside the
+  ;; next stair's cells on three sides; the child dig refused :unsafe (it would let the water in)
+  ;; and the stair failed with it, three times in a moment. A cell the dig will not open is a
+  ;; refusal like lava or an ore the pickaxe cannot drop: turn
+  (let [blocks (assoc deep-stone [9 75 9] blocks/water-base) ; beside the first +x stair's new feet
+        [w sim] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 74 60000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (not= [1 0] (:intent/dir (:plan/intent w))) "it turned away from the water")
+    (is (not (contains? (:sim/broken sim) [9 75 8])) "the cell beside the water was never dug")))
+
 (deftest boxed-in-by-lava-on-every-side-fails-boxed
   (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
         blocks (reduce (fn [b [x z]] (assoc b [x 74 z] lava)) deep-stone [[9 8] [7 8] [8 9] [8 7]])

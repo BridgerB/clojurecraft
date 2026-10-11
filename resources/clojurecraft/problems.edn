@@ -155,7 +155,7 @@
   :problem/done
   "RCON Inventory shows a filled water_bucket and flint_and_steel after a live run on the local server, with RESULT :ok true."
   :problem/last-failure
-  "clojurecraft has never attempted this. steve: no race passed 3 ingots because the smelt burned planks as fuel and no bot mined coal; later its two deepest runs (498, 518) reached two buckets and a full kit and then hung at Fill Water Buckets in a dry jungle and a savanna."
+  "First live run (local server, forest landing 2360,2360, 2026-10-11): no iron in sight at the surface, so the bot cut stairs down toward y 16; at y 36 an aquifer lay beside the next stair's cells, the child dig refused :unsafe, and the staircase failed instead of turning, three times, ending the plan. The stairs now turn on it. Before that, steve: no race passed 3 ingots because the smelt burned planks as fuel and no bot mined coal; its two deepest runs (498, 518) reached two buckets and then hung at Fill Water Buckets in a dry jungle and a savanna."
   :problem/sources ["docs/issues/07-furnace-iron-bucket-flint-and-steel.md"
                     "brain/bot/plan/roadmap-issues.md" "brain/siblings/sib-smelt-fuel-deadlock.md"
                     "brain/siblings/sib-bucket-water-find.md"]}
