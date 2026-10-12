@@ -9,6 +9,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.spec]
+            [clojurecraft.swim]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.wood :as wood]
             [clojurecraft.world :as world]))
@@ -208,7 +209,18 @@
 
 (deftest the-current-stage-is-the-furthest-target
   (is (= "nether" (plan/current-until)))
+  ;; A gym stage names only its own target. A fresh run plays every step up to it.
   (is (= [:nether] (plan/goals-for (plan/current-until))))
+  (let [chain (plan/through (plan/current-until))]
+    (is (= [:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket :water-bucket
+            :flint-and-steel :iron-kit :cast-one :portal :nether]
+           chain))
+    (is (= [:wood] (plan/through "wood")))
+    (is (nil? (plan/through "play")))
+    (is (= :wood
+           (:goal/id (plan/choose (assoc (world-state [0.5 64.0 0.5]) :plan/goals (set chain))
+                                  plan/goals)))
+        "empty hands at spawn: the chain starts at wood, not the portal"))
   (is (= "later"
          (plan/current-until
           [{:goal/id :wood :goal/target? true :goal/priority 1 :goal/until "wood"}

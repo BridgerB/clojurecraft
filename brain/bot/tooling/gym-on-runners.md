@@ -27,6 +27,7 @@ sourceRefs:
   - ".github/workflows/gym.yml#fail-on-cache-miss: true"
   - ".github/workflows/gym.yml#max-parallel: 20"
   - .github/workflows/full.yml#One fresh world, nothing given.
+  - src/clojurecraft/plan.clj#defn through
   - test/clojurecraft/gym_test.clj#outcome-is-judged-twice
   - test/clojurecraft/recordings_test.clj#every-recorded-run-replays
 related:
@@ -38,7 +39,7 @@ related:
 
 # Gym on runners
 
-`test.yml` runs the suite and the brain checker on every push, spread over nine runners ([[test-fixtures]]: the parallel runner, and the forests as eight shards). `gym.yml` runs real runs of goals on real terrain: on push every goal once (the smoke test `wood.yml` used to be), on dispatch one goal `runs` times (`goal`, `runs`, `landing-set`, `label`). `world.yml` builds a landing set's world once and caches it. `full.yml` is the one fresh world, nothing given: spawn, the current stage, 5.5 hours, one attempt per pull request, and a later push to that request cancels its own.
+`test.yml` runs the suite and the brain checker on every push, spread over nine runners ([[test-fixtures]]: the parallel runner, and the forests as eight shards). `gym.yml` runs real runs of goals on real terrain: on push every goal once (the smoke test `wood.yml` used to be), on dispatch one goal `runs` times (`goal`, `runs`, `landing-set`, `label`). `world.yml` builds a landing set's world once and caches it. `full.yml` is the one fresh world, nothing given: spawn, every step up to the current stage (`plan/through`), 5.5 hours, one attempt per pull request, and a later push to that request cancels its own. A gym trial still names one target (`plan/goals-for`).
 
 ## How a batch runs
 1. **plan**: refuses when more than 20 jobs are already running in the repository, then `clojure -M:gym plan --goals ... --runs N` prints the trial matrix; only goal, run number and job minutes cross the job boundary.

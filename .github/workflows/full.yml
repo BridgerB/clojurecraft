@@ -1,8 +1,9 @@
 name: full
 
-# One fresh world, nothing given. The bot stands at spawn and aims at the current stage
-# (plan/current-until) for 5.5 hours. A pull request runs it. A new push to that same
-# request cancels its run and starts the new commit. Another request keeps its own.
+# One fresh world, nothing given. The bot stands at spawn and plays every step up to the
+# current stage (plan/current-until, via --chain) for 5.5 hours. A pull request runs it.
+# A new push to that same request cancels its run and starts the new commit. Another
+# request keeps its own.
 
 on:
   pull_request:
@@ -49,7 +50,7 @@ jobs:
           bb server start
           trap 'bb server stop' EXIT
           mkdir -p data/full
-          clojure -M:run --port "$PORT" --name Clj --until "$until" --timeout-ms 19800000 \
+          clojure -M:run --port "$PORT" --name Clj --until "$until" --chain true --timeout-ms 19800000 \
             --record data/full/run.edn --commit "$GITHUB_SHA"
       - name: The recording
         if: always()

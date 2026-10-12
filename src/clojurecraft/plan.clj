@@ -65,6 +65,21 @@
         last
         :goal/until)))
 
+(defn through
+  "The chain up to until: every live target with a :goal/until that is not an escape and not an
+   aside (the water trial, :goal/plan :wade), whose priority is at most the named target's, in
+   priority order. A fresh run plays these, so --until nether starts at wood. Nil when until
+   names nothing. One gym stage still uses goals-for, which names only that target."
+  [until]
+  (when-let [end (first (filter #(= until (:goal/until %)) targets))]
+    (->> targets
+         (remove :goal/always?)
+         (remove #(= :wade (:goal/plan %)))
+         (filter :goal/until)
+         (filter #(<= (:goal/priority %) (:goal/priority end)))
+         (sort-by :goal/priority)
+         (mapv :goal/id))))
+
 (def landing-timeout 30000)           ; a :go that names a landing waits this long for the bot to be there
 (def landing-reach 2.0)               ; horizontal distance from :go/at that counts as landed
 
