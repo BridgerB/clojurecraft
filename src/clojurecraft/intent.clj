@@ -78,6 +78,7 @@
 (def swing-every 350)                 ; ms between arm swings while digging
 (def collect-timeout 10000)           ; ms a collect may take before it fails
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
+(def ledge-look 0.6)                  ; blocks ahead of the feet a collect looks for a floor before stepping
 
 (defn face-toward
   "Block face nearest the eye: 0 down 1 up 2 north 3 south 4 west 5 east."
@@ -466,6 +467,25 @@
                             blocks/leaves?)
                    spots))))
 
+(defn ledge-ahead?
+  "Would a step toward goal take the body over a drop: the cell ledge-look ahead on the plane (not
+   the feet's own) open, with no floor under it nor within path/max-fall below that (path/landing)? Gym batch
+   iron-a9 run 3's collect walked after a drop at a ravine's edge at y -7 and the bot fell from
+   a high place."
+  [world goal]
+  (let [[px _ pz] (:player/pos world)
+        [gx _ gz] goal
+        d (physics/horizontal-distance [px 0 pz] [gx 0 gz])
+        [_ fy _ :as at] (feet world)
+        cell (when (pos? d)
+               [(long (math/floor (+ px (* ledge-look (/ (- gx px) d))))) fy
+                (long (math/floor (+ pz (* ledge-look (/ (- gz pz) d)))))])]
+    (boolean (and cell
+                  (not= cell at)
+                  (= :clear (path/classify world cell))
+                  (not (path/floor? world (update cell 1 dec)))
+                  (nil? (path/landing world cell))))))
+
 (defmethod run :collect
   [world
    {:intent/keys [target since best-dist best-tick drops drops-before]
@@ -498,5 +518,9 @@
           (-> world
               (assoc :player/controls {})
               (fail :not-picked-up))
+          (and (> d 0.4) (ledge-ahead? world goal))
+          (-> world
+              (assoc :player/controls {})
+              (fail :ledge))
           (> d 0.4) (assoc world :player/controls (toward world goal 0.0))
           :else (assoc world :player/controls {}))))

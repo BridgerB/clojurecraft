@@ -1331,6 +1331,21 @@
     (is (= gold (sim/block-at sim [11 66 8])) "the ore left where it is")
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-collect-stops-at-a-ledge
+  ;; gym batch iron-a9 run 3 dug gravel for flint at a ravine's edge at y -7: the collect walked
+  ;; after the drop and the bot fell from a high place
+  (let [ravine (into {} (for [y (range 50 64) z (range 16)] [[10 y z] blocks/air]))
+        [w sim] (intent-run {:intent/kind :collect
+                             :intent/target [10 63 8]
+                             :intent/drops #{(get blocks/items :gravel)}}
+                            ravine
+                            64
+                            (get blocks/items :stone_pickaxe)
+                            20000)]
+    (is (= [:failed :ledge] [(:intent/status (:plan/intent w)) (:intent/reason (:plan/intent w))]))
+    (is (<= 64.0 (second (:player/pos w))) "still on the ground beside the ravine")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest a-tunnel-with-no-pickaxe-stops-for-one
   ;; batch iron-a2 runs dug stone by hand when the pickaxe broke, 7500 ms a block for nothing,
   ;; until a step timed out; with no pickaxe the tunnel stops at once and the planner makes one

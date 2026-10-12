@@ -8,6 +8,8 @@ status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/intent.clj#defn ledge-ahead?
+  - test/clojurecraft/sim_test.clj#a-collect-stops-at-a-ledge
   - src/clojurecraft/intent.clj#defmethod run :collect
   - src/clojurecraft/intent.clj#defn blocker
   - src/clojurecraft/intent.clj#def collect-stall-ticks 20
@@ -38,6 +40,7 @@ related:
 5. Otherwise walk toward the goal until within 0.4 horizontally, then stand.
 
 ## Gotchas
+- **Never off a ledge.** The collect walks straight at its drop, not along a route, so before each step it looks `ledge-look` (0.6) ahead: an open cell with no floor within `path/max-fall` under it (`ledge-ahead?`, `path/landing`) fails it `:ledge`. Gym batch iron-a9 run 3 dug gravel for flint at a ravine's edge at y -7, walked after a drop and fell from a high place (`a-collect-stops-at-a-ledge`).
 - A blocked collect is reported as done, not failed, so it never counts an attempt or blacklists the trunk.
 - The 10 s timeout counts from the first collect; a resumed collect is a new intent with a fresh clock.
 
