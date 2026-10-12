@@ -68,6 +68,7 @@
 (s/def :control/sneak? boolean?)
 (s/def :player/jump-ticks int?)
 (s/def :player/loaded? boolean?)
+(s/def :player/dimension string?)
 (s/def :player/entity-id int?)
 (s/def :player/inventory (s/map-of int? (s/keys :req-un [::item ::count])))
 (s/def ::item int?)
@@ -208,9 +209,9 @@
           :opt
           [:bot/name :bot/sequence :bot/closed :bot/disconnected :player/pos :player/vel
            :player/look :player/on-ground? :player/horizontal-collision? :player/jump-ticks
-           :player/loaded? :player/entity-id :player/inventory :player/controls :world/chunks
-           :world/blocks :world/facts :world/entities :window/state-id :window/grid :window/cursor
-           :window/open :player/held-slot :plan/intent :plan/status :plan/blacklist
+           :player/loaded? :player/dimension :player/entity-id :player/inventory :player/controls
+           :world/chunks :world/blocks :world/facts :world/entities :window/state-id :window/grid
+           :window/cursor :window/open :player/held-slot :plan/intent :plan/status :plan/blacklist
            :plan/trunk-failures]))
 
 (s/fdef game/step

@@ -65,6 +65,9 @@
     "after the first physics tick"]
    [:player/dead? "health reached zero; cleared by the server's respawn" "while dead"]
    [:player/loaded? "player_loaded was sent: the server lets the bot act" "always"]
+   [:player/dimension
+    "the dimension the last respawn named (\"minecraft:the_nether\"); the overworld before one"
+    "after a respawn"]
    [:player/controls "what the planner wants physics to do next tick (:control/*)" "always"]
    [:player/inventory "{player-slot {:item id :count n}}: the server's word, slots 0-40" "always"]
    [:player/held-slot "selected hotbar slot 0-8" "always"]

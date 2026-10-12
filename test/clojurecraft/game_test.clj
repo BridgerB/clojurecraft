@@ -212,6 +212,26 @@
         (is (nil? (:window/cursor w)))
         (is (= {} (:window/grid w)))))))
 
+(deftest a-respawn-into-another-dimension-forgets-the-old-one
+  ;; the dimension change arrives as a respawn (#8: the portal; #11 owns the Nether itself): the
+  ;; columns, block overlay and entities were the old dimension's, and the bot is loaded again
+  ;; only when the server has placed it
+  (let [col (world/column-bytes {})
+        [w _] (run (in-play)
+                   [(packet
+                     {:packet/name :level-chunk-with-light :x 0 :z 0 :heightmaps [] :data col})
+                    (packet (assoc fx/respawn :dimension "minecraft:the_nether"))])]
+    (is (= "minecraft:the_nether" (:player/dimension w)))
+    (is (= {} (:world/chunks w)))
+    (is (false? (:player/loaded? w)))
+    (let [[w2 _] (run w [(packet fx/respawn)])]
+      (is (= "minecraft:overworld" (:player/dimension w2)) "and back"))
+    (let [[w3 _] (run (in-play)
+                      [(packet
+                        {:packet/name :level-chunk-with-light :x 0 :z 0 :heightmaps [] :data col})
+                       (packet fx/respawn)])]
+      (is (seq (:world/chunks w3)) "a respawn in the same dimension (a death) keeps the terrain"))))
+
 (deftest chunks-blocks-entities-and-memory
   (let [col (world/column-bytes {[3 64 0] 136 [3 65 0] 136})
         [w _]
