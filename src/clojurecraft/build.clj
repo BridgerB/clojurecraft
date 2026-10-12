@@ -575,17 +575,20 @@
    designated stand, or, for a place or a dig whose stand cannot be occupied, on a cell that
    already reaches the block. A keyword is why no such cell exists."
   [world i {:build/keys [op stand pos]}]
-  (when-not (intent/centred? world stand)
-    (if-let [blocked
-             (clear-stand world stand (:intent/build i) (:intent/origin i) (:intent/facing i))]
-      blocked
-      (if (or (path/standable? world stand) (not (#{:place :dig} op)))
-        {:intent/kind :walk :intent/target stand :intent/for :build}
-        (let [work (if (= op :place) (or (foundation world pos) pos) pos)
-              alt (reachable-stand world stand work)]
-          (cond (nil? alt) :no-stand
-                (intent/centred? world alt) nil
-                :else {:intent/kind :walk :intent/target alt :intent/for :build}))))))
+  (cond (intent/centred? world stand) nil
+        :else
+        (let [blocked
+              (clear-stand world stand (:intent/build i) (:intent/origin i) (:intent/facing i))]
+          (cond blocked blocked
+                (or (path/standable? world stand) (not (#{:place :dig} op)))
+                {:intent/kind :walk :intent/target stand :intent/for :build}
+                :else
+                (let [work (cond (= :place op) (or (foundation world pos) pos)
+                                 :else pos)
+                      alt (reachable-stand world stand work)]
+                  (cond (nil? alt) :no-stand
+                        (intent/centred? world alt) nil
+                        :else {:intent/kind :walk :intent/target alt :intent/for :build}))))))
 
 (defn op-child
   "The child intent that works op next: lava to refill first when a lava pour has none, else
