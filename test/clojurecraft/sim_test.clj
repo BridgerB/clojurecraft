@@ -1316,6 +1316,21 @@
     (is (= lava (sim/block-at sim [11 66 8])))
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-tunnel-goes-round-ore-its-pickaxe-cannot-drop
+  ;; gym batch iron-a9 run 4's tunnel at y 2 met ore a stone pickaxe cannot drop: the dig failed
+  ;; :needs-tool and so did the tunnel, three times in a moment
+  (let [gold (blocks/default-state :gold_ore)
+        blocks (assoc pocket [11 66 8] gold [11 67 8] gold)
+        [w sim] (intent-run {:intent/kind :tunnel :intent/dir [1 0] :intent/length 8}
+                            blocks
+                            66
+                            (get blocks/items :stone_pickaxe)
+                            120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/side])))
+    (is (= gold (sim/block-at sim [11 66 8])) "the ore left where it is")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest a-tunnel-with-no-pickaxe-stops-for-one
   ;; batch iron-a2 runs dug stone by hand when the pickaxe broke, 7500 ms a block for nothing,
   ;; until a step timed out; with no pickaxe the tunnel stops at once and the planner makes one

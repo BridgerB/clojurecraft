@@ -34,6 +34,7 @@
    sent, since a dig the server refused leaves the bot where it stood."
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
+            [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
@@ -110,12 +111,43 @@
   {:stairs-down {:cells stair-cells :safe? safe? :rise -1}
    :stairs-up {:cells up-cells :safe? up-safe? :rise 1}})
 
+(defn tool-missing
+  "The reason to stop when the block at cell would be dug by hand for nothing (no-<tool>, as
+   :no-pickaxe): it drops only to a tool and no tool of its kind is held at all, which
+   happens when the pickaxe breaks on the way. Stone by hand takes 7500 ms a block; batch iron-a2
+   runs went on that way, a stair at a time, until a step timed out. A tool of the kind too weak
+   for the block is the child dig's :needs-tool instead, which turns the stairs. nil when it can
+   be dug."
+  [world cell]
+  (let [id (terrain/block-at world cell)
+        kind (some-> id
+                     blocks/tool-of)]
+    (when (and id
+               (blocks/drops-need-tool? id)
+               (not-any? (fn [[_ {:keys [item]}]] (= kind (:kind (blocks/tool item))))
+                         (:player/inventory world)))
+      (keyword (str "no-" (name (or kind :tool)))))))
+
+(defn too-hard?
+  "Is the block at cell one no held item drops, though a tool of its kind is held (ore above the
+   pickaxe's tier)? Dug, it breaks for nothing, so the dig refuses it :needs-tool. With no tool
+   of the kind at all it is tool-missing's instead: the stairs stop for one."
+  [world cell]
+  (let [id (terrain/block-at world cell)]
+    (boolean (and id
+                  (blocks/drops-need-tool? id)
+                  (nil? (tool-missing world cell))
+                  (not-any? (fn [[_ {:keys [item]}]] (dig/harvest? id item))
+                            (:player/inventory world))))))
+
 (defn level-safe?
   "May a level step (or a stair whose cells are given) be cut: what a stair needs (safe?), and no
-   cell it opens borders water or lava, which the child dig would refuse to open
-   (intent/exposes-fluid?)."
+   cell it opens borders water or lava (intent/exposes-fluid?) or is too hard for the held tools
+   (too-hard?), which the child dig would refuse to open. Gym batch iron-a9 run 4's tunnel at y 2
+   met ore its stone pickaxe could not drop and failed :needs-tool three times in a moment."
   [world cells]
-  (and (safe? world cells) (not-any? #(intent/exposes-fluid? world %) cells)))
+  (and (safe? world cells)
+       (not-any? #(or (intent/exposes-fluid? world %) (too-hard? world %)) cells)))
 
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
@@ -231,23 +263,6 @@
    (or into the one below): the cell is open, which is what the dig was for."
   [child]
   (and (intent/failed? child) (= :target-gone (:intent/reason child))))
-
-(defn tool-missing
-  "The reason to stop when the block at cell would be dug by hand for nothing (no-<tool>, as
-   :no-pickaxe): it drops only to a tool and no tool of its kind is held at all, which
-   happens when the pickaxe breaks on the way. Stone by hand takes 7500 ms a block; batch iron-a2
-   runs went on that way, a stair at a time, until a step timed out. A tool of the kind too weak
-   for the block is the child dig's :needs-tool instead, which turns the stairs. nil when it can
-   be dug."
-  [world cell]
-  (let [id (terrain/block-at world cell)
-        kind (some-> id
-                     blocks/tool-of)]
-    (when (and id
-               (blocks/drops-need-tool? id)
-               (not-any? (fn [[_ {:keys [item]}]] (= kind (:kind (blocks/tool item))))
-                         (:player/inventory world)))
-      (keyword (str "no-" (name (or kind :tool)))))))
 
 (defn dig-next
   "Start a child for cell, the next of a stair's to open: a :dig, or first an :equip of the tool
