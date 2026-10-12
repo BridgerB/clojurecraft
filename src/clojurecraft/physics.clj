@@ -49,6 +49,8 @@
 
 (defn eye "Eye position of a player whose feet centre is [x y z]." [[x y z]] [x (+ y eye-height) z])
 
+(defn y-of "The height of a point or a block position [x y z]: (y-of [3 64 5]) is 64." [[_ y _]] y)
+
 (defn centre
   "The centre point of the block at integer position [x y z]."
   [[x y z]]
@@ -219,7 +221,7 @@
                out-of-liquid-impulse
                vy')
          fall (cond (or liquid? landed?) 0.0
-                    (neg? vy) (+ fall-distance (- (second pos) (second pos')))
+                    (neg? vy) (+ fall-distance (- (y-of pos) (y-of pos')))
                     :else fall-distance)]
      (assoc world
             :player/pos pos'

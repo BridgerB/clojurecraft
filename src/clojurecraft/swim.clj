@@ -74,7 +74,8 @@
              :when (and (not (blacklist cell)) (path/standable? world cell))]
          cell)
        (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
-                                                         (physics/centre cell)) (- (second cell))]))
+                                                         (physics/centre cell))
+                            (- (physics/y-of cell))]))
        first))
 
 (defn ahead
@@ -319,7 +320,7 @@
    [bank water], or nil."
   [world feet]
   (let [eye (physics/eye (:player/pos world))
-        ey (second eye)]
+        ey (physics/y-of eye)]
     (->> (memory/pools world :water)
          (filter (fn [[_ [_ y _]]] (>= y (- ey wade-below))))
          (filter (fn [[_ pos]] (<= (physics/distance eye (physics/centre pos)) wade-radius)))

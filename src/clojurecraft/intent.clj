@@ -199,7 +199,7 @@
    scoop-range on the plane, where the eyes look down on its surface; the tenth live run's walk
    ended in reach but in its own stair pit two below the surface, and saw no water."
   [world {:intent/keys [target for pickup?] :as i} d]
-  (let [rise (- (second target) (long (math/floor (second (:player/pos world)))))]
+  (let [rise (- (physics/y-of target) (long (math/floor (physics/y-of (:player/pos world)))))]
     (and (<= d reach)
          (cond pickup? (path/goal-done? (walk-goal i) (feet world))
                (= :scoop for)

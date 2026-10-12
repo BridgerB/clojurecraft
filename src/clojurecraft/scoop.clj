@@ -92,7 +92,7 @@
    through the block overlay, so a source just scooped is air."
   [world]
   (let [eye (game/eye world)
-        lo (- (second eye) memory/surface-water-below)
+        lo (- (physics/y-of eye) memory/surface-water-below)
         blacklist (:plan/blacklist world #{})]
     (memory/nearest-first eye
                           search-radius
@@ -109,7 +109,7 @@
    what is loaded near it, the terrain search sees."
   [world]
   (let [eye (game/eye world)
-        lo (- (second eye) memory/surface-water-below)
+        lo (- (physics/y-of eye) memory/surface-water-below)
         blacklist (:plan/blacklist world #{})]
     (memory/nearest-first eye
                           pool-radius
@@ -138,7 +138,7 @@
    (:plan/go-at) than the bot is now, so a hunt goes out and never doubles back."
   [world]
   (let [[px _ pz] (:player/pos world)
-        ey (second (game/eye world))
+        ey (physics/y-of (game/eye world))
         home (:plan/go-at world)
         out? (fn [[x _ z]]
                (or (nil? home)
@@ -186,11 +186,11 @@
   (let [home (:plan/go-at world)
         feet (intent/feet world)]
     (when (and home
-               (< (second feet) (- (second home) underground-depth))
+               (< (physics/y-of feet) (- (physics/y-of home) underground-depth))
                (not (terrain/under-sky? world feet)))
       (or (first-walk world :surface [(mapv #(long (math/floor %)) home)])
           {:intent/kind :stairs-up
-           :intent/to-y (long (math/floor (second home)))
+           :intent/to-y (long (math/floor (physics/y-of home)))
            :intent/for :surface}))))
 
 (defn dig-out

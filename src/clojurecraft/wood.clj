@@ -7,6 +7,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
+            [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -36,7 +37,7 @@
   "Of the remembered logs stacked on bottom, the one whose height is closest to the player's
    feet (lower on ties)."
   [world [x y z]]
-  (let [feet (long (math/floor (second (:player/pos world))))
+  (let [feet (long (math/floor (physics/y-of (:player/pos world))))
         column (take-while #(memory/log-at? world %)
                            (map (fn [dy] [x (+ y dy) z]) (range max-trunk)))]
     (apply min-key (fn [[_ ly _]] (abs (- ly feet))) (reverse column))))

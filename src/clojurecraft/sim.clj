@@ -217,7 +217,7 @@
     (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
       (let [eid (:sim/next-eid sim)
             [x y z] pos
-            item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
+            [ix iy iz :as item-pos] [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
             [sim item] (loot sim id held)
             drop (when item {:item item :count 1})
             before (full (:sim/inv sim) (inventory/layouts :inventory))
@@ -239,9 +239,9 @@
                      :entity-id eid
                      :uuid nil
                      :type blocks/item-entity-type
-                     :x (first item-pos)
-                     :y (second item-pos)
-                     :z (nth item-pos 2)}))
+                     :x ix
+                     :y iy
+                     :z iz}))
           sim))
       ;; too early: the real server keeps the block and restores the client's view of it
       (-> sim

@@ -259,11 +259,13 @@
                             (fn [row] (long (math/ceil (/ missing (yield row)))))
                             (conj path s))))))
 
+(def coal-ticks (smelt/burn-ticks :coal))       ; game ticks one coal burns
+(def plank-ticks (smelt/burn-ticks :oak_planks)) ; game ticks one plank burns
+
 (def fuel-sources
-  "Where fuel the inventory lacks comes from, in order: coal (mined beside the iron), then
-   planks (from logs); each with the ticks one burns. Charcoal is not made: it burns wood to
-   save wood."
-  [[:item/coal (smelt/burn-ticks :coal)] [:tag/planks (smelt/burn-ticks :oak_planks)]])
+  "Where fuel the inventory lacks comes from, in order, as [need ticks-one-burns]: coal (mined
+   beside the iron), then planks (from logs). Charcoal is not made: it burns wood to save wood."
+  [[:item/coal coal-ticks] [:tag/planks plank-ticks]])
 
 (defn burn
   "[counts' ticks-left]: the fuel in counts that burns ticks taken out in the order the smelt
@@ -290,7 +292,7 @@
    is wood for a new pickaxe: gym batch iron-a6 runs 2 and 5 broke theirs climbing out with no
    wood left."
   [counts ticks]
-  (let [planks (long (math/ceil (/ ticks (second (second fuel-sources)))))]
+  (let [planks (long (math/ceil (/ ticks plank-ticks)))]
     (>= (- (recipe/have counts (recipe/tags :logs)) log-reserve)
         (long (math/ceil (/ planks planks-per-log))))))
 

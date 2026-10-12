@@ -18,6 +18,7 @@
    floor nor clear, so routes go around them. Nothing here reads a clock or the atom."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -214,7 +215,7 @@
 (defmethod goal-done? :block [{:goal/keys [pos]} node] (= node pos))
 (defmethod heuristic :block [{:goal/keys [pos]} node] (flat-distance node pos))
 
-(defmethod goal-done? :xz [{:goal/keys [pos]} [x _ z]] (= [x z] [(first pos) (nth pos 2)]))
+(defmethod goal-done? :xz [{[px _ pz] :goal/pos} [x _ z]] (= [x z] [px pz]))
 (defmethod heuristic :xz [{:goal/keys [pos]} node] (octile node pos))
 
 (defmethod goal-done? :away [{:goal/keys [pos range]} node] (> (flat-distance node pos) range))
@@ -226,17 +227,17 @@
   "Is node a straight neighbour of pos a block up, where a block dug at pos is in the floor
    beside the feet (a :pickup goal with :goal/step-down?: its drop lands in the hole it leaves)?"
   [pos [_ ny _ :as node]]
-  (and (= (second pos) (dec ny)) (== 1 (octile node pos))))
+  (and (= (physics/y-of pos) (dec ny)) (== 1 (octile node pos))))
 
 (defmethod goal-done? :pickup
   ;; where a block dug at pos drops within the pickup box: within range on the plane, with pos at
   ;; the feet's height or up to rise above it; or, with :goal/step-down?, in the floor beside them
   [{:goal/keys [pos range rise step-down?]} [_ ny _ :as node]]
-  (or (and (<= (octile node pos) range) (<= ny (second pos) (+ ny rise)))
+  (or (and (<= (octile node pos) range) (<= ny (physics/y-of pos) (+ ny rise)))
       (boolean (and step-down? (step-down-node? pos node)))))
 (defmethod heuristic :pickup
   [{:goal/keys [pos range rise step-down?]} [_ ny _ :as node]]
-  (let [py (second pos)]
+  (let [py (physics/y-of pos)]
     (cond (and step-down? (= py (dec ny))) (max 0.0 (dec (octile node pos)))
           :else
           (+ (max 0.0 (- (octile node pos) range))
