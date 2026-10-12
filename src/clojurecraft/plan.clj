@@ -187,10 +187,14 @@
 
 (defn fail-intent
   "An intent failed: stop moving, blacklist its target (and count a failure against its trunk's
-   column, for a log: digging the base moves the bottom up, the column stays), count the attempt; max-attempts
-   failures in a row fail the plan with the intent's reason."
+   column, for a log: digging the base moves the bottom up, the column stays), count the attempt.
+   max-attempts failures in a row fail the plan with the intent's reason. A walk that failed
+   :no-path does not count. Its route was accepted and then could not be walked, so the target is
+   given up and the next candidate is tried: three such walks, each a different place, used to end
+   a run that was still searching."
   [world i]
-  (let [attempts (inc (:plan/attempts world 0))]
+  (let [attempts (cond-> (:plan/attempts world 0)
+                   (not (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))) inc)]
     (-> world
         (memory/remember-intention i :failed)
         (assoc :player/controls {})

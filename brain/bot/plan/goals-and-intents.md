@@ -14,6 +14,8 @@ sourceRefs:
   - src/clojurecraft/plan.clj#defmulti act
   - src/clojurecraft/plan.clj#defmulti next-intent
   - src/clojurecraft/plan.clj#defn run-intent
+  - src/clojurecraft/plan.clj#defn fail-intent
+  - test/clojurecraft/plan_test.clj#a-walk-with-no-way-on-fails-no-path
   - src/clojurecraft/plan.clj#defn choose
   - src/clojurecraft/plan.clj#defn through
   - src/clojurecraft/plan.clj#defn current-until
@@ -45,7 +47,7 @@ The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id
 ## How it works
 1. Each tick: choose first. With nothing left, the plan is done; if the running intent serves another target, it is preempted. Otherwise run it; if it ended, plan again in the same tick (finish or fail, then choose).
 2. With no intent: `choose` takes the highest-priority target in play (`:plan/goals` from the `:go` event, or every target, plus every row marked `:goal/always?`: the two escapes) whose `done-by` is false, and `next-intent` turns it into an intent, `{:plan/wait reason}`, or nil. A wait longer than `wait-timeout` (20 s) fails the plan. Before choosing, `trap/trapped-tick` re-derives `:plan/trap` ([[water-escape]]).
-3. A failed intent blacklists its target (when it has one) and counts an attempt; a success resets the count, so `max-attempts` (3) means three failures in a row.
+3. A failed intent blacklists its target (when it has one) and counts an attempt; a success resets the count, so `max-attempts` (3) means three failures in a row. A walk that fails `:no-path` blacklists its target and does not count. The route was accepted and then could not be walked, and the next candidate is tried. Three such walks used to end a run that still had somewhere else to go.
 4. No target left means `:plan/status :done`.
 
 ## Gotchas

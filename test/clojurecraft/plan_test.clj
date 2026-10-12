@@ -424,7 +424,8 @@
                       :intent/id 1
                       :intent/goal :wood}))
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
-    (is (= 1 (:plan/attempts w)) "the walk failed on its first tick")
+    (is (= 0 (:plan/attempts w))
+        "no way to walk it: the target is given up, and the search is not a failed attempt")
     (is (= #{[13 64 0]} (:plan/blacklist w)) "and its target is blacklisted")
     (is (= :no-path
            (:intent/reason (first (filter #(= :failed (:intention/event %)) (memory/intentions w)))
