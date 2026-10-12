@@ -5,6 +5,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.build :as build]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -43,6 +44,11 @@
           :opt [:build/pos :build/into :build/item :build/aim :build/face :build/step :build/cell]))
 (s/def ::plan (s/coll-of ::op :kind vector?))
 
+(s/fdef fortress/step-plan
+  :args
+  (s/cat :feet ::block-pos
+         :move :intent/move)
+  :ret ::plan)
 (s/fdef build/portal-plan
   :args
   (s/cat :origin ::block-pos
@@ -145,9 +151,14 @@
         :else ((:valid? (p/wire-types t)) v)))
 
 (defn fields-ok?
-  "Does map m carry every field of a spec, each fitting its type? Extra keys are fine."
+  "Does map m carry the fields of a spec, each fitting its type: all of them, or the first few
+   and none after, as a packet decoded before the spec grew carries (a spec only grows by
+   appending, so an old packet is a prefix of today's: a recorded login has only :entity-id)?
+   Extra keys are fine."
   [fields m]
-  (every? (fn [[k t]] (and (contains? m k) (value-ok? t (get m k)))) fields))
+  (let [[held missing] (split-with (fn [[k]] (contains? m k)) fields)]
+    (and (every? (fn [[k t]] (value-ok? t (get m k))) held)
+         (not-any? (fn [[k]] (contains? m k)) missing))))
 
 (def shapes
   "packet name → every field vector the table gives it (a name can recur across states and
@@ -228,6 +239,7 @@
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
 (s/def :goal/blocks (s/coll-of keyword? :kind vector? :min-count 1)) ; what a :mine row digs
 (s/def :goal/depth int?)                   ; the lowest feet height a :mine row cuts stairs to
+(s/def :goal/dimension string?)            ; the dimension a row is worked in; elsewhere it waits
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
 (s/def ::goal
@@ -235,7 +247,7 @@
           :opt
           [:goal/needs :goal/holds :goal/spares :goal/passage-ok? :goal/build :goal/act
            :goal/target? :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/trap
-           :goal/plan :goal/blocks :goal/depth]))
+           :goal/plan :goal/blocks :goal/depth :goal/dimension]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
@@ -357,6 +369,10 @@
 (s/def :intent/aim (s/coll-of number? :kind vector? :count 3))
 (s/def :intent/expect :build/done)
 (s/def :intent/fluid #{:water :lava})
+(s/def :intent/move (s/coll-of #{-1 0 1} :kind vector? :count 3)) ; a :tunnel step's [dx dy dz]
+(s/def :intent/from ::block-pos)
+(s/def :intent/taken nat-int?)
+(s/def :intent/steps pos-int?)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
@@ -423,6 +439,7 @@
 (s/def :intent/against ::block-pos)
 (s/def :intent/sequence int?)
 (s/def :chunk/column map?)
+(s/def :chunk/min-y #{-64 0})
 (s/def :plan/intents pos-int?)
 (s/def :intent/id pos-int?)
 (s/def :intention/id pos-int?)
@@ -449,11 +466,12 @@
 (s/def :problem/done ::text)
 (s/def :problem/last-failure ::text)
 (s/def :problem/sources (s/coll-of ::text :kind vector? :min-count 1))
+(s/def :problem/decisions (s/coll-of ::text :kind vector? :min-count 1)) ; the open questions answered before the code
 (s/def ::problem
   (s/keys :req
           [:problem/stage :problem/statement :problem/needs :problem/risks :problem/done
            :problem/last-failure :problem/sources]
-          :opt [:problem/issue :problem/goals]))
+          :opt [:problem/issue :problem/goals :problem/decisions]))
 (s/def :intent/goal keyword?)
 
 ;; the server model (sim): a reducer too, so it is specced and instrumented like the bot's
@@ -473,6 +491,9 @@
 (s/def :sim/dimension string?)
 (s/def :sim/portal-since int?)
 (s/def :sim/kill-at int?)
+(s/def :sim/nether (s/keys :req-un [:sim.nether/column :sim.nether/at])) ; the Nether a portal leads to
+(s/def :sim.nether/column bytes?)
+(s/def :sim.nether/at ::vec3)
 (s/def :sim/falling (s/map-of ::block-pos map?))
 (s/def :sim/next-window int?)
 (s/def :sim/clicks nat-int?)

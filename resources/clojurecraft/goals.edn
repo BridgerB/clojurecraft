@@ -143,6 +143,15 @@
   :goal/plan :build
   :goal/build :nether
   :goal/done? :built?}
+ {:goal/id :fortress
+  :goal/priority 17
+  :goal/target? true
+  :goal/until "fortress"
+  :goal/doc
+  "within 6 blocks of a nether fortress's bricks, reached by a tunnel that never opens a cell beside lava (issue #11)"
+  :goal/dimension "minecraft:the_nether"
+  :goal/plan :fortress
+  :goal/done? :at-fortress?}
  {:goal/id :shore
   :goal/priority 5
   :goal/target? true

@@ -69,7 +69,14 @@
    [:configuration :c2s :finish-configuration] []
    [:configuration :s2c :disconnect] [[:reason :rest]]
    ;; play, server → client
-   [:play :s2c :login] [[:entity-id :i32]]
+   ;; login: the player's id, the server's settings, then CommonPlayerSpawnInfo as respawn has it,
+   ;; so a bot that joins in the Nether knows it; the death location and what follows are an
+   ;; unmodelled tail. Field order read from the game's ClientboundLoginPacket.write (issue #11)
+   [:play :s2c :login]
+   [[:entity-id :i32] [:hardcore? :bool] [:levels [:vec :string]] [:max-players :varint]
+    [:view-distance :varint] [:simulation-distance :varint] [:reduced-debug? :bool]
+    [:death-screen? :bool] [:limited-crafting? :bool] [:dimension-type :varint] [:dimension :string]
+    [:seed :i64] [:game-type :u8] [:previous-game-type :i8] [:debug? :bool] [:flat? :bool]]
    [:play :s2c :keep-alive] [[:id :i64]]
    [:play :s2c :ping] [[:id :i32]]
    [:play :s2c :player-position] [[:teleport-id :varint] [:x :f64] [:y :f64] [:z :f64] [:dx :f64]

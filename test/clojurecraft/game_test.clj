@@ -5,6 +5,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
+            [clojurecraft.sim :as sim]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
@@ -211,6 +212,26 @@
         (is (nil? (:window/open w)) (str (:packet/name p)))
         (is (nil? (:window/cursor w)))
         (is (= {} (:window/grid w)))))))
+
+(deftest a-login-says-the-dimension-the-bot-joins-in
+  (let [[w _] (run (in-play) [(packet (sim/login "minecraft:the_nether"))])]
+    (is (= "minecraft:the_nether" (:player/dimension w))))
+  (testing "a login recorded before it carried one leaves the overworld"
+    (let [[w _] (run (in-play)
+                     [{:event/kind :packet :event/packet {:packet/name :login :entity-id 1}}])]
+      (is (nil? (:player/dimension w))))))
+
+(deftest a-nether-chunk-loads-at-the-nether-height
+  ;; the server writes its dimension's sections; a Nether column is 16 from y 0, not 24 from -64
+  (let [col (world/column-bytes {[3 70 3] (blocks/default-state :nether_bricks)}
+                                "minecraft:the_nether")
+        [w _] (run (in-play)
+                   [(packet (assoc fx/respawn :dimension "minecraft:the_nether"))
+                    (packet
+                     {:packet/name :level-chunk-with-light :x 0 :z 0 :heightmaps [] :data col})])]
+    (is (= :nether_bricks (blocks/name-of (terrain/block-at w [3 70 3]))))
+    (is (= [3 70 3] (first (memory/positions-now w [(blocks/default-state :nether_bricks)])))
+        "remembered, in the Nether")))
 
 (deftest a-respawn-into-another-dimension-forgets-the-old-one
   ;; the dimension change arrives as a respawn (#8: the portal; #11 owns the Nether itself): the

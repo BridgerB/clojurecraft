@@ -255,6 +255,27 @@
               :when (seq tries)]
           [(keyword (file-stem p)) tries])))
 
+(defn dimensions
+  "[{:dimension/name ...}] for every dimension type in the inner jar's
+   data/minecraft/dimension_type/*.json, by name, which is the registry order the server sends
+   them in: a row's :dimension/id is the id a login or respawn names its dimension type by
+   (typecraft: 3 = the_nether). :dimension/sections is the column's 16-block sections."
+  [entries]
+  (->> (for [[p j] entries
+             :when (str/starts-with? p "data/minecraft/dimension_type/")
+             :let [d (json/read-str j)]]
+         [(str "minecraft:" (file-stem p)) d])
+       (sort-by first)
+       (map-indexed (fn [i [n d]]
+                      {:dimension/name n
+                       :dimension/id i
+                       :dimension/min-y (get d "min_y")
+                       :dimension/height (get d "height")
+                       :dimension/sections (quot (get d "height") 16)
+                       :dimension/logical-height (get d "logical_height")
+                       :dimension/coordinate-scale (double (get d "coordinate_scale"))}))
+       vec))
+
 (defn fuel
   "{item-kw burn-ticks} from the probe's JSON: the game's own FuelValues."
   [probe]
@@ -297,8 +318,9 @@
           (for [[n m] (get-in j [reg "entries"])] [(name-kw n) (get m "protocol_id")]))))
 
 (defn inner-jar-entries
-  "{path json-string} for version.json and every data/minecraft/{recipe,tags/item,tags/block}/*.json
-   in the inner jar."
+  "{path json-string} for version.json and every
+   data/minecraft/{recipe,loot_table/blocks,tags/item,tags/block,dimension_type}/*.json in the
+   inner jar."
   [server-jar]
   (with-open [outer (ZipInputStream. (io/input-stream server-jar))]
     (let [inner (loop []
@@ -316,7 +338,7 @@
                  (or
                   (= n "version.json")
                   (re-matches
-                   #"data/minecraft/(recipe/[^/]+|loot_table/blocks/[^/]+|tags/(item|block)/.+)\.json"
+                   #"data/minecraft/(recipe/[^/]+|loot_table/blocks/[^/]+|dimension_type/[^/]+|tags/(item|block)/.+)\.json"
                    n))
                  (assoc acc n (String. (.readAllBytes z) "UTF-8"))
                  acc)))
@@ -342,7 +364,7 @@
 
 (defn -main
   "Write the --reports tables (blocks, packets, items, entity types) into out; with a server
-   jar also the jar tables (version, item tags, recipes, harvest, smelting, drops); with the probe's JSON too,
+   jar also the jar tables (version, item tags, recipes, harvest, smelting, drops, dimensions); with the probe's JSON too,
    the tables read from the game's classes (hardness, materials, fuel)."
   [reports out & [server-jar probe-json]]
   (let
@@ -359,7 +381,9 @@
         (write-map (io/file out "harvest.edn") jar-hdr (harvest (tags-of entries "block")))
         (write-rows (io/file out "smelting.edn") jar-hdr (smelting entries tags))
         (write-map (io/file out "drops.edn") jar-hdr (drops entries))
-        (println "wrote" (str out "/{version,item-tags,recipes,harvest,smelting,drops}.edn"))))
+        (write-rows (io/file out "dimensions.edn") jar-hdr (dimensions entries))
+        (println "wrote"
+                 (str out "/{version,item-tags,recipes,harvest,smelting,drops,dimensions}.edn"))))
     (when probe-json
       (let [probe (json/read-str (slurp probe-json))]
         (write-map (io/file out "hardness.edn") probe-hdr (hardness probe (blocks reports)))

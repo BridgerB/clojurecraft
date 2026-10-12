@@ -19,6 +19,7 @@
             [clojurecraft.build]
             [clojurecraft.cli :as cli]
             [clojurecraft.conn :as conn]
+            [clojurecraft.fortress]
             [clojurecraft.game :as game]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]

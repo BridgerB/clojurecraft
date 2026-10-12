@@ -64,6 +64,30 @@
     (is (nil? (chunk/block-at chunks [0 -65 0])) "below the world")
     (is (= [[3 5 7 136] [0 16 1 139]] (vec (chunk/find-blocks chunks blocks/log?))))))
 
+(def nether-bytes
+  "A Nether column: 16 sections from y 0, a log (paletted) in section 4, y 64..79."
+  (b/with-out (fn [o]
+                (dotimes [si 16]
+                  (case si
+                    0 (single-section o 1)
+                    4 (paletted-section o)
+                    (single-section o 0))))))
+
+(deftest a-nether-column-is-sixteen-sections-from-y-zero
+  ;; ruststeve read nether columns as overworld ones and saw fortress brick 64 blocks off,
+  ;; then ran off the end of the shorter buffer: a column's height is the sections it holds
+  (let [col (chunk/decode nether-bytes)
+        chunks {[0 0] col}]
+    (is (= 16 (count (:sections col))))
+    (is (= 0 (:chunk/min-y col)))
+    (is (= 1 (chunk/block-at chunks [5 0 5])) "stone at the floor of the world")
+    (is (= 136 (chunk/block-at chunks [3 69 7])) "the log at 64 + 5")
+    (is (nil? (chunk/block-at chunks [3 -1 7])) "below y 0 is out of the world")
+    (is (nil? (chunk/block-at chunks [3 256 7])) "and above 255")
+    (is (= [[3 69 7 136]] (vec (chunk/find-blocks chunks blocks/log?))))
+    (testing "an overworld column still reads from y -64"
+      (is (= -64 (:chunk/min-y (chunk/decode column-bytes)))))))
+
 (deftest negative-coordinates
   (let [chunks {[-1 -1] (chunk/decode column-bytes)}]
     (is (= 136 (chunk/block-at chunks [-13 5 -9])) "x=-16+3, z=-16+7")

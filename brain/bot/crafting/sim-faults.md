@@ -10,7 +10,7 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#Fault knobs are inputs, not hidden state
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :container-close]
-  - src/clojurecraft/sim.clj#[{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed kill-at]
+  - src/clojurecraft/sim.clj#defn init
   - src/clojurecraft/sim.clj#:sim/lag-ticks in sim0 delays every server→client packet by that many ticks,
   - test/clojurecraft/sim_test.clj#no-blind-take-under-lag-or-a-dropped-click
   - src/clojurecraft/sim.clj#(update :sim/violations conj [:place-into-player dest])

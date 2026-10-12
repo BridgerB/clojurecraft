@@ -47,6 +47,8 @@ src/clojurecraft/smelt.clj    the :smelt executor: settle, lay the fuel and the 
 src/clojurecraft/place.clj    the :place and :open-container executors: a spot, use-item-on, the server's answer
 src/clojurecraft/scoop.clj    the :scoop act and executor: surface water in sight or remembered, aim, use-item, the water bucket
 src/clojurecraft/build.clj    a build plan as data (the portal mold): ops with done-predicates, the :build intent, the site
+src/clojurecraft/fortress.clj the Nether leg: the :fortress goal and the :tunnel intent, each step a plan of ops, never beside lava
+src/clojurecraft/dimension.clj the dimensions as data (dimensions.edn): names, ids, heights; the one the bot is in
 src/clojurecraft/window.clj   window views (inventory, table or furnace), the click that predicts nothing, the resync click
 src/clojurecraft/recipe.clj   the vanilla crafting table as data: match, clicks, needs
 src/clojurecraft/plan.clj     loads goals.edn; registries done-by, act, next-intent; the planner; :plan/*

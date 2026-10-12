@@ -22,6 +22,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
@@ -208,18 +209,15 @@
   [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
 
-(def start-dimension "minecraft:overworld") ; where a login puts the bot (the login packet's dimension is not read)
-
 (defn change-dimension
   "The world after a respawn into the dimension named dim (\"minecraft:the_nether\"): the
    columns, the block overlay and the entities belonged to the old one, so they go, and the bot
    is loaded again only once the server has placed it (the next teleport sends player-loaded). A
-   respawn in the dimension the bot is in (a death) keeps them. Before any respawn the bot is in
-   start-dimension."
+   respawn in the dimension the bot is in (a death) keeps them (dimension/of: the overworld
+   before a login named one)."
   [w dim]
   (cond-> (assoc w :player/dimension dim)
-    (not= dim (:player/dimension w start-dimension))
-    (assoc :world/chunks {} :world/blocks {} :player/loaded? false)))
+    (not= dim (dimension/of w)) (assoc :world/chunks {} :world/blocks {} :player/loaded? false)))
 
 (defmethod on-packet [:play :respawn]
   [w p]
@@ -236,9 +234,11 @@
 
 (defmethod on-packet [:play :login]
   [w p]
+  ;; the dimension it joins in: a recording made before login carried it has none
   (-> w
       inventory/fresh-menus
       (assoc :player/entity-id (:entity-id p))
+      (cond-> (:dimension p) (assoc :player/dimension (:dimension p)))
       (emit {:packet/name :client-information
              :locale "en_US"
              :view-distance 6

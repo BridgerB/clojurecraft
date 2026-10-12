@@ -31,6 +31,30 @@
       (let [w (memory/observe (assoc w :time/now 9) [0 64 0] oak-y)]
         (is (contains? (set (memory/positions-now w blocks/log-states)) [0 64 0]))))))
 
+(deftest the-same-place-in-two-dimensions-is-two-places
+  ;; ruststeve kept one map of columns and read fortress brick 64 blocks off: a sighting says the
+  ;; dimension it was seen in, and every question is asked in the bot's
+  (let [brick (blocks/default-state :nether_bricks)
+        w (seen [[4 61 147] oak-y])
+        nether (memory/observe (assoc w :player/dimension "minecraft:the_nether" :time/now 5)
+                               [4 61 147]
+                               brick)]
+    (is (= brick (memory/remembered nether [4 61 147])) "in the Nether, the brick")
+    (is (= oak-y
+           (memory/remembered (assoc nether :player/dimension "minecraft:overworld") [4 61 147]))
+        "back in the overworld, the log is still there")
+    (is (= [[4 61 147]] (memory/positions-now nether [brick])))
+    (is (empty? (memory/positions-now nether blocks/log-states)) "no log in the Nether")
+    (is (= [oak-y] (mapv :block/state (memory/history w [4 61 147]))))
+    (testing "a fact written before facts said a dimension is the overworld's"
+      (let [old (update w
+                        :world/facts
+                        d/db-with
+                        [{:sight/pos [9 64 9] :sight/state oak-y :sight/at 7}])]
+        (is (= oak-y (memory/remembered old [9 64 9])))
+        (is (nil? (memory/remembered (assoc old :player/dimension "minecraft:the_nether")
+                                     [9 64 9])))))))
+
 ;; ---------------------------------------------------------------- pools (issue #5)
 
 (def pond-and-lava

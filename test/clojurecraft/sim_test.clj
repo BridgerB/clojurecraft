@@ -9,7 +9,9 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.gym :as gym]
             [clojurecraft.intent :as intent]
@@ -2049,17 +2051,18 @@
 ;; ---------------------------------------------------------------- the portal through the planner (issue #8)
 
 (defn nether-run
-  "The planner against the model toward the Nether from the kit, a lava trench beside the
-   arena, the frame's site chosen by the bot; sim-opts adds faults. Returns [world sim]."
-  [step sim-opts]
-  (sim/run step
-           (game/init fx/opts)
-           (sim/init (merge
-                      {:column (world/column-bytes lava-pit) :spawn [9.5 64.0 10.5] :inventory kit}
-                      sim-opts))
-           #(or (plan/done? %) (plan/failed? %))
-           1800000
-           {:event/kind :go :go/goals [:nether]}))
+  "The planner against the model toward the Nether (or goals) from the kit, a lava trench beside
+   the arena, the frame's site chosen by the bot; sim-opts adds faults. Returns [world sim]."
+  ([step sim-opts] (nether-run step sim-opts [:nether]))
+  ([step sim-opts goals]
+   (sim/run step
+            (game/init fx/opts)
+            (sim/init (merge
+                       {:column (world/column-bytes lava-pit) :spawn [9.5 64.0 10.5] :inventory kit}
+                       sim-opts))
+            #(or (plan/done? %) (plan/failed? %))
+            1800000
+            {:event/kind :go :go/goals goals})))
 
 (deftest the-portal-from-a-kit-and-its-recording-replays
   (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-portal.edn")
@@ -2086,3 +2089,71 @@
     (is (= 3 (count (filter #(= blocks/lava-base (sim/block-at sim %)) (keys lava-pit))))
         "nine lava scooped, as without the death: no cell cast twice")
     (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- the fortress (issue #11)
+
+(def netherrack (blocks/default-state :netherrack))
+
+(def nether-fragment
+  "A Nether column (16 sections from y 0): the arrival at x 2, a wall of netherrack x 4..11 to
+   tunnel through, a lava source beside the straight way at [8 64 7] that a level step past would
+   open onto, and a fortress's bricks at x 14..15. Stone below y 64, as every fixture column."
+  (merge (into {} (for [x (range 4 12) y (range 64 68) z (range 4 13)] [[x y z] netherrack]))
+         {[8 64 7] blocks/lava-base}
+         (into {}
+               (for [x [14 15]
+                     y (range 64 67)
+                     z (range 6 11)]
+                 [[x y z] (blocks/default-state :nether_bricks)]))))
+
+(def nether-arrival [2.5 64.0 8.5])
+
+(def fortress-kit
+  "What the fortress row gives: a pickaxe for netherrack and cobblestone for floors."
+  {[:hotbar 0] {:item (recipe/item-id :iron_pickaxe) :count 1}
+   [:hotbar 1] {:item (recipe/item-id :cobblestone) :count 64}})
+
+(defn fortress-run
+  "The planner toward the fortress from a Nether landing (the gym's tp there), in the
+   nether-fragment. Returns [world sim]."
+  [step]
+  (sim/run step
+           (game/init fx/opts)
+           (sim/init {:column (world/column-bytes nether-fragment dimension/nether)
+                      :spawn nether-arrival
+                      :dimension dimension/nether
+                      :inventory fortress-kit})
+           #(or (plan/done? %) (plan/failed? %))
+           600000
+           {:event/kind :go :go/goals [:fortress]}))
+
+(deftest the-fortress-from-a-nether-landing-and-its-recording-replays
+  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-fortress.edn")
+        tap (record/tap! path)
+        [w sim] (fortress-run (recording step tap))]
+    ((:close tap))
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= dimension/nether (:player/dimension w)) "joined in the Nether, from the login")
+    (is (some #(fortress/arrived? w %) (fortress/bricks w)) "within 6 of a brick")
+    (is (= blocks/lava-base (sim/block-at sim [8 64 7])) "the lava is still a source")
+    (is (= netherrack (sim/block-at sim [8 64 8]))
+        "and the cell beside it on the way was never opened")
+    (is (zero? (:stats/deaths w 0)))
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))
+    (testing "the recording replays with every sent packet the same"
+      (is (nil? (record/verify step (game/init fx/opts) path))))))
+
+(deftest the-portal-leads-on-to-the-fortress
+  ;; one run from the kit: cast the portal, step through, and tunnel to the fortress; the
+  ;; overworld rows are done once in the Nether, and the fortress waits for it
+  (let [[w sim] (nether-run step
+                            {:nether {:column (world/column-bytes nether-fragment dimension/nether)
+                                      :at nether-arrival}
+                             :inventory (merge kit {[:hotbar 7] (fortress-kit [:hotbar 0])})}
+                            [:nether :fortress])]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= dimension/nether (:player/dimension w)))
+    (is (some #(fortress/arrived? w %) (fortress/bricks w)))
+    (is (empty? (:sim/violations sim)))))
+

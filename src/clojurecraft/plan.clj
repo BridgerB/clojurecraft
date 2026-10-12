@@ -11,6 +11,7 @@
    under :plan/*."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
@@ -116,14 +117,29 @@
          (filter #(or (nil? goals) (:goal/always? %) (contains? goals (:goal/id %))))
          (sort-by :goal/priority))))
 
-(defn choose
-  "The highest-priority target in play the world does not satisfy and the run has not already
-   reached (:plan/reached, a chained run's milestones)."
+(defn here?
+  "Is goal worked in the dimension the bot is in: it names none, or this one (:goal/dimension)?"
+  [world goal]
+  (let [d (:goal/dimension goal)] (or (nil? d) (= d (dimension/of world)))))
+
+(defn undone
+  "The targets in play the world does not satisfy and the run has not already reached
+   (:plan/reached, a chained run's milestones), highest priority first, wherever they are worked."
   [world table]
   (->> (in-play world table)
        (remove #(contains? (:plan/reached world #{}) (:goal/id %)))
-       (remove #(done-by world %))
-       first))
+       (remove #(done-by world %))))
+
+(defn choose
+  "The highest-priority undone target that is worked here (here?), or nil."
+  [world table]
+  (first (filter #(here? world %) (undone world table))))
+
+(defn elsewhere?
+  "Is a target still undone that is worked in another dimension? Then no target here is not the
+   end of the plan: it waits for the dimension to change."
+  [world table]
+  (boolean (seq (remove #(here? world %) (undone world table)))))
 
 (defn reach
   "A chained run's milestones: on a :plan/chain? plan, every target in play that holds now joins
@@ -285,6 +301,11 @@
     (cond (not active?) world
           (and i (or (nil? goal) preempt?) (not (can-abandon? world)))
           (run-intent world i event table)
+          (and (nil? goal) (elsewhere? world table))
+          (-> world
+              (cond-> i (abandon-intent i :goal-met))
+              (dissoc :plan/intent)
+              (wait :other-dimension))
           (nil? goal)
           (-> world
               (cond-> i (abandon-intent i :goal-met))

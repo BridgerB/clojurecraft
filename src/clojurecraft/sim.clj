@@ -27,6 +27,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.packet :as packet]
             [clojurecraft.physics :as physics]
@@ -120,9 +121,13 @@
    :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {slot item} (a slot is a named place,
    [:hotbar 0] as inventory/slot reads it, or a window-0 slot number), :lag-ticks,
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
-   from the world spawn), :seed (where the loot rolls start, 0 when absent) and :kill-at ms (the
-   player dies then, a fault as an input: a death mid-task)."
-  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed kill-at]
+   from the world spawn), :seed (where the loot rolls start, 0 when absent), :kill-at ms (the
+   player dies then, a fault as an input: a death mid-task), :dimension (the dimension the
+   player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
+   there) and :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
+   and where the player arrives)."
+  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed kill-at
+           dimension nether]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -154,7 +159,9 @@
      :sim/next-eid 100
      :sim/next-keep-alive keep-alive-every
      :sim/keep-alives-pending #{}}
-    kill-at (assoc :sim/kill-at kill-at)))
+    kill-at (assoc :sim/kill-at kill-at)
+    dimension (assoc :sim/dimension dimension)
+    nether (assoc :sim/nether nether)))
 
 (defn send "Queue pkt for the client in :sim/out." [sim pkt] (update sim :sim/out conj pkt))
 
@@ -177,12 +184,34 @@
 (defmethod on-packet [:configuration :select-known-packs]
   [sim _]
   (send sim {:packet/name :finish-configuration}))
+(defn login
+  "The login packet for a player joining in the dimension named dim: the settings a vanilla
+   server sends, then the spawn info (the dimension type's registry id and the dimension's name)."
+  [dim]
+  {:packet/name :login
+   :entity-id 1
+   :hardcore? false
+   :levels [dimension/overworld dimension/nether dimension/end]
+   :max-players 20
+   :view-distance 6
+   :simulation-distance 6
+   :reduced-debug? false
+   :death-screen? true
+   :limited-crafting? false
+   :dimension-type (:dimension/id (dimension/by-name dim))
+   :dimension dim
+   :seed 0
+   :game-type (packet/value :game-type :survival)
+   :previous-game-type (packet/value :game-type :none)
+   :debug? false
+   :flat? false})
+
 (defmethod on-packet [:configuration :finish-configuration]
   [sim _]
   (let [[x y z] (:sim/spawn sim)]
     (-> sim
         (assoc :sim/phase :play)
-        (send {:packet/name :login :entity-id 1})
+        (send (login (:sim/dimension sim dimension/overworld)))
         (send {:packet/name :player-position
                :teleport-id 1
                :x x
@@ -806,7 +835,9 @@
 (def portal-ms 4000)                  ; a survival player in a portal this long changes dimension (80 game ticks)
 (def nether
   "The respawn the model sends for the Nether: the dimension change a portal makes."
-  (assoc respawn :dimension-type 3 :dimension "minecraft:the_nether"))
+  (assoc respawn
+         :dimension-type (:dimension/id (dimension/by-name dimension/nether))
+         :dimension dimension/nether))
 
 (defn frame-around
   "The six interior cells of a complete portal frame round cell along axis (:x or :z), or nil: an
@@ -856,41 +887,58 @@
               (send ack))
           :else (send sim ack))))
 
+(defn arrive
+  "The model in the Nether: with a :sim/nether, its column becomes the world (the overworld's
+   placed and broken blocks were the other dimension's) and the player stands at its :at; without
+   one, the same column where the player stood (a one-column model of the portal alone)."
+  [sim]
+  (if-let [{:keys [column at]} (:sim/nether sim)]
+    (assoc sim
+           :sim/column column
+           :sim/chunk (chunk/decode column)
+           :sim/placed {}
+           :sim/broken #{}
+           :sim/player-pos at)
+    sim))
+
 (defn through-portal
   "The model a tick on: a player whose feet stand in a nether portal portal-ms on end changes
-   dimension (the Nether's respawn, then a teleport where it stands and the column again, as the
-   one-column model has only one); out of a portal, the count starts over."
+   dimension (arrive, then the Nether's respawn, a teleport where it now stands and its column);
+   out of a portal, the count starts over."
   [sim now]
-  (let [[x y z :as pos] (:sim/player-pos sim)
+  (let [pos (:sim/player-pos sim)
         in? (and pos
                  (= :nether_portal
-                    (blocks/name-of (block-at sim (mapv #(long (math/floor %)) [x (+ y 0.1) z])))))
+                    (blocks/name-of (block-at sim
+                                              (mapv #(long (math/floor %)) (update pos 1 + 0.1))))))
         since (:sim/portal-since sim)]
     (cond (not in?) (dissoc sim :sim/portal-since)
-          (= "minecraft:the_nether" (:sim/dimension sim)) sim
+          (= dimension/nether (:sim/dimension sim)) sim
           (nil? since) (assoc sim :sim/portal-since now)
           (< (- now since) portal-ms) sim
           :else
-          (-> sim
-              (assoc :sim/dimension "minecraft:the_nether")
-              (dissoc :sim/portal-since)
-              (send nether)
-              (send {:packet/name :player-position
-                     :teleport-id 3
-                     :x x
-                     :y y
-                     :z z
-                     :dx 0.0
-                     :dy 0.0
-                     :dz 0.0
-                     :yaw 0.0
-                     :pitch 0.0
-                     :flags 0})
-              (send {:packet/name :level-chunk-with-light
-                     :x 0
-                     :z 0
-                     :heightmaps []
-                     :data (:sim/column sim)})))))
+          (let [sim (arrive sim)
+                [x y z] (:sim/player-pos sim)]
+            (-> sim
+                (assoc :sim/dimension dimension/nether)
+                (dissoc :sim/portal-since)
+                (send nether)
+                (send {:packet/name :player-position
+                       :teleport-id 3
+                       :x x
+                       :y y
+                       :z z
+                       :dx 0.0
+                       :dy 0.0
+                       :dz 0.0
+                       :yaw 0.0
+                       :pitch 0.0
+                       :flags 0})
+                (send {:packet/name :level-chunk-with-light
+                       :x 0
+                       :z 0
+                       :heightmaps []
+                       :data (:sim/column sim)}))))))
 
 (defn place
   "use-item-on that is not on a container: place the held block item at pos + face when the
