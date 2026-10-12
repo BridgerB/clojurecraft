@@ -164,7 +164,7 @@
 (deftest a-stale-click-gets-the-full-window
   (let [sim (-> (sim/init {:column (world/column-bytes {})
                            :spawn [0.5 64.0 0.5]
-                           :inventory {10 {:item (recipe/item-id :oak_planks) :count 3}}})
+                           :inventory {[:main 1] {:item (recipe/item-id :oak_planks) :count 3}}})
                 (assoc :sim/phase :play :sim/window {:id 1 :kind :table :grid {} :state-id 4})
                 (sim/step {:sim/kind :packet
                            :sim/packet {:packet/name :container-click
@@ -191,9 +191,9 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes {})
                                     :spawn [0.5 64.0 0.5]
-                                    :inventory {36 {:item planks :count 4}
-                                                37 {:item stick :count 2}
-                                                38 {:item table :count 1}}})
+                                    :inventory {[:hotbar 0] {:item planks :count 4}
+                                                [:hotbar 1] {:item stick :count 2}
+                                                [:hotbar 2] {:item table :count 1}}})
                          #(or (plan/done? %) (plan/failed? %))
                          60000
                          {:event/kind :go :go/goals [:pickaxe]})]
@@ -248,7 +248,7 @@
   [id item wait-ms]
   (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] id})
                                :spawn [0.5 64.0 0.5]
-                               :inventory (if item {36 {:item item :count 1}} {})})
+                               :inventory (if item {[:hotbar 0] {:item item :count 1}} {})})
                     :sim/phase :play
                     :sim/now 1000
                     :sim/player-pos [0.5 64.0 0.5])]
@@ -277,7 +277,7 @@
         sim (dig-on-model stone-id wooden-pickaxe 1000)]
     (is (empty? (:sim/broken early)))
     (is (contains? (:sim/broken sim) [1 64 0]))
-    (is (= 58 (get-in sim [:sim/inv 36 :durability])) "one use off 59")))
+    (is (= 58 (get-in sim [:sim/inv (inventory/slot [:hotbar 0]) :durability])) "one use off 59")))
 
 (deftest iron-ore-with-a-wooden-pickaxe-breaks-but-drops-nothing
   (let [sim (dig-on-model iron-ore-id wooden-pickaxe 7500)]
@@ -287,7 +287,8 @@
 (deftest a-worn-out-tool-leaves-its-slot
   (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] stone-id})
                                :spawn [0.5 64.0 0.5]
-                               :inventory {36 {:item wooden-pickaxe :count 1 :durability 1}}})
+                               :inventory {[:hotbar 0]
+                                           {:item wooden-pickaxe :count 1 :durability 1}}})
                     :sim/phase :play
                     :sim/now 1000
                     :sim/player-pos [0.5 64.0 0.5])
@@ -302,7 +303,7 @@
                        :sim/packet
                        {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))]
     (is (contains? (:sim/broken sim) [1 64 0]))
-    (is (nil? (get-in sim [:sim/inv 36])) "the last use broke it")
+    (is (nil? (get-in sim [:sim/inv (inventory/slot [:hotbar 0])])) "the last use broke it")
     (is (some #(and (= :container-set-slot (:packet/name %)) (= 36 (:slot %)) (nil? (:item %)))
               (:sim/out sim))
         "and the client is told the slot is empty")))
@@ -616,7 +617,7 @@
                   :else w)))
         sim0 (sim/init {:column column
                         :spawn [8.5 (double spawn-y) 8.5]
-                        :inventory (if item {36 {:item item :count 1}} {})})]
+                        :inventory (if item {[:hotbar 0] {:item item :count 1}} {})})]
     (sim/run step
              (game/init fx/opts)
              sim0
@@ -729,9 +730,9 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes staircase)
                                     :spawn [8.5 72.0 8.5]
-                                    :inventory {36 {:item (get blocks/items :crafting_table)
-                                                    :count 1}
-                                                37 {:item (get blocks/items :furnace) :count 1}}})
+                                    :inventory
+                                    {[:hotbar 0] {:item (get blocks/items :crafting_table) :count 1}
+                                     [:hotbar 1] {:item (get blocks/items :furnace) :count 1}}})
                          #(or (plan/done? %) (plan/failed? %))
                          60000
                          {:event/kind :go :go/goals [:both-near]})
@@ -761,11 +762,12 @@
                      :goal/done? :provided?})
         [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
                          (game/init fx/opts)
-                         (sim/init
-                          {:column (world/column-bytes
-                                    (assoc deep-stone [13 74 9] (blocks/default-state :iron_ore)))
-                           :spawn [8.5 76.0 8.5]
-                           :inventory {36 {:item (get blocks/items :stone_pickaxe) :count 1}}})
+                         (sim/init {:column
+                                    (world/column-bytes
+                                     (assoc deep-stone [13 74 9] (blocks/default-state :iron_ore)))
+                                    :spawn [8.5 76.0 8.5]
+                                    :inventory {[:hotbar 0] {:item (get blocks/items :stone_pickaxe)
+                                                             :count 1}}})
                          #(or (plan/done? %) (plan/failed? %))
                          240000
                          {:event/kind :go :go/goals [:ore-test]})]
@@ -801,8 +803,9 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes forest-over-stone)
                                     :spawn [8.5 65.0 8.5]
-                                    :inventory {36 {:item (get blocks/items :wooden_pickaxe)
-                                                    :count 1}}})
+                                    :inventory {[:hotbar 0] {:item (get blocks/items
+                                                                        :wooden_pickaxe)
+                                                             :count 1}}})
                          #(or (plan/done? %) (plan/failed? %))
                          240000
                          {:event/kind :go :go/goals [:cobblestone]})]
@@ -821,9 +824,10 @@
                          (sim/init {:column (world/column-bytes forest-over-stone)
                                     :spawn [8.5 65.0 8.5]
                                     :inventory
-                                    {36 {:item (get blocks/items :wooden_pickaxe) :count 1}
-                                     37 {:item (get blocks/items :stick) :count 2}
-                                     38 {:item (get blocks/items :crafting_table) :count 1}}})
+                                    {[:hotbar 0] {:item (get blocks/items :wooden_pickaxe) :count 1}
+                                     [:hotbar 1] {:item (get blocks/items :stick) :count 2}
+                                     [:hotbar 2] {:item (get blocks/items :crafting_table)
+                                                  :count 1}}})
                          #(or (plan/done? %) (plan/failed? %))
                          240000
                          {:event/kind :go :go/goals [:stone-pickaxe]})]
@@ -844,7 +848,8 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes {})
                                     :spawn [8.5 64.0 8.5]
-                                    :inventory {36 {:item (get blocks/items :furnace) :count 1}}})
+                                    :inventory {[:hotbar 0] {:item (get blocks/items :furnace)
+                                                             :count 1}}})
                          #(or (plan/done? %) (plan/failed? %))
                          30000
                          {:event/kind :go :go/goals [:furnace-near]})]
@@ -920,7 +925,7 @@
       (click-in 0 0 0)))
 
 (deftest a-furnace-opens-with-its-slots-and-properties
-  (let [sim (open-furnace (furnace-sim {36 {:item (item :raw_iron) :count 4}}))
+  (let [sim (open-furnace (furnace-sim {[:hotbar 0] {:item (item :raw_iron) :count 4}}))
         out (:sim/out sim)]
     (is (= [:block-changed-ack :open-screen :container-set-content :container-set-data
             :container-set-data :container-set-data :container-set-data]
@@ -1020,9 +1025,9 @@
    {:event/kind :go :go/goals [:ingots-test]}))
 
 (def furnace-and-iron
-  {36 {:item (item :furnace) :count 1}
-   37 {:item (item :raw_iron) :count 4}
-   38 {:item (item :coal) :count 1}})
+  {[:hotbar 0] {:item (item :furnace) :count 1}
+   [:hotbar 1] {:item (item :raw_iron) :count 4}
+   [:hotbar 2] {:item (item :coal) :count 1}})
 
 (deftest four-raw-iron-and-a-coal-become-four-ingots-in-a-placed-furnace
   (let [[w sim] (smelt-run furnace-and-iron 4 #{})]
@@ -1037,10 +1042,10 @@
 
 (deftest a-second-stack-of-fuel-is-loaded-when-the-first-burns-out
   ;; birch before oak in burn-order: one birch plank cooks one and a half, then the oak one
-  (let [[w sim] (smelt-run {36 {:item (item :furnace) :count 1}
-                            37 {:item (item :raw_iron) :count 2}
-                            38 {:item (item :birch_planks) :count 1}
-                            39 {:item (item :oak_planks) :count 1}}
+  (let [[w sim] (smelt-run {[:hotbar 0] {:item (item :furnace) :count 1}
+                            [:hotbar 1] {:item (item :raw_iron) :count 2}
+                            [:hotbar 2] {:item (item :birch_planks) :count 1}
+                            [:hotbar 3] {:item (item :oak_planks) :count 1}}
                            2
                            #{})]
     (is (plan/done? w) (pr-str (plan/summary w)))
@@ -1074,7 +1079,8 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes ore-field)
                                     :spawn [8.5 64.0 8.5]
-                                    :inventory {36 {:item (item :stone_pickaxe) :count 1}}})
+                                    :inventory {[:hotbar 0] {:item (item :stone_pickaxe)
+                                                             :count 1}}})
                          #(or (plan/done? %) (plan/failed? %))
                          120000
                          {:event/kind :go :go/goals [:ore-test]})]
@@ -1103,7 +1109,8 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes ore-corridor)
                                     :spawn [2.5 64.0 8.5]
-                                    :inventory {36 {:item (item :stone_pickaxe) :count 1}}})
+                                    :inventory {[:hotbar 0] {:item (item :stone_pickaxe)
+                                                             :count 1}}})
                          #(or (plan/done? %) (plan/failed? %))
                          120000
                          {:event/kind :go :go/goals [:ore-test]})]
@@ -1151,8 +1158,9 @@
                      :goal/provides {:item/raw_iron 1}
                      :goal/done? :provided?})
         junk {:item (item :dirt) :count 1}
-        inv
-        (assoc (into {} (for [s (range 36 45)] [s junk])) 9 {:item (item :stone_pickaxe) :count 1})
+        inv (assoc (into {} (for [h (range 9)] [[:hotbar h] junk]))
+                   [:main 0]
+                   {:item (item :stone_pickaxe) :count 1})
         [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes ore-field)
@@ -1202,7 +1210,7 @@
            (game/init fx/opts)
            (sim/init {:column (world/column-bytes {})
                       :spawn [8.5 64.0 8.5]
-                      :inventory {36 {:item (item :gravel) :count 1}}
+                      :inventory {[:hotbar 0] {:item (item :gravel) :count 1}}
                       :seed seed})
            #(or (plan/done? %) (plan/failed? %))
            600000
@@ -1239,7 +1247,7 @@
         (-> (sim/init {:column (world/column-bytes
                                 {[1 64 0] stone-id [1 65 0] gravel-state [1 66 0] gravel-state})
                        :spawn [0.5 64.0 0.5]
-                       :inventory {36 {:item (item :wooden_pickaxe) :count 1}}})
+                       :inventory {[:hotbar 0] {:item (item :wooden_pickaxe) :count 1}}})
             (assoc :sim/phase :play :sim/now 1000 :sim/player-pos [0.5 64.0 0.5])
             (client-sends {:packet/name :set-carried-item :slot 0})
             (client-sends {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1})
@@ -1424,8 +1432,9 @@
   ;; of what mining picked up) and their stairs stopped :no-pickaxe; the dig chooses from the
   ;; hotbar, so the pickaxe is swapped into the hand first
   (let [junk {:item (item :dirt) :count 1}
-        inv
-        (assoc (into {} (for [s (range 36 45)] [s junk])) 9 {:item (item :stone_pickaxe) :count 1})
+        inv (assoc (into {} (for [h (range 9)] [[:hotbar h] junk]))
+                   [:main 0]
+                   {:item (item :stone_pickaxe) :count 1})
         [w sim]
         (sim/run
          (fn [w e]
@@ -1522,9 +1531,9 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes bank-pond)
                                     :spawn [5.5 64.0 8.5]
-                                    :inventory {36 {:item (item :wooden_pickaxe) :count 1}
-                                                37 {:item (item :wooden_pickaxe) :count 1}
-                                                40 {:item (item :bucket) :count 1}}})
+                                    :inventory {[:hotbar 0] {:item (item :wooden_pickaxe) :count 1}
+                                                [:hotbar 1] {:item (item :wooden_pickaxe) :count 1}
+                                                [:hotbar 4] {:item (item :bucket) :count 1}}})
                          ;; a step into the pond ends the run, so done means never in it
                          #(or (plan/done? %) (plan/failed? %) (:player/in-water? %))
                          60000
@@ -1555,9 +1564,9 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes pit)
                                     :spawn [9.5 62.0 8.5]
-                                    :inventory {36 {:item (item :wooden_pickaxe) :count 1}
-                                                37 {:item (item :wooden_pickaxe) :count 1}
-                                                40 {:item (item :bucket) :count 1}}})
+                                    :inventory {[:hotbar 0] {:item (item :wooden_pickaxe) :count 1}
+                                                [:hotbar 1] {:item (item :wooden_pickaxe) :count 1}
+                                                [:hotbar 4] {:item (item :bucket) :count 1}}})
                          #(or (plan/done? %) (plan/failed? %) (:player/in-water? %))
                          60000
                          {:event/kind :go :go/goals [:bucket-test]})]
@@ -1584,10 +1593,10 @@
 (def kit-start
   "What the kit starts from: the stone pickaxe, a crafting table, the furnace's eight
    cobblestone and four logs."
-  {36 {:item (item :stone_pickaxe) :count 1}
-   37 {:item (item :crafting_table) :count 1}
-   9 {:item (item :cobblestone) :count 8}
-   10 {:item (item :oak_log) :count 4}})
+  {[:hotbar 0] {:item (item :stone_pickaxe) :count 1}
+   [:hotbar 1] {:item (item :crafting_table) :count 1}
+   [:main 0] {:item (item :cobblestone) :count 8}
+   [:main 1] {:item (item :oak_log) :count 4}})
 
 (defn recording
   "step, with every event written to tap before it is applied and only the effects that event
@@ -1638,8 +1647,9 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes walled-ledge)
                                     :spawn [5.5 64.0 8.5]
-                                    :inventory {36 {:item (get blocks/items :wooden_pickaxe)
-                                                    :count 1}}})
+                                    :inventory {[:hotbar 0] {:item (get blocks/items
+                                                                        :wooden_pickaxe)
+                                                             :count 1}}})
                          #(or (plan/done? %) (plan/failed? %))
                          240000
                          {:event/kind :go :go/goals [:cobblestone]})]
@@ -1758,7 +1768,8 @@
   (let [[w sim _] (escape-run capped-well
                               [0.5 60.0 0.5]
                               90000
-                              {:inventory {36 {:item wooden-pickaxe :count 1 :durability 1}}})]
+                              {:inventory {[:hotbar 0]
+                                           {:item wooden-pickaxe :count 1 :durability 1}}})]
     (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
     (is (trap/dry-land? w))

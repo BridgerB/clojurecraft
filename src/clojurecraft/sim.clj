@@ -46,11 +46,17 @@
 
 (declare disturb full sync-window)
 
+(defn held-slot
+  "The window-0 slot of the hotbar place the client last selected (set-carried-item), the
+   first when it never selected one."
+  [sim]
+  (inventory/slot [:hotbar (:sim/held sim 0)]))
+
 (defn held-item
   "The item id in the slot the client last selected (set-carried-item), or nil for an empty
    hand."
   [sim]
-  (get-in sim [:sim/inv (+ 36 (:sim/held sim 0)) :item]))
+  (get-in sim [:sim/inv (held-slot sim) :item]))
 
 (defn break-ms
   "ms the server requires between START and FINISH on block id with the held item: the same
@@ -104,14 +110,15 @@
 
 (defn init
   "A fresh server before the handshake, from {:column bytes :spawn [x y z]} plus optional
-   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {window-0-slot item}, :lag-ticks,
+   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {slot item} (a slot is a named place,
+   [:hotbar 0] as inventory/slot reads it, or a window-0 slot number), :lag-ticks,
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
    from the world spawn) and :seed (where the loot rolls start, 0 when absent)."
   [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed]
     :or {keep-alive-every keep-alive-every}}]
   {:sim/phase :handshake
    :sim/lag-ticks (or lag-ticks 0)
-   :sim/inv (or inventory {})
+   :sim/inv (into {} (for [[k it] inventory] [(if (vector? k) (inventory/slot k) k) it]))
    :sim/state-id 1
    :sim/held 0
    :sim/placed {}
@@ -205,7 +212,7 @@
     (let [{:keys [at] dpos :pos} (:sim/dig sim)
           id (block-at sim pos)
           held (held-item sim)
-          slot (+ 36 (:sim/held sim 0))]
+          slot (held-slot sim)]
       (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
         (let [eid (:sim/next-eid sim)
               [x y z] pos
@@ -775,7 +782,7 @@
    player; else tell the client the destination's real state. Either way, then the ack."
   [sim pos face ack]
   (let [dest (mapv + pos (faces face))
-        slot (+ 36 (:sim/held sim 0))
+        slot (held-slot sim)
         held (get-in sim [:sim/inv slot])
         d (block-at sim dest)
         overlap? (overlaps-player? sim dest)
@@ -846,7 +853,7 @@
   ;; the bucket a water bucket; anything else does nothing here. Either way, the ack.
   [sim {:keys [sequence y-rot x-rot]}]
   (let [ack {:packet/name :block-changed-ack :sequence sequence}
-        slot (+ 36 (:sim/held sim 0))
+        slot (held-slot sim)
         held (get-in sim [:sim/inv slot])
         src (when (and (:sim/player-pos sim) (= (:item held) (get blocks/items :bucket)))
               (scooped sim [y-rot x-rot]))]

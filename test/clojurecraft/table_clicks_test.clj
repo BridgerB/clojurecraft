@@ -8,10 +8,10 @@
             [clojurecraft.world :as world]))
 
 (defn stock
-  "One stack per ingredient set, enough for one craft, in main-inventory slots 9.."
+  "One stack per ingredient set, enough for one craft, in the main inventory from its top left."
   [r]
   (into {}
-        (map-indexed (fn [i [s n]] [(+ 9 i)
+        (map-indexed (fn [i [s n]] [(inventory/slot [:main i])
                                     {:item (recipe/item-id (first (sort s))) :count (+ n 3)}])
                      (recipe/needs r))))
 

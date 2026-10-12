@@ -3,7 +3,7 @@ title: Window model
 description: The world attributes for windows - window 0 (:window/grid, :window/cursor, :window/state-id), an open container (:window/open with its own slots and state id), :player/held-slot - which packets write them, and why no item is ever counted twice.
 type: reference
 tags: [bot, crafting, world, windows]
-aliases: [window/grid, window/cursor, window/state-id, window/open, window/slots, held-slot, set-window-0-slot, layouts, layout-of-menu]
+aliases: [inventory/slot, named slots, window/grid, window/cursor, window/state-id, window/open, window/slots, held-slot, set-window-0-slot, layouts, layout-of-menu]
 status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
@@ -12,6 +12,8 @@ sourceRefs:
   - src/clojurecraft/inventory.clj#defn set-open-window-slot
   - src/clojurecraft/inventory.clj#def layouts
   - src/clojurecraft/inventory.clj#defn window->player-slot
+  - src/clojurecraft/inventory.clj#The window-0 slot of a place
+  - src/clojurecraft/sim.clj#defn held-slot
   - src/clojurecraft/game.clj#defmethod on-packet [:play :container-set-content]
   - src/clojurecraft/game.clj#defmethod on-packet [:play :set-held-slot]
   - test/clojurecraft/game_test.clj#the-crafting-grid-is-never-invisible
@@ -37,6 +39,7 @@ related:
 - `inventory.clj`, `set-window-0-slot` - slots 0-4 to `:window/grid`, others via `window->player-slot` over window 0's layout to `:player/inventory`.
 - `inventory.clj`, `layouts` - every window the bot clicks in as data: window 0 (grid size 2, player inventory from slot 9, armour 5-8, offhand 45), the crafting table (size 3, player inventory from slot 10, menu type 12) and the furnace (no grid: input 0, fuel 1, output 2, player inventory from slot 3, menu type 14), the menu types read from `menus.edn`; `layout-of-menu` finds a container's by its menu type. The server model reads the same table.
 - `inventory.clj`, `window->player-slot` - a window slot to the player slot it shows: from the layout's `:inventory` on, 27 main slots then 9 hotbar map to player slots 9-35 then 0-8; anything before is the container's own.
+- `inventory.clj`, `slot` - a place in window 0 by name: `[:hotbar n]` (0-8), `[:main n]` (0-26 from the top left), `[:armour n]` (head to feet), `[:offhand]`, as the window-0 slot number, read from the same layout (`[:hotbar 0]` is 36). Tests and the server model name places with it (`sim/held-slot`, the selected hotbar place) rather than write wire numbers.
 - `inventory.clj`, `set-open-window-slot` - the container's own slots go to `:window/open`'s `:window/slots`; slots that are the player's inventory update `:player/inventory`.
 - `game.clj`, `on-packet` for `container-set-content` / `container-set-slot` - dispatch on window id: 0, the open window's id, or ignored.
 

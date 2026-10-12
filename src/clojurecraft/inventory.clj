@@ -87,6 +87,20 @@
   [{:keys [inventory]}]
   (+ inventory main-slots))
 
+(defn slot
+  "The window-0 slot of a place in the player's own screen, named: [:hotbar n] (0-8, left to
+   right), [:main n] (0-26, from the top left), [:armour n] (0-3, head to feet), [:offhand]. The
+   numbers are read from (layouts :inventory), so a test or a fixture says where an item is
+   rather than which wire slot that is ([:hotbar 0] is 36)."
+  [[area n]]
+  (let [l (layouts :inventory)
+        n (or n 0)]
+    (case area
+      :hotbar (+ (hotbar-start l) n)
+      :main (+ (:inventory l) n)
+      :armour (+ (:armour l) n)
+      :offhand (:offhand l))))
+
 (defn grid-slots
   "The crafting-grid slots of a layout, 1..size²."
   [{:keys [size]}]
