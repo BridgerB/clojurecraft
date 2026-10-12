@@ -179,7 +179,7 @@
  {:goal/id :mine-iron
   :goal/priority 10
   :goal/doc
-  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest. A spare pickaxe is made before more ore is dug, gathering the wood when a log can be started, so the last one is not worn out at the bottom"
+  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest. A spare pickaxe is made before more ore is dug, gathering the wood when a walk to a trunk or stairs up to one can be started, so the last one is not worn out at the bottom. A walk back up the dug shaft is not that: it reaches the sky, not a tree"
   :goal/holds {:item/stone_pickaxe 1}
   :goal/spares {:item/stone_pickaxe 1}
   :goal/provides {:item/raw_iron 1}

@@ -154,15 +154,19 @@
 
 (defn spare-worth?
   "Is action worth doing to keep a spare tool? Not :stuck, and not a mine. A gather is worth it
-   when a log can be started now (gather-next returns an intent): underground, the walk or the
-   stairs up to the trees, while a pickaxe is still held. A gather that would wait :no-log is
-   not, which is the open sky with no tree remembered. Gym batch iron-a7 runs 1-3, deep in the
-   mine with a working pickaxe and no wood, waited :no-log for a second pickaxe. Full run
-   068485c kept mining on its last stone pickaxe until it broke at y 16, then the wooden one
-   broke on the stairs and three :no-pickaxe failures ended the plan."
+   when a log can be started now (gather-next returns an intent): a walk to a trunk, or the
+   stairs up to the trees, while a pickaxe is still held. A walk up the shaft already dug
+   (:intent/for :opening) is not: it reaches the sky, not a tree, and from that mouth the trunk
+   may still have no route. Full run f277605 held one stone pickaxe, flint and steel and a water
+   bucket, and spent five hours walking out for the spare and cutting back down. A gather that
+   would wait :no-log is not either, which is the open sky with no tree remembered. Gym batch
+   iron-a7 runs 1-3, deep in the mine with a working pickaxe and no wood, waited :no-log for a
+   second pickaxe. Full run 068485c kept mining on its last stone pickaxe until it broke at y 16,
+   then the wooden one broke on the stairs and three :no-pickaxe failures ended the plan."
   [world action]
   (cond (or (nil? action) (= :stuck action) (= :mine (:goal/act action))) false
-        (= :gather (:goal/act action)) (boolean (:intent/kind (wood/gather-next world)))
+        (= :gather (:goal/act action))
+        (let [n (wood/gather-next world)] (and (:intent/kind n) (not= :opening (:intent/for n))))
         :else true))
 
 (defn resolve-spares
