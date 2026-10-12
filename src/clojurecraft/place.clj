@@ -184,9 +184,12 @@
 
 (defmethod place-stage :spot
   [world {:intent/keys [passage-ok?]}]
-  (let [[target support :as found] (or (spot world) (when passage-ok? (spot world true)))
-        n (when-not found (niche world))]
-    (cond found
+  ;; a plain spot, else a niche cut in the wall, else (passage-ok?) a spot in the passage: a
+  ;; table or a gravel to dig again leaves the way open when the bot goes on
+  (let [found (spot world)
+        n (when-not found (niche world))
+        [target support :as at] (or found (when (and (nil? n) passage-ok?) (spot world true)))]
+    (cond at
           (intent/assoc-intent world
                                :intent/stage :settle
                                :intent/target target

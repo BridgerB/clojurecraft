@@ -19,6 +19,8 @@
             [clojurecraft.record :as record]
             [clojurecraft.terrain :as terrain]))
 
+(set! *warn-on-reflection* true)
+
 (defn fold
   "The world of the recording at path at the first event after which stop? holds of it, or at
    its end."
