@@ -1345,6 +1345,26 @@
         "no water came down")
     (is (empty? (:sim/violations sim)))))
 
+(def lake-over-the-pocket
+  "pocket under a lake: from x 7 east, sand at y 69 and water over it to the hilltop; dry stone
+   west of it."
+  (merge pocket
+         (into {} (for [x (range 7 16) z (range 16)] [[x 69 z] (blocks/default-state :sand)]))
+         (into {} (for [x (range 7 16) y (range 70 76) z (range 16)] [[x y z] blocks/water-base]))))
+
+(deftest stairs-up-under-a-lake-step-toward-the-shore
+  ;; gym batch iron-a7 run 1 climbed to y 44 under a lake: sand, then water to y 63, over every
+  ;; stair; its level steps went 32 east under the lake and failed :boxed. The shore is west
+  (let [[w sim] (staircase-run :stairs-up lake-over-the-pocket
+                               66 (get blocks/items :stone_pickaxe)
+                               72 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/level-steps])))
+    (is (<= 72.0 (second (:player/pos w))))
+    (is (not-any? #(<= 9 (first %)) (:sim/broken sim)) "nothing dug east, under the lake")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest a-pickaxe-in-the-main-inventory-is-put-in-hand
   ;; gym batch iron-a3 runs 1 and 3 held a stone pickaxe in the main inventory (the hotbar was full
   ;; of what mining picked up) and their stairs stopped :no-pickaxe; the dig chooses from the

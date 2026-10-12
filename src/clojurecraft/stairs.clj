@@ -33,6 +33,7 @@
    descent is judged by the feet having actually gone down, never by a packet having been
    sent, since a dig the server refused leaves the bot where it stood."
   (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.chunk :as chunk]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
@@ -46,6 +47,7 @@
 (def max-level-steps 32)              ; level steps around what refuses every stair before :boxed
 (def step-timeout-ticks 200)          ; ticks a walk down one stair may take (10 s)
 (def directions [[1 0] [0 1] [-1 0] [0 -1]]) ; the four headings, each a quarter turn from the last
+(def shore-reach 48)                  ; columns along a heading a climb looks for dry ground over
 
 (defn turn
   "The heading a quarter turn from dir."
@@ -140,19 +142,40 @@
       (assoc :player/controls {})
       (intent/fail :boxed)))
 
+(defn dry-top?
+  "Is the top of column [x z] (its highest block that is solid or a fluid) solid: ground the open
+   sky is over, not a lake or the sea? false when the column is not loaded."
+  [world [x z]]
+  (true? (first (keep (fn [y]
+                        (when-let [id (terrain/block-at world [x y z])]
+                          (cond (blocks/fluid id) false
+                                (blocks/solid? id) true
+                                :else nil)))
+                      (range terrain/top-y (dec chunk/min-y) -1)))))
+
+(defn shore-distance
+  "How many columns along heading [dx dz] from feet the first with dry ground on top lies
+   (dry-top?), within shore-reach; nil when none is loaded there."
+  [world [x _ z] [dx dz]]
+  (some #(when (dry-top? world [(+ x (* % dx)) (+ z (* % dz))]) %) (range 1 (inc shore-reach))))
+
 (defn step-aside
   "Every stair refused: a level step, the turns counted afresh, or :boxed when none is allowed
    or max-level-steps are spent. The step keeps the last one's way (:intent/level-dir) while it
    is allowed and never goes straight back, so the staircase walks out from under what refuses
    it: the ninth live run, cutting stairs up under water at y 51, stepped round a square of four
    cells until it failed :boxed three times. The first step takes the first heading allowed,
-   from the staircase's own round a full turn."
-  [world {:intent/keys [dir level-steps level-dir] :or {level-steps 0}}]
+   from the staircase's own round a full turn; going up, nearest the shore first
+   (shore-distance), since what refuses a climb is most often a lake or the sea overhead: gym
+   batch iron-a7 run 1, under a lake at y 44, stepped 32 east under it and failed :boxed."
+  [world {:intent/keys [kind dir level-steps level-dir] :or {level-steps 0}}]
   (let [feet (intent/feet world)
         back (when level-dir (mapv - level-dir))
-        ways (if level-dir
-               (cons level-dir (remove #{back} (take 4 (iterate turn level-dir))))
-               (take 4 (iterate turn (or dir (first directions)))))
+        round (take 4 (iterate turn (or dir (first directions))))
+        ways (cond level-dir (cons level-dir (remove #{back} (take 4 (iterate turn level-dir))))
+                   (= :stairs-up kind)
+                   (sort-by #(or (shore-distance world feet %) Long/MAX_VALUE) round)
+                   :else round)
         d (when (< level-steps max-level-steps)
             (first (filter #(level-safe? world (level-cells feet %)) ways)))]
     (if d
