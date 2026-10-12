@@ -89,6 +89,17 @@
     (is (= {:intent/kind :stairs-down :intent/to-y -40}
            (stone/mine-next (standing -34 :wooden_pickaxe) (row :mine-stone))))))
 
+(deftest deeper-only-where-a-stair-can-be-dug
+  ;; gym batch iron-a8 run 3: its tunnel at y 16 was boxed, and the stairs deeper it was sent down
+  ;; bordered water every way: the dig refused each cell :unsafe and the stairs failed :boxed twice
+  ;; in a second
+  (let [water (into {}
+                    (for [[dx dz] [[1 0] [0 1] [-1 0] [0 -1]]]
+                      [[(+ 5 (* 2 dx)) 15 (+ 5 (* 2 dz))] blocks/water-base]))
+        w (assoc (standing 16 :stone_pickaxe) :world/chunks {[0 0] (world/column water)})]
+    (is (some? (stone/deeper (standing 16 :stone_pickaxe))) "plain rock: stairs deeper")
+    (is (nil? (stone/deeper w)) "water beside every stair: none")))
+
 (def sealed-ore
   "Iron ore buried in the floor at [8 61 8], with a two-cell pocket beside it to stand in
    ([9 61 8] and [9 62 8]) and stone all round: exposed, and no route from the surface reaches

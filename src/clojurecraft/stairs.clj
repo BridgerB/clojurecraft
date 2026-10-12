@@ -110,8 +110,9 @@
    :stairs-up {:cells up-cells :safe? up-safe? :rise 1}})
 
 (defn level-safe?
-  "May a level step be taken: what a stair needs (safe?), and no cell it opens borders water or
-   lava, which the child dig would refuse to open (intent/exposes-fluid?)."
+  "May a level step (or a stair whose cells are given) be cut: what a stair needs (safe?), and no
+   cell it opens borders water or lava, which the child dig would refuse to open
+   (intent/exposes-fluid?)."
   [world cells]
   (and (safe? world cells) (not-any? #(intent/exposes-fluid? world %) cells)))
 
