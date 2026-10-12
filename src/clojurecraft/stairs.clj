@@ -193,6 +193,16 @@
   [world [x _ z] [dx dz]]
   (some #(when (dry-top? world [(+ x (* % dx)) (+ z (* % dz))]) %) (range 1 (inc shore-reach))))
 
+(defn level-step-limit
+  "How many level steps a staircase of kind may take before it is :boxed: max-level-steps, and a
+   climb as many more as the landing (:plan/go-at) is far from feet on the plane, since under a
+   lake or the sea the way out may be all the way back: gym batch iron-a9 run 1 climbed under
+   the sea 155 blocks from its landing and was :boxed after 32 steps three times."
+  [world kind feet]
+  (let [home (:plan/go-at world)]
+    (cond-> max-level-steps
+      (and home (= :stairs-up kind)) (+ (long (physics/horizontal-distance feet home))))))
+
 (defn step-aside
   "Every stair refused: a level step, the turns counted afresh, or :boxed when none is allowed
    or max-level-steps are spent. The step keeps the last one's way (:intent/level-dir) while it
@@ -219,7 +229,7 @@
                                                    0)])
                             round)
                    :else round)
-        d (when (< level-steps max-level-steps)
+        d (when (< level-steps (level-step-limit world kind feet))
             (first (filter #(level-safe? world (level-cells feet %)) ways)))]
     (if d
       (-> world

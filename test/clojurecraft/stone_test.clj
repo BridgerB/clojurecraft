@@ -114,7 +114,16 @@
                    :world/chunks {[0 0] sea [1 0] sea [-1 0] sea [0 1] sea [0 -1] sea})]
       (is (= [-1 0]
              (:intent/level-dir
-              (:plan/intent (stairs/step-aside w {:intent/kind :stairs-up :intent/dir [1 0]}))))))))
+              (:plan/intent (stairs/step-aside w {:intent/kind :stairs-up :intent/dir [1 0]})))))
+      (is
+       (= :level
+          (:intent/stage (:plan/intent (stairs/step-aside (assoc w :plan/go-at [-140.5 70.0 8.5])
+                                                          {:intent/kind :stairs-up
+                                                           :intent/dir [1 0]
+                                                           :intent/level-steps 40
+                                                           :intent/level-dir [-1 0]}))))
+       "the way home under the sea may be long: gym batch iron-a9 run 1, 155 blocks out, was
+           :boxed after 32 steps three times"))))
 
 (deftest deeper-only-where-a-stair-can-be-dug
   ;; gym batch iron-a8 run 3: its tunnel at y 16 was boxed, and the stairs deeper it was sent down
