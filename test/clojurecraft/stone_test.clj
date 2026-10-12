@@ -6,6 +6,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.plan :as plan]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.world :as world]))
 
@@ -88,6 +89,32 @@
   (testing "stone has no depth: always down"
     (is (= {:intent/kind :stairs-down :intent/to-y -40}
            (stone/mine-next (standing -34 :wooden_pickaxe) (row :mine-stone))))))
+
+(def sea
+  "A column with water on top, y 64 to 66: the sea over the rock."
+  (world/column
+   (into {} (for [x (range 16) y (range 64 67) z (range 16)] [[x y z] blocks/water-base]))))
+
+(deftest tunnels-and-climbs-keep-under-dry-ground
+  ;; gym batch iron-a8 run 2 tunnelled 260 blocks east at depth, out under the sea, and its stairs
+  ;; up met the seabed every way: :boxed three times
+  (testing "a tunnel takes a heading with dry ground over it a tunnel ahead"
+    (let [w (assoc
+             (standing 16 :stone_pickaxe)
+             :player/pos [8.5 16.0 8.5]
+             :plan/go-at [8.5 70.0 -40.5] ; north: south leads farthest from it
+             :world/chunks
+             {[0 0] (world/column {}) [0 1] sea [1 0] (world/column {}) [-1 0] (world/column {})})]
+      (is (= [1 0] (stone/tunnel-heading w)) "east, not south under the sea")))
+  (testing "under the sea with no shore in sight, a climb steps toward the landing"
+    (let [w (assoc (standing 16 :stone_pickaxe)
+                   :player/pos [8.5 16.0 8.5]
+                   :plan/go-at [-40.5 70.0 8.5] ; west
+                   :plan/intent {:intent/kind :stairs-up :intent/to-y 70 :intent/status :active}
+                   :world/chunks {[0 0] sea [1 0] sea [-1 0] sea [0 1] sea [0 -1] sea})]
+      (is (= [-1 0]
+             (:intent/level-dir
+              (:plan/intent (stairs/step-aside w {:intent/kind :stairs-up :intent/dir [1 0]}))))))))
 
 (deftest deeper-only-where-a-stair-can-be-dug
   ;; gym batch iron-a8 run 3: its tunnel at y 16 was boxed, and the stairs deeper it was sent down

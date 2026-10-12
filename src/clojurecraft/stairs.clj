@@ -37,6 +37,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
             [clojurecraft.place]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]))
@@ -167,15 +168,24 @@
    it: the ninth live run, cutting stairs up under water at y 51, stepped round a square of four
    cells until it failed :boxed three times. The first step takes the first heading allowed,
    from the staircase's own round a full turn; going up, nearest the shore first
-   (shore-distance), since what refuses a climb is most often a lake or the sea overhead: gym
-   batch iron-a7 run 1, under a lake at y 44, stepped 32 east under it and failed :boxed."
+   (shore-distance), since what refuses a climb is most often a lake or the sea overhead, and
+   with no shore in sight toward the landing (:plan/go-at), which is land: gym batch iron-a7
+   run 1, under a lake at y 44, stepped 32 east under it and failed :boxed; batch iron-a8 run 2,
+   under the sea with no shore in sight, :boxed three times."
   [world {:intent/keys [kind dir level-steps level-dir] :or {level-steps 0}}]
   (let [feet (intent/feet world)
         back (when level-dir (mapv - level-dir))
         round (take 4 (iterate turn (or dir (first directions))))
+        home (:plan/go-at world)
         ways (cond level-dir (cons level-dir (remove #{back} (take 4 (iterate turn level-dir))))
                    (= :stairs-up kind)
-                   (sort-by #(or (shore-distance world feet %) Long/MAX_VALUE) round)
+                   (sort-by (fn [[dx dz :as d]] [(or (shore-distance world feet d) Long/MAX_VALUE)
+                                                 (if home
+                                                   (physics/horizontal-distance
+                                                    [(+ (first feet) dx) 0 (+ (nth feet 2) dz)]
+                                                    home)
+                                                   0)])
+                            round)
                    :else round)
         d (when (< level-steps max-level-steps)
             (first (filter #(level-safe? world (level-cells feet %)) ways)))]

@@ -135,20 +135,27 @@
 (def floor-margin 8)                  ; blocks above the bottom of the world a staircase deeper stops
 
 (defn tunnel-heading
-  "The heading a new tunnel takes: of the four, farthest from the landing (:plan/go-at) first
-   (+x first without one), the first whose first level step is allowed (stairs/level-safe?) and
-   has rock to cut, so never back along an open tunnel nor straight at what refused the last;
-   nil when none. With the heading fixed, gym batches iron-a3 and iron-a4 retried tunnels
-   :boxed by an aquifer three times in a second and failed."
+  "The heading a new tunnel takes: of the four, those with dry ground over the column a tunnel
+   ahead first (stairs/dry-top?, not a lake or the sea: gym batch iron-a8 run 2 tunnelled 260
+   blocks out under the sea and its stairs up met the seabed every way), then farthest from the
+   landing (:plan/go-at; +x first without one), the first whose first level step is allowed
+   (stairs/level-safe?) and has rock to cut, so never back along an open tunnel nor straight at
+   what refused the last; nil when none. With the heading fixed, gym batches iron-a3 and
+   iron-a4 retried tunnels :boxed by an aquifer three times in a second and failed."
   [world]
   (let [[x _ z] (:player/pos world)
         feet (intent/feet world)
         home (:plan/go-at world)
-        ranked (if home
-                 (sort-by (fn [[dx dz]]
-                            (- (physics/horizontal-distance [(+ x dx) 0 (+ z dz)] home)))
-                          stairs/directions)
-                 stairs/directions)]
+        dry? (fn [[dx dz]]
+               (stairs/dry-top? world
+                                [(+ (first feet) (* tunnel-length dx))
+                                 (+ (nth feet 2) (* tunnel-length dz))]))
+        ranked (sort-by (fn [[dx dz :as d]] [(if (dry? d) 0 1)
+                                             (if home
+                                               (- (physics/horizontal-distance [(+ x dx) 0 (+ z dz)]
+                                                                               home))
+                                               0)])
+                        stairs/directions)]
     (first (filter (fn [d]
                      (let [cells (stairs/level-cells feet d)]
                        (and (stairs/level-safe? world cells)
