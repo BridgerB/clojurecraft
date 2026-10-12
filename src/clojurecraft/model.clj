@@ -58,6 +58,9 @@
    [:intent/exposes-ok?
     "a :dig that may open a cell beside water or lava (an escape digs beside the water it is in)"
     "on an escape's child dig"]
+   [:intent/passage-ok?
+    "a :place that may put its block in a passage, since it is dug again at once (a gravel for flint)"
+    "on a redig's child place"]
    [:player/air "breath left, 0-300 ticks: an estimate, down 1 under water, up 4 out"
     "after the first physics tick"]
    [:player/dead? "health reached zero; cleared by the server's respawn" "while dead"]
@@ -82,6 +85,9 @@
    [:window/id "container window id" "inside :window/open"]
    [:window/menu-type "container menu type id (12 is a crafting table)" "inside :window/open"]
    [:window/slots "the open container's slots" "inside :window/open"]
+   [:window/data
+    "the open container's numbered properties {property value} (a furnace: 0 fuel left, 1 fuel total, 2 cook progress, 3 cook total)"
+    "inside :window/open, once the server sends one"]
    ;; ---- the world as last seen, and as remembered
    [:world/chunks "{[cx cz] column}: chunks the server has sent and not forgotten" "always"]
    [:world/blocks "{[x y z] state}: block updates and own breaks over the chunks" "always"]
@@ -139,7 +145,8 @@
    [:plan/waiting-since "ms the current wait began" "while waiting"]
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
-   [:intent/kind "executor: :walk :dig :collect :craft :place :open-container :stairs-down"
+   [:intent/kind
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :smelt :redig :scoop :equip"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -147,8 +154,15 @@
     "intents the planner starts"]
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
    [:intent/target "block position it acts on or walks to" "most intents"]
-   [:intent/for "what the intent serves (:log), so chains continue only their own"
+   [:intent/for
+    "what the intent serves (:log, a mining row's id), so chains continue only their own"
     "gather-chain intents"]
+   [:intent/pickup?
+    "a walk toward a block to mine from beside: it ends where the dug block's drop lands in the pickup box"
+    "a :mine walk"]
+   [:intent/step-down?
+    "a :mine walk toward a block in the floor: it may end a block up beside it, the drop landing in the hole the dig leaves"
+    "a :mine walk to a block that leaves a step down"]
    [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"
     "gather-chain intents"]
    [:intent/stage "executor stage, e.g. :settle :digging :click :verify :take" "staged intents"]
@@ -172,8 +186,21 @@
     "stairs-down, after a refusal"]
    [:intent/cells "the three cells the current stair opens, top first"
     "stairs-down, while a stair is cut"]
-   [:intent/child "the :dig intent cutting one cell, run by the dig executor"
-    "stairs-down, while digging"]
+   [:intent/level-cells
+    "the two cells a level step opens, head then feet, when every stair down was refused"
+    "stairs-down, during a level step"]
+   [:intent/level-steps
+    "level steps this staircase (past stairs/max-level-steps it fails :boxed) or tunnel (done at its length) has taken"
+    "stairs-down and tunnel, after a level step"]
+   [:intent/length "level steps a tunnel cuts" "tunnel"]
+   [:intent/side "the side a tunnel steps to, keeping its heading, where the heading is refused"
+    "tunnel, once one is taken"]
+   [:intent/level-dir
+    "the way the staircase's last level step went; the next keeps it while allowed"
+    "stairs-down and stairs-up, after a level step"]
+   [:intent/child
+    "the child intent run in the intent's place by its own executor (stairs: the :dig cutting one cell; redig: the place, dig or collect it is on)"
+    "stairs-down, while digging; redig; place, while digging a niche"]
    [:intent/started-y "feet height when the current stair began; a step is judged by going below it"
     "stairs-down, per stair"]
    [:intent/started-tick "tick the current stair or its step began" "stairs-down, per stair"]
@@ -193,20 +220,34 @@
     "walk, once planned"]
    [:intent/logs-before "logs held when collecting began" "collect, before :intent/drops"]
    [:intent/drops
-    "the item ids a collect is for: one more of any of them than it began with ends it" "collect"]
+    "the item ids a collect is for: one more of any of them than it began with ends it"
+    "collect, redig"]
    [:intent/drops-before "items of :intent/drops held when collecting began" "collect"]
    [:intent/blocked-by "leaf block over the drop" "collect, when the drop is covered"]
    [:intent/clears "leaf blocks cleared for this drop" "a collect resumed after clearing"]
    [:intent/resume "the intent to run after clearing a blocker" "a dig that clears a blocker"]
    [:intent/recipe "recipe id to craft" "craft"] [:intent/window ":inventory or :table" "craft"]
-   [:intent/clicks "clicks still to send" "craft, :click stage"]
-   [:intent/result "result item id" "craft"] [:intent/makes "items one craft yields" "craft"]
-   [:intent/before "result items held before crafting" "craft"]
+   [:intent/clicks "clicks still to send" "craft, :click stage; smelt, :load stage"]
+   [:intent/result "result item id" "craft, smelt"]
+   [:intent/makes "items one craft yields; for a smelt, the batch" "craft, smelt"]
+   [:intent/before "result items held before crafting, smelting or scooping" "craft, smelt, scoop"]
+   [:intent/smelt "furnace recipe id to cook (smelting.edn)" "smelt"]
+   [:intent/count "how many of the input the batch cooks" "smelt"]
+   [:intent/lost "clicks the server lost in this smelt; the intent resumed from its slots"
+    "smelt, after a lost click"]
+   [:intent/resync "the next click is a resync: the cursor after a lost click is unknown"
+    "smelt, from a lost click until the resync is sent"]
+   [:intent/cook-by "ms by which the batch must be cooked; the cook stage fails after it"
+    "smelt, :cook stage, once the furnace is loaded"]
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
-   [:intent/item "item to place" "place"] [:intent/against "block the placement is against" "place"]
-   [:intent/sequence "sequence number of the placement" "place, after sending"]
+   [:intent/item "item to place" "place, redig"]
+   [:intent/against "block the placement is against" "place"]
+   [:intent/sequence "sequence number of the placement, or of the bucket's use"
+    "place and scoop, after sending"]
+   [:intent/tries "scoops sent at this source; the last of scoop/max-tries fails :no-scoop"
+    "scoop, after a scoop went unanswered"]
    ;; ---- events: everything the reducer is given
    [:event/kind ":start :packet :tick :go :closed" "every event"]
    [:event/now "wall-clock ms of a tick" "tick"]

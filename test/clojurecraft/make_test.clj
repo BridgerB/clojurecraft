@@ -8,6 +8,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -15,6 +16,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.smelt :as smelt]
             [clojurecraft.spec]
             [clojurecraft.stone]
             [clojurecraft.swim :as swim]
@@ -64,6 +66,8 @@
       :place (and (= :crafting_table (:intent/item i)) (pos? (get counts :crafting_table 0)))
       :open-container (some? (memory/remembered w (:intent/target i)))
       :stairs-down (pos? (get counts :wooden_pickaxe 0)) ; down to stone, with nothing remembered: only with a pickaxe
+      :walk (intent/routable? w i) ; to stone in the floor beside the feet, which a route reaches
+      :dig (some? (memory/remembered w (:intent/target i))) ; the placed table, taken along
       :wade (some? (swim/entry w (intent/feet w))) ; into water the bot remembers, from a bank it can stand on
       nil (contains? #{:no-log :no-water :in-water} (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it: wait
       false)))
@@ -160,3 +164,118 @@
         "the shipped table gathers: no tree known yet")
     (is (= {:plan/wait :stuck} (make/decide w wood without-gathering))
         "a table with no way to get a log is stuck")))
+
+(deftest a-need-already-being-resolved-is-a-dead-end
+  ;; the recipes alone hold the iron cycle: ingots from a block of nine ingots, and from nine
+  ;; nuggets cut from an ingot
+  (is (make/cycle? [#{:iron_block} #{:iron_ingot}] #{:iron_ingot}))
+  (is (not (make/cycle? [#{:iron_block}] #{:iron_ingot})))
+  (is (= :stuck
+         (make/next-row (world-holding {} false)
+                        {:goal/provides {:item/iron_ingot 4}}
+                        (filterv #(not= :mine (:goal/act %)) plan/goals)))
+      "no iron and nothing to mine it with: stuck, after trying each way round once"))
+
+(deftest a-need-keyed-by-an-item-set-is-counted-not-a-block
+  (is (make/block-need? :block/furnace))
+  (is (not (make/block-need? :item/coal)))
+  (is (not (make/block-need? #{:dried_kelp_block :coal_block})) "a set has no namespace to ask")
+  (is (= [{} :stuck]
+         (make/resolve-need (world-holding {} false) plan/goals {} #{:diamond :emerald} 1 []))))
+
+(defn with-furnace
+  "w with a furnace remembered two blocks from the bot."
+  [w]
+  (memory/observe w [7 64 5] (blocks/default-state :furnace)))
+
+(defn ingots [n] {:goal/id :ingots :goal/provides {:item/iron_ingot n} :goal/done? :provided?})
+
+(deftest fuel-is-planned-before-a-smelt
+  (let [row #(:goal/id
+              (make/next-row (with-furnace (world-holding % false)) (ingots 2) plan/goals))]
+    (is (= :smelt/iron_ingot_from_smelting_raw_iron (row {:raw_iron 2 :coal 1})))
+    (is (= :smelt/iron_ingot_from_smelting_raw_iron (row {:raw_iron 2 :oak_planks 2}))
+        "two planks burn 600 ticks, the 400 two ingots need")
+    (is (= :craft/oak_planks (row {:raw_iron 2 :oak_planks 1 :oak_log 1}))
+        "one plank is short: the log becomes planks to burn")
+    (is (= :gather-log (row {:raw_iron 2})) "nothing to burn: wood, until coal can be mined")
+    (is (= :craft/oak_planks (row {:raw_iron 2 :oak_log 2 :stone_pickaxe 1}))
+        "a held log burns before coal is mined for, one kept back for a new pickaxe")
+    (is (= :mine-coal (row {:raw_iron 2 :oak_log 1 :stone_pickaxe 1}))
+        "the last log is kept back: coal")
+    (is (= :mine-coal
+           (:goal/id (make/next-row
+                      (with-furnace (world-holding {:raw_iron 9 :oak_log 1 :stone_pickaxe 1} false))
+                      (ingots 9)
+                      plan/goals)))
+        "nine ingots need more than a log's four planks: coal"))
+  (testing "fuel is netted after the row's other needs and the target's earlier provides"
+    (is (= [{:coal 0 :oak_planks 1} 0] (make/burn {:coal 1 :oak_planks 1} 1600)) "coal first")
+    (is (= [{:oak_planks 0 :stick 1} 0] (make/burn {:oak_planks 2 :stick 1} 500))
+        "whole planks: two for 500 ticks")))
+
+(def fuel-held-gen
+  (gen/hash-map :raw_iron (gen/choose 0 9)
+                :coal (gen/choose 0 2)
+                :oak_planks (gen/choose 0 9)
+                :oak_log (gen/choose 0 3)
+                :stick (gen/choose 0 5)))
+
+(deftest the-planner-never-smelts-without-the-fuel-for-it
+  ;; issue #6: steve's races stalled at three ingots when planks ran out mid-smelt; here a
+  ;; smelt is chosen only when the netted inventory burns 200 ticks for every ingot asked
+  (let [r (tc/quick-check 400
+                          (prop/for-all [held fuel-held-gen n (gen/choose 1 8)]
+                                        (let [w (with-furnace (world-holding held false))
+                                              row (make/next-row w (ingots n) plan/goals)
+                                              counts (recipe/counts (:player/inventory w))]
+                                          (or (not= :smelt (:goal/act row))
+                                              (and
+                                               (>= (smelt/fuel-ticks counts :raw_iron) (* 200 n))
+                                               (not= {:plan/wait :no-fuel} (plan/act w row)))))))]
+    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
+
+(deftest iron-from-nothing-starts-with-a-log
+  ;; ingots <- smelt raw iron <- :mine-iron, holding a stone pickaxe <- cobblestone <- :mine-stone,
+  ;; holding a wooden pickaxe <- planks <- a log
+  (is (= :gather-log
+         (:goal/id (make/next-row (world-holding {} false)
+                                  {:goal/provides {:item/iron_ingot 4}}
+                                  plan/goals))))
+  (is (= :mine-iron
+         (:goal/id (make/next-row (with-furnace (world-holding {:stone_pickaxe 1 :coal 1} false))
+                                  {:goal/provides {:item/iron_ingot 4}}
+                                  plan/goals)))
+      "with the pickaxe and the fuel: mine the ore"))
+
+(deftest the-iron-kit-is-planned-in-order
+  ;; the kit's provides are netted against one inventory: three ingots go to the bucket, one to
+  ;; the flint and steel, so iron already spent is never mined again
+  (let [kit (first (filter #(= :iron-kit (:goal/id %)) plan/goals))
+        row (fn [held & {:keys [table? furnace?]}]
+              (let [w (cond-> (world-holding held table?) furnace? with-furnace)
+                    r (make/next-row w kit plan/goals)]
+                (if (map? r) (:goal/id r) r)))]
+    (is (= :mine-iron (row {:stone_pickaxe 1})) "the ore first, with the stone pickaxe")
+    (is (= :craft/furnace (row {:stone_pickaxe 1 :raw_iron 4 :coal 1 :cobblestone 8} :table? true))
+        "iron and fuel held: the furnace, from eight cobblestone")
+    (is (= :smelt/iron_ingot_from_smelting_raw_iron
+           (row {:stone_pickaxe 1 :raw_iron 4 :coal 1} :table? true :furnace? true)))
+    (is (= :craft/flint_and_steel (row {:stone_pickaxe 1 :iron_ingot 4 :flint 1} :table? true))
+        "the flint and steel first, while the ingots are all in hand")
+    (is (= :flint-from-gravel (row {:stone_pickaxe 1 :iron_ingot 4 :gravel 1})))
+    (is (= :dig-gravel (row {:stone_pickaxe 1 :iron_ingot 4})) "all four ingots held, still below")
+    (is (= :gather-log (row {:iron_ingot 4}))
+        "gravel may lie below: no pickaxe, and one is made first")
+    (is (= :craft/bucket (row {:stone_pickaxe 2 :iron_ingot 3 :flint_and_steel 1} :table? true)))
+    (is (= :fill-bucket (row {:stone_pickaxe 2 :bucket 1 :flint_and_steel 1}))
+        "the bucket is iron spent")
+    (is (= :fill-bucket (row {:stone_pickaxe 1 :bucket 1 :flint_and_steel 1}))
+        "one pickaxe and no wood: a spare is never worth a trip for wood (gym batch iron-a7)")
+    (is (=
+         :craft/stone_pickaxe
+         (row {:stone_pickaxe 1 :bucket 1 :flint_and_steel 1 :stick 2 :cobblestone 3} :table? true))
+        "a spare made from what is held and near")
+    (is (= :mine-iron (row {:stone_pickaxe 1 :iron_ingot 2 :flint_and_steel 1} :table? true))
+        "the third ingot's ore, not wood for a spare")
+    (is (nil? (row {:water_bucket 1 :flint_and_steel 1})) "the kit held: nothing to do")))

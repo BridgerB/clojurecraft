@@ -21,7 +21,9 @@
   [r]
   (let [inv (stock r)
         sim0 (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
-                 (assoc :sim/phase :play :sim/inv inv :sim/window {:id 1 :grid {} :state-id 1}))]
+                 (assoc :sim/phase :play
+                        :sim/inv inv
+                        :sim/window {:id 1 :kind :table :grid {} :state-id 1}))]
     (if-let [cs
              (recipe/clicks inv r 3 #(inventory/player->window-slot (inventory/layouts :table) %))]
       (let [sim (reduce (fn [sim {:click/keys [slot button mode]}]

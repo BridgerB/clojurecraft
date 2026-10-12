@@ -17,6 +17,8 @@ sourceRefs:
   - test/clojurecraft/props_test.clj#step-is-total-after-a-death
   - test/clojurecraft/props_test.clj#water-over-the-eye-preempts-whatever-runs
   - test/clojurecraft/make_test.clj#the-planner-only-picks-executable-intents
+  - test/clojurecraft/props_test.clj#the-smelt-never-closes-with-a-loaded-cursor-or-clicks-outside-the-window
+  - test/clojurecraft/make_test.clj#the-planner-never-smelts-without-the-fuel-for-it
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[specs-and-instrumentation]]"
@@ -43,6 +45,8 @@ related:
 | `the-wood-goal-holds-in-generated-forests` (sim_test) | the whole bot against the server model, in 2,000 generated forests with mounds, low canopies and varied spawns, always ends holding a log with no violation ([[server-model]]) |
 | `step-is-total-after-a-death` | a set-health of 0 followed by 0-20 arbitrary play packets never throws, leaves a valid world with no `:plan/intent` or `:plan/last`, and asked to respawn ([[death-and-respawn]]) |
 | `water-over-the-eye-preempts-whatever-runs` | for a running walk or dig to any target, one tick with the eye under water at the trap's edge yields a `:swim-out`, the old intent abandoned `:preempted`, `:plan/last` gone and the old look gone from the controls ([[water-escape]]) |
+| `the-smelt-never-closes-with-a-loaded-cursor-or-clicks-outside-the-window` | a `:smelt` intent at an open furnace, with any raw iron, coal and planks held, against 0-120 furnace packets in any order between ticks (the whole window, single slots, the cursor, properties) and then 20 s of ticks: every `container-close` it sends comes on a tick when the cursor is empty, and every click is into the furnace window at a slot it has (0-38). Taking the cursor check off the close stage fails it, shrunk to an empty inventory and a cursor holding an item ([[smelt-intent]]) |
+| `the-planner-never-smelts-without-the-fuel-for-it` (make_test) | over 400 generated inventories of raw iron, coal, planks, logs and sticks and 1-8 ingots asked, a smelt row is reached only when the fuel burns 200 ticks per ingot ([[make-goals]]) |
 | `clicks-then-match-round-trip` (recipe_test) | for every recipe that fits 2x2, a stock of one species per ingredient yields clicks whose right-clicked cells are exactly `placement`'s, and `match` on that grid gives the recipe's result |
 
 ## Gotchas

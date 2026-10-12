@@ -14,6 +14,9 @@ sourceRefs:
   - src/clojurecraft/packet.clj#defn encode
   - src/clojurecraft/packet.clj#def ids
   - dev/clojurecraft/datagen.clj#defn packets
+  - src/clojurecraft/packet.clj#def component-codecs
+  - src/clojurecraft/packet.clj#defn read-slot
+  - test/clojurecraft/packet_test.clj#a-worn-tool-does-not-hide-the-slots-after-it
 related:
   - "[[bot/protocol/_moc|Protocol]]"
   - "[[connection-phases]]"
@@ -33,7 +36,7 @@ A packet is a flat map with `:packet/name`; its other keys are the wire's own fi
 
 ## How it works
 1. Types are keywords for primitives (`:varint :f64 :string :uuid :position :bytes :rest :slot` ...), `[:vec T]` for a varint-counted sequence, or a vector of pairs for a struct.
-2. A `:slot` with components stops the decode of that packet and marks it `:truncated`; item id and count are still read.
+2. A `:slot`'s components are read when their wire codec is known (`component-codecs`: damage, max damage, max stack size and repair cost are a varint, unbreakable is nothing, as the 26.1.2 jar's `DataComponents` registers them; type ids from `components.edn`, the `minecraft:data_component_type` registry) and kept as `:components {type value}`. A component of any other type cannot be stepped over: the slot is marked `:components?`, the decode of that packet stops and marks it `:truncated`; item id and count are still read. Before the codecs, a worn stone pickaxe ended every `container-set-content` it was in, and the game answers each `use-item` with the whole inventory: gym batch iron-a2 run 3 filled its bucket three times, the server took the water each time, and the bot never saw the water bucket behind the pickaxe and failed `:no-scoop`.
 3. An id with no spec decodes to `{:packet/name :unknown :packet/id n :packet/known name-if-any}`; the reducer counts it under `:stats/unknown` and never throws.
 
 ## Specs only grow

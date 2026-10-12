@@ -25,7 +25,7 @@ Getting a log is a chain of three intents, each started by the planner after the
 
 ## Key files
 - `wood.clj`, `gather-next` - continue the chain if one is in flight, else start toward the nearest remembered trunk bottom (`memory/nearest-log`, radius 48) at the log nearest feet height (`trunk-target`), or `{:plan/wait :no-log}`.
-- `wood.clj`, `continue-gather` - reads `:plan/last` (the intent that just finished); only intents tagged `:intent/for :log` continue. The plain links (walk → dig → collect) are `intent/chain-next`, the same chain stone's `continue-mine` follows; wood adds the leaf clears and their resume.
+- `wood.clj`, `continue-gather` - reads `:plan/last` (the intent that just finished); only intents tagged `:intent/for :log` continue. The plain links (walk → dig → collect) are `intent/chain-next`, the same chain a mining row's `continue-mine` follows ([[mine-act]]); wood adds the leaf clears and their resume.
 - `wood.clj`, `max-clears` - at most 6 leaf digs per drop.
 
 ## How it works

@@ -22,6 +22,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.record :as record]
+            [clojurecraft.scoop]
             [clojurecraft.spec]
             [clojurecraft.stairs]
             [clojurecraft.stone]

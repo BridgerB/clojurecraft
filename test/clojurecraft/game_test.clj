@@ -1,5 +1,6 @@
 (ns clojurecraft.game-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx :refer [fold names packet packets ticks]]
             [clojurecraft.game :as game]
             [clojurecraft.inventory :as inventory]
@@ -126,6 +127,29 @@
   (is (nil? (inventory/window->player-slot (inventory/layouts :table) 9)) "the table's own grid")
   (is (= (inventory/layouts :table) (inventory/layout-of-menu 12)))
   (is (nil? (inventory/layout-of-menu 99))))
+
+(deftest a-furnace-window-keeps-its-slots-its-data-and-the-players-items-apart
+  (let [coal {:item (get blocks/items :coal) :count 4}
+        ore {:item (get blocks/items :raw_iron) :count 3}
+        log {:item 134 :count 1}
+        [w _] (run
+               (in-play)
+               [(packet {:packet/name :open-screen
+                         :window-id 2
+                         :menu-type (blocks/menus :furnace)
+                         :title (byte-array 0)})
+                (packet {:packet/name :container-set-content
+                         :window-id 2
+                         :state-id 1
+                         :items (vec (concat [ore coal nil] (repeat 27 nil) [log] (repeat 8 nil)))
+                         :carried nil})
+                (packet {:packet/name :container-set-data :window-id 2 :property 2 :value 40})
+                (packet {:packet/name :container-set-data :window-id 7 :property 2 :value 99})])]
+    (is (= {0 ore 1 coal} (get-in w [:window/open :window/slots]))
+        "input and fuel are the furnace's")
+    (is (= {0 log} (:player/inventory w)) "window slot 30 is hotbar slot 0")
+    (is (= {2 40} (get-in w [:window/open :window/data])) "a property of another window is ignored")
+    (is (= (inventory/layouts :furnace) (inventory/layout-of-menu (blocks/menus :furnace))))))
 
 (deftest the-crafting-grid-is-never-invisible
   (let [items (vec (concat [{:item 30 :count 1} {:item 36 :count 1} nil {:item 36 :count 1} nil]

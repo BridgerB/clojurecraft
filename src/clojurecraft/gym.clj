@@ -80,6 +80,53 @@
     :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0"
                  :truth/re "Found ([3-9]|[1-9][0-9])"}
                 {:truth/cmd "clear {name} minecraft:wooden_pickaxe 0" :truth/re "Found [1-9]"}]}
+   ;; the wooden pickaxe, sticks and a table are given, so the row measures stone and the table craft
+   {:gym/goal :stone-pickaxe
+    :gym/until "stone-pickaxe"
+    :gym/prereqs ["minecraft:wooden_pickaxe 1" "minecraft:stick 2" "minecraft:crafting_table 1"]
+    :gym/timeout-ms 300000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:stone_pickaxe 0" :truth/re "Found [1-9]"}]}
+   ;; issue #6, one row per stage of the iron kit, each given what the stages before it make.
+   ;; The furnace: a placed block is not in the inventory, so the server's word is that the
+   ;; cobblestone was spent and no furnace is held; the bot's RESULT needs the placed block seen.
+   {:gym/goal :furnace
+    :gym/until "furnace"
+    :gym/prereqs ["minecraft:cobblestone 8" "minecraft:crafting_table 1"]
+    :gym/timeout-ms 180000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:cobblestone 0" :truth/re "No items were found"}
+                {:truth/cmd "clear {name} minecraft:furnace 0" :truth/re "No items were found"}]}
+   {:gym/goal :ingots
+    :gym/until "ingots"
+    :gym/prereqs ["minecraft:furnace 1" "minecraft:raw_iron 4" "minecraft:coal 1"]
+    :gym/timeout-ms 240000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:iron_ingot 0"
+                 :truth/re "Found ([4-9]|[1-9][0-9])"}]}
+   {:gym/goal :bucket
+    :gym/until "bucket"
+    :gym/prereqs ["minecraft:iron_ingot 3" "minecraft:crafting_table 1"]
+    :gym/timeout-ms 180000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:bucket 0" :truth/re "Found [1-9]"}]}
+   {:gym/goal :water-bucket
+    :gym/until "water-bucket"
+    :gym/prereqs ["minecraft:bucket 1" "minecraft:stone_pickaxe 2"]
+    :gym/timeout-ms 300000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}]}
+   ;; a gravel is given, so the row measures digging it again for flint, not finding gravel
+   {:gym/goal :flint-and-steel
+    :gym/until "flint-and-steel"
+    :gym/prereqs ["minecraft:iron_ingot 1" "minecraft:gravel 1"]
+    :gym/timeout-ms 300000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
+   ;; the whole stage from what #9 ends with, as the sim's end-to-end run starts. Forty minutes:
+   ;; down to y 16, iron, coal, gravel and the smelts there, then the stairs back up to water; batch
+   ;; iron-a5's three runs that held flint and steel and the bucket were still climbing at twenty
+   {:gym/goal :iron-kit
+    :gym/until "iron-kit"
+    :gym/prereqs ["minecraft:stone_pickaxe 1" "minecraft:crafting_table 1" "minecraft:cobblestone 8"
+                  "minecraft:oak_log 4"]
+    :gym/timeout-ms 2400000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}
+                {:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
    ;; issue #5: wade in, get out; the server must see the bot on dry land (steve's onDryLand judge)
    {:gym/goal :shore
     :gym/until "shore"
@@ -99,7 +146,6 @@
 (def hold-ms 60000)                     ; how long an ok bot stays online for the judge's truth commands
 
 (def z95 1.959964)                      ; the normal quantile for a two-sided 95% interval
-(def judge-poll-ms 500)                 ; how often the judge looks for the RESULT line
 (def judge-grace-ms 120000)             ; past the goal's timeout, how long the judge waits for RESULT
 (def shard-overhead-minutes 8)          ; setup, server start and judging, on top of a goal's timeout
 
@@ -122,11 +168,10 @@
    :truth/reply (str reply)
    :truth/ok? (boolean (re-find (re-pattern (:truth/re row)) (str reply)))})
 
-(defn parse-result
-  "The RESULT map in a bot log's text, or nil when the bot never printed one."
-  [log-text]
-  (some (fn [line] (when (str/starts-with? line "RESULT ") (edn/read-string (subs line 7))))
-        (str/split-lines (str log-text))))
+(defn result-line
+  "The RESULT map a whole line of the bot's output carries, or nil for any other line."
+  [line]
+  (when (str/starts-with? line "RESULT ") (edn/read-string (subs line 7))))
 
 (defn outcome
   "How a run ended, from what it left behind. :pass only when the bot says ok and every truth
@@ -280,25 +325,35 @@
            (cli/log "landing failed:" e)
            {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
 
-(defn wait-result!
-  "The RESULT map from the bot log once it appears, or nil after wait-ms."
-  [log-path wait-ms]
-  (let [until (+ (System/currentTimeMillis) wait-ms)]
-    (loop []
-      (let [r (when (.exists (io/file log-path)) (parse-result (slurp log-path)))]
-        (cond r r
-              (> (System/currentTimeMillis) until) nil
-              :else (do (Thread/sleep (long judge-poll-ms)) (recur)))))))
+(defn tee-output!
+  "Read the bot process p's output as it is written, a whole line at a time: copy each to log
+   (for people and the artifacts) and deliver the value of the RESULT line to result (a promise),
+   or nil when the output ends without one. The bot's answer comes back through the pipe its
+   :go went down, never through a file another process is writing: polling the log, live
+   iron-kit run 19's judge read its 44 KB RESULT half written and failed the trial on the
+   reader's error. Runs on a thread of its own; returns it."
+  [^Process p log result]
+  (doto (Thread. ^Runnable
+                 (fn []
+                   (try (with-open [r (io/reader (.getInputStream p))
+                                    w (io/writer log)]
+                          (doseq [line (line-seq r)]
+                            (.write w (str line "\n"))
+                            (.flush w)
+                            (when-let [v (result-line line)] (deliver result v))))
+                        (finally (deliver result nil)))))
+    (.setDaemon true)
+    (.start)))
 
 (defn judge!
-  "Judge one run: wait for the bot's RESULT, then read what the fixture left (a missing landed
+  "Judge one run: wait for the bot's RESULT (result, a promise tee-output! delivers), then read what the fixture left (a missing landed
    file is a landing that never happened), ask the server each truth command while the bot
    still holds, write the result row and print it as one GYMRESULT line. Returns the row."
-  [{:keys [goal run name host rcon-port rcon-pass bot-log landed out wait-ms commit]}]
+  [{:keys [goal run name host rcon-port rcon-pass result landed out wait-ms commit]}]
   (let [row (gym goal)
-        result (wait-result!
-                bot-log
-                (if wait-ms (parse-long wait-ms) (+ (:gym/timeout-ms row) judge-grace-ms)))
+        result (deref result
+                      (if wait-ms (parse-long wait-ms) (+ (:gym/timeout-ms row) judge-grace-ms))
+                      nil)
         left (if (.exists (io/file landed))
                (edn/read-string (slurp landed))
                {:gym/landed? false :gym/error "no landed file"})
@@ -337,10 +392,10 @@
                              (:gym/until row) "--events" "stdin" "--timeout-ms"
                              (str (:gym/timeout-ms row)) "--hold-ms" (str hold-ms) "--record"
                              (str (io/file dir "run.edn"))]
-        p (.start (doto (ProcessBuilder. cmd)
-                    (.directory (io/file bot-dir))
-                    (.redirectErrorStream true)
-                    (.redirectOutput bot-log)))
+        p (.start
+           (doto (ProcessBuilder. cmd) (.directory (io/file bot-dir)) (.redirectErrorStream true)))
+        result (promise)
+        tee (tee-output! p bot-log result)
         landed
         (landing!
          {:goal goal :run run :name name :rcon-port rcon-port :rcon-pass pass :landings landings})
@@ -354,13 +409,14 @@
                                  :name name
                                  :rcon-port rcon-port
                                  :rcon-pass pass
-                                 :bot-log (str bot-log)
+                                 :result result
                                  :landed (str landed-file)
                                  :out (str (io/file dir "result.edn"))
                                  :commit commit})
                         tags)]
       (.destroy p)
       (.waitFor p)
+      (.join ^Thread tee 5000) ; the log whole before it is uploaded
       (spit (io/file dir "result.edn") (pr-str tagged))
       tagged)))
 

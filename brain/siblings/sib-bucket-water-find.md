@@ -39,7 +39,7 @@ steve's code calls the water link "the confirmed #1 bottleneck for smelted bots"
 7. **The scoop flag.** steve clears `usingHeldItem` by hand after each scoop and resyncs the inventory, because the client model briefly showed the wrong bucket counts ([[sib-steve-portal-cast]]).
 
 ## What it means here
-Water is a sighting kind like logs: `memory/watched?` gains water sources, and a water query is "nearest remembered source with air above, near the surface of its column", answered from memory, never by diving. The hunt is an intent with absolute deadlines, and a blacklist with an expiry rather than a reset.
+Water is remembered as one pool fact per chunk (the highest surface source), and the scoop takes the nearest surface source in the loaded terrain, else walks to the nearest remembered pool, never one deeper than five under the eye ([[scoop-intent]]); a source that fails three scoops is blacklisted. The long hunt is not built yet.
 
 ## Limits
 ruststeve's `fill_water_buckets` roam loop and memory-first return were read only through its comments. The race numbers in the comments are steve's operator records, not reproduced here.

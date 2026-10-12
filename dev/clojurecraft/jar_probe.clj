@@ -1,7 +1,9 @@
 (ns clojurecraft.jar-probe
   "Ask the vanilla server itself what the --reports output does not say: every block's
    hardness (BlockState.getDestroySpeed, the number the server divides by when it breaks a
-   block) and every tool material's speed, durability and harvest tag (ToolMaterial). Run by
+   block), which blocks drop only to their correct tool (requiresCorrectToolForDrops: stone
+   dug by hand drops nothing), every tool material's speed, durability and harvest tag
+   (ToolMaterial), and every fuel's burn ticks (FuelValues). Run by
    bb datagen in a JVM whose classpath is the inner server jar plus the libraries the
    bundler ships, since the server's classes need them to boot:
 
@@ -13,13 +15,21 @@
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io])
   (:import [java.lang.reflect Field]
+           [java.util Map]
            [net.minecraft SharedConstants]
            [net.minecraft.core BlockPos]
+           [net.minecraft.core Registry$PendingTags RegistryAccess]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.server Bootstrap]
-           [net.minecraft.world.item ToolMaterial]
+           [net.minecraft.server.packs PackType]
+           [net.minecraft.server.packs.repository ServerPacksSource]
+           [net.minecraft.server.packs.resources MultiPackResourceManager]
+           [net.minecraft.tags TagLoader]
+           [net.minecraft.world.flag FeatureFlags]
+           [net.minecraft.world.item Item ToolMaterial]
            [net.minecraft.world.level EmptyBlockGetter]
-           [net.minecraft.world.level.block Block]))
+           [net.minecraft.world.level.block Block]
+           [net.minecraft.world.level.block.entity FuelValues]))
 
 (set! *warn-on-reflection* true)
 
@@ -35,6 +45,16 @@
                                        EmptyBlockGetter/INSTANCE
                                        BlockPos/ZERO))]))))
 
+(defn needs-tool
+  "[\"minecraft:stone\" ...]: every block whose default state drops only when broken with its
+   correct tool (BlockState.requiresCorrectToolForDrops, which Player.hasCorrectToolForDrops
+   asks before it asks the tool), sorted."
+  []
+  (let [reg BuiltInRegistries/BLOCK]
+    (vec (sort (for [^Block b reg
+                     :when (.requiresCorrectToolForDrops (.defaultBlockState b))]
+                 (str (.getKey reg b)))))))
+
 (defn materials
   "{\"WOOD\" {\"speed\" 2.0 \"durability\" 59 \"incorrect\" \"minecraft:incorrect_for_wooden_tool\"} ...}
    for every ToolMaterial constant."
@@ -48,11 +68,30 @@
             "durability" (.durability m)
             "incorrect" (str (.location (.incorrectBlocksForDrops m)))}])))
 
+(defn fuel
+  "{\"minecraft:coal\" 1600 ...}: every item the game burns and its burn ticks, from the game's own
+   FuelValues. Fuel is given partly by item tag (#logs, #planks), so the vanilla data pack's tags
+   are loaded and bound to the registries first; the burn times are FuelValues' own item map."
+  []
+  (let [rm (MultiPackResourceManager. PackType/SERVER_DATA
+                                      [(ServerPacksSource/createVanillaPackSource)])
+        access (RegistryAccess/fromRegistryOfRegistries BuiltInRegistries/REGISTRY)]
+    (doseq [^Registry$PendingTags p (TagLoader/loadTagsForExistingRegistries rm access)] (.apply p))
+    (let [fv (FuelValues/vanillaBurnTimes access FeatureFlags/VANILLA_SET)
+          ^Map values (.get (doto (.getDeclaredField FuelValues "values") (.setAccessible true))
+                            fv)]
+      (into (sorted-map)
+            (for [[^Item i ticks] values] [(str (.getKey BuiltInRegistries/ITEM i)) ticks])))))
+
 (defn -main
-  "Boot the game's registries and write {\"hardness\" ... \"materials\" ...} as JSON to out."
+  "Boot the game's registries and write {\"hardness\" ... \"needs-tool\" ... \"materials\" ...
+   \"fuel\" ...} as JSON to out."
   [out]
   (SharedConstants/tryDetectVersion)
   (Bootstrap/bootStrap)
-  (with-open [w (io/writer out)] (json/write {"hardness" (hardness) "materials" (materials)} w))
+  (with-open [w (io/writer out)]
+    (json/write
+     {"hardness" (hardness) "needs-tool" (needs-tool) "materials" (materials) "fuel" (fuel)}
+     w))
   (println "wrote" out)
   (shutdown-agents))

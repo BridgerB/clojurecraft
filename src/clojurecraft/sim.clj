@@ -5,11 +5,16 @@
    the client accumulate in :sim/out. Rules modelled: login/configuration handshake, one
    teleport to spawn, one chunk column, keep-alives, block breaking with the vanilla timing
    (an early FINISH is ignored), an item drop at the block, pickup when the player comes
-   within the inflated pickup box after the 10-tick delay, and window 0 (the player's
-   inventory with its 2x2 crafting grid) with vanilla click rules and state ids.
+   within the inflated pickup box after the 10-tick delay, window 0 (the player's inventory
+   with its 2x2 crafting grid) with vanilla click rules and state ids, block placement, and the
+   containers a right-click opens: a crafting table, and a furnace that cooks by the game's
+   smelting and fuel tables every tick, open or not. Gravel and sand fall: a block of a falling
+   type whose neighbour below changed falls two ticks later if the cell under it is free, and
+   lands where the game's gravity brings it.
 
    Fault knobs are inputs, not hidden state: :sim/drop-clicks is a set of click ordinals
-   (0-based) the server silently loses. :sim/violations records anything a real server would
+   (0-based) the server silently loses, and the loot table's chances (gravel's flint) roll from
+   :sim/rng, a pure generator whose start is the :seed input, so a run's luck replays. :sim/violations records anything a real server would
    punish or a careful client must never do: a click on an empty result slot, a close with a
    loaded cursor.
 
@@ -23,6 +28,7 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]))
 
 (set! *warn-on-reflection* true)
@@ -38,7 +44,7 @@
         (contains? (:sim/broken sim) pos) 0
         :else (chunk/block-at {[0 0] (:sim/chunk sim)} pos)))
 
-(declare full sync-window)
+(declare disturb full sync-window)
 
 (defn held-item
   "The item id in the slot the client last selected (set-carried-item), or nil for an empty
@@ -54,17 +60,29 @@
   [id held]
   (* break-threshold (or (dig/ms id held {}) dig-ms)))
 
-(defn drop-of
-  "The item a broken block gives, {:item id :count 1}, or nil when it drops nothing: the
-   block's own item (cobblestone for stone, the log for a log) when the held item harvests it.
-   Only the two the goals need are mapped; anything else drops its own name's item or nothing."
-  [id held]
-  (when (dig/harvest? id held)
-    (let [n (blocks/name-of id)
-          item (case n
-                 :stone :cobblestone
-                 n)]
-      (when-let [item-id (get blocks/items item)] {:item item-id :count 1}))))
+(defn roll
+  "[sim' r]: the model's next roll, r in [0, 1), from :sim/rng by one 64-bit linear congruential
+   step (Knuth's MMIX constants); pure, so the same :seed rolls the same luck."
+  [sim]
+  (let [s (unchecked-add (unchecked-multiply (long (:sim/rng sim)) 6364136223846793005)
+                         1442695040888963407)]
+    [(assoc sim :sim/rng s) (/ (double (unsigned-bit-shift-right s 11)) 9007199254740992.0)]))
+
+(defn loot
+  "[sim' item] for breaking block id with held: the item (an id) its loot table drops, or nil
+   when the held item does not harvest the block or nothing drops. The table's tries go in
+   order (dig/drop-tries); one of chance 1.0 always drops, one below takes a roll and drops
+   when the roll is under its chance (gravel: flint one time in ten, else gravel)."
+  [sim id held]
+  (if (dig/harvest? id held)
+    (reduce (fn [[sim _] [item chance]]
+              (if (>= chance 1.0)
+                (reduced [sim (get blocks/items item)])
+                (let [[sim r] (roll sim)]
+                  (if (< r chance) (reduced [sim (get blocks/items item)]) [sim nil]))))
+            [sim nil]
+            (dig/drop-tries id))
+    [sim nil]))
 
 (defn wear
   "The inventory after one accepted dig with the tool in slot: its durability counts down from
@@ -86,10 +104,10 @@
 
 (defn init
   "A fresh server before the handshake, from {:column bytes :spawn [x y z]} plus optional
-   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {window-0-slot item}, :lag-ticks and
+   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {window-0-slot item}, :lag-ticks,
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
-   from the world spawn)."
-  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn]
+   from the world spawn) and :seed (where the loot rolls start, 0 when absent)."
+  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed]
     :or {keep-alive-every keep-alive-every}}]
   {:sim/phase :handshake
    :sim/lag-ticks (or lag-ticks 0)
@@ -97,9 +115,13 @@
    :sim/state-id 1
    :sim/held 0
    :sim/placed {}
+   :sim/furnaces {}
+   :sim/falls {}
+   :sim/falling {}
    :sim/next-window 1
    :sim/clicks 0
    :sim/drop-clicks (or drop-clicks #{})
+   :sim/rng (or seed 0)
    :sim/violations []
    :sim/keep-alive-every keep-alive-every
    :sim/now 0
@@ -158,7 +180,8 @@
         (send {:packet/name :container-set-content
                :window-id 0
                :state-id (:sim/state-id sim)
-               :items (mapv #(get-in sim [:sim/inv %]) (range 46))
+               :items (mapv #(get-in sim [:sim/inv %])
+                            (range (inventory/slot-count (inventory/layouts :inventory))))
                :carried nil})
         (send
          {:packet/name :level-chunk-with-light :x 0 :z 0 :heightmaps [] :data (:sim/column sim)})
@@ -187,15 +210,18 @@
         (let [eid (:sim/next-eid sim)
               [x y z] pos
               item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
-              drop (drop-of id held)
+              [sim item] (loot sim id held)
+              drop (when item {:item item :count 1})
               before (full (:sim/inv sim) (inventory/layouts :inventory))
               sim (-> sim
+                      (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
                       (update :sim/broken conj pos)
                       (dissoc :sim/dig)
                       ;; observed live on 26.1.2: the breaker gets the block update, then the ack
                       (send {:packet/name :block-update :pos pos :state 0})
                       (send {:packet/name :block-changed-ack :sequence sequence})
-                      (update :sim/inv wear slot))
+                      (update :sim/inv wear slot)
+                      (disturb pos))
               sim (sync-window sim :inventory before (:sim/cursor sim) false)]
           (if drop
             (-> sim
@@ -218,8 +244,6 @@
 
 ;; ---------------------------------------------------------------- windows
 
-(def table-state (first (keep (fn [[n _ lo]] (when (= n :crafting_table) lo)) blocks/table)))
-
 (defn result-of
   "What the grid of view crafts, {:item id :count n}, or nil when it matches no recipe."
   [view layout]
@@ -231,52 +255,53 @@
     (when-let [r (recipe/match grid (:size layout))]
       {:item (recipe/item-id (:recipe/result r)) :count (:recipe/count r)})))
 
-(defn view-of
-  "The slots of window kind as the click rules see them, {slot item} without the result slot:
-   :inventory is window 0; :table is the table grid plus the player's slots where the table
-   shows them (inventory/layouts)."
+(defn own-path
+  "Where the sim keeps the own slots of the open container of kind: the table's grid on its
+   window (it empties when the window closes), a furnace's slots at its position (they stay)."
   [sim kind]
   (case kind
-    :inventory (:sim/inv sim)
-    :table
-    (merge (get-in sim [:sim/window :grid])
-           (into {}
-                 (for [[s it] (:sim/inv sim)
-                       :let [t (inventory/translate (inventory/layouts :inventory)
-                                                    (inventory/layouts :table)
-                                                    s)]
-                       :when t]
-                   [t it])))))
+    :table [:sim/window :grid]
+    :furnace [:sim/furnaces (get-in sim [:sim/window :pos]) :slots]))
+
+(defn view-of
+  "The slots of window kind as the click rules see them, {slot item}, never a crafting result:
+   :inventory is window 0; a container is its own slots plus the player's where it shows them
+   (inventory/layouts)."
+  [sim kind]
+  (if (= kind :inventory)
+    (:sim/inv sim)
+    (let [layout (inventory/layouts kind)]
+      (merge (get-in sim (own-path sim kind))
+             (into {}
+                   (for [[s it] (:sim/inv sim)
+                         :let [t (inventory/translate (inventory/layouts :inventory) layout s)]
+                         :when t]
+                     [t it]))))))
 
 (defn with-view
-  "Write a clicked view of window kind back into the sim; the inverse of view-of. The result
-   slot is dropped, since it is always derived."
+  "Write a clicked view of window kind back into the sim; the inverse of view-of. A crafting
+   result slot is dropped, since it is always derived."
   [sim kind view]
-  (let [view (dissoc view 0)]
-    (case kind
-      :inventory (assoc sim :sim/inv view)
-      :table
-      (-> sim
-          (assoc-in [:sim/window :grid]
-                    (into {}
-                          (for [s (inventory/grid-slots (inventory/layouts :table))
-                                :let [it (get view s)]
-                                :when it]
-                            [s it])))
+  (let [layout (inventory/layouts kind)
+        view (cond-> view (inventory/crafting? layout) (dissoc 0))]
+    (if (= kind :inventory)
+      (assoc sim :sim/inv view)
+      (let [inv (inventory/layouts :inventory)]
+        (->
+          sim
+          (assoc-in (own-path sim kind) (select-keys view (inventory/own-slots layout)))
           (assoc
            :sim/inv
-           (let [inv (inventory/layouts :inventory)
-                 table (inventory/layouts :table)]
-             (merge
-              (into {} (remove (fn [[s _]] (inventory/translate inv table s)) (:sim/inv sim)))
-              (into
-               {}
-               (for [[s it] view :let [w (inventory/translate table inv s)] :when w] [w it])))))))))
+           (merge
+            (into {} (remove (fn [[s _]] (inventory/translate inv layout s)) (:sim/inv sim)))
+            (into
+             {}
+             (for [[s it] view :let [w (inventory/translate layout inv s)] :when w] [w it])))))))))
 
 (defn full
-  "view with slot 0 set to what its grid crafts."
+  "view with slot 0 set to what its grid crafts, when the window crafts."
   [view layout]
-  (assoc view 0 (result-of view layout)))
+  (cond-> view (inventory/crafting? layout) (assoc 0 (result-of view layout))))
 
 (defn insert
   "Put a stack into the given slots, stacking first. Returns [view leftover]."
@@ -316,11 +341,39 @@
       (cond (or (nil? out) left) view
             :else (recur (craft-once view' layout))))))
 
+(defn burns?
+  "Does a furnace burn this item name (the game's fuel table)?"
+  [n]
+  (contains? blocks/fuel-by-name n))
+
+(defn accepts?
+  "May a click put item into slot of a window with layout? A furnace's output takes nothing and
+   its fuel slot only what burns or an empty bucket (vanilla's FurnaceResultSlot and
+   FurnaceFuelSlot); every other slot takes anything."
+  [layout slot {:keys [item]}]
+  (let [n (recipe/item-name item)]
+    (cond (= slot (:output layout)) false
+          (= slot (:fuel layout)) (or (burns? n) (= n :bucket))
+          :else true)))
+
+(defn take-onto
+  "A loaded cursor clicks a slot that refuses it: vanilla moves what fits of the same item from
+   the slot onto the cursor (taking from a furnace's output), and does nothing otherwise."
+  [view cursor slot]
+  (let [at (get view slot)]
+    (if (and at (= (:item at) (:item cursor)))
+      (let [k (min (:count at) (- max-stack (:count cursor)))
+            left (- (:count at) k)]
+        {:view (if (pos? left) (assoc view slot (assoc at :count left)) (dissoc view slot))
+         :cursor (update cursor :count + k)})
+      {:view view :cursor cursor})))
+
 (defn click-kind
-  "Which vanilla rule a click falls under: :result (slot 0), :swap (mode 2, with a hotbar slot),
-   :shift (mode 1), :left (button 0) or :right."
-  [{:keys [slot button mode]}]
-  (cond (= slot 0) :result
+  "Which vanilla rule a click in a window with layout falls under: :result (slot 0 of a window
+   that crafts), :swap (mode 2, with a hotbar slot), :shift (mode 1), :left (button 0) or
+   :right."
+  [layout {:keys [slot button mode]}]
+  (cond (and (inventory/crafting? layout) (= slot 0)) :result
         (= mode 2) :swap
         (= mode 1) :shift
         (= button 0) :left
@@ -330,7 +383,7 @@
   "Vanilla click rules over one window's slots, one method per kind of click (click-kind).
    Returns {:view :cursor :violation}."
   {:arglists '([layout view cursor click])}
-  (fn [_layout _view _cursor click] (click-kind click)))
+  (fn [layout _view _cursor click] (click-kind layout click)))
 
 (defmethod click-view :result
   ;; vanilla crafts onto the cursor, or with a shift-click into the store; a click when the grid
@@ -345,31 +398,37 @@
           :else {:view view :cursor cursor})))
 
 (defmethod click-view :swap
-  ;; the slot and hotbar slot (hotbar + button) trade places
+  ;; the slot and hotbar slot (hotbar + button) trade places, unless the slot refuses the
+  ;; hotbar's item
   [layout view cursor {:keys [slot button]}]
   (let [at (get view slot)
         h (+ (inventory/hotbar-start layout) button)
         other (get view h)]
-    {:view (-> view
-               (dissoc slot h)
-               (cond-> other (assoc slot other)
-                       at (assoc h at)))
-     :cursor cursor}))
+    (if (and other (not (accepts? layout slot other)))
+      {:view view :cursor cursor}
+      {:view (-> view
+                 (dissoc slot h)
+                 (cond-> other (assoc slot other)
+                         at (assoc h at)))
+       :cursor cursor})))
 
 (defmethod click-view :shift
-  ;; a grid cell's stack moves into the store, what does not fit stays; anywhere else nothing
+  ;; a container's own stack (a grid cell, a furnace slot) moves into the store, what does not
+  ;; fit stays; anywhere else nothing
   [layout view cursor {:keys [slot]}]
   (let [at (get view slot)]
-    (if (and at (some #{slot} (inventory/grid-slots layout)))
+    (if (and at (some #{slot} (inventory/own-slots layout)))
       (let [[view' left] (insert (dissoc view slot) (inventory/store-slots layout) at)]
         {:view (cond-> view' left (assoc slot left)) :cursor cursor})
       {:view view :cursor cursor})))
 
 (defmethod click-view :left
-  ;; pick up, put down, merge up to a full stack (the rest stays on the cursor), or swap
-  [_layout view cursor {:keys [slot]}]
+  ;; pick up, put down, merge up to a full stack (the rest stays on the cursor), or swap; a slot
+  ;; that refuses the cursor's item gives what fits of the same item instead
+  [layout view cursor {:keys [slot]}]
   (let [at (get view slot)]
     (cond (nil? cursor) {:view (dissoc view slot) :cursor at}
+          (not (accepts? layout slot cursor)) (take-onto view cursor slot)
           (nil? at) {:view (assoc view slot cursor) :cursor nil}
           (= (:item at) (:item cursor))
           (let [k (min (:count cursor) (- max-stack (:count at)))
@@ -380,8 +439,8 @@
 
 (defmethod click-view :right
   ;; an empty cursor picks up half (rounded up); a loaded one places one into an empty or
-  ;; same-item slot that is not full
-  [_layout view cursor {:keys [slot]}]
+  ;; same-item slot that is not full, or takes from a slot that refuses it as a left click does
+  [layout view cursor {:keys [slot]}]
   (let [at (get view slot)]
     (cond (and (nil? cursor) at)
           (let [half (long (math/ceil (/ (:count at) 2)))
@@ -389,23 +448,21 @@
             {:cursor (assoc at :count half)
              :view (if (pos? rest) (assoc view slot (assoc at :count rest)) (dissoc view slot))})
           (nil? cursor) {:view view :cursor nil}
+          (not (accepts? layout slot cursor)) (take-onto view cursor slot)
           (or (nil? at) (and (= (:item at) (:item cursor)) (< (:count at) max-stack)))
           {:view (assoc view slot {:item (:item cursor) :count (inc (:count at 0))})
            :cursor (when (> (:count cursor) 1) (update cursor :count dec))}
           :else {:view view :cursor cursor})))
 
 (defn state-id-path
-  "Where the sim keeps the state id of window kind."
+  "Where the sim keeps the state id of window kind: window 0's, or the open container's."
   [kind]
-  (case kind
-    :inventory [:sim/state-id]
-    :table [:sim/window :state-id]))
+  (if (= kind :inventory) [:sim/state-id] [:sim/window :state-id]))
+
 (defn window-id
-  "The protocol window id of window kind: 0, or the open table's."
+  "The protocol window id of window kind: 0, or the open container's."
   [sim kind]
-  (case kind
-    :inventory 0
-    :table (get-in sim [:sim/window :id])))
+  (if (= kind :inventory) 0 (get-in sim [:sim/window :id])))
 
 (defn sync-window
   "Answer a click the way vanilla does. The click's own changed-slots and cursor fields are the
@@ -415,6 +472,7 @@
    id gets the full window instead. predicted-cursor is the cursor the client last claimed."
   [sim kind before predicted-cursor stale?]
   (let [layout (inventory/layouts kind)
+        slots (range (inventory/slot-count layout))
         after (full (view-of sim kind) layout)
         id (window-id sim kind)
         path (state-id-path kind)]
@@ -424,7 +482,7 @@
               {:packet/name :container-set-content
                :window-id id
                :state-id (get-in sim path)
-               :items (mapv #(get after %) (range 46))
+               :items (mapv #(get after %) slots)
                :carried (:sim/cursor sim)}))
       (as-> sim sim
         (reduce (fn [sim s]
@@ -438,17 +496,17 @@
                              :slot s
                              :item (get after s)}))))
                 sim
-                (range 46))
+                slots)
         (if (= predicted-cursor (:sim/cursor sim))
           sim
           (send sim {:packet/name :set-cursor-item :item (:sim/cursor sim)}))))))
 
 (defn window-kind
-  "Which window a protocol window id names: :inventory, :table when it is the open table,
-   else nil."
+  "Which window a protocol window id names: :inventory, the open container's kind (:table,
+   :furnace) when it is that window's id, else nil."
   [sim window-id]
   (cond (zero? window-id) :inventory
-        (= window-id (get-in sim [:sim/window :id])) :table))
+        (= window-id (get-in sim [:sim/window :id])) (get-in sim [:sim/window :kind])))
 
 (defmethod on-packet [:play :container-click]
   [sim {:keys [window-id state-id] :as pkt}]
@@ -477,23 +535,26 @@
                      (:cursor pkt)
                      (not= state-id (get-in sim (state-id-path kind))))))))
 
+(defn close-window
+  "The open container closes: a table's grid goes back into the inventory (vanilla), a
+   furnace's slots stay in the furnace; window 0 is synced with what came back."
+  [sim]
+  (let [store (inventory/store-slots (inventory/layouts :inventory))
+        before (full (:sim/inv sim) (inventory/layouts :inventory))
+        inv (reduce (fn [inv it] (first (insert inv store it)))
+                    (:sim/inv sim)
+                    (vals (get-in sim [:sim/window :grid])))]
+    (-> sim
+        (assoc :sim/inv inv)
+        (dissoc :sim/window)
+        (sync-window :inventory before (:sim/cursor sim) false))))
+
 (defmethod on-packet [:play :container-close]
   [sim {:keys [window-id]}]
   (let [sim (cond-> sim
               (:sim/cursor sim)
               (update :sim/violations conj [:close-with-cursor (:sim/cursor sim)]))]
-    (if (= :table (window-kind sim window-id))
-      (let [before (full (:sim/inv sim) (inventory/layouts :inventory))
-            inv (reduce (fn [inv it]
-                          (first
-                           (insert inv (inventory/store-slots (inventory/layouts :inventory)) it)))
-                        (:sim/inv sim)
-                        (vals (get-in sim [:sim/window :grid])))]
-        (-> sim
-            (assoc :sim/inv inv)
-            (dissoc :sim/window)
-            (sync-window :inventory before (:sim/cursor sim) false)))
-      sim)))
+    (if (= window-id (get-in sim [:sim/window :id])) (close-window sim) sim)))
 
 (defn give
   "An item entity reaches the inventory: stack it into window 0 and tell the client."
@@ -501,6 +562,160 @@
   (let [before (full (:sim/inv sim) (inventory/layouts :inventory))
         [inv _] (insert (:sim/inv sim) (inventory/store-slots (inventory/layouts :inventory)) item)]
     (sync-window (assoc sim :sim/inv inv) :inventory before (:sim/cursor sim) false)))
+
+(defn open-window
+  "Open a container window of kind for the client, closing any open one first as vanilla does:
+   a fresh window id with state id 1 (extra carries the kind's own keys: a table's empty grid,
+   a furnace's position), then open-screen and the whole window with the real cursor."
+  [sim kind extra]
+  (let [sim (if-let [old (get-in sim [:sim/window :id])]
+              (-> sim
+                  close-window
+                  (send {:packet/name :container-close :window-id old}))
+              sim)
+        id (:sim/next-window sim)
+        layout (inventory/layouts kind)
+        sim (-> sim
+                (assoc :sim/window (merge {:id id :kind kind :state-id 1} extra))
+                (update :sim/next-window inc))
+        view (full (view-of sim kind) layout)]
+    (-> sim
+        (send {:packet/name :open-screen
+               :window-id id
+               :menu-type (:menu-type layout)
+               :title (byte-array 0)})
+        (send {:packet/name :container-set-content
+               :window-id id
+               :state-id 1
+               :items (mapv #(get view %) (range (inventory/slot-count layout)))
+               :carried (:sim/cursor sim)}))))
+
+;; ---------------------------------------------------------------- the furnace
+
+(def fresh-furnace
+  "A furnace nothing has been put in: no slots, unlit, no progress (vanilla's data 0-3)."
+  {:slots {} :lit 0 :lit-total 0 :cook 0 :cook-total 0})
+
+(def default-cook-ticks 200)          ; vanilla's cook total when no recipe takes the input
+
+(def smelt-by-input
+  "item name → the furnace recipe that takes it (smelting.edn)."
+  (into {} (for [r recipe/smelting n (:smelt/input r)] [n r])))
+
+(defn smelt-of
+  "The furnace recipe that takes a slot's item, or nil."
+  [it]
+  (some-> it
+          :item
+          recipe/item-name
+          smelt-by-input))
+
+(defn furnace-data
+  "A furnace's numbered properties as container-set-data sends them: 0 fuel left, 1 fuel
+   total, 2 cook progress, 3 cook total."
+  [{:keys [lit lit-total cook cook-total]}]
+  {0 lit 1 lit-total 2 cook 3 cook-total})
+
+(defn can-burn?
+  "Can the furnace's input cook now: a recipe takes it, and the output is empty or holds the
+   result with room for one more batch."
+  [{:keys [slots]}]
+  (let [r (smelt-of (get slots 0))
+        out (get slots 2)]
+    (boolean (and r
+                  (or (nil? out)
+                      (and (= (:item out) (recipe/item-id (:smelt/result r)))
+                           (<= (+ (:count out) (:smelt/count r)) max-stack)))))))
+
+(defn smelt-once
+  "A furnace's slots after one batch: one input taken, its result added to the output."
+  [slots]
+  (let [r (smelt-of (get slots 0))
+        out (get slots 2)]
+    (-> slots
+        (take-one 0)
+        (assoc 2
+               {:item (recipe/item-id (:smelt/result r))
+                :count (+ (:count out 0) (:smelt/count r))}))))
+
+(defn reset-on-new-input
+  "Vanilla resets the progress, and sets the cook total from the recipe, when the input slot is
+   set to a different item; :cooking remembers which item the progress is for."
+  [{:keys [slots cooking] :as f}]
+  (let [item (:item (get slots 0))]
+    (if (= item cooking)
+      f
+      (cond-> (assoc f
+                     :cook 0
+                     :cook-total (:smelt/ticks (smelt-of (get slots 0)) default-cook-ticks))
+        item (assoc :cooking item)
+        (nil? item) (dissoc :cooking)))))
+
+(defn cook
+  "One game tick of a furnace, as vanilla's AbstractFurnaceBlockEntity.serverTick: a lit furnace
+   burns down one tick; one that is out lights when its input can cook, taking one fuel for
+   the fuel's burn ticks (fuel.edn); while lit and able to cook, progress grows, and at the
+   cook total one input becomes the result; lit but unable, progress resets; out with no fuel
+   or input, progress unwinds two a tick. (A lava bucket's empty bucket is not modelled.)"
+  [f]
+  (let [f (cond-> (reset-on-new-input f) (pos? (:lit f)) (update :lit dec))
+        fuel (get-in f [:slots 1])]
+    (cond (or (pos? (:lit f)) (and fuel (get-in f [:slots 0])))
+          (let [f (if (and (zero? (:lit f)) (can-burn? f))
+                    (let [t (get blocks/fuel-by-name (recipe/item-name (:item fuel)) 0)]
+                      (-> f
+                          (assoc :lit t :lit-total t)
+                          (update :slots take-one 1)))
+                    f)]
+            (cond (not (and (pos? (:lit f)) (can-burn? f))) (assoc f :cook 0)
+                  (= (inc (:cook f)) (:cook-total f))
+                  (-> f
+                      (assoc :cook 0)
+                      (update :slots smelt-once))
+                  :else (update f :cook inc)))
+          (pos? (:cook f)) (update f :cook #(max 0 (- % 2)))
+          :else f)))
+
+(defn send-data
+  "container-set-data for every property of the open window that changed between before and
+   after (vanilla sends a property only when it differs from what the client was last told)."
+  [sim before after]
+  (reduce (fn [sim p]
+            (if (= (get before p) (get after p))
+              sim
+              (send sim
+                    {:packet/name :container-set-data
+                     :window-id (get-in sim [:sim/window :id])
+                     :property p
+                     :value (get after p)})))
+          sim
+          (sort (keys after))))
+
+(defn open-furnace
+  "Open the furnace at pos (one is made there if the model has none yet): its window, then
+   every property, as vanilla sends a menu's whole state on opening."
+  [sim pos]
+  (let [sim (update-in sim [:sim/furnaces pos] #(or % fresh-furnace))]
+    (-> sim
+        (open-window :furnace {:pos pos})
+        (send-data {} (furnace-data (get-in sim [:sim/furnaces pos]))))))
+
+(defn tick-furnaces
+  "One game tick of every furnace, open or not (a furnace cooks with nobody watching); the one
+   whose window is open tells the client what changed: slots with a state id each, then the
+   properties."
+  [sim]
+  (reduce (fn [sim [pos f]]
+            (let [open? (= pos (get-in sim [:sim/window :pos]))
+                  before (when open? (view-of sim :furnace))
+                  f' (cook f)
+                  sim (assoc-in sim [:sim/furnaces pos] f')]
+              (cond-> sim
+                open?
+                (-> (sync-window :furnace before (:sim/cursor sim) false)
+                    (send-data (furnace-data f) (furnace-data f'))))))
+          sim
+          (:sim/furnaces sim)))
 
 ;; ---------------------------------------------------------------- using items on blocks
 
@@ -554,47 +769,178 @@
                  :flags 0})))
     sim))
 
+(defn place
+  "use-item-on that is not on a container: place the held block item at pos + face when the
+   destination is empty, the clicked block is solid and the block would not overlap the
+   player; else tell the client the destination's real state. Either way, then the ack."
+  [sim pos face ack]
+  (let [dest (mapv + pos (faces face))
+        slot (+ 36 (:sim/held sim 0))
+        held (get-in sim [:sim/inv slot])
+        d (block-at sim dest)
+        overlap? (overlaps-player? sim dest)
+        placing (some-> held
+                        :item
+                        recipe/item-name
+                        blocks/default-state) ; the held item is a block: it is placed
+        ok? (and placing
+                 d
+                 (not (blocks/solid? d))
+                 (not= :liquid (blocks/type-of d))
+                 (blocks/solid? (or (block-at sim pos) 0))
+                 (not overlap?))
+        sim (cond-> sim overlap? (update :sim/violations conj [:place-into-player dest]))]
+    (if ok?
+      (let [before (full (:sim/inv sim) (inventory/layouts :inventory))]
+        (-> sim
+            (assoc-in [:sim/placed dest] placing)
+            (disturb dest)
+            (update :sim/inv take-one slot)
+            (send {:packet/name :block-update :pos dest :state placing})
+            (sync-window :inventory before (:sim/cursor sim) false)
+            (send ack)))
+      (-> sim
+          (send {:packet/name :block-update :pos dest :state (or d 0)})
+          (send ack)))))
+
 (defmethod on-packet [:play :use-item-on]
+  ;; a right-click on a container opens it (ack first, as with a placement); anything else is
+  ;; a placement against the clicked face
   [sim {:keys [pos face sequence]}]
   (let [ack {:packet/name :block-changed-ack :sequence sequence}]
-    (if (= table-state (block-at sim pos))
-      (let [id (:sim/next-window sim)
-            sim (-> sim
-                    (assoc :sim/window {:id id :grid {} :state-id 1})
-                    (update :sim/next-window inc))]
+    (case (blocks/name-of (block-at sim pos))
+      :crafting_table
+      (-> sim
+          (send ack)
+          (open-window :table {:grid {}}))
+      :furnace
+      (-> sim
+          (send ack)
+          (open-furnace pos))
+      (place sim pos face ack))))
+
+(def use-range 4.5)                   ; how far the eyes reach for a block, as the server's interaction range
+(def ray-step 0.05)                   ; the length of one step along a ray
+
+(defn ray-cells
+  "The cells a ray from the player's eye (its last reported position) along look [yaw pitch]
+   passes through within use-range, in order, without repeats."
+  [sim look]
+  (let [[px py pz] (:sim/player-pos sim)]
+    (physics/cells-along [px (+ py 1.62) pz] (physics/direction look) use-range ray-step)))
+
+(defn scooped
+  "The water source a bucket used along look takes: the first water source on the ray, unless a
+   solid block comes first (the eyes do not see through it); nil when none."
+  [sim look]
+  (reduce (fn [_ cell]
+            (let [id (block-at sim cell)]
+              (cond (= id blocks/water-base) (reduced cell)
+                    (and id (blocks/solid? id)) (reduced nil)
+                    :else nil)))
+          nil
+          (ray-cells sim look)))
+
+(defmethod on-packet [:play :use-item]
+  ;; a held empty bucket aimed by the look at a water source fills: the source becomes air and
+  ;; the bucket a water bucket; anything else does nothing here. Either way, the ack.
+  [sim {:keys [sequence y-rot x-rot]}]
+  (let [ack {:packet/name :block-changed-ack :sequence sequence}
+        slot (+ 36 (:sim/held sim 0))
+        held (get-in sim [:sim/inv slot])
+        src (when (and (:sim/player-pos sim) (= (:item held) (get blocks/items :bucket)))
+              (scooped sim [y-rot x-rot]))]
+    (if src
+      (let [before (full (:sim/inv sim) (inventory/layouts :inventory))
+            filled {:item (get blocks/items :water_bucket) :count 1}
+            inv (if (= 1 (:count held))
+                  (assoc (:sim/inv sim) slot filled)
+                  (first (insert (take-one (:sim/inv sim) slot)
+                                 (inventory/store-slots (inventory/layouts :inventory))
+                                 filled)))]
         (-> sim
-            (send ack)
-            (send {:packet/name :open-screen :window-id id :menu-type 12 :title (byte-array 0)})
-            (send {:packet/name :container-set-content
-                   :window-id id
-                   :state-id 1
-                   :items (mapv #(get (full (view-of sim :table) (inventory/layouts :table)) %)
-                                (range 46))
-                   :carried (:sim/cursor sim)})))
-      (let [dest (mapv + pos (faces face))
-            slot (+ 36 (:sim/held sim 0))
-            held (get-in sim [:sim/inv slot])
-            d (block-at sim dest)
-            overlap? (overlaps-player? sim dest)
-            ok? (and held
-                     (= (:item held) (recipe/item-id :crafting_table))
-                     d
-                     (not (blocks/solid? d))
-                     (not= :liquid (blocks/type-of d))
-                     (blocks/solid? (or (block-at sim pos) 0))
-                     (not overlap?))
-            sim (cond-> sim overlap? (update :sim/violations conj [:place-into-player dest]))]
-        (if ok?
-          (let [before (full (:sim/inv sim) (inventory/layouts :inventory))]
-            (-> sim
-                (assoc-in [:sim/placed dest] table-state)
-                (update :sim/inv take-one slot)
-                (send {:packet/name :block-update :pos dest :state table-state})
-                (sync-window :inventory before (:sim/cursor sim) false)
-                (send ack)))
-          (-> sim
-              (send {:packet/name :block-update :pos dest :state (or d 0)})
-              (send ack)))))))
+            (assoc-in [:sim/placed src] blocks/air)
+            (disturb src)
+            (assoc :sim/inv inv)
+            (send {:packet/name :block-update :pos src :state blocks/air})
+            (sync-window :inventory before (:sim/cursor sim) false)
+            (send ack)))
+      (send sim ack))))
+
+;; ---------------------------------------------------------------- falling blocks
+
+(def fall-delay-ms 100)               ; a falling block looks under itself 2 game ticks after a neighbour changed (FallingBlock.getDelayAfterPlace)
+(def fall-gravity 0.04)               ; blocks per tick a falling block gains each tick (FallingBlockEntity.getDefaultGravity)
+(def fall-drag 0.98)                  ; the share of its speed it keeps each tick
+
+(defn free?
+  "Is the cell holding state id nothing a falling block rests on (FallingBlock.isFree: air, a
+   liquid, fire, a plant)? An unloaded cell is not."
+  [id]
+  (boolean (and id (not (blocks/solid? id)))))
+
+(defn disturb
+  "The block at pos changed: a falling block over it looks under itself fall-delay-ms from now,
+   as vanilla schedules its tick on the neighbour update."
+  [sim [x y z]]
+  (let [above [x (inc y) z]]
+    (if (blocks/falls? (block-at sim above))
+      (assoc-in sim [:sim/falls above] (+ (:sim/now sim) fall-delay-ms))
+      sim)))
+
+(defn rest-y
+  "The lowest height a block falling in column x z, its bottom in cell y, can come down to: the
+   bottom of the free cells straight under it."
+  [sim x y z]
+  (last (cons y (take-while #(free? (block-at sim [x % z])) (iterate dec (dec y))))))
+
+(defn start-fall
+  "The block at pos falls when it still falls and the cell under it is free: its cell becomes air
+   for the client, the block above it is disturbed in turn, and it is in the air from its own
+   cell (FallingBlockEntity.fall), keyed by where it fell from."
+  [sim [x y z :as pos]]
+  (let [state (block-at sim pos)]
+    (if (and (blocks/falls? state) (free? (block-at sim [x (dec y) z])))
+      (-> sim
+          (assoc-in [:sim/placed pos] blocks/air)
+          (send {:packet/name :block-update :pos pos :state blocks/air})
+          (assoc-in [:sim/falling pos] {:state state :y (double y) :v 0.0})
+          (disturb pos))
+      sim)))
+
+(defn land
+  "A falling block comes to rest in cell to: placed there when the cell is free (vanilla drops it
+   as an item otherwise, which the model does not), and it looks under itself again."
+  [sim [x y z :as to] state]
+  (if (free? (block-at sim to))
+    (-> sim
+        (assoc-in [:sim/placed to] state)
+        (send {:packet/name :block-update :pos to :state state})
+        (disturb [x (dec y) z]))
+    sim))
+
+(defn fall-tick
+  "One game tick of the block in the air that fell from origin (FallingBlockEntity.tick): it gains
+   fall-gravity of speed and moves down, landing on whatever is under it now (a block that
+   landed before it included), else keeps fall-drag of its speed."
+  [sim [x _ z :as origin] {:keys [state y v] :as f}]
+  (let [v (+ v fall-gravity)
+        y' (- y v)
+        bottom (rest-y sim x (long (math/floor y)) z)]
+    (if (<= y' bottom)
+      (land (update sim :sim/falling dissoc origin) [x bottom z] state)
+      (assoc-in sim [:sim/falling origin] (assoc f :y y' :v (* v fall-drag))))))
+
+(defn tick-falls
+  "One game tick of falling blocks: every block whose look is due falls or stays, then every one in
+   the air moves, the lowest first; in position order, so a run replays."
+  [sim]
+  (let [now (:sim/now sim)
+        due (sort (keep (fn [[p at]] (when (<= at now) p)) (:sim/falls sim)))
+        sim (reduce (fn [sim p] (start-fall (update sim :sim/falls dissoc p) p)) sim due)]
+    (reduce (fn [sim [origin f]] (fall-tick sim origin f))
+            sim
+            (sort-by (comp second key) (:sim/falling sim)))))
 
 (defn within-pickup?
   "Is an item at [ix iy iz] inside the pickup box of a player at [px py pz] (its box inflated
@@ -628,11 +974,11 @@
       hurt? (send {:packet/name :set-health :health health :food 20 :saturation 5.0}))))
 
 (defn tick
-  "Advance the server clock to now: send a keep-alive when one is due, breathe or drown, and
-   hand over every item whose pickup delay has passed and that the player stands within reach
-   of."
+  "Advance the server clock to now, one game tick: send a keep-alive when one is due, breathe
+   or drown, cook in every furnace, let gravel and sand fall, and hand over every item whose pickup delay has passed and
+   that the player stands within reach of."
   [sim now]
-  (let [sim (drown (assoc sim :sim/now now))
+  (let [sim (tick-falls (tick-furnaces (drown (assoc sim :sim/now now))))
         sim (if (>= now (:sim/next-keep-alive sim))
               (-> sim
                   (send {:packet/name :keep-alive :id now})

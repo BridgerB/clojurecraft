@@ -2,7 +2,10 @@
 ;; a function; executing is open). A row says what it needs, what it provides, which registered
 ;; predicate decides it is done, and which registered act satisfies it once its needs are met.
 ;; Need and provide keys: :item/<name> n, :tag/<item-tag> n, :block/<name> :near. A row's :goal/holds
-;; are needs it keeps rather than spends (a tool): planned for once, never netted per run.
+;; are needs it keeps rather than spends (a tool): planned for once, never netted per run; its
+;; :goal/spares one more of a held tool each, made only from what is held and near. A :mine
+;; row names the blocks it digs (:goal/blocks, stone when absent) and how deep it may cut stairs
+;; looking for them (:goal/depth, unbounded when absent); what it collects is their loot table's.
 ;; Targets (:goal/target? true) are what a run is for; --until <:goal/until> puts one in play. Producers are
 ;; how a need is met; recipes add one generated producer row each (clojurecraft.make/craft-rows).
 ;; A row is never edited into a different meaning or deleted: to fix one, add the fixed row under
@@ -54,6 +57,57 @@
   :goal/doc "three cobblestone, dug with the wooden pickaxe"
   :goal/provides {:item/cobblestone 3}
   :goal/done? :provided?}
+ {:goal/id :stone-pickaxe
+  :goal/priority 6
+  :goal/target? true
+  :goal/until "stone-pickaxe"
+  :goal/doc "a stone pickaxe, from cobblestone and sticks in a placed crafting table"
+  :goal/provides {:item/stone_pickaxe 1}
+  :goal/done? :provided?}
+ {:goal/id :furnace
+  :goal/priority 7
+  :goal/target? true
+  :goal/until "furnace"
+  :goal/doc "a furnace placed near, crafted from eight cobblestone in a placed crafting table"
+  :goal/provides {:block/furnace :near}
+  :goal/done? :provided?}
+ {:goal/id :ingots
+  :goal/priority 8
+  :goal/target? true
+  :goal/until "ingots"
+  :goal/doc
+  "four iron ingots, the iron kit's: raw iron mined with a stone pickaxe and smelted with planned fuel"
+  :goal/provides {:item/iron_ingot 4}
+  :goal/done? :provided?}
+ {:goal/id :bucket
+  :goal/priority 9
+  :goal/target? true
+  :goal/until "bucket"
+  :goal/doc "an empty bucket, from three iron ingots"
+  :goal/provides {:item/bucket 1}
+  :goal/done? :provided?}
+ {:goal/id :water-bucket
+  :goal/priority 10
+  :goal/target? true
+  :goal/until "water-bucket"
+  :goal/doc "a bucket filled at surface water, never cave water"
+  :goal/provides {:item/water_bucket 1}
+  :goal/done? :provided?}
+ {:goal/id :flint-and-steel
+  :goal/priority 11
+  :goal/target? true
+  :goal/until "flint-and-steel"
+  :goal/doc "flint and steel, from an iron ingot and flint dug out of gravel"
+  :goal/provides {:item/flint_and_steel 1}
+  :goal/done? :provided?}
+ {:goal/id :iron-kit
+  :goal/priority 12
+  :goal/target? true
+  :goal/until "iron-kit"
+  :goal/doc
+  "the iron kit the portal needs: flint and steel and a filled water bucket (four ingots in all: one in the flint and steel, three in the bucket), the flint and steel first so all the iron is mined in one trip down and the climb out ends at the water"
+  :goal/provides {:item/flint_and_steel 1 :item/water_bucket 1}
+  :goal/done? :provided?}
  {:goal/id :shore
   :goal/priority 5
   :goal/target? true
@@ -75,6 +129,57 @@
   :goal/holds {:item/wooden_pickaxe 1}
   :goal/provides {:item/cobblestone 1}
   :goal/act :mine
+  :goal/blocks [:stone]
+  :goal/done? :provided?}
+ {:goal/id :mine-coal
+  :goal/priority 10
+  :goal/doc
+  "dig the nearest exposed coal ore with any pickaxe, or cut stairs down toward it, no deeper than y 40 (the game makes coal densest high up, around y 96, and none below y 0)"
+  :goal/holds {:tag/pickaxes 1}
+  :goal/provides {:item/coal 1}
+  :goal/act :mine
+  :goal/blocks [:coal_ore :deepslate_coal_ore]
+  :goal/depth 40
+  :goal/done? :provided?}
+ {:goal/id :mine-iron
+  :goal/priority 10
+  :goal/doc
+  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest"
+  :goal/holds {:item/stone_pickaxe 1}
+  :goal/provides {:item/raw_iron 1}
+  :goal/act :mine
+  :goal/blocks [:iron_ore :deepslate_iron_ore]
+  :goal/depth 16
+  :goal/done? :provided?}
+ {:goal/id :dig-gravel
+  :goal/priority 10
+  :goal/doc
+  "dig the nearest exposed gravel, by hand or with a shovel; a pickaxe is held for the stairs down when none is in sight"
+  :goal/holds {:tag/pickaxes 1}
+  :goal/provides {:item/gravel 1}
+  :goal/act :mine
+  :goal/blocks [:gravel]
+  :goal/depth 40
+  :goal/done? :provided?}
+ {:goal/id :flint-from-gravel
+  :goal/priority 10
+  :goal/doc
+  "place a held gravel and dig it, again until it drops flint (the game's loot table: one time in ten)"
+  :goal/needs {:item/gravel 1}
+  :goal/provides {:item/flint 1}
+  :goal/act :redig
+  :goal/item :gravel
+  :goal/blocks [:gravel]
+  :goal/done? :provided?}
+ {:goal/id :fill-bucket
+  :goal/priority 10
+  :goal/doc
+  "scoop a surface water source with an empty bucket, walking to the nearest one in sight or remembered; a pickaxe is held for the stairs up out of a mine, and a spare made when what is held makes one, since one wears out on the way (a stone pickaxe lasts 131 blocks, a climb of fifty stairs digs about 150) and there may be no table or wood up there to make another"
+  :goal/holds {:tag/pickaxes 1}
+  :goal/spares {:tag/pickaxes 1}
+  :goal/needs {:item/bucket 1}
+  :goal/provides {:item/water_bucket 1}
+  :goal/act :scoop
   :goal/done? :provided?}
  {:goal/id :place-table
   :goal/priority 10
@@ -83,4 +188,12 @@
   :goal/provides {:block/crafting_table :near}
   :goal/act :place
   :goal/item :crafting_table
+  :goal/done? :provided?}
+ {:goal/id :place-furnace
+  :goal/priority 10
+  :goal/doc "put a held furnace down near the player"
+  :goal/needs {:item/furnace 1}
+  :goal/provides {:block/furnace :near}
+  :goal/act :place
+  :goal/item :furnace
   :goal/done? :provided?}]

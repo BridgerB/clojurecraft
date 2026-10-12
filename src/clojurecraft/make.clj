@@ -2,23 +2,29 @@
   "The needs planner and the acts of the goal table.
 
    A need is a key and an amount: :item/<name> n and :tag/<item-tag> n are counted in the
-   inventory, :block/<name> :near is a remembered block within reach of a walk. A goal is met
-   when its provides are held. When it is not, the planner walks back through producer rows -
-   the table's own (gather a log, place a table) and one generated row per recipe - until it
-   reaches a row whose needs are all met, and acts on it. Every tick this is re-derived from
-   the inventory and the world, so a lost or consumed item is simply planned for again; needs
-   are netted against one working inventory so two needs never count the same item twice.
+   inventory, :block/<name> :near is a remembered block within reach of a walk, and :fuel/ticks
+   n is fuel that burns n game ticks (a smelt's), counted from what the inventory would burn.
+   A goal is met when its provides are held. When it is not, the planner walks back through
+   producer rows - the table's own (gather a log, place a table) and one generated row per
+   recipe and per furnace recipe - until it reaches a row whose needs are all met, and acts on
+   it. Every tick this is re-derived from the inventory and the world, so a lost or consumed
+   item is simply planned for again; needs are netted against one working inventory so two
+   needs never count the same item twice.
 
    Requiring this namespace registers the :needs planner, the :provided? predicate and the
-   :gather, :place and :craft acts."
+   :gather, :place, :craft and :smelt acts."
   (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.craft]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.smelt :as smelt]
             [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
@@ -26,7 +32,9 @@
 ;; the :mine act lives in clojurecraft.stone, required by main (and by tests that plan for stone)
 
 (def table-search 24)                 ; how far a remembered crafting table counts as :near
-(def max-depth 8)                     ; producer rows the needs planner may chain before it is :stuck
+(def block-window {:crafting_table :table :furnace :furnace}) ; the window a placed block opens
+(def max-depth 12)                    ; item needs the needs planner may chain before it is :stuck
+(def fetching-acts #{:gather :mine})  ; acts that go out for what is not held: never done for a spare
 
 ;; ---------------------------------------------------------------- needs as data
 
@@ -44,8 +52,15 @@
         (= 1 (count s)) (keyword "item" (name (first s)))
         :else s))
 
+(defn block-need?
+  "Is need key k a :block/<name> :near need (not a counted item, tag or item set)?"
+  [k]
+  (and (keyword? k) (= "block" (namespace k))))
+
+(defn fuel-need? "Is need key k a :fuel/ticks need?" [k] (= k :fuel/ticks))
+
 (defn need-set
-  "The item set a counted need key stands for (nil for a :block/ need)."
+  "The item set a counted need key stands for (nil for a :block/ or :fuel/ticks need)."
   [k]
   (cond (set? k) k
         (= "item" (namespace k)) #{(keyword (name k))}
@@ -67,10 +82,29 @@
 
 (def craft-rows (mapv craft-row recipe/recipes))
 
+(defn smelt-row
+  "A furnace recipe as a goal row: its input and the fuel to cook it as needs (after the input,
+   so the input is never counted as its own fuel), a furnace nearby, its result as what it
+   provides."
+  [r]
+  {:goal/id (keyword "smelt" (name (:smelt/id r)))
+   :goal/priority 10
+   :goal/needs
+   (array-map (need-key (:smelt/input r)) 1 :fuel/ticks (:smelt/ticks r) :block/furnace :near)
+   :goal/provides {(keyword "item" (name (:smelt/result r))) (:smelt/count r)}
+   :goal/done? :provided?
+   :goal/act :smelt
+   :goal/smelt (:smelt/id r)})
+
+(def smelt-rows (mapv smelt-row recipe/smelting))
+
 (def producers
   "table → every row that can provide something: the table's live acting rows, then one per
-   recipe. Memoized: a table is a value, so its producers are too."
-  (memoize (fn [table] (into (filterv #(and (:goal/act %) (plan/live? %)) table) craft-rows))))
+   recipe and one per furnace recipe. Memoized: a table is a value, so its producers are too."
+  (memoize (fn [table]
+             (-> (filterv #(and (:goal/act %) (plan/live? %)) table)
+                 (into craft-rows)
+                 (into smelt-rows)))))
 
 (def by-item
   "table → {item name → producer rows that provide it}. Memoized like producers."
@@ -88,15 +122,16 @@
 (defn counts "Held items by name." [world] (recipe/counts (:player/inventory world)))
 
 (defn near
-  "The remembered position of a placed block of this name within table-search, or nil. A
-   position the plan blacklisted (a walk to it failed) does not count, so an unreachable table
-   is replaced by a new one instead of walked at until the plan fails."
+  "The remembered position of a placed block of this name (a table, a furnace: memory's
+   placed-kinds) within table-search, or nil. A position the plan blacklisted (a walk to it
+   failed) does not count, so an unreachable table is replaced by a new one instead of walked
+   at until the plan fails."
   [world block]
-  (when (= block :crafting_table)
+  (when (contains? memory/placed-kinds block)
     (memory/nearest-of (game/eye world)
                        table-search
                        (remove (or (:plan/blacklist world) #{})
-                               (memory/positions-now world [memory/crafting-table])))))
+                               (memory/positions-now world (blocks/states-of block))))))
 
 ;; ---------------------------------------------------------------- the planner
 
@@ -106,39 +141,66 @@
   "[counts action] for what a row must hold but does not spend (:goal/holds, a tool): each is
    resolved once, however many times the row runs, and the count is handed back unconsumed,
    so three cobblestone need one pickaxe, not three."
-  [world table counts row depth]
+  [world table counts row path]
   (reduce (fn [[c _] [k n]]
-            (let [[_ a] (resolve-need world table c k n (inc depth))]
-              (if a (reduced [c a]) [c nil])))
+            (let [[_ a] (resolve-need world table c k n path)] (if a (reduced [c a]) [c nil])))
           [counts nil]
           (:goal/holds row)))
 
+(defn fetch?
+  "Would action send the bot out for something: :stuck, or a row whose act gathers or mines?"
+  [action]
+  (or (= :stuck action) (contains? fetching-acts (:goal/act action))))
+
+(defn resolve-spares
+  "[counts action] for the tools a row keeps one more of than it holds (:goal/spares, beside
+   :goal/holds): planned only when it can be made from what is held and near; one that would
+   send the bot out for wood or stone is no need at all (nil). Gym batch iron-a7 runs 1-3, deep
+   in the mine with a working pickaxe and no wood, waited :no-log for a second pickaxe the fill
+   row held."
+  [world table counts row path]
+  (reduce (fn [[c _] [k n]]
+            (let [[_ a] (resolve-need world table c k (+ n (get (:goal/holds row) k 0)) path)]
+              (if (and a (not (fetch? a))) (reduced [c a]) [c nil])))
+          [counts nil]
+          (:goal/spares row)))
+
 (defn resolve-row
   "Try to get times × row done: [counts row-to-act-on] (a producer whose needs are met, maybe
-   this row), or [counts :stuck]. What the row holds is resolved once; what it needs, times
-   over."
-  [world table counts row times depth]
-  (let [[c a] (resolve-holds world table counts row depth)
+   this row), or [counts :stuck]. What the row holds is resolved once, then its spares
+   (resolve-spares); what it needs, times over."
+  [world table counts row times path]
+  (let [[c a] (resolve-holds world table counts row path)
+        [c a] (if a [c a] (resolve-spares world table counts row path))
         [c a] (if a
                 [c a]
-                (reduce
-                 (fn [[c _] [k n]]
-                   (let [[c a]
-                         (resolve-need world table c k (if (number? n) (* n times) n) (inc depth))]
-                     (if a (reduced [c a]) [c nil])))
-                 [c nil]
-                 (:goal/needs row)))]
+                (reduce (fn [[c _] [k n]]
+                          (let [[c a]
+                                (resolve-need world table c k (if (number? n) (* n times) n) path)]
+                            (if a (reduced [c a]) [c nil])))
+                        [c nil]
+                        (:goal/needs row)))]
     (cond (= a :stuck) [counts :stuck]
           a [c a]
           :else [c row])))
 
+(defn craft-now
+  "[counts row] when a craft row asked for n runs (n > 1) would first send the bot elsewhere
+   (action, a producer further down) but one run of it can be made from what is held: craft what
+   can be crafted now, then fetch the rest. nil otherwise. Only crafts: a smelt is batched on
+   purpose, one trip to the furnace for all the ore."
+  [world table counts row n action path]
+  (when (and (= :craft (:goal/act row)) (> n 1) (map? action) (not= action row))
+    (let [[c a] (resolve-row world table counts row 1 path)] (when (= a row) [c a]))))
+
 (defn first-resolved
   "[counts action] for the first of rows that can be done (times-of row) times, trying them in
-   order, or [counts :stuck] when none can."
-  [world table counts rows times-of depth]
+   order (a craft that can run once now goes first, craft-now), or [counts :stuck] when none can."
+  [world table counts rows times-of path]
   (or (some (fn [row]
-              (let [[c a] (resolve-row world table counts row (times-of row) depth)]
-                (when (not= a :stuck) [c a])))
+              (let [n (times-of row)
+                    [c a] (resolve-row world table counts row n path)]
+                (when (not= a :stuck) (or (craft-now world table counts row n a path) [c a]))))
             rows)
       [counts :stuck]))
 
@@ -158,7 +220,7 @@
 (defn resolve-block-need
   "[counts action] for a :block/<name> :near need: met (nil) when such a block is remembered
    near, else the first producer row that provides it and can be done once, or :stuck."
-  [world table counts k depth]
+  [world table counts k path]
   (if (near world (keyword (name k)))
     [counts nil]
     (first-resolved world
@@ -166,18 +228,26 @@
                     counts
                     (for [row (producers table) :when (contains? (:goal/provides row) k)] row)
                     (constantly 1)
-                    depth)))
+                    path)))
+
+(defn cycle?
+  "Would resolving the item set s go round in a circle: is one of its items already being
+   resolved higher up the path (an ingot from a block made of ingots, from nuggets cut from an
+   ingot)?"
+  [path s]
+  (boolean (some (fn [above] (some above s)) path)))
 
 (defn resolve-item-need
   "[counts action] for a counted need (:item/<name> n or :tag/<tag> n): met (nil, the items
    consumed from counts) when counts hold n, else what is held is consumed and the producers
-   of the rest are tried in producer-order, each for as many runs as the rest needs; :stuck
-   past max-depth or when no producer can be done."
-  [world table counts k n depth]
+   of the rest are tried in producer-order, each for as many runs as the rest needs. path is
+   the item sets being resolved above this one; :stuck past max-depth of them, when this need
+   is one of them (cycle?), or when no producer can be done."
+  [world table counts k n path]
   (let [s (need-set k)
         h (recipe/have counts s)]
     (cond (>= h n) [(recipe/consume counts s n) nil]
-          (> depth max-depth) [counts :stuck]
+          (or (> (count path) max-depth) (cycle? path s)) [counts :stuck]
           :else
           (let [counts (recipe/consume counts s h)
                 missing (- n h)]
@@ -187,35 +257,103 @@
                             (sort-by #(producer-order counts %)
                                      (distinct (mapcat (by-item table) s)))
                             (fn [row] (long (math/ceil (/ missing (yield row)))))
-                            depth)))))
+                            (conj path s))))))
+
+(def fuel-sources
+  "Where fuel the inventory lacks comes from, in order: coal (mined beside the iron), then
+   planks (from logs); each with the ticks one burns. Charcoal is not made: it burns wood to
+   save wood."
+  [[:item/coal (smelt/burn-ticks :coal)] [:tag/planks (smelt/burn-ticks :oak_planks)]])
+
+(defn burn
+  "[counts' ticks-left]: the fuel in counts that burns ticks taken out in the order the smelt
+   intent burns it (smelt/burn-order, coal first), whole items only; ticks-left is what it
+   could not cover."
+  [counts ticks]
+  (let [[counts left] (reduce (fn [[counts left] [n c]]
+                                (if (<= left 0)
+                                  (reduced [counts left])
+                                  (let [b (smelt/burn-ticks n)
+                                        k (min c (long (math/ceil (/ left b))))]
+                                    [(update counts n - k) (- left (* k b))])))
+                              [counts ticks]
+                              (smelt/fuels counts nil))]
+    [counts (max 0 left)]))
+
+(def planks-per-log 4)                ; a log crafts into four planks
+(def log-reserve 1)                   ; logs never counted as fuel: the sticks and table a new pickaxe needs
+
+(defn wood-covers?
+  "Do the logs in counts, but log-reserve, make the planks that burn ticks? Then they are the fuel
+   to use before any coal is mined: the twelfth live run held two logs, eight planks' worth of
+   fire, and tunnelled thirteen minutes at y 0 for coal until the trial timed out. The reserve
+   is wood for a new pickaxe: gym batch iron-a6 runs 2 and 5 broke theirs climbing out with no
+   wood left."
+  [counts ticks]
+  (let [planks (long (math/ceil (/ ticks (second (second fuel-sources)))))]
+    (>= (- (recipe/have counts (recipe/tags :logs)) log-reserve)
+        (long (math/ceil (/ planks planks-per-log))))))
+
+(defn resolve-fuel-need
+  "[counts action] for a :fuel/ticks n need: met (nil) when the fuel in counts burns n ticks,
+   taken out as the smelt will burn it; else what is held is taken and the rest is planned from
+   the first of fuel-sources that can be done (planks first when held logs make them,
+   wood-covers?), or :stuck."
+  [world table counts n path]
+  (let [[counts left] (burn counts n)]
+    (if (<= left 0)
+      [counts nil]
+      (or (some (fn [[k b]]
+                  (let [[c a]
+                        (resolve-item-need world table counts k (long (math/ceil (/ left b))) path)]
+                    (when (not= a :stuck) [c a])))
+                (cond-> fuel-sources (wood-covers? counts left) reverse))
+          [counts :stuck]))))
 
 (defn resolve-need
   "[counts' action] for a need: action nil when it is already met (counts' has it consumed), a
-   producer row to act on, or :stuck when nothing in the table can provide it."
-  [world table counts k n depth]
-  (if (= "block" (namespace k))
-    (resolve-block-need world table counts k depth)
-    (resolve-item-need world table counts k n depth)))
+   producer row to act on, or :stuck when nothing in the table can provide it. path is the
+   item sets being resolved above it, [] for a goal's own provides."
+  [world table counts k n path]
+  (cond (block-need? k) (resolve-block-need world table counts k path)
+        (fuel-need? k) (resolve-fuel-need world table counts n path)
+        :else (resolve-item-need world table counts k n path)))
 
 (defn next-row
   "The producer row of table to act on next for a goal, nil when its provides are all held, or
    :stuck."
   [world goal table]
   (second (reduce (fn [[counts _] [k n]]
-                    (let [[counts a] (resolve-need world table counts k n 0)]
+                    (let [[counts a] (resolve-need world table counts k n [])]
                       (if a (reduced [counts a]) [counts nil])))
                   [(counts world) nil]
                   (:goal/provides goal))))
 
+(def table-drops #{(recipe/item-id :crafting_table)}) ; what digging a placed table drops: the table
+
+(defn take-table
+  "A dig of the bot's placed crafting table, to carry it on, when row goes out for something
+   (fetch?), no table is held and the remembered one is within reach; nil otherwise. A table
+   left behind is a log spent on the next: gym batch iron-a7 run 1 crafted three on its way
+   down the mine and had no wood left for a pickaxe."
+  [world row]
+  (let [pos (near world :crafting_table)]
+    (when (and pos
+               (fetch? row)
+               (zero? (get (counts world) :crafting_table 0))
+               (<= (physics/distance (game/eye world) (physics/centre pos)) intent/reach))
+      {:intent/kind :dig :intent/target pos :intent/for :take-table})))
+
 (defn decide
-  "The next intent toward goal: continue a log chain in flight, else act on the row the needs
-   planner reaches through table."
+  "The next intent toward goal: continue a log chain or a table pick-up in flight, else take the
+   table along (take-table) or act on the row the needs planner reaches through table."
   [world goal table]
   (or (wood/continue-gather world)
+      (intent/chain-next (:plan/last world) :take-table table-drops {})
       (let [row (next-row world goal table)]
         (cond (nil? row) nil
               (= :stuck row) {:plan/wait :stuck}
-              :else (plan/act world row)))))
+              :else (or (take-table world row) (plan/act world row))))))
 
 (defmethod plan/next-intent :needs [world goal table] (decide world goal table))
 
@@ -223,7 +361,7 @@
   [world goal]
   (let [c (counts world)]
     (every? (fn [[k n]]
-              (if (= "block" (namespace k))
+              (if (block-need? k)
                 (some? (near world (keyword (name k))))
                 (>= (recipe/have c (need-set k)) n)))
             (:goal/provides goal))))
@@ -234,15 +372,34 @@
 
 (defmethod plan/act :place [_ row] {:intent/kind :place :intent/item (:goal/item row)})
 
+(defn at-container
+  "The intent i once the window of the placed block (a table, a furnace) is open; before that,
+   open the remembered one within reach, walk to it, or wait for one (reason wait)."
+  [world block wait i]
+  (let [pos (near world block)]
+    (cond (= (:menu-type (inventory/layouts (block-window block)))
+             (get-in world [:window/open :window/menu-type]))
+          i
+          (and pos (<= (physics/distance (game/eye world) (physics/centre pos)) place/open-reach))
+          {:intent/kind :open-container :intent/target pos}
+          pos {:intent/kind :walk :intent/target pos}
+          :else {:plan/wait wait})))
+
 (defmethod plan/act :craft
   [world {:goal/keys [recipe]}]
   (if (recipe/fits? (recipe/by-id recipe) 2)
     {:intent/kind :craft :intent/recipe recipe :intent/window :inventory}
-    (let [eye (game/eye world)
-          table (near world :crafting_table)]
-      (cond (= 12 (get-in world [:window/open :window/menu-type]))
-            {:intent/kind :craft :intent/recipe recipe :intent/window :table}
-            (and table (<= (physics/distance eye (mapv #(+ % 0.5) table)) place/open-reach))
-            {:intent/kind :open-container :intent/target table}
-            table {:intent/kind :walk :intent/target table}
-            :else {:plan/wait :no-table}))))
+    (at-container world
+                  :crafting_table
+                  :no-table
+                  {:intent/kind :craft :intent/recipe recipe :intent/window :table})))
+
+(defmethod plan/act :smelt
+  [world {:goal/keys [smelt]}]
+  (let [n (smelt/batch (counts world) (recipe/smelt-by-id smelt))]
+    (if (pos? n)
+      (at-container world
+                    :furnace
+                    :no-furnace
+                    {:intent/kind :smelt :intent/smelt smelt :intent/count n})
+      {:plan/wait :no-fuel})))

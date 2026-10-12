@@ -22,7 +22,7 @@
 
 (def generated
   "Files their writers own: the tables bb datagen writes, and recorded runs."
-  #"resources/clojurecraft/(blocks|entity-types|hardness|harvest|item-tags|items|materials|packets|recipes|version)\.edn$|test/recordings/")
+  #"resources/clojurecraft/(blocks|components|drops|entity-types|fuel|hardness|harvest|item-tags|items|materials|menus|needs-tool|packets|recipes|smelting|version)\.edn$|test/recordings/")
 
 (defn files
   "Every file to format under the given paths (files or directories), sorted, as strings."

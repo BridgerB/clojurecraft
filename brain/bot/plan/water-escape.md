@@ -63,6 +63,8 @@ Survival is two goal rows, a trap rule the planner applies every tick, and the e
 4. **Stuck** (`stuck-ticks` 40 without `progress` 0.05 toward the bank): `obstacle` names what to dig: a lily pad over the head first (a lid, steve's rule), else the cell ahead at head height, else the cell over the head; never the cell ahead at feet height, which is the bank the impulse needs to collide with. The dig is a child `:dig` with `:intent/exposes-ok?` run by `intent/run-child` (intents composing intents, as [[stairs-down]]).
 5. **From the floor.** `dig-or-sink`: off the ground a dig is five times slower and under water five times again, so a cap dug from the water takes 28 s with a wooden pickaxe and the breath lasts 25. When the cap is within reach of the eye standing on the floor (`dig-from-floor?`), the escape holds sneak, remembers the cell as `:intent/dig-when-down`, and starts the dig once on the ground: 5.75 s.
 
+A `:swim-out` started by the mine act's retreat (`:intent/for :retreat`, out of a flooded tunnel the bot is wading in) ends itself on dry land (`trap/dry-land?`); an escape's is ended by its goal when the trap clears ([[mine-act]]).
+
 ## :flee
 The lava half: `footing` is the nearest standable cell with no lava beside or under it within `flee-radius` 6, at most one up or down; forward and jump toward it; `flee-timeout-ticks` (200) fails it `:no-footing`. The planner ends it the moment the trap clears.
 

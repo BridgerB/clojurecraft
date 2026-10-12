@@ -8,7 +8,7 @@ status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: 26.1.2
 sourceRefs:
-  - src/clojurecraft/inventory.clj#:table {:size 3 :inventory 10 :menu-type 12}
+  - src/clojurecraft/inventory.clj#:table {:size 3 :inventory 10 :menu-type (blocks/menus :crafting)}
   - src/clojurecraft/inventory.clj#defn player->window-slot
 related:
   - "[[game/windows/_moc|Windows]]"

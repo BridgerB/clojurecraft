@@ -61,6 +61,7 @@
 (s/def :intent/water ::block-pos)
 (s/def :intent/wet? boolean?)
 (s/def :intent/exposes-ok? boolean?)
+(s/def :intent/passage-ok? boolean?)
 (s/def :player/dead? boolean?)
 (s/def :player/in-lava? boolean?)
 (s/def :player/eye-in-water? boolean?)
@@ -86,8 +87,9 @@
 (s/def :window/id int?)
 (s/def :window/menu-type int?)
 (s/def :window/slots (s/map-of int? ::slot-item))
+(s/def :window/data (s/map-of int? int?))
 (s/def :window/open
-  (s/keys :req [:window/id :window/menu-type] :opt [:window/state-id :window/slots]))
+  (s/keys :req [:window/id :window/menu-type] :opt [:window/state-id :window/slots :window/data]))
 (s/def :player/held-slot (s/int-in 0 9))
 
 ;; world
@@ -164,6 +166,12 @@
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :intent/recipe keyword?)
 (s/def :intent/window #{:inventory :table})
+(s/def :intent/smelt keyword?)
+(s/def :intent/count pos-int?)
+(s/def :intent/cook-by int?)
+(s/def :intent/lost pos-int?)
+(s/def :intent/tries pos-int?)
+(s/def :intent/resync boolean?)
 (s/def :intent/item keyword?)
 (s/def ::need-key
   (s/or :named keyword?
@@ -173,6 +181,7 @@
         :near #{:near}))
 (s/def :goal/needs (s/map-of ::need-key ::amount))
 (s/def :goal/holds (s/map-of ::need-key ::amount))    ; needs a row keeps rather than spends (a tool)
+(s/def :goal/spares (s/map-of ::need-key ::amount))   ; one more of a held tool, made only from what is held
 (s/def :goal/provides (s/map-of ::need-key ::amount :min-count 1))
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
@@ -182,13 +191,15 @@
 (s/def :goal/trap #{:water :lava})
 (s/def :goal/plan keyword?)                ; which next-intent planner the row uses (default :needs)
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
+(s/def :goal/blocks (s/coll-of keyword? :kind vector? :min-count 1)) ; what a :mine row digs
+(s/def :goal/depth int?)                   ; the lowest feet height a :mine row cuts stairs to
 (s/def :goal/id keyword?)
 (s/def :goal/priority int?)
 (s/def ::goal
   (s/keys :req [:goal/id :goal/priority :goal/done?]
           :opt
-          [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by
-           :goal/always? :goal/trap :goal/plan]))
+          [:goal/needs :goal/holds :goal/spares :goal/act :goal/target? :goal/until :goal/doc
+           :goal/superseded-by :goal/always? :goal/trap :goal/plan :goal/blocks :goal/depth]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
@@ -299,6 +310,8 @@
 (s/def :plan/wait some?)
 (s/def :intent/reason some?)
 (s/def :intent/for keyword?)
+(s/def :intent/pickup? boolean?)
+(s/def :intent/step-down? boolean?)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
@@ -316,6 +329,11 @@
 (s/def :intent/dir (s/tuple int? int?))
 (s/def :intent/turns nat-int?)
 (s/def :intent/cells (s/coll-of ::block-pos :kind vector? :count 3))
+(s/def :intent/level-cells (s/coll-of ::block-pos :kind vector? :count 2))
+(s/def :intent/level-steps pos-int?)
+(s/def :intent/length pos-int?)
+(s/def :intent/side (s/tuple int? int?))
+(s/def :intent/level-dir (s/tuple int? int?))
 (s/def :intent/child (s/keys :req [:intent/kind]))
 (s/def :intent/started-y number?)
 (s/def :intent/started-tick int?)
@@ -339,7 +357,9 @@
 (s/def :goal/pos ::block-pos)
 (s/def :goal/range number?)
 (s/def :goal/rise nat-int?)
-(s/def ::path-goal (s/keys :req [:goal/kind :goal/pos] :opt [:goal/range :goal/rise]))
+(s/def :goal/step-down? boolean?)
+(s/def ::path-goal
+  (s/keys :req [:goal/kind :goal/pos] :opt [:goal/range :goal/rise :goal/step-down?]))
 (s/def :intent/logs-before nat-int?)
 (s/def :intent/drops (s/coll-of int? :kind set?))
 (s/def :intent/drops-before nat-int?)
@@ -400,6 +420,10 @@
 (s/def :sim/state-id int?)
 (s/def :sim/held int?)
 (s/def :sim/placed map?)
+(s/def :sim/rng int?)
+(s/def :sim/furnaces (s/map-of ::block-pos map?))
+(s/def :sim/falls (s/map-of ::block-pos int?))
+(s/def :sim/falling (s/map-of ::block-pos map?))
 (s/def :sim/next-window int?)
 (s/def :sim/clicks nat-int?)
 (s/def :sim/drop-clicks set?)
@@ -488,7 +512,8 @@
   (s/cat :world (requires :player/pos :world/facts)))
 (s/fdef place/spot
   :args
-  (s/cat :world (requires :player/pos :world/chunks)))
+  (s/cat :world (requires :player/pos :world/chunks)
+         :passage-ok? (s/? boolean?)))
 (s/fdef path/plan
   :args
   (s/cat :world (requires :world/chunks)
@@ -503,7 +528,7 @@
 (s/fdef window/view
   :args
   (s/cat :world (requires :window/grid)
-         :which #{:inventory :table}))
+         :which #{:inventory :table :furnace}))
 
 (def selected
   "Every function whose selection is stated above, for instrument."

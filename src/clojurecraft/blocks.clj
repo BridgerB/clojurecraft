@@ -15,6 +15,20 @@
 (def entity-types "{name id}" (resource "entity-types"))
 (def hardness-by-name "{block-name hardness}; -1.0 is unbreakable" (resource "hardness"))
 (def harvest-by-name "{block-name {:tool kind :needs tier}}" (resource "harvest"))
+(def needs-tool-names
+  "#{block-name}: the blocks that drop only when broken with their correct tool (the game's
+   requiresCorrectToolForDrops: stone by hand drops nothing)"
+  (resource "needs-tool"))
+(def drops-by-name
+  "{block-name [[item-name chance] ...]}: what a broken block drops to a bare hand or a plain
+   tool, the tries in order (the game's loot tables)"
+  (resource "drops"))
+(def fuel-by-name
+  "{item-name burn-ticks}: every item a furnace burns (the game's FuelValues)"
+  (resource "fuel"))
+(def menus
+  "{menu-name type-id}: the registry minecraft:menu (12 crafting, 14 furnace)"
+  (resource "menus"))
 (def materials
   "{tier {:speed s :durability d :incorrect tag}}: the game's ToolMaterial constants"
   (resource "materials"))
@@ -37,6 +51,12 @@
     :standing_sign :wall_sign :ceiling_hanging_sign :wall_hanging_sign :ladder :snow_layer :web
     :fire :soul_fire :lily_pad :small_dripleaf :moving_piston})
 
+(def falling-types
+  "Block definition types that fall when the cell under them is free: the game's FallingBlock
+   (sand and red sand, gravel, concrete powder, anvils, the dragon egg) and BrushableBlock
+   (suspicious sand and gravel), read in the 26.1.2 jar."
+  #{:sand :colored_falling :concrete_powder :anvil :dragon_egg :brushable})
+
 (defn states-where
   "The set of every state id of the table rows matching pred."
   [pred]
@@ -58,6 +78,23 @@
   (some-> (row id)
           (nth 1)))
 
+(def name-states
+  "block name → the set of every state id of that block."
+  (reduce (fn [m [n _ lo hi]] (assoc m n (set (range lo (inc hi))))) {} table))
+
+(defn states-of
+  "Every state id of the block named n (empty for no such block)."
+  [n]
+  (get name-states n #{}))
+
+(defn default-state
+  "The lowest state id of the block named n, or nil: the one a server model places (a real
+   server picks the state, a furnace facing away from the player, so the bot judges a placement
+   by the block's name, never by this)."
+  [n]
+  (some->> (seq (states-of n))
+           (apply min)))
+
 (def solid-states
   "Every state that collides as a full cube (approximation: every non-passable type does)."
   (states-where (fn [[_ type]] (not (contains? passable-types type)))))
@@ -66,6 +103,11 @@
   "Does the block state collide as a full cube (approximation: every non-passable type does)?"
   [id]
   (contains? solid-states id))
+
+(defn falls?
+  "Is block state id of a type that falls when the cell under it is free (falling-types)?"
+  [id]
+  (contains? falling-types (type-of id)))
 
 (defn log-name?
   "Does a block or item name end in _log (every species, stripped ones too)?"
@@ -101,6 +143,11 @@
   (some-> (name-of id)
           harvest-by-name
           :tool))
+
+(defn drops-need-tool?
+  "Does a block state drop only to its correct tool (needs-tool-names)?"
+  [id]
+  (contains? needs-tool-names (name-of id)))
 
 (defn needs-tier
   "The lowest tool tier (:stone :iron :diamond) a block state drops for, or nil when it drops

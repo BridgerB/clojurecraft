@@ -21,12 +21,18 @@
 (def penalty 5.0)                     ; the eyes in water, or the feet off the ground: speed / 5 each
 
 (defn harvest?
-  "Does a block state drop when broken with held (an item id, or nil for the hand)? Yes unless
-   the block needs a tier and the held tool's tier ranks below it."
+  "Does a block state drop when broken with held (an item id, or nil for the hand)? The game's
+   Player.hasCorrectToolForDrops: always for a block that does not need its tool
+   (blocks/drops-need-tool?); else only for a tool of the kind that mines it whose tier ranks
+   at or above the block's (stone takes any pickaxe, iron ore a stone one, neither the hand or
+   an axe)."
   [id held]
-  (let [needs (blocks/needs-tier id)
-        tier (:tier (blocks/tool held))]
-    (or (nil? needs) (and (some? tier) (>= (blocks/tier-rank tier) (blocks/tier-rank needs))))))
+  (let [{:keys [tier kind]} (blocks/tool held)
+        needs (blocks/needs-tier id)]
+    (or (not (blocks/drops-need-tool? id))
+        (boolean (and kind
+                      (= kind (blocks/tool-of id))
+                      (or (nil? needs) (>= (blocks/tier-rank tier) (blocks/tier-rank needs))))))))
 
 (defn speed
   "The breaking speed of held (an item id, or nil) against block id: the tool tier's speed when
@@ -47,6 +53,19 @@
                 off-ground? (/ penalty))
             damage (/ s h (if (harvest? id held) harvest-divisor no-harvest-divisor))]
         (if (>= damage 1.0) 0 (long (* tick-ms (math/ceil (/ 1.0 damage)))))))))
+
+(defn drop-tries
+  "[[item-name chance] ...]: what block id drops when it is harvested, in the order the game's
+   loot table tries them (the first that rolls under its chance drops; 1.0 always does)."
+  [id]
+  (get blocks/drops-by-name (blocks/name-of id)))
+
+(defn drop-item
+  "The item name block id surely drops when harvested (its one try of chance 1.0: cobblestone
+   for stone, raw_iron for iron ore, dirt for grass), or nil when it drops nothing for sure
+   (leaves: a sapling only by chance; gravel's flint comes before its sure gravel)."
+  [id]
+  (some (fn [[item chance]] (when (= 1.0 chance) item)) (drop-tries id)))
 
 (defn best-tool
   "The player-inventory slot holding the tool to dig block id with, among {slot {:item id ...}}:

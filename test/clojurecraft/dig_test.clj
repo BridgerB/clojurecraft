@@ -36,10 +36,10 @@
   (testing "by hand"
     (is (= 3000 (dig/ms oak-log nil none)) "today's constant, now derived")
     (is (= 750 (dig/ms dirt nil none)))
-    (is
-     (= 2300 (dig/ms stone nil none))
-     "the issue said 7500 and no drop; the game's tags say stone needs no tier, so a hand harvests it, only slower (45 ticks)")
-    (is (dig/harvest? stone nil)))
+    (is (= 7500 (dig/ms stone nil none))
+        "the game's requiresCorrectToolForDrops: stone needs a pickaxe to drop, so a hand is /100")
+    (is (not (dig/harvest? stone nil)))
+    (is (dig/harvest? dirt nil) "dirt drops to anything"))
   (testing "with the mining tool"
     (is (= 1500 (dig/ms oak-log (item :wooden_axe) none)))
     (is (= 1150 (dig/ms stone (item :wooden_pickaxe) none)))
@@ -55,7 +55,8 @@
     (is (= 9400 (dig/ms obsidian (item :diamond_pickaxe) none)))
     (is (dig/harvest? obsidian (item :diamond_pickaxe))))
   (testing "a tool of the wrong kind is a hand"
-    (is (= 2300 (dig/ms stone (item :wooden_axe) none))))
+    (is (= 7500 (dig/ms stone (item :wooden_axe) none)))
+    (is (not (dig/harvest? iron-ore (item :stone_axe))) "the tier is right, the kind is not"))
   (testing "copper harvests what stone does"
     (is (dig/harvest? iron-ore (item :copper_pickaxe)))
     (is (not (dig/harvest? obsidian (item :copper_pickaxe)))))
@@ -83,3 +84,19 @@
            (dig/best-tool iron-ore (assoc inv 3 {:item (item :stone_pickaxe) :count 1}) none))
         "a stone pickaxe in that slot reaches it")
     (is (nil? (dig/best-tool stone {} none)) "nothing held")))
+
+(deftest what-a-block-drops-is-the-games-loot-table
+  (is (= :cobblestone (dig/drop-item stone)))
+  (is (= :raw_iron (dig/drop-item iron-ore)))
+  (is (= :dirt (dig/drop-item (state :grass_block))) "grass gives dirt")
+  (is (nil? (dig/drop-item (state :oak_leaves))) "leaves give a sapling only by chance")
+  (is (= [[:flint 0.1] [:gravel 1.0]] (dig/drop-tries (state :gravel))) "flint one time in ten")
+  (is (= :gravel (dig/drop-item (state :gravel))))
+  (is (nil? (dig/drop-tries (state :glass))) "glass drops only to silk touch"))
+
+(deftest the-furnace-tables-come-from-the-game
+  (is (= 1600 (blocks/fuel-by-name :coal)))
+  (is (= 300 (blocks/fuel-by-name :oak_planks)))
+  (is (= 100 (blocks/fuel-by-name :stick)))
+  (is (= 14 (blocks/menus :furnace)))
+  (is (= 12 (blocks/menus :crafting))))

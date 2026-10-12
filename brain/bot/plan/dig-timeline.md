@@ -14,9 +14,13 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn dig-time
   - src/clojurecraft/intent.clj#defn finish-delay
   - src/clojurecraft/intent.clj#defn choose-tool
+  - src/clojurecraft/intent.clj#defn stowed-tool
+  - test/clojurecraft/sim_test.clj#a-pickaxe-in-the-main-inventory-is-put-in-hand
   - src/clojurecraft/intent.clj#defn penalties
   - src/clojurecraft/intent.clj#defn still?
   - src/clojurecraft/intent.clj#defn exposes-fluid?
+  - src/clojurecraft/intent.clj#defn fluid-over-falling?
+  - test/clojurecraft/sim_test.clj#a-tunnel-never-cuts-under-gravel-under-water
   - src/clojurecraft/intent.clj#defmethod run :dig
   - src/clojurecraft/intent.clj#defmulti dig-stage
   - test/clojurecraft/plan_test.clj#stone-is-dug-with-the-pickaxe-in-its-slot
@@ -31,7 +35,7 @@ related:
 
 # Dig timeline
 
-The `:dig` intent has three stages. `:settle`: look at the block, refuse at once if it is gone, out of reach, a tiered block no held tool of its kind reaches (`:needs-tool`), obsidian, or a block with water or lava in any of its six neighbours unless the intent says `:intent/exposes-ok?` (`:unsafe`, [[water-escape]]); require three consecutive still ticks (horizontal velocity under 0.05, on ground) and 500 ms since the stage began; then choose the tool (`choose-tool`), send `set-carried-item` for its hotbar slot (0 for the hand), `player-action` status 0 (START) with the face nearest the eye, and a `swing`. `:digging`: swing every 350 ms; at `finish-at` (START + `finish-delay` of the block's own time with that tool) send `player-action` status 2 (FINISH) with the next sequence number and overlay the target as air locally. `:confirm`: up to ten ticks for the server's answer; a `block-changed-ack` for the FINISH sequence ends the dig, the block back at its START state fails it `:rejected`, and silence after ten ticks trusts the overlay.
+The `:dig` intent has three stages. `:settle`: look at the block, refuse at once if it is gone, out of reach, a tiered block no held tool of its kind reaches (`:needs-tool`), obsidian, or a block with water or lava in any of its six neighbours, or resting on gravel or sand stacked over it (`fluid-over-falling?`: the stack would fall into the cut and the fluid follow; gym batch iron-a4 run 1 tunnelled under a riverbed and the river came down after the gravel), unless the intent says `:intent/exposes-ok?` (`:unsafe`, [[water-escape]]); require three consecutive still ticks (horizontal velocity under 0.05, on ground) and 500 ms since the stage began; then choose the tool (`choose-tool`), send `set-carried-item` for its hotbar slot (0 for the hand), `player-action` status 0 (START) with the face nearest the eye, and a `swing`. `:digging`: swing every 350 ms; at `finish-at` (START + `finish-delay` of the block's own time with that tool) send `player-action` status 2 (FINISH) with the next sequence number and overlay the target as air locally. `:confirm`: up to ten ticks for the server's answer; a `block-changed-ack` for the FINISH sequence ends the dig, the block back at its START state fails it `:rejected`, and silence after ten ticks trusts the overlay.
 
 ## Key files
 - `intent.clj`, `dig-time` - `dig/ms` for the block, the held item and the penalties in force; 3000 (a log by hand) for a block the tables do not know ([[hardness-and-tools]]).
@@ -45,7 +49,7 @@ The `:dig` intent has three stages. `:settle`: look at the block, refuse at once
 ## Gotchas
 - A tool that vanishes from its slot mid-dig (it broke) fails the dig `:tool-broke`; the next dig chooses again.
 - The server sends the breaker a `block-update` (state 0) then `block-changed-ack`; the local overlay keeps the bot independent of their timing, and the confirm stage reads the restoring `block-update` the server sends instead when it refused the break ([[early-finish-aborts]]).
-- Only hotbar slots are considered: moving a tool from the main inventory is window-click work the dig does not do.
+- Only hotbar slots are considered: moving a tool from the main inventory is window-click work the dig does not do. The executors that start digs do it first: `intent/stowed-tool` finds a tool only the main inventory holds, and the staircase (`stairs/dig-next`) and the mine act start an `:equip` intent ([[place-intent]]) before the dig. With the hotbar full of what mining picked up, a crafted pickaxe lands in the main inventory: gym batch iron-a3 runs 1 and 3 held one there and stopped `:no-pickaxe` (`a-pickaxe-in-the-main-inventory-is-put-in-hand`, `ore-is-mined-with-a-pickaxe-from-the-main-inventory`).
 - The property over every breakable block and every tool holds FINISH never early, no START for an unreachable tier, and consecutive sequences.
 
 ## See also

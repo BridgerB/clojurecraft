@@ -54,9 +54,29 @@
     (is (not (:truth/ok? (gym/truth row "Clj_g1" "No items were found on player Clj_g1"))))))
 
 (deftest the-result-line-is-read-from-the-log
-  (is (= {:ok true :reason :goal}
-         (gym/parse-result "12:00 connected\nRESULT {:ok true, :reason :goal}\n12:01 holding")))
-  (is (nil? (gym/parse-result "12:00 connected\n"))))
+  (is (= {:ok true :reason :goal} (gym/result-line "RESULT {:ok true, :reason :goal}")))
+  (is (nil? (gym/result-line "12:00 connected"))))
+
+(deftest the-result-comes-back-through-the-pipe-whole
+  ;; live iron-kit run 19's judge polled the log and read its 44 KB RESULT half written: a
+  ;; process that writes its RESULT in two pieces is read as one value, and the log keeps every line
+  (let
+    [log (java.io.File/createTempFile "bot" ".log")
+     p
+     (.start
+      (doto
+        (ProcessBuilder.
+         ^java.util.List
+         ["sh" "-c"
+          "echo connected; printf 'RESULT {:ok true, :plan '; sleep 0.3; printf '#:plan{:status :done}}\\n'"])
+        (.redirectErrorStream true)))
+     result (promise)
+     tee (gym/tee-output! p log result)]
+    (is (= {:ok true :plan {:plan/status :done}} (deref result 5000 :none)))
+    (.join ^Thread tee 5000)
+    (is (= ["connected" "RESULT {:ok true, :plan #:plan{:status :done}}"]
+           (clojure.string/split-lines (slurp log))))
+    (.delete log)))
 
 (deftest wilson-intervals
   (let [[lo hi] (gym/wilson 12 12)]

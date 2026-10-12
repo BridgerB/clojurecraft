@@ -25,12 +25,14 @@ Crafting as data (issues #2 and #7): the recipe table, the graph from wants to t
 - [[window-zero-model]] - window 0, the open container, the held slot, and the packets that write them.
 - [[place-intent]] - equip, pick a spot, right-click, done only on the server's block update.
 - [[open-container-intent]] - right-click within 4.5, done when the window and its contents arrive.
+- [[smelt-intent]] - settle, load, cook, take, close in a furnace; fuel only as much as the batch burns, coal first; a lost click recovered by a resync.
 
 ## The sim's window
 - [[sim-window-clicks]] - vanilla click rules in the model, slot 0 computed by match.
 - [[sim-window-sync]] - how a click is answered: differences only, state id per slot, resync on stale id.
 - [[sim-faults]] - lost clicks as an input, violations as a record.
-- [[sim-placement]] - use-item-on in the model: open a table, place one, or reject.
+- [[sim-placement]] - use-item-on in the model: open a table or a furnace, place a block, or reject.
+- [[sim-furnace]] - the model's furnace: its slots at its position, cooking every tick by the game's tables, checked against the 26.1.2 code.
 
 ## Gotchas
 - [[phantom-cursor-stale-window]] - a harmless click times out because the model kept a cursor the server emptied.

@@ -15,6 +15,8 @@ sourceRefs:
   - src/clojurecraft/gym.clj#defn trial!
   - src/clojurecraft/gym.clj#defn located-in
   - src/clojurecraft/gym.clj#defn judge!
+  - src/clojurecraft/gym.clj#defn tee-output!
+  - test/clojurecraft/gym_test.clj#the-result-comes-back-through-the-pipe-whole
   - src/clojurecraft/landings.clj#defn landings!
   - src/clojurecraft/landings.clj#defn landing-for
   - ci/gym.edn#{:landing-sets {"A" {:center [20000 20000] :n 20 :spacing 640 :biome "#minecraft:is_forest" :pregen-r 96}
@@ -44,6 +46,8 @@ Three workflows. `test.yml` runs the suite and the brain checker on every push, 
 ## Judging
 `gym/gyms` is the registry, data like the goal table: goal, `--until`, prerequisites, timeout, and truth commands that count items without removing them (`clear <name> <item> 0` answers "Found N matching item(s)"). `gym/outcome` is one pure function: `:harness` when the landing failed, `:disconnect` when the bot never printed RESULT or lost its socket, `:death`, `:timeout`, `:pass` only when RESULT is ok and every truth passes, else `:fail`. The bot saying ok while the server disagrees is `:fail`, with the server's reply in the row. `:harness` and `:disconnect` are not counted.
 
+The iron kit (issue #6) has a row per stage, each given what the stages before it make: `furnace` (eight cobblestone, a table; judged by the cobblestone spent and no furnace held, since `clear` cannot see a placed block), `ingots` (a furnace, four raw iron, a coal), `bucket` (three ingots, a table), `water-bucket` (a bucket, two stone pickaxes, which the fill row holds), `flint-and-steel` (an ingot, a gravel), and `iron-kit` (a stone pickaxe, a table, eight cobblestone, four logs; forty minutes, since batch iron-a5's three runs holding flint and steel and the bucket were still climbing out at twenty). The push runs the four that need no particular terrain; `water-bucket` and `iron-kit` need water near the landing and are dispatched.
+
 ## Landing sets
 `ci/gym.edn` names each set: a centre far from world spawn, n grid cells spacing apart, the biome cells snap to, and a pregeneration radius. A is forests (20000, 20000); W is beaches (26000, 20000), steve's landing set W for the water trial (`:shore`, [[water-escape]]), whose truth commands are the server's own dry-land test (`execute ... unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water`) and `OnGround 1b`. `landings/landings!` snaps each cell with `locate biome`, finds the surface with a marker entity, keeps it when y >= 55 and no fixture landing check passes (else tries the fixture's nearby offsets), and pregenerates the chunks around it. Run k always lands on `landings[k]` (`landing-for`, wrapping), so batches are paired.
 
@@ -51,6 +55,7 @@ Three workflows. `test.yml` runs the suite and the brain checker on every push, 
 A gym run's recording can be promoted into `test/recordings/<name>/` (`run.edn.gz`, gzip because `record/entries` reads it natively, plus the run's `result.edn`); the corpus stays under 10 MB. `recordings_test` folds each one: every intermediate world must satisfy the world spec, and the fold must reach exactly the RESULT the run printed, which must also be the one the gym judged. The first entry is run 3 of batch wood-a1 (1.2 MB). A replay is open-loop, so when the bot's behaviour changes on purpose a diverging recording is re-promoted from the next batch.
 
 ## Gotchas
+- **The bot's answer comes back through the pipe its `:go` went down** (`tee-output!`): a thread reads the bot's stdout a whole line at a time, copies each line to `bot.log` for people and the artifacts, and delivers the RESULT value to a promise the judge derefs. Nothing reads a file another process is still writing, and nothing polls. When the judge polled `bot.log` every 500 ms, live iron-kit run 19's judge read its 44 KB RESULT half written and failed the trial `:harness-error` on the EDN reader's error, though the bot held the kit (`the-result-comes-back-through-the-pipe-whole`).
 - The recording ends at RESULT and stores it ([[record-replay]]), so a downloaded `run.edn.zst` replays to exactly the RESULT in `result.edn` (`:replay/result :identical`).
 - `--strict true` (on push) makes the judge exit 1 for `:fail`, `:timeout` and `:death`, so the push smoke goes red; dispatched batches report instead.
 

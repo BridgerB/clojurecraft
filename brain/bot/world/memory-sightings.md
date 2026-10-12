@@ -26,7 +26,7 @@ related:
 
 # Memory sightings
 
-`:world/facts` is a DataScript value of observation facts `{:sight/pos [x y z] :sight/state id :sight/at ms}`, appended only when what is seen at a position changes and never retracted. Only watched kinds start a record (logs and crafting tables); a position on record is followed through every change, so a dug log becomes air and both facts remain. `remembered` is the latest fact at a position, `latest` the newest per position, `history` every fact at one.
+`:world/facts` is a DataScript value of observation facts `{:sight/pos [x y z] :sight/state id :sight/at ms}`, appended only when what is seen at a position changes and never retracted. Only watched kinds start a record (logs and memory's `placed-kinds`: crafting tables and furnaces); a position on record is followed through every change, so a dug log becomes air and both facts remain. `remembered` is the latest fact at a position, `latest` the newest per position, `history` every fact at one.
 
 ## Key files
 - `memory.clj`, `remember-column` - on chunk load, every watched block in the column becomes a sighting.

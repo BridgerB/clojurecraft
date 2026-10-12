@@ -3,6 +3,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -93,3 +94,48 @@
                     {:event/kind :tick :event/now 100 :event/rand 0.5}])]
         (is (intent/done? (:plan/intent w)))
         (is (= memory/crafting-table (memory/remembered w [7 64 5])) "remembered")))))
+
+(deftest a-niche-is-cut-in-the-side-wall-not-ahead
+  ;; batch iron-a2 run 1: at the end of a tunnel east of its landing the bot dug its niche in the
+  ;; wall ahead, put the table there, and the tunnel went on through it
+  (let [rock (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 2 9) y [64 65]] [[x y 8] 0])))
+        w (assoc (standing [8.5 64.0 8.5])
+                 :world/chunks {[0 0] (world/column rock)}
+                 :plan/go-at [2.5 64.0 8.0])]
+    (is (not= [9 64 8] (place/niche w)) "not the wall ahead, away from the landing")
+    (is (#{[8 64 9] [8 64 7]} (place/niche w)) "a side wall")))
+
+(deftest no-niche-where-the-tools-cannot-drop
+  ;; gym batch iron-a3 run 5 failed placing its furnace :needs-tool three times: its niche was a
+  ;; block the held tools cannot drop
+  (let [iron (blocks/default-state :iron_ore)
+        rock (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] iron]))
+                    (into {} (for [x (range 2 9) y [64 65]] [[x y 8] 0])))
+        w (assoc (standing [8.5 64.0 8.5])
+                 :world/chunks {[0 0] (world/column rock)}
+                 :player/inventory {0 {:item (blocks/items :wooden_pickaxe) :count 1}})]
+    (is (nil? (place/niche w)) "iron ore all round, and only a wooden pickaxe")))
+
+(deftest a-block-is-never-placed-on-a-table
+  ;; gym batch iron-a5 run 4: the only spot was on its crafting table, and a right-click on a
+  ;; table opens it, so the gravel was never placed and the intent failed :rejected three times
+  (let [walls
+        (into {}
+              (for [dx [-1 0 1] dz [-1 0 1] :when (not= [dx dz] [0 0])] [[(+ 8 dx) 64 (+ 8 dz)] 1]))
+        w (assoc (standing [8.5 64.0 8.5])
+                 :world/chunks
+                 {[0 0] (world/column
+                         (assoc walls [7 64 7] (blocks/default-state :crafting_table)))})]
+    (is (= [[7 65 8] [7 64 8]] (place/spot w)) "on the wall beside the table, not on the table")))
+
+(deftest a-block-dug-again-at-once-may-go-in-a-passage
+  ;; gym batch iron-a6 run 1: at the foot of its stairs, between its table and furnace, the only
+  ;; spot for the gravel it meant to dig again for flint was the stair behind it
+  (let [rock (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] 1]))
+                    {[8 64 8] 0 [8 65 8] 0 [7 65 8] 0 [7 66 8] 0}
+                    {[9 64 8] (blocks/default-state :furnace)
+                     [8 64 9] (blocks/default-state :crafting_table)})
+        w (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column rock)})]
+    (is (nil? (place/spot w)) "the stair behind is a passage: no block stays there")
+    (is (= [[7 65 8] [7 64 8]] (place/spot w true)) "but one dug again at once may")))

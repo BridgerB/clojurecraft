@@ -13,7 +13,7 @@ sourceRefs:
   - src/clojurecraft/inventory.clj#defn player->window-slot
   - src/clojurecraft/inventory.clj#def layouts
   - src/clojurecraft/inventory.clj#Window 0 is the player's own screen: slots 0-4 are the crafting grid (0 is the result)
-  - src/clojurecraft/sim.clj#:items (mapv #(get-in sim [:sim/inv %]) (range 46)) :carried nil})
+  - src/clojurecraft/inventory.clj#defn slot-count
 related:
   - "[[game/windows/_moc|Windows]]"
   - "[[window-zero-model]]"
@@ -34,7 +34,7 @@ Window 0 (the player's inventory screen, always open, never announced by `open-s
 | 45 | offhand | 40 |
 
 ## Facts
-- `container-set-content` for window 0 carries exactly 46 slots; the sim sends `(range 46)`.
+- `container-set-content` for window 0 carries exactly 46 slots; the sim sends `inventory/slot-count` of window 0's layout, which is 46 (the offhand at 45 is the last).
 - The player-inventory numbering (hotbar 0-8, main 9-35, armour 36-39, offhand 40) is what `set-player-inventory` uses; `inventory/window->player-slot` and `inventory/player->window-slot` over `(inventory/layouts :inventory)` are the two directions of the map.
 - `set-carried-item` (held slot) takes a hotbar index 0-8, i.e. window slots 36-44.
 

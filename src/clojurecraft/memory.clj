@@ -7,7 +7,7 @@
    ever retracted: a block later seen as air is a newer fact, and the history stays queryable
    (`history`). The latest observation at a position is the one with the highest entity id.
 
-   Only block kinds that `watched?` accepts start a record (logs and crafting tables today); a
+   Only block kinds that `watched?` accepts start a record (logs, tables and furnaces); a
    position already on record is followed through every change, so a dug log becomes air.
 
    The bot's own intentions are facts in the same store: {:intention/id n :intention/event
@@ -47,21 +47,19 @@
 
 (defn crafting-table? "Is this state a crafting table?" [id] (= id crafting-table))
 
-(defn placed-state
-  "The block state a placed item turns into, for the blocks the bot places today."
-  [item]
-  (case item
-    :crafting_table crafting-table
-    nil))
+(def placed-kinds
+  "The blocks the bot places and comes back to (a table to craft at, a furnace to smelt in):
+   remembered wherever they are seen, like logs."
+  #{:crafting_table :furnace})
 
 (defn watched?
-  "Does seeing this state start a record? Logs and crafting tables: things rare enough to
+  "Does seeing this state start a record? Logs and the placed-kinds: things rare enough to
    remember after their chunk is gone. Stone is not: ten chunks hold 120,000 of it, and
    recording them made every chunk load and every planner tick take seconds (gym batch
    cobble-a1, 2026-10-10: eleven of twelve bots timed out). What is exposed now is the
    terrain's question, not memory's."
   [id]
-  (or (blocks/log? id) (crafting-table? id)))
+  (or (blocks/log? id) (contains? placed-kinds (blocks/name-of id))))
 
 ;; ---------------------------------------------------------------- reading
 
@@ -252,15 +250,19 @@
   [world [x y z]]
   (and (log-at? world [x y z]) (not (log-at? world [x (dec y) z]))))
 
-(defn nearest-of
-  "Nearest of positions within radius of eye, or nil."
+(defn nearest-first
+  "The positions within radius of eye, nearest first."
   [eye radius positions]
   (->> positions
        (map (fn [p] [(physics/distance eye (physics/centre p)) p]))
        (filter (fn [[d _]] (<= d radius)))
        (sort-by first)
-       first
-       second))
+       (map second)))
+
+(defn nearest-of
+  "Nearest of positions within radius of eye, or nil."
+  [eye radius positions]
+  (first (nearest-first eye radius positions)))
 
 (defn nearest
   "Nearest position whose latest observed state satisfies pred, within radius of eye, or nil.

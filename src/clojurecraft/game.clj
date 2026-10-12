@@ -301,6 +301,9 @@
   [w {:keys [window-id menu-type]}]
   (assoc w :window/open {:window/id window-id :window/menu-type menu-type :window/slots {}}))
 (defmethod on-packet [:play :container-close] [w _] (dissoc w :window/open))
+(defmethod on-packet [:play :container-set-data]
+  [w {:keys [window-id property value]}]
+  (if (inventory/open? w window-id) (assoc-in w [:window/open :window/data property] value) w))
 (defmethod on-packet [:play :set-player-inventory]
   [w {:keys [slot item]}]
   (inventory/set-slot w slot item))

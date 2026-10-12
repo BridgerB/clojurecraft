@@ -22,6 +22,10 @@
 (def goal-range 3)                    ; a walk's route ends within this of its target
 (def waypoint-reach 0.35)             ; horizontal distance to a waypoint's centre that reaches it
 (def jump-near 1.3)                   ; a waypoint above the feet is jumped for from this close
+(def pickup-range 1.5)               ; octile cells from a dug block's own cell where its drop is in the
+                                      ; pickup box (1.3 each way): a neighbour, diagonals too
+(def scoop-range 1)                   ; cells from a water source where a scoop walk ends: right beside it on its
+                                      ; bank, where nothing stands between the eyes and its surface
 (def pickup-rise 2)                   ; a drop resting more than 2 blocks above the feet is above
                                       ; the pickup box (1.8 tall, grown 0.5 up)
 (def settle-ms 500)                   ; let the server catch up before START
@@ -39,12 +43,26 @@
 
 (def never-dug #{:obsidian})          ; a portal frame is never a dig target (ruststeve dug its own frame)
 
-(defn exposes-fluid?
-  "Would breaking target let water or lava in: is any of its six neighbours a fluid
-   (steve's digExposesWater)?"
+(def falling-reach 16)                ; gravel or sand stacked over a cell that a fluid on top is looked for through
+
+(defn fluid-over-falling?
+  "Is there water or lava resting on gravel or sand stacked straight over pos: opening pos lets
+   the stack fall and the fluid follow it down. Gym batch iron-a4 run 1 tunnelled under a
+   riverbed, the gravel over a cell it cut fell into it, and the river came down the tunnel."
   [world [x y z]]
-  (boolean (some (fn [[dx dy dz]] (terrain/fluid-at world [(+ x dx) (+ y dy) (+ z dz)]))
-                 [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])))
+  (let [over (map (fn [dy] [x (+ y dy) z]) (range 1 (inc falling-reach)))
+        stack (take-while #(some-> (terrain/block-at world %)
+                                   blocks/falls?)
+                          over)]
+    (boolean (and (seq stack) (terrain/fluid-at world (nth over (count stack)))))))
+
+(defn exposes-fluid?
+  "Would breaking target let water or lava in: is any of its six neighbours a fluid (steve's
+   digExposesWater), or does a fluid rest on gravel or sand over it (fluid-over-falling?)?"
+  [world [x y z :as target]]
+  (boolean (or (some (fn [[dx dy dz]] (terrain/fluid-at world [(+ x dx) (+ y dy) (+ z dz)]))
+                     [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+               (fluid-over-falling? world target))))
 
 (defn dig-time
   "ms to break block id with held (an item id, or nil for the hand) under the world's penalties:
@@ -60,6 +78,7 @@
 (def swing-every 350)                 ; ms between arm swings while digging
 (def collect-timeout 10000)           ; ms a collect may take before it fails
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
+(def ledge-look 0.6)                  ; blocks ahead of the feet a collect looks for a floor before stepping
 
 (defn face-toward
   "Block face nearest the eye: 0 down 1 up 2 north 3 south 4 west 5 east."
@@ -149,27 +168,54 @@
 
 ;; ---------------------------------------------------------------- walk
 
+(defn walk-goal
+  "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell
+   within pickup-range of it whose feet are where the drop lands in reach (path's :pickup goal:
+   the block at or up to pickup-rise above them; no single cell beside it, which a wall may
+   close off), and with :intent/step-down? a straight neighbour a block up too (the block in the
+   floor beside the feet, path's :goal/step-down?); for water to scoop, its bank (arrived?: path's :pickup goal at the cell over the
+   source, rise 1); else anywhere within goal-range."
+  [{:intent/keys [target for pickup? step-down?]}]
+  (cond pickup?
+        (cond->
+          {:goal/kind :pickup :goal/pos target :goal/range pickup-range :goal/rise pickup-rise}
+          step-down? (assoc :goal/step-down? true))
+        (= :scoop for)
+        {:goal/kind :pickup :goal/pos (update target 1 inc) :goal/range scoop-range :goal/rise 1}
+        :else {:goal/kind :near :goal/pos target :goal/range goal-range}))
+
 (defn arrived?
   "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
    the pickup box: for a log, no more than pickup-rise below it (not on a bank above the box);
-   for stone, neither above it (the drop would lie under the box) nor more than pickup-rise
-   below it."
-  [world {:intent/keys [target for]} d]
+   for a block mined from beside (:intent/pickup?: stone, ore), its walk-goal: neither above it
+   (the drop would lie under the box) nor more than pickup-rise below it, and within
+   pickup-range of its cell on the plane, or a block up beside it with :intent/step-down?: the
+   drop lands in the block's own cell, and a collect walks straight at it, so from farther,
+   round a tunnel's corner, it walked into the wall until it failed. For water to
+   scoop, on its bank: the feet level with the cell over the source or a block lower, within
+   scoop-range on the plane, where the eyes look down on its surface; the tenth live run's walk
+   ended in reach but in its own stair pit two below the surface, and saw no water."
+  [world {:intent/keys [target for pickup?] :as i} d]
   (let [rise (- (second target) (long (math/floor (second (:player/pos world)))))]
     (and (<= d reach)
-         (case for
-           :log (<= rise pickup-rise)
-           :stone (<= 0 rise pickup-rise)
-           true))))
+         (cond pickup? (path/goal-done? (walk-goal i) (feet world))
+               (= :scoop for)
+               (and (<= -1 rise 0) (<= (path/octile (feet world) target) scoop-range))
+               (= :log for) (<= rise pickup-rise)
+               :else true))))
 
-(defn walk-goal
-  "Where a walk's route may end: for stone, any cell within goal-range whose feet are where the
-   drop lands in reach (path's :pickup goal: the stone at or up to pickup-rise above them; no
-   single cell beside it, which a wall may close off); else anywhere within goal-range."
-  [{:intent/keys [target for]}]
-  (if (= :stone for)
-    {:goal/kind :pickup :goal/pos target :goal/range goal-range :goal/rise pickup-rise}
-    {:goal/kind :near :goal/pos target :goal/range goal-range}))
+(defn routable?
+  "Is there a way to walk intent i's goal from the feet: the planner's route is :found, or
+   :partial toward a target in a chunk not loaded yet (the walk plans again as chunks arrive).
+   Not :none, the search exhausted with the goal never reached, nor :partial toward a target in
+   loaded terrain, the budget spent on it: walks to such targets failed :no-path again and
+   again. An act asks before it chooses a target, so one with no way to it is passed over, not
+   walked at: three such walks in a row ended live runs among ore and water in caves."
+  [world {:intent/keys [target] :as i}]
+  (case (:path/status (path/plan world (path/feet-cell (:player/pos world)) (walk-goal i)))
+    :found true
+    :partial (not (terrain/chunk-loaded? world target))
+    false))
 
 (defn waypoint-reached?
   "Is the player at waypoint [x y z]: within waypoint-reach of its centre on the plane, and the
@@ -269,6 +315,16 @@
   "The hotbar slots of the inventory, {slot item}: the only slots a dig can hold a tool from."
   [world]
   (into {} (filter (fn [[s _]] (<= 0 s 8)) (:player/inventory world))))
+
+(defn stowed-tool
+  "[slot item-id] of the tool to dig block id with when it is only in the main inventory, nil
+   when the hotbar holds one or none is held. A dig chooses from the hotbar, and with the hotbar
+   full of what mining picked up, a crafted pickaxe lands in the main inventory: gym batch
+   iron-a3 runs 1 and 3 held a stone pickaxe there and stopped for want of one."
+  [world id]
+  (when-not (dig/best-tool id (hotbar world) (penalties world))
+    (when-let [[slot _ :as t] (dig/best-tool id (:player/inventory world) (penalties world))]
+      (when (> slot 8) t))))
 
 (defn choose-tool
   "[slot item-id] of the tool to dig block id with from the hotbar, [0 nil] for the hand, or
@@ -411,6 +467,25 @@
                             blocks/leaves?)
                    spots))))
 
+(defn ledge-ahead?
+  "Would a step toward goal take the body over a drop: the cell ledge-look ahead on the plane (not
+   the feet's own) open, with no floor under it nor within path/max-fall below that (path/landing)? Gym batch
+   iron-a9 run 3's collect walked after a drop at a ravine's edge at y -7 and the bot fell from
+   a high place."
+  [world goal]
+  (let [[px _ pz] (:player/pos world)
+        [gx _ gz] goal
+        d (physics/horizontal-distance [px 0 pz] [gx 0 gz])
+        [_ fy _ :as at] (feet world)
+        cell (when (pos? d)
+               [(long (math/floor (+ px (* ledge-look (/ (- gx px) d))))) fy
+                (long (math/floor (+ pz (* ledge-look (/ (- gz pz) d)))))])]
+    (boolean (and cell
+                  (not= cell at)
+                  (= :clear (path/classify world cell))
+                  (not (path/floor? world (update cell 1 dec)))
+                  (nil? (path/landing world cell))))))
+
 (defmethod run :collect
   [world
    {:intent/keys [target since best-dist best-tick drops drops-before]
@@ -443,5 +518,9 @@
           (-> world
               (assoc :player/controls {})
               (fail :not-picked-up))
+          (and (> d 0.4) (ledge-ahead? world goal))
+          (-> world
+              (assoc :player/controls {})
+              (fail :ledge))
           (> d 0.4) (assoc world :player/controls (toward world goal 0.0))
           :else (assoc world :player/controls {}))))

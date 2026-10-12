@@ -1,6 +1,7 @@
 (ns clojurecraft.packet-test
   (:require [clojure.edn :as edn]
             [clojure.test :refer [deftest is testing]]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.packet :as p]))
 
@@ -115,6 +116,42 @@
                       (fn [o] (b/write-varint o 0x6c) (b/write-varint o 5) (b/write-varint o 0)))]
       (is (= {:packet/name :set-player-inventory :slot 5 :item nil}
              (p/decode :play :s2c empty-slot))))))
+
+(deftest a-worn-tool-does-not-hide-the-slots-after-it
+  ;; gym batch iron-a2 run 3: the server filled the bucket and answered with the whole inventory,
+  ;; but a worn stone pickaxe (a damage component) came first and every slot after it was lost,
+  ;; so the bot never saw the water bucket and failed :no-scoop three times
+  (let [pickaxe (blocks/items :stone_pickaxe)
+        water-bucket (blocks/items :water_bucket)
+        frame (b/with-out
+               (fn [o]
+                 (b/write-varint o (get-in p/ids [:play :s2c :container-set-content]))
+                 (b/write-varint o 0)
+                 (b/write-varint o 341)
+                 (b/write-varint o 46)
+                 (dotimes [i 46]
+                   (case (long i)
+                     36
+                     (doto o ; a worn pickaxe: one component added (damage 17), none removed
+                       (b/write-varint 1)
+                       (b/write-varint pickaxe)
+                       (b/write-varint 1)
+                       (b/write-varint 0)
+                       (b/write-varint (p/component-ids :damage))
+                       (b/write-varint 17))
+                     37
+                     (doto o
+                       (b/write-varint 1)
+                       (b/write-varint water-bucket)
+                       (b/write-varint 0)
+                       (b/write-varint 0))
+                     (b/write-varint o 0)))
+                 (b/write-varint o 0)))
+        d (p/decode :play :s2c frame)]
+    (is (not (:truncated d)))
+    (is (= 46 (count (:items d))))
+    (is (= {:item pickaxe :count 1 :components {:damage 17}} (nth (:items d) 36)))
+    (is (= {:item water-bucket :count 1} (nth (:items d) 37)) "the slot after it is read")))
 
 (deftest container-click-wire-format
   (testing "775 layout: window, state id, slot, button, mode, changed slots, cursor"
