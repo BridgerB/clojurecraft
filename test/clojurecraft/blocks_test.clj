@@ -19,6 +19,8 @@
   (is (not (blocks/solid? 86)) "water")
   (is (not (blocks/solid? 2248)) "short_grass")
   (is (not (blocks/solid? 6919)) "snow layer")
+  (is (not (blocks/solid? (blocks/default-state :nether_portal)))
+      "a nether portal: the body walks into it to change dimension (#8)")
   (is (not (blocks/solid? -1)))
   (is (not (blocks/solid? 999999))))
 

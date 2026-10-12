@@ -54,7 +54,7 @@
     :redstone_wire :lever :button :pressure_plate :weighted_pressure_plate :tripwire :trip_wire_hook
     :rail :powered_rail :detector_rail :carpet :wool_carpet :mossy_carpet :banner :wall_banner
     :standing_sign :wall_sign :ceiling_hanging_sign :wall_hanging_sign :ladder :snow_layer :web
-    :fire :soul_fire :lily_pad :small_dripleaf :moving_piston})
+    :fire :soul_fire :lily_pad :small_dripleaf :moving_piston :nether_portal})
 
 (def falling-types
   "Block definition types that fall when the cell under them is free: the game's FallingBlock
