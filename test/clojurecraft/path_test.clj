@@ -6,6 +6,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -64,6 +65,12 @@
   (is (= :lava (path/classify-id lava)))
   (is (= :awkward (path/classify-id oak-slab)))
   (is (= :awkward (path/classify-id oak-stairs)))
+  (is
+   (= :awkward (path/classify-id (blocks/default-state :cocoa)))
+   "a cocoa pod collides though nothing listed it: gym batch iron-a9 run 5 walked into one on a
+       jungle log and never moved again")
+  (is (= :clear (path/classify-id (blocks/default-state :moss_carpet)))
+      "a carpet is walked over like the floor")
   (is (= :clear (path/classify-id short-grass)) "a plant is walked through")
   (is (= :clear (path/classify-id 0)) "air")
   (is (= :unknown (path/classify-id nil)) "an unloaded chunk")

@@ -19,6 +19,11 @@
   "#{block-name}: the blocks that drop only when broken with their correct tool (the game's
    requiresCorrectToolForDrops: stone by hand drops nothing)"
   (resource "needs-tool"))
+(def partial-shapes
+  "{block-name top}: the blocks whose default state collides as neither nothing nor a full cube,
+   and the top of the shape in blocks (the game's getCollisionShape: a cocoa pod 0.75, a slab 0.5,
+   a carpet 0.0625)"
+  (resource "shapes"))
 (def drops-by-name
   "{block-name [[item-name chance] ...]}: what a broken block drops to a bare hand or a plain
    tool, the tries in order (the game's loot tables)"
