@@ -1,7 +1,7 @@
-name: gym-world
+name: world
 
 # Builds a gym landing set's pregenerated world once and caches it. gym.yml calls this before its
-# shards, which restore the cache and are never allowed to build. The weekly run restores the
+# trials, which restore the cache and are never allowed to build. The weekly run restores the
 # entry, which keeps it from the 7-day eviction.
 
 on:
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@v7
       - id: key
         name: The world's cache key
-        run: echo "key=gym-world-$SET-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/gym_world.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj') }}" >> "$GITHUB_OUTPUT"
+        run: echo "key=world-$SET-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj') }}" >> "$GITHUB_OUTPUT"
       - id: have
         uses: actions/cache/restore@v6
         with:

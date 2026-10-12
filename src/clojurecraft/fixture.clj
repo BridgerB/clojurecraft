@@ -1,6 +1,6 @@
 (ns clojurecraft.fixture
   "What every fixture asks the server, over RCON, and the one thing it tells the bot. The forest
-   harness (clojure -M:harness), the gym's land and judge, the landing-set builder and the fleet
+   harness (clojure -M:harness), the gym's land and judge, the landing-set builder and a plan
    are all fixtures: each waits for a player, loads columns, teleports onto a surface, judges a
    landing by the server's own answers, and hands the bot a :go event. The pure half reads the
    server's replies; the I/O half sends the commands."

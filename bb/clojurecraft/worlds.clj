@@ -1,8 +1,9 @@
-(ns clojurecraft.gym-world
+(ns clojurecraft.worlds
   "Build one gym landing set's world, once: boot a fresh server, find and pregenerate the set's
    landings (clojure -M:gym landings), flush to disk, insist no forceload is left behind, stop,
    and leave the world in cache/worlds/<set> with its landings.edn, ready for
-   actions/cache/save (gym-world.yml).
+   actions/cache/save (world.yml). The namespace is worlds because clojurecraft.world is the
+   test fixture that builds chunk columns.
 
      SET=A RCON_PASS=secret bb prepare-world
 
@@ -16,7 +17,7 @@
 (def ports {:port "25565" :rcon-port "25575"})   ; a runner of its own: nothing else listens there
 
 (def discarded
-  "What a shard writes again on start, and logs that would only bloat the cache."
+  "What a trial writes again on start, and logs that would only bloat the cache."
   ["server.properties" "server.pid" "server.log" "eula.txt" "logs"])
 
 (defn repeats

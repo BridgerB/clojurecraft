@@ -1,18 +1,19 @@
-name: fleet
-run-name: "fleet ${{ inputs.plan || 'push' }}${{ inputs.salt && format(' salt {0}', inputs.salt) || '' }}"
+name: plan
+run-name: "plan ${{ inputs.plan || 'push' }}${{ inputs.salt && format(' salt {0}', inputs.salt) || '' }}"
 
-# Many runners kept busy from one plan file (ci/fleet/<label>.edn). The plan job reads the plan,
-# counts the jobs already running and emits only worker numbers; each worker recomputes its own
-# share from the plan (clojure -M:fleet work). The aggregate folds every result into one report.
-# A plan runs when it is pushed (a new or changed file under ci/fleet/) or dispatched by path.
+# Many jobs from one plan file (ci/plan/<label>.edn). The plan job reads the plan, counts the
+# jobs already running and emits only job numbers; each job recomputes its own share from the
+# plan (clojure -M:plan work). The aggregate folds every result into one report. A plan runs
+# when it is pushed (a new or changed file under ci/plan/) or dispatched by path. Pushing the
+# soak starts it too, and that plan does not finish inside a job; the timer is what launches it.
 
 on:
   push:
-    paths: ['ci/fleet/*.edn']
+    paths: ['ci/plan/*.edn']
   workflow_dispatch:
     inputs:
       plan:
-        description: the plan file, e.g. ci/fleet/smoke1.edn
+        description: the plan file, e.g. ci/plan/smoke2.edn
         required: true
       salt:
         description: makes a repeated plan (the soak) sample fresh sim worlds
@@ -43,8 +44,8 @@ jobs:
           BEFORE: ${{ github.event.before }}
         run: |
           if [ -n "$INPUT" ]; then plan=$INPUT
-          elif git cat-file -e "$BEFORE" 2>/dev/null; then plan=$(git diff --name-only --diff-filter=AMR "$BEFORE" HEAD -- 'ci/fleet/*.edn' | tail -n 1)
-          else plan=$(git diff --name-only --diff-filter=AMR HEAD~1 HEAD -- 'ci/fleet/*.edn' | tail -n 1)
+          elif git cat-file -e "$BEFORE" 2>/dev/null; then plan=$(git diff --name-only --diff-filter=AMR "$BEFORE" HEAD -- 'ci/plan/*.edn' | tail -n 1)
+          else plan=$(git diff --name-only --diff-filter=AMR HEAD~1 HEAD -- 'ci/plan/*.edn' | tail -n 1)
           fi
           [ -f "$plan" ] || { echo "::error::no plan file ($plan)"; exit 1; }
           echo "plan: $plan"
@@ -77,21 +78,21 @@ jobs:
             ~/.gitlibs
           key: clj-${{ hashFiles('deps.edn') }}
       - id: plan
-        name: The worker matrix
+        name: The job matrix
         env:
           SALT: ${{ inputs.salt }}
         run: |
-          clojure -M:fleet plan --plan "${{ steps.pick.outputs.plan }}" --busy "$BUSY" ${SALT:+--salt "$SALT"} | tee plan.out
+          clojure -M:plan plan --plan "${{ steps.pick.outputs.plan }}" --busy "$BUSY" ${SALT:+--salt "$SALT"} | tee plan.out
           cat plan.out >> "$GITHUB_OUTPUT"
 
   world:
-    uses: ./.github/workflows/gym-world.yml
+    uses: ./.github/workflows/world.yml
     with:
       set: A
 
-  worker:
+  job:
     needs: [plan, world]
-    name: w${{ matrix.worker }}
+    name: job-${{ matrix.job }}
     runs-on: ubuntu-24.04
     timeout-minutes: 355
     strategy:
@@ -129,17 +130,17 @@ jobs:
       - name: Work
         env:
           SALT: ${{ inputs.salt }}
-        run: clojure -M:fleet work --plan "${{ needs.plan.outputs.plan }}" --worker "${{ matrix.worker }}" --out out --worlds cache/worlds ${SALT:+--salt "$SALT"}
+        run: clojure -M:plan work --plan "${{ needs.plan.outputs.plan }}" --job "${{ matrix.job }}" --out out --worlds cache/worlds ${SALT:+--salt "$SALT"}
       - uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: fleet-${{ needs.plan.outputs.label }}-w${{ matrix.worker }}
+          name: plan-${{ needs.plan.outputs.label }}-job-${{ matrix.job }}
           retention-days: 3
           path: out
           if-no-files-found: ignore
 
   aggregate:
-    needs: [plan, worker]
+    needs: [plan, job]
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -147,7 +148,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
-          pattern: fleet-${{ needs.plan.outputs.label }}-w*
+          pattern: plan-${{ needs.plan.outputs.label }}-job-*
           path: artifacts
       - uses: actions/setup-java@v6
         with:
@@ -172,17 +173,17 @@ jobs:
           LABEL: ${{ needs.plan.outputs.label }}
         run: |
           {
-            echo "## fleet $LABEL ($PLAN) at ${GITHUB_SHA::7}, run $GITHUB_RUN_ID"
+            echo "## plan $LABEL ($PLAN) at ${GITHUB_SHA::7}, run $GITHUB_RUN_ID"
             echo
-            clojure -M:fleet report --dir artifacts
+            clojure -M:plan report --dir artifacts
           } > summary.md
           cat summary.md
           cat summary.md >> "$GITHUB_STEP_SUMMARY"
-          issue=$(clojure -M -e "(println (or (:fleet/issue (clojure.edn/read-string (slurp \"$PLAN\"))) \"\"))")
+          issue=$(clojure -M -e "(println (or (:plans/issue (clojure.edn/read-string (slurp \"$PLAN\"))) \"\"))")
           if [ -n "$issue" ]; then gh issue comment "$issue" --repo "$GITHUB_REPOSITORY" --body-file summary.md; fi
       - uses: actions/upload-artifact@v7
         with:
-          name: fleet-${{ needs.plan.outputs.label }}-summary
+          name: plan-${{ needs.plan.outputs.label }}-summary
           path: |
             summary.md
             artifacts/**/result.edn

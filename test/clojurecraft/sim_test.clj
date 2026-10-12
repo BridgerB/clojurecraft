@@ -358,7 +358,7 @@
    around the trunk, so a 2-high bank holds the drop out of reach from every side), maybe with low leaves one block above its base over every cell
    within two steps of the trunk, maybe (4 logs or more) with a branch: a log beside the trunk,
    two below its top, with air under it. A bank under a low canopy is the ledge a live run once
-   failed on; a branch and a bank above the feet are what the fleet found at 21280,18720 (a 2-high
+   failed on; a branch and a bank above the feet are what a plan found at 21280,18720 (a 2-high
    bank puts the drop at the top of the pickup box)."
   (gen/let [x (gen/choose 3 13)
             z (gen/choose 3 13)
@@ -418,7 +418,7 @@
   ;; from the ground; digging a step into the bank is not yet a thing it can do) it gives the
   ;; trees up (two tries a trunk) and waits or fails :no-log rather than looping. Either way the
   ;; sim never sees something a real server would punish, within the gym's own time for the goal. FOREST_TRIALS=n overrides the count, FOREST_SEED=s fixes the seed
-  ;; (a fleet shard's), FOREST_OUT=f writes the verdict as EDN.
+  ;; (a plan's shard), FOREST_OUT=f writes the verdict as EDN.
   (let [r (tc/quick-check (or (some-> (System/getenv "FOREST_TRIALS")
                                       Long/parseLong)
                               2000)
@@ -442,7 +442,7 @@
                           (or (some-> (System/getenv "FOREST_SEED")
                                       Long/parseLong)
                               (System/currentTimeMillis)))]
-    (when-let [out (System/getenv "FOREST_OUT")] ; a fleet shard reads its verdict as data
+    (when-let [out (System/getenv "FOREST_OUT")] ; a plan's shard reads its verdict as data
       (spit out
             (pr-str {:pass? (boolean (:pass? r))
                      :num-tests (:num-tests r)
@@ -533,7 +533,7 @@
          {[2 68 0] 136 [2 69 0] 136 [2 70 0] 136 [2 71 0] 136 [2 72 0] 252}))
 
 (deftest a-drop-out-of-reach-is-never-dug-for
-  ;; recorded by the gym and the fleet at landing 21280,18720 (wood-a2 run 5, smoke2 run 5): the
+  ;; recorded by the gym and a plan at landing 21280,18720 (wood-a2 run 5, smoke2 run 5): the
   ;; bot stood in a pit, dug the base of a trunk on the bank four blocks above its feet, and the
   ;; drop came to rest on the bank, above a 1.8-tall player's pickup box. Reach is not enough: a
   ;; log walk arrives only where the drop will land within pickup height; a trunk it cannot

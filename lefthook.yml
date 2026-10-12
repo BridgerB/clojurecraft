@@ -29,7 +29,7 @@ pre-commit:
       # bindings and requires. Any warning refuses the commit. The whole repo, not the staged
       # files: about a second, it catches a change that breaks a caller in a file not staged, and
       # a file linted alone against a stale .clj-kondo/.cache once reported a type error in
-      # fleet.clj that was not there (the whole-repo run was right every time).
+      # plans.clj that was not there (the whole-repo run was right every time).
       priority: 3
       glob: "*.{clj,cljc,cljs}"
       run: scripts/clj-kondo --lint src dev test repl bb --parallel

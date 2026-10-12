@@ -1,11 +1,11 @@
-name: fleet-launch
+name: timer
 
 # Keeps the runners busy without anyone watching. Every 20 minutes: count the jobs running or
-# queued across the repository; when at least MIN_FREE of the 20 are free and no fleet run is
-# still going, dispatch the next plan in ci/fleet/queue/ (by name) that has never run, or, with
-# the queue spent, the soak plan with a fresh salt. One fleet at a time: two soaks held nineteen
-# runners for an afternoon and every push queued behind them. A plan's runs are named after it (fleet.yml run-name), which is how "never run" is
-# known: the launcher writes nothing.
+# queued across the repository; when at least MIN_FREE of the 20 are free and no plan run is
+# still going, dispatch the next plan in ci/plan/queue/ (by name) that has never run, or, with
+# the queue spent, the soak plan with a fresh salt. One plan at a time: two soaks held nineteen
+# runners for an afternoon and every push queued behind them. A plan's runs are named after it (plan.yml run-name), which is how "never run" is
+# known: the timer writes nothing.
 
 on:
   schedule:
@@ -19,7 +19,7 @@ permissions:
 env:
   CAP: 20
   MIN_FREE: 4
-  SOAK: ci/fleet/soak.edn
+  SOAK: ci/plan/soak.edn
 
 jobs:
   launch:
@@ -42,20 +42,20 @@ jobs:
           free=$((CAP - busy))
           echo "jobs running or queued elsewhere: $busy; free: $free"
           if [ "$free" -lt "$MIN_FREE" ]; then echo "fewer than $MIN_FREE runners free; nothing launched"; exit 0; fi
-          running=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow fleet.yml --status in_progress --json databaseId --jq 'length')
-          queued=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow fleet.yml --status queued --json databaseId --jq 'length')
-          if [ "$((running + queued))" -gt 0 ]; then echo "a fleet is still running or queued; nothing launched"; exit 0; fi
-          ran=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow fleet.yml --limit 1000 --json displayTitle --jq '.[].displayTitle')
+          running=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow plan.yml --status in_progress --json databaseId --jq 'length')
+          queued=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow plan.yml --status queued --json databaseId --jq 'length')
+          if [ "$((running + queued))" -gt 0 ]; then echo "a plan is still running or queued; nothing launched"; exit 0; fi
+          ran=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow plan.yml --limit 1000 --json displayTitle --jq '.[].displayTitle')
           next=""
-          for p in ci/fleet/queue/*.edn; do   # a glob expands sorted
+          for p in ci/plan/queue/*.edn; do   # a glob expands sorted
             [ -f "$p" ] || continue
-            if ! grep -qxF "fleet $p" <<< "$ran"; then next=$p; break; fi
+            if ! grep -qxF "plan $p" <<< "$ran"; then next=$p; break; fi
           done
           if [ -n "$next" ]; then
             echo "launching queued plan $next"
-            gh workflow run fleet.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f plan="$next"
+            gh workflow run plan.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f plan="$next"
           else
             echo "queue spent; launching $SOAK with salt $GITHUB_RUN_ID"
-            gh workflow run fleet.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f plan="$SOAK" -f salt="$GITHUB_RUN_ID"
+            gh workflow run plan.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f plan="$SOAK" -f salt="$GITHUB_RUN_ID"
           fi
           echo "launched: ${next:-$SOAK} (free $free)" >> "$GITHUB_STEP_SUMMARY"

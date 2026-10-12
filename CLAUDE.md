@@ -61,6 +61,7 @@ src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints o
 src/clojurecraft/fixture.clj  what every fixture asks the server over RCON: wait, load, teleport, judge a landing; the :go event
 src/clojurecraft/rcon.clj     RCON client (fixtures, CI judge); `clojure -M:rcon`
 src/clojurecraft/gym.clj      the gym: registry, one trial (land, judge, retry a disconnect), report (`clojure -M:gym`)
+src/clojurecraft/plans.clj    one plan file across many jobs (`clojure -M:plan`, `ci/plan/`): `:plans/*`, because `:plan/*` belongs to `plan.clj`
 src/clojurecraft/landings.clj landing sets: grid, biome snap, surface checks, pregeneration
 src/clojurecraft/watch.clj    observers of the atom: --telemetry diffs successive worlds, bounded, off-thread
 src/clojurecraft/main.clj     loop, effects, RESULT line, --record, --telemetry, replay
@@ -94,11 +95,23 @@ clojure -M:splint src dev test/clojurecraft                   # idioms (Splint, 
 clojure -M:lsp clean-ns                                       # sort and prune ns forms (clojure-lsp, settings in .lsp/config.edn); the hook too
 clojure -M:lsp diagnostics --raw                              # no unused public vars (clojure-lsp); the hook checks staged files, CI the repo
 clojure -M:brain                                              # brain checker (must be zero)
+clojure -M:plan plan --plan ci/plan/soak.edn                  # the job matrix for one plan file (also work, report, pull)
 clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data get entity Clj_wood Inventory
 bb datagen                            # regenerate the EDN tables (needs the jar)
 ```
 
-The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI: `test.yml` runs the tests and the brain checker on every push; `gym.yml` runs every goal once on push and N runs of one goal on dispatch, one runner and one pregenerated landing per run, judged by RESULT plus the server's truth commands and reported with a 95% interval (`clojure -M:gym`, `brain/bot/tooling/gym-on-runners.md`). Write code, push, and read the runs: the runners do the compute.
+The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI is five workflows. `test.yml` runs the tests and the brain checker on every push; its forest property is eight sim shards. `gym.yml` runs every goal once on push and N trials of one goal on dispatch, one runner and one pregenerated landing per trial, judged by RESULT plus the server's truth commands and reported with a 95% interval (`clojure -M:gym`, `brain/bot/tooling/gym-on-runners.md`). `world.yml` builds a landing set's world once and caches it. `plan.yml` runs one plan file (`ci/plan/`, `clojure -M:plan`) as many jobs. `timer.yml` dispatches the next plan every twenty minutes. Write code, push, and read the runs: the runners do the compute.
+
+## Words
+
+GitHub's words stay GitHub's. Actions is the product, a workflow is one yaml file, a job is one occupancy of a runner, and a runner is the machine. The cap of 20 counts jobs.
+
+- **test** is the suite workflow. **gym** is the real-terrain workflow. One run of one goal on one landing is a **trial** (the matrix job in `gym.yml`).
+- **world** builds a landing set once (`world.yml`, `bb prepare-world`). The namespace is `clojurecraft.worlds` (`bb/clojurecraft/worlds.clj`), because `clojurecraft.world` is the test fixture that builds chunk columns.
+- **plan** is one file of experiments run together (`ci/plan/<label>.edn`, `plan.yml`, `clojure -M:plan`). The namespace is `clojurecraft.plans` and the keys are `:plans/*`. `clojurecraft.plan` and `:plan/*` are the bot's planner in `plan.clj`; a plan file does not use them.
+- **job** is one share of a plan (`--job N`, matrix key `job`, artifact `plan-<label>-job-<n>`).
+- **shard** is only a seeded slice of a sim property (`:exp/shards`, and the same word on `test.yml`'s forest matrix).
+- **soak** is the repeated plan, `ci/plan/soak.edn`. **timer** (`timer.yml`) dispatches the next file in `ci/plan/queue/`, or the soak when the queue is empty.
 
 ## Server facts
 
