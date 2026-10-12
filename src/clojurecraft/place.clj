@@ -148,10 +148,9 @@
           :else
           (window/click world
                         (window/view world :inventory) ; swap into the held slot
-                        {:click/slot (inventory/player->window-slot (inventory/layouts :inventory)
-                                                                    p)
-                         :click/button held
-                         :click/mode 2}))))
+                        (inventory/swap-click
+                         (inventory/player->window-slot (inventory/layouts :inventory) p)
+                         held)))))
 
 (defmethod place-stage :equip [world {:intent/keys [item]}] (equip world item :spot))
 

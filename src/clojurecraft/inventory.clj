@@ -42,12 +42,52 @@
    and 1..size² the grid. Window 0 (the player's own screen, :inventory) also shows the armour
    at :armour..:armour+3 (head to feet) and the offhand at :offhand; a container is known by
    its :menu-type (registry minecraft:menu: 12 the crafting table, 14 the furnace, whose own
-   slots are :input, :fuel and :output). The bot's views and the server model's windows are
-   both read from here."
+   slots are :input, :fuel and :output, and whose :properties are the container-set-data ids of
+   its fire and its cooking). The bot's views and the server model's windows are both read from
+   here."
   {:inventory {:size 2 :inventory 9 :armour 5 :offhand 45}
    :table {:size 3 :inventory 10 :menu-type (blocks/menus :crafting)}
    ;; a furnace has no grid: its own slots are the input, the fuel and the output
-   :furnace {:size 0 :inventory 3 :menu-type (blocks/menus :furnace) :input 0 :fuel 1 :output 2}})
+   :furnace {:size 0
+             :inventory 3
+             :menu-type (blocks/menus :furnace)
+             :input 0
+             :fuel 1
+             :output 2
+             ;; AbstractFurnaceBlockEntity's data: ticks of fire left and of the fuel lit, ticks
+             ;; cooked and to cook
+             :properties {:lit 0 :lit-total 1 :cook 2 :cook-total 3}}})
+
+(def result-slot 0)                     ; a crafting window's slot 0 shows what its grid makes
+
+(def click-modes
+  "The container-click packet's mode, by name (26.1.2 ContainerInput): :pickup picks a stack up
+   or puts it down, :quick-move moves it to the other part of the window (a shift-click), :swap
+   trades it with the hotbar slot the button names."
+  {:pickup 0 :quick-move 1 :swap 2})
+
+(def left-button 0)                    ; with :pickup, the whole stack
+(def right-button 1)                   ; with :pickup, one item put down (or half picked up)
+
+(defn left-click
+  "Pick up the whole stack at window slot s, or put the cursor's down there."
+  [s]
+  {:click/slot s :click/button left-button :click/mode (click-modes :pickup)})
+
+(defn right-click
+  "Put one item of the cursor down at window slot s."
+  [s]
+  {:click/slot s :click/button right-button :click/mode (click-modes :pickup)})
+
+(defn shift-click
+  "Move the stack at window slot s to the other part of the window (a quick move)."
+  [s]
+  {:click/slot s :click/button left-button :click/mode (click-modes :quick-move)})
+
+(defn swap-click
+  "Trade the stack at window slot s with hotbar slot n."
+  [s n]
+  {:click/slot s :click/button n :click/mode (click-modes :swap)})
 
 (defn layout-of-menu
   "The layout of a container by its menu type, or nil for one the bot does not know."
@@ -121,7 +161,7 @@
       (some-> (:armour l)
               (+ n))
       :offhand (:offhand l)
-      :result (when (crafting? l) 0)
+      :result (when (crafting? l) result-slot)
       :grid (when (crafting? l) n)
       (:input :fuel :output) (get l area))))
 

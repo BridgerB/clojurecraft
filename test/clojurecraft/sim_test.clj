@@ -34,6 +34,11 @@
 
 (def step (game/compose game/step plan/step))
 
+(defn wire
+  "A named click (inventory/left-click and the rest) as the container-click packet's fields."
+  [{:click/keys [slot button mode]}]
+  {:slot slot :button button :mode mode})
+
 (deftest collects-one-log-against-the-model
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
         sim0 (sim/init {:column column :spawn [0.5 64.0 0.5] :keep-alive-every 3000})
@@ -166,15 +171,12 @@
                            :spawn [0.5 64.0 0.5]
                            :inventory {[:main 1] {:item (recipe/item-id :oak_planks) :count 3}}})
                 (assoc :sim/phase :play :sim/window {:id 1 :kind :table :grid {} :state-id 4})
-                (sim/step {:sim/kind :packet
-                           :sim/packet {:packet/name :container-click
-                                        :window-id 1
-                                        :state-id 2
-                                        :slot 11
-                                        :button 0
-                                        :mode 0
-                                        :changed []
-                                        :cursor nil}}))
+                (sim/step
+                 {:sim/kind :packet
+                  :sim/packet
+                  (merge
+                   {:packet/name :container-click :window-id 1 :state-id 2 :changed [] :cursor nil}
+                   (wire (inventory/left-click (inventory/slot-in :table [:main 1]))))}))
         [reply] (:sim/out sim)]
     (is (= :container-set-content (:packet/name reply))
         "a stale state id is answered with the whole window")
@@ -206,15 +208,12 @@
 (deftest the-sim-flags-a-click-into-window-0-while-a-container-is-open
   (let [sim (-> (sim/init {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5]})
                 (assoc :sim/phase :play :sim/window {:id 1 :kind :table :grid {} :state-id 1})
-                (sim/step {:sim/kind :packet
-                           :sim/packet {:packet/name :container-click
-                                        :window-id 0
-                                        :state-id 1
-                                        :slot 36
-                                        :button 0
-                                        :mode 0
-                                        :changed []
-                                        :cursor nil}}))]
+                (sim/step
+                 {:sim/kind :packet
+                  :sim/packet
+                  (merge
+                   {:packet/name :container-click :window-id 0 :state-id 1 :changed [] :cursor nil}
+                   (wire (inventory/left-click (inventory/slot [:hotbar 0]))))}))]
     (is (= [[:click-inventory-while-open 0]] (:sim/violations sim)))
     (is (= [] (:sim/out sim)) "vanilla ignores it: no answer")))
 
@@ -892,17 +891,15 @@
                  :sequence 1}))
 
 (defn click-in
-  "The model after one click into its open window, at the window's current state id."
-  [sim slot button mode]
+  "The model after one named click c into its open window, at the window's current state id."
+  [sim c]
   (client-sends sim
-                {:packet/name :container-click
-                 :window-id (get-in sim [:sim/window :id])
-                 :state-id (get-in sim [:sim/window :state-id])
-                 :slot slot
-                 :button button
-                 :mode mode
-                 :changed []
-                 :cursor nil}))
+                (merge {:packet/name :container-click
+                        :window-id (get-in sim [:sim/window :id])
+                        :state-id (get-in sim [:sim/window :state-id])
+                        :changed []
+                        :cursor nil}
+                       (wire c))))
 
 (defn game-ticks
   "The model after n game ticks, 50 ms apart."
@@ -924,10 +921,10 @@
   [input fuel]
   (-> (furnace-sim {[:hotbar 0] input [:hotbar 1] fuel})
       open-furnace
-      (click-in (in-furnace [:hotbar 1]) 0 0)
-      (click-in (in-furnace [:fuel]) 0 0)
-      (click-in (in-furnace [:hotbar 0]) 0 0)
-      (click-in (in-furnace [:input]) 0 0)))
+      (click-in (inventory/left-click (in-furnace [:hotbar 1])))
+      (click-in (inventory/left-click (in-furnace [:fuel])))
+      (click-in (inventory/left-click (in-furnace [:hotbar 0])))
+      (click-in (inventory/left-click (in-furnace [:input])))))
 
 (deftest a-furnace-opens-with-its-slots-and-properties
   (let [sim (open-furnace (furnace-sim {[:hotbar 0] {:item (item :raw_iron) :count 4}}))
@@ -943,20 +940,24 @@
 (deftest four-raw-iron-cook-on-one-coal-in-200-ticks-each
   (let [sim (loaded {:item (item :raw_iron) :count 4} {:item (item :coal) :count 1})
         sim (assoc sim :sim/out [])]
-    (is (= {0 {:item (item :raw_iron) :count 4} 1 {:item (item :coal) :count 1}}
+    (is (= {(in-furnace [:input]) {:item (item :raw_iron) :count 4}
+            (in-furnace [:fuel]) {:item (item :coal) :count 1}}
            (:slots (furnace sim)))
         "four clicks put the fuel and the input in")
-    (is (= 3 (get-in (furnace (game-ticks sim 799)) [:slots 2 :count])) "three at tick 799")
+    (is (= 3 (get-in (furnace (game-ticks sim 799)) [:slots (in-furnace [:output]) :count]))
+        "three at tick 799")
     (let [done (game-ticks sim 800)
-          slot-2 (last (filter #(and (= :container-set-slot (:packet/name %)) (= 2 (:slot %)))
+          output (last (filter #(and (= :container-set-slot (:packet/name %))
+                                     (= (in-furnace [:output]) (:slot %)))
                                (:sim/out done)))]
-      (is (= {2 {:item (item :iron_ingot) :count 4}} (:slots (furnace done)))
+      (is (= {(in-furnace [:output]) {:item (item :iron_ingot) :count 4}} (:slots (furnace done)))
           "four ingots at tick 800, the coal burned, the input gone")
-      (is (= {0 801 1 1600 2 0 3 200} (sim/furnace-data (furnace done)))
+      (is (= {:lit 801 :lit-total 1600 :cook 0 :cook-total 200}
+             (select-keys (furnace done) [:lit :lit-total :cook :cook-total]))
           "one coal lit at the first tick and burns on")
-      (is (= {:item (item :iron_ingot) :count 4} (:item slot-2)) "the client was told")
+      (is (= {:item (item :iron_ingot) :count 4} (:item output)) "the client was told")
       (let [taken (-> done
-                      (click-in 2 0 1)
+                      (click-in (inventory/shift-click (in-furnace [:output])))
                       (client-sends {:packet/name :container-close
                                      :window-id (get-in done [:sim/window :id])}))]
         (is (= 4
@@ -969,12 +970,14 @@
   (let [sim (loaded {:item (item :raw_iron) :count 3} {:item (item :oak_planks) :count 1})]
     (is (= 300 (blocks/fuel-by-name :oak_planks)))
     (let [at-300 (furnace (game-ticks sim 300))]
-      (is (= 1 (get-in at-300 [:slots 2 :count])) "one ingot from 300 ticks of fuel")
+      (is (= 1 (get-in at-300 [:slots (in-furnace [:output]) :count]))
+          "one ingot from 300 ticks of fuel")
       (is (= [1 100] [(:lit at-300) (:cook at-300)]) "the second halfway"))
     (is (= [0 98] ((juxt :lit :cook) (furnace (game-ticks sim 301))))
         "out: progress unwinds by two")
     (is (= 0 (:cook (furnace (game-ticks sim 350)))))
-    (is (= {:item (item :raw_iron) :count 2} (get-in (furnace (game-ticks sim 350)) [:slots 0]))
+    (is (= {:item (item :raw_iron) :count 2}
+           (get-in (furnace (game-ticks sim 350)) [:slots (in-furnace [:input])]))
         "the rest waits for fuel")))
 
 (deftest a-furnace-cooks-with-its-window-closed
@@ -984,7 +987,7 @@
                 (assoc :sim/out [])
                 open-furnace)
         content (some #(when (= :container-set-content (:packet/name %)) %) (:sim/out sim))]
-    (is (= {:item (item :iron_ingot) :count 1} (get (:items content) 2))
+    (is (= {:item (item :iron_ingot) :count 1} (get (:items content) (in-furnace [:output])))
         "opened again, the output holds what cooked meanwhile")))
 
 (deftest the-furnace-click-rules
@@ -992,18 +995,33 @@
         ingot {:item (item :iron_ingot) :count 3}
         ore {:item (item :raw_iron) :count 2}
         coal {:item (item :coal) :count 1}]
-    (is (= :left (sim/click-kind f {:slot 0 :button 0 :mode 0})) "slot 0 is the input, no result")
-    (is (= {:view {} :cursor coal} (sim/click-view f {} coal {:slot 2 :button 0 :mode 0}))
+    (is (= :left (sim/click-kind f (wire (inventory/left-click (in-furnace [:input])))))
+        "the input is no result")
+    (is (= {:view {} :cursor coal}
+           (sim/click-view f {} coal (wire (inventory/left-click (in-furnace [:output])))))
         "nothing is put into the output")
-    (is (= {:view {} :cursor ore} (sim/click-view f {} ore {:slot 1 :button 1 :mode 0}))
+    (is (= {:view {} :cursor ore}
+           (sim/click-view f {} ore (wire (inventory/right-click (in-furnace [:fuel])))))
         "the fuel slot refuses what does not burn")
-    (is (= {:view {1 coal} :cursor nil} (sim/click-view f {} coal {:slot 1 :button 0 :mode 0})))
+    (is (= {:view {(in-furnace [:fuel]) coal} :cursor nil}
+           (sim/click-view f {} coal (wire (inventory/left-click (in-furnace [:fuel]))))))
     (is (= {:view {} :cursor {:item (item :iron_ingot) :count 5}}
-           (sim/click-view f {2 ingot} (assoc ingot :count 2) {:slot 2 :button 0 :mode 0}))
+           (sim/click-view f
+                           {(in-furnace [:output]) ingot}
+                           (assoc ingot :count 2)
+                           (wire (inventory/left-click (in-furnace [:output])))))
         "a cursor of the output's item takes the output onto it")
-    (is (= {:view {30 ore} :cursor nil} (sim/click-view f {30 ore} nil {:slot 1 :button 0 :mode 2}))
+    (is (= {:view {(in-furnace [:hotbar 0]) ore} :cursor nil}
+           (sim/click-view f
+                           {(in-furnace [:hotbar 0]) ore}
+                           nil
+                           (wire (inventory/swap-click (in-furnace [:fuel]) 0))))
         "a hotbar swap cannot put ore into the fuel slot")
-    (is (= {:view {3 ore} :cursor nil} (sim/click-view f {0 ore} nil {:slot 0 :button 0 :mode 1}))
+    (is (= {:view {(in-furnace [:main 0]) ore} :cursor nil}
+           (sim/click-view f
+                           {(in-furnace [:input]) ore}
+                           nil
+                           (wire (inventory/shift-click (in-furnace [:input])))))
         "a shift-click on the input moves it into the store")))
 
 (defn ingots-target

@@ -290,7 +290,7 @@
    result slot is dropped, since it is always derived."
   [sim kind view]
   (let [layout (inventory/layouts kind)
-        view (cond-> view (inventory/crafting? layout) (dissoc 0))]
+        view (cond-> view (inventory/crafting? layout) (dissoc inventory/result-slot))]
     (if (= kind :inventory)
       (assoc sim :sim/inv view)
       (let [inv (inventory/layouts :inventory)]
@@ -306,9 +306,9 @@
              (for [[s it] view :let [w (inventory/translate layout inv s)] :when w] [w it])))))))))
 
 (defn full
-  "view with slot 0 set to what its grid crafts, when the window crafts."
+  "view with its result slot set to what its grid crafts, when the window crafts."
   [view layout]
-  (cond-> view (inventory/crafting? layout) (assoc 0 (result-of view layout))))
+  (cond-> view (inventory/crafting? layout) (assoc inventory/result-slot (result-of view layout))))
 
 (defn insert
   "Put a stack into the given slots, stacking first. Returns [view leftover]."
@@ -376,14 +376,14 @@
       {:view view :cursor cursor})))
 
 (defn click-kind
-  "Which vanilla rule a click in a window with layout falls under: :result (slot 0 of a window
-   that crafts), :swap (mode 2, with a hotbar slot), :shift (mode 1), :left (button 0) or
-   :right."
+  "Which vanilla rule a click in a window with layout falls under: :result (the result slot of a
+   window that crafts), :swap (with a hotbar slot), :shift (a quick move), :left (the left
+   button) or :right."
   [layout {:keys [slot button mode]}]
-  (cond (and (inventory/crafting? layout) (= slot 0)) :result
-        (= mode 2) :swap
-        (= mode 1) :shift
-        (= button 0) :left
+  (cond (and (inventory/crafting? layout) (= slot inventory/result-slot)) :result
+        (= mode (inventory/click-modes :swap)) :swap
+        (= mode (inventory/click-modes :quick-move)) :shift
+        (= button inventory/left-button) :left
         :else :right))
 
 (defmulti click-view
@@ -398,7 +398,8 @@
   [layout view cursor {:keys [mode]}]
   (let [out (result-of view layout)]
     (cond (nil? out) {:view view :cursor cursor :violation [:click-on-empty-result mode]}
-          (= mode 1) {:view (craft-all view layout) :cursor cursor}
+          (= mode (inventory/click-modes :quick-move))
+          {:view (craft-all view layout) :cursor cursor}
           (or (nil? cursor)
               (and (= (:item cursor) (:item out)) (<= (+ (:count cursor) (:count out)) max-stack)))
           {:view (craft-once view layout) :cursor (update out :count + (:count cursor 0))}
@@ -617,18 +618,23 @@
           recipe/item-name
           smelt-by-input))
 
+(def furnace-input (inventory/slot-in :furnace [:input])) ; a furnace's own slots, as its window numbers them
+(def furnace-fuel (inventory/slot-in :furnace [:fuel]))
+(def furnace-output (inventory/slot-in :furnace [:output]))
+
 (defn furnace-data
-  "A furnace's numbered properties as container-set-data sends them: 0 fuel left, 1 fuel
-   total, 2 cook progress, 3 cook total."
-  [{:keys [lit lit-total cook cook-total]}]
-  {0 lit 1 lit-total 2 cook 3 cook-total})
+  "A furnace's properties as container-set-data sends them, {property-id value}: the fire left
+   and lit (:lit, :lit-total), the cooking done and to do (:cook, :cook-total), numbered by the
+   furnace layout's :properties."
+  [f]
+  (into {} (for [[k id] (:properties (inventory/layouts :furnace))] [id (get f k)])))
 
 (defn can-burn?
   "Can the furnace's input cook now: a recipe takes it, and the output is empty or holds the
    result with room for one more batch."
   [{:keys [slots]}]
-  (let [r (smelt-of (get slots 0))
-        out (get slots 2)]
+  (let [r (smelt-of (get slots furnace-input))
+        out (get slots furnace-output)]
     (boolean (and r
                   (or (nil? out)
                       (and (= (:item out) (recipe/item-id (:smelt/result r)))
@@ -637,11 +643,11 @@
 (defn smelt-once
   "A furnace's slots after one batch: one input taken, its result added to the output."
   [slots]
-  (let [r (smelt-of (get slots 0))
-        out (get slots 2)]
+  (let [r (smelt-of (get slots furnace-input))
+        out (get slots furnace-output)]
     (-> slots
-        (take-one 0)
-        (assoc 2
+        (take-one furnace-input)
+        (assoc furnace-output
                {:item (recipe/item-id (:smelt/result r))
                 :count (+ (:count out 0) (:smelt/count r))}))))
 
@@ -649,12 +655,13 @@
   "Vanilla resets the progress, and sets the cook total from the recipe, when the input slot is
    set to a different item; :cooking remembers which item the progress is for."
   [{:keys [slots cooking] :as f}]
-  (let [item (:item (get slots 0))]
+  (let [item (:item (get slots furnace-input))]
     (if (= item cooking)
       f
       (cond-> (assoc f
                      :cook 0
-                     :cook-total (:smelt/ticks (smelt-of (get slots 0)) default-cook-ticks))
+                     :cook-total
+                     (:smelt/ticks (smelt-of (get slots furnace-input)) default-cook-ticks))
         item (assoc :cooking item)
         (nil? item) (dissoc :cooking)))))
 
@@ -666,13 +673,13 @@
    or input, progress unwinds two a tick. (A lava bucket's empty bucket is not modelled.)"
   [f]
   (let [f (cond-> (reset-on-new-input f) (pos? (:lit f)) (update :lit dec))
-        fuel (get-in f [:slots 1])]
-    (cond (or (pos? (:lit f)) (and fuel (get-in f [:slots 0])))
+        fuel (get-in f [:slots furnace-fuel])]
+    (cond (or (pos? (:lit f)) (and fuel (get-in f [:slots furnace-input])))
           (let [f (if (and (zero? (:lit f)) (can-burn? f))
                     (let [t (get blocks/fuel-by-name (recipe/item-name (:item fuel)) 0)]
                       (-> f
                           (assoc :lit t :lit-total t)
-                          (update :slots take-one 1)))
+                          (update :slots take-one furnace-fuel)))
                     f)]
             (cond (not (and (pos? (:lit f)) (can-burn? f))) (assoc f :cook 0)
                   (= (inc (:cook f)) (:cook-total f))
