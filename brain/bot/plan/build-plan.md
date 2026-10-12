@@ -14,6 +14,12 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn cell-ops
   - src/clojurecraft/build.clj#defn dig-op
   - src/clojurecraft/build.clj#defn point
+  - src/clojurecraft/build.clj#defmethod intent/run :build
+  - src/clojurecraft/build.clj#defn op-child
+  - src/clojurecraft/build.clj#defn station
+  - src/clojurecraft/build.clj#defn foundation
+  - test/clojurecraft/sim_test.clj#the-frame-is-cast-lit-and-stepped-through
+  - test/clojurecraft/sim_test.clj#a-cast-six-tenths-done-casts-only-the-other-four
   - test/clojurecraft/build_test.clj#the-plan-casts-the-ten-cells-in-layer-order
   - test/clojurecraft/build_test.clj#the-plan-never-places-into-its-own-stance-nor-lids-a-cup
   - test/clojurecraft/build_test.clj#no-dig-can-take-obsidian
@@ -36,7 +42,13 @@ ruststeve's template mold ([[sib-portal-mold]]) as data, pure (`the-plan-never-p
 
 `cast-one-plan` is the pad, the rim, layer 0's platform and the first cell: the gym's cast-one stage.
 
+## The `:build` intent
+`{:intent/kind :build :intent/build :cast-one|:portal|:nether :intent/origin o :intent/facing f}`: each tick the plan (`plan-for`, memoized) is read and the first op not satisfied is worked; the build is done when the plan's last op holds (its goal: once in the Nether the earlier ops' cells are not even loaded). `op-child` makes the child that works the op: a lava pour with no lava bucket first refills (`refill`: a walk to the `station`, a lava source outside the footprint within 16 with ground beside the cell over it, then a `:scoop` with `:intent/fluid :lava`); else a walk to the op's stand, ending centred in that cell (`intent/centred?`); then `:place` into a given `:intent/cell` against a solid neighbour (`place/support`, or a `foundation` built up from below), a child dig, `:pour` (equip, look at the aim, `use-item`, done when `:intent/expect` holds), `:scoop`, `:use-on` (flint and steel on the top face) or `:await` (hold still until the dimension changes). A new op drops the child. In the model a cast from the kit and a lava trench reaches the Nether (`the-frame-is-cast-lit-and-stepped-through`), and one with six cells already obsidian casts only the other four (`a-cast-six-tenths-done-casts-only-the-other-four`).
+
 ## Gotchas
+- **The tower stands until the frame does.** A layer's stair and platform are done only once all ten cells are cast: later layers stand on them, so a resumed cast whose lower layers are obsidian still builds them.
+- **A plan ends in its goal.** cast-one ends in a `:verify` (the cell cast and the bowl dry); its last cell op, the scoop, holds before anything is poured.
+- **Lava is not renewable**: a scoop takes a source for good, and a station needs ground beside the cell over its source, so the gym's pit is a one-wide trench.
 - **A dig never takes obsidian**: `dig-op`'s done holds when its cell is obsidian (`no-dig-can-take-obsidian`); a cell's bowl can be another cell (the bowl of (0,1) is (0,2)).
 - **Facings turn about the origin cell's middle** (`point`), so the origin cell stays put and a cell and the points inside it turn alike.
 - The stair differs from ruststeve's, whose steps rose away from the platform and left a gap the pathfinder bridged.

@@ -177,7 +177,7 @@
    the block at or up to pickup-rise above them; no single cell beside it, which a wall may
    close off), and with :intent/step-down? a straight neighbour a block up too (the block in the
    floor beside the feet, path's :goal/step-down?); for water to scoop, its bank (arrived?: path's :pickup goal at the cell over the
-   source, rise 1); else anywhere within goal-range."
+   source, rise 1); for a build's stand, that cell itself; else anywhere within goal-range."
   [{:intent/keys [target for pickup? step-down?]}]
   (cond pickup?
         (cond->
@@ -185,7 +185,16 @@
           step-down? (assoc :goal/step-down? true))
         (= :scoop for)
         {:goal/kind :pickup :goal/pos (update target 1 inc) :goal/range scoop-range :goal/rise 1}
+        (= :build for) {:goal/kind :block :goal/pos target}
         :else {:goal/kind :near :goal/pos target :goal/range goal-range}))
+
+(def centred-within 0.25)             ; how far from a cell's middle the feet may stand and count as on it
+
+(defn centred?
+  "Are the feet in cell, within centred-within of its middle on the plane?"
+  [world cell]
+  (and (= cell (feet world))
+       (<= (physics/horizontal-distance (:player/pos world) (physics/centre cell)) centred-within)))
 
 (defn arrived?
   "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
@@ -197,7 +206,8 @@
    round a tunnel's corner, it walked into the wall until it failed. For water to
    scoop, on its bank: the feet level with the cell over the source or a block lower, within
    scoop-range on the plane, where the eyes look down on its surface; the tenth live run's walk
-   ended in reach but in its own stair pit two below the surface, and saw no water."
+   ended in reach but in its own stair pit two below the surface, and saw no water. For a build's
+   stand (#8: a pour is aimed from it), the feet in that cell near its middle (centred?)."
   [world {:intent/keys [target for pickup?] :as i} d]
   (let [rise (- (physics/y-of target) (long (math/floor (physics/y-of (:player/pos world)))))]
     (and (<= d reach)
@@ -205,6 +215,7 @@
                (= :scoop for)
                (and (<= -1 rise 0) (<= (path/octile (feet world) target) scoop-range))
                (= :log for) (<= rise pickup-rise)
+               (= :build for) (centred? world target)
                :else true))))
 
 (defn routable?

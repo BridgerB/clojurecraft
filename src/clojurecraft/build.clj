@@ -18,7 +18,18 @@
    +z (:south) and turned for the other facings."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.chunk :as chunk]
+            [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
+            [clojurecraft.packet :as packet]
+            [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
+            [clojurecraft.place :as place]
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.scoop :as scoop]
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
 
@@ -159,10 +170,13 @@
 
 (defn stair-ops
   "The stair up to layer li's work level: steps east of the platform, the top one beside the
-   platform's back row, each a block lower going east, placed bottom up from the step below."
+   platform's back row, each a block lower going east (the rim's cell at dx 6 is one of them),
+   placed bottom up, each from the step below it. The lowest is placed from the ground, or for
+   layer 1, whose lowest step is beside the rim, from on top of the rim."
   [at li guard]
-  (for [j (range (dec li) -1 -1)]
-    (place-op (at [(+ 5 j) (- li 1 j) 2]) (at [(+ 6 j) (- li 1 j) 2]) guard :stair)))
+  (for [j (range (dec li) -1 -1)
+        :let [stand (if (= [li j] [1 0]) [6 1 2] [(+ 6 j) (- li 1 j) 2])]]
+    (place-op (at [(+ 5 j) (- li 1 j) 2]) (at stand) guard :stair)))
 
 (defn platform-ops
   "The platform at layer li: two rows (dz 1 and 2) from dx 4 down to -1 at height li, the front
@@ -215,11 +229,13 @@
               :build/done [:no-water bowl]}])))
 
 (defn layer-ops
-  "Everything layer li needs: its stair, its platform (both done once the layer is cast) and its
-   cells in order."
+  "Everything layer li needs: its stair, its platform and its cells in order. The stair and the
+   platform are done only once the whole frame is cast (the front-ops dig them then): every
+   later layer stands on them, so a cast resumed with its lower layers already obsidian still
+   builds them."
   [at origin facing li]
   (let [cells (nth layers li)
-        guard (layer-cast? at cells)]
+        guard (layer-cast? at frame-cells)]
     (concat (stair-ops at li guard)
             (platform-ops at li guard)
             (mapcat #(cell-ops at origin facing cells %) cells))))
@@ -277,7 +293,13 @@
         [first-cell] (first layers)]
     (vec (concat (mold at)
                  (platform-ops at 0 (cast? at first-cell))
-                 (cell-ops at origin facing (first layers) first-cell)))))
+                 (cell-ops at origin facing (first layers) first-cell)
+                 [{:build/op :verify
+                   :build/stand (at [1 1 1])
+                   :build/step :verify
+                   :build/done [:and (cast? at first-cell)
+                                [:no-water
+                                 (at [(first first-cell) (inc (second first-cell)) 0])]]}]))))
 
 (defn frame-plan
   "The mold from origin facing to a complete frame, then a lit portal, and with enter? the step
@@ -295,3 +317,188 @@
    opened, the portal lit and stepped through. A pure function: equal arguments, an equal plan."
   [origin facing]
   (frame-plan origin facing true))
+
+;; ---------------------------------------------------------------- the executors
+
+(def settle-ms 300)                   ; standing still this long, looking at the aim, before using the item
+(def answer-ms 3000)                  ; ms an action waits for the world to show it worked
+(def await-ms 10000)                  ; ms an :await holds before it fails
+(def station-radius 16)               ; blocks from the origin a lava station may be
+
+(defn- now [world] (:time/now world))
+
+(defn held?
+  "Does the inventory hold item (a name)?"
+  [world item]
+  (pos? (inventory/item-count world (recipe/item-id item))))
+
+(defmulti act-stage
+  "Advance a :pour or :use-on one tick in its :intent/stage (:equip :aim :sent): put the item in
+   hand, look at the aim and hold still, use it, then wait for the world to show the op done
+   (:intent/expect)."
+  {:arglists '([world intent])}
+  (fn [_world i] (:intent/stage i)))
+
+(defmethod act-stage :equip [world {:intent/keys [item]}] (place/equip world item :aim))
+
+(defn use!
+  "Use the held item at the intent's aim: a pour sends use-item with the look (a bucket is used by
+   where the eyes point), a use-on sends use-item-on at the clicked block's top."
+  [world {:intent/keys [kind target]} look]
+  (case kind
+    :pour (scoop/use-item world look)
+    :use-on (place/use-item-on world target (packet/value :face :up) (place/face-cursors :up))))
+
+(defmethod act-stage :aim
+  [world {:intent/keys [aim since still] :or {still 0} :as i}]
+  (let [look (physics/look-at (game/eye world) aim)
+        still (if (intent/still? world) (inc still) 0)
+        world (assoc world :player/controls {:control/look look})]
+    (if (and (>= still 3) (> (- (now world) since) settle-ms))
+      (-> world
+          (use! i look)
+          (intent/assoc-intent :intent/stage :sent))
+      (intent/assoc-intent world :intent/still still))))
+
+(defmethod act-stage :sent
+  [world {:intent/keys [expect sent-at]}]
+  (cond (holds? world expect) (intent/done world)
+        (> (- (now world) sent-at) answer-ms) (intent/fail world :no-effect)
+        :else world))
+
+(defn act-run
+  "Run a :pour or :use-on: its stage once no inventory click is unanswered."
+  [world i]
+  (let [i (cond-> i (nil? (:intent/stage i)) (assoc :intent/stage :equip :intent/since (now world)))
+        world (assoc world :plan/intent i)]
+    (case (window/waiting world i)
+      :overdue (intent/fail world :stale-window)
+      :waiting world
+      (act-stage world i))))
+
+(defmethod intent/run :pour [world i _] (act-run world i))
+(defmethod intent/run :use-on [world i _] (act-run world i))
+
+(defmethod intent/run :await
+  ;; hold still until :intent/expect holds, await-ms at most
+  [world {:intent/keys [expect started] :as i} _]
+  (let [started (or started (now world))
+        world (assoc world :plan/intent (assoc i :intent/started started) :player/controls {})]
+    (cond (holds? world expect) (intent/done world)
+          (> (- (now world) started) await-ms) (intent/fail world :not-yet)
+          :else world)))
+
+(defn footprint?
+  "Is column [x z] inside the mold's footprint from origin facing (dx -2..6, dz -2..3), where a
+   station must not be?"
+  [origin facing [x z]]
+  (some (fn [[dx dz]] (= [x z] (let [[cx _ cz] (cell origin facing [dx 0 dz])] [cx cz])))
+        (for [dx (range -2 7) dz (range -2 4)] [dx dz])))
+
+(defn station
+  "[stand source] to refill lava from: a lava source outside the footprint within station-radius
+   of origin, and a cell to stand in beside the cell over it (the source diagonally below the
+   feet, never beside them), nearest the origin first; nil when none."
+  [world origin facing]
+  (->> (chunk/find-blocks (:world/chunks world) #(= % blocks/lava-base))
+       (map (fn [[x y z _]] [x y z]))
+       (filter #(= blocks/lava-base (terrain/block-at world %)))
+       (filter #(<= (physics/horizontal-distance (physics/centre %) (physics/centre origin))
+                    station-radius))
+       (remove (fn [[x _ z]] (footprint? origin facing [x z])))
+       (sort-by #(physics/distance (physics/centre %) (physics/centre origin)))
+       (mapcat (fn [[x y z :as src]]
+                 (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+                       :let [stand [(+ x dx) (inc y) (+ z dz)]]
+                       :when (path/standable? world stand)]
+                   [stand src])))
+       first))
+
+(def plan-for
+  "[build origin facing] → the plan: :cast-one, :portal (lit) or :nether (stepped through).
+   Memoized: the plans are pure, and a build reads its plan every tick."
+  (memoize (fn [build origin facing]
+             (case build
+               :cast-one (cast-one-plan origin facing)
+               :portal (frame-plan origin facing false)
+               :nether (portal-plan origin facing)))))
+
+(defn refill
+  "The child that refills lava: a walk to the station, then a scoop of its source; or the reason
+   it cannot (:no-station, :no-bucket)."
+  [world {:intent/keys [origin facing]}]
+  (let [[stand src] (station world origin facing)]
+    (cond (nil? stand) :no-station
+          (not (held? world :bucket)) :no-bucket
+          (not (intent/centred? world stand))
+          {:intent/kind :walk :intent/target stand :intent/for :build}
+          :else {:intent/kind :scoop :intent/target src :intent/fluid :lava})))
+
+(def foundation-depth 4)               ; air cells under a placement a foundation is built up through
+
+(defn foundation
+  "The cell to place a block in now so that cell can have one: cell itself when a solid neighbour
+   holds it up (place/support), else the lowest of the air cells straight under it (foundation-depth
+   at most) that the block under it holds up, building up to it from below (ruststeve's
+   ensure_solid); nil when there is none. A resumed cast meets this: a wall whose cell below was
+   another cell's, already cast before, was never placed."
+  [world [x y z :as cell]]
+  (if (place/support world cell)
+    cell
+    (some (fn [dy]
+            (let [c [x (- y dy) z]]
+              (when (and (holds? world [:not-solid c]) (place/support world c)) c)))
+          (range 1 (inc foundation-depth)))))
+
+(defn op-child
+  "The child intent that works op next: lava to refill first when a lava pour has none, else a
+   walk to the op's stand, else the op's own action; or a keyword, why it cannot be worked."
+  [world i {:build/keys [op stand pos item aim into done]}]
+  (cond
+    (and (= op :pour) (= item :lava_bucket) (not (held? world :lava_bucket))) (refill world i)
+    (not (intent/centred? world stand)) {:intent/kind :walk :intent/target stand :intent/for :build}
+    :else
+    (case op
+      :place
+      (if-let [c (foundation world pos)]
+        {:intent/kind :place :intent/item item :intent/cell c}
+        :no-support)
+      :dig (assoc (intent/child-dig pos) :intent/exposes-ok? true)
+      :pour
+      {:intent/kind :pour :intent/item item :intent/aim aim :intent/target into :intent/expect done}
+      :scoop {:intent/kind :scoop :intent/target pos}
+      :use-on
+      {:intent/kind :use-on
+       :intent/item item
+       :intent/target pos
+       :intent/aim (update (physics/centre pos) 1 + 0.5)
+       :intent/expect done}
+      :stand-in {:intent/kind :await :intent/expect done}
+      :verify :unverified)))
+
+(defmethod intent/run :build
+  ;; work the first op of the plan not satisfied; done when the last op is (the plan's goal: past
+  ;; it, as in another dimension, the earlier ops' cells are not even loaded). A child works the op;
+  ;; when the op changes under it (the world moved on) the child is dropped and the new op begun
+  [world {:intent/keys [child op] :as i} event]
+  (let [plan (plan-for (:intent/build i) (:intent/origin i) (:intent/facing i))
+        next (when-not (satisfied? world (peek plan)) (first (remove #(satisfied? world %) plan)))]
+    (cond (nil? next)
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (not= next op)
+          (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child)
+          (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
+          (and child (intent/failed? child))
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail (:intent/reason child)))
+          child (intent/run-child world event)
+          :else
+          (let [c (op-child world i next)]
+            (cond (keyword? c) (intent/fail world c)
+                  :else
+                  (intent/run-child
+                   (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
+                   event))))))

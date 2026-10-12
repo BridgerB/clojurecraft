@@ -182,20 +182,52 @@
                                             (blocks/name-of (terrain/block-at world c)))))]
              c))))
 
+(def face-cursors
+  "Where on each face of the clicked block a placement clicks: its middle."
+  {:up [0.5 1.0 0.5]
+   :down [0.5 0.0 0.5]
+   :north [0.5 0.5 0.0]
+   :south [0.5 0.5 1.0]
+   :west [0.0 0.5 0.5]
+   :east [1.0 0.5 0.5]})
+
+(defn support
+  "[block face] to click to place a block into cell: a solid neighbour (under it first, then the
+   four sides, then over it) that a click does not open, and its face toward cell; nil when cell
+   has none."
+  [world cell]
+  (first (for [[face step] [[:up [0 -1 0]] [:south [0 0 -1]] [:north [0 0 1]] [:east [-1 0 0]]
+                            [:west [1 0 0]] [:down [0 1 0]]]
+               :let [s (mapv + cell step)
+                     id (terrain/block-at world s)]
+               :when (and id
+                          (blocks/solid? id)
+                          (not (contains? memory/placed-kinds (blocks/name-of id))))]
+           [s face])))
+
+(defn settle-at
+  "On to :settle to place into target by a click on face of against."
+  [world target against face]
+  (intent/assoc-intent world
+                       :intent/stage :settle
+                       :intent/target target
+                       :intent/against against
+                       :intent/click-face face
+                       :intent/since (now world)
+                       :intent/still 0))
+
 (defmethod place-stage :spot
-  [world {:intent/keys [passage-ok?]}]
-  ;; a plain spot, else a niche cut in the wall, else (passage-ok?) a spot in the passage: a
-  ;; table or a gravel to dig again leaves the way open when the bot goes on
-  (let [found (spot world)
-        n (when-not found (niche world))
-        [target support :as at] (or found (when (and (nil? n) passage-ok?) (spot world true)))]
-    (cond at
-          (intent/assoc-intent world
-                               :intent/stage :settle
-                               :intent/target target
-                               :intent/against support
-                               :intent/since (now world)
-                               :intent/still 0)
+  ;; a given cell (:intent/cell, a build's) against a solid neighbour; else a plain spot, else a
+  ;; niche cut in the wall, else (passage-ok?) a spot in the passage: a table or a gravel to dig
+  ;; again leaves the way open when the bot goes on
+  [world {:intent/keys [passage-ok?] at :intent/cell}]
+  (let [[against face :as given] (when at (support world at))
+        found (when-not at (spot world))
+        n (when-not (or at found) (niche world))
+        [target from] (or found (when (and (nil? at) (nil? n) passage-ok?) (spot world true)))]
+    (cond given (settle-at world at against face)
+          at (intent/fail world :no-support)
+          target (settle-at world target from :up)
           n (intent/assoc-intent world :intent/stage :niche :intent/child (intent/child-dig n))
           :else (intent/fail world :no-spot))))
 
@@ -211,13 +243,13 @@
         :else (intent/run-child world event)))
 
 (defmethod place-stage :settle
-  [world {:intent/keys [target against since still]}]
+  [world {:intent/keys [target against click-face since still] :or {click-face :up}}]
   (let [look (physics/look-at (game/eye world) (physics/centre target))
         still (if (intent/still? world) (inc still) 0)
         world (assoc world :player/controls {:control/look look})]
     (if (and (>= still 3) (> (- (now world) since) settle-ms))
       (-> world
-          (use-item-on against (packet/value :face :up) [0.5 1.0 0.5])
+          (use-item-on against (packet/value :face click-face) (face-cursors click-face))
           (intent/assoc-intent :intent/stage :sent))
       (intent/assoc-intent world :intent/still still))))
 

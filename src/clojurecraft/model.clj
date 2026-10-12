@@ -149,7 +149,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :smelt :redig :scoop :equip"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :smelt :redig :scoop :equip :build :pour :use-on :await"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -166,6 +166,18 @@
    [:intent/step-down?
     "a :mine walk toward a block in the floor: it may end a block up beside it, the drop landing in the hole the dig leaves"
     "a :mine walk to a block that leaves a step down"]
+   [:intent/cell "the cell a :place puts its block in, given (a build's), not chosen"
+    "a build's :place"]
+   [:intent/click-face "the face of the clicked block a placement clicks, toward the cell it fills"
+    ":place, once it has a spot"]
+   [:intent/build "which plan a :build works: :cast-one, :portal or :nether" ":build"]
+   [:intent/origin "a build's frame origin [bx by bz]" ":build"]
+   [:intent/facing "the side of the frame a build works from: :south :north :east :west" ":build"]
+   [:intent/op "the plan op a :build works now; a new op drops the child" ":build"]
+   [:intent/aim "the point a :pour or :use-on looks at to act" ":pour, :use-on"]
+   [:intent/expect "the predicate (build/holds?) that shows a :pour, :use-on or :await worked"
+    ":pour, :use-on, :await"]
+   [:intent/fluid "what a :scoop takes: :water (when absent) or :lava" "a :scoop for lava"]
    [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"
     "gather-chain intents"]
    [:intent/stage "executor stage, e.g. :settle :digging :click :verify :take" "staged intents"]

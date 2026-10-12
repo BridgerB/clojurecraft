@@ -8,6 +8,7 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.build :as build]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.gym :as gym]
@@ -941,6 +942,82 @@
     (is (not-any? #(= :respawn (:packet/name %)) (:sim/out early)) "not before four seconds")
     (is (= "minecraft:the_nether" (:sim/dimension later)))
     (is (some #(= "minecraft:the_nether" (:dimension %)) (:sim/out later)))))
+
+;; ---------------------------------------------------------------- building the portal (issue #8)
+
+(def build-origin "Where the frame's corner goes in the one-column arena." [4 64 5])
+
+(def kit
+  "What the gym gives a cast: buckets of lava and water, an empty one, cobblestone, flint and
+   steel."
+  {[:hotbar 0] {:item (recipe/item-id :lava_bucket) :count 1}
+   [:hotbar 1] {:item (recipe/item-id :water_bucket) :count 1}
+   [:hotbar 2] {:item (recipe/item-id :bucket) :count 1}
+   [:hotbar 3] {:item (recipe/item-id :cobblestone) :count 64}
+   [:hotbar 4] {:item (recipe/item-id :flint_and_steel) :count 1}
+   [:hotbar 5] {:item (recipe/item-id :cobblestone) :count 64}
+   [:hotbar 6] {:item (recipe/item-id :cobblestone) :count 64}})
+
+(defn build-run
+  "Run a :build of kind from build-origin facing south over blocks, from spawn with inv, until it
+   ends or max-ms. Returns [world sim]."
+  [kind blocks spawn inv max-ms]
+  (let [it
+        {:intent/kind :build :intent/build kind :intent/origin build-origin :intent/facing :south}
+        step
+        (fn [w e]
+          (let [w (game/step w e)
+                i (:plan/intent w)]
+            (cond (= :go (:event/kind e)) (assoc w :plan/intent (assoc it :intent/status :active))
+                  (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
+                  (intent/run w i e)
+                  :else w)))]
+    (sim/run step
+             (game/init fx/opts)
+             (sim/init {:column (world/column-bytes blocks) :spawn spawn :inventory inv})
+             #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
+             max-ms)))
+
+(deftest one-cell-is-cast-from-lava-and-water
+  (let [[w sim] (build-run :cast-one {} [9.5 64.0 10.5] kit 300000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
+    (is (= :obsidian (blocks/name-of (sim/block-at sim [5 64 5]))) "the first cell, obsidian")
+    (is (= (recipe/item-id :water_bucket)
+           (some #(when (= (recipe/item-id :water_bucket) (:item %)) (:item %))
+                 (vals (:sim/inv sim))))
+        "the water scooped back")
+    (is (empty? (:sim/violations sim)))))
+
+(def lava-pit
+  "A trench of lava sources set into the floor east of the footprint, one wide so every source
+   has ground beside it to refill from (a scoop takes a source for good)."
+  (into {} (for [z (range 0 12)] [[15 63 z] blocks/lava-base])))
+
+(deftest the-frame-is-cast-lit-and-stepped-through
+  (let [[w sim] (build-run :nether lava-pit [9.5 64.0 10.5] kit 1800000)
+        frame (for [[dx dy] build/frame-cells] [(+ 4 dx) (+ 64 dy) 5])]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
+    (is (every? #(= :obsidian (blocks/name-of (sim/block-at sim %))) frame) "ten obsidian")
+    (is (= 6
+           (count (filter #(= :nether_portal (blocks/name-of (sim/block-at sim %)))
+                          (for [x [5 6] y [65 66 67]] [x y 5])))))
+    (is (= "minecraft:the_nether" (:player/dimension w)))
+    (is (empty? (:sim/violations sim)))))
+
+(deftest a-cast-six-tenths-done-casts-only-the-other-four
+  ;; the build reads the world, not a record of its progress: six cells already obsidian are
+  ;; skipped, so four lava pours are needed, one from the kit and three from the trench
+  (let [seeded (into {}
+                     (for [[dx dy] (take 6 build/frame-cells)]
+                       [[(+ 4 dx) (+ 64 dy) 5] (blocks/default-state :obsidian)]))
+        [w sim] (build-run :portal (merge lava-pit seeded) [9.5 64.0 10.5] kit 1800000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
+    (is (= 9 (count (filter #(= blocks/lava-base (sim/block-at sim %)) (keys lava-pit))))
+        "three lava scooped: four cells cast, not ten")
+    (is (empty? (:sim/violations sim)))))
 
 ;; ---------------------------------------------------------------- pours (issue #8)
 

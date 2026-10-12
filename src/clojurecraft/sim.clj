@@ -746,13 +746,9 @@
 
 ;; ---------------------------------------------------------------- using items on blocks
 
-(def face-offsets
-  "Each block face by name, as the step from the block to the cell beyond that face."
-  {:down [0 -1 0] :up [0 1 0] :north [0 0 -1] :south [0 0 1] :west [-1 0 0] :east [1 0 0]})
-
 (def faces
   "A face as the packets number it → the step to the cell beyond it (face-offsets)."
-  (into {} (for [[n step] face-offsets] [(packet/value :face n) step])))
+  (into {} (for [[n step] physics/face-offsets] [(packet/value :face n) step])))
 
 (defn overlaps-player?
   "Would a block at [x y z] intersect the player's 0.6×1.8 box at its last reported position?

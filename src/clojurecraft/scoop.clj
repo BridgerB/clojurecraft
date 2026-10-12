@@ -50,18 +50,29 @@
 
 (def water-bucket (recipe/item-id :water_bucket))
 
+(def fluids
+  "What a scoop of each fluid takes and gives: the source state and the filled bucket. Water is
+   the default; a build refills lava from a station (#8)."
+  {:water {:source blocks/water-base :bucket water-bucket}
+   :lava {:source blocks/lava-base :bucket (recipe/item-id :lava_bucket)}})
+
 ;; ---------------------------------------------------------------- where the water is
+
+(defn scoopable?
+  "Is target still a source of fluid with air over it, a surface the eyes look down into?"
+  [world [x y z :as target] fluid]
+  (let [above (terrain/block-at world [x (inc y) z])]
+    (and (= (get-in fluids [fluid :source]) (terrain/block-at world target))
+         (some? above)
+         (not (blocks/solid? above))
+         (nil? (blocks/fluid above)))))
 
 (defn surface-source?
   "Is pos a water source block (plain water at level 0, not a waterlogged block) open to the
    air above it, a surface the eyes can look down into? A source under stone is a pocket in an
    aquifer wall: the live run that scooped at three of them got nothing from any."
-  [world [x y z :as pos]]
-  (let [above (terrain/block-at world [x (inc y) z])]
-    (and (= blocks/water-base (terrain/block-at world pos))
-         (some? above)
-         (not (blocks/solid? above))
-         (nil? (blocks/fluid above)))))
+  [world pos]
+  (scoopable? world pos :water))
 
 (defn aim-point
   "Where the eyes look to scoop the source at [x y z]: its surface's centre. Aimed at the block's
@@ -266,11 +277,11 @@
         (intent/assoc-intent :intent/sequence seq :intent/sent-at (now world)))))
 
 (defmethod scoop-stage :aim
-  [world {:intent/keys [target since still] :or {still 0}}]
+  [world {:intent/keys [target since still fluid] :or {still 0 fluid :water}}]
   (let [look (physics/look-at (game/eye world) (aim-point target))
         still (if (intent/still? world) (inc still) 0)
         world (assoc world :player/controls {:control/look look})]
-    (cond (not (surface-source? world target)) (intent/fail world :target-gone)
+    (cond (not (scoopable? world target fluid)) (intent/fail world :target-gone)
           (and (>= still 3) (> (- (now world) since) settle-ms))
           (-> world
               (use-item look)
@@ -278,8 +289,8 @@
           :else (intent/assoc-intent world :intent/still still))))
 
 (defmethod scoop-stage :sent
-  [world {:intent/keys [before sent-at tries] :or {tries 1}}]
-  (cond (> (inventory/item-count world water-bucket) before) (intent/done world)
+  [world {:intent/keys [before sent-at tries fluid] :or {tries 1 fluid :water}}]
+  (cond (> (inventory/item-count world (get-in fluids [fluid :bucket])) before) (intent/done world)
         (<= (- (now world) sent-at) answer-ms) world
         (>= tries max-tries) (intent/fail world :no-scoop)
         :else
@@ -294,7 +305,8 @@
             (nil? (:intent/stage i))
             (assoc :intent/stage :equip
                    :intent/since (now world)
-                   :intent/before (inventory/item-count world water-bucket)))
+                   :intent/before
+                   (inventory/item-count world (get-in fluids [(:intent/fluid i :water) :bucket]))))
         world (assoc world :plan/intent i)]
     (case (window/waiting world i)
       :overdue (intent/fail world :stale-window)
