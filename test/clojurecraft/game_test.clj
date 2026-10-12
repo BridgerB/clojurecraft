@@ -85,30 +85,42 @@
       (is (= :configuration (:bot/phase w))))))
 
 (deftest inventory-one-key-space
-  (let [log {:item 134 :count 1}
-        items (vec (concat (repeat 36 nil) [log] (repeat 9 nil)))
+  (let [log {:item (blocks/items :oak_log) :count 1}
+        items (assoc (vec (repeat (inventory/slot-count (inventory/layouts :inventory)) nil))
+                     (inventory/slot [:hotbar 0])
+                     log)
         [w _]
         (run
          (in-play)
          [(packet
            {:packet/name :container-set-content :window-id 0 :state-id 1 :items items :carried nil})
-          (packet {:packet/name :set-player-inventory :slot 5 :item {:item 134 :count 2}})
+          (packet {:packet/name :set-player-inventory
+                   :slot 5
+                   :item {:item (blocks/items :oak_log) :count 2}})
           (packet {:packet/name :container-set-slot
                    :window-id 0
                    :state-id 2
-                   :slot 9
-                   :item {:item 1 :count 3}})
+                   :slot (inventory/slot [:main 0])
+                   :item {:item (blocks/items :stone) :count 3}})
           (packet {:packet/name :container-set-slot
                    :window-id 3
                    :state-id 2
                    :slot 9
-                   :item {:item 134 :count 64}})])]
-    (is (= {0 log 5 {:item 134 :count 2} 9 {:item 1 :count 3}} (:player/inventory w)))
+                   :item {:item (blocks/items :oak_log) :count 64}})])]
+    (is (=
+         {0 log 5 {:item (blocks/items :oak_log) :count 2} 9 {:item (blocks/items :stone) :count 3}}
+         (:player/inventory w)))
     (is (= 2 (:window/state-id w)) "window 0's latest state id is kept")
     (is (= 3 (inventory/logs-held w)))
-    (is (= 0 (inventory/window->player-slot (inventory/layouts :inventory) 36)))
-    (is (= 40 (inventory/window->player-slot (inventory/layouts :inventory) 45)))
-    (is (= 39 (inventory/window->player-slot (inventory/layouts :inventory) 5))
+    (is (= 0
+           (inventory/window->player-slot (inventory/layouts :inventory)
+                                          (inventory/slot [:hotbar 0]))))
+    (is (= inventory/offhand-slot
+           (inventory/window->player-slot (inventory/layouts :inventory)
+                                          (inventory/slot [:offhand]))))
+    (is (= inventory/head-slot
+           (inventory/window->player-slot (inventory/layouts :inventory)
+                                          (inventory/slot [:armour 0])))
         "window 5 is the helmet, player slot 39")
     (is (= 36 (inventory/window->player-slot (inventory/layouts :inventory) 8))
         "window 8 is the boots, player slot 36")
@@ -131,7 +143,7 @@
 (deftest a-furnace-window-keeps-its-slots-its-data-and-the-players-items-apart
   (let [coal {:item (get blocks/items :coal) :count 4}
         ore {:item (get blocks/items :raw_iron) :count 3}
-        log {:item 134 :count 1}
+        log {:item (blocks/items :oak_log) :count 1}
         [w _] (run
                (in-play)
                [(packet {:packet/name :open-screen
@@ -152,7 +164,9 @@
     (is (= (inventory/layouts :furnace) (inventory/layout-of-menu (blocks/menus :furnace))))))
 
 (deftest the-crafting-grid-is-never-invisible
-  (let [items (vec (concat [{:item 30 :count 1} {:item 36 :count 1} nil {:item 36 :count 1} nil]
+  (let [items (vec (concat [{:item (blocks/items :podzol) :count 1}
+                            {:item (blocks/items :oak_planks) :count 1} nil
+                            {:item (blocks/items :oak_planks) :count 1} nil]
                            (repeat 41 nil)))
         [w _] (run
                (in-play)
@@ -160,34 +174,38 @@
                          :window-id 0
                          :state-id 4
                          :items items
-                         :carried {:item 36 :count 6}})
+                         :carried {:item (blocks/items :oak_planks) :count 6}})
                 (packet {:packet/name :container-set-slot
                          :window-id 0
                          :state-id 5
                          :slot 3
-                         :item {:item 36 :count 1}})
+                         :item {:item (blocks/items :oak_planks) :count 1}})
                 (packet
                  {:packet/name :container-set-slot :window-id 0 :state-id 6 :slot 1 :item nil})])]
-    (is (= {0 {:item 30 :count 1} 3 {:item 36 :count 1}} (:window/grid w)))
-    (is (= {:item 36 :count 6} (:window/cursor w)))
+    (is (= {0 {:item (blocks/items :podzol) :count 1} 3 {:item (blocks/items :oak_planks) :count 1}}
+           (:window/grid w)))
+    (is (= {:item (blocks/items :oak_planks) :count 6} (:window/cursor w)))
     (is (= 6 (:window/state-id w)))
     (is (= {} (:player/inventory w)) "grid items are in the grid, not double-counted")
     (testing "cursor and open windows"
-      (let [[w _]
-            (run w
-                 [(packet {:packet/name :set-cursor-item :item nil})
-                  (packet
-                   {:packet/name :open-screen :window-id 3 :menu-type 12 :title (byte-array 0)})])]
+      (let [[w _] (run w
+                       [(packet {:packet/name :set-cursor-item :item nil})
+                        (packet {:packet/name :open-screen
+                                 :window-id 3
+                                 :menu-type (blocks/menus :crafting)
+                                 :title (byte-array 0)})])]
         (is (nil? (:window/cursor w)))
-        (is (= {:window/id 3 :window/menu-type 12 :window/slots {}} (:window/open w)))
+        (is (= {:window/id 3 :window/menu-type (blocks/menus :crafting) :window/slots {}}
+               (:window/open w)))
         (is (nil? (:window/open
                    (first (run w [(packet {:packet/name :container-close :window-id 3})])))))))))
 
 (deftest a-login-or-respawn-gives-fresh-menus
   (let [w (assoc (in-play)
-                 :window/open {:window/id 3 :window/menu-type 12 :window/slots {}}
-                 :window/cursor {:item 36 :count 2}
-                 :window/grid {1 {:item 36 :count 1}})]
+                 :window/open
+                 {:window/id 3 :window/menu-type (blocks/menus :crafting) :window/slots {}}
+                 :window/cursor {:item (blocks/items :oak_planks) :count 2}
+                 :window/grid {1 {:item (blocks/items :oak_planks) :count 1}})]
     (doseq [p [fx/respawn {:packet/name :login :entity-id 9}]]
       (let [[w _] (run w [(packet p)])]
         (is (nil? (:window/open w)) (str (:packet/name p)))

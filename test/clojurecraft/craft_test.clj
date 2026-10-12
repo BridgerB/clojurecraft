@@ -1,6 +1,7 @@
 (ns clojurecraft.craft-test
   "The :craft intent tick by tick, against canned server answers (no sim, no socket)."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.craft]
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
@@ -113,7 +114,10 @@
 (deftest a-stale-state-id-in-the-table-window-is-just-another-answer
   ;; vanilla applies a click that carries a stale state id and answers with the full window;
   ;; the bot treats that like any answer: the state id moved, the next click carries the new one
-  (let [table {:window/id 2 :window/menu-type 12 :window/state-id 5 :window/slots {}}
+  (let [table {:window/id 2
+               :window/menu-type (blocks/menus :crafting)
+               :window/state-id 5
+               :window/slots {}}
         w (-> (in-play)
               (assoc :window/open table
                      :player/inventory {0 {:item planks :count 3} 1 {:item stick :count 2}}
