@@ -171,7 +171,11 @@
                          (watch/telemetry! world*))]
     (cli/log "connected to" host port "as" name)
     (cond (= events "stdin") (read-events! *in* queue) ; a fixture speaks through the pipe
-          planned (go-when-loaded! world* queue {:event/kind :go :go/goals planned})) ; no fixture: start where we stand
+          planned
+          (go-when-loaded! world*
+                           queue
+                           (cond-> {:event/kind :go :go/goals planned} ; no fixture: start where we stand
+                             (= chain "true") (assoc :go/chain? true)))) ; milestones (plan/reach)
     (apply-event! world*
                   {:event/kind :start :start/host host :start/port (:port opts) :start/name name}
                   (:out c)

@@ -173,14 +173,15 @@
 (s/def :event/packet ::packet)
 (s/def :event/reason string?)
 (s/def :go/goals (s/coll-of keyword?))
+(s/def :go/chain? boolean?)             ; a run that plays every step up to its target, with milestones
 (s/def :start/host string?)
 (s/def :start/port int?)
 (s/def :start/name string?)
 (s/def ::event
   (s/keys :req [:event/kind]
           :opt
-          [:event/now :event/rand :event/packet :event/reason :go/goals :go/at :start/host
-           :start/port :start/name]))
+          [:event/now :event/rand :event/packet :event/reason :go/goals :go/at :go/chain?
+           :start/host :start/port :start/name]))
 
 ;; plan and intents
 (s/def :intent/kind keyword?)
@@ -194,6 +195,8 @@
 (s/def :plan/blacklist (s/coll-of ::block-pos :kind set?))
 (s/def :plan/trunk-failures (s/map-of (s/tuple int? int?) pos-int?))
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
+(s/def :plan/chain? boolean?)
+(s/def :plan/reached (s/coll-of keyword? :kind set?))
 (s/def :intent/recipe keyword?)
 (s/def :intent/window #{:inventory :table})
 (s/def :intent/smelt keyword?)
@@ -242,7 +245,7 @@
            :player/loaded? :player/dimension :player/entity-id :player/inventory :player/controls
            :world/chunks :world/blocks :world/facts :world/entities :window/state-id :window/grid
            :window/cursor :window/open :player/held-slot :plan/intent :plan/status :plan/blacklist
-           :plan/trunk-failures]))
+           :plan/trunk-failures :plan/chain? :plan/reached]))
 
 (s/fdef game/step
   :args

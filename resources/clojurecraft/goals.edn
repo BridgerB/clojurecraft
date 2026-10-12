@@ -108,8 +108,16 @@
   "the iron kit the portal needs: flint and steel and a filled water bucket (four ingots in all: one in the flint and steel, three in the bucket), the flint and steel first so all the iron is mined in one trip down and the climb out ends at the water"
   :goal/provides {:item/flint_and_steel 1 :item/water_bucket 1}
   :goal/done? :provided?}
- {:goal/id :cast-one
+ {:goal/id :portal-kit
   :goal/priority 13
+  :goal/target? true
+  :goal/until "portal-kit"
+  :goal/doc
+  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from a pool to the mold, and three stacks of cobblestone for the mold (its plan places at most 190); the gym's portal rows give these, a run from spawn makes them"
+  :goal/provides {:item/bucket 1 :item/cobblestone 192}
+  :goal/done? :provided?}
+ {:goal/id :cast-one
+  :goal/priority 14
   :goal/target? true
   :goal/until "cast-one"
   :goal/doc
@@ -118,7 +126,7 @@
   :goal/build :cast-one
   :goal/done? :built?}
  {:goal/id :portal
-  :goal/priority 14
+  :goal/priority 15
   :goal/target? true
   :goal/until "portal"
   :goal/doc
@@ -127,7 +135,7 @@
   :goal/build :portal
   :goal/done? :built?}
  {:goal/id :nether
-  :goal/priority 15
+  :goal/priority 16
   :goal/target? true
   :goal/until "nether"
   :goal/doc "the portal cast and lit, then stood in until the dimension is the Nether"

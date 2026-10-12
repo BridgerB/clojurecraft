@@ -8,6 +8,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.spec]
             [clojurecraft.swim]
             [clojurecraft.terrain :as terrain]
@@ -213,7 +214,7 @@
   (is (= [:nether] (plan/goals-for (plan/current-until))))
   (let [chain (plan/through (plan/current-until))]
     (is (= [:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket :water-bucket
-            :flint-and-steel :iron-kit :cast-one :portal :nether]
+            :flint-and-steel :iron-kit :portal-kit :cast-one :portal :nether]
            chain))
     (is (= [:wood] (plan/through "wood")))
     (is (nil? (plan/through "play")))
@@ -235,6 +236,32 @@
             :goal/until "old"
             :goal/superseded-by :later}
            {:goal/id :later :goal/target? true :goal/priority 9 :goal/until "later"}]))))
+
+(deftest a-chained-run-does-not-go-back-for-a-step-it-reached
+  ;; grok's first chained run (PR #32, run 38216982945) crafted the pickaxe, which spent the
+  ;; kit's sticks, so :kit was undone again and preempted it: open the table, craft, craft a
+  ;; stick, twice a second for five minutes. A chained run's steps are milestones.
+  (let [chain (plan/through "pickaxe")
+        holding (fn [w items]
+                  (assoc w
+                         :player/inventory
+                         (into {}
+                               (map-indexed
+                                (fn [i [item n]] [(+ 36 i) {:item (recipe/item-id item) :count n}])
+                                items))))
+        w (plan/begin (world-state [0.5 64.0 0.5]) {:go/goals chain :go/chain? true} plan/goals)
+        kit-held (plan/reach (holding w {:crafting_table 1 :stick 4 :oak_log 1}) plan/goals)
+        spent (holding kit-held {:crafting_table 1 :stick 2 :oak_planks 1})]
+    (is (= #{:wood :kit} (:plan/reached kit-held)) "the logs and the kit held: both reached")
+    (is (= :pickaxe (:goal/id (plan/choose spent plan/goals)))
+        "two sticks spent on the pickaxe: the kit is not made again")
+    (testing "a gym stage, not chained, still re-derives every step"
+      (let [stage (plan/begin (world-state [0.5 64.0 0.5]) {:go/goals chain} plan/goals)]
+        (is (nil? (:plan/reached (plan/reach (holding stage {:crafting_table 1 :stick 4})
+                                             plan/goals))))
+        (is (= :wood
+               (:goal/id (plan/choose (holding stage {:crafting_table 1 :stick 2})
+                                      plan/goals))))))))
 
 (def superseding-table
   "A table where :wood was fixed as :wood-2 and :wood-2 again as :wood-3."

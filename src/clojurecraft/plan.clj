@@ -107,22 +107,43 @@
 (defmethod act :default [_ goal] {:plan/wait [:no-act (:goal/act goal)]})
 (defmethod next-intent :default [_ _ _] nil)
 
-(defn choose
-  "The highest-priority live target of table in play (:plan/goals, or every target) the world
-   does not satisfy. A row marked :goal/always? is in play whatever --until asked for: the
-   escapes are."
+(defn in-play
+  "The live targets of table in play (:plan/goals, or every target), highest priority first. A
+   row marked :goal/always? is in play whatever --until asked for: the escapes are."
   [world table]
-  (let [in-play (:plan/goals world)]
+  (let [goals (:plan/goals world)]
     (->> (targets-of table)
-         (filter #(or (nil? in-play) (:goal/always? %) (contains? in-play (:goal/id %))))
-         (sort-by :goal/priority)
-         (remove #(done-by world %))
-         first)))
+         (filter #(or (nil? goals) (:goal/always? %) (contains? goals (:goal/id %))))
+         (sort-by :goal/priority))))
+
+(defn choose
+  "The highest-priority target in play the world does not satisfy and the run has not already
+   reached (:plan/reached, a chained run's milestones)."
+  [world table]
+  (->> (in-play world table)
+       (remove #(contains? (:plan/reached world #{}) (:goal/id %)))
+       (remove #(done-by world %))
+       first))
+
+(defn reach
+  "A chained run's milestones: on a :plan/chain? plan, every target in play that holds now joins
+   :plan/reached and stays there for the run, the escapes excepted. A run from spawn spends what
+   an earlier step made (the pickaxe takes the kit's sticks, the water bucket the bucket): the
+   step was reached, so it is not done again; a tool that breaks is made again by the needs of
+   the step that uses it. A gym stage, one target, keeps re-deriving."
+  [world table]
+  (if (:plan/chain? world)
+    (update world
+            :plan/reached
+            (fnil into #{})
+            (comp (remove :goal/always?) (filter #(done-by world %)) (map :goal/id))
+            (in-play world table))
+    world))
 
 (defn begin
   "Start planning. A :go that names a landing (:go/at, from the fixture) first waits in
    :landing until the bot is there with its chunk loaded; the wait is plan state, not a sleep."
-  [world {:go/keys [goals at]} table]
+  [world {:go/keys [goals at chain?]} table]
   (-> world
       (cond-> (:plan/intent world) (memory/remember-intention (:plan/intent world) :abandoned))
       (assoc :plan/status (if at :landing :active)
@@ -132,6 +153,7 @@
              :plan/attempts 0)
       (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
+      (cond-> chain? (assoc :plan/chain? true :plan/reached #{}))
       (dissoc :plan/intent :plan/last :plan/waiting-since)))
 
 (defn landed?
@@ -245,7 +267,9 @@
    now is preempted; either waits while the cursor holds an item. Otherwise the intent runs, or
    the chosen target's next intent starts."
   [world event table]
-  (let [world (if (:player/pos world) (trap/trapped-tick world) world)
+  (let [world (cond-> world
+                (:player/pos world) trap/trapped-tick
+                true (reach table))
         i (:plan/intent world)
         active? (= :active (:plan/status world))
         goal (when active? (choose world table))
