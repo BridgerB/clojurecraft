@@ -191,7 +191,8 @@
    max-attempts failures in a row fail the plan with the intent's reason. A walk that failed
    :no-path does not count. Its route was accepted and then could not be walked, so the target is
    given up and the next candidate is tried: three such walks, each a different place, used to end
-   a run that was still searching."
+   a run that was still searching. A staircase that died :boxed blacklists the cell it stood on,
+   so the next descent does not start there and a later stair will not step back onto it."
   [world i]
   (let [attempts (cond-> (:plan/attempts world 0)
                    (not (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))) inc)]
@@ -199,6 +200,8 @@
         (memory/remember-intention i :failed)
         (assoc :player/controls {})
         (cond-> (:intent/target i) (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
+        (cond-> (and (= :stairs-down (:intent/kind i)) (= :boxed (:intent/reason i)))
+                (update :plan/blacklist (fnil conj #{}) (intent/feet world)))
         (cond-> (:intent/trunk i)
                 (update-in [:plan/trunk-failures (let [[x _ z] (:intent/trunk i)] [x z])]
                            (fnil inc 0)))

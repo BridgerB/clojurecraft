@@ -125,6 +125,29 @@
        "the way home under the sea may be long: gym batch iron-a9 run 1, 155 blocks out, was
            :boxed after 32 steps three times"))))
 
+(deftest a-boxed-descent-is-not-started-again-from-the-same-cell
+  ;; full run ab3945e died at y 32 over an aquifer: every stair and every further level step was
+  ;; refused, then two new stairs-down from that cell boxed in under a second and the plan failed
+  (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
+        corridor (merge (into {} (for [x (range 5 16) y [32 33]] [[x y 5] 0]))
+                        (into {} (for [z (range 5 16) y [32 33]] [[15 y z] 0]))
+                        {[5 32 7] lava [3 32 5] lava [5 32 3] lava [6 30 5] lava})
+        w (assoc (standing 32 :stone_pickaxe) :world/chunks {[0 0] (world/column corridor)})
+        died (plan/fail-intent
+              (assoc w :plan/blacklist #{} :plan/attempts 0)
+              {:intent/kind :stairs-down :intent/reason :boxed :intent/status :failed :intent/id 7})
+        r (stone/mine-next died (row :mine-iron))]
+    (is (contains? (:plan/blacklist died) [5 32 5]) "the cell it died on")
+    (is (= [:walk :retreat] [(:intent/kind r) (:intent/for r)]) (pr-str r))
+    (is (= {:intent/kind :stairs-down :intent/to-y 26} (stone/mine-next w (row :mine-iron)))
+        "the first descent still starts")
+    (let [stone (into {} (for [x (range 16) y (range 28 36) z (range 16)] [[x y z] 1]))
+          hill (assoc w :world/chunks {[0 0] (world/column (assoc stone [5 32 5] 0 [5 33 5] 0))})]
+      (is (stairs/safe? hill (stairs/stair-cells [5 32 5] [1 0])) "solid rock ahead is a stair")
+      (is (not (stairs/safe? (assoc hill :plan/blacklist #{[6 31 5]})
+                             (stairs/stair-cells [5 32 5] [1 0])))
+          "a later descent does not step back onto the cell"))))
+
 (deftest deeper-only-where-a-stair-can-be-dug
   ;; gym batch iron-a8 run 3: its tunnel at y 16 was boxed, and the stairs deeper it was sent down
   ;; bordered water every way: the dig refused each cell :unsafe and the stairs failed :boxed twice
