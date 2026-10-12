@@ -124,11 +124,16 @@
 (deftest a-surface-with-no-tree-still-waits
   (is (= {:plan/wait :no-log} (wood/gather-next (remembered {} [0.5 64.0 0.5])))))
 
-(deftest underground-with-no-log-the-bot-climbs-out
-  ;; full run 5be14e7: the stone pickaxe wore out tunnelling at y 16, one plank left, no log
-  ;; within 12 of the eye, and the plan waited :no-log until it failed
+(deftest underground-with-no-log-the-bot-waits
+  ;; full run 29ef069 cut a stair at spawn before any tree was remembered
   (let [w (remembered {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air} [8.5 50.0 8.5])]
     (is (not (terrain/under-sky? w (intent/feet w))))
+    (is (= {:plan/wait :no-log} (wood/gather-next w)))))
+
+(deftest a-trunk-with-no-route-is-climbed-for
+  (let [w (remembered
+           {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [8 69 8] 1 [8 70 8] 136}
+           [8.5 50.0 8.5])]
     (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
            (wood/gather-next w)))))
 

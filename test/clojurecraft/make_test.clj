@@ -284,12 +284,13 @@
     (is (nil? (row {:water_bucket 1 :flint_and_steel 1})) "the kit held: nothing to do")))
 
 (deftest a-last-stone-pickaxe-underground-goes-for-a-log
-  ;; full run 068485c wore the last stone pickaxe out at y 16, then the wooden one broke on the
-  ;; stairs and three :no-pickaxe failures ended the plan. The spare is gathered while the
-  ;; pickaxe still digs, which underground is a climb; on the open sky with no tree it is not.
-  (let [w (assoc (with-furnace (world-holding {:stone_pickaxe 1 :coal 1} false))
-                 :player/pos
-                 [5.5 50.0 5.5])]
+  ;; full run 068485c wore the last stone pickaxe out at y 16. The spare is gathered while one
+  ;; still digs. The trunk is remembered above the near band and no route reaches it, so the
+  ;; gather is a climb. On the open sky with no tree it is not.
+  (let [col (world/column {[8 69 8] 1 [8 70 8] 136})
+        w (-> (with-furnace (world-holding {:stone_pickaxe 1 :coal 1} false))
+              (assoc :player/pos [5.5 50.0 5.5] :world/chunks {[0 0] col})
+              (memory/remember-column [0 0] col))]
     (is (not (terrain/under-sky? w (intent/feet w))))
     (is (= :gather-log
            (:goal/id (make/next-row w {:goal/provides {:item/iron_ingot 4}} plan/goals))))))

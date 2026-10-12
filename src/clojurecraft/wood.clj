@@ -88,20 +88,23 @@
    :intent/trunk bottom})
 
 (defn climb-out
-  "No trunk in the near band. Underground, the trees are on the surface: walk to the nearest
-   remembered one a route reaches (intent/routable?), else cut stairs up until out of the ground
-   (stairs/out? ends them; terrain/top-y is the top of the world). nil under the open sky.
-   A :partial route through ground already loaded is not started: full run 068485c took six of
-   them from y 16, each failed :no-path within seconds, and the trunks were blacklisted."
+  "No trunk in the near band. Underground, with a standing trunk remembered further off: walk to
+   the nearest one a route reaches (intent/routable?), else cut stairs up until out of the ground
+   (stairs/out? ends them; terrain/top-y is the top of the world). nil under the open sky, and
+   nil when no trunk is remembered yet. Full run 29ef069 cut a stair at spawn before any tree
+   was remembered, failed :stair-not-taken, and the plan then waited :no-log."
   [world]
   (when-not (terrain/under-sky? world (intent/feet world))
-    (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
-              (->> (memory/positions-now world blocks/log-states)
-                   (remove (skipped world))
-                   (filter #(standing-trunk? world %))
-                   (memory/nearest-first (game/eye world) far-radius)
-                   (take far-candidates)))
-        {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface})))
+    (let [trunks (->> (memory/positions-now world blocks/log-states)
+                      (remove (skipped world))
+                      (filter #(standing-trunk? world %))
+                      (memory/nearest-first (game/eye world) far-radius)
+                      (take far-candidates))]
+      (when (seq trunks)
+        (or (some (fn [bottom]
+                    (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
+                  trunks)
+            {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface})))))
 
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
