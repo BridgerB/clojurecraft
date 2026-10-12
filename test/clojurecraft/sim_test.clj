@@ -2076,8 +2076,10 @@
 
 (deftest a-death-mid-cast-resumes-at-the-first-op-not-done
   ;; the build stores no progress: after a death the planner starts it again at the site it
-  ;; remembers, and the first op the world says is not done is the one worked
-  (let [[w sim] (nether-run step {:kill-at 240000})]
+  ;; remembers, and the first op the world says is not done is the one worked. The new life
+  ;; begins off the frame (the site was chosen at the landing, and vanilla never respawns a
+  ;; player inside blocks), so it walks back to the site
+  (let [[w sim] (nether-run step {:kill-at 240000 :respawn [12.5 64.0 14.5]})]
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
     (is (= 1 (:stats/deaths w)) "it died once")
     (is (= "minecraft:the_nether" (:player/dimension w)))
