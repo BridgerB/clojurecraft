@@ -13,6 +13,8 @@ sourceRefs:
   - src/clojurecraft/scoop.clj#defn hunt-targets
   - src/clojurecraft/scoop.clj#defn first-walk
   - src/clojurecraft/scoop.clj#defn climb
+  - src/clojurecraft/scoop.clj#defn dig-out
+  - test/clojurecraft/scoop_test.clj#inside-a-hill-at-the-landings-height-the-bot-cuts-out
   - test/clojurecraft/scoop_test.clj#with-no-way-back-up-the-bot-cuts-stairs-up
   - test/clojurecraft/sim_test.clj#from-a-pit-below-the-water-the-bot-climbs-to-the-bank
   - src/clojurecraft/scoop.clj#defn sees?
@@ -41,7 +43,8 @@ The `:fill-bucket` row needs an empty bucket, holds a pickaxe and keeps a spare 
 2. With none in sight, a walk to the first of the three nearest remembered pools within 96 a route reaches (`pools-near` leaves out a pool in a loaded chunk that is not a surface source: memory's pool is the highest source with no water above it, which can be under stone), the same depth rule ([[memory-sightings]]): one fact per chunk, so a far pond is known without a fact per water cell.
 3. Deep in the mine (feet more than `underground-depth`, 8, under the landing `:plan/go-at`, and the sky not open over them), out first (`climb`, `:intent/for :surface`): a walk back to the landing when a route reaches it, else `:stairs-up` to the landing's height ([[stairs-down]]). From down there no water is in sight, and a hunt looks for ground near the bot's own height. Gym batch iron-a1 runs 3 and 5 made the bucket deep in the mine and failed `:no-water` (`deep-in-the-mine-with-no-water-the-bot-climbs-out-first`); the siblings climbed out first too ([[sib-bucket-water-find]]). The way down is often no way back up: batch iron-a2 runs 2 and 5 had mined an ore out of the floor under a stair, or dug a niche under one, and waited `:no-water` at y 18 and 24 with no route out (`with-no-way-back-up-the-bot-cuts-stairs-up`).
 4. Else a hunt (`hunt-targets`, the first a route reaches): of eight bearings, the ground 40 blocks out (the highest cell the feet could stand in, 16 over to 24 under the eye, in a loaded chunk), leaving out any nearer the landing (`:plan/go-at`) than the bot is now, lowest first, since water lies low; a walk there tagged `:intent/for :water-hunt`. The chunks it loads are remembered as they arrive, pools included, so the next pass finds the water in sight or remembered. Nothing is stored for the hunt: going outward from the landing is what keeps it from walking back over dry ground. This is the siblings' directional hunt, downhill first ([[sib-bucket-water-find]]).
-5. With no bearing that has ground, `{:plan/wait :no-water}`.
+5. With no hunt a route reaches and no open sky over the feet, `dig-out`: stairs up until out of the ground (`:intent/to-y` the top of the world, so only `stairs/out?` ends them), whatever the height. Live run 17 climbed out of its mine to the landing's height, y 65, which 145 blocks east of the landing was inside a hill; a pond lay 22 blocks off with no route to it nor to any hunt, and it waited `:no-water` (`inside-a-hill-at-the-landings-height-the-bot-cuts-out`).
+6. Under the open sky with nothing reachable, `{:plan/wait :no-water}`.
 
 The hunt came from gym batch `water-a1` (forest landings, set A): 1 pass in 5, and all four failures waited `:no-water` about 33 s in, with no water in sight within 24 and none remembered within 96.
 

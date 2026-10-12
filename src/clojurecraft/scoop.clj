@@ -192,10 +192,21 @@
            :intent/to-y (long (math/floor (second home)))
            :intent/for :surface}))))
 
+(defn dig-out
+  "Stairs cut up until out of the ground (stairs/out? ends them first; terrain/top-y is the top
+   of the world) when the sky is not open over the feet, whatever the height: nil under the
+   open sky. The last resort before waiting: live run 17 climbed out of its mine to the
+   landing's height, which 145 blocks east was inside a hill, found no route to a pond 22 blocks
+   off nor to any hunt, and waited :no-water."
+  [world]
+  (when-not (terrain/under-sky? world (intent/feet world))
+    {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}))
+
 (defn scoop-next
   "The next step toward a filled bucket: scoop the nearest surface source in reach and in sight,
    else walk to the bank of the nearest one a route reaches, or to such a remembered pool, or climb
-   out (to the landing, or by stairs cut up) when deep under it, or hunt for one (hunt-targets); else wait :no-water."
+   out (to the landing, or by stairs cut up) when deep under it, or hunt for one (hunt-targets),
+   or cut out of the ground (dig-out); else wait :no-water."
   [world]
   (let [srcs (sources world)
         src (first (filter #(and (in-reach? world %) (sees? world %)) srcs))]
@@ -205,6 +216,7 @@
               (first-walk world :scoop (pools-near world))
               (climb world)
               (first-walk world :water-hunt (hunt-targets world))
+              (dig-out world)
               {:plan/wait :no-water}))))
 
 (defmethod plan/act :scoop [world _] (scoop-next world))

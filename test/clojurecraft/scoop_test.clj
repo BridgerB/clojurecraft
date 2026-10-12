@@ -9,6 +9,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -126,9 +127,21 @@
   ;; sight and the hunt looked for ground near the bot's own height; both failed :no-water
   (let [w (assoc (standing mine [14.5 8.5]) :player/pos [14.5 66.0 8.5] :plan/go-at [4.5 76.0 8.5])]
     (is (= {:intent/kind :walk :intent/target [4 76 8] :intent/for :surface} (scoop/scoop-next w))))
-  (is (= {:plan/wait :no-water}
+  (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
          (scoop/scoop-next (assoc (standing mine [14.5 8.5]) :player/pos [14.5 66.0 8.5])))
-      "no landing to climb to"))
+      "no landing to climb to: out of the ground"))
+
+(deftest inside-a-hill-at-the-landings-height-the-bot-cuts-out
+  ;; live run 17 climbed out of its mine by stairs to the landing's height, y 65, which 145 blocks
+  ;; east was inside a hill: a pond 22 blocks off, no route to it or to any hunt, and it waited
+  ;; :no-water
+  (let [hill (merge (into {} (for [x (range 16) y (range 64 76) z (range 16)] [[x y z] 1]))
+                    {[8 70 8] blocks/air [8 71 8] blocks/air})
+        w (assoc (standing hill [8.5 8.5]) :player/pos [8.5 70.0 8.5] :plan/go-at [8.5 70.0 8.5])]
+    (is (nil? (scoop/climb w)) "not under the landing")
+    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+           (scoop/scoop-next w))
+        "stairs up until out of the ground")))
 
 (deftest with-no-way-back-up-the-bot-cuts-stairs-up
   ;; batch iron-a2 run 2 mined an iron ore out of the floor under one of its stairs, run 5 dug a
