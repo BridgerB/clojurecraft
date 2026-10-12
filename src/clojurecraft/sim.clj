@@ -28,6 +28,7 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.packet :as packet]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]))
 
@@ -204,50 +205,56 @@
   [sim {:keys [id]}]
   (update sim :sim/keep-alives-pending disj id))
 
+(defn finish-dig
+  "The client says it finished breaking pos: broken, with its drop, when it started breaking that
+   block at least the block's break time ago (break-ms); else the real server keeps the block
+   and restores the client's view of it. Either way, the ack of sequence."
+  [sim {:keys [pos sequence]}]
+  (let [{:keys [at] dpos :pos} (:sim/dig sim)
+        id (block-at sim pos)
+        held (held-item sim)
+        slot (held-slot sim)]
+    (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
+      (let [eid (:sim/next-eid sim)
+            [x y z] pos
+            item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
+            [sim item] (loot sim id held)
+            drop (when item {:item item :count 1})
+            before (full (:sim/inv sim) (inventory/layouts :inventory))
+            sim (-> sim
+                    (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
+                    (update :sim/broken conj pos)
+                    (dissoc :sim/dig)
+                    ;; observed live on 26.1.2: the breaker gets the block update, then the ack
+                    (send {:packet/name :block-update :pos pos :state blocks/air})
+                    (send {:packet/name :block-changed-ack :sequence sequence})
+                    (update :sim/inv wear slot)
+                    (disturb pos))
+            sim (sync-window sim :inventory before (:sim/cursor sim) false)]
+        (if drop
+          (-> sim
+              (assoc :sim/next-eid (inc eid))
+              (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
+              (send {:packet/name :add-entity
+                     :entity-id eid
+                     :uuid nil
+                     :type blocks/item-entity-type
+                     :x (first item-pos)
+                     :y (second item-pos)
+                     :z (nth item-pos 2)}))
+          sim))
+      ;; too early: the real server keeps the block and restores the client's view of it
+      (-> sim
+          (dissoc :sim/dig)
+          (send {:packet/name :block-update :pos pos :state (or id blocks/air)})
+          (send {:packet/name :block-changed-ack :sequence sequence})))))
+
 (defmethod on-packet [:play :player-action]
-  [sim {:keys [status pos sequence]}]
-  (case (long status)
-    0 (assoc sim :sim/dig {:pos pos :at (:sim/now sim)})
-    2
-    (let [{:keys [at] dpos :pos} (:sim/dig sim)
-          id (block-at sim pos)
-          held (held-item sim)
-          slot (held-slot sim)]
-      (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
-        (let [eid (:sim/next-eid sim)
-              [x y z] pos
-              item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
-              [sim item] (loot sim id held)
-              drop (when item {:item item :count 1})
-              before (full (:sim/inv sim) (inventory/layouts :inventory))
-              sim (-> sim
-                      (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
-                      (update :sim/broken conj pos)
-                      (dissoc :sim/dig)
-                      ;; observed live on 26.1.2: the breaker gets the block update, then the ack
-                      (send {:packet/name :block-update :pos pos :state 0})
-                      (send {:packet/name :block-changed-ack :sequence sequence})
-                      (update :sim/inv wear slot)
-                      (disturb pos))
-              sim (sync-window sim :inventory before (:sim/cursor sim) false)]
-          (if drop
-            (-> sim
-                (assoc :sim/next-eid (inc eid))
-                (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
-                (send {:packet/name :add-entity
-                       :entity-id eid
-                       :uuid nil
-                       :type blocks/item-entity-type
-                       :x (first item-pos)
-                       :y (second item-pos)
-                       :z (nth item-pos 2)}))
-            sim))
-        ;; too early: the real server keeps the block and restores the client's view of it
-        (-> sim
-            (dissoc :sim/dig)
-            (send {:packet/name :block-update :pos pos :state (or id 0)})
-            (send {:packet/name :block-changed-ack :sequence sequence}))))
-    sim))
+  [sim {:keys [status pos] :as p}]
+  (cond (= status (packet/value :dig :start-destroy))
+        (assoc sim :sim/dig {:pos pos :at (:sim/now sim)})
+        (= status (packet/value :dig :stop-destroy)) (finish-dig sim p)
+        :else sim))
 
 ;; ---------------------------------------------------------------- windows
 
@@ -733,7 +740,13 @@
 
 ;; ---------------------------------------------------------------- using items on blocks
 
-(def faces {0 [0 -1 0] 1 [0 1 0] 2 [0 0 -1] 3 [0 0 1] 4 [-1 0 0] 5 [1 0 0]})
+(def face-offsets
+  "Each block face by name, as the step from the block to the cell beyond that face."
+  {:down [0 -1 0] :up [0 1 0] :north [0 0 -1] :south [0 0 1] :west [-1 0 0] :east [1 0 0]})
+
+(def faces
+  "A face as the packets number it → the step to the cell beyond it (face-offsets)."
+  (into {} (for [[n step] face-offsets] [(packet/value :face n) step])))
 
 (defn overlaps-player?
   "Would a block at [x y z] intersect the player's 0.6×1.8 box at its last reported position?
@@ -755,16 +768,16 @@
    :dimension-type 0
    :dimension "minecraft:overworld"
    :seed 0
-   :game-type 0
-   :previous-game-type -1
+   :game-type (packet/value :game-type :survival)
+   :previous-game-type (packet/value :game-type :none)
    :debug? false
    :flat? false})
 
 (defmethod on-packet [:play :client-command]
   [sim {:keys [action]}]
-  ;; 0 asks to respawn: a dead player gets a new life at spawn, full health and breath, then
-  ;; the teleport that places it
-  (if (and (= 0 action) (<= (:sim/health sim) 0.0))
+  ;; a dead player asking to respawn gets a new life at spawn, full health and breath, then the
+  ;; teleport that places it
+  (if (and (= action (packet/value :client-command :perform-respawn)) (<= (:sim/health sim) 0.0))
     (let [[x y z] (:sim/respawn sim)]
       (-> sim
           (assoc :sim/health 20.0 :sim/air max-air :sim/player-pos [x y z])
@@ -801,7 +814,7 @@
                  d
                  (not (blocks/solid? d))
                  (not= :liquid (blocks/type-of d))
-                 (blocks/solid? (or (block-at sim pos) 0))
+                 (blocks/solid? (or (block-at sim pos) blocks/air))
                  (not overlap?))
         sim (cond-> sim overlap? (update :sim/violations conj [:place-into-player dest]))]
     (if ok?
@@ -814,7 +827,7 @@
             (sync-window :inventory before (:sim/cursor sim) false)
             (send ack)))
       (-> sim
-          (send {:packet/name :block-update :pos dest :state (or d 0)})
+          (send {:packet/name :block-update :pos dest :state (or d blocks/air)})
           (send ack)))))
 
 (defmethod on-packet [:play :use-item-on]

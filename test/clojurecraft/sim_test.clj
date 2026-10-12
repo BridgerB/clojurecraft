@@ -16,6 +16,7 @@
             [clojurecraft.main :as main]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -221,15 +222,20 @@
   (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] 1}) :spawn [0.5 64.0 0.5]})
                     :sim/phase :play
                     :sim/now 1000)
-        sim
-        (-> sim0
-            (sim/step {:sim/kind :packet
-                       :sim/packet
-                       {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
-            (sim/step {:sim/kind :tick :sim/now 2000})
-            (sim/step {:sim/kind :packet
-                       :sim/packet
-                       {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))]
+        sim (-> sim0
+                (sim/step {:sim/kind :packet
+                           :sim/packet {:packet/name :player-action
+                                        :status (packet/value :dig :start-destroy)
+                                        :pos [1 64 0]
+                                        :face (packet/value :face :west)
+                                        :sequence 1}})
+                (sim/step {:sim/kind :tick :sim/now 2000})
+                (sim/step {:sim/kind :packet
+                           :sim/packet {:packet/name :player-action
+                                        :status (packet/value :dig :stop-destroy)
+                                        :pos [1 64 0]
+                                        :face (packet/value :face :west)
+                                        :sequence 2}}))]
     (is (empty? (:sim/broken sim)))
     (is (= [:block-update :block-changed-ack] (mapv :packet/name (:sim/out sim)))
         "the real server restores the client's view of the block, then acks")
@@ -254,12 +260,18 @@
     (-> sim0
         (sim/step {:sim/kind :packet :sim/packet {:packet/name :set-carried-item :slot 0}})
         (sim/step {:sim/kind :packet
-                   :sim/packet
-                   {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
+                   :sim/packet {:packet/name :player-action
+                                :status (packet/value :dig :start-destroy)
+                                :pos [1 64 0]
+                                :face (packet/value :face :west)
+                                :sequence 1}})
         (sim/step {:sim/kind :tick :sim/now (+ 1000 wait-ms)})
         (sim/step {:sim/kind :packet
-                   :sim/packet
-                   {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))))
+                   :sim/packet {:packet/name :player-action
+                                :status (packet/value :dig :stop-destroy)
+                                :pos [1 64 0]
+                                :face (packet/value :face :west)
+                                :sequence 2}}))))
 
 (deftest stone-by-hand-breaks-slowly-and-drops-nothing
   ;; the game's requiresCorrectToolForDrops: stone drops only to a pickaxe; by hand it breaks
@@ -291,16 +303,21 @@
                     :sim/phase :play
                     :sim/now 1000
                     :sim/player-pos [0.5 64.0 0.5])
-        sim
-        (-> sim0
-            (sim/step {:sim/kind :packet :sim/packet {:packet/name :set-carried-item :slot 0}})
-            (sim/step {:sim/kind :packet
-                       :sim/packet
-                       {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1}})
-            (sim/step {:sim/kind :tick :sim/now 2200})
-            (sim/step {:sim/kind :packet
-                       :sim/packet
-                       {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}}))]
+        sim (-> sim0
+                (sim/step {:sim/kind :packet :sim/packet {:packet/name :set-carried-item :slot 0}})
+                (sim/step {:sim/kind :packet
+                           :sim/packet {:packet/name :player-action
+                                        :status (packet/value :dig :start-destroy)
+                                        :pos [1 64 0]
+                                        :face (packet/value :face :west)
+                                        :sequence 1}})
+                (sim/step {:sim/kind :tick :sim/now 2200})
+                (sim/step {:sim/kind :packet
+                           :sim/packet {:packet/name :player-action
+                                        :status (packet/value :dig :stop-destroy)
+                                        :pos [1 64 0]
+                                        :face (packet/value :face :west)
+                                        :sequence 2}}))]
     (is (contains? (:sim/broken sim) [1 64 0]))
     (is (nil? (get-in sim [:sim/inv (inventory/slot [:hotbar 0])])) "the last use broke it")
     (is (some #(and (= :container-set-slot (:packet/name %)) (= 36 (:slot %)) (nil? (:item %)))
@@ -880,9 +897,9 @@
   [sim]
   (client-sends sim
                 {:packet/name :use-item-on
-                 :hand 0
+                 :hand (packet/value :hand :main-hand)
                  :pos furnace-pos
-                 :face 1
+                 :face (packet/value :face :up)
                  :cursor-x 0.5
                  :cursor-y 1.0
                  :cursor-z 0.5
@@ -1266,17 +1283,24 @@
   ;; FallingBlock in the 26.1.2 jar: two ticks after the block under it changed, gravel with a
   ;; free cell under it falls, a column one block at a time, and lands where
   ;; FallingBlockEntity's gravity brings it
-  (let [broken
-        (-> (sim/init {:column (world/column-bytes
-                                {[1 64 0] stone-id [1 65 0] gravel-state [1 66 0] gravel-state})
-                       :spawn [0.5 64.0 0.5]
-                       :inventory {[:hotbar 0] {:item (item :wooden_pickaxe) :count 1}}})
-            (assoc :sim/phase :play :sim/now 1000 :sim/player-pos [0.5 64.0 0.5])
-            (client-sends {:packet/name :set-carried-item :slot 0})
-            (client-sends {:packet/name :player-action :status 0 :pos [1 64 0] :face 4 :sequence 1})
-            (sim/step {:sim/kind :tick :sim/now 2200})
-            (client-sends
-             {:packet/name :player-action :status 2 :pos [1 64 0] :face 4 :sequence 2}))
+  (let [broken (-> (sim/init {:column (world/column-bytes {[1 64 0] stone-id
+                                                           [1 65 0] gravel-state
+                                                           [1 66 0] gravel-state})
+                              :spawn [0.5 64.0 0.5]
+                              :inventory {[:hotbar 0] {:item (item :wooden_pickaxe) :count 1}}})
+                   (assoc :sim/phase :play :sim/now 1000 :sim/player-pos [0.5 64.0 0.5])
+                   (client-sends {:packet/name :set-carried-item :slot 0})
+                   (client-sends {:packet/name :player-action
+                                  :status (packet/value :dig :start-destroy)
+                                  :pos [1 64 0]
+                                  :face (packet/value :face :west)
+                                  :sequence 1})
+                   (sim/step {:sim/kind :tick :sim/now 2200})
+                   (client-sends {:packet/name :player-action
+                                  :status (packet/value :dig :stop-destroy)
+                                  :pos [1 64 0]
+                                  :face (packet/value :face :west)
+                                  :sequence 2}))
         at #(mapv (fn [y] (blocks/name-of (sim/block-at %1 [1 y 0]))) [64 65 66])]
     (is (= [:air :gravel :gravel] (at broken)) "the stone is gone")
     (is (= [:air :gravel :gravel] (at (game-ticks broken 1))) "nothing falls in the first tick")

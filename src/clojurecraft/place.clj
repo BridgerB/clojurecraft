@@ -14,6 +14,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
+            [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
@@ -104,7 +105,7 @@
     (-> world
         (assoc :bot/sequence seq)
         (game/emit {:packet/name :use-item-on
-                    :hand 0
+                    :hand (packet/value :hand :main-hand)
                     :pos pos
                     :face face
                     :cursor-x cx
@@ -113,7 +114,7 @@
                     :inside-block false
                     :world-border-hit false
                     :sequence seq})
-        (game/emit {:packet/name :swing :hand 0})
+        (game/emit {:packet/name :swing :hand (packet/value :hand :main-hand)})
         (intent/assoc-intent :intent/sequence seq :intent/sent-at (now world)))))
 
 (defn held-slot-of
@@ -213,7 +214,7 @@
         world (assoc world :player/controls {:control/look look})]
     (if (and (>= still 3) (> (- (now world) since) settle-ms))
       (-> world
-          (use-item-on against 1 [0.5 1.0 0.5])
+          (use-item-on against (packet/value :face :up) [0.5 1.0 0.5])
           (intent/assoc-intent :intent/stage :sent))
       (intent/assoc-intent world :intent/still still))))
 

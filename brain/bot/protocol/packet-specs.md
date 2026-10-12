@@ -10,6 +10,7 @@ verifiedAgainst: HEAD
 sourceRefs:
   - test/clojurecraft/packet_test.clj#packet-specs-only-grow
   - src/clojurecraft/packet.clj#def specs
+  - src/clojurecraft/packet.clj#def values
   - src/clojurecraft/packet.clj#defn decode
   - src/clojurecraft/packet.clj#defn encode
   - src/clojurecraft/packet.clj#def ids
@@ -29,6 +30,7 @@ A packet is a flat map with `:packet/name`; its other keys are the wire's own fi
 
 ## Key files
 - `packet.clj`, `specs` - the table (about fifty packets).
+- `packet.clj`, `values` - the numbers some fields carry, by name (`value :hand :main-hand` is 0; `:dig`, `:face`, `:next-state`, `:client-command`, `:chat-mode`, `:main-hand`, `:particle-status`, `:game-type`), as the game's enums number them: code says what a field means and the packet still carries the number. A name the enum lacks throws.
 - `packet.clj`, `decode` - reads only the listed fields and ignores the rest of the frame; that is how chunk packets skip block entities and light.
 - `packet.clj`, `encode` - client-to-server only; throws if the spec is missing.
 - `packet.clj`, `ids` - loaded from `resources/clojurecraft/packets.edn`.

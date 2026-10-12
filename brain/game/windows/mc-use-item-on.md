@@ -21,7 +21,7 @@ related:
 
 ## Facts
 - Play c2s id 66 in 775. Fields: `hand varint, pos position, face varint, cursor-x f32, cursor-y f32, cursor-z f32, inside-block bool, world-border-hit bool, sequence varint`.
-- `pos` is the block clicked and `face` the face clicked (0 down, 1 up, 2 north, 3 south, 4 west, 5 east); a placed block goes into `pos + face`. The cursor is the hit point inside that block, 0..1 per axis.
+- `pos` is the block clicked and `face` the face clicked (0 down, 1 up, 2 north, 3 south, 4 west, 5 east; the code writes them by name, `packet/value :face`); a placed block goes into `pos + face`. The cursor is the hit point inside that block, 0..1 per axis.
 - `sequence` is the same per-player counter `player-action` uses; the server answers with `block-changed-ack` for it.
 - Placement accepted: `block-update` for the new block, a slot update for the consumed item, the ack. Rejected: `block-update` restating the destination's current state, then the ack.
 - On a container block (a crafting table) the same packet opens its screen: `open-screen` then `container-set-content` ([[mc-crafting-table-window]]).

@@ -22,6 +22,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
+            [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
@@ -238,8 +239,12 @@
   (let [seq (inc (:bot/sequence world))]
     (-> world
         (assoc :bot/sequence seq)
-        (game/emit {:packet/name :use-item :hand 0 :sequence seq :y-rot yaw :x-rot pitch})
-        (game/emit {:packet/name :swing :hand 0})
+        (game/emit {:packet/name :use-item
+                    :hand (packet/value :hand :main-hand)
+                    :sequence seq
+                    :y-rot yaw
+                    :x-rot pitch})
+        (game/emit {:packet/name :swing :hand (packet/value :hand :main-hand)})
         (intent/assoc-intent :intent/sequence seq :intent/sent-at (now world)))))
 
 (defmethod scoop-stage :aim
