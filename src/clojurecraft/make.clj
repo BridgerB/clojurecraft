@@ -17,6 +17,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.craft]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
@@ -328,15 +329,31 @@
                   [(counts world) nil]
                   (:goal/provides goal))))
 
+(def table-drops #{(recipe/item-id :crafting_table)}) ; what digging a placed table drops: the table
+
+(defn take-table
+  "A dig of the bot's placed crafting table, to carry it on, when row goes out for something
+   (fetch?), no table is held and the remembered one is within reach; nil otherwise. A table
+   left behind is a log spent on the next: gym batch iron-a7 run 1 crafted three on its way
+   down the mine and had no wood left for a pickaxe."
+  [world row]
+  (let [pos (near world :crafting_table)]
+    (when (and pos
+               (fetch? row)
+               (zero? (get (counts world) :crafting_table 0))
+               (<= (physics/distance (game/eye world) (physics/centre pos)) intent/reach))
+      {:intent/kind :dig :intent/target pos :intent/for :take-table})))
+
 (defn decide
-  "The next intent toward goal: continue a log chain in flight, else act on the row the needs
-   planner reaches through table."
+  "The next intent toward goal: continue a log chain or a table pick-up in flight, else take the
+   table along (take-table) or act on the row the needs planner reaches through table."
   [world goal table]
   (or (wood/continue-gather world)
+      (intent/chain-next (:plan/last world) :take-table table-drops {})
       (let [row (next-row world goal table)]
         (cond (nil? row) nil
               (= :stuck row) {:plan/wait :stuck}
-              :else (plan/act world row)))))
+              :else (or (take-table world row) (plan/act world row))))))
 
 (defmethod plan/next-intent :needs [world goal table] (decide world goal table))
 

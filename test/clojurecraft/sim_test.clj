@@ -1365,6 +1365,30 @@
     (is (not-any? #(<= 9 (first %)) (:sim/broken sim)) "nothing dug east, under the lake")
     (is (empty? (:sim/violations sim)))))
 
+(deftest the-table-is-taken-along-when-the-bot-goes-out
+  ;; gym batch iron-a7 run 1 crafted three tables on its way down, a log each, and ran out of wood
+  ;; for a pickaxe; a table left behind is a log spent on the next one
+  (let [table (conj plan/goals
+                    {:goal/id :table-test
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:item/cobblestone 2}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes deep-stone)
+                                    :spawn [8.5 76.0 8.5]
+                                    :inventory {36 {:item (item :crafting_table) :count 1}
+                                                37 {:item (item :oak_planks) :count 3}
+                                                38 {:item (item :stick) :count 2}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         {:event/kind :go :go/goals [:table-test]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (get (held w) :crafting_table 0)) "the table placed for the pickaxe, carried on")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))))
+
 (deftest a-pickaxe-in-the-main-inventory-is-put-in-hand
   ;; gym batch iron-a3 runs 1 and 3 held a stone pickaxe in the main inventory (the hotbar was full
   ;; of what mining picked up) and their stairs stopped :no-pickaxe; the dig chooses from the

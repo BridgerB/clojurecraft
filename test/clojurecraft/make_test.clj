@@ -67,6 +67,7 @@
       :open-container (some? (memory/remembered w (:intent/target i)))
       :stairs-down (pos? (get counts :wooden_pickaxe 0)) ; down to stone, with nothing remembered: only with a pickaxe
       :walk (intent/routable? w i) ; to stone in the floor beside the feet, which a route reaches
+      :dig (some? (memory/remembered w (:intent/target i))) ; the placed table, taken along
       :wade (some? (swim/entry w (intent/feet w))) ; into water the bot remembers, from a bank it can stand on
       nil (contains? #{:no-log :no-water :in-water} (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it: wait
       false)))
