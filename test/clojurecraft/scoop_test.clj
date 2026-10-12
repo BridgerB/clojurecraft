@@ -153,6 +153,16 @@
            (scoop/scoop-next w))
         "stairs up until out of the ground")))
 
+(deftest the-way-home-runs-out-of-loaded-terrain
+  ;; gym batch solid-b1 run 1 climbed under the sea 146 blocks from its landing, where the chunks
+  ;; round the landing had unloaded: its own tunnel home ran to the edge of what was loaded, the
+  ;; route came back :none, and it cut stairs up under the sea until :boxed five times. A tunnel to
+  ;; the chunk's edge, the landing in a chunk not loaded: walk home along it
+  (let [rock (merge (into {} (for [x (range 16) y (range 64 72) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 2 16) y [64 65]] [[x y 8] blocks/air])))
+        w (assoc (standing rock [3.5 8.5]) :plan/go-at [40.5 80.0 8.5])]
+    (is (= {:intent/kind :walk :intent/target [40 80 8] :intent/for :surface} (scoop/climb w)))))
+
 (deftest with-no-way-back-up-the-bot-cuts-stairs-up
   ;; batch iron-a2 run 2 mined an iron ore out of the floor under one of its stairs, run 5 dug a
   ;; niche under one: the staircase down was no way back up
