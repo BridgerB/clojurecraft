@@ -9,6 +9,7 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.build]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -69,7 +70,7 @@
       :walk (intent/routable? w i) ; to stone in the floor beside the feet, which a route reaches
       :dig (some? (memory/remembered w (:intent/target i))) ; the placed table, taken along
       :wade (some? (swim/entry w (intent/feet w))) ; into water the bot remembers, from a bank it can stand on
-      nil (contains? #{:no-log :no-water :in-water} (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it: wait
+      nil (contains? #{:no-log :no-water :in-water :no-site} (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near: wait
       false)))
 
 (deftest the-planner-only-picks-executable-intents
@@ -107,9 +108,10 @@
     "no item target needs a per-goal method: wood, kit and pickaxe all plan through the same registries;
             the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
-    (is (every? #(contains? #{:not-trapped-in :escaped-water?} (:goal/done? %))
+    (is (every? #(contains? #{:not-trapped-in :escaped-water? :built?} (:goal/done? %))
                 (remove :goal/provides plan/targets)))
-    (is (= #{:needs :escape :wade} (set (keys (dissoc (methods plan/next-intent) :default)))))))
+    (is (= #{:needs :escape :wade :build}
+           (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
 

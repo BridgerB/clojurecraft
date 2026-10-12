@@ -120,38 +120,41 @@
    :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {slot item} (a slot is a named place,
    [:hotbar 0] as inventory/slot reads it, or a window-0 slot number), :lag-ticks,
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
-   from the world spawn) and :seed (where the loot rolls start, 0 when absent)."
-  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed]
+   from the world spawn), :seed (where the loot rolls start, 0 when absent) and :kill-at ms (the
+   player dies then, a fault as an input: a death mid-task)."
+  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed kill-at]
     :or {keep-alive-every keep-alive-every}}]
-  {:sim/phase :handshake
-   :sim/lag-ticks (or lag-ticks 0)
-   :sim/inv (into {} (for [[k it] inventory] [(if (vector? k) (inventory/slot k) k) it]))
-   :sim/state-id 1
-   :sim/held 0
-   :sim/placed {}
-   :sim/furnaces {}
-   :sim/falls {}
-   :sim/falling {}
-   :sim/next-window 1
-   :sim/clicks 0
-   :sim/drop-clicks (or drop-clicks #{})
-   :sim/rng (or seed 0)
-   :sim/violations []
-   :sim/keep-alive-every keep-alive-every
-   :sim/now 0
-   :sim/out []
-   :sim/column column
-   :sim/chunk (chunk/decode column)
-   :sim/spawn spawn
-   :sim/respawn (or respawn spawn)
-   :sim/broken #{}
-   :sim/air max-air
-   :sim/health max-health
-   :sim/respawns 0
-   :sim/items {}
-   :sim/next-eid 100
-   :sim/next-keep-alive keep-alive-every
-   :sim/keep-alives-pending #{}})
+  (cond->
+    {:sim/phase :handshake
+     :sim/lag-ticks (or lag-ticks 0)
+     :sim/inv (into {} (for [[k it] inventory] [(if (vector? k) (inventory/slot k) k) it]))
+     :sim/state-id 1
+     :sim/held 0
+     :sim/placed {}
+     :sim/furnaces {}
+     :sim/falls {}
+     :sim/falling {}
+     :sim/next-window 1
+     :sim/clicks 0
+     :sim/drop-clicks (or drop-clicks #{})
+     :sim/rng (or seed 0)
+     :sim/violations []
+     :sim/keep-alive-every keep-alive-every
+     :sim/now 0
+     :sim/out []
+     :sim/column column
+     :sim/chunk (chunk/decode column)
+     :sim/spawn spawn
+     :sim/respawn (or respawn spawn)
+     :sim/broken #{}
+     :sim/air max-air
+     :sim/health max-health
+     :sim/respawns 0
+     :sim/items {}
+     :sim/next-eid 100
+     :sim/next-keep-alive keep-alive-every
+     :sim/keep-alives-pending #{}}
+    kill-at (assoc :sim/kill-at kill-at)))
 
 (defn send "Queue pkt for the client in :sim/out." [sim pkt] (update sim :sim/out conj pkt))
 
@@ -1151,6 +1154,18 @@
                                             [(long (math/floor x)) (long (math/floor (+ y 1.62)))
                                              (long (math/floor z))]))))))
 
+(defn kill
+  "At :sim/kill-at, once: the player dies, told to the client as set-health; the respawn then is
+   client-command's, as after any death."
+  [sim]
+  (let [at (:sim/kill-at sim)]
+    (cond (or (nil? at) (< (:sim/now sim) at)) sim
+          :else
+          (-> sim
+              (assoc :sim/health 0.0)
+              (dissoc :sim/kill-at)
+              (send {:packet/name :set-health :health 0.0 :food 20 :saturation 5.0})))))
+
 (defn drown
   "One tick of breath: air falls while the eye is under and refills otherwise; at zero, a hurt
    of drown-damage every drown-every ticks, each told to the client as set-health. A dead
@@ -1172,7 +1187,8 @@
    and hand over every item whose pickup delay has passed and
    that the player stands within reach of."
   [sim now]
-  (let [sim (through-portal (tick-falls (tick-furnaces (drown (assoc sim :sim/now now)))) now)
+  (let [sim (through-portal (tick-falls (tick-furnaces (drown (kill (assoc sim :sim/now now)))))
+                            now)
         sim (if (>= now (:sim/next-keep-alive sim))
               (-> sim
                   (send {:packet/name :keep-alive :id now})

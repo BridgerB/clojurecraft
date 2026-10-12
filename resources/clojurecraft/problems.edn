@@ -161,6 +161,7 @@
                     "brain/siblings/sib-bucket-water-find.md"]}
  {:problem/stage :portal
   :problem/issue 8
+  :problem/goals [:cast-one :portal :nether]
   :problem/statement
   "The bot must cast ten obsidian blocks from lava and water into a nether portal frame, light it and stand in it, which can only be done by following a fixed template mold, not by mining obsidian or improvising per cell."
   :problem/needs

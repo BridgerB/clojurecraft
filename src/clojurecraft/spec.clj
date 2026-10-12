@@ -212,7 +212,8 @@
 (s/def :goal/needs (s/map-of ::need-key ::amount))
 (s/def :goal/holds (s/map-of ::need-key ::amount))    ; needs a row keeps rather than spends (a tool)
 (s/def :goal/spares (s/map-of ::need-key ::amount))
-(s/def :goal/passage-ok? boolean?)                   ; a block it places may stand in a passage   ; one more of a held tool, made only from what is held
+(s/def :goal/passage-ok? boolean?)
+(s/def :goal/build #{:cast-one :portal :nether}) ; which plan a :build row works (build/plan-for)                   ; a block it places may stand in a passage   ; one more of a held tool, made only from what is held
 (s/def :goal/provides (s/map-of ::need-key ::amount :min-count 1))
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
@@ -229,9 +230,9 @@
 (s/def ::goal
   (s/keys :req [:goal/id :goal/priority :goal/done?]
           :opt
-          [:goal/needs :goal/holds :goal/spares :goal/passage-ok? :goal/act :goal/target?
-           :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/trap :goal/plan
-           :goal/blocks :goal/depth]))
+          [:goal/needs :goal/holds :goal/spares :goal/passage-ok? :goal/build :goal/act
+           :goal/target? :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/trap
+           :goal/plan :goal/blocks :goal/depth]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
@@ -466,6 +467,7 @@
 (s/def :sim/falls (s/map-of ::block-pos int?))
 (s/def :sim/dimension string?)
 (s/def :sim/portal-since int?)
+(s/def :sim/kill-at int?)
 (s/def :sim/falling (s/map-of ::block-pos map?))
 (s/def :sim/next-window int?)
 (s/def :sim/clicks nat-int?)

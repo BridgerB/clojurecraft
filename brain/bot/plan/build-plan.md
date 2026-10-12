@@ -18,6 +18,8 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn op-child
   - src/clojurecraft/build.clj#defn station
   - src/clojurecraft/build.clj#defn foundation
+  - src/clojurecraft/build.clj#defn choose-site
+  - src/clojurecraft/memory.clj#defn site
   - test/clojurecraft/sim_test.clj#the-frame-is-cast-lit-and-stepped-through
   - test/clojurecraft/sim_test.clj#a-cast-six-tenths-done-casts-only-the-other-four
   - test/clojurecraft/build_test.clj#the-plan-casts-the-ten-cells-in-layer-order
@@ -44,6 +46,9 @@ ruststeve's template mold ([[sib-portal-mold]]) as data, pure (`the-plan-never-p
 
 ## The `:build` intent
 `{:intent/kind :build :intent/build :cast-one|:portal|:nether :intent/origin o :intent/facing f}`: each tick the plan (`plan-for`, memoized) is read and the first op not satisfied is worked; the build is done when the plan's last op holds (its goal: once in the Nether the earlier ops' cells are not even loaded). `op-child` makes the child that works the op: a lava pour with no lava bucket first refills (`refill`: a walk to the `station`, a lava source outside the footprint within 16 with ground beside the cell over it, then a `:scoop` with `:intent/fluid :lava`); else a walk to the op's stand, ending centred in that cell (`intent/centred?`); then `:place` into a given `:intent/cell` against a solid neighbour (`place/support`, or a `foundation` built up from below), a child dig, `:pour` (equip, look at the aim, `use-item`, done when `:intent/expect` holds), `:scoop`, `:use-on` (flint and steel on the top face) or `:await` (hold still until the dimension changes). A new op drops the child. In the model a cast from the kit and a lava trench reaches the Nether (`the-frame-is-cast-lit-and-stepped-through`), and one with six cells already obsidian casts only the other four (`a-cast-six-tenths-done-casts-only-the-other-four`).
+
+## The targets
+`goals.edn` rows `:cast-one`, `:portal` and `:nether` (`--until` the same) plan with `:goal/plan :build` and are done by `:built?`: the last op of the row's plan (`:goal/build`) holds at the remembered site. The site is a fact in memory (`memory/remember-site`, `memory/site`, the latest wins), written by the `:build` intent when it starts; with none the planner chooses one (`choose-site`: the origin nearest the feet within 4, the first facing whose footprint is loaded and free of lava, with solid ground under the origin and a lava station), else waits `:no-site`. After a death the planner starts the build again at the site and the first op not satisfied is worked; the model's `:kill-at` fault tests it.
 
 ## Gotchas
 - **The tower stands until the frame does.** A layer's stair and platform are done only once all ten cells are cast: later layers stand on them, so a resumed cast whose lower layers are obsidian still builds them.

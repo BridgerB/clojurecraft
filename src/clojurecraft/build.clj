@@ -22,10 +22,12 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.memory :as memory]
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
+            [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
             [clojurecraft.terrain :as terrain]
@@ -395,14 +397,19 @@
   (some (fn [[dx dz]] (= [x z] (let [[cx _ cz] (cell origin facing [dx 0 dz])] [cx cz])))
         (for [dx (range -2 7) dz (range -2 4)] [dx dz])))
 
-(defn station
-  "[stand source] to refill lava from: a lava source outside the footprint within station-radius
-   of origin, and a cell to stand in beside the cell over it (the source diagonally below the
-   feet, never beside them), nearest the origin first; nil when none."
-  [world origin facing]
+(defn lava-sources
+  "Every lava source in the loaded terrain, as the block overlay says now."
+  [world]
   (->> (chunk/find-blocks (:world/chunks world) #(= % blocks/lava-base))
        (map (fn [[x y z _]] [x y z]))
-       (filter #(= blocks/lava-base (terrain/block-at world %)))
+       (filter #(= blocks/lava-base (terrain/block-at world %)))))
+
+(defn station-among
+  "[stand source] to refill lava from, of sources: a source outside the footprint within
+   station-radius of origin, and a cell to stand in beside the cell over it (the source diagonally
+   below the feet, never beside them), nearest the origin first; nil when none."
+  [world sources origin facing]
+  (->> sources
        (filter #(<= (physics/horizontal-distance (physics/centre %) (physics/centre origin))
                     station-radius))
        (remove (fn [[x _ z]] (footprint? origin facing [x z])))
@@ -413,6 +420,12 @@
                        :when (path/standable? world stand)]
                    [stand src])))
        first))
+
+(defn station
+  "[stand source] to refill lava from for the build at origin facing (station-among the lava
+   sources loaded), or nil."
+  [world origin facing]
+  (station-among world (lava-sources world) origin facing))
 
 (def plan-for
   "[build origin facing] → the plan: :cast-one, :portal (lit) or :nether (stepped through).
@@ -480,8 +493,11 @@
   ;; work the first op of the plan not satisfied; done when the last op is (the plan's goal: past
   ;; it, as in another dimension, the earlier ops' cells are not even loaded). A child works the op;
   ;; when the op changes under it (the world moved on) the child is dropped and the new op begun
-  [world {:intent/keys [child op] :as i} event]
-  (let [plan (plan-for (:intent/build i) (:intent/origin i) (:intent/facing i))
+  [world {:intent/keys [child op origin facing] :as i} event]
+  (let [world (cond-> world
+                (not= {:site/origin origin :site/facing facing} (memory/site world))
+                (memory/remember-site origin facing))
+        plan (plan-for (:intent/build i) (:intent/origin i) (:intent/facing i))
         next (when-not (satisfied? world (peek plan)) (first (remove #(satisfied? world %) plan)))]
     (cond (nil? next)
           (-> world
@@ -502,3 +518,50 @@
                   (intent/run-child
                    (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
                    event))))))
+
+;; ---------------------------------------------------------------- the site and the targets
+
+(def site-radius 4)                   ; blocks from the feet a frame origin is looked for
+
+(defn site-ok?
+  "Can a frame be cast at origin facing: every cell of the footprint (dx -2..6, dy -1..1, dz
+   -2..3) loaded and no lava in it (a block placed into lava destroys the source, and lava under
+   the mold is no stance: ruststeve's lava sea), the ground under the origin solid, and a station
+   among sources?"
+  [world sources origin facing]
+  (let [cells
+        (for [dx (range -2 7) dy (range -1 2) dz (range -2 4)] (cell origin facing [dx dy dz]))]
+    (and (every? #(some? (terrain/block-at world %)) cells)
+         (not-any? #(contains? blocks/lava-states (terrain/block-at world %)) cells)
+         (holds? world [:solid (update origin 1 dec)])
+         (some? (station-among world sources origin facing)))))
+
+(defn choose-site
+  "[origin facing] for a new frame: the origin nearest the feet (within site-radius on the plane,
+   at the feet's height) and the first facing that site-ok? accepts; nil when none."
+  [world]
+  (let [[fx fy fz] (intent/feet world)
+        sources (lava-sources world)]
+    (first (for [[dx dz] (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
+                                  (for [dx (range (- site-radius) (inc site-radius))
+                                        dz (range (- site-radius) (inc site-radius))]
+                                    [dx dz]))
+                 facing [:south :west :north :east]
+                 :let [origin [(+ fx dx) fy (+ fz dz)]]
+                 :when (site-ok? world sources origin facing)]
+             [origin facing]))))
+
+(defmethod plan/next-intent :build
+  ;; build the row's plan (:goal/build) at the site remembered, else at one chosen now (the
+  ;; :build intent remembers it); with none, wait :no-site
+  [world {:goal/keys [build]} _]
+  (let [{:site/keys [origin facing]} (memory/site world)
+        [origin facing] (if origin [origin facing] (choose-site world))]
+    (if origin
+      {:intent/kind :build :intent/build build :intent/origin origin :intent/facing facing}
+      {:plan/wait :no-site})))
+
+(defmethod plan/done-by :built?
+  [world {:goal/keys [build]}]
+  (let [{:site/keys [origin facing]} (memory/site world)]
+    (boolean (and origin (satisfied? world (peek (plan-for build origin facing)))))))

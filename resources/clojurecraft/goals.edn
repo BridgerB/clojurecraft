@@ -108,6 +108,32 @@
   "the iron kit the portal needs: flint and steel and a filled water bucket (four ingots in all: one in the flint and steel, three in the bucket), the flint and steel first so all the iron is mined in one trip down and the climb out ends at the water"
   :goal/provides {:item/flint_and_steel 1 :item/water_bucket 1}
   :goal/done? :provided?}
+ {:goal/id :cast-one
+  :goal/priority 13
+  :goal/target? true
+  :goal/until "cast-one"
+  :goal/doc
+  "one obsidian cast in the first cell of a portal mold: lava poured into a cup, water into the bowl over it, the water scooped back (the gym's cast-one stage)"
+  :goal/plan :build
+  :goal/build :cast-one
+  :goal/done? :built?}
+ {:goal/id :portal
+  :goal/priority 14
+  :goal/target? true
+  :goal/until "portal"
+  :goal/doc
+  "a nether portal cast from lava and water in ruststeve's template mold, never mined, and lit with flint and steel"
+  :goal/plan :build
+  :goal/build :portal
+  :goal/done? :built?}
+ {:goal/id :nether
+  :goal/priority 15
+  :goal/target? true
+  :goal/until "nether"
+  :goal/doc "the portal cast and lit, then stood in until the dimension is the Nether"
+  :goal/plan :build
+  :goal/build :nether
+  :goal/done? :built?}
  {:goal/id :shore
   :goal/priority 5
   :goal/target? true

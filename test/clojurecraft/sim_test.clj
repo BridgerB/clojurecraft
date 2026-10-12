@@ -2045,3 +2045,42 @@
     (is (trap/dry-land? w))
     (is (= [:water] (map :trap/kind (:world/traps w))))
     (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- the portal through the planner (issue #8)
+
+(defn nether-run
+  "The planner against the model toward the Nether from the kit, a lava trench beside the
+   arena, the frame's site chosen by the bot; sim-opts adds faults. Returns [world sim]."
+  [step sim-opts]
+  (sim/run step
+           (game/init fx/opts)
+           (sim/init (merge
+                      {:column (world/column-bytes lava-pit) :spawn [9.5 64.0 10.5] :inventory kit}
+                      sim-opts))
+           #(or (plan/done? %) (plan/failed? %))
+           1800000
+           {:event/kind :go :go/goals [:nether]}))
+
+(deftest the-portal-from-a-kit-and-its-recording-replays
+  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-portal.edn")
+        tap (record/tap! path)
+        [w sim] (nether-run (recording step tap) {})]
+    ((:close tap))
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= "minecraft:the_nether" (:player/dimension w)))
+    (is (some? (memory/site w)) "the site is remembered")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))
+    (testing "the recording replays with every sent packet the same"
+      (is (nil? (record/verify step (game/init fx/opts) path))))))
+
+(deftest a-death-mid-cast-resumes-at-the-first-op-not-done
+  ;; the build stores no progress: after a death the planner starts it again at the site it
+  ;; remembers, and the first op the world says is not done is the one worked
+  (let [[w sim] (nether-run step {:kill-at 240000})]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= 1 (:stats/deaths w)) "it died once")
+    (is (= "minecraft:the_nether" (:player/dimension w)))
+    (is (= 3 (count (filter #(= blocks/lava-base (sim/block-at sim %)) (keys lava-pit))))
+        "nine lava scooped, as without the death: no cell cast twice")
+    (is (empty? (:sim/violations sim)))))
