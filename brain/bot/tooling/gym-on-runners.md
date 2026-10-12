@@ -15,6 +15,8 @@ sourceRefs:
   - src/clojurecraft/gym.clj#defn trial!
   - src/clojurecraft/gym.clj#defn located-in
   - src/clojurecraft/gym.clj#defn judge!
+  - src/clojurecraft/gym.clj#defn fill-in
+  - src/clojurecraft/gym.clj#def portal-arena
   - src/clojurecraft/gym.clj#defn tee-output!
   - test/clojurecraft/gym_test.clj#the-result-comes-back-through-the-pipe-whole
   - src/clojurecraft/landings.clj#defn landings!
@@ -47,6 +49,9 @@ Three workflows. `test.yml` runs the suite and the brain checker on every push, 
 `gym/gyms` is the registry, data like the goal table: goal, `--until`, prerequisites, timeout, and truth commands that count items without removing them (`clear <name> <item> 0` answers "Found N matching item(s)"). `gym/outcome` is one pure function: `:harness` when the landing failed, `:disconnect` when the bot never printed RESULT or lost its socket, `:death`, `:timeout`, `:pass` only when RESULT is ok and every truth passes, else `:fail`. The bot saying ok while the server disagrees is `:fail`, with the server's reply in the row. `:harness` and `:disconnect` are not counted.
 
 The iron kit (issue #6) has a row per stage, each given what the stages before it make: `furnace` (eight cobblestone, a table; judged by the cobblestone spent and no furnace held, since `clear` cannot see a placed block), `ingots` (a furnace, four raw iron, a coal), `bucket` (three ingots, a table), `water-bucket` (a bucket, two stone pickaxes, which the fill row holds), `flint-and-steel` (an ingot, a gravel), and `iron-kit` (a stone pickaxe, a table, eight cobblestone, four logs; forty minutes, since batch iron-a5's three runs holding flint and steel and the bucket were still climbing out at twenty). The push runs the four that need no particular terrain; `water-bucket` and `iron-kit` need water near the landing and are dispatched.
+
+## Arenas (#8)
+A row may build its own arena: `:gym/setup` is RCON commands run in `landing!` before the teleport, inside `fixture/with-forceload` over `arena-reach` (16) round the landing, written with `fill-in` placeholders (`{x} {y} {z}` the landing, with offsets as `{x+14}`; `{name}` the bot). The portal rows (`cast-one`, `portal`, `nether`) share `portal-arena` (a stone floor two thick, air over it, a one-wide lava trench 14 east) and `portal-kit` (two lava buckets, one water, one empty, 192 cobblestone, flint and steel). Their truths go through `fill-in` too: a frame the bot sited itself is judged by `block-count`, a `clone ... filtered` of the arena whose reply says how many obsidian or `nether_portal` blocks there are; the Nether by `data get entity {name} Dimension`.
 
 ## Landing sets
 `ci/gym.edn` names each set: a centre far from world spawn, n grid cells spacing apart, the biome cells snap to, and a pregeneration radius. A is forests (20000, 20000); W is beaches (26000, 20000), steve's landing set W for the water trial (`:shore`, [[water-escape]]), whose truth commands are the server's own dry-land test (`execute ... unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water`) and `OnGround 1b`. `landings/landings!` snaps each cell with `locate biome`, finds the surface with a marker entity, keeps it when y >= 55 and no fixture landing check passes (else tries the fixture's nearby offsets), and pregenerates the chunks around it. Run k always lands on `landings[k]` (`landing-for`, wrapping), so batches are paired.

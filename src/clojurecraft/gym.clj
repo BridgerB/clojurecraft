@@ -38,7 +38,9 @@
 (s/def :truth/reply string?)
 (s/def :truth/ok? boolean?)
 (s/def :gym/truth (s/coll-of (s/keys :req [:truth/cmd :truth/re]) :kind vector? :min-count 1))
-(s/def ::row (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]))
+(s/def :gym/setup (s/coll-of string? :kind vector?)) ; RCON commands that build the row's arena round the landing (fill-in)
+(s/def ::row
+  (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth] :opt [:gym/setup]))
 (s/def :gym/run pos-int?)
 (s/def :gym/landing (s/coll-of int? :kind vector? :count 3))
 (s/def :gym/landed? boolean?)
@@ -51,6 +53,30 @@
 (s/def ::result
   (s/keys :req [:gym/goal :gym/run :gym/landed? :gym/outcome :gym/truths]
           :opt [:gym/landing :gym/ms :gym/reason :gym/commit :gym/result]))
+
+(def arena-reach 16)                  ; blocks round the landing an arena's setup is forceloaded over
+
+(def portal-arena
+  "The portal rows' arena round the landing (issue #8): a stone floor two thick and air over it,
+   and a trench of lava sources one wide east of where any frame footprint near the landing can
+   reach, every source with stone beside it to refill from (a scoop takes a source for good)."
+  ["fill {x-8} {y-2} {z-8} {x+16} {y-1} {z+16} minecraft:stone"
+   "fill {x-8} {y} {z-8} {x+16} {y+14} {z+16} minecraft:air"
+   "fill {x+14} {y-1} {z-6} {x+14} {y-1} {z+6} minecraft:lava"])
+
+(def portal-kit
+  "What a portal row gives: two buckets of lava, one of water, an empty one, three stacks of
+   cobblestone (the mold places about 150) and flint and steel."
+  ["minecraft:lava_bucket 2" "minecraft:water_bucket 1" "minecraft:bucket 1"
+   "minecraft:cobblestone 192" "minecraft:flint_and_steel 1"])
+
+(defn block-count
+  "A truth that counts the blocks named block in the arena: a clone of the arena filtered to them,
+   to air high over it, whose reply says how many (re, a pattern of that reply)."
+  [block re]
+  {:truth/cmd (str "clone {x-8} {y-1} {z-8} {x+16} {y+12} {z+16} {x-8} {y+60} {z-8} filtered "
+                   block)
+   :truth/re re})
 
 (def gyms
   "The gym registry. Truth commands count items without removing any (`clear <name> <item> 0`
@@ -127,6 +153,26 @@
     :gym/timeout-ms 2400000
     :gym/truth [{:truth/cmd "clear {name} minecraft:water_bucket 0" :truth/re "Found [1-9]"}
                 {:truth/cmd "clear {name} minecraft:flint_and_steel 0" :truth/re "Found [1-9]"}]}
+   ;; issue #8: the portal cast in an arena built round the landing, from the kit
+   {:gym/goal :cast-one
+    :gym/until "cast-one"
+    :gym/prereqs portal-kit
+    :gym/setup portal-arena
+    :gym/timeout-ms 600000
+    :gym/truth [(block-count "minecraft:obsidian" "cloned [1-9]")]}
+   {:gym/goal :portal
+    :gym/until "portal"
+    :gym/prereqs portal-kit
+    :gym/setup portal-arena
+    :gym/timeout-ms 2400000
+    :gym/truth [(block-count "minecraft:obsidian" "cloned (1[0-9]|[2-9][0-9]) block")
+                (block-count "minecraft:nether_portal" "cloned [1-9]")]}
+   {:gym/goal :nether
+    :gym/until "nether"
+    :gym/prereqs portal-kit
+    :gym/setup portal-arena
+    :gym/timeout-ms 2400000
+    :gym/truth [{:truth/cmd "data get entity {name} Dimension" :truth/re "the_nether"}]}
    ;; issue #5: wade in, get out; the server must see the bot on dry land (steve's onDryLand judge)
    {:gym/goal :shore
     :gym/until "shore"
@@ -156,15 +202,26 @@
   [goal]
   (let [n (name goal)] (some #(when (or (= n (name (:gym/goal %))) (= n (:gym/until %))) %) gyms)))
 
+(defn fill-in
+  "cmd with {name} the bot's name and {x} {y} {z} the landing's coordinates, each with an offset
+   when written {x+14} or {z-8}: an arena or a truth command placed relative to the landing."
+  [cmd bot [x z y]]
+  (-> cmd
+      (str/replace "{name}" bot)
+      (str/replace #"\{([xyz])([+-]\d+)?\}"
+                   (fn [[_ axis off]]
+                     (str (+ ({"x" x "y" y "z" z} axis) (if off (parse-long off) 0)))))))
+
 (defn truth-cmd
-  "A row's truth command for the bot's name."
-  [{:truth/keys [cmd]} bot]
-  (str/replace cmd "{name}" bot))
+  "A row's truth command for the bot's name and the run's landing (fill-in)."
+  [{:truth/keys [cmd]} bot landing]
+  (fill-in cmd bot landing))
 
 (defn truth
-  "A truth row's verdict on the server's reply: {:truth/cmd :truth/reply :truth/ok?}."
-  [row bot reply]
-  {:truth/cmd (truth-cmd row bot)
+  "A truth row's verdict on the server's reply to cmd (the row's command, filled in):
+   {:truth/cmd :truth/reply :truth/ok?}."
+  [row cmd reply]
+  {:truth/cmd cmd
    :truth/reply (str reply)
    :truth/ok? (boolean (re-find (re-pattern (:truth/re row)) (str reply)))})
 
@@ -304,23 +361,28 @@
         [x z y :as landing] (landings/landing-for (landings/read-landings landings)
                                                   (parse-long (str run)))
         started (System/currentTimeMillis)]
-    (try (rcon/with-rcon (or host "127.0.0.1")
-                         (parse-long (str rcon-port))
-                         rcon-pass
-                         (fn [rc]
-                           (when-not (fixture/wait-online! rc name fixture/online-timeout)
-                             (throw (ex-info "bot never came online" {:name name})))
-                           (rcon/command! rc (str "gamemode survival " name))
-                           (rcon/command! rc (str "clear " name))
-                           (doseq [p (:gym/prereqs row)]
-                             (rcon/command! rc (str "give " name " " p)))
-                           (fixture/teleport! rc name [x z])
-                           (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
-                           (Thread/sleep (long fixture/settle-ms))
-                           {:gym/landed? true
-                            :gym/landing landing
-                            :gym/at (fixture/position rc name)
-                            :gym/started started}))
+    (try (rcon/with-rcon
+          (or host "127.0.0.1")
+          (parse-long (str rcon-port))
+          rcon-pass
+          (fn [rc]
+            (when-not (fixture/wait-online! rc name fixture/online-timeout)
+              (throw (ex-info "bot never came online" {:name name})))
+            (rcon/command! rc (str "gamemode survival " name))
+            (rcon/command! rc (str "clear " name))
+            (doseq [p (:gym/prereqs row)] (rcon/command! rc (str "give " name " " p)))
+            (when-let [cmds (seq (:gym/setup row))] ; the row's arena, round the landing
+              (fixture/with-forceload
+               rc
+               [(- x arena-reach) (- z arena-reach) (+ x arena-reach) (+ z arena-reach)]
+               #(doseq [c cmds] (rcon/command! rc (fill-in c name landing)))))
+            (fixture/teleport! rc name [x z])
+            (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
+            (Thread/sleep (long fixture/settle-ms))
+            {:gym/landed? true
+             :gym/landing landing
+             :gym/at (fixture/position rc name)
+             :gym/started started}))
          (catch Exception e
            (cli/log "landing failed:" e)
            {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
@@ -362,7 +424,8 @@
                                       (parse-long (str rcon-port))
                                       rcon-pass
                                       (fn [rc]
-                                        (mapv #(truth % name (rcon/command! rc (truth-cmd % name)))
+                                        (mapv #(let [c (truth-cmd % name (:gym/landing left))]
+                                                 (truth % c (rcon/command! rc c)))
                                               (:gym/truth row))))
                       (catch Exception e (cli/log "truth failed:" e) [])))
         judged-row (judged (assoc left
