@@ -161,6 +161,7 @@
                     "brain/siblings/sib-bucket-water-find.md"]}
  {:problem/stage :portal
   :problem/issue 8
+  :problem/goals [:cast-one :portal :nether]
   :problem/statement
   "The bot must cast ten obsidian blocks from lava and water into a nether portal frame, light it and stand in it, which can only be done by following a fixed template mold, not by mining obsidian or improvising per cell."
   :problem/needs
@@ -179,7 +180,7 @@
   :problem/done
   "Ten obsidian frame blocks and nether_portal blocks inside exist (RCON execute if block), and after standing in the portal RCON data get entity Dimension reads the Nether."
   :problem/last-failure
-  "clojurecraft has never attempted this. ruststeve: the remaining blocker was casting over a lava sea, and lidded cups bent lava pours onto the bot's feet; its mold then passed 7 of 8 pool gyms and one natural cast in 1374 s. steve: natural 0/63 versus arena 66/72, the wall being lava refill reachability."
+  "The mold is cast in the model from the kit to the Nether, resumed over six cells already cast and after a death; live cast-one passed 5/5 on the runners (batch p1-cast-one). The last failure, in the model: the site was chosen at the landing, so a death respawned the bot inside its own frame's corner and every walk out failed :no-path (vanilla never respawns a player inside blocks; a natural site near the world spawn still could put the frame over it). Before: ruststeve's blocker was casting over a lava sea and lidded cups bending pours onto the feet; steve went natural 0/63 versus arena 66/72, the wall being lava refill reachability."
   :problem/sources ["docs/issues/08-portal-cast.md" "brain/bot/plan/roadmap-issues.md"
                     "brain/siblings/sib-portal-mold.md" "brain/siblings/sib-steve-portal-cast.md"
                     "brain/siblings/sib-lava-safety.md"]}

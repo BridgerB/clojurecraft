@@ -46,6 +46,7 @@ src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with cli
 src/clojurecraft/smelt.clj    the :smelt executor: settle, lay the fuel and the input, cook, take, close; fuel in burn order
 src/clojurecraft/place.clj    the :place and :open-container executors: a spot, use-item-on, the server's answer
 src/clojurecraft/scoop.clj    the :scoop act and executor: surface water in sight or remembered, aim, use-item, the water bucket
+src/clojurecraft/build.clj    a build plan as data (the portal mold): ops with done-predicates, the :build intent, the site
 src/clojurecraft/window.clj   window views (inventory, table or furnace), the click that predicts nothing, the resync click
 src/clojurecraft/recipe.clj   the vanilla crafting table as data: match, clicks, needs
 src/clojurecraft/plan.clj     loads goals.edn; registries done-by, act, next-intent; the planner; :plan/*

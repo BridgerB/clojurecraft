@@ -37,6 +37,7 @@ related:
 - `blocks.clj`, `leaves?` - a block state whose name ends in `_leaves`; used for the leaf dig time and the collect blocker ([[leaf-canopy-over-the-drop]]).
 
 ## Gotchas
+- **A nether portal is passable** (`:nether_portal` in `passable-types`): the body walks into one to change dimension, and a route must be able to end in it (#8). It counted as solid before.
 - `grass` (grass_block's type) must stay out of `passable-types` ([[grass-type-is-grass]]).
 - `solid?` is an approximation: slabs, stairs, fences, walls, doors, leaves and snow blocks are full cubes; `snow_layer` is passable whatever its height.
 - `solid?` of an unknown id (-1, beyond the table) is false, but `terrain/solid-fn` treats an *unloaded* block (nil) as solid; the two are different questions.

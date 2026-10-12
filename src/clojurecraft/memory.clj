@@ -204,7 +204,24 @@
   [world answer]
   (update world :world/facts d/db-with [(assoc answer :answer/at (:time/now world))]))
 
+(defn remember-site
+  "Append the site of a build, its frame origin and facing, as a fact stamped with now: chosen once,
+   the latest is the one a build resumes at (#8)."
+  [world origin facing]
+  (update world
+          :world/facts
+          d/db-with
+          [{:site/origin origin :site/facing facing :site/at (:time/now world)}]))
+
 ;; ---------------------------------------------------------------- questions
+
+(defn site
+  "The latest build site remembered, {:site/origin [x y z] :site/facing f}, or nil."
+  [world]
+  (let [db (:world/facts world)]
+    (when-let [datoms (seq (d/datoms db :aevt :site/origin))]
+      (select-keys (d/entity db (apply max (map :e datoms))) [:site/origin :site/facing]))))
+
 
 (defn answers
   "The server's answers of a kind (:ack, :pickup), oldest first."

@@ -4,6 +4,7 @@
    this namespace and `instrument` in tests; nothing here runs in the hot loop."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [clojurecraft.build :as build]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -24,6 +25,34 @@
 
 (s/def ::vec3 (s/coll-of double? :kind vector? :count 3))
 (s/def ::block-pos (s/coll-of int? :kind vector? :count 3))
+
+;; ---------------------------------------------------------------- build plans (issue #8)
+
+(s/def :build/op #{:place :dig :pour :scoop :use-on :stand-in :verify})
+(s/def :build/pos ::block-pos)
+(s/def :build/stand ::block-pos)
+(s/def :build/into ::block-pos)
+(s/def :build/item keyword?)
+(s/def :build/aim (s/coll-of number? :kind vector? :count 3))
+(s/def :build/face keyword?)
+(s/def :build/step keyword?)
+(s/def :build/cell (s/tuple int? int?))
+(s/def :build/done (s/and vector? #(keyword? (first %)))) ; a predicate as data, read by build/holds?
+(s/def ::op
+  (s/keys :req [:build/op :build/stand :build/done]
+          :opt [:build/pos :build/into :build/item :build/aim :build/face :build/step :build/cell]))
+(s/def ::plan (s/coll-of ::op :kind vector?))
+
+(s/fdef build/portal-plan
+  :args
+  (s/cat :origin ::block-pos
+         :facing build/facings)
+  :ret ::plan)
+(s/fdef build/cast-one-plan
+  :args
+  (s/cat :origin ::block-pos
+         :facing build/facings)
+  :ret ::plan)
 
 ;; bot
 (s/def :bot/phase #{:handshake :login :configuration :play})
@@ -68,6 +97,7 @@
 (s/def :control/sneak? boolean?)
 (s/def :player/jump-ticks int?)
 (s/def :player/loaded? boolean?)
+(s/def :player/dimension string?)
 (s/def :player/entity-id int?)
 (s/def :player/inventory (s/map-of int? (s/keys :req-un [::item ::count])))
 (s/def ::item int?)
@@ -182,7 +212,8 @@
 (s/def :goal/needs (s/map-of ::need-key ::amount))
 (s/def :goal/holds (s/map-of ::need-key ::amount))    ; needs a row keeps rather than spends (a tool)
 (s/def :goal/spares (s/map-of ::need-key ::amount))
-(s/def :goal/passage-ok? boolean?)                   ; a block it places may stand in a passage   ; one more of a held tool, made only from what is held
+(s/def :goal/passage-ok? boolean?)
+(s/def :goal/build #{:cast-one :portal :nether}) ; which plan a :build row works (build/plan-for)                   ; a block it places may stand in a passage   ; one more of a held tool, made only from what is held
 (s/def :goal/provides (s/map-of ::need-key ::amount :min-count 1))
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
@@ -199,18 +230,18 @@
 (s/def ::goal
   (s/keys :req [:goal/id :goal/priority :goal/done?]
           :opt
-          [:goal/needs :goal/holds :goal/spares :goal/passage-ok? :goal/act :goal/target?
-           :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/trap :goal/plan
-           :goal/blocks :goal/depth]))
+          [:goal/needs :goal/holds :goal/spares :goal/passage-ok? :goal/build :goal/act
+           :goal/target? :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/trap
+           :goal/plan :goal/blocks :goal/depth]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
           :opt
           [:bot/name :bot/sequence :bot/closed :bot/disconnected :player/pos :player/vel
            :player/look :player/on-ground? :player/horizontal-collision? :player/jump-ticks
-           :player/loaded? :player/entity-id :player/inventory :player/controls :world/chunks
-           :world/blocks :world/facts :world/entities :window/state-id :window/grid :window/cursor
-           :window/open :player/held-slot :plan/intent :plan/status :plan/blacklist
+           :player/loaded? :player/dimension :player/entity-id :player/inventory :player/controls
+           :world/chunks :world/blocks :world/facts :world/entities :window/state-id :window/grid
+           :window/cursor :window/open :player/held-slot :plan/intent :plan/status :plan/blacklist
            :plan/trunk-failures]))
 
 (s/fdef game/step
@@ -314,6 +345,15 @@
 (s/def :intent/for keyword?)
 (s/def :intent/pickup? boolean?)
 (s/def :intent/step-down? boolean?)
+(s/def :intent/cell ::block-pos)
+(s/def :intent/click-face #{:down :up :north :south :west :east})
+(s/def :intent/build #{:cast-one :portal :nether})
+(s/def :intent/origin ::block-pos)
+(s/def :intent/facing build/facings)
+(s/def :intent/op ::op)
+(s/def :intent/aim (s/coll-of number? :kind vector? :count 3))
+(s/def :intent/expect :build/done)
+(s/def :intent/fluid #{:water :lava})
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
@@ -425,6 +465,9 @@
 (s/def :sim/rng int?)
 (s/def :sim/furnaces (s/map-of ::block-pos map?))
 (s/def :sim/falls (s/map-of ::block-pos int?))
+(s/def :sim/dimension string?)
+(s/def :sim/portal-since int?)
+(s/def :sim/kill-at int?)
 (s/def :sim/falling (s/map-of ::block-pos map?))
 (s/def :sim/next-window int?)
 (s/def :sim/clicks nat-int?)

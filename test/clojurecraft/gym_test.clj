@@ -45,13 +45,30 @@
   (is (= :disconnect (gym/outcome (left :result nil))) "the bot never printed RESULT")
   (is (= :harness (gym/outcome (left :landed? false))) "the landing failed before :go"))
 
+(deftest an-arena-is-written-round-the-landing
+  ;; a portal row builds its arena relative to the landing [x z y] (issue #8)
+  (is (= "fill 92 63 192 116 63 216 minecraft:stone"
+         (gym/fill-in "fill {x-8} {y-1} {z-8} {x+16} {y-1} {z+16} minecraft:stone"
+                      "Clj_g1"
+                      [100 200 64])))
+  (is (= "data get entity Clj_g1 Dimension"
+         (gym/fill-in "data get entity {name} Dimension" "Clj_g1" [0 0 0]))))
+
 (deftest a-truth-reads-the-servers-reply
   (let [row {:truth/cmd "clear {name} minecraft:stick 0" :truth/re "Found ([4-9]|[1-9][0-9])"}]
-    (is (= "clear Clj_g1 minecraft:stick 0" (gym/truth-cmd row "Clj_g1")))
-    (is (:truth/ok? (gym/truth row "Clj_g1" "Found 4 matching item(s) on player Clj_g1")))
-    (is (:truth/ok? (gym/truth row "Clj_g1" "Found 12 matching item(s) on player Clj_g1")))
-    (is (not (:truth/ok? (gym/truth row "Clj_g1" "Found 3 matching item(s) on player Clj_g1"))))
-    (is (not (:truth/ok? (gym/truth row "Clj_g1" "No items were found on player Clj_g1"))))))
+    (is (= "clear Clj_g1 minecraft:stick 0" (gym/truth-cmd row "Clj_g1" [0 0 64])))
+    (is (:truth/ok? (gym/truth row
+                               "clear Clj_g1 minecraft:stick 0"
+                               "Found 4 matching item(s) on player Clj_g1")))
+    (is (:truth/ok? (gym/truth row
+                               "clear Clj_g1 minecraft:stick 0"
+                               "Found 12 matching item(s) on player Clj_g1")))
+    (is (not (:truth/ok? (gym/truth row
+                                    "clear Clj_g1 minecraft:stick 0"
+                                    "Found 3 matching item(s) on player Clj_g1"))))
+    (is (not (:truth/ok? (gym/truth row
+                                    "clear Clj_g1 minecraft:stick 0"
+                                    "No items were found on player Clj_g1"))))))
 
 (deftest the-result-line-is-read-from-the-log
   (is (= {:ok true :reason :goal} (gym/result-line "RESULT {:ok true, :reason :goal}")))

@@ -22,6 +22,9 @@
 (def half-width 0.3)                  ; the player box is 0.6 wide
 (def height 1.8)                      ; the player box height
 (def eye-height 1.62)                 ; eye above the feet
+(def face-offsets
+  "Each block face by name, as the step from the block to the cell beyond that face."
+  {:down [0 -1 0] :up [0 1 0] :north [0 0 -1] :south [0 0 1] :west [-1 0 0] :east [1 0 0]})
 (def jump-velocity 0.42)              ; vy given by a jump
 (def ground-inertia (* 0.6 0.91))                     ; slipperiness × 0.91
 (def air-inertia 0.91)                ; horizontal velocity kept per tick in the air

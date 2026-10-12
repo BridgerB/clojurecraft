@@ -106,4 +106,6 @@ The rewrite that followed this essay did the first five items on the list above,
 - **Conveyance**: chunk decoding happens on the socket's reader thread; every channel is bounded; the test fixture is its own process speaking to the bot through a pipe.
 - **Style**: docstrings on every public function (a test holds it), `defn-` only for local aliases, constants with comments at the top, I/O fenced last, `reduce` over `loop`, `cond` over nested `if` (a test holds it), no records, no macros, and no primitive arrays or hints that a measurement did not ask for.
 
-Not done: the multi-bot race (separate atoms sharing one channel for claimed landing cells; issue #17, planned once one bot reaches iron or the portal), and a real pathfinder (issue #4). Next is the stone pickaxe, issue #9, whose problem statement is already written.
+- **Builds are data**: the nether portal is a plan of ops, each with a done-predicate read from the world (`build.clj`); the planner works the first op not done, so a cast resumes after a death or over a frame already half cast, and nothing records its progress.
+
+Not done: the multi-bot race (separate atoms sharing one channel for claimed landing cells; issue #17). The run reaches the Nether from the iron kit's tools and a cast portal; next is a dimension-aware world and the fortress, issue #11.

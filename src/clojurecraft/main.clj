@@ -15,6 +15,7 @@
             [clojure.edn :as edn]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [clojurecraft.build]
             [clojurecraft.cli :as cli]
             [clojurecraft.conn :as conn]
             [clojurecraft.game :as game]

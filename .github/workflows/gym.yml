@@ -10,7 +10,7 @@ on:
     inputs:
       goal:
         type: choice
-        options: [wood, table, pickaxe, cobblestone, stone-pickaxe, furnace, ingots, bucket, water-bucket, flint-and-steel, iron-kit, shore]
+        options: [wood, table, pickaxe, cobblestone, stone-pickaxe, furnace, ingots, bucket, water-bucket, flint-and-steel, iron-kit, cast-one, portal, nether, shore]
         default: wood
       runs:
         default: '6'
@@ -74,7 +74,7 @@ jobs:
       - id: plan
         name: The trial matrix
         run: |
-          if [ "${{ github.event_name }}" = push ]; then goals=wood,table,pickaxe,cobblestone,stone-pickaxe,furnace,ingots,bucket,flint-and-steel; runs=1; else goals=${{ inputs.goal }}; runs=${{ inputs.runs }}; fi
+          if [ "${{ github.event_name }}" = push ]; then goals=wood,table,pickaxe,cobblestone,stone-pickaxe,furnace,ingots,bucket,flint-and-steel,cast-one; runs=1; else goals=${{ inputs.goal }}; runs=${{ inputs.runs }}; fi
           matrix=$(clojure -M:gym plan --goals "$goals" --runs "$runs")
           echo "$matrix"
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"

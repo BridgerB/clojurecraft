@@ -120,38 +120,41 @@
    :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {slot item} (a slot is a named place,
    [:hotbar 0] as inventory/slot reads it, or a window-0 slot number), :lag-ticks,
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
-   from the world spawn) and :seed (where the loot rolls start, 0 when absent)."
-  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed]
+   from the world spawn), :seed (where the loot rolls start, 0 when absent) and :kill-at ms (the
+   player dies then, a fault as an input: a death mid-task)."
+  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed kill-at]
     :or {keep-alive-every keep-alive-every}}]
-  {:sim/phase :handshake
-   :sim/lag-ticks (or lag-ticks 0)
-   :sim/inv (into {} (for [[k it] inventory] [(if (vector? k) (inventory/slot k) k) it]))
-   :sim/state-id 1
-   :sim/held 0
-   :sim/placed {}
-   :sim/furnaces {}
-   :sim/falls {}
-   :sim/falling {}
-   :sim/next-window 1
-   :sim/clicks 0
-   :sim/drop-clicks (or drop-clicks #{})
-   :sim/rng (or seed 0)
-   :sim/violations []
-   :sim/keep-alive-every keep-alive-every
-   :sim/now 0
-   :sim/out []
-   :sim/column column
-   :sim/chunk (chunk/decode column)
-   :sim/spawn spawn
-   :sim/respawn (or respawn spawn)
-   :sim/broken #{}
-   :sim/air max-air
-   :sim/health max-health
-   :sim/respawns 0
-   :sim/items {}
-   :sim/next-eid 100
-   :sim/next-keep-alive keep-alive-every
-   :sim/keep-alives-pending #{}})
+  (cond->
+    {:sim/phase :handshake
+     :sim/lag-ticks (or lag-ticks 0)
+     :sim/inv (into {} (for [[k it] inventory] [(if (vector? k) (inventory/slot k) k) it]))
+     :sim/state-id 1
+     :sim/held 0
+     :sim/placed {}
+     :sim/furnaces {}
+     :sim/falls {}
+     :sim/falling {}
+     :sim/next-window 1
+     :sim/clicks 0
+     :sim/drop-clicks (or drop-clicks #{})
+     :sim/rng (or seed 0)
+     :sim/violations []
+     :sim/keep-alive-every keep-alive-every
+     :sim/now 0
+     :sim/out []
+     :sim/column column
+     :sim/chunk (chunk/decode column)
+     :sim/spawn spawn
+     :sim/respawn (or respawn spawn)
+     :sim/broken #{}
+     :sim/air max-air
+     :sim/health max-health
+     :sim/respawns 0
+     :sim/items {}
+     :sim/next-eid 100
+     :sim/next-keep-alive keep-alive-every
+     :sim/keep-alives-pending #{}}
+    kill-at (assoc :sim/kill-at kill-at)))
 
 (defn send "Queue pkt for the client in :sim/out." [sim pkt] (update sim :sim/out conj pkt))
 
@@ -746,13 +749,9 @@
 
 ;; ---------------------------------------------------------------- using items on blocks
 
-(def face-offsets
-  "Each block face by name, as the step from the block to the cell beyond that face."
-  {:down [0 -1 0] :up [0 1 0] :north [0 0 -1] :south [0 0 1] :west [-1 0 0] :east [1 0 0]})
-
 (def faces
   "A face as the packets number it → the step to the cell beyond it (face-offsets)."
-  (into {} (for [[n step] face-offsets] [(packet/value :face n) step])))
+  (into {} (for [[n step] physics/face-offsets] [(packet/value :face n) step])))
 
 (defn overlaps-player?
   "Would a block at [x y z] intersect the player's 0.6×1.8 box at its last reported position?
@@ -802,6 +801,97 @@
                  :flags 0})))
     sim))
 
+;; ---------------------------------------------------------------- fire and portals (issue #8)
+
+(def portal-ms 4000)                  ; a survival player in a portal this long changes dimension (80 game ticks)
+(def nether
+  "The respawn the model sends for the Nether: the dimension change a portal makes."
+  (assoc respawn :dimension-type 3 :dimension "minecraft:the_nether"))
+
+(defn frame-around
+  "The six interior cells of a complete portal frame round cell along axis (:x or :z), or nil: an
+   interior two wide and three high, air (or fire) inside, obsidian on its four sides, the
+   corners not needed (PortalShape)."
+  [sim [x y z] axis]
+  (let [along (fn [[a b c] d] (if (= axis :x) [(+ a d) b c] [a b (+ c d)]))
+        obsidian? #(= :obsidian (blocks/name-of (block-at sim %)))
+        open? #(contains? #{:air :fire} (blocks/name-of (block-at sim %)))]
+    (first (for [da [0 -1]
+                 dy [0 -1 -2]
+                 :let [base (along [x (+ y dy) z] da)
+                       inside (for [a [0 1] b [0 1 2]] (update (along base a) 1 + b))
+                       frame (concat (for [a [0 1]] (update (along base a) 1 dec))
+                                     (for [a [0 1]] (update (along base a) 1 + 3))
+                                     (for [b [0 1 2]] (update (along base -1) 1 + b))
+                                     (for [b [0 1 2]] (update (along base 2) 1 + b)))]
+                 :when (and (every? open? inside) (every? obsidian? frame))]
+             inside))))
+
+(defn light
+  "use-item-on with flint and steel: fire in the cell the clicked face looks into when it is air;
+   fire inside a complete frame becomes the portal instead (BaseFireBlock.onPlace finds the
+   PortalShape round it). Then the ack."
+  [sim pos face ack]
+  (let [dest (mapv + pos (faces face))
+        inside (when (= :air (blocks/name-of (block-at sim dest)))
+                 (or (some-> (frame-around sim dest :x)
+                             (vector (blocks/default-state :nether_portal)))
+                     (some-> (frame-around sim dest :z)
+                             (vector (inc (blocks/default-state :nether_portal))))))
+        fire (blocks/default-state :fire)]
+    (cond (nil? (block-at sim dest)) (send sim ack)
+          inside
+          (let [[cells state] inside]
+            (-> (reduce (fn [sim c]
+                          (-> sim
+                              (assoc-in [:sim/placed c] state)
+                              (send {:packet/name :block-update :pos c :state state})))
+                        sim
+                        cells)
+                (send ack)))
+          (= :air (blocks/name-of (block-at sim dest)))
+          (-> sim
+              (assoc-in [:sim/placed dest] fire)
+              (send {:packet/name :block-update :pos dest :state fire})
+              (send ack))
+          :else (send sim ack))))
+
+(defn through-portal
+  "The model a tick on: a player whose feet stand in a nether portal portal-ms on end changes
+   dimension (the Nether's respawn, then a teleport where it stands and the column again, as the
+   one-column model has only one); out of a portal, the count starts over."
+  [sim now]
+  (let [[x y z :as pos] (:sim/player-pos sim)
+        in? (and pos
+                 (= :nether_portal
+                    (blocks/name-of (block-at sim (mapv #(long (math/floor %)) [x (+ y 0.1) z])))))
+        since (:sim/portal-since sim)]
+    (cond (not in?) (dissoc sim :sim/portal-since)
+          (= "minecraft:the_nether" (:sim/dimension sim)) sim
+          (nil? since) (assoc sim :sim/portal-since now)
+          (< (- now since) portal-ms) sim
+          :else
+          (-> sim
+              (assoc :sim/dimension "minecraft:the_nether")
+              (dissoc :sim/portal-since)
+              (send nether)
+              (send {:packet/name :player-position
+                     :teleport-id 3
+                     :x x
+                     :y y
+                     :z z
+                     :dx 0.0
+                     :dy 0.0
+                     :dz 0.0
+                     :yaw 0.0
+                     :pitch 0.0
+                     :flags 0})
+              (send {:packet/name :level-chunk-with-light
+                     :x 0
+                     :z 0
+                     :heightmaps []
+                     :data (:sim/column sim)})))))
+
 (defn place
   "use-item-on that is not on a container: place the held block item at pos + face when the
    destination is empty, the clicked block is solid and the block would not overlap the
@@ -850,7 +940,9 @@
       (-> sim
           (send ack)
           (open-furnace pos))
-      (place sim pos face ack))))
+      (if (= (:item (get-in sim [:sim/inv (held-slot sim)])) (get blocks/items :flint_and_steel))
+        (light sim pos face ack)
+        (place sim pos face ack)))))
 
 (def use-range 4.5)                   ; how far the eyes reach for a block, as the server's interaction range
 (def ray-step 0.05)                   ; the length of one step along a ray
@@ -862,43 +954,114 @@
   (let [[px py pz] (:sim/player-pos sim)]
     (physics/cells-along [px (+ py 1.62) pz] (physics/direction look) use-range ray-step)))
 
+(def bucket-fluids
+  "What each bucket holds, by item id: the empty one nothing, the filled ones the source state they
+   pour."
+  {(get blocks/items :bucket) nil
+   (get blocks/items :water_bucket) blocks/water-base
+   (get blocks/items :lava_bucket) blocks/lava-base})
+
+(def filled-bucket
+  "The bucket a scooped source state fills an empty one into."
+  {blocks/water-base (get blocks/items :water_bucket)
+   blocks/lava-base (get blocks/items :lava_bucket)})
+
 (defn scooped
-  "The water source a bucket used along look takes: the first water source on the ray, unless a
-   solid block comes first (the eyes do not see through it); nil when none."
+  "The fluid source an empty bucket used along look takes: the first water or lava source on the
+   ray (BucketItem with ClipContext.Fluid.SOURCE_ONLY), unless a solid block comes first (the eyes
+   do not see through it); nil when none."
   [sim look]
   (reduce (fn [_ cell]
             (let [id (block-at sim cell)]
-              (cond (= id blocks/water-base) (reduced cell)
+              (cond (contains? filled-bucket id) (reduced cell)
                     (and id (blocks/solid? id)) (reduced nil)
                     :else nil)))
           nil
           (ray-cells sim look)))
 
+(defn poured
+  "Where a filled bucket used along look puts its fluid: the cell before the first solid block on
+   the ray, the ray passing through every fluid (ClipContext.Fluid.NONE: a water pour aimed at the
+   floor under a lava source goes through the lava and replaces it), when that cell can take a
+   fluid (air, a plant, a fluid); nil when no solid block is in reach."
+  [sim look]
+  (reduce (fn [before cell]
+            (let [id (block-at sim cell)]
+              (cond (nil? id) (reduced nil)
+                    (blocks/solid? id) (reduced before)
+                    :else cell)))
+          nil
+          (ray-cells sim look)))
+
+(def quench-sides
+  "The cells round a lava block water turns it to stone from: above and the four sides, never
+   below (LiquidBlock.shouldSpreadLiquid over POSSIBLE_FLOW_DIRECTIONS, each one's opposite)."
+  [[0 1 0] [0 0 -1] [0 0 1] [1 0 0] [-1 0 0]])
+
+(defn quench
+  "The model after water meets lava at or round pos: each lava block there with water above it or
+   beside it becomes obsidian when a source, cobblestone when flowing, and the client is told."
+  [sim pos]
+  (reduce (fn [sim cell]
+            (let [id (block-at sim cell)
+                  water? (some #(contains? blocks/water-states (block-at sim (mapv + cell %)))
+                               quench-sides)]
+              (cond (not (and (contains? blocks/lava-states id) water?)) sim
+                    :else
+                    (let [stone (blocks/default-state
+                                 (if (= id blocks/lava-base) :obsidian :cobblestone))]
+                      (-> sim
+                          (assoc-in [:sim/placed cell] stone)
+                          (send {:packet/name :block-update :pos cell :state stone}))))))
+          sim
+          (cons pos (map #(mapv + pos %) [[0 1 0] [0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]))))
+
+(defn swap-held
+  "The model with the one held item in the held slot exchanged for item (a bucket filled or
+   emptied), the client told what window 0 now holds."
+  [sim item]
+  (let [slot (held-slot sim)
+        held (get-in sim [:sim/inv slot])
+        before (full (:sim/inv sim) (inventory/layouts :inventory))
+        stack {:item item :count 1}
+        inv (if (= 1 (:count held))
+              (assoc (:sim/inv sim) slot stack)
+              (first (insert (take-one (:sim/inv sim) slot)
+                             (inventory/store-slots (inventory/layouts :inventory))
+                             stack)))]
+    (-> sim
+        (assoc :sim/inv inv)
+        (sync-window :inventory before (:sim/cursor sim) false))))
+
 (defmethod on-packet [:play :use-item]
-  ;; a held empty bucket aimed by the look at a water source fills: the source becomes air and
-  ;; the bucket a water bucket; anything else does nothing here. Either way, the ack.
+  ;; a held bucket used along the look: an empty one aimed at a water or lava source fills and the
+  ;; source becomes air; a filled one puts its fluid in the cell before the first solid block,
+  ;; empties, and water meeting lava turns it to stone. Anything else does nothing here. Either
+  ;; way, the ack.
   [sim {:keys [sequence y-rot x-rot]}]
   (let [ack {:packet/name :block-changed-ack :sequence sequence}
-        slot (held-slot sim)
-        held (get-in sim [:sim/inv slot])
-        src (when (and (:sim/player-pos sim) (= (:item held) (get blocks/items :bucket)))
-              (scooped sim [y-rot x-rot]))]
-    (if src
-      (let [before (full (:sim/inv sim) (inventory/layouts :inventory))
-            filled {:item (get blocks/items :water_bucket) :count 1}
-            inv (if (= 1 (:count held))
-                  (assoc (:sim/inv sim) slot filled)
-                  (first (insert (take-one (:sim/inv sim) slot)
-                                 (inventory/store-slots (inventory/layouts :inventory))
-                                 filled)))]
-        (-> sim
-            (assoc-in [:sim/placed src] blocks/air)
-            (disturb src)
-            (assoc :sim/inv inv)
-            (send {:packet/name :block-update :pos src :state blocks/air})
-            (sync-window :inventory before (:sim/cursor sim) false)
-            (send ack)))
-      (send sim ack))))
+        item (:item (get-in sim [:sim/inv (held-slot sim)]))
+        look [y-rot x-rot]
+        bucket? (and (:sim/player-pos sim) (contains? bucket-fluids item))
+        fluid (get bucket-fluids item)
+        src (when (and bucket? (nil? fluid)) (scooped sim look))
+        into (when (and bucket? fluid) (poured sim look))]
+    (cond src
+          (let [state (block-at sim src)]
+            (-> sim
+                (assoc-in [:sim/placed src] blocks/air)
+                (disturb src)
+                (send {:packet/name :block-update :pos src :state blocks/air})
+                (swap-held (filled-bucket state))
+                (send ack)))
+          into
+          (-> sim
+              (assoc-in [:sim/placed into] fluid)
+              (send {:packet/name :block-update :pos into :state fluid})
+              (quench into)
+              (swap-held (get blocks/items :bucket))
+              (send ack))
+          :else (send sim ack))))
 
 ;; ---------------------------------------------------------------- falling blocks
 
@@ -991,6 +1154,18 @@
                                             [(long (math/floor x)) (long (math/floor (+ y 1.62)))
                                              (long (math/floor z))]))))))
 
+(defn kill
+  "At :sim/kill-at, once: the player dies, told to the client as set-health; the respawn then is
+   client-command's, as after any death."
+  [sim]
+  (let [at (:sim/kill-at sim)]
+    (cond (or (nil? at) (< (:sim/now sim) at)) sim
+          :else
+          (-> sim
+              (assoc :sim/health 0.0)
+              (dissoc :sim/kill-at)
+              (send {:packet/name :set-health :health 0.0 :food 20 :saturation 5.0})))))
+
 (defn drown
   "One tick of breath: air falls while the eye is under and refills otherwise; at zero, a hurt
    of drown-damage every drown-every ticks, each told to the client as set-health. A dead
@@ -1008,10 +1183,12 @@
 
 (defn tick
   "Advance the server clock to now, one game tick: send a keep-alive when one is due, breathe
-   or drown, cook in every furnace, let gravel and sand fall, and hand over every item whose pickup delay has passed and
+   or drown, cook in every furnace, let gravel and sand fall, carry a player through a portal,
+   and hand over every item whose pickup delay has passed and
    that the player stands within reach of."
   [sim now]
-  (let [sim (tick-falls (tick-furnaces (drown (assoc sim :sim/now now))))
+  (let [sim (through-portal (tick-falls (tick-furnaces (drown (kill (assoc sim :sim/now now)))))
+                            now)
         sim (if (>= now (:sim/next-keep-alive sim))
               (-> sim
                   (send {:packet/name :keep-alive :id now})

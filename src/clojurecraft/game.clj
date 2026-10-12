@@ -208,12 +208,27 @@
   [w p]
   (assoc w :bot/disconnected (String. ^bytes (:reason p) "ISO-8859-1")))
 
+(def start-dimension "minecraft:overworld") ; where a login puts the bot (the login packet's dimension is not read)
+
+(defn change-dimension
+  "The world after a respawn into the dimension named dim (\"minecraft:the_nether\"): the
+   columns, the block overlay and the entities belonged to the old one, so they go, and the bot
+   is loaded again only once the server has placed it (the next teleport sends player-loaded). A
+   respawn in the dimension the bot is in (a death) keeps them. Before any respawn the bot is in
+   start-dimension."
+  [w dim]
+  (cond-> (assoc w :player/dimension dim)
+    (not= dim (:player/dimension w start-dimension))
+    (assoc :world/chunks {} :world/blocks {} :player/loaded? false)))
+
 (defmethod on-packet [:play :respawn]
-  [w _]
-  ;; a new life: fresh menus, no entities, at rest, lungs full; the teleport that follows places it
+  [w p]
+  ;; a new life, or a new dimension: fresh menus, no entities, at rest, lungs full; the teleport
+  ;; that follows places it
   (-> w
       inventory/fresh-menus
       (dissoc :player/dead?)
+      (change-dimension (:dimension p))
       (assoc :world/entities {}
              :player/vel [0.0 0.0 0.0]
              :player/fall-distance 0.0

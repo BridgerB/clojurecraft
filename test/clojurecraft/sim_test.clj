@@ -8,6 +8,7 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.build :as build]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.gym :as gym]
@@ -892,6 +893,178 @@
   "The model after the client sends pkt."
   [sim pkt]
   (sim/step sim {:sim/kind :packet :sim/packet pkt}))
+
+;; ---------------------------------------------------------------- the portal (issue #8)
+
+(def frame
+  "A portal frame along x at z 8 with its corner origin [4 64 8]: ten obsidian round an interior
+   [5..6, 65..67], on the stone floor."
+  (into {}
+        (for [[dx dy] [[1 0] [2 0] [0 1] [3 1] [0 2] [3 2] [0 3] [3 3] [1 4] [2 4]]]
+          [[(+ 4 dx) (+ 64 dy) 8] (blocks/default-state :obsidian)])))
+
+(defn lighter-sim
+  "A model in play over blocks, the player at [5.5 64 10.5] holding flint and steel."
+  [blocks]
+  (-> (sim/init {:column (world/column-bytes blocks)
+                 :spawn [5.5 64.0 10.5]
+                 :inventory {[:hotbar 0] {:item (recipe/item-id :flint_and_steel) :count 1}}})
+      (assoc :sim/phase :play :sim/player-pos [5.5 64.0 10.5])))
+
+(defn strike
+  "The model after the player uses its held item on the top face of the block at pos."
+  [sim pos]
+  (client-sends sim
+                {:packet/name :use-item-on
+                 :hand 0
+                 :pos pos
+                 :face (packet/value :face :up)
+                 :cursor-x 0.5
+                 :cursor-y 1.0
+                 :cursor-z 0.5
+                 :inside-block false
+                 :world-border-hit false
+                 :sequence 9}))
+
+(deftest flint-and-steel-in-a-complete-frame-lights-the-portal
+  (let [sim (strike (lighter-sim frame) [5 64 8])]
+    (is (every? #(= :nether_portal (blocks/name-of (sim/block-at sim %)))
+                (for [x [5 6] y [65 66 67]] [x y 8])))
+    (is (= :fire (blocks/name-of (sim/block-at (strike (lighter-sim {}) [5 63 8]) [5 64 8])))
+        "no frame: a fire, no portal")))
+
+(deftest standing-in-the-portal-four-seconds-goes-to-the-nether
+  (let [lit (-> (strike (lighter-sim frame) [5 64 8])
+                (assoc :sim/player-pos [5.5 65.0 8.5] :sim/out []))
+        at (fn [sim ms] (sim/step sim {:sim/kind :tick :sim/now ms}))
+        early (reduce at lit (range 1000 4950 50))
+        later (reduce at early (range 4950 5200 50))]
+    (is (not-any? #(= :respawn (:packet/name %)) (:sim/out early)) "not before four seconds")
+    (is (= "minecraft:the_nether" (:sim/dimension later)))
+    (is (some #(= "minecraft:the_nether" (:dimension %)) (:sim/out later)))))
+
+;; ---------------------------------------------------------------- building the portal (issue #8)
+
+(def build-origin "Where the frame's corner goes in the one-column arena." [4 64 5])
+
+(def kit
+  "What the gym gives a cast: buckets of lava and water, an empty one, cobblestone, flint and
+   steel."
+  {[:hotbar 0] {:item (recipe/item-id :lava_bucket) :count 1}
+   [:hotbar 1] {:item (recipe/item-id :water_bucket) :count 1}
+   [:hotbar 2] {:item (recipe/item-id :bucket) :count 1}
+   [:hotbar 3] {:item (recipe/item-id :cobblestone) :count 64}
+   [:hotbar 4] {:item (recipe/item-id :flint_and_steel) :count 1}
+   [:hotbar 5] {:item (recipe/item-id :cobblestone) :count 64}
+   [:hotbar 6] {:item (recipe/item-id :cobblestone) :count 64}})
+
+(defn build-run
+  "Run a :build of kind from build-origin facing south over blocks, from spawn with inv, until it
+   ends or max-ms. Returns [world sim]."
+  [kind blocks spawn inv max-ms]
+  (let [it
+        {:intent/kind :build :intent/build kind :intent/origin build-origin :intent/facing :south}
+        step
+        (fn [w e]
+          (let [w (game/step w e)
+                i (:plan/intent w)]
+            (cond (= :go (:event/kind e)) (assoc w :plan/intent (assoc it :intent/status :active))
+                  (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
+                  (intent/run w i e)
+                  :else w)))]
+    (sim/run step
+             (game/init fx/opts)
+             (sim/init {:column (world/column-bytes blocks) :spawn spawn :inventory inv})
+             #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
+             max-ms)))
+
+(deftest one-cell-is-cast-from-lava-and-water
+  (let [[w sim] (build-run :cast-one {} [9.5 64.0 10.5] kit 300000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
+    (is (= :obsidian (blocks/name-of (sim/block-at sim [5 64 5]))) "the first cell, obsidian")
+    (is (= (recipe/item-id :water_bucket)
+           (some #(when (= (recipe/item-id :water_bucket) (:item %)) (:item %))
+                 (vals (:sim/inv sim))))
+        "the water scooped back")
+    (is (empty? (:sim/violations sim)))))
+
+(def lava-pit
+  "A trench of lava sources set into the floor east of the footprint, one wide so every source
+   has ground beside it to refill from (a scoop takes a source for good)."
+  (into {} (for [z (range 0 12)] [[15 63 z] blocks/lava-base])))
+
+(deftest the-frame-is-cast-lit-and-stepped-through
+  (let [[w sim] (build-run :nether lava-pit [9.5 64.0 10.5] kit 1800000)
+        frame (for [[dx dy] build/frame-cells] [(+ 4 dx) (+ 64 dy) 5])]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
+    (is (every? #(= :obsidian (blocks/name-of (sim/block-at sim %))) frame) "ten obsidian")
+    (is (= 6
+           (count (filter #(= :nether_portal (blocks/name-of (sim/block-at sim %)))
+                          (for [x [5 6] y [65 66 67]] [x y 5])))))
+    (is (= "minecraft:the_nether" (:player/dimension w)))
+    (is (empty? (:sim/violations sim)))))
+
+(deftest a-cast-six-tenths-done-casts-only-the-other-four
+  ;; the build reads the world, not a record of its progress: six cells already obsidian are
+  ;; skipped, so four lava pours are needed, one from the kit and three from the trench
+  (let [seeded (into {}
+                     (for [[dx dy] (take 6 build/frame-cells)]
+                       [[(+ 4 dx) (+ 64 dy) 5] (blocks/default-state :obsidian)]))
+        [w sim] (build-run :portal (merge lava-pit seeded) [9.5 64.0 10.5] kit 1800000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
+    (is (= 9 (count (filter #(= blocks/lava-base (sim/block-at sim %)) (keys lava-pit))))
+        "three lava scooped: four cells cast, not ten")
+    (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- pours (issue #8)
+
+(def cup
+  "One cell of ruststeve's mold at [5 64 5] in a stone floor: the cup, stone round it (north,
+   east, west, and the stand to the south at [5 64 6]), the bowl over it at [5 65 5] walled north,
+   east and west, the player on the stand with its feet at [5 65 6]."
+  (into {} (for [c [[5 64 4] [4 64 5] [6 64 5] [5 64 6] [5 65 4] [4 65 5] [6 65 5]]] [c 1])))
+
+(defn pour-sim
+  "A model in play over cup, the player standing on the stand, holding item in the first hotbar
+   place, with the cells in extra placed."
+  [item extra]
+  (-> (sim/init {:column (world/column-bytes cup)
+                 :spawn [5.5 65.0 6.5]
+                 :inventory {[:hotbar 0] {:item (recipe/item-id item) :count 1}}})
+      (assoc :sim/phase :play :sim/player-pos [5.5 65.0 6.5])
+      (update :sim/placed merge extra)))
+
+(defn use-toward
+  "The model after the player uses its held item looking at point from its standing eye."
+  [sim point]
+  (let [[yaw pitch] (physics/look-at [5.5 (+ 65.0 physics/eye-height) 6.5] point)]
+    (client-sends sim {:packet/name :use-item :hand 0 :sequence 7 :y-rot yaw :x-rot pitch})))
+
+(deftest a-lava-pour-aimed-at-the-cups-north-wall-fills-the-cup
+  ;; ruststeve's aim: the north wall's inner face, low; the ray goes through the bowl and the cup
+  (let [sim (use-toward (pour-sim :lava_bucket {}) [5.5 64.3 4.98])]
+    (is (= blocks/lava-base (sim/block-at sim [5 64 5])))
+    (is (= (recipe/item-id :bucket) (get-in sim [:sim/inv (inventory/slot [:hotbar 0]) :item])))))
+
+(deftest water-poured-into-the-bowl-turns-the-lava-under-it-to-obsidian
+  (let [sim (use-toward (pour-sim :water_bucket {[5 64 5] blocks/lava-base}) [5.5 65.5 4.98])]
+    (is (= :obsidian (blocks/name-of (sim/block-at sim [5 64 5]))))
+    (is (= blocks/water-base (sim/block-at sim [5 65 5])) "the water stays in the bowl")))
+
+(deftest water-aimed-at-the-floor-goes-through-the-lava-and-replaces-it
+  ;; a filled bucket's ray ignores fluids: ruststeve's floor aim replaced its lava source
+  (let [sim (use-toward (pour-sim :water_bucket {[5 64 5] blocks/lava-base}) [5.5 64.0 5.5])]
+    (is (= blocks/water-base (sim/block-at sim [5 64 5])))
+    (is (not= :obsidian (blocks/name-of (sim/block-at sim [5 64 5]))))))
+
+(deftest an-empty-bucket-scoops-lava
+  (let [sim (use-toward (pour-sim :bucket {[5 64 5] blocks/lava-base}) [5.5 64.85 5.5])]
+    (is (= blocks/air (sim/block-at sim [5 64 5])))
+    (is (= (recipe/item-id :lava_bucket)
+           (get-in sim [:sim/inv (inventory/slot [:hotbar 0]) :item])))))
 
 (defn open-furnace
   "The model after the client right-clicks the furnace."
@@ -1871,4 +2044,45 @@
     (is (zero? (:stats/deaths w 0)))
     (is (trap/dry-land? w))
     (is (= [:water] (map :trap/kind (:world/traps w))))
+    (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- the portal through the planner (issue #8)
+
+(defn nether-run
+  "The planner against the model toward the Nether from the kit, a lava trench beside the
+   arena, the frame's site chosen by the bot; sim-opts adds faults. Returns [world sim]."
+  [step sim-opts]
+  (sim/run step
+           (game/init fx/opts)
+           (sim/init (merge
+                      {:column (world/column-bytes lava-pit) :spawn [9.5 64.0 10.5] :inventory kit}
+                      sim-opts))
+           #(or (plan/done? %) (plan/failed? %))
+           1800000
+           {:event/kind :go :go/goals [:nether]}))
+
+(deftest the-portal-from-a-kit-and-its-recording-replays
+  (let [path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-portal.edn")
+        tap (record/tap! path)
+        [w sim] (nether-run (recording step tap) {})]
+    ((:close tap))
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= "minecraft:the_nether" (:player/dimension w)))
+    (is (some? (memory/site w)) "the site is remembered")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))
+    (testing "the recording replays with every sent packet the same"
+      (is (nil? (record/verify step (game/init fx/opts) path))))))
+
+(deftest a-death-mid-cast-resumes-at-the-first-op-not-done
+  ;; the build stores no progress: after a death the planner starts it again at the site it
+  ;; remembers, and the first op the world says is not done is the one worked. The new life
+  ;; begins off the frame (the site was chosen at the landing, and vanilla never respawns a
+  ;; player inside blocks), so it walks back to the site
+  (let [[w sim] (nether-run step {:kill-at 240000 :respawn [12.5 64.0 14.5]})]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= 1 (:stats/deaths w)) "it died once")
+    (is (= "minecraft:the_nether" (:player/dimension w)))
+    (is (= 3 (count (filter #(= blocks/lava-base (sim/block-at sim %)) (keys lava-pit))))
+        "nine lava scooped, as without the death: no cell cast twice")
     (is (empty? (:sim/violations sim)))))
