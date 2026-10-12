@@ -67,13 +67,16 @@
   [id held]
   (* break-threshold (or (dig/ms id held {}) dig-ms)))
 
+(def ^:const roll-bits 53)             ; a double's mantissa: the bits of a roll kept from the generator's 64
+
 (defn roll
   "[sim' r]: the model's next roll, r in [0, 1), from :sim/rng by one 64-bit linear congruential
    step (Knuth's MMIX constants); pure, so the same :seed rolls the same luck."
   [sim]
   (let [s (unchecked-add (unchecked-multiply (long (:sim/rng sim)) 6364136223846793005)
                          1442695040888963407)]
-    [(assoc sim :sim/rng s) (/ (double (unsigned-bit-shift-right s 11)) 9007199254740992.0)]))
+    [(assoc sim :sim/rng s)
+     (/ (double (unsigned-bit-shift-right s (- 64 roll-bits))) (math/pow 2 roll-bits))]))
 
 (defn loot
   "[sim' item] for breaking block id with held: the item (an id) its loot table drops, or nil
@@ -108,6 +111,9 @@
 (def max-air 300)                     ; a full breath, as the game's
 (def drown-every 20)                  ; ticks between drowning hurts at zero air
 (def drown-damage 2.0)                ; health taken by each
+(def max-health 20.0)                 ; a full life, the health a spawn and a respawn give
+(def air-regained 4)                  ; breath a tick gives back with the eyes out of water
+(def drop-rise 0.25)                  ; how far over the bottom of a broken block its drop appears
 
 (defn init
   "A fresh server before the handshake, from {:column bytes :spawn [x y z]} plus optional
@@ -140,7 +146,7 @@
    :sim/respawn (or respawn spawn)
    :sim/broken #{}
    :sim/air max-air
-   :sim/health 20.0
+   :sim/health max-health
    :sim/respawns 0
    :sim/items {}
    :sim/next-eid 100
@@ -217,7 +223,7 @@
     (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
       (let [eid (:sim/next-eid sim)
             [x y z] pos
-            [ix iy iz :as item-pos] [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
+            [ix iy iz :as item-pos] [(+ x 0.5) (+ y drop-rise) (+ z 0.5)]
             [sim item] (loot sim id held)
             drop (when item {:item item :count 1})
             before (full (:sim/inv sim) (inventory/layouts :inventory))
@@ -780,7 +786,7 @@
   (if (and (= action (packet/value :client-command :perform-respawn)) (<= (:sim/health sim) 0.0))
     (let [[x y z] (:sim/respawn sim)]
       (-> sim
-          (assoc :sim/health 20.0 :sim/air max-air :sim/player-pos [x y z])
+          (assoc :sim/health max-health :sim/air max-air :sim/player-pos [x y z])
           (update :sim/respawns inc)
           (send respawn)
           (send {:packet/name :player-position
@@ -991,7 +997,7 @@
    player (health at zero) is left for client-command to respawn."
   [sim]
   (let [under? (eye-under? sim)
-        air (if under? (max 0 (dec (:sim/air sim))) (min max-air (+ (:sim/air sim) 4)))
+        air (if under? (max 0 (dec (:sim/air sim))) (min max-air (+ (:sim/air sim) air-regained)))
         hurt? (and under?
                    (zero? air)
                    (zero? (mod (quot (:sim/now sim) physics/tick-ms) drown-every))
