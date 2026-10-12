@@ -139,3 +139,44 @@
           w (standing-at (open-ground {[4 63 8] cobble [5 63 8] 1 [5 64 8] 1}) pos)]
       (is (= [5 63 8] (:intent/target (build/op-child w hill-intent hill-op)))
           "cobblestone the plan places stays; the stone past it is dug"))))
+
+(def pond-stand [6 63 8])
+
+(def pond-op
+  {:build/op :place
+   :build/item :cobblestone
+   :build/pos [6 62 7]
+   :build/stand pond-stand
+   :build/step :pad
+   :build/done [:solid [6 62 7]]})
+
+(defn pond-at
+  "open-ground with water sources in the stone floor."
+  [pos cells]
+  (standing-at (open-ground (into {} (map (fn [c] [c blocks/water-base]) cells))) pos))
+
+(deftest a-pad-stand-over-water-is-placed-from-the-shore
+  ;; full run 61abf8c stood on the bank. The first open pad cell was water and the stand was air
+  ;; over the next water cell; the walk was :partial six times and three :no-path ended the plan
+  (let [pos [5.5 63.0 8.5]
+        w (pond-at pos [[6 62 7] [6 62 8]])]
+    (is (not (path/standable? w pond-stand)) "air over water is no stance")
+    (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [6 62 7]}
+           (build/op-child w hill-intent pond-op))
+        "the shore already reaches the cell, so it is placed from here")
+    (let [far [2.5 63.0 8.5]
+          out (pond-at far [[8 62 8] [8 62 9]])
+          stand [8 63 9]
+          op (assoc pond-op :build/pos [8 62 8] :build/stand stand :build/done [:solid [8 62 8]])
+          child (build/op-child out hill-intent op)]
+      (is (not= :found
+                (:path/status
+                 (path/plan out (path/feet-cell far) {:goal/kind :block :goal/pos stand})))
+          "a walk onto the water stand does not arrive")
+      (is (= :walk (:intent/kind child)))
+      (is (path/standable? out (:intent/target child)) "the walk stops on ground")
+      (is (build/reaches-from? out (:intent/target child) [8 62 8]))
+      (let [boxed (pond-at far (for [x (range 4 13) z (range 4 13)] [x 62 z]))
+            boxed-op (assoc op :build/pos [8 62 8] :build/stand [8 63 9])]
+        (is (= :no-stand (build/op-child boxed hill-intent boxed-op))
+            "with no ground in reach the plan says so, and does not walk onto the water")))))
