@@ -1,0 +1,16 @@
+;; Ten seeds of the forest property, 50,000 worlds each. A shard stops at its first
+;; failure and shrinks that one case, so more shards are what find a different failure,
+;; and more worlds only reach a failure that shows up later. A shard killed at 355
+;; minutes writes nothing. 50,000 worlds is about four hours at the rate the last
+;; finished shard measured, inside that limit. The salt keeps this search off the
+;; soak's seeds. Pushed, it runs with the salt in this file.
+{:plans/label "find"
+ :plans/salt "2026-10-12"
+ :plans/jobs 10
+ :plans/max-parallel 10
+ :plans/experiments [{:exp/name "forests"
+                      :exp/kind :sim
+                      :exp/property "forests"
+                      :exp/shards 10
+                      :exp/worlds 500000
+                      :exp/est-s 17000}]}
