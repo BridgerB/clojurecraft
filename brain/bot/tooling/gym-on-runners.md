@@ -15,6 +15,8 @@ sourceRefs:
   - src/clojurecraft/gym.clj#defn trial!
   - src/clojurecraft/gym.clj#defn located-in
   - src/clojurecraft/gym.clj#defn judge!
+  - src/clojurecraft/gym.clj#defn tee-output!
+  - test/clojurecraft/gym_test.clj#the-result-comes-back-through-the-pipe-whole
   - src/clojurecraft/landings.clj#defn landings!
   - src/clojurecraft/landings.clj#defn landing-for
   - ci/gym.edn#{:landing-sets {"A" {:center [20000 20000] :n 20 :spacing 640 :biome "#minecraft:is_forest" :pregen-r 96}
@@ -53,6 +55,7 @@ The iron kit (issue #6) has a row per stage, each given what the stages before i
 A gym run's recording can be promoted into `test/recordings/<name>/` (`run.edn.gz`, gzip because `record/entries` reads it natively, plus the run's `result.edn`); the corpus stays under 10 MB. `recordings_test` folds each one: every intermediate world must satisfy the world spec, and the fold must reach exactly the RESULT the run printed, which must also be the one the gym judged. The first entry is run 3 of batch wood-a1 (1.2 MB). A replay is open-loop, so when the bot's behaviour changes on purpose a diverging recording is re-promoted from the next batch.
 
 ## Gotchas
+- **The bot's answer comes back through the pipe its `:go` went down** (`tee-output!`): a thread reads the bot's stdout a whole line at a time, copies each line to `bot.log` for people and the artifacts, and delivers the RESULT value to a promise the judge derefs. Nothing reads a file another process is still writing, and nothing polls. When the judge polled `bot.log` every 500 ms, live iron-kit run 19's judge read its 44 KB RESULT half written and failed the trial `:harness-error` on the EDN reader's error, though the bot held the kit (`the-result-comes-back-through-the-pipe-whole`).
 - The recording ends at RESULT and stores it ([[record-replay]]), so a downloaded `run.edn.zst` replays to exactly the RESULT in `result.edn` (`:replay/result :identical`).
 - `--strict true` (on push) makes the judge exit 1 for `:fail`, `:timeout` and `:death`, so the push smoke goes red; dispatched batches report instead.
 

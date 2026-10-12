@@ -146,7 +146,6 @@
 (def hold-ms 60000)                     ; how long an ok bot stays online for the judge's truth commands
 
 (def z95 1.959964)                      ; the normal quantile for a two-sided 95% interval
-(def judge-poll-ms 500)                 ; how often the judge looks for the RESULT line
 (def judge-grace-ms 120000)             ; past the goal's timeout, how long the judge waits for RESULT
 (def shard-overhead-minutes 8)          ; setup, server start and judging, on top of a goal's timeout
 
@@ -169,11 +168,10 @@
    :truth/reply (str reply)
    :truth/ok? (boolean (re-find (re-pattern (:truth/re row)) (str reply)))})
 
-(defn parse-result
-  "The RESULT map in a bot log's text, or nil when the bot never printed one."
-  [log-text]
-  (some (fn [line] (when (str/starts-with? line "RESULT ") (edn/read-string (subs line 7))))
-        (str/split-lines (str log-text))))
+(defn result-line
+  "The RESULT map a whole line of the bot's output carries, or nil for any other line."
+  [line]
+  (when (str/starts-with? line "RESULT ") (edn/read-string (subs line 7))))
 
 (defn outcome
   "How a run ended, from what it left behind. :pass only when the bot says ok and every truth
@@ -327,25 +325,35 @@
            (cli/log "landing failed:" e)
            {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
 
-(defn wait-result!
-  "The RESULT map from the bot log once it appears, or nil after wait-ms."
-  [log-path wait-ms]
-  (let [until (+ (System/currentTimeMillis) wait-ms)]
-    (loop []
-      (let [r (when (.exists (io/file log-path)) (parse-result (slurp log-path)))]
-        (cond r r
-              (> (System/currentTimeMillis) until) nil
-              :else (do (Thread/sleep (long judge-poll-ms)) (recur)))))))
+(defn tee-output!
+  "Read the bot process p's output as it is written, a whole line at a time: copy each to log
+   (for people and the artifacts) and deliver the value of the RESULT line to result (a promise),
+   or nil when the output ends without one. The bot's answer comes back through the pipe its
+   :go went down, never through a file another process is writing: polling the log, live
+   iron-kit run 19's judge read its 44 KB RESULT half written and failed the trial on the
+   reader's error. Runs on a thread of its own; returns it."
+  [^Process p log result]
+  (doto (Thread. ^Runnable
+                 (fn []
+                   (try (with-open [r (io/reader (.getInputStream p))
+                                    w (io/writer log)]
+                          (doseq [line (line-seq r)]
+                            (.write w (str line "\n"))
+                            (.flush w)
+                            (when-let [v (result-line line)] (deliver result v))))
+                        (finally (deliver result nil)))))
+    (.setDaemon true)
+    (.start)))
 
 (defn judge!
-  "Judge one run: wait for the bot's RESULT, then read what the fixture left (a missing landed
+  "Judge one run: wait for the bot's RESULT (result, a promise tee-output! delivers), then read what the fixture left (a missing landed
    file is a landing that never happened), ask the server each truth command while the bot
    still holds, write the result row and print it as one GYMRESULT line. Returns the row."
-  [{:keys [goal run name host rcon-port rcon-pass bot-log landed out wait-ms commit]}]
+  [{:keys [goal run name host rcon-port rcon-pass result landed out wait-ms commit]}]
   (let [row (gym goal)
-        result (wait-result!
-                bot-log
-                (if wait-ms (parse-long wait-ms) (+ (:gym/timeout-ms row) judge-grace-ms)))
+        result (deref result
+                      (if wait-ms (parse-long wait-ms) (+ (:gym/timeout-ms row) judge-grace-ms))
+                      nil)
         left (if (.exists (io/file landed))
                (edn/read-string (slurp landed))
                {:gym/landed? false :gym/error "no landed file"})
@@ -384,10 +392,10 @@
                              (:gym/until row) "--events" "stdin" "--timeout-ms"
                              (str (:gym/timeout-ms row)) "--hold-ms" (str hold-ms) "--record"
                              (str (io/file dir "run.edn"))]
-        p (.start (doto (ProcessBuilder. cmd)
-                    (.directory (io/file bot-dir))
-                    (.redirectErrorStream true)
-                    (.redirectOutput bot-log)))
+        p (.start
+           (doto (ProcessBuilder. cmd) (.directory (io/file bot-dir)) (.redirectErrorStream true)))
+        result (promise)
+        tee (tee-output! p bot-log result)
         landed
         (landing!
          {:goal goal :run run :name name :rcon-port rcon-port :rcon-pass pass :landings landings})
@@ -401,13 +409,14 @@
                                  :name name
                                  :rcon-port rcon-port
                                  :rcon-pass pass
-                                 :bot-log (str bot-log)
+                                 :result result
                                  :landed (str landed-file)
                                  :out (str (io/file dir "result.edn"))
                                  :commit commit})
                         tags)]
       (.destroy p)
       (.waitFor p)
+      (.join ^Thread tee 5000) ; the log whole before it is uploaded
       (spit (io/file dir "result.edn") (pr-str tagged))
       tagged)))
 
