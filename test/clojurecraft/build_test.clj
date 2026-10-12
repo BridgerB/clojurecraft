@@ -6,7 +6,11 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
-            [clojurecraft.build :as build]))
+            [clojurecraft.build :as build]
+            [clojurecraft.fixtures :as fx]
+            [clojurecraft.game :as game]
+            [clojurecraft.path :as path]
+            [clojurecraft.world :as world]))
 
 (def origin [100 64 200])
 
@@ -84,3 +88,54 @@
 (deftest cast-one-casts-the-first-cell
   (let [plan (build/cast-one-plan origin :south)]
     (is (= [[1 0]] (keep :build/cell (filter #(= :lava (:build/step %)) plan))))))
+
+(def hill-origin [2 63 8])
+(def hill-stand [6 63 8])
+
+(def hill-op
+  {:build/op :place
+   :build/item :cobblestone
+   :build/pos [6 62 8]
+   :build/stand hill-stand
+   :build/step :pad
+   :build/done [:solid [6 62 8]]})
+
+(def hill-intent
+  {:intent/kind :build :intent/build :cast-one :intent/origin hill-origin :intent/facing :south})
+
+(defn open-ground
+  "Air at the feet's height and the head, over the stone floor the column fills below y 64."
+  [extra]
+  (merge (into {} (for [x (range 16) y [63 64] z (range 16)] [[x y z] blocks/air])) extra))
+
+(defn standing-at
+  [blocks pos]
+  (-> (game/init fx/opts)
+      (assoc :bot/phase :play :player/pos pos :player/loaded? true :player/on-ground? true)
+      (assoc :world/chunks {[0 0] (world/column blocks)})))
+
+(deftest a-stand-inside-a-hill-is-dug
+  ;; full run 4e59246 stood at the pond and the pad's stand was stone; the walk was :none and
+  ;; three :no-path failures ended the plan
+  (let [pos [2.5 63.0 8.5]
+        flat (standing-at (open-ground {}) pos)
+        hill (standing-at (open-ground (into {} (for [x (range 3 7) y [63 64]] [[x y 8] 1]))) pos)]
+    (is (= {:intent/kind :walk :intent/target hill-stand :intent/for :build}
+           (build/op-child flat hill-intent hill-op))
+        "open ground is walked to")
+    (is (= :none
+           (:path/status
+            (path/plan hill (path/feet-cell pos) {:goal/kind :block :goal/pos hill-stand})))
+        "the stand is inside the hill, so a walk at it has no route")
+    (is (=
+         {:intent/kind :dig :intent/target [3 63 8] :intent/status :active :intent/exposes-ok? true}
+         (build/op-child hill hill-intent hill-op))
+        "the first solid on the way, in reach")
+    (let [opened (assoc-in hill [:world/blocks [3 63 8]] blocks/air)]
+      (is (= [3 64 8] (:intent/target (build/op-child opened hill-intent hill-op)))
+          "then the head over it"))
+    (let [cobble (blocks/default-state :cobblestone)
+          ;; [4 63 8] is a cell the cast places; cobble there is the mold, the stone past it is the hill
+          w (standing-at (open-ground {[4 63 8] cobble [5 63 8] 1 [5 64 8] 1}) pos)]
+      (is (= [5 63 8] (:intent/target (build/op-child w hill-intent hill-op)))
+          "cobblestone the plan places stays; the stone past it is dug"))))

@@ -473,13 +473,82 @@
               (when (and (holds? world [:not-solid c]) (place/support world c)) c)))
           (range 1 (inc foundation-depth)))))
 
+(defn place-cells
+  "Every cell the plan places a block in."
+  [build origin facing]
+  (set (keep #(when (= :place (:build/op %)) (:build/pos %)) (plan-for build origin facing))))
+
+(defn diggable?
+  "Is pos a solid or awkward block a clear may dig: not unloaded, not obsidian, and not
+   cobblestone the plan places (the mold, already stood up). Stone or dirt where a wall will
+   go later is still dug: the place is satisfied by whatever is solid, and the hill would
+   stay in the way."
+  [world pos placed?]
+  (when-let [id (terrain/block-at world pos)]
+    (and (not (and (placed? pos) (= :cobblestone (blocks/name-of id))))
+         (not (contains? intent/never-dug (blocks/name-of id)))
+         (contains? #{:solid :awkward} (path/classify-id id)))))
+
+(defn stance-block
+  "The first solid cell in the way of standing at stand: from the feet toward it, one cell
+   at a time, the body at the stand's height or the head over that. nil when that line is
+   already clear. Full run 4e59246 stood at a pond and the pad's stand, four blocks east, was
+   stone inside the hill; the walk at it was :none."
+  [world stand build origin facing]
+  (let [placed? (place-cells build origin facing)
+        [fx _ fz] (intent/feet world)
+        [sx sy sz] stand]
+    (loop [x fx
+           z fz]
+      (let [body [x sy z]]
+        (cond (diggable? world body placed?) body
+              (diggable? world (update body 1 inc) placed?) (update body 1 inc)
+              (and (= x sx) (= z sz)) nil
+              :else
+              (recur (cond (< x sx) (inc x)
+                           (> x sx) (dec x)
+                           :else x)
+                     (if (= x sx)
+                       (cond (< z sz) (inc z)
+                             (> z sz) (dec z)
+                             :else z)
+                       z)))))))
+
+(defn within-reach?
+  "Can a dig of pos be started from here: the eye within reach of its centre, the same gate
+   the dig fails :out-of-reach on."
+  [world pos]
+  (<= (physics/distance (game/eye world) (physics/centre pos)) (+ intent/reach 0.5)))
+
+(defn approach
+  "A walk to beside pos, where a dig of it can start, or nil when no route reaches a cell
+   beside it."
+  [world pos]
+  (when (intent/routable?
+         world
+         {:intent/kind :walk :intent/target pos :intent/for :build :intent/pickup? true})
+    {:intent/kind :walk :intent/target pos :intent/for :build :intent/pickup? true}))
+
+(defn clear-stand
+  "The child that opens a way to stand, or nil when the way is clear. The block in the way is
+   dug when it is in reach (a pond beside the hill makes the face expose water, which a mold
+   dig is allowed to), else walked to beside."
+  [world stand build origin facing]
+  (when-let [b (stance-block world stand build origin facing)]
+    (if (within-reach? world b)
+      (assoc (intent/child-dig b) :intent/exposes-ok? true)
+      (approach world b))))
+
 (defn op-child
   "The child intent that works op next: lava to refill first when a lava pour has none, else a
-   walk to the op's stand, else the op's own action; or a keyword, why it cannot be worked."
+   dig of whatever solid blocks the stand, else a walk to the stand, else the op's own action;
+   or a keyword, why it cannot be worked."
   [world i {:build/keys [op stand pos item aim into done]}]
   (cond
     (and (= op :pour) (= item :lava_bucket) (not (held? world :lava_bucket))) (refill world i)
-    (not (intent/centred? world stand)) {:intent/kind :walk :intent/target stand :intent/for :build}
+    (not (intent/centred? world stand))
+    (or (clear-stand world stand (:intent/build i) (:intent/origin i) (:intent/facing i))
+        {:intent/kind :walk :intent/target stand :intent/for :build})
     :else
     (case op
       :place
