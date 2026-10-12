@@ -184,7 +184,7 @@
 
 (defmethod place-stage :spot
   [world {:intent/keys [passage-ok?]}]
-  (let [[target support :as found] (spot world (boolean passage-ok?))
+  (let [[target support :as found] (or (spot world) (when passage-ok? (spot world true)))
         n (when-not found (niche world))]
     (cond found
           (intent/assoc-intent world
