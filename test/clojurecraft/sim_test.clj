@@ -1465,9 +1465,9 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes deep-stone)
                                     :spawn [8.5 76.0 8.5]
-                                    :inventory {36 {:item (item :crafting_table) :count 1}
-                                                37 {:item (item :oak_planks) :count 3}
-                                                38 {:item (item :stick) :count 2}}})
+                                    :inventory {[:hotbar 0] {:item (item :crafting_table) :count 1}
+                                                [:hotbar 1] {:item (item :oak_planks) :count 3}
+                                                [:hotbar 2] {:item (item :stick) :count 2}}})
                          #(or (plan/done? %) (plan/failed? %))
                          120000
                          {:event/kind :go :go/goals [:table-test]})]

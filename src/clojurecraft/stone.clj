@@ -144,12 +144,10 @@
    iron-a4 retried tunnels :boxed by an aquifer three times in a second and failed."
   [world]
   (let [[x _ z] (:player/pos world)
-        feet (intent/feet world)
+        [fx _ fz :as feet] (intent/feet world)
         home (:plan/go-at world)
         dry? (fn [[dx dz]]
-               (stairs/dry-top? world
-                                [(+ (first feet) (* tunnel-length dx))
-                                 (+ (nth feet 2) (* tunnel-length dz))]))
+               (stairs/dry-top? world [(+ fx (* tunnel-length dx)) (+ fz (* tunnel-length dz))]))
         ranked (sort-by (fn [[dx dz :as d]] [(if (dry? d) 0 1)
                                              (if home
                                                (- (physics/horizontal-distance [(+ x dx) 0 (+ z dz)]
