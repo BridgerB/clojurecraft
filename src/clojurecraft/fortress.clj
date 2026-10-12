@@ -74,7 +74,10 @@
 (defn safe?
   "Can the step from feet by move be taken: every cell it opens and the floor loaded, none of them
    lava or something it never opens, no lava beside a cell it opens (other than the cells it opens,
-   the floor, which is filled first, and the body's own), and a floor that is solid or can be placed (build/foundation)."
+   the floor, which is filled first, and the body's own), and a floor that is solid, or lava a
+   block placed against a solid neighbour fills. Never air: a step over a drop is not enclosed
+   (live run f1-5 stood at a cave's edge with air under the next floor, slid off while placing it
+   and fell forty blocks into the lava sea)."
   [world feet move]
   (let [cells (opens feet move)
         floor (plus (plus feet move) [0 -1 0])
@@ -85,7 +88,8 @@
          (not-any? lava? cells)
          (not-any? #(contains? unbreakable (blocks/name-of (at %))) cells)
          (not-any? lava? (remove own (mapcat neighbours cells)))
-         (or (build/holds? world [:solid floor]) (some? (build/foundation world floor))))))
+         (or (build/holds? world [:solid floor])
+             (and (lava? floor) (= floor (build/foundation world floor)))))))
 
 (defn toward "The sign of d: -1, 0 or 1." [d] (long (math/signum (double d))))
 

@@ -41,6 +41,8 @@
     (is (not (fortress/safe? (rock {[1 64 0] lava}) [0 64 0] [1 0 0])) "lava in the cell itself")
     (is (fortress/safe? (rock {[1 63 0] lava}) [0 64 0] [1 0 0])
         "lava in the floor is filled: the floor op places into it")
+    (is (not (fortress/safe? (rock {[1 63 0] air [1 62 0] air [1 61 0] air}) [0 64 0] [1 0 0]))
+        "never out over a drop: an air floor is not a tunnel")
     (is (not (fortress/safe? (rock {[1 64 0] (blocks/default-state :obsidian)}) [0 64 0] [1 0 0]))
         "never through obsidian")
     (is (not (fortress/safe? (rock {[1 64 0] nil}) [0 64 0] [1 0 0])) "never into the unknown")
