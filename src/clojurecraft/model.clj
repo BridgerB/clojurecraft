@@ -153,7 +153,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :smelt :redig :scoop :equip :build :pour :use-on :await"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -177,17 +177,18 @@
    [:intent/build "which plan a :build works: :cast-one, :portal or :nether" ":build"]
    [:intent/origin "a build's frame origin [bx by bz]" ":build"]
    [:intent/facing "the side of the frame a build works from: :south :north :east :west" ":build"]
-   [:intent/op "the plan op a :build or a :tunnel step works now; a new op drops the child"
-    ":build, :tunnel"] [:intent/aim "the point a :pour or :use-on looks at to act" ":pour, :use-on"]
+   [:intent/op "the plan op a :build or a :tunnel-to step works now; a new op drops the child"
+    ":build, :tunnel-to"]
+   [:intent/aim "the point a :pour or :use-on looks at to act" ":pour, :use-on"]
    [:intent/expect "the predicate (build/holds?) that shows a :pour, :use-on or :await worked"
     ":pour, :use-on, :await"]
    [:intent/fluid "what a :scoop takes: :water (when absent) or :lava" "a :scoop for lava"]
-   [:intent/steps "how many steps a :tunnel takes before the planner looks again" ":tunnel"]
-   [:intent/taken "steps a :tunnel has taken" ":tunnel, after its first step"]
-   [:intent/move "the step a :tunnel is taking, [dx dy dz], chosen when it starts"
-    ":tunnel, during a step"]
-   [:intent/from "the feet a :tunnel's step started from, where its ops are worked"
-    ":tunnel, during a step"]
+   [:intent/steps "how many steps a :tunnel-to takes before the planner looks again" ":tunnel-to"]
+   [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
+   [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
+    ":tunnel-to, during a step"]
+   [:intent/from "the feet a :tunnel-to's step started from, where its ops are worked"
+    ":tunnel-to, during a step"]
    [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"
     "gather-chain intents"]
    [:intent/stage "executor stage, e.g. :settle :digging :click :verify :take" "staged intents"]

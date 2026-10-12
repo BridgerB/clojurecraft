@@ -1,5 +1,6 @@
 (ns clojurecraft.fortress
-  "Reaching a nether fortress (issue #11): the :fortress goal and the :tunnel intent.
+  "Reaching a nether fortress (issue #11): the :fortress goal and the :tunnel-to intent (stone's
+   :tunnel digs along a direction for ore; this one goes to a target).
 
    Finding the fortress is passive: its bricks are sightings like logs (memory/landmark-kinds),
    remembered as each chunk loads, in the dimension they were seen in. Reaching it is enclosed,
@@ -24,7 +25,7 @@
 (def reach 6)                         ; blocks from a fortress brick that count as at the fortress
 (def brick-min-y 32)                  ; bricks under this are below the lava sea's surface (y 31): never tunnel to them
 (def sight-radius 512)                ; how far a remembered brick may be and still be the target
-(def steps-per-tunnel 32)             ; steps a :tunnel takes before the planner looks again
+(def steps-per-tunnel 32)             ; steps a :tunnel-to takes before the planner looks again
 (def explore 48)                      ; blocks ahead an exploring tunnel aims, when no brick is on record
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
 
@@ -117,9 +118,9 @@
   [world target]
   (<= (physics/distance (physics/centre (intent/feet world)) (physics/centre target)) reach))
 
-;; ---------------------------------------------------------------- the :tunnel intent
+;; ---------------------------------------------------------------- the :tunnel-to intent
 
-(defmethod intent/run :tunnel
+(defmethod intent/run :tunnel-to
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target or after
   ;; :intent/steps steps, failed :blocked when no step is safe
@@ -177,5 +178,5 @@
   (let [t (when (= dimension/nether (dimension/of world))
             (or (nearest-brick world) (exploring world)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
-          t {:intent/kind :tunnel :intent/target t :intent/steps steps-per-tunnel}
+          t {:intent/kind :tunnel-to :intent/target t :intent/steps steps-per-tunnel}
           :else {:plan/wait :no-way})))

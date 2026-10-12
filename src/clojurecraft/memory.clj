@@ -60,10 +60,11 @@
   #{:crafting_table :furnace})
 
 (def landmark-kinds
-  "Blocks that say where something is: a fortress (its bricks, fences and stairs, its blaze
-   spawners) and a portal (its obsidian frame and the portal itself, the way back). Rare enough to
-   remember wherever they are seen (issue #11)."
-  #{:nether_bricks :nether_brick_fence :nether_brick_stairs :spawner :nether_portal :obsidian})
+  "Blocks that say where something is: a fortress (its bricks, fences and stairs) and a lit
+   portal, the way back (issue #11). Only blocks the overworld never generates, so watching them
+   changes nothing a forest run remembers (obsidian and spawners do: the wood recording's 1098
+   sightings became 1121)."
+  #{:nether_bricks :nether_brick_fence :nether_brick_stairs :nether_portal})
 
 (defn watched?
   "Does seeing this state start a record? Logs, the placed-kinds and the landmark-kinds: things
