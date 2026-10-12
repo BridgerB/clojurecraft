@@ -28,7 +28,7 @@ A batch is N runs of one goal, each on its own runner with its own Minecraft ser
 
 | Input | Meaning |
 |---|---|
-| `goal` | what to reach: `wood`, `table`, `pickaxe`, `cobblestone`, `stone-pickaxe`, `furnace`, `ingots`, `bucket`, `water-bucket`, `flint-and-steel`, `iron-kit`, `shore` (the registry is `gym/gyms` in `src/clojurecraft/gym.clj`: prerequisites given over RCON, the timeout, the truth commands) |
+| `goal` | what to reach: `wood`, `table`, `pickaxe`, `cobblestone`, `stone-pickaxe`, `furnace`, `ingots`, `bucket`, `water-bucket`, `flint-and-steel`, `iron-kit`, `cast-one`, `portal`, `nether`, `shore` (the registry is `gym/gyms` in `src/clojurecraft/gym.clj`: prerequisites given over RCON, the timeout, the truth commands) |
 | `runs` | how many runs; run k always lands on landing k of the set, so batches are paired |
 | `landing-set` | which landings (`ci/gym.edn`): `A` forests round (20000, 20000), `W` beaches round (26000, 20000); a new set is a new entry there |
 | `label` | names the batch's artifacts (`gym-<label>-<goal>-<run>`) and its summary |
