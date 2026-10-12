@@ -76,8 +76,8 @@
       (is (= 0 (:status start)))
       (is (= 2 (:status finish)))
       (is (= [3 64 0] (:pos start)))
-      (is (<= 500 t-start 2000))
-      (is (>= (- t-finish t-start) (+ (* 3000 1.35) 200)))
+      (is (<= intent/settle-ms t-start 2000))
+      (is (>= (- t-finish t-start) (intent/finish-delay 3000)))
       (is (= (:sequence finish) (inc (:sequence start)))))
     (testing "swings every 350 ms while digging" (is (<= 11 (count swings) 14)))
     (testing "the broken block is air locally and in memory"
@@ -420,20 +420,22 @@
     (is (= 3 (:player/held-slot w)))
     (is (= 0 (:status start)))
     (is (= 2 (:status finish)))
-    (is (>= (- t-finish t-start) (+ (* 1150 1.35) 200)) "stone with a wooden pickaxe is 1150 ms")
-    (is (< (- t-finish t-start) (+ (* 3000 1.35) 200)) "and not a log's 3000")
+    (is (>= (- t-finish t-start) (intent/finish-delay 1150))
+        "stone with a wooden pickaxe is 1150 ms")
+    (is (< (- t-finish t-start) (intent/finish-delay 3000)) "and not a log's 3000")
     (is (= (:sequence finish) (inc (:sequence start))))
     (is (= [3 wooden-pickaxe 1150]
            ((juxt :intent/slot :intent/tool :intent/dig-ms) (:plan/last w))))))
 
 (deftest a-restored-block-after-finish-is-a-refused-break
-  (let [[w _] (run (digging 1 {3 {:item wooden-pickaxe :count 1}}) (ticks 50 2500))
+  (let [sent-by (long (+ 400 (intent/finish-delay 1150))) ; settled, START, then FINISH; the confirm lasts 500 ms
+        [w _] (run (digging 1 {3 {:item wooden-pickaxe :count 1}}) (ticks 50 sent-by))
         i (:plan/intent w)]
     (is (= :confirm (:intent/stage i)) "FINISH sent, waiting for the server")
     (is (= 0 (terrain/block-at w [3 64 0])) "air locally meanwhile")
     (let [[w2 _] (run w
                       [(packet {:packet/name :block-update :pos [3 64 0] :state 1})
-                       {:event/kind :tick :event/now 2550 :event/rand 0.5}])]
+                       {:event/kind :tick :event/now (+ sent-by 50) :event/rand 0.5}])]
       (is (= 1 (:plan/attempts w2)) "the dig failed")
       (is (= :rejected
              (:intention/reason (last (filter #(= :failed (:intention/event %))

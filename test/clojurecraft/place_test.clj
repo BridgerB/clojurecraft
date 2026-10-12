@@ -10,6 +10,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
+            [clojurecraft.plan :as plan]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -139,3 +140,11 @@
         w (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column rock)})]
     (is (nil? (place/spot w)) "the stair behind is a passage: no block stays there")
     (is (= [[7 65 8] [7 64 8]] (place/spot w true)) "but one dug again at once may")))
+
+(deftest a-table-may-go-in-the-passage-a-furnace-not
+  ;; gym batch solid-b1 run 6 broke its pickaxe on the stairs down, in a stairwell one wide: no
+  ;; spot but the stair, no niche without a pickaxe, and the table failed :no-spot three times. The
+  ;; table is taken along when the bot goes on, so the stair is free again; a furnace stays
+  (let [row (fn [id] (first (filter #(= id (:goal/id %)) plan/goals)))]
+    (is (:intent/passage-ok? (plan/act {} (row :place-table))))
+    (is (not (:intent/passage-ok? (plan/act {} (row :place-furnace)))))))

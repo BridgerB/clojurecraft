@@ -3,7 +3,8 @@
    external events, feeds the reducer, drains :bot/effects, prints RESULT.
 
      clojure -M:run --port 25571 [--name N] [--until play|wood|table|pickaxe] [--events stdin]
-                    [--timeout-ms 120000] [--hold-ms 0] [--record run.edn] [--telemetry t.edn]
+                    [--timeout-ms 120000] [--hold-ms 0] [--record run.edn [--commit sha]]
+                    [--telemetry t.edn]
      clojure -M:replay run.edn
 
    With --events stdin the bot reads EDN events (one per line) from stdin: that is how the
@@ -145,7 +146,7 @@
   "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,
    hold for an outside judge when ok, and exit 0 when ok else 1."
   [& args]
-  (let [{:keys [host port name until timeout-ms hold-ms events record telemetry]
+  (let [{:keys [host port name until timeout-ms hold-ms events record commit telemetry]
          :or {host "127.0.0.1"
               port "25571"
               name "Clj_wood"
@@ -159,8 +160,7 @@
         planned (plan/goals-for until)
         goal? (goal-fn until)
         stop? (fn [w] (or (goal? w) (and planned (plan/failed? w)) (> (now) deadline)))
-        tap (some-> record
-                    record/tap!)
+        tap (when record (record/tap! record (if commit {:record/commit commit} {}))) ; the code that made the run
         c (conn/open! opts)
         queue (async/chan 16)
         world* (atom (game/init opts))

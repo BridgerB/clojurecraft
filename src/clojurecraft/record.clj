@@ -44,19 +44,23 @@
    one value on a bounded channel and a thread of its own prints it, so the loop never does file
    I/O. The recording is the source of truth, so a full channel blocks the loop rather than
    dropping a line (unlike telemetry). Events are written as they came off the wire (see wire).
-   :close waits until every line is on disk."
-  [path]
-  (let [ch (async/chan tap-buffer)
-        done (async/thread (with-open [w (io/writer path)]
-                             (binding [*out* w]
-                               (loop []
-                                 (when-let [line (async/<!! ch)]
-                                   (prn line)
-                                   (recur))))))]
-    {:write (fn [event] (async/>!! ch (wire event)))
-     :effects (fn [effects] (when (seq effects) (async/>!! ch {:record/effects effects})))
-     :result (fn [r] (async/>!! ch {:record/result r}))
-     :close (fn [] (async/close! ch) (async/<!! done))}))
+   :close waits until every line is on disk. header, when not empty, is the first line: what the
+   run is beside its events, {:record/commit sha} the code that made it, since a recording replays
+   only with that code."
+  ([path] (tap! path {}))
+  ([path header]
+   (let [ch (async/chan tap-buffer)
+         done (async/thread (with-open [w (io/writer path)]
+                              (binding [*out* w]
+                                (loop []
+                                  (when-let [line (async/<!! ch)]
+                                    (prn line)
+                                    (recur))))))]
+     (when (seq header) (async/>!! ch header))
+     {:write (fn [event] (async/>!! ch (wire event)))
+      :effects (fn [effects] (when (seq effects) (async/>!! ch {:record/effects effects})))
+      :result (fn [r] (async/>!! ch {:record/result r}))
+      :close (fn [] (async/close! ch) (async/<!! done))})))
 
 (defn entries
   "Every line of a recording, in order: event maps, {:record/effects ...} and {:record/result
@@ -66,6 +70,16 @@
                                               (GZIPInputStream. (io/input-stream path))
                                               path)))]
     (vec (take-while some? (repeatedly #(edn/read {:readers readers :eof nil} r))))))
+
+(defn header
+  "The recording's header, {:record/commit sha} when the run named its code, else {}: its first
+   line when that is no event, read without reading the rest."
+  [path]
+  (with-open [r (PushbackReader. (io/reader (if (str/ends-with? (str path) ".gz")
+                                              (GZIPInputStream. (io/input-stream path))
+                                              path)))]
+    (let [first-line (edn/read {:readers readers :eof nil} r)]
+      (if (contains? first-line :record/commit) first-line {}))))
 
 (defn accretes?
   "Does later hold every fact earlier holds? Maps compare key by key, so attributes added since

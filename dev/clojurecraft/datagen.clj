@@ -109,6 +109,12 @@
   [probe]
   (into (sorted-set) (map name-kw) (get probe "needs-tool")))
 
+(defn partial-shapes
+  "{block-kw top}: the blocks whose default state collides as neither nothing nor a full cube, and
+   the top of that shape in blocks, from the probe's JSON (the game's getCollisionShape)."
+  [probe]
+  (into (sorted-map) (for [[n top] (get probe "partial-shapes")] [(name-kw n) top])))
+
 (defn materials
   "{tier-kw {:speed s :durability d :incorrect tag-kw}} from the probe's JSON: the game's own
    ToolMaterial constants. Tiers are named as the item names spell them (:wooden, not WOOD)."
@@ -360,7 +366,8 @@
         (write-map (io/file out "materials.edn") probe-hdr (materials probe))
         (write-map (io/file out "fuel.edn") probe-hdr (fuel probe))
         (spit (io/file out "needs-tool.edn") (str probe-hdr (pr-str (needs-tool probe)) "\n"))
-        (println "wrote" (str out "/{hardness,materials,fuel,needs-tool}.edn"))))
+        (write-map (io/file out "shapes.edn") probe-hdr (partial-shapes probe))
+        (println "wrote" (str out "/{hardness,materials,fuel,needs-tool,shapes}.edn"))))
     (write-rows (io/file out "blocks.edn") hdr (blocks reports))
     (write-map (io/file out "packets.edn") hdr (packets reports))
     (write-map (io/file out "items.edn") hdr (registry reports "minecraft:item"))

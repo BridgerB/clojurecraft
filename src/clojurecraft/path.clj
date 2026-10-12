@@ -23,6 +23,7 @@
 
 (set! *warn-on-reflection* true)
 
+(def flat-shape 0.125)                ; a shape no taller is walked over like the floor (a carpet, a layer of snow)
 (def max-fall 3)                      ; blocks a drop may fall; vanilla damage starts above 3
 (def default-max-nodes 6000)          ; expansions one plan may spend
 (def walk-cost 1.0)                   ; one cell on the level
@@ -33,8 +34,11 @@
 ;; ---------------------------------------------------------------- cells
 
 (def awkward-types
-  "Block definition types with a collision shape that is not a full cube or empty: the physics
-   cannot simulate them, so a route treats them as neither floor nor clear."
+  "Block definition types the physics cannot simulate though their collision shape is a full cube
+   or nothing (slime and honey bounce and stick, ice slides, a web or powder snow slows, a berry
+   bush or magma hurts), and the shapes listed before the game's own were read
+   (blocks/partial-shapes, but for those no taller than flat-shape): a route treats them as
+   neither floor nor clear."
   #{:slab :stair :fence :wall :fence_gate :trapdoor :door :iron_bars :stained_glass_pane :chain
     :lantern :snow_layer :farmland :dirt_path :cactus :magma :powder_snow :sweet_berry_bush :bed
     :candle :candle_cake :cake :skull :wall_skull :player_head :player_wall_head :wither_skull
@@ -56,7 +60,9 @@
   (cond (nil? id) :unknown
         (contains? blocks/water-states id) :water
         (contains? blocks/lava-states id) :lava
-        (contains? awkward-types (blocks/type-of id)) :awkward
+        (or (contains? awkward-types (blocks/type-of id))
+            (> (get blocks/partial-shapes (blocks/name-of id) 0.0) flat-shape))
+        :awkward
         (blocks/solid? id) :solid
         :else :clear))
 

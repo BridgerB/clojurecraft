@@ -183,7 +183,9 @@
   :goal/done? :provided?}
  {:goal/id :place-table
   :goal/priority 10
-  :goal/doc "put a held crafting table down near the player"
+  :goal/doc
+  "put a held crafting table down near the player, in a passage if nowhere else: it is taken along when the bot goes on, so the way is free again"
+  :goal/passage-ok? true
   :goal/needs {:item/crafting_table 1}
   :goal/provides {:block/crafting_table :near}
   :goal/act :place

@@ -142,7 +142,7 @@
 
 (deftest a-dig-with-any-tool-on-any-block-keeps-the-rules
   ;; issue #9: for any breakable block, any held item and any tick sequence, FINISH is never
-  ;; before 1.35 x dig/ms + 200 after START; a block that needs a tier gets no START unless a
+  ;; before 1.15 x dig/ms + 100 after START; a block that needs a tier gets no START unless a
   ;; held tool of its own kind reaches the tier (the game drops by tier alone, but the dig
   ;; chooses only tools of the block's kind, so an off-kind tool is refused rather than spent on
   ;; a slow dig); and FINISH's sequence is START's plus one

@@ -44,6 +44,7 @@
 (def hunt-distance 40)                ; blocks a water hunt walks along a bearing before looking again
 (def surface-above 16)                ; how far above the eye a hunt looks for the ground to stand on
 (def surface-below 24)                ; and how far below it
+(def tunnel-out-length 8)             ; level steps cut out of a pit no route leaves, before looking again
 
 (defn- now [world] (:time/now world))
 
@@ -86,38 +87,44 @@
   [world src]
   (<= (physics/distance (game/eye world) (physics/centre src)) intent/reach))
 
+(defn surface-water?
+  "Is the source at src surface water, not cave water: no more than memory/surface-water-below
+   under the eye, or deeper but under the open sky (terrain/under-sky?). Gym batch solid-b1 run
+   9 stood on a hill at y 70 over ponds at y 62, and the depth rule alone refused every one."
+  [world [_ y _ :as src] eye-y]
+  (or (>= y (- eye-y memory/surface-water-below)) (terrain/under-sky? world src)))
+
 (defn sources
-  "The surface water sources in the loaded terrain within search-radius of the eye, no more than
-   memory/surface-water-below under it, not blacklisted, nearest first. Asked of the terrain
-   through the block overlay, so a source just scooped is air."
+  "The surface water sources in the loaded terrain within search-radius of the eye
+   (surface-water?), not blacklisted, nearest first. Asked of the terrain through the block
+   overlay, so a source just scooped is air."
   [world]
   (let [eye (game/eye world)
-        lo (- (physics/y-of eye) memory/surface-water-below)
         blacklist (:plan/blacklist world #{})]
     (memory/nearest-first eye
                           search-radius
                           (->> (chunk/find-blocks (stone/near-chunks world) #{blocks/water-base})
                                (map (fn [[x y z _]] [x y z]))
-                               (filter (fn [[_ y _]] (>= y lo)))
                                (remove blacklist)
-                               (filter #(surface-source? world %))))))
+                               (filter #(surface-source? world %))
+                               (filter #(surface-water? world % (physics/y-of eye)))))))
 
 (defn pools-near
-  "The remembered water pools within pool-radius, no deeper than surface water, not blacklisted,
-   nearest first, leaving out one in a loaded chunk that is not a surface source to scoop
-   (memory's pool is the highest source with no water above it, which may be under stone):
-   what is loaded near it, the terrain search sees."
+  "The remembered water pools within pool-radius, not blacklisted, nearest first, leaving out one
+   in a loaded chunk that is not surface water to scoop (surface-source? and surface-water?:
+   memory's pool is the highest source with no water above it, which may be under stone or deep
+   in a cave): what is loaded near it, the terrain search sees."
   [world]
   (let [eye (game/eye world)
-        lo (- (physics/y-of eye) memory/surface-water-below)
         blacklist (:plan/blacklist world #{})]
     (memory/nearest-first eye
                           pool-radius
                           (->> (vals (memory/pools world :water))
-                               (filter (fn [[_ y _]] (>= y lo)))
                                (remove blacklist)
-                               (remove #(and (terrain/chunk-loaded? world %)
-                                             (not (surface-source? world %))))))))
+                               (remove
+                                #(and (terrain/chunk-loaded? world %)
+                                      (not (and (surface-source? world %)
+                                                (surface-water? world % (physics/y-of eye))))))))))
 
 (defn ground
   "The highest cell of column [x z] the feet could stand in, from surface-above over the eye down
@@ -203,11 +210,21 @@
   (when-not (terrain/under-sky? world (intent/feet world))
     {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}))
 
+(defn tunnel-out
+  "A tunnel of tunnel-out-length level steps at the feet's height along stone/tunnel-heading (one
+   it can cut, away from the landing), for a hunt that has no route anywhere; nil when no
+   heading can be cut. Gym batch solid-b1 run 13 came up its stairs into a pit under the open
+   sky, leaves and rock round it with no room to jump out, and waited :no-water."
+  [world]
+  (when-let [d (stone/tunnel-heading world)]
+    {:intent/kind :tunnel :intent/dir d :intent/length tunnel-out-length :intent/for :water-hunt}))
+
 (defn scoop-next
   "The next step toward a filled bucket: scoop the nearest surface source in reach and in sight,
    else walk to the bank of the nearest one a route reaches, or to such a remembered pool, or climb
    out (to the landing, or by stairs cut up) when deep under it, or hunt for one (hunt-targets),
-   or cut out of the ground (dig-out); else wait :no-water."
+   or cut out of the ground (dig-out), or tunnel out of a pit (tunnel-out); else wait
+   :no-water."
   [world]
   (let [srcs (sources world)
         src (first (filter #(and (in-reach? world %) (sees? world %)) srcs))]
@@ -218,6 +235,7 @@
               (climb world)
               (first-walk world :water-hunt (hunt-targets world))
               (dig-out world)
+              (tunnel-out world)
               {:plan/wait :no-water}))))
 
 (defmethod plan/act :scoop [world _] (scoop-next world))

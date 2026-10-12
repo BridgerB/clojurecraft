@@ -8,6 +8,11 @@ status: verified
 lastUpdated: 2026-10-10
 verifiedAgainst: b9e38a1
 sourceRefs:
+  - dev/clojurecraft/probe.clj#defn fold
+  - src/clojurecraft/record.clj#defn header
+  - test/clojurecraft/record_test.clj#a-recording-names-the-code-that-made-it
+  - dev/clojurecraft/probe.clj#defn story
+  - dev/clojurecraft/probe.clj#defn around
   - src/clojurecraft/record.clj#defn tap!
   - src/clojurecraft/record.clj#defn wire
   - src/clojurecraft/record.clj#defn recorded-result
@@ -42,6 +47,9 @@ related:
 - The `:start` event carries the connection (`:start/host :start/port :start/name`), so the replay's starting world needs no outside arguments; before that, replay began from placeholder values and the very first handshake effects differed (which is how the hidden input was found).
 1. A live wood run produced an 8 MB file (4320 events, 263 chunk packets); it replays in under 4 s with the same intents, the same pickup event and `:ok true`.
 2. Because the clock, randomness and the connection are event fields, nothing diverges on replay, and `verify` proves it per event.
+
+## Looking inside a failed run
+`dev/clojurecraft/probe.clj` folds the bot over a recording to any moment: `fold` stops at the first world a predicate holds of, `at-ms` at a clock time, `story` is every intent's start, end and reason from memory's facts, and `around` draws two slices of the cells round the feet (`#` solid, `.` clear, `W` water, `L` lava, `~` awkward, `g` a falling block). From a shell: `clojure -M:dev -m clojurecraft.probe story run.edn`, `... around run.edn <ms>`. Fold a gym run with the code that ran it (`git worktree add --detach <dir> <commit>`): with newer code the planner decides otherwise and the bot ends up elsewhere. The recording names that code: with `--commit sha` (the gym passes its own) its first line is `{:record/commit sha}` (`record/tap!`'s header, read by `record/header` without the rest; `a-recording-names-the-code-that-made-it`), and `probe story` prints it first. The procedure end to end is `docs/CHURN.md`.
 
 ## Gotchas
 - A recording ends at RESULT: `main` writes the RESULT into the file (`{:record/result ...}`, read back by `recorded-result`) and closes the tap before any hold, so the hold for an outside judge is not recorded. `main/replayed` judges the fold with the run's own `--until` and the same `ok?` rule, and reports `:replay/result :identical` when it reaches exactly the RESULT the run printed (else the recorded one, to compare). Older recordings without a result report `:not-recorded`.

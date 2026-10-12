@@ -106,6 +106,18 @@
         (is (= (seq data) (seq (:data recorded)))))
       (is (nil? (record/verify game/step (game/init fx/opts) path))))))
 
+(deftest a-recording-names-the-code-that-made-it
+  ;; a recording replays only with the code that made it: the run says which, so a replay of a
+  ;; gym failure can check that code out without asking anything else
+  (let [path (tmp "record-commit")
+        tap (record/tap! path {:record/commit "6de524552452770ccbb1c6791b2c64822b1ef128"})]
+    ((:write tap) {:event/kind :start})
+    ((:close tap))
+    (is (= {:record/commit "6de524552452770ccbb1c6791b2c64822b1ef128"} (record/header path)))
+    (is (= [{:event/kind :start}] (record/events path)) "the header is no event")
+    (is (= {} (record/header (doto (tmp "record-no-commit") (spit "{:event/kind :start}\n"))))
+        "a recording made before has none")))
+
 (deftest a-recording-carries-its-result-and-a-replay-reaches-it
   (let [path (tmp "record-result")
         tap (record/tap! path)

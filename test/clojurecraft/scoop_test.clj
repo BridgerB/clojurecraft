@@ -55,6 +55,16 @@
   (let [w (game/step w e)]
     (if (and (= :tick (:event/kind e)) (:plan/intent w)) (intent/run w (:plan/intent w) e) w)))
 
+(deftest a-pond-below-a-hill-is-surface-water
+  ;; gym batch solid-b1 run 9 stood on a hill at y 70 over ponds at y 62: the rule that water more
+  ;; than five under the eye is cave water refused every one, and it waited :no-water. Surface
+  ;; water is water under the open sky, whatever the height
+  (let [hill (merge pond ; a slope a block down a step, from y 74 at x 0 to the pond's bank
+                    (into {} (for [x (range 0 10) y (range 64 (- 74 x)) z (range 16)] [[x y z] 1])))
+        w (assoc (standing hill [0.5 8.5]) :player/pos [0.5 74.0 8.5])]
+    (is (= [10 63 8] (first (scoop/sources w))))
+    (is (= :walk (:intent/kind (scoop/scoop-next w))))))
+
 (deftest a-scoop-the-server-never-answers-fails-no-scoop
   (let [w (assoc (standing pond [8.5 8.5])
                  :plan/intent
@@ -142,6 +152,28 @@
     (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
            (scoop/scoop-next w))
         "stairs up until out of the ground")))
+
+(deftest the-way-home-runs-out-of-loaded-terrain
+  ;; gym batch solid-b1 run 1 climbed under the sea 146 blocks from its landing, where the chunks
+  ;; round the landing had unloaded: its own tunnel home ran to the edge of what was loaded, the
+  ;; route came back :none, and it cut stairs up under the sea until :boxed five times. A tunnel to
+  ;; the chunk's edge, the landing in a chunk not loaded: walk home along it
+  (let [rock (merge (into {} (for [x (range 16) y (range 64 72) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 2 16) y [64 65]] [[x y 8] blocks/air])))
+        w (assoc (standing rock [3.5 8.5]) :plan/go-at [40.5 80.0 8.5])]
+    (is (= {:intent/kind :walk :intent/target [40 80 8] :intent/for :surface} (scoop/climb w)))))
+
+(deftest in-a-pit-with-no-way-out-the-bot-tunnels-out
+  ;; gym batch solid-b1 run 13 came up its stairs into a pit under the open sky, leaves and rock
+  ;; round it with no room to jump out: no hunt had a route, and it waited :no-water
+  (let [shaft (merge (into {} (for [x (range 16) y (range 64 71) z (range 16)] [[x y z] 1]))
+                     (into {} (for [y (range 64 71)] [[8 y 8] blocks/air])))
+        w (standing shaft [8.5 8.5])]
+    (is (= {:intent/kind :tunnel
+            :intent/dir [1 0]
+            :intent/length scoop/tunnel-out-length
+            :intent/for :water-hunt}
+           (scoop/scoop-next w)))))
 
 (deftest with-no-way-back-up-the-bot-cuts-stairs-up
   ;; batch iron-a2 run 2 mined an iron ore out of the floor under one of its stairs, run 5 dug a

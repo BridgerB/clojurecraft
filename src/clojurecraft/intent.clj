@@ -29,10 +29,10 @@
                                       ; bank, where nothing stands between the eyes and its surface
 (def pickup-rise 2)                   ; a drop resting more than 2 blocks above the feet is above
                                       ; the pickup box (1.8 tall, grown 0.5 up)
-(def settle-ms 500)                   ; let the server catch up before START
+(def settle-ms 150)                   ; let the server catch up before START: three still ticks
 (def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks (dig/ms derives it now)
-(def finish-margin 1.35)              ; FINISH is sent this late: an early one aborts the break
-(def finish-slack 200)                ; ms added to the margin
+(def finish-margin 1.15)              ; FINISH is sent this late: the server takes it at 70% of its own ticks, aborts it before
+(def finish-slack 100)                ; ms added to the margin
 (def confirm-ticks 10)                ; after FINISH, ticks to wait for the server's ack or its refusal
 
 (defn penalties
@@ -210,15 +210,19 @@
 (defn routable?
   "Is there a way to walk intent i's goal from the feet: the planner's route is :found, or
    :partial toward a target in a chunk not loaded yet (the walk plans again as chunks arrive).
-   Not :none, the search exhausted with the goal never reached, nor :partial toward a target in
+   Toward a target in a chunk not loaded, a :none route with waypoints is progress too: the search
+   ran out of loaded terrain, not of ways (gym batch solid-b1 run 1's own tunnel home ran to the
+   edge of what was loaded). Not :none toward a loaded target, nor :partial toward a target in
    loaded terrain, the budget spent on it: walks to such targets failed :no-path again and
    again. An act asks before it chooses a target, so one with no way to it is passed over, not
    walked at: three such walks in a row ended live runs among ore and water in caves."
   [world {:intent/keys [target] :as i}]
-  (case (:path/status (path/plan world (path/feet-cell (:player/pos world)) (walk-goal i)))
-    :found true
-    :partial (not (terrain/chunk-loaded? world target))
-    false))
+  (let [{:path/keys [status waypoints]}
+        (path/plan world (path/feet-cell (:player/pos world)) (walk-goal i))]
+    (case status
+      :found true
+      (:partial :none) (boolean (and (seq waypoints) (not (terrain/chunk-loaded? world target))))
+      false)))
 
 (defn waypoint-reached?
   "Is the player at waypoint [x y z]: within waypoint-reach of its centre on the plane, and the

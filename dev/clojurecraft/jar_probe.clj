@@ -17,7 +17,7 @@
   (:import [java.lang.reflect Field]
            [java.util Map]
            [net.minecraft SharedConstants]
-           [net.minecraft.core BlockPos]
+           [net.minecraft.core BlockPos Direction$Axis]
            [net.minecraft.core Registry$PendingTags RegistryAccess]
            [net.minecraft.core.registries BuiltInRegistries]
            [net.minecraft.server Bootstrap]
@@ -29,7 +29,8 @@
            [net.minecraft.world.item Item ToolMaterial]
            [net.minecraft.world.level EmptyBlockGetter]
            [net.minecraft.world.level.block Block]
-           [net.minecraft.world.level.block.entity FuelValues]))
+           [net.minecraft.world.level.block.entity FuelValues]
+           [net.minecraft.world.phys.shapes Shapes VoxelShape]))
 
 (set! *warn-on-reflection* true)
 
@@ -83,6 +84,21 @@
       (into (sorted-map)
             (for [[^Item i ticks] values] [(str (.getKey BuiltInRegistries/ITEM i)) ticks])))))
 
+(defn partial-shapes
+  "{\"minecraft:cocoa\" 0.75 ...}: every block whose default state collides as neither nothing nor
+   a full cube (BlockState.getCollisionShape against an empty world), with the top of its shape
+   in blocks: a cocoa pod, a slab, a lantern, a carpet (0.0625). The bot's physics knows only
+   cubes."
+  []
+  (let [reg BuiltInRegistries/BLOCK]
+    (into (sorted-map)
+          (for [^Block b reg
+                :let [^VoxelShape s (.getCollisionShape (.defaultBlockState b)
+                                                        EmptyBlockGetter/INSTANCE
+                                                        BlockPos/ZERO)]
+                :when (and (not (.isEmpty s)) (not= s (Shapes/block)))]
+            [(str (.getKey reg b)) (.max s Direction$Axis/Y)]))))
+
 (defn -main
   "Boot the game's registries and write {\"hardness\" ... \"needs-tool\" ... \"materials\" ...
    \"fuel\" ...} as JSON to out."
@@ -90,8 +106,11 @@
   (SharedConstants/tryDetectVersion)
   (Bootstrap/bootStrap)
   (with-open [w (io/writer out)]
-    (json/write
-     {"hardness" (hardness) "needs-tool" (needs-tool) "materials" (materials) "fuel" (fuel)}
-     w))
+    (json/write {"hardness" (hardness)
+                 "needs-tool" (needs-tool)
+                 "materials" (materials)
+                 "fuel" (fuel)
+                 "partial-shapes" (partial-shapes)}
+                w))
   (println "wrote" out)
   (shutdown-agents))
