@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, path, intents]
 aliases: [path/plan, A*, route, waypoints, :awkward, lava rule, node budget, path.clj]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-12
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/path.clj#defn plan
@@ -17,6 +17,7 @@ sourceRefs:
   - src/clojurecraft/path.clj#defn start-cell
   - src/clojurecraft/path.clj#defn lava-near?
   - src/clojurecraft/path.clj#defmulti goal-done?
+  - src/clojurecraft/path.clj#defmethod goal-done? :sky
   - src/clojurecraft/path.clj#def default-max-nodes 6000
   - src/clojurecraft/path.clj#defn trap-factor
   - test/clojurecraft/path_test.clj#a-cliff-is-descended-by-its-stair-never-by-the-six-block-drop
@@ -39,7 +40,7 @@ related:
 - `path.clj`, `floor?` / `clear?` / `standable?` - a floor is `:solid`; a clear cell is `:clear` with no lava in its four horizontal neighbours or under it (`lava-near?`); a node is standable with a floor below and body and head clear.
 - `path.clj`, `landing` - where a drop comes to rest: the first floor within `max-fall`, with only clear cells on the way; water, lava, an awkward block or an unloaded chunk under the fall refuse it.
 - `path.clj`, `start-cell` - where the search begins: the feet cell when it is standable, else the nearest standable cell within one block on the plane and one up or down; `plan` reports it as `:path/from`.
-- `path.clj`, `goal-done?` / `heuristic` - multimethods on `:goal/kind`: `:near` (within `:goal/range`, default 3), `:block`, `:xz` (any height), `:away` (farther than range), `:pickup` (within range on the plane with the target at the feet's height or up to `:goal/rise` above: where a dug block's drop lands in reach; with `:goal/step-down?`, also a straight neighbour a block up, `step-down-node?`: the block in the floor beside the feet, whose drop lands in the hole it leaves). The heuristic is octile on the plane plus the height difference.
+- `path.clj`, `goal-done?` / `heuristic` - multimethods on `:goal/kind`: `:near` (within `:goal/range`, default 3), `:block`, `:xz` (any height), `:away` (farther than range), `:pickup` (within range on the plane with the target at the feet's height or up to `:goal/rise` above: where a dug block's drop lands in reach; with `:goal/step-down?`, also a straight neighbour a block up, `step-down-node?`: the block in the floor beside the feet, whose drop lands in the hole it leaves), `:sky` (a standable cell `terrain/under-sky?` accepts; the world rides on the goal). The heuristic for a point is octile on the plane plus the height difference. `:sky` weights the height deficit by `sky-weight` (4), more than a jump costs, so the air already dug is climbed before a mine is filled. That heuristic is not admissible.
 - `path.clj`, `search` - A* with a sorted set of `[f g node]` (ties break on the node, so the search is deterministic), g and parent maps, a closed set, and the nearest node seen by the heuristic. Each move's cost is multiplied by `trap-factor`: 10 within two columns of a trap in `:world/traps` younger than ten minutes ([[water-escape]]).
 
 ## How it works

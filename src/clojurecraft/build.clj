@@ -473,31 +473,153 @@
               (when (and (holds? world [:not-solid c]) (place/support world c)) c)))
           (range 1 (inc foundation-depth)))))
 
+(defn place-cells
+  "Every cell the plan places a block in."
+  [build origin facing]
+  (set (keep #(when (= :place (:build/op %)) (:build/pos %)) (plan-for build origin facing))))
+
+(defn diggable?
+  "Is pos a solid or awkward block a clear may dig: not unloaded, not obsidian, and not
+   cobblestone the plan places (the mold, already stood up). Stone or dirt where a wall will
+   go later is still dug: the place is satisfied by whatever is solid, and the hill would
+   stay in the way."
+  [world pos placed?]
+  (when-let [id (terrain/block-at world pos)]
+    (and (not (and (placed? pos) (= :cobblestone (blocks/name-of id))))
+         (not (contains? intent/never-dug (blocks/name-of id)))
+         (contains? #{:solid :awkward} (path/classify-id id)))))
+
+(defn stance-block
+  "The first solid cell in the way of standing at stand: from the feet toward it, one cell
+   at a time, the body at the stand's height or the head over that. nil when that line is
+   already clear. Full run 4e59246 stood at a pond and the pad's stand, four blocks east, was
+   stone inside the hill; the walk at it was :none."
+  [world stand build origin facing]
+  (let [placed? (place-cells build origin facing)
+        [fx _ fz] (intent/feet world)
+        [sx sy sz] stand]
+    (loop [x fx
+           z fz]
+      (let [body [x sy z]]
+        (cond (diggable? world body placed?) body
+              (diggable? world (update body 1 inc) placed?) (update body 1 inc)
+              (and (= x sx) (= z sz)) nil
+              :else
+              (recur (cond (< x sx) (inc x)
+                           (> x sx) (dec x)
+                           :else x)
+                     (if (= x sx)
+                       (cond (< z sz) (inc z)
+                             (> z sz) (dec z)
+                             :else z)
+                       z)))))))
+
+(defn within-reach?
+  "Can a dig of pos be started from here: the eye within reach of its centre, the same gate
+   the dig fails :out-of-reach on."
+  [world pos]
+  (<= (physics/distance (game/eye world) (physics/centre pos)) (+ intent/reach 0.5)))
+
+(defn approach
+  "A walk to beside pos, where a dig of it can start, or nil when no route reaches a cell
+   beside it."
+  [world pos]
+  (when (intent/routable?
+         world
+         {:intent/kind :walk :intent/target pos :intent/for :build :intent/pickup? true})
+    {:intent/kind :walk :intent/target pos :intent/for :build :intent/pickup? true}))
+
+(defn clear-stand
+  "The child that opens a way to stand, or nil when the way is clear. The block in the way is
+   dug when it is in reach (a pond beside the hill makes the face expose water, which a mold
+   dig is allowed to), else walked to beside."
+  [world stand build origin facing]
+  (when-let [b (stance-block world stand build origin facing)]
+    (if (within-reach? world b)
+      (assoc (intent/child-dig b) :intent/exposes-ok? true)
+      (approach world b))))
+
+(defn reaches-from?
+  "Would the eye, standing in cell, be within reach of pos? The feet use the real eye; any
+   other cell, the eye at its middle."
+  [world cell pos]
+  (let [[x y z] cell
+        eye (if (= cell (intent/feet world))
+              (game/eye world)
+              [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)])]
+    (<= (physics/distance eye (physics/centre pos)) intent/reach)))
+
+(defn reachable-stand
+  "A cell the feet can occupy from which pos is within reach. The feet, when they already
+   can; else the standable cell around pos nearest the designated stand. nil when none, and
+   never the cell being worked. Full run 61abf8c stood on the shore of a pond: the pad cell
+   was water and the stand was air over the next water cell, so a walk there was :partial
+   and six replans failed :no-path."
+  [world stand pos]
+  (let [feet (intent/feet world)
+        ok? (fn [cell]
+              (and (not= cell pos) (path/standable? world cell) (reaches-from? world cell pos)))]
+    (if (ok? feet)
+      feet
+      (->> (for [dy [0 -1 1]
+                 dx (range -4 5)
+                 dz (range -4 5)
+                 :let [c (mapv + pos [dx (inc dy) dz])]
+                 :when (ok? c)]
+             c)
+           (sort-by #(physics/distance (physics/centre %) (physics/centre stand)))
+           first))))
+
+(defn approach-stand
+  "The child that gets the feet centred for op, or nil when they already are: on the
+   designated stand, or, for a place or a dig whose stand cannot be occupied, on a cell that
+   already reaches the block. A keyword is why no such cell exists."
+  [world i {:build/keys [op stand pos]}]
+  (cond (intent/centred? world stand) nil
+        :else
+        (let [blocked
+              (clear-stand world stand (:intent/build i) (:intent/origin i) (:intent/facing i))]
+          (cond blocked blocked
+                (or (path/standable? world stand) (not (#{:place :dig} op)))
+                {:intent/kind :walk :intent/target stand :intent/for :build}
+                :else
+                (let [work (cond (= :place op) (or (foundation world pos) pos)
+                                 :else pos)
+                      alt (reachable-stand world stand work)]
+                  (cond (nil? alt) :no-stand
+                        (intent/centred? world alt) nil
+                        :else {:intent/kind :walk :intent/target alt :intent/for :build}))))))
+
 (defn op-child
-  "The child intent that works op next: lava to refill first when a lava pour has none, else a
-   walk to the op's stand, else the op's own action; or a keyword, why it cannot be worked."
-  [world i {:build/keys [op stand pos item aim into done]}]
-  (cond
-    (and (= op :pour) (= item :lava_bucket) (not (held? world :lava_bucket))) (refill world i)
-    (not (intent/centred? world stand)) {:intent/kind :walk :intent/target stand :intent/for :build}
-    :else
-    (case op
-      :place
-      (if-let [c (foundation world pos)]
-        {:intent/kind :place :intent/item item :intent/cell c}
-        :no-support)
-      :dig (assoc (intent/child-dig pos) :intent/exposes-ok? true)
-      :pour
-      {:intent/kind :pour :intent/item item :intent/aim aim :intent/target into :intent/expect done}
-      :scoop {:intent/kind :scoop :intent/target pos}
-      :use-on
-      {:intent/kind :use-on
-       :intent/item item
-       :intent/target pos
-       :intent/aim (update (physics/centre pos) 1 + 0.5)
-       :intent/expect done}
-      :stand-in {:intent/kind :await :intent/expect done}
-      :verify :unverified)))
+  "The child intent that works op next: lava to refill first when a lava pour has none, else
+   whatever gets the feet centred for the op (a dig of the ground in the way, a walk to the
+   stand, or a place already in reach from the shore), else the op's own action; or a
+   keyword, why it cannot be worked."
+  [world i {:build/keys [op pos item aim into done] :as this}]
+  (cond (and (= op :pour) (= item :lava_bucket) (not (held? world :lava_bucket))) (refill world i)
+        :else
+        (or (approach-stand world i this)
+            (case op
+              :place
+              (if-let [c (foundation world pos)]
+                {:intent/kind :place :intent/item item :intent/cell c}
+                :no-support)
+              :dig (assoc (intent/child-dig pos) :intent/exposes-ok? true)
+              :pour
+              {:intent/kind :pour
+               :intent/item item
+               :intent/aim aim
+               :intent/target into
+               :intent/expect done}
+              :scoop {:intent/kind :scoop :intent/target pos}
+              :use-on
+              {:intent/kind :use-on
+               :intent/item item
+               :intent/target pos
+               :intent/aim (update (physics/centre pos) 1 + 0.5)
+               :intent/expect done}
+              :stand-in {:intent/kind :await :intent/expect done}
+              :verify :unverified))))
 
 (defmethod intent/run :build
   ;; work the first op of the plan not satisfied; done when the last op is (the plan's goal: past

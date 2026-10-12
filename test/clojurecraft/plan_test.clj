@@ -8,7 +8,9 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.spec]
+            [clojurecraft.swim]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.wood :as wood]
             [clojurecraft.world :as world]))
@@ -103,6 +105,65 @@
         [w _] (run w (cons go (ticks 50 25000)))]
     (is (plan/failed? w))
     (is (= :no-log (:plan/reason w)))))
+
+(defn remembered
+  "In play at pos over blocks, the column remembered."
+  [blocks pos]
+  (let [col (world/column blocks)]
+    (-> (game/init fx/opts)
+        (assoc :bot/phase :play :player/pos pos :player/loaded? true :player/on-ground? true)
+        (assoc :world/chunks {[0 0] col})
+        (memory/remember-column [0 0] col))))
+
+(def shaft
+  "An air stair from [0 40 8] up to [14 54 8], and a trunk beside the top, more than 12 above an
+   eye at y 40: the near search's band misses it."
+  (merge (into {} (for [x (range 0 15) dy [0 1 2]] [[x (+ 40 x dy) 8] blocks/air]))
+         {[14 55 9] 1 [14 56 9] 136 [14 57 9] 136}))
+
+(deftest a-surface-with-no-tree-still-waits
+  (is (= {:plan/wait :no-log} (wood/gather-next (remembered {} [0.5 64.0 0.5])))))
+
+(deftest underground-with-no-log-the-bot-waits
+  ;; full run 29ef069 cut a stair at spawn before any tree was remembered
+  (let [w (remembered {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air} [8.5 50.0 8.5])]
+    (is (not (terrain/under-sky? w (intent/feet w))))
+    (is (= {:plan/wait :no-log} (wood/gather-next w)))))
+
+(deftest a-trunk-with-no-route-is-climbed-for
+  (let [w (remembered
+           {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [8 69 8] 1 [8 70 8] 136}
+           [8.5 50.0 8.5])]
+    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+           (wood/gather-next w)))))
+
+(def sky-shaft
+  "Air from a pocket at [2 50 8] up a stair to [8 56 8], that column open to the sky. A log at
+   [14 70 14] is sealed in stone, past the near band, and no route reaches it."
+  (merge (into {} (for [i (range 7) dy [0 1 2]] [[(+ 2 i) (+ 50 i dy) 8] blocks/air]))
+         (into {} (for [y (range 59 64)] [[8 y 8] blocks/air]))
+         (into {} (for [x (range 12 17) y (range 68 74) z (range 12 17)] [[x y z] 1]))
+         {[14 70 14] 136}))
+
+(deftest a-shaft-to-the-sky-is-walked-not-cut
+  ;; full run 4528031 cut a new stair out of the iron mine and the only pickaxe broke on it
+  (let [w (remembered sky-shaft [2.5 50.0 8.5])
+        i (wood/gather-next w)]
+    (is (not (terrain/under-sky? w (intent/feet w))))
+    (is
+     (nil?
+      (memory/nearest-log w (game/eye w) wood/search-radius (wood/skipped w) wood/standing-trunk?))
+     "the log is in the stone, past the near band")
+    (is (= {:intent/kind :walk :intent/target [8 56 8] :intent/for :opening} i))
+    (is (terrain/under-sky? w (:intent/target i)))))
+
+(deftest a-trunk-above-the-band-is-walked-to
+  (let [w (remembered shaft [0.5 40.0 8.5])
+        eye (game/eye w)]
+    (is (nil? (memory/nearest-log w eye wood/search-radius (wood/skipped w) wood/standing-trunk?))
+        "more than 12 above the eye: the near search misses it")
+    (is (= {:intent/kind :walk :intent/target [14 56 9] :intent/for :log :intent/trunk [14 56 9]}
+           (wood/gather-next w)))))
 
 (deftest a-failed-intent-is-blacklisted-and-retried
   (let [w (world-state [0.5 64.0 0.5])
@@ -205,6 +266,61 @@
   (is (= [:kit] (plan/goals-for "table")))
   (is (= [:pickaxe] (plan/goals-for "pickaxe")))
   (is (nil? (plan/goals-for "play"))))
+
+(deftest the-current-stage-is-the-furthest-target
+  (is (= "nether" (plan/current-until)))
+  ;; A gym stage names only its own target. A fresh run plays every step up to it.
+  (is (= [:nether] (plan/goals-for (plan/current-until))))
+  (let [chain (plan/through (plan/current-until))]
+    (is (= [:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket :water-bucket
+            :flint-and-steel :iron-kit :portal-kit :cast-one :portal :nether]
+           chain))
+    (is (= [:wood] (plan/through "wood")))
+    (is (nil? (plan/through "play")))
+    (is (= :wood
+           (:goal/id (plan/choose (assoc (world-state [0.5 64.0 0.5]) :plan/goals (set chain))
+                                  plan/goals)))
+        "empty hands at spawn: the chain starts at wood, not the portal"))
+  (is (= "later"
+         (plan/current-until
+          [{:goal/id :wood :goal/target? true :goal/priority 1 :goal/until "wood"}
+           {:goal/id :escape
+            :goal/target? true
+            :goal/always? true
+            :goal/priority 30
+            :goal/until "escape"}
+           {:goal/id :old
+            :goal/target? true
+            :goal/priority 40
+            :goal/until "old"
+            :goal/superseded-by :later}
+           {:goal/id :later :goal/target? true :goal/priority 9 :goal/until "later"}]))))
+
+(deftest a-chained-run-does-not-go-back-for-a-step-it-reached
+  ;; grok's first chained run (PR #32, run 38216982945) crafted the pickaxe, which spent the
+  ;; kit's sticks, so :kit was undone again and preempted it: open the table, craft, craft a
+  ;; stick, twice a second for five minutes. A chained run's steps are milestones.
+  (let [chain (plan/through "pickaxe")
+        holding (fn [w items]
+                  (assoc w
+                         :player/inventory
+                         (into {}
+                               (map-indexed
+                                (fn [i [item n]] [(+ 36 i) {:item (recipe/item-id item) :count n}])
+                                items))))
+        w (plan/begin (world-state [0.5 64.0 0.5]) {:go/goals chain :go/chain? true} plan/goals)
+        kit-held (plan/reach (holding w {:crafting_table 1 :stick 4 :oak_log 1}) plan/goals)
+        spent (holding kit-held {:crafting_table 1 :stick 2 :oak_planks 1})]
+    (is (= #{:wood :kit} (:plan/reached kit-held)) "the logs and the kit held: both reached")
+    (is (= :pickaxe (:goal/id (plan/choose spent plan/goals)))
+        "two sticks spent on the pickaxe: the kit is not made again")
+    (testing "a gym stage, not chained, still re-derives every step"
+      (let [stage (plan/begin (world-state [0.5 64.0 0.5]) {:go/goals chain} plan/goals)]
+        (is (nil? (:plan/reached (plan/reach (holding stage {:crafting_table 1 :stick 4})
+                                             plan/goals))))
+        (is (= :wood
+               (:goal/id (plan/choose (holding stage {:crafting_table 1 :stick 2})
+                                      plan/goals))))))))
 
 (def superseding-table
   "A table where :wood was fixed as :wood-2 and :wood-2 again as :wood-3."
@@ -367,7 +483,8 @@
                       :intent/id 1
                       :intent/goal :wood}))
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
-    (is (= 1 (:plan/attempts w)) "the walk failed on its first tick")
+    (is (= 0 (:plan/attempts w))
+        "no way to walk it: the target is given up, and the search is not a failed attempt")
     (is (= #{[13 64 0]} (:plan/blacklist w)) "and its target is blacklisted")
     (is (= :no-path
            (:intent/reason (first (filter #(= :failed (:intention/event %)) (memory/intentions w)))

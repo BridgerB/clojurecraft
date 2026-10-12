@@ -1,0 +1,63 @@
+name: full
+
+# One fresh world, nothing given. The bot stands at spawn and plays every step up to the
+# current stage (plan/current-until, via --chain) for 5.5 hours. A pull request runs it.
+# A new push to that same request cancels its run and starts the new commit. Another
+# request keeps its own.
+
+on:
+  pull_request:
+
+concurrency:
+  group: full-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  full:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI and Babashka
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: clj-${{ hashFiles('deps.edn') }}
+      - name: Fresh world, current stage
+        env:
+          PORT: '25565'
+          RCON_PORT: '25575'
+          RCON_PASS: full
+          WORLD: ${{ runner.temp }}/world
+          HEAP_MB: '4096'
+        run: |
+          set -euo pipefail
+          until=$(clojure -M -e "(require '[clojurecraft.plan :as plan]) (println (plan/current-until))")
+          [ -n "$until" ] || { echo "::error::no current stage"; exit 1; }
+          echo "until $until"
+          bb server start
+          trap 'bb server stop' EXIT
+          mkdir -p data/full
+          clojure -M:run --port "$PORT" --name Clj --until "$until" --chain true --timeout-ms 19800000 \
+            --record data/full/run.edn --commit "$GITHUB_SHA"
+      - name: The recording
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: full-${{ github.sha }}
+          path: |
+            data/full/run.edn
+            ${{ runner.temp }}/world/server.log
+          if-no-files-found: ignore

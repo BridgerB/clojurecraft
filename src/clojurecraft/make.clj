@@ -152,16 +152,31 @@
   [action]
   (or (= :stuck action) (contains? fetching-acts (:goal/act action))))
 
+(defn spare-worth?
+  "Is action worth doing to keep a spare tool? Not :stuck, and not a mine. A gather is worth it
+   when a log can be started now (gather-next returns an intent): a walk to a trunk, or the
+   stairs up to the trees, while a pickaxe is still held. A walk up the shaft already dug
+   (:intent/for :opening) is not: it reaches the sky, not a tree, and from that mouth the trunk
+   may still have no route. Full run f277605 held one stone pickaxe, flint and steel and a water
+   bucket, and spent five hours walking out for the spare and cutting back down. A gather that
+   would wait :no-log is not either, which is the open sky with no tree remembered. Gym batch
+   iron-a7 runs 1-3, deep in the mine with a working pickaxe and no wood, waited :no-log for a
+   second pickaxe. Full run 068485c kept mining on its last stone pickaxe until it broke at y 16,
+   then the wooden one broke on the stairs and three :no-pickaxe failures ended the plan."
+  [world action]
+  (cond (or (nil? action) (= :stuck action) (= :mine (:goal/act action))) false
+        (= :gather (:goal/act action))
+        (let [n (wood/gather-next world)] (and (:intent/kind n) (not= :opening (:intent/for n))))
+        :else true))
+
 (defn resolve-spares
   "[counts action] for the tools a row keeps one more of than it holds (:goal/spares, beside
-   :goal/holds): planned only when it can be made from what is held and near; one that would
-   send the bot out for wood or stone is no need at all (nil). Gym batch iron-a7 runs 1-3, deep
-   in the mine with a working pickaxe and no wood, waited :no-log for a second pickaxe the fill
-   row held."
+   :goal/holds): planned when spare-worth? says the producer can be done. A mine is never one.
+   A gather is one only when a log can be started now."
   [world table counts row path]
   (reduce (fn [[c _] [k n]]
             (let [[_ a] (resolve-need world table c k (+ n (get (:goal/holds row) k 0)) path)]
-              (if (and a (not (fetch? a))) (reduced [c a]) [c nil])))
+              (if (and a (spare-worth? world a)) (reduced [c a]) [c nil])))
           [counts nil]
           (:goal/spares row)))
 

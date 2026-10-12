@@ -194,12 +194,12 @@
 (defn climb
   "Out of the ground when the feet are more than underground-depth under the landing
    (:plan/go-at) and the sky is not open over them: a walk back to the landing when a route
-   reaches it, else stairs cut up to its height; nil when not underground. A bot that needs water
-   deep in its mine sees none and its hunt looks for ground near its own height, underground: gym
-   batch iron-a1 runs 3 and 5 got the bucket down there and failed :no-water. The way it came
-   down is often no way back up: batch iron-a2 runs 2 and 5 had mined an ore out of the floor of
-   a stair, or dug a niche under one, and waited :no-water at y 18 and 24 with no route out. The
-   siblings climbed out first too."
+   reaches it, else a walk up the air already dug (intent/opening), else stairs cut up to its
+   height; nil when not underground. A bot that needs water deep in its mine sees none and its
+   hunt looks for ground near its own height, underground: gym batch iron-a1 runs 3 and 5 got the
+   bucket down there and failed :no-water. The way it came down is often no way back up: batch
+   iron-a2 runs 2 and 5 had mined an ore out of the floor of a stair, or dug a niche under one,
+   and waited :no-water at y 18 and 24 with no route out. The siblings climbed out first too."
   [world]
   (let [home (:plan/go-at world)
         feet (intent/feet world)]
@@ -207,19 +207,22 @@
                (< (physics/y-of feet) (- (physics/y-of home) underground-depth))
                (not (terrain/under-sky? world feet)))
       (or (first-walk world :surface [(mapv #(long (math/floor %)) home)])
+          (intent/opening world)
           {:intent/kind :stairs-up
            :intent/to-y (long (math/floor (physics/y-of home)))
            :intent/for :surface}))))
 
 (defn dig-out
-  "Stairs cut up until out of the ground (stairs/out? ends them first; terrain/top-y is the top
-   of the world) when the sky is not open over the feet, whatever the height: nil under the
-   open sky. The last resort before waiting: live run 17 climbed out of its mine to the
-   landing's height, which 145 blocks east was inside a hill, found no route to a pond 22 blocks
-   off nor to any hunt, and waited :no-water."
+  "Out of the ground when the sky is not open over the feet, whatever the height: walk up the
+   air already dug (intent/opening), else stairs cut up until out (stairs/out? ends them first;
+   terrain/top-y is the top of the world). nil under the open sky. The last resort before
+   waiting: live run 17 climbed out of its mine to the landing's height, which 145 blocks east
+   was inside a hill, found no route to a pond 22 blocks off nor to any hunt, and waited
+   :no-water. Full run 4528031 cut that stair from y 17 with the only pickaxe and it broke."
   [world]
   (when-not (terrain/under-sky? world (intent/feet world))
-    {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}))
+    (or (intent/opening world)
+        {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface})))
 
 (defn tunnel-out
   "A tunnel of tunnel-out-length level steps at the feet's height along stone/tunnel-heading (one

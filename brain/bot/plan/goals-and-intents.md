@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, goals, intents]
 aliases: [planner, plan/step, intent/run, goal table, goals.edn, done-by, plan/act, blacklist, retries]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-12
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/plan.clj#def goals
@@ -14,7 +14,11 @@ sourceRefs:
   - src/clojurecraft/plan.clj#defmulti act
   - src/clojurecraft/plan.clj#defmulti next-intent
   - src/clojurecraft/plan.clj#defn run-intent
+  - src/clojurecraft/plan.clj#defn fail-intent
+  - test/clojurecraft/plan_test.clj#a-walk-with-no-way-on-fails-no-path
   - src/clojurecraft/plan.clj#defn choose
+  - src/clojurecraft/plan.clj#defn through
+  - src/clojurecraft/plan.clj#defn current-until
   - src/clojurecraft/plan.clj#defn step-over
   - test/clojurecraft/make_test.clj#the-needs-planner-plans-over-the-table-it-is-given
   - src/clojurecraft/plan.clj#defn abandon-intent
@@ -37,13 +41,13 @@ The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id
 - `plan.clj`, `done-by` - an open registry keyed by the row's `:goal/done?`, the name of a predicate (`:provided?` is registered by `make`).
 - `plan.clj`, `act` - an open registry keyed by `:goal/act`: what to do once a row's needs are met (`:gather`, `:place`, `:craft`).
 - `plan.clj`, `next-intent` - keyed by `:goal/plan` (default `:needs`); `make` registers the needs planner.
-- `plan.clj`, `step-over` - the planner over a goal table it is given, `(plan world goals) → intent` in the essay's words: `choose`, `begin`, `plan-tick` and `next-intent` take the table, and so does the needs planner (`make/decide`, whose producer rows are a memoized function of the table). `plan/step` is `step-over` over the shipped `goals.edn`; only `goals-for`, which maps the `--until` name at the program's edge, reads the shipped table directly. A test plans over a table without the gather-log row and gets `:stuck`.
+- `plan.clj`, `step-over` - the planner over a goal table it is given, `(plan world goals) → intent` in the essay's words: `choose`, `begin`, `plan-tick` and `next-intent` take the table, and so does the needs planner (`make/decide`, whose producer rows are a memoized function of the table). `plan/step` is `step-over` over the shipped `goals.edn`. At the edge, `goals-for` maps one `--until` name to its target, `current-until` names the furthest stage, and `through` names the chain up to it. A test plans over a table without the gather-log row and gets `:stuck`.
 - `plan.clj`, `choose`, `run-intent` - the tick loop; `intent.clj`, `run` - the executors.
 
 ## How it works
 1. Each tick: choose first. With nothing left, the plan is done; if the running intent serves another target, it is preempted. Otherwise run it; if it ended, plan again in the same tick (finish or fail, then choose).
 2. With no intent: `choose` takes the highest-priority target in play (`:plan/goals` from the `:go` event, or every target, plus every row marked `:goal/always?`: the two escapes) whose `done-by` is false, and `next-intent` turns it into an intent, `{:plan/wait reason}`, or nil. A wait longer than `wait-timeout` (20 s) fails the plan. Before choosing, `trap/trapped-tick` re-derives `:plan/trap` ([[water-escape]]).
-3. A failed intent blacklists its target (when it has one) and counts an attempt; a success resets the count, so `max-attempts` (3) means three failures in a row.
+3. A failed intent blacklists its target (when it has one) and counts an attempt; a success resets the count, so `max-attempts` (3) means three failures in a row. A walk that fails `:no-path` blacklists its target and does not count. The route was accepted and then could not be walked, and the next candidate is tried. Three such walks used to end a run that still had somewhere else to go.
 4. No target left means `:plan/status :done`.
 
 ## Gotchas

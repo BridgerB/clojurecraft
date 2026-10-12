@@ -2,7 +2,8 @@
   "The loop: the one place with an atom, a clock, randomness and effects. Reads packets and
    external events, feeds the reducer, drains :bot/effects, prints RESULT.
 
-     clojure -M:run --port 25571 [--name N] [--until play|wood|table|pickaxe] [--events stdin]
+     clojure -M:run --port 25571 [--name N] [--until play|wood|table|pickaxe] [--chain true]
+                    [--events stdin]
                     [--timeout-ms 120000] [--hold-ms 0] [--record run.edn [--commit sha]]
                     [--telemetry t.edn]
      clojure -M:replay run.edn
@@ -147,7 +148,7 @@
   "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,
    hold for an outside judge when ok, and exit 0 when ok else 1."
   [& args]
-  (let [{:keys [host port name until timeout-ms hold-ms events record commit telemetry]
+  (let [{:keys [host port name until timeout-ms hold-ms events record commit telemetry chain]
          :or {host "127.0.0.1"
               port "25571"
               name "Clj_wood"
@@ -158,7 +159,8 @@
         opts {:host host :port (Long/parseLong port) :name name}
         deadline (+ (now) (Long/parseLong timeout-ms))
         hold (Long/parseLong hold-ms)
-        planned (plan/goals-for until)
+        ;; --chain plays every step up to --until. A gym stage names only its own target.
+        planned (if (= chain "true") (plan/through until) (plan/goals-for until))
         goal? (goal-fn until)
         stop? (fn [w] (or (goal? w) (and planned (plan/failed? w)) (> (now) deadline)))
         tap (when record (record/tap! record (if commit {:record/commit commit} {}))) ; the code that made the run
@@ -169,7 +171,11 @@
                          (watch/telemetry! world*))]
     (cli/log "connected to" host port "as" name)
     (cond (= events "stdin") (read-events! *in* queue) ; a fixture speaks through the pipe
-          planned (go-when-loaded! world* queue {:event/kind :go :go/goals planned})) ; no fixture: start where we stand
+          planned
+          (go-when-loaded! world*
+                           queue
+                           (cond-> {:event/kind :go :go/goals planned} ; no fixture: start where we stand
+                             (= chain "true") (assoc :go/chain? true)))) ; milestones (plan/reach)
     (apply-event! world*
                   {:event/kind :start :start/host host :start/port (:port opts) :start/name name}
                   (:out c)

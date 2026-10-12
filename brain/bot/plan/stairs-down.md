@@ -11,6 +11,8 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn stair-cells
   - src/clojurecraft/stairs.clj#defn exposed
   - src/clojurecraft/stairs.clj#defn safe?
+  - src/clojurecraft/plan.clj#defn fail-intent
+  - test/clojurecraft/stone_test.clj#a-boxed-descent-is-not-started-again-from-the-same-cell
   - src/clojurecraft/intent.clj#defn run-child
   - src/clojurecraft/intent.clj#defn feet
   - src/clojurecraft/stairs.clj#def max-turns
@@ -59,7 +61,7 @@ related:
 ## Key files
 - `stairs.clj`, `stair-cells` - the three cells a stair ahead opens: head-up, head, and the new feet one block down.
 - `stairs.clj`, `exposed` - what the stair exposes to the body: those three, the floor under the new feet, and every horizontal neighbour of the three.
-- `stairs.clj`, `safe?` - none of the opened cells water, lava or unloaded; no lava in any exposed cell; a floor under the new feet.
+- `stairs.clj`, `safe?` - none of the opened cells water, lava or unloaded; no lava in any exposed cell; a floor under the new feet. A new feet cell on `:plan/blacklist` is refused.
 - `intent.clj`, `feet` - y a touch below the position, since physics jitter dips it under the integer.
 - `intent.clj`, `run-child` - the child `:dig` (`intent/child-dig`) stands in as `:plan/intent` for one tick of the dig executor, then returns to `:intent/child`: intents composing intents, with one rule for breaking blocks ([[dig-timeline]]).
 - `stairs.clj`, `max-turns` 4, `step-timeout-ticks` 200.
@@ -81,7 +83,7 @@ Each stage is a method of `stairs-stage`; `run :stairs-down` only checks whether
 ## Gotchas
 - Keys that are over (`:intent/child`, `:intent/cells`) are removed, never nil: the world spec refuses a nil vector.
 - Water beside a stair is allowed, lava is not: the siblings found refusing water wedged descents in wet biomes. A cell that itself borders water is still never dug (the dig's `exposes-fluid?`): the stair turns instead. Before it turned, a live iron-kit descent (local landing 2360,2360) met an aquifer at y 36 and failed `:unsafe` three times in a moment, the planner restarting the same refused stair (`water-beside-a-stair-cell-turns-the-stairs`).
-- **A lake under every stair is stepped around.** The fifth live iron-kit run (local landing 3024,2360) stood at y 52 over an underground lake filling y 48-51: every stair's new feet had water under or beside them, and the staircase failed `:boxed` three times in a moment. A level step leads along until a stair is safe; `boxed-in-by-lava-on-every-side-fails-boxed` now needs lava beside the feet too.
+- **A lake under every stair is stepped around.** The fifth live iron-kit run (local landing 3024,2360) stood at y 52 over an underground lake filling y 48-51: every stair's new feet had water under or beside them, and the staircase failed `:boxed` three times in a moment. A level step leads along until a stair is safe; `boxed-in-by-lava-on-every-side-fails-boxed` now needs lava beside the feet too. Full run ab3945e reached a furnace and a stone pickaxe, then stood at y 32 where every stair and every further level step was refused; two more staircases from that cell boxed in under a second. `fail-intent` blacklists the cell, the mine does not start another staircase there (`a-boxed-descent-is-not-started-again-from-the-same-cell`), and `safe?` will not step back onto it.
 - **A broken pickaxe stops the staircase.** A cell that drops only to a tool with none of its kind in the hotbar is never dug by hand: the stairs or tunnel fail `:no-pickaxe` (`tool-missing`) and the planner makes another. Batch iron-a2 runs went on by hand when the pickaxe broke, 7500 ms a stone for nothing, until a step timed out. A level step's 10 s is the walk's alone: it starts again after each dig.
 - **Gravel falls into the stair.** The seventh live iron-kit run (local landing 2360,3000) cut its staircase through gravel at y 37-40: the gravel over the cells it opened fell into them, the walk onto the stair failed `:stair-not-taken`, then two digs found their cell already emptied and failed `:target-gone`, ending the plan. A cell refilled is dug again, a cell emptied counts as open, and the step goes back to digging; the server model drops gravel the way the game does ([[server-model]]), and `gravel-that-refills-a-stair-is-dug-again` cuts two stairs into a gravel cliff (it fails with the old stages). A falling block that lands on the bot's head is not handled.
 

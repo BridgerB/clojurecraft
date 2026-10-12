@@ -13,6 +13,8 @@
 (set! *warn-on-reflection* true)
 
 (def search-radius 48)                ; blocks from the eye searched for a remembered log
+(def far-radius 256)                  ; a trunk remembered on the way in, past the near band
+(def far-candidates 3)                ; routes planned on the way back to the surface
 (def max-trunk 8)                     ; logs followed up one trunk column
 
 (defn ground?
@@ -77,20 +79,50 @@
     (fn [[x _ z :as pos]]
       (or (contains? blacklist pos) (>= (get failures [x z] 0) max-trunk-failures)))))
 
+(defn log-walk
+  "A walk to the log of bottom nearest the feet, tagged as the gather chain."
+  [world bottom]
+  {:intent/kind :walk
+   :intent/target (trunk-target world bottom)
+   :intent/for :log
+   :intent/trunk bottom})
+
+(defn climb-out
+  "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest
+   one a route reaches (intent/routable?), under the open sky or not. Underground, with none of
+   those a route reaches: walk up the air already dug (intent/opening) and cut stairs only when
+   that mouth cannot be walked to (stairs/out? ends them; terrain/top-y is the top of the world).
+   nil when no trunk is remembered yet. Full run 29ef069 cut a stair at spawn before any tree
+   was remembered, failed :stair-not-taken, and the plan then waited :no-log. Full run 4528031
+   remembered the trees, found no route through the mine, and cut a new stair; the only pickaxe
+   broke."
+  [world]
+  (let [feet (intent/feet world)
+        trunks (->> (memory/positions-now world blocks/log-states)
+                    (remove (skipped world))
+                    (filter #(standing-trunk? world %))
+                    (memory/nearest-first (game/eye world) far-radius)
+                    (take far-candidates))]
+    (when (seq trunks)
+      (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
+                trunks)
+          (when-not (terrain/under-sky? world feet)
+            (or (intent/opening world)
+                {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}))))))
+
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
-   trunk. Any goal that needs a log uses this."
+   trunk. Any goal that needs a log uses this. With none in the near band, climb out to the
+   trees instead of waiting :no-log."
   [world]
   (or (continue-gather world)
-      (if-let [bottom (memory/nearest-log world
-                                          (game/eye world)
-                                          search-radius
-                                          (skipped world)
-                                          standing-trunk?)]
-        {:intent/kind :walk
-         :intent/target (trunk-target world bottom)
-         :intent/for :log
-         :intent/trunk bottom}
-        {:plan/wait :no-log})))
+      (when-let [bottom (memory/nearest-log world
+                                            (game/eye world)
+                                            search-radius
+                                            (skipped world)
+                                            standing-trunk?)]
+        (log-walk world bottom))
+      (climb-out world)
+      {:plan/wait :no-log}))
 
 

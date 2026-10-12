@@ -21,6 +21,8 @@
             [clojurecraft.spec]
             [clojurecraft.stone]
             [clojurecraft.swim :as swim]
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.wood :as wood]
             [clojurecraft.world :as world]))
 
 (def pickaxe (first (filter #(= :pickaxe (:goal/id %)) plan/goals)))
@@ -281,3 +283,35 @@
     (is (= :mine-iron (row {:stone_pickaxe 1 :iron_ingot 2 :flint_and_steel 1} :table? true))
         "the third ingot's ore, not wood for a spare")
     (is (nil? (row {:water_bucket 1 :flint_and_steel 1})) "the kit held: nothing to do")))
+
+(deftest a-last-stone-pickaxe-underground-goes-for-a-log
+  ;; full run 068485c wore the last stone pickaxe out at y 16. The spare is gathered while one
+  ;; still digs. The trunk is remembered above the near band and no route reaches it, so the
+  ;; gather is a climb. On the open sky with no tree it is not.
+  (let [col (world/column {[8 69 8] 1 [8 70 8] 136})
+        w (-> (with-furnace (world-holding {:stone_pickaxe 1 :coal 1} false))
+              (assoc :player/pos [5.5 50.0 5.5] :world/chunks {[0 0] col})
+              (memory/remember-column [0 0] col))]
+    (is (not (terrain/under-sky? w (intent/feet w))))
+    (is (= :gather-log
+           (:goal/id (make/next-row w {:goal/provides {:item/iron_ingot 4}} plan/goals))))))
+
+(def sky-shaft
+  "Air from a pocket at [2 50 8] up a stair to [8 56 8], that column open to the sky. A log at
+   [14 70 14] is sealed in stone, past the near band, and no route reaches it."
+  (merge (into {} (for [i (range 7) dy [0 1 2]] [[(+ 2 i) (+ 50 i dy) 8] blocks/air]))
+         (into {} (for [y (range 59 64)] [[8 y 8] blocks/air]))
+         (into {} (for [x (range 12 17) y (range 68 74) z (range 12 17)] [[x y z] 1]))
+         {[14 70 14] 136}))
+
+(deftest a-shaft-to-the-sky-is-not-a-spare
+  ;; full run f277605 walked out of the iron mine for a spare pickaxe and cut straight back
+  ;; down, for five hours: the walk reaches the sky, and from there no trunk could be walked to
+  (let [col (world/column sky-shaft)
+        w (-> (with-furnace (world-holding {:stone_pickaxe 1 :coal 1} false))
+              (assoc :player/pos [2.5 50.0 8.5] :world/chunks {[0 0] col})
+              (memory/remember-column [0 0] col))
+        goal {:goal/provides {:item/iron_ingot 4}}]
+    (is (not (terrain/under-sky? w (intent/feet w))))
+    (is (= :opening (:intent/for (wood/gather-next w))))
+    (is (= :mine-iron (:goal/id (make/next-row w goal plan/goals))))))

@@ -134,7 +134,11 @@
    ;; ---- its own intentions
    [:plan/status ":landing, :active, :done or :failed" "from the :go event"]
    [:plan/goals "the target goal ids in play" "from the :go event"]
-   [:plan/go-at "the landing a fixture named" "from a :go with :go/at"]
+   [:plan/chain?
+    "a run that plays every step up to its target (--chain true): reached steps stay reached"
+    "a chained :go"]
+   [:plan/reached "the targets a chained run has reached; choose skips them (plan/reach)"
+    "a chained plan"] [:plan/go-at "the landing a fixture named" "from a :go with :go/at"]
    [:plan/since "ms the status last changed" "from the :go event"]
    [:plan/blacklist "targets that failed, skipped when choosing" "from the :go event"]
    [:plan/trunk-failures
@@ -270,6 +274,7 @@
    [:event/packet "the decoded packet" "packet"] [:event/reason "why the socket closed" "closed"]
    [:start/host "server host" "start"] [:start/port "server port" "start"]
    [:start/name "player name" "start"] [:go/goals "target goal ids to pursue" "go"]
+   [:go/chain? "the goals are the steps of one run: reached ones stay reached" "a chained go"]
    [:go/at "where the fixture landed the bot" "go, from a fixture"]
    ;; ---- effects: everything the reducer asks for
    [:effect/kind ":send or :log" "every effect"] [:effect/packet "packet to send" "send"]
