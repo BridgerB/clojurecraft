@@ -227,13 +227,13 @@
       (emit {:packet/name :client-information
              :locale "en_US"
              :view-distance 6
-             :chat-mode 0
+             :chat-mode (p/value :chat-mode :enabled)
              :chat-colors true
-             :skin-parts 0x7f
-             :main-hand 1
+             :skin-parts p/all-skin-parts
+             :main-hand (p/value :main-hand :right)
              :text-filtering false
              :server-listing true
-             :particle-status 0})))
+             :particle-status (p/value :particle-status :all)})))
 (defmethod on-packet [:play :keep-alive]
   [w p]
   (-> w
@@ -259,7 +259,7 @@
       (memory/remember-answer {:answer/kind :death})
       (update :stats/deaths (fnil inc 0))
       (dissoc :plan/intent :plan/last)
-      (emit {:packet/name :client-command :action 0})))
+      (emit {:packet/name :client-command :action (p/value :client-command :perform-respawn)})))
 
 (defmethod on-packet [:play :set-health]
   [w p]
@@ -293,7 +293,7 @@
         :else w))
 (defmethod on-packet [:play :set-held-slot]
   [w {:keys [slot]}]
-  (if (<= 0 slot 8) (assoc w :player/held-slot slot) w))
+  (if (inventory/hotbar? slot) (assoc w :player/held-slot slot) w))
 (defmethod on-packet [:play :set-cursor-item]
   [w {:keys [item]}]
   (if item (assoc w :window/cursor item) (dissoc w :window/cursor)))
@@ -421,7 +421,7 @@
                :protocol-version protocol-version
                :host (:conn/host world)
                :port (:conn/port world)
-               :next-state 2})
+               :next-state (p/value :next-state :login)})
         (emit {:packet/name :hello :username (:bot/name world) :uuid (:bot/uuid world)}))))
 
 (defmethod on-event :packet [world {:event/keys [packet]}] (on-packet world packet))

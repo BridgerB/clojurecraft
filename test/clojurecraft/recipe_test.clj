@@ -3,6 +3,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.spec]))
 
@@ -48,14 +49,16 @@
   (is (nil? (recipe/match {} 2))))
 
 (deftest clicks-lay-one-craft
-  (is
-   (= [{:click/slot 36 :click/button 0 :click/mode 0} {:click/slot 1 :click/button 1 :click/mode 0}
-       {:click/slot 3 :click/button 1 :click/mode 0} {:click/slot 36 :click/button 0 :click/mode 0}]
-      (recipe/clicks (inv 0 :oak_planks 8) (recipe/by-id :stick) 2)))
+  (is (= [(inventory/left-click (inventory/slot [:hotbar 0]))
+          (inventory/right-click (inventory/slot [:grid 1]))
+          (inventory/right-click (inventory/slot [:grid 3]))
+          (inventory/left-click (inventory/slot [:hotbar 0]))]
+         (recipe/clicks (inv 0 :oak_planks 8) (recipe/by-id :stick) 2))
+      "pick up the planks in hotbar 0, one into each cell of a column, the rest back")
   (testing "a stack used up exactly needs no put-back"
     (is (= 5 (count (recipe/clicks (inv 0 :oak_planks 4) (recipe/by-id :crafting_table) 2)))))
   (testing "one stack per ingredient: a short stack is skipped for one that covers it"
-    (is (= 12
+    (is (= (inventory/slot [:main 3])
            (:click/slot (first (recipe/clicks (inv 0 :oak_planks 1 12 :birch_planks 4)
                                               (recipe/by-id :crafting_table)
                                               2))))))

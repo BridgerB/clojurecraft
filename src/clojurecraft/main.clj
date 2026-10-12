@@ -19,6 +19,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.record :as record]
@@ -105,10 +106,10 @@
     (doseq [e effects] (perform! e out))))
 
 (defn run-loop!
-  "Drive the reducer over socket packets, 50 ms ticks and external events until (stop? world)
+  "Drive the reducer over socket packets, game ticks (physics/tick-ms) and external events until (stop? world)
    or the socket closes. Returns the final world."
   [{:keys [in out]} events world* stop? tap]
-  (loop [next-tick (+ (now) 50)]
+  (loop [next-tick (+ (now) physics/tick-ms)]
     (let [[v ch] (async/alts!! [in events (async/timeout (max 0 (- next-tick (now))))])
           event (cond (= ch in)
                       (if (nil? v)
@@ -120,7 +121,7 @@
       (let [w @world*]
         (if (or (stop? w) (:bot/closed w) (:bot/disconnected w))
           w
-          (recur (if (= :tick (:event/kind event)) (+ next-tick 50) next-tick)))))))
+          (recur (if (= :tick (:event/kind event)) (+ next-tick physics/tick-ms) next-tick)))))))
 
 (defn read-events!
   "Feed EDN events from a reader (the fixture's stdout, piped in) onto the events channel until

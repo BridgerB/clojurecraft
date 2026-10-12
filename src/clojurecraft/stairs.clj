@@ -215,19 +215,17 @@
    run 1, under a lake at y 44, stepped 32 east under it and failed :boxed; batch iron-a8 run 2,
    under the sea with no shore in sight, :boxed three times."
   [world {:intent/keys [kind dir level-steps level-dir] :or {level-steps 0}}]
-  (let [feet (intent/feet world)
+  (let [[fx _ fz :as feet] (intent/feet world)
         back (when level-dir (mapv - level-dir))
         round (take 4 (iterate turn (or dir (first directions))))
         home (:plan/go-at world)
         ways (cond level-dir (cons level-dir (remove #{back} (take 4 (iterate turn level-dir))))
                    (= :stairs-up kind)
-                   (sort-by (fn [[dx dz :as d]] [(or (shore-distance world feet d) Long/MAX_VALUE)
-                                                 (if home
-                                                   (physics/horizontal-distance
-                                                    [(+ (first feet) dx) 0 (+ (nth feet 2) dz)]
-                                                    home)
-                                                   0)])
-                            round)
+                   (sort-by
+                    (fn [[dx dz :as d]]
+                      [(or (shore-distance world feet d) Long/MAX_VALUE)
+                       (if home (physics/horizontal-distance [(+ fx dx) 0 (+ fz dz)] home) 0)])
+                    round)
                    :else round)
         d (when (< level-steps (level-step-limit world kind feet))
             (first (filter #(level-safe? world (level-cells feet %)) ways)))]
@@ -263,7 +261,7 @@
                                :intent/dir dir
                                :intent/cells cells
                                :intent/stage :open
-                               :intent/started-y (second (:player/pos world))
+                               :intent/started-y (physics/y-of (:player/pos world))
                                :intent/started-tick (:time/tick world))
           (boxed? turns) (step-aside world (assoc i :intent/dir dir))
           :else (turned world dir turns (str "stairs: refused toward " dir ", turning")))))
@@ -279,14 +277,13 @@
    when it is only in the main inventory (intent/stowed-tool); or fail with tool-missing's
    reason, so the planner makes the tool again."
   [world cell event]
-  (let [stowed (some->> (terrain/block-at world cell)
-                        (intent/stowed-tool world))
+  (let [[_ stowed-item :as stowed] (some->> (terrain/block-at world cell)
+                                            (intent/stowed-tool world))
         missing (tool-missing world cell)
-        child (if stowed
-                {:intent/kind :equip
-                 :intent/item (recipe/item-name (second stowed))
-                 :intent/status :active}
-                (intent/child-dig cell))]
+        child
+        (if stowed
+          {:intent/kind :equip :intent/item (recipe/item-name stowed-item) :intent/status :active}
+          (intent/child-dig cell))]
     (if missing
       (-> world
           (assoc :player/controls {})
@@ -323,7 +320,7 @@
    goes (rise -1 down, 1 up), the only proof the server broke what the bot asked for; going up,
    also on the ground again, since halfway up a jump the step is not yet stood on."
   [world rise started-y]
-  (and (>= (* rise (- (second (:player/pos world)) started-y)) 0.5)
+  (and (>= (* rise (- (physics/y-of (:player/pos world)) started-y)) 0.5)
        (or (neg? rise) (boolean (:player/on-ground? world)))))
 
 (defmethod stairs-stage :step
@@ -435,7 +432,7 @@
   ;; done standing at to-y, or out of the ground (out?), whichever comes first
   [world {:intent/keys [to-y] :as i} event]
   (if (and (:player/on-ground? world)
-           (or (>= (second (intent/feet world)) to-y) (out? world (intent/feet world))))
+           (or (>= (physics/y-of (intent/feet world)) to-y) (out? world (intent/feet world))))
     (-> world
         (assoc :player/controls {})
         intent/done)
@@ -443,7 +440,7 @@
 
 (defmethod intent/run :stairs-down
   [world {:intent/keys [to-y] :as i} event]
-  (if (<= (second (intent/feet world)) to-y)
+  (if (<= (physics/y-of (intent/feet world)) to-y)
     (-> world
         (assoc :player/controls {})
         intent/done)

@@ -28,6 +28,7 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.packet :as packet]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]))
 
@@ -46,11 +47,17 @@
 
 (declare disturb full sync-window)
 
+(defn held-slot
+  "The window-0 slot of the hotbar place the client last selected (set-carried-item), the
+   first when it never selected one."
+  [sim]
+  (inventory/slot [:hotbar (:sim/held sim 0)]))
+
 (defn held-item
   "The item id in the slot the client last selected (set-carried-item), or nil for an empty
    hand."
   [sim]
-  (get-in sim [:sim/inv (+ 36 (:sim/held sim 0)) :item]))
+  (get-in sim [:sim/inv (held-slot sim) :item]))
 
 (defn break-ms
   "ms the server requires between START and FINISH on block id with the held item: the same
@@ -60,13 +67,16 @@
   [id held]
   (* break-threshold (or (dig/ms id held {}) dig-ms)))
 
+(def ^:const roll-bits 53)             ; a double's mantissa: the bits of a roll kept from the generator's 64
+
 (defn roll
   "[sim' r]: the model's next roll, r in [0, 1), from :sim/rng by one 64-bit linear congruential
    step (Knuth's MMIX constants); pure, so the same :seed rolls the same luck."
   [sim]
   (let [s (unchecked-add (unchecked-multiply (long (:sim/rng sim)) 6364136223846793005)
                          1442695040888963407)]
-    [(assoc sim :sim/rng s) (/ (double (unsigned-bit-shift-right s 11)) 9007199254740992.0)]))
+    [(assoc sim :sim/rng s)
+     (/ (double (unsigned-bit-shift-right s (- 64 roll-bits))) (math/pow 2 roll-bits))]))
 
 (defn loot
   "[sim' item] for breaking block id with held: the item (an id) its loot table drops, or nil
@@ -101,17 +111,21 @@
 (def max-air 300)                     ; a full breath, as the game's
 (def drown-every 20)                  ; ticks between drowning hurts at zero air
 (def drown-damage 2.0)                ; health taken by each
+(def max-health 20.0)                 ; a full life, the health a spawn and a respawn give
+(def air-regained 4)                  ; breath a tick gives back with the eyes out of water
+(def drop-rise 0.25)                  ; how far over the bottom of a broken block its drop appears
 
 (defn init
   "A fresh server before the handshake, from {:column bytes :spawn [x y z]} plus optional
-   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {window-0-slot item}, :lag-ticks,
+   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {slot item} (a slot is a named place,
+   [:hotbar 0] as inventory/slot reads it, or a window-0 slot number), :lag-ticks,
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
    from the world spawn) and :seed (where the loot rolls start, 0 when absent)."
   [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed]
     :or {keep-alive-every keep-alive-every}}]
   {:sim/phase :handshake
    :sim/lag-ticks (or lag-ticks 0)
-   :sim/inv (or inventory {})
+   :sim/inv (into {} (for [[k it] inventory] [(if (vector? k) (inventory/slot k) k) it]))
    :sim/state-id 1
    :sim/held 0
    :sim/placed {}
@@ -132,7 +146,7 @@
    :sim/respawn (or respawn spawn)
    :sim/broken #{}
    :sim/air max-air
-   :sim/health 20.0
+   :sim/health max-health
    :sim/respawns 0
    :sim/items {}
    :sim/next-eid 100
@@ -197,50 +211,56 @@
   [sim {:keys [id]}]
   (update sim :sim/keep-alives-pending disj id))
 
+(defn finish-dig
+  "The client says it finished breaking pos: broken, with its drop, when it started breaking that
+   block at least the block's break time ago (break-ms); else the real server keeps the block
+   and restores the client's view of it. Either way, the ack of sequence."
+  [sim {:keys [pos sequence]}]
+  (let [{:keys [at] dpos :pos} (:sim/dig sim)
+        id (block-at sim pos)
+        held (held-item sim)
+        slot (held-slot sim)]
+    (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
+      (let [eid (:sim/next-eid sim)
+            [x y z] pos
+            [ix iy iz :as item-pos] [(+ x 0.5) (+ y drop-rise) (+ z 0.5)]
+            [sim item] (loot sim id held)
+            drop (when item {:item item :count 1})
+            before (full (:sim/inv sim) (inventory/layouts :inventory))
+            sim (-> sim
+                    (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
+                    (update :sim/broken conj pos)
+                    (dissoc :sim/dig)
+                    ;; observed live on 26.1.2: the breaker gets the block update, then the ack
+                    (send {:packet/name :block-update :pos pos :state blocks/air})
+                    (send {:packet/name :block-changed-ack :sequence sequence})
+                    (update :sim/inv wear slot)
+                    (disturb pos))
+            sim (sync-window sim :inventory before (:sim/cursor sim) false)]
+        (if drop
+          (-> sim
+              (assoc :sim/next-eid (inc eid))
+              (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
+              (send {:packet/name :add-entity
+                     :entity-id eid
+                     :uuid nil
+                     :type blocks/item-entity-type
+                     :x ix
+                     :y iy
+                     :z iz}))
+          sim))
+      ;; too early: the real server keeps the block and restores the client's view of it
+      (-> sim
+          (dissoc :sim/dig)
+          (send {:packet/name :block-update :pos pos :state (or id blocks/air)})
+          (send {:packet/name :block-changed-ack :sequence sequence})))))
+
 (defmethod on-packet [:play :player-action]
-  [sim {:keys [status pos sequence]}]
-  (case (long status)
-    0 (assoc sim :sim/dig {:pos pos :at (:sim/now sim)})
-    2
-    (let [{:keys [at] dpos :pos} (:sim/dig sim)
-          id (block-at sim pos)
-          held (held-item sim)
-          slot (+ 36 (:sim/held sim 0))]
-      (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
-        (let [eid (:sim/next-eid sim)
-              [x y z] pos
-              item-pos [(+ x 0.5) (+ y 0.25) (+ z 0.5)]
-              [sim item] (loot sim id held)
-              drop (when item {:item item :count 1})
-              before (full (:sim/inv sim) (inventory/layouts :inventory))
-              sim (-> sim
-                      (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
-                      (update :sim/broken conj pos)
-                      (dissoc :sim/dig)
-                      ;; observed live on 26.1.2: the breaker gets the block update, then the ack
-                      (send {:packet/name :block-update :pos pos :state 0})
-                      (send {:packet/name :block-changed-ack :sequence sequence})
-                      (update :sim/inv wear slot)
-                      (disturb pos))
-              sim (sync-window sim :inventory before (:sim/cursor sim) false)]
-          (if drop
-            (-> sim
-                (assoc :sim/next-eid (inc eid))
-                (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
-                (send {:packet/name :add-entity
-                       :entity-id eid
-                       :uuid nil
-                       :type blocks/item-entity-type
-                       :x (first item-pos)
-                       :y (second item-pos)
-                       :z (nth item-pos 2)}))
-            sim))
-        ;; too early: the real server keeps the block and restores the client's view of it
-        (-> sim
-            (dissoc :sim/dig)
-            (send {:packet/name :block-update :pos pos :state (or id 0)})
-            (send {:packet/name :block-changed-ack :sequence sequence}))))
-    sim))
+  [sim {:keys [status pos] :as p}]
+  (cond (= status (packet/value :dig :start-destroy))
+        (assoc sim :sim/dig {:pos pos :at (:sim/now sim)})
+        (= status (packet/value :dig :stop-destroy)) (finish-dig sim p)
+        :else sim))
 
 ;; ---------------------------------------------------------------- windows
 
@@ -283,7 +303,7 @@
    result slot is dropped, since it is always derived."
   [sim kind view]
   (let [layout (inventory/layouts kind)
-        view (cond-> view (inventory/crafting? layout) (dissoc 0))]
+        view (cond-> view (inventory/crafting? layout) (dissoc inventory/result-slot))]
     (if (= kind :inventory)
       (assoc sim :sim/inv view)
       (let [inv (inventory/layouts :inventory)]
@@ -299,9 +319,9 @@
              (for [[s it] view :let [w (inventory/translate layout inv s)] :when w] [w it])))))))))
 
 (defn full
-  "view with slot 0 set to what its grid crafts, when the window crafts."
+  "view with its result slot set to what its grid crafts, when the window crafts."
   [view layout]
-  (cond-> view (inventory/crafting? layout) (assoc 0 (result-of view layout))))
+  (cond-> view (inventory/crafting? layout) (assoc inventory/result-slot (result-of view layout))))
 
 (defn insert
   "Put a stack into the given slots, stacking first. Returns [view leftover]."
@@ -369,14 +389,14 @@
       {:view view :cursor cursor})))
 
 (defn click-kind
-  "Which vanilla rule a click in a window with layout falls under: :result (slot 0 of a window
-   that crafts), :swap (mode 2, with a hotbar slot), :shift (mode 1), :left (button 0) or
-   :right."
+  "Which vanilla rule a click in a window with layout falls under: :result (the result slot of a
+   window that crafts), :swap (with a hotbar slot), :shift (a quick move), :left (the left
+   button) or :right."
   [layout {:keys [slot button mode]}]
-  (cond (and (inventory/crafting? layout) (= slot 0)) :result
-        (= mode 2) :swap
-        (= mode 1) :shift
-        (= button 0) :left
+  (cond (and (inventory/crafting? layout) (= slot inventory/result-slot)) :result
+        (= mode (inventory/click-modes :swap)) :swap
+        (= mode (inventory/click-modes :quick-move)) :shift
+        (= button inventory/left-button) :left
         :else :right))
 
 (defmulti click-view
@@ -391,7 +411,8 @@
   [layout view cursor {:keys [mode]}]
   (let [out (result-of view layout)]
     (cond (nil? out) {:view view :cursor cursor :violation [:click-on-empty-result mode]}
-          (= mode 1) {:view (craft-all view layout) :cursor cursor}
+          (= mode (inventory/click-modes :quick-move))
+          {:view (craft-all view layout) :cursor cursor}
           (or (nil? cursor)
               (and (= (:item cursor) (:item out)) (<= (+ (:count cursor) (:count out)) max-stack)))
           {:view (craft-once view layout) :cursor (update out :count + (:count cursor 0))}
@@ -610,18 +631,23 @@
           recipe/item-name
           smelt-by-input))
 
+(def furnace-input (inventory/slot-in :furnace [:input])) ; a furnace's own slots, as its window numbers them
+(def furnace-fuel (inventory/slot-in :furnace [:fuel]))
+(def furnace-output (inventory/slot-in :furnace [:output]))
+
 (defn furnace-data
-  "A furnace's numbered properties as container-set-data sends them: 0 fuel left, 1 fuel
-   total, 2 cook progress, 3 cook total."
-  [{:keys [lit lit-total cook cook-total]}]
-  {0 lit 1 lit-total 2 cook 3 cook-total})
+  "A furnace's properties as container-set-data sends them, {property-id value}: the fire left
+   and lit (:lit, :lit-total), the cooking done and to do (:cook, :cook-total), numbered by the
+   furnace layout's :properties."
+  [f]
+  (into {} (for [[k id] (:properties (inventory/layouts :furnace))] [id (get f k)])))
 
 (defn can-burn?
   "Can the furnace's input cook now: a recipe takes it, and the output is empty or holds the
    result with room for one more batch."
   [{:keys [slots]}]
-  (let [r (smelt-of (get slots 0))
-        out (get slots 2)]
+  (let [r (smelt-of (get slots furnace-input))
+        out (get slots furnace-output)]
     (boolean (and r
                   (or (nil? out)
                       (and (= (:item out) (recipe/item-id (:smelt/result r)))
@@ -630,11 +656,11 @@
 (defn smelt-once
   "A furnace's slots after one batch: one input taken, its result added to the output."
   [slots]
-  (let [r (smelt-of (get slots 0))
-        out (get slots 2)]
+  (let [r (smelt-of (get slots furnace-input))
+        out (get slots furnace-output)]
     (-> slots
-        (take-one 0)
-        (assoc 2
+        (take-one furnace-input)
+        (assoc furnace-output
                {:item (recipe/item-id (:smelt/result r))
                 :count (+ (:count out 0) (:smelt/count r))}))))
 
@@ -642,12 +668,13 @@
   "Vanilla resets the progress, and sets the cook total from the recipe, when the input slot is
    set to a different item; :cooking remembers which item the progress is for."
   [{:keys [slots cooking] :as f}]
-  (let [item (:item (get slots 0))]
+  (let [item (:item (get slots furnace-input))]
     (if (= item cooking)
       f
       (cond-> (assoc f
                      :cook 0
-                     :cook-total (:smelt/ticks (smelt-of (get slots 0)) default-cook-ticks))
+                     :cook-total
+                     (:smelt/ticks (smelt-of (get slots furnace-input)) default-cook-ticks))
         item (assoc :cooking item)
         (nil? item) (dissoc :cooking)))))
 
@@ -659,13 +686,13 @@
    or input, progress unwinds two a tick. (A lava bucket's empty bucket is not modelled.)"
   [f]
   (let [f (cond-> (reset-on-new-input f) (pos? (:lit f)) (update :lit dec))
-        fuel (get-in f [:slots 1])]
-    (cond (or (pos? (:lit f)) (and fuel (get-in f [:slots 0])))
+        fuel (get-in f [:slots furnace-fuel])]
+    (cond (or (pos? (:lit f)) (and fuel (get-in f [:slots furnace-input])))
           (let [f (if (and (zero? (:lit f)) (can-burn? f))
                     (let [t (get blocks/fuel-by-name (recipe/item-name (:item fuel)) 0)]
                       (-> f
                           (assoc :lit t :lit-total t)
-                          (update :slots take-one 1)))
+                          (update :slots take-one furnace-fuel)))
                     f)]
             (cond (not (and (pos? (:lit f)) (can-burn? f))) (assoc f :cook 0)
                   (= (inc (:cook f)) (:cook-total f))
@@ -719,7 +746,13 @@
 
 ;; ---------------------------------------------------------------- using items on blocks
 
-(def faces {0 [0 -1 0] 1 [0 1 0] 2 [0 0 -1] 3 [0 0 1] 4 [-1 0 0] 5 [1 0 0]})
+(def face-offsets
+  "Each block face by name, as the step from the block to the cell beyond that face."
+  {:down [0 -1 0] :up [0 1 0] :north [0 0 -1] :south [0 0 1] :west [-1 0 0] :east [1 0 0]})
+
+(def faces
+  "A face as the packets number it → the step to the cell beyond it (face-offsets)."
+  (into {} (for [[n step] face-offsets] [(packet/value :face n) step])))
 
 (defn overlaps-player?
   "Would a block at [x y z] intersect the player's 0.6×1.8 box at its last reported position?
@@ -741,19 +774,19 @@
    :dimension-type 0
    :dimension "minecraft:overworld"
    :seed 0
-   :game-type 0
-   :previous-game-type -1
+   :game-type (packet/value :game-type :survival)
+   :previous-game-type (packet/value :game-type :none)
    :debug? false
    :flat? false})
 
 (defmethod on-packet [:play :client-command]
   [sim {:keys [action]}]
-  ;; 0 asks to respawn: a dead player gets a new life at spawn, full health and breath, then
-  ;; the teleport that places it
-  (if (and (= 0 action) (<= (:sim/health sim) 0.0))
+  ;; a dead player asking to respawn gets a new life at spawn, full health and breath, then the
+  ;; teleport that places it
+  (if (and (= action (packet/value :client-command :perform-respawn)) (<= (:sim/health sim) 0.0))
     (let [[x y z] (:sim/respawn sim)]
       (-> sim
-          (assoc :sim/health 20.0 :sim/air max-air :sim/player-pos [x y z])
+          (assoc :sim/health max-health :sim/air max-air :sim/player-pos [x y z])
           (update :sim/respawns inc)
           (send respawn)
           (send {:packet/name :player-position
@@ -775,7 +808,7 @@
    player; else tell the client the destination's real state. Either way, then the ack."
   [sim pos face ack]
   (let [dest (mapv + pos (faces face))
-        slot (+ 36 (:sim/held sim 0))
+        slot (held-slot sim)
         held (get-in sim [:sim/inv slot])
         d (block-at sim dest)
         overlap? (overlaps-player? sim dest)
@@ -787,7 +820,7 @@
                  d
                  (not (blocks/solid? d))
                  (not= :liquid (blocks/type-of d))
-                 (blocks/solid? (or (block-at sim pos) 0))
+                 (blocks/solid? (or (block-at sim pos) blocks/air))
                  (not overlap?))
         sim (cond-> sim overlap? (update :sim/violations conj [:place-into-player dest]))]
     (if ok?
@@ -800,7 +833,7 @@
             (sync-window :inventory before (:sim/cursor sim) false)
             (send ack)))
       (-> sim
-          (send {:packet/name :block-update :pos dest :state (or d 0)})
+          (send {:packet/name :block-update :pos dest :state (or d blocks/air)})
           (send ack)))))
 
 (defmethod on-packet [:play :use-item-on]
@@ -846,7 +879,7 @@
   ;; the bucket a water bucket; anything else does nothing here. Either way, the ack.
   [sim {:keys [sequence y-rot x-rot]}]
   (let [ack {:packet/name :block-changed-ack :sequence sequence}
-        slot (+ 36 (:sim/held sim 0))
+        slot (held-slot sim)
         held (get-in sim [:sim/inv slot])
         src (when (and (:sim/player-pos sim) (= (:item held) (get blocks/items :bucket)))
               (scooped sim [y-rot x-rot]))]
@@ -964,10 +997,10 @@
    player (health at zero) is left for client-command to respawn."
   [sim]
   (let [under? (eye-under? sim)
-        air (if under? (max 0 (dec (:sim/air sim))) (min max-air (+ (:sim/air sim) 4)))
+        air (if under? (max 0 (dec (:sim/air sim))) (min max-air (+ (:sim/air sim) air-regained)))
         hurt? (and under?
                    (zero? air)
-                   (zero? (mod (quot (:sim/now sim) 50) drown-every))
+                   (zero? (mod (quot (:sim/now sim) physics/tick-ms) drown-every))
                    (pos? (:sim/health sim)))
         health (if hurt? (max 0.0 (- (:sim/health sim) drown-damage)) (:sim/health sim))]
     (cond-> (assoc sim :sim/air air :sim/health health)
@@ -1015,13 +1048,13 @@
   (mapv :effect/packet (filter #(= :send (:effect/kind %)) (:bot/effects world))))
 
 (defn run
-  "Run a bot reducer against the model from a fresh handshake, 50 ms per tick, until (stop?
+  "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a time, until (stop?
    world) or max-ms. Sends go (default {:event/kind :go}) once the bot is loaded. Returns
    [world sim]. :sim/lag-ticks in sim0 delays every server→client packet by that many ticks,
    in order: a slow network as an input."
   [bot-step world0 sim0 stop? max-ms & [go]]
   (let [w (bot-step world0 {:event/kind :start})
-        lag (* 50 (:sim/lag-ticks sim0 0))]
+        lag (* physics/tick-ms (:sim/lag-ticks sim0 0))]
     (loop [world (assoc w :bot/effects [])
            sim sim0
            pending (sends w)
@@ -1042,15 +1075,14 @@
             world (assoc world :bot/effects [])]
         (if (or (stop? world) (> t max-ms))
           [world (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out)] ; deliver the last tick's packets
-          (recur world sim out (+ t 50) (or went? go?) inflight))))))
+          (recur world sim out (+ t physics/tick-ms) (or went? go?) inflight))))))
 
 ;;;; I/O: the model behind a channel pair, on a thread of its own ;;;;
 
-(def tick-ms 50)                        ; the model's tick, as the vanilla server's
 
 (defn connect!
   "The model behind a channel pair shaped like conn/open!'s: {:in chan :out chan :close! fn}.
-   Packet maps the client puts on :out are stepped into the model; every tick-ms of wall time
+   Packet maps the client puts on :out are stepped into the model; every physics/tick-ms of wall time
    the model ticks; whatever it says for the client goes onto :in, in order. Both channels are
    bounded, as conn's are. :in closes when the client closes :out or calls :close!, which the
    loop reads as the socket closing."
@@ -1060,7 +1092,7 @@
         stop (async/chan)
         t0 (System/currentTimeMillis)]
     (async/thread (loop [sim sim0
-                         next-tick tick-ms]
+                         next-tick physics/tick-ms]
                     (let [wait (max 0 (- next-tick (- (System/currentTimeMillis) t0)))
                           [v ch] (async/alts!! [stop out (async/timeout wait)] :priority true)
                           closed? (or (= ch stop) (and (= ch out) (nil? v)))
@@ -1071,5 +1103,5 @@
                       (doseq [p said] (async/>!! in p))
                       (cond closed? (async/close! in)
                             (= ch out) (recur sim next-tick)
-                            :else (recur sim (+ next-tick tick-ms))))))
+                            :else (recur sim (+ next-tick physics/tick-ms))))))
     {:in in :out out :close! (fn [] (async/close! stop) (async/close! out))}))

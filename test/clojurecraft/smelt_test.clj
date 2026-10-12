@@ -28,14 +28,12 @@
   (is (= 3 (smelt/batch {:oak_log 3 :oak_planks 2} charcoal))))
 
 (deftest a-stack-is-laid-whole-or-one-at-a-time
-  (let [v {:view/slot-of #(inventory/player->window-slot (inventory/layouts :furnace) %)}]
-    (is (= [{:click/slot 30 :click/button 0 :click/mode 0}
-            {:click/slot 1 :click/button 0 :click/mode 0}]
-           (smelt/lay v 0 1 1 1))
+  (let [v {:view/slot-of #(inventory/player->window-slot (inventory/layouts :furnace) %)}
+        in-furnace #(inventory/slot-in :furnace %)]
+    (is (= [(inventory/left-click (in-furnace [:hotbar 0])) (inventory/left-click smelt/fuel-slot)]
+           (smelt/lay v 0 1 smelt/fuel-slot 1))
         "all of it: pick it up, put it down")
-    (is (= [{:click/slot 3 :click/button 0 :click/mode 0}
-            {:click/slot 1 :click/button 1 :click/mode 0}
-            {:click/slot 1 :click/button 1 :click/mode 0}
-            {:click/slot 3 :click/button 0 :click/mode 0}]
-           (smelt/lay v 9 5 1 2))
+    (is (= [(inventory/left-click (in-furnace [:main 0])) (inventory/right-click smelt/fuel-slot)
+            (inventory/right-click smelt/fuel-slot) (inventory/left-click (in-furnace [:main 0]))]
+           (smelt/lay v 9 5 smelt/fuel-slot 2))
         "two of five: two right clicks, then the rest back where it was")))

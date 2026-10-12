@@ -8,6 +8,7 @@ status: verified
 lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/inventory.clj#def click-modes
   - src/clojurecraft/recipe.clj#defn clicks
   - src/clojurecraft/recipe.clj#defn placement
   - src/clojurecraft/inventory.clj#defn player->window-slot
@@ -33,8 +34,8 @@ related:
 ## How it works
 For each ingredient group (cells sharing one set):
 1. Source: the lowest-numbered inventory slot whose item is in the set and whose count, minus what earlier groups already took from it, covers every cell in the group.
-2. Left-click the source (`button 0 mode 0`): the whole stack goes to the cursor.
-3. Right-click each cell in slot order (`button 1 mode 0`): one item per cell.
+2. Left-click the source (`inventory/left-click`: button 0, mode 0): the whole stack goes to the cursor.
+3. Right-click each cell in slot order (`inventory/right-click`: button 1, mode 0): one item per cell. The clicks are named in `inventory.clj` (`click-modes`, `left-click`, `right-click`, `shift-click`, `swap-click`), so no code writes a button or a mode as a number.
 4. If anything is left on the cursor, left-click the source again to put it back.
 
 Sticks from 8 oak planks in hotbar slot 0: `36 b0`, `1 b1`, `3 b1`, `36 b0`. A stack used up exactly needs no put-back (crafting table from 4 planks is 5 clicks).

@@ -85,8 +85,9 @@
       (is (= 0 (memory/remembered w [3 64 0]))))
     (testing "done once the inventory shows a log"
       (let [[w2 _] (run w
-                        [(packet
-                          {:packet/name :set-player-inventory :slot 0 :item {:item 134 :count 1}})
+                        [(packet {:packet/name :set-player-inventory
+                                  :slot 0
+                                  :item {:item (blocks/items :oak_log) :count 1}})
                          {:event/kind :tick :event/now 8050 :event/rand 0.5}])]
         (is (plan/done? w2))
         (is (= {} (:player/controls w2)))))))
@@ -289,7 +290,9 @@
           :intent/best-tick 0}))
 
 (deftest done-is-re-derived-every-tick-even-mid-intent
-  (let [w (assoc (walking #{:wood} :wood) :player/inventory {0 {:item 134 :count 1}}) ; a log arrived
+  (let [w (assoc (walking #{:wood} :wood)
+                 :player/inventory
+                 {0 {:item (blocks/items :oak_log) :count 1}}) ; a log arrived
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (plan/done? w) "the world says the goal is met, so the plan is done this tick")
     (is (nil? (:plan/intent w)) "the walk is dropped")
@@ -308,7 +311,8 @@
 
 (deftest nothing-is-dropped-with-an-item-on-the-cursor
   (let [w (-> (walking #{:wood} :wood)
-              (assoc :player/inventory {0 {:item 134 :count 1}} :window/cursor {:item 36 :count 1}))
+              (assoc :player/inventory {0 {:item (blocks/items :oak_log) :count 1}}
+                     :window/cursor {:item (blocks/items :oak_planks) :count 1}))
         [w _] (run w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
     (is (not (plan/done? w)) "the plan waits until the hand is empty")
     (is (= 1 (get-in w [:plan/intent :intent/id])))))
@@ -405,7 +409,9 @@
 (def iron-ore (first (blocks/states-where (fn [[n]] (= n :iron_ore)))))
 
 (deftest stone-is-dug-with-the-pickaxe-in-its-slot
-  (let [[w fx] (run (digging 1 {3 {:item wooden-pickaxe :count 1} 0 {:item 1 :count 2}})
+  (let [[w fx] (run (digging 1
+                             {3 {:item wooden-pickaxe :count 1}
+                              0 {:item (blocks/items :stone) :count 2}})
                     (ticks 50 4000)) ; slot 0 holds stone, not a log: :wood stays wanted
         carried (filter #(= :set-carried-item (:packet/name (second %))) (sent fx))
         actions (filter #(= :player-action (:packet/name (second %))) (sent fx))

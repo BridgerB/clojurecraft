@@ -104,7 +104,7 @@
    block just dug is air."
   [world states]
   (let [eye (game/eye world)
-        ey (second eye)
+        ey (physics/y-of eye)
         blacklist (:plan/blacklist world #{})
         lo (- ey search-height)
         hi (+ ey search-height)]
@@ -128,7 +128,7 @@
   "The staircase to cut when nothing is in sight: stair-depth down from the feet, never below
    the row's :goal/depth; nil when the feet are already there."
   [world {:goal/keys [depth]}]
-  (let [feet (long (math/floor (second (:player/pos world))))
+  (let [feet (long (math/floor (physics/y-of (:player/pos world))))
         to (cond-> (- feet stair-depth) depth (max depth))]
     (when (< to feet) {:intent/kind :stairs-down :intent/to-y to})))
 
@@ -144,12 +144,10 @@
    iron-a4 retried tunnels :boxed by an aquifer three times in a second and failed."
   [world]
   (let [[x _ z] (:player/pos world)
-        feet (intent/feet world)
+        [fx _ fz :as feet] (intent/feet world)
         home (:plan/go-at world)
         dry? (fn [[dx dz]]
-               (stairs/dry-top? world
-                                [(+ (first feet) (* tunnel-length dx))
-                                 (+ (nth feet 2) (* tunnel-length dz))]))
+               (stairs/dry-top? world [(+ fx (* tunnel-length dx)) (+ fz (* tunnel-length dz))]))
         ranked (sort-by (fn [[dx dz :as d]] [(if (dry? d) 0 1)
                                              (if home
                                                (- (physics/horizontal-distance [(+ x dx) 0 (+ z dz)]
@@ -175,7 +173,7 @@
    whose every cell bordered water, and failed :boxed twice in a second."
   [world]
   (let [feet (intent/feet world)
-        to (- (second feet) stair-depth)]
+        to (- (physics/y-of feet) stair-depth)]
     (when (and (> to (+ chunk/min-y floor-margin))
                (some #(stairs/level-safe? world (stairs/stair-cells feet %)) stairs/directions))
       {:intent/kind :stairs-down :intent/to-y to})))
@@ -204,31 +202,32 @@
    when neither can; wait for the tool. The live runs that waited at the depth
    with nothing in sight failed there; a tunnel's walls are where the ore shows."
   [world row]
-  (or
-   (continue-mine world row)
-   (let [missing (tool-missing world row)
-         stowed (intent/stowed-tool world (first (states-of-row row)))
-         walk-to
-         (fn [t]
-           (cond->
-             {:intent/kind :walk :intent/target t :intent/for (:goal/id row) :intent/pickup? true}
-             (= (inc (second t)) (second (beside world t))) (assoc :intent/step-down? true)))
-         walk (when-not missing
-                (->> (exposed-of-states world (states-of-row row))
-                     (take max-candidates)
-                     (map walk-to)
-                     (filter #(intent/routable? world %))
-                     first))]
-     (cond missing {:plan/wait missing}
-           stowed {:intent/kind :equip :intent/item (recipe/item-name (second stowed))}
-           walk walk
-           :else
-           (or (stairs world row)
-               (when-let [d (tunnel-heading world)]
-                 {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
-               (deeper world)
-               (retreat world)
-               {:plan/wait :boxed})))))
+  (or (continue-mine world row)
+      (let [missing (tool-missing world row)
+            [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
+            walk-to (fn [t]
+                      (cond-> {:intent/kind :walk
+                               :intent/target t
+                               :intent/for (:goal/id row)
+                               :intent/pickup? true}
+                        (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
+                        (assoc :intent/step-down? true)))
+            walk (when-not missing
+                   (->> (exposed-of-states world (states-of-row row))
+                        (take max-candidates)
+                        (map walk-to)
+                        (filter #(intent/routable? world %))
+                        first))]
+        (cond missing {:plan/wait missing}
+              stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
+              walk walk
+              :else
+              (or (stairs world row)
+                  (when-let [d (tunnel-heading world)]
+                    {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
+                  (deeper world)
+                  (retreat world)
+                  {:plan/wait :boxed})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
 

@@ -145,11 +145,11 @@
                     :when (and (= kind (:fluid/kind (blocks/fluid id)))
                                (blocks/source? id)
                                (surface-fluid? fluids pos kind))]
-                [[(- y) (+ (abs (- x mx)) (abs (- z mz)))] pos])]
+                {:rank [(- y) (+ (abs (- x mx)) (abs (- z mz)))] :pos pos})]
     (when (seq cells)
       {:pool/chunk [cx cz]
        :pool/kind kind
-       :pool/pos (second (first (sort-by first cells)))
+       :pool/pos (:pos (first (sort-by :rank cells)))
        :pool/at now})))
 
 (defn latest-pool
@@ -236,8 +236,8 @@
         open (for [[id e] latest
                    :let [f (d/entity db e)]
                    :when (= :started (:intention/event f))]
-               [id f])]
-    (when (seq open) (into {} (d/touch (second (apply max-key first open)))))))
+               {:id id :fact f})]
+    (when (seq open) (into {} (d/touch (:fact (apply max-key :id open)))))))
 
 (defn log-at?
   "Is the last thing seen at pos a log?"
@@ -291,7 +291,7 @@
   "The nearest remembered water pool within radius of eye and no more than surface-water-below
    under it, or nil: where a bucket could be filled without diving for it."
   [world eye radius]
-  (let [ey (second eye)]
+  (let [ey (physics/y-of eye)]
     (nearest-of eye
                 radius
                 (filter (fn [[_ y _]] (>= y (- ey surface-water-below)))
@@ -304,7 +304,7 @@
    positions-now: a log was seen there and nothing since says it is gone."
   ([world eye radius blacklist] (nearest-log world eye radius blacklist trunk-bottom?))
   ([world eye radius blacklist bottom?]
-   (let [ey (second eye)]
+   (let [ey (physics/y-of eye)]
      (nearest-of eye
                  radius
                  (->> (positions-now world blocks/log-states)

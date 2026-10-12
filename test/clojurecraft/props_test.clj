@@ -13,6 +13,7 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.spec]
             [clojurecraft.swim]
@@ -116,7 +117,8 @@
   ([gaps] (uneven-ticks gaps 10000))
   ([gaps horizon]
    (let [ts (reductions + 0 gaps)]
-     (for [t (concat ts (range (+ (last ts) 50) (+ (last ts) horizon) 50))]
+     (for [t (concat ts
+                     (range (+ (last ts) physics/tick-ms) (+ (last ts) horizon) physics/tick-ms))]
        {:event/kind :tick :event/now t :event/rand 0.5}))))
 
 (deftest a-dig-never-finishes-before-its-deadline
@@ -170,21 +172,23 @@
 (deftest step-is-total-after-a-death
   ;; issue #5: a set-health of 0 followed by any packets never throws, and the intent that was
   ;; running is gone (a new life plans afresh)
-  (check (prop/for-all
-          [pkts (gen/vector s2c-play-packet 0 20)]
-          (let [w0 (assoc (in-play)
-                          :plan/intent {:intent/kind :walk :intent/target [1 64 1]}
-                          :plan/last {:intent/kind :walk :intent/target [1 64 1]})
-                [w fx] (fx/fold game/step
-                                w0
-                                (cons
-                                 (fx/packet
-                                  {:packet/name :set-health :health 0.0 :food 20 :saturation 5.0})
-                                 (map fx/packet pkts)))]
-            (and (s/valid? :clojurecraft.spec/world w)
-                 (not (contains? w :plan/intent))
-                 (not (contains? w :plan/last))
-                 (some #(= % {:packet/name :client-command :action 0}) (fx/packets fx)))))))
+  (check
+   (prop/for-all
+    [pkts (gen/vector s2c-play-packet 0 20)]
+    (let [w0 (assoc (in-play)
+                    :plan/intent {:intent/kind :walk :intent/target [1 64 1]}
+                    :plan/last {:intent/kind :walk :intent/target [1 64 1]})
+          [w fx] (fx/fold game/step
+                          w0
+                          (cons (fx/packet
+                                 {:packet/name :set-health :health 0.0 :food 20 :saturation 5.0})
+                                (map fx/packet pkts)))]
+      (and (s/valid? :clojurecraft.spec/world w)
+           (not (contains? w :plan/intent))
+           (not (contains? w :plan/last))
+           (some
+            #(= % {:packet/name :client-command :action (p/value :client-command :perform-respawn)})
+            (fx/packets fx)))))))
 
 (def pond-column
   "A pond two deep around the player (x 4-6, z 4-6) with a bank all round at y 64."
@@ -272,7 +276,7 @@
   (gen/fmap (fn [xs]
               (second (reduce (fn [[t evs] x]
                                 (if (= :tick x)
-                                  [(+ t 50)
+                                  [(+ t physics/tick-ms)
                                    (conj evs {:event/kind :tick :event/now t :event/rand 0.5})]
                                   [t (conj evs (fx/packet x))]))
                               [1000 []]

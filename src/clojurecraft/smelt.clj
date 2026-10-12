@@ -27,6 +27,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.window :as window]))
 
@@ -34,9 +35,11 @@
 
 (def stage-timeout 5000)              ; ms a smelt stage waits on the server before it fails
 (def cook-slack 5000)                 ; ms past the batch's cook time before the cook stage fails
-(def tick-ms 50)                      ; a game tick: cook and burn times are counted in them
 (def max-batch 64)                    ; the input slot holds one stack
 (def max-lost 3)                      ; clicks the server may lose in one smelt before it fails
+(def input-slot (inventory/slot-in :furnace [:input]))   ; the furnace window's own slots
+(def fuel-slot (inventory/slot-in :furnace [:fuel]))
+(def output-slot (inventory/slot-in :furnace [:output]))
 
 (defn- now [world] (:time/now world))
 
@@ -97,11 +100,11 @@
    v: pick the stack up, then put it all down, or put k down one at a time with right clicks
    and put the rest back."
   [{:view/keys [slot-of]} p have to k]
-  (let [pick {:click/slot (slot-of p) :click/button 0 :click/mode 0}]
+  (let [pick (inventory/left-click (slot-of p))]
     (if (= k have)
-      [pick {:click/slot to :click/button 0 :click/mode 0}]
+      [pick (inventory/left-click to)]
       (-> [pick]
-          (into (repeat k {:click/slot to :click/button 1 :click/mode 0}))
+          (into (repeat k (inventory/right-click to)))
           (conj pick)))))
 
 (defn fuel-clicks
@@ -112,7 +115,7 @@
   (when-let [[n _] (first (fuels (recipe/counts (:player/inventory world)) except))]
     (let [[p have] (slot-holding world n)
           k (min have (long (math/ceil (/ ticks (burn-ticks n)))))]
-      (lay v p have (:fuel (inventory/layouts :furnace)) k))))
+      (lay v p have fuel-slot k))))
 
 (defn load-plan
   "{:clicks :count} to cook up to n of recipe r: the input stack's count caps n; the fuel is
@@ -123,8 +126,7 @@
         [p have] (when in (slot-holding world in))
         n (min n (or have 0))
         fuel (when (pos? n) (fuel-clicks world v (* n (:smelt/ticks r)) in))]
-    (when fuel
-      {:clicks (into fuel (lay v p have (:input (inventory/layouts :furnace)) n)) :count n})))
+    (when fuel {:clicks (into fuel (lay v p have input-slot n)) :count n})))
 
 ;; ---------------------------------------------------------------- the stages
 
@@ -137,13 +139,15 @@
   "Put the cursor's stack into a free inventory slot of view v, or fail :inventory-full."
   [world v]
   (if-let [s (window/free-slot world v)]
-    (window/click world v {:click/slot s :click/button 0 :click/mode 0})
+    (window/click world v (inventory/left-click s))
     (intent/fail world :inventory-full)))
 
 (defn lit
-  "Game ticks of fire the open furnace has left (its property 0), 0 before the server says."
+  "Game ticks of fire the open furnace has left (its :lit property), 0 before the server says."
   [world]
-  (get-in world [:window/open :window/data 0] 0))
+  (get-in world
+          [:window/open :window/data (get-in (inventory/layouts :furnace) [:properties :lit])]
+          0))
 
 (defmulti stage
   "Advance a :smelt intent one tick in its current :intent/stage (:settle :load :cook :take
@@ -158,8 +162,7 @@
           (nil? (:view/state-id v))
           (if (> (- (now world) since) stage-timeout) (intent/fail world :no-window) world)
           (:window/cursor world) (put-down world v)
-          (own-slot-holding v)
-          (window/click world v {:click/slot (own-slot-holding v) :click/button 0 :click/mode 1})
+          (own-slot-holding v) (window/click world v (inventory/shift-click (own-slot-holding v)))
           :else
           (if-let [{:keys [clicks] n :count} (load-plan world v r count)]
             (let [result (recipe/item-id (:smelt/result r))]
@@ -188,26 +191,26 @@
    going)?"
   [world {:view/keys [grid]} r]
   (and (contains? (:smelt/input r)
-                  (some-> (get grid 0)
+                  (some-> (get grid input-slot)
                           :item
                           recipe/item-name))
-       (or (some? (get grid 1)) (pos? (lit world)))))
+       (or (some? (get grid fuel-slot)) (pos? (lit world)))))
 
 (defmethod stage :cook
   [world {:intent/keys [smelt makes since cook-by]} {:view/keys [grid] :as v}]
   (let [r (recipe/smelt-by-id smelt)
-        input (get grid 0)]
-    (cond (>= (get-in grid [2 :count] 0) makes)
+        input (get grid input-slot)]
+    (cond (>= (get-in grid [output-slot :count] 0) makes)
           (intent/assoc-intent world :intent/stage :take :intent/since (now world))
           (nil? cook-by)
           (cond (loaded? world v r)
                 (intent/assoc-intent
                  world
                  :intent/cook-by
-                 (+ (now world) (* (:count input) (:smelt/ticks r) tick-ms) cook-slack))
+                 (+ (now world) (* (:count input) (:smelt/ticks r) physics/tick-ms) cook-slack))
                 (> (- (now world) since) stage-timeout) (intent/fail world :not-loaded)
                 :else world)
-          (and input (nil? (get grid 1)) (zero? (lit world)))
+          (and input (nil? (get grid fuel-slot)) (zero? (lit world)))
           (if-let [clicks (fuel-clicks world
                                        v
                                        (* (:count input) (:smelt/ticks r))
@@ -222,14 +225,13 @@
   (cond (>= (inventory/item-count world result) (+ before makes))
         (intent/assoc-intent world :intent/stage :close)
         (> (- (now world) since) stage-timeout) (intent/fail world :not-taken)
-        (get grid 2) (window/click world v {:click/slot 2 :click/button 0 :click/mode 1})
+        (get grid output-slot) (window/click world v (inventory/shift-click output-slot))
         :else world))
 
 (defmethod stage :close
   [world _ v]
   (cond (:window/cursor world) (put-down world v)
-        (own-slot-holding v)
-        (window/click world v {:click/slot (own-slot-holding v) :click/button 0 :click/mode 1})
+        (own-slot-holding v) (window/click world v (inventory/shift-click (own-slot-holding v)))
         :else
         (-> world
             (game/emit {:packet/name :container-close :window-id (:view/id v)})
@@ -261,7 +263,7 @@
   [world v]
   (if-let [s (window/free-slot world v)]
     (-> world
-        (window/resync-click v {:click/slot s :click/button 0 :click/mode 0})
+        (window/resync-click v (inventory/left-click s))
         (intent/dissoc-intent :intent/resync))
     (intent/fail world :inventory-full)))
 

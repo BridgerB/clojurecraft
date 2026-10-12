@@ -166,11 +166,9 @@
                                left (- (get-in inventory [source :count]) (get used source 0) n)]
                            [(update used source (fnil + 0) n)
                             (-> acc
-                                (conj {:click/slot cs :click/button 0 :click/mode 0})
-                                (into (for [[g _] (sort-by key cells)]
-                                        {:click/slot g :click/button 1 :click/mode 0}))
-                                (cond-> (pos? left)
-                                        (conj {:click/slot cs :click/button 0 :click/mode 0})))]))))
+                                (conj (inventory/left-click cs))
+                                (into (for [[g _] (sort-by key cells)] (inventory/right-click g)))
+                                (cond-> (pos? left) (conj (inventory/left-click cs))))]))))
                    [{} []]
                    (group-by val (placement r size)))
            second)))

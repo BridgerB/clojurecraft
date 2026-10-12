@@ -52,10 +52,9 @@
           (if (> (- (now world) since) stage-timeout) (intent/fail world :no-window) world)
           (:window/cursor world)
           (if-let [s (window/free-slot world v)]
-            (window/click world v {:click/slot s :click/button 0 :click/mode 0})
+            (window/click world v (inventory/left-click s))
             (intent/fail world :inventory-full))
-          (dirty-grid-slot v)
-          (window/click world v {:click/slot (dirty-grid-slot v) :click/button 0 :click/mode 1})
+          (dirty-grid-slot v) (window/click world v (inventory/shift-click (dirty-grid-slot v)))
           :else
           (if-let [cs (recipe/clicks (:player/inventory world) r (:view/size v) (:view/slot-of v))]
             (intent/assoc-intent world
@@ -78,10 +77,10 @@
 
 (defmethod stage :verify
   [world {:intent/keys [result makes since]} v]
-  (let [out (get-in v [:view/grid 0])]
+  (let [out (get-in v [:view/grid inventory/result-slot])]
     (cond (= out {:item result :count makes})
           (-> world
-              (window/click v {:click/slot 0 :click/button 0 :click/mode 1})
+              (window/click v (inventory/shift-click inventory/result-slot))
               (intent/assoc-intent :intent/stage :take :intent/since (now world)))
           (some? out) (intent/fail world :wrong-result)
           (> (- (now world) since) stage-timeout) (intent/fail world :no-result)

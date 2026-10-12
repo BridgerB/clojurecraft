@@ -24,6 +24,30 @@
         (for [[state dirs] ids]
           [state (into {} (for [[dir m] dirs] [dir (into {} (map (fn [[n i]] [i n]) m))]))])))
 
+(def values
+  "The numbers some packet fields carry, by name: each enum as 26.1.2 numbers it (its ordinal in
+   the game's own enum, named after it). Code writes (value :hand :main-hand) and the packet still
+   carries the number, so a field says what it means without the wire changing."
+  {:hand {:main-hand 0 :off-hand 1}                         ; InteractionHand
+   :dig {:start-destroy 0 :abort-destroy 1 :stop-destroy 2} ; player-action's status
+   :face {:down 0 :up 1 :north 2 :south 3 :west 4 :east 5}  ; Direction
+   :next-state {:status 1 :login 2 :transfer 3}             ; intention, the handshake
+   :client-command {:perform-respawn 0 :request-stats 1}    ; client-command's action
+   :chat-mode {:enabled 0 :commands-only 1 :hidden 2}       ; ChatVisiblity
+   :main-hand {:left 0 :right 1}                            ; HumanoidArm
+   :particle-status {:all 0 :decreased 1 :minimal 2}        ; ParticleStatus
+   :game-type {:none -1 :survival 0 :creative 1 :adventure 2 :spectator 3}}) ; GameType
+
+(defn value
+  "The number enum k (a key of values) gives name: (value :face :up) is 1. A name the enum does
+   not have is a mistake in the code, so it throws rather than send a nil."
+  [k name]
+  (let [n (get-in values [k name])]
+    (when (nil? n) (throw (ex-info "no such packet value" {:enum k :name name})))
+    n))
+
+(def all-skin-parts 0x7f)             ; client-information's skin parts: every bit, all shown
+
 (def specs
   {;; handshake / login
    [:handshake :c2s :intention] [[:protocol-version :varint] [:host :string] [:port :u16]

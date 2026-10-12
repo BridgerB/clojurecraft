@@ -9,6 +9,7 @@
             [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
@@ -81,15 +82,17 @@
 (def ledge-look 0.6)                  ; blocks ahead of the feet a collect looks for a floor before stepping
 
 (defn face-toward
-  "Block face nearest the eye: 0 down 1 up 2 north 3 south 4 west 5 east."
+  "The face of the block at target nearest the eye, as the packets number it (packet/value :face):
+   the eye above it sees :up, east of it :east, and so on along whichever axis it is farthest."
   [eye target]
   (let [[dx dy dz] (map - eye (physics/centre target))
         ax (abs dx)
         ay (abs dy)
         az (abs dz)]
-    (cond (and (>= ay ax) (>= ay az)) (if (pos? dy) 1 0)
-          (>= ax az) (if (pos? dx) 5 4)
-          :else (if (pos? dz) 3 2))))
+    (packet/value :face
+                  (cond (and (>= ay ax) (>= ay az)) (if (pos? dy) :up :down)
+                        (>= ax az) (if (pos? dx) :east :west)
+                        :else (if (pos? dz) :south :north)))))
 
 (defn assoc-intent
   "The world with keys set on the running intent (:plan/intent)."
@@ -196,7 +199,7 @@
    scoop-range on the plane, where the eyes look down on its surface; the tenth live run's walk
    ended in reach but in its own stair pit two below the surface, and saw no water."
   [world {:intent/keys [target for pickup?] :as i} d]
-  (let [rise (- (second target) (long (math/floor (second (:player/pos world)))))]
+  (let [rise (- (physics/y-of target) (long (math/floor (physics/y-of (:player/pos world)))))]
     (and (<= d reach)
          (cond pickup? (path/goal-done? (walk-goal i) (feet world))
                (= :scoop for)
@@ -314,7 +317,7 @@
 (defn hotbar
   "The hotbar slots of the inventory, {slot item}: the only slots a dig can hold a tool from."
   [world]
-  (into {} (filter (fn [[s _]] (<= 0 s 8)) (:player/inventory world))))
+  (into {} (filter (fn [[s _]] (inventory/hotbar? s)) (:player/inventory world))))
 
 (defn stowed-tool
   "[slot item-id] of the tool to dig block id with when it is only in the main inventory, nil
@@ -324,7 +327,7 @@
   [world id]
   (when-not (dig/best-tool id (hotbar world) (penalties world))
     (when-let [[slot _ :as t] (dig/best-tool id (:player/inventory world) (penalties world))]
-      (when (> slot 8) t))))
+      (when-not (inventory/hotbar? slot) t))))
 
 (defn choose-tool
   "[slot item-id] of the tool to dig block id with from the hotbar, [0 nil] for the hand, or
@@ -347,45 +350,50 @@
   (let [now (:time/now world)
         eye (game/eye world)
         at-target (terrain/block-at world target)]
-    (cond
-      (and at-target (not (blocks/solid? at-target))) (fail world :target-gone)
-      (> (physics/distance eye (physics/centre target)) (+ reach 0.5)) (fail world :out-of-reach)
-      (= :needs-tool (choose-tool world at-target)) (fail world :needs-tool)
-      (or (contains? never-dug (blocks/name-of at-target))
-          (and (not exposes-ok?) (exposes-fluid? world target)))
-      (fail world :unsafe)
-      (and (>= still 3) (> (- now since) settle-ms))
-      (let [seq (inc (:bot/sequence world))
-            face (face-toward eye target)
-            [slot tool] (choose-tool world at-target)
-            ms (dig-time at-target tool (penalties world))]
-        (-> world
-            (assoc :bot/sequence seq)
-            (assoc :player/held-slot slot)
-            (game/emit {:packet/name :set-carried-item :slot slot})
-            (game/emit {:packet/name :player-action :status 0 :pos target :face face :sequence seq})
-            (game/emit {:packet/name :swing :hand 0})
-            (assoc-intent :intent/stage :digging
-                          :intent/face face
-                          :intent/started now
-                          :intent/slot slot
-                          :intent/tool tool
-                          :intent/dig-ms ms
-                          :intent/state at-target
-                          :intent/next-swing (+ now swing-every)
-                          :intent/finish-at (+ now (finish-delay ms)))
-            (game/say (str "digging "
-                           target
-                           " face "
-                           face
-                           (when tool (str " with " (name (:kind (blocks/tool tool))) " in " slot))
-                           " "
-                           ms
-                           "ms"))))
-      :else
-      (-> world
-          (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
-          (assoc-intent :intent/still (if (still? world) (inc still) 0))))))
+    (cond (and at-target (not (blocks/solid? at-target))) (fail world :target-gone)
+          (> (physics/distance eye (physics/centre target)) (+ reach 0.5))
+          (fail world :out-of-reach)
+          (= :needs-tool (choose-tool world at-target)) (fail world :needs-tool)
+          (or (contains? never-dug (blocks/name-of at-target))
+              (and (not exposes-ok?) (exposes-fluid? world target)))
+          (fail world :unsafe)
+          (and (>= still 3) (> (- now since) settle-ms))
+          (let [seq (inc (:bot/sequence world))
+                face (face-toward eye target)
+                [slot tool] (choose-tool world at-target)
+                ms (dig-time at-target tool (penalties world))]
+            (-> world
+                (assoc :bot/sequence seq)
+                (assoc :player/held-slot slot)
+                (game/emit {:packet/name :set-carried-item :slot slot})
+                (game/emit {:packet/name :player-action
+                            :status (packet/value :dig :start-destroy)
+                            :pos target
+                            :face face
+                            :sequence seq})
+                (game/emit {:packet/name :swing :hand (packet/value :hand :main-hand)})
+                (assoc-intent :intent/stage :digging
+                              :intent/face face
+                              :intent/started now
+                              :intent/slot slot
+                              :intent/tool tool
+                              :intent/dig-ms ms
+                              :intent/state at-target
+                              :intent/next-swing (+ now swing-every)
+                              :intent/finish-at (+ now (finish-delay ms)))
+                (game/say (str "digging "
+                               target
+                               " face "
+                               face
+                               (when tool
+                                 (str " with " (name (:kind (blocks/tool tool))) " in " slot))
+                               " "
+                               ms
+                               "ms"))))
+          :else
+          (-> world
+              (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
+              (assoc-intent :intent/still (if (still? world) (inc still) 0))))))
 
 (defmethod dig-stage :digging
   [world {:intent/keys [target face slot tool next-swing finish-at]}]
@@ -396,8 +404,11 @@
           (let [seq (inc (:bot/sequence world))]
             (-> world
                 (assoc :bot/sequence seq)
-                (game/emit
-                 {:packet/name :player-action :status 2 :pos target :face face :sequence seq})
+                (game/emit {:packet/name :player-action
+                            :status (packet/value :dig :stop-destroy)
+                            :pos target
+                            :face face
+                            :sequence seq})
                 (terrain/set-block target blocks/air) ; the server echoes a block-update and an ack; the overlay makes the bot independent of their timing
                 (assoc-intent :intent/stage :confirm
                               :intent/since now
@@ -405,7 +416,7 @@
                               :intent/confirm-left confirm-ticks)))
           (>= now next-swing)
           (-> world
-              (game/emit {:packet/name :swing :hand 0})
+              (game/emit {:packet/name :swing :hand (packet/value :hand :main-hand)})
               (assoc-intent :intent/next-swing (+ now swing-every)))
           :else world)))
 
