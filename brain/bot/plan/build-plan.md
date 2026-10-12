@@ -16,7 +16,7 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn point
   - src/clojurecraft/build.clj#defmethod intent/run :build
   - src/clojurecraft/build.clj#defn op-child
-  - src/clojurecraft/build.clj#defn station
+  - src/clojurecraft/build.clj#defn station-among
   - src/clojurecraft/build.clj#defn foundation
   - src/clojurecraft/build.clj#defn choose-site
   - src/clojurecraft/memory.clj#defn site
