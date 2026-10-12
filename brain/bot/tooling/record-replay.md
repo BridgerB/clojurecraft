@@ -9,6 +9,8 @@ lastUpdated: 2026-10-10
 verifiedAgainst: b9e38a1
 sourceRefs:
   - dev/clojurecraft/probe.clj#defn fold
+  - src/clojurecraft/record.clj#defn header
+  - test/clojurecraft/record_test.clj#a-recording-names-the-code-that-made-it
   - dev/clojurecraft/probe.clj#defn story
   - dev/clojurecraft/probe.clj#defn around
   - src/clojurecraft/record.clj#defn tap!
@@ -47,7 +49,7 @@ related:
 2. Because the clock, randomness and the connection are event fields, nothing diverges on replay, and `verify` proves it per event.
 
 ## Looking inside a failed run
-`dev/clojurecraft/probe.clj` folds the bot over a recording to any moment: `fold` stops at the first world a predicate holds of, `at-ms` at a clock time, `story` is every intent's start, end and reason from memory's facts, and `around` draws two slices of the cells round the feet (`#` solid, `.` clear, `W` water, `L` lava, `~` awkward, `g` a falling block). From a shell: `clojure -M:dev -m clojurecraft.probe story run.edn`, `... around run.edn <ms>`. Fold a gym run with the code that ran it (`git worktree add --detach <dir> <commit>`, the commit is in its `result.edn`): with newer code the planner decides otherwise and the bot ends up elsewhere.
+`dev/clojurecraft/probe.clj` folds the bot over a recording to any moment: `fold` stops at the first world a predicate holds of, `at-ms` at a clock time, `story` is every intent's start, end and reason from memory's facts, and `around` draws two slices of the cells round the feet (`#` solid, `.` clear, `W` water, `L` lava, `~` awkward, `g` a falling block). From a shell: `clojure -M:dev -m clojurecraft.probe story run.edn`, `... around run.edn <ms>`. Fold a gym run with the code that ran it (`git worktree add --detach <dir> <commit>`): with newer code the planner decides otherwise and the bot ends up elsewhere. The recording names that code: with `--commit sha` (the gym passes its own) its first line is `{:record/commit sha}` (`record/tap!`'s header, read by `record/header` without the rest; `a-recording-names-the-code-that-made-it`), and `probe story` prints it first. The procedure end to end is `docs/CHURN.md`.
 
 ## Gotchas
 - A recording ends at RESULT: `main` writes the RESULT into the file (`{:record/result ...}`, read back by `recorded-result`) and closes the tap before any hold, so the hold for an outside judge is not recorded. `main/replayed` judges the fold with the run's own `--until` and the same `ok?` rule, and reports `:replay/result :identical` when it reaches exactly the RESULT the run printed (else the recorded one, to compare). Older recordings without a result report `:not-recorded`.

@@ -8,7 +8,8 @@
      clojure -M:dev -m clojurecraft.probe around run.edn <ms>    ; the cells round the feet at ms
 
    From the REPL: (fold path stop?) is the world at the first moment stop? holds, and the rest
-   are questions about a world."
+   are questions about a world. A recording made with --commit names the code that made it
+   (record/header): story prints it first."
   (:require [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.game :as game]
@@ -70,7 +71,9 @@
   "story path, or around path ms: print it."
   [cmd path & [ms]]
   (case cmd
-    "story" (doseq [r (story path)] (prn r))
+    "story"
+    (do (prn :commit (:record/commit (record/header path) :unrecorded))
+        (doseq [r (story path)] (prn r)))
     "around"
     (let [w (at-ms path (parse-long ms))]
       (prn :feet (intent/feet w) :intent (dissoc (:plan/intent w) :intent/child))

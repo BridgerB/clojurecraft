@@ -121,9 +121,10 @@
                           pool-radius
                           (->> (vals (memory/pools world :water))
                                (remove blacklist)
-                               (remove #(and (terrain/chunk-loaded? world %)
-                                             (not (and (surface-source? world %)
-                                                       (surface-water? world % (physics/y-of eye))))))))))
+                               (remove
+                                #(and (terrain/chunk-loaded? world %)
+                                      (not (and (surface-source? world %)
+                                                (surface-water? world % (physics/y-of eye))))))))))
 
 (defn ground
   "The highest cell of column [x z] the feet could stand in, from surface-above over the eye down
