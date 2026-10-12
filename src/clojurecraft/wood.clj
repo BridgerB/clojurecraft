@@ -7,12 +7,15 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
 
 (def search-radius 48)                ; blocks from the eye searched for a remembered log
+(def far-radius 256)                  ; a trunk remembered on the way in, past the near band
+(def far-candidates 3)                ; routes planned on the way back to the surface
 (def max-trunk 8)                     ; logs followed up one trunk column
 
 (defn ground?
@@ -77,20 +80,53 @@
     (fn [[x _ z :as pos]]
       (or (contains? blacklist pos) (>= (get failures [x z] 0) max-trunk-failures)))))
 
+(defn log-walk
+  "A walk to the log of bottom nearest the feet, tagged as the gather chain."
+  [world bottom]
+  {:intent/kind :walk
+   :intent/target (trunk-target world bottom)
+   :intent/for :log
+   :intent/trunk bottom})
+
+(defn way-home?
+  "Does walk i have a route, or waypoints to start along? From a mine the way back to a surface
+   tree can be longer than one search, so the plan comes back :partial while the target's chunk
+   is still loaded, which routable? refuses. The walk follows those waypoints and plans again.
+   A wooden pickaxe cannot cut the stone over a mine, so the open tunnel is the way out."
+  [world i]
+  (let [{:path/keys [status waypoints]}
+        (path/plan world (path/feet-cell (:player/pos world)) (intent/walk-goal i))]
+    (or (= :found status) (boolean (seq waypoints)))))
+
+(defn climb-out
+  "No trunk in the near band. Underground, the trees are on the surface: walk to the nearest
+   remembered one a way leads to, else cut stairs up until out of the ground (stairs/out? ends
+   them; terrain/top-y is the top of the world). nil under the open sky, where there is nothing
+   to climb and the caller waits :no-log. Full run 5be14e7 stood at y 16 with one plank and a
+   wooden pickaxe, no log within 12 of the eye, and the plan waited :no-log until it failed."
+  [world]
+  (when-not (terrain/under-sky? world (intent/feet world))
+    (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (way-home? world i) i)))
+              (->> (memory/positions-now world blocks/log-states)
+                   (remove (skipped world))
+                   (filter #(standing-trunk? world %))
+                   (memory/nearest-first (game/eye world) far-radius)
+                   (take far-candidates)))
+        {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface})))
+
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
-   trunk. Any goal that needs a log uses this."
+   trunk. Any goal that needs a log uses this. With none in the near band and the sky not open,
+   climb out to the trees instead of waiting :no-log."
   [world]
   (or (continue-gather world)
-      (if-let [bottom (memory/nearest-log world
-                                          (game/eye world)
-                                          search-radius
-                                          (skipped world)
-                                          standing-trunk?)]
-        {:intent/kind :walk
-         :intent/target (trunk-target world bottom)
-         :intent/for :log
-         :intent/trunk bottom}
-        {:plan/wait :no-log})))
+      (when-let [bottom (memory/nearest-log world
+                                            (game/eye world)
+                                            search-radius
+                                            (skipped world)
+                                            standing-trunk?)]
+        (log-walk world bottom))
+      (climb-out world)
+      {:plan/wait :no-log}))
 
 

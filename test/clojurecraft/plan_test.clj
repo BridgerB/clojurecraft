@@ -106,6 +106,40 @@
     (is (plan/failed? w))
     (is (= :no-log (:plan/reason w)))))
 
+(defn remembered
+  "In play at pos over blocks, the column remembered."
+  [blocks pos]
+  (let [col (world/column blocks)]
+    (-> (game/init fx/opts)
+        (assoc :bot/phase :play :player/pos pos :player/loaded? true :player/on-ground? true)
+        (assoc :world/chunks {[0 0] col})
+        (memory/remember-column [0 0] col))))
+
+(def shaft
+  "An air stair from [0 40 8] up to [14 54 8], and a trunk beside the top, more than 12 above an
+   eye at y 40: the near search's band misses it."
+  (merge (into {} (for [x (range 0 15) dy [0 1 2]] [[x (+ 40 x dy) 8] blocks/air]))
+         {[14 55 9] 1 [14 56 9] 136 [14 57 9] 136}))
+
+(deftest a-surface-with-no-tree-still-waits
+  (is (= {:plan/wait :no-log} (wood/gather-next (remembered {} [0.5 64.0 0.5])))))
+
+(deftest underground-with-no-log-the-bot-climbs-out
+  ;; full run 5be14e7: the stone pickaxe wore out tunnelling at y 16, one plank left, no log
+  ;; within 12 of the eye, and the plan waited :no-log until it failed
+  (let [w (remembered {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air} [8.5 50.0 8.5])]
+    (is (not (terrain/under-sky? w (intent/feet w))))
+    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+           (wood/gather-next w)))))
+
+(deftest a-trunk-above-the-band-is-walked-to
+  (let [w (remembered shaft [0.5 40.0 8.5])
+        eye (game/eye w)]
+    (is (nil? (memory/nearest-log w eye wood/search-radius (wood/skipped w) wood/standing-trunk?))
+        "more than 12 above the eye: the near search misses it")
+    (is (= {:intent/kind :walk :intent/target [14 56 9] :intent/for :log :intent/trunk [14 56 9]}
+           (wood/gather-next w)))))
+
 (deftest a-failed-intent-is-blacklisted-and-retried
   (let [w (world-state [0.5 64.0 0.5])
         w (assoc w
