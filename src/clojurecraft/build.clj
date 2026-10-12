@@ -1,0 +1,297 @@
+(ns clojurecraft.build
+  "Building from a plan that is data (issue #8, the portal cast).
+
+   A plan is a vector of ops, flat maps. Every op says what it does (:build/op :place :dig :pour
+   :scoop :use-on :stand-in), where (:build/pos, and :build/stand where the bot stands to do it),
+   with what (:build/item), and when it is done (:build/done, a predicate over the world as data:
+   [:solid p] [:not-solid p] [:filled p] [:block p name] [:lava-source p] [:no-water p]
+   [:dimension name] [:or & preds] [:and & preds]). `satisfied?` reads a predicate against the
+   world. Nothing about progress is stored: the op to work on is the first one not satisfied, so
+   a build resumes after a death, a chunk reload or a relaunch by reading the world again.
+
+   `portal-plan` is ruststeve's template mold (portal_mold.rs: 7 of 8 pool gyms, a natural cast in
+   1374 s) as data. The frame is ten obsidian in the plane z = bz of the origin [bx by bz], cast
+   layer by layer in LAYERS order (never sorted by height); the bot works from the facing side,
+   standing on a platform that rises one block a layer, and pours each cell from the cell's own
+   stance (x, Y+1, bz+1): lava aimed at the cup's north wall low, water at the bowl's north wall,
+   the bowl scooped once the cup reads obsidian. Positions are written for the bot working from
+   +z (:south) and turned for the other facings."
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
+            [clojurecraft.terrain :as terrain]))
+
+(set! *warn-on-reflection* true)
+
+(def layers
+  "The frame cells [dx dy] from the origin, in the order they are cast: the bottom pair, the two
+   columns a block a layer, the top pair. Never sorted by height: a sort interleaves the columns and
+   the bot crosses the frame for every block (steve cast.ts 2510-2521)."
+  [[[1 0] [2 0]] [[0 1] [3 1]] [[0 2] [3 2]] [[0 3] [3 3]] [[1 4] [2 4]]])
+
+(def frame-cells "Every frame cell [dx dy], in cast order." (vec (apply concat layers)))
+(def interior
+  "The portal's inside, [dx dy]: two wide, three high."
+  (for [dx [1 2] dy [1 2 3]] [dx dy]))
+(def facings #{:south :north :east :west}) ; the side of the frame the bot works from
+(def lava-aim [0.5 0.3 -0.02])        ; in the cup's cell: low on the north wall's inner face, not the floor (lava at the feet)
+(def water-aim [0.5 1.5 -0.02])       ; in the cup's cell: the bowl's north wall; a filled bucket's ray goes through lava
+(def bowl-aim [0.5 1.5 0.5])          ; in the cup's cell: the middle of the bowl, to scoop the water back
+
+;; ---------------------------------------------------------------- predicates
+
+(defmulti holds?
+  "Does predicate pred (a vector, its first element the kind) hold in world? An open set: a new
+   kind is a defmethod."
+  {:arglists '([world pred])}
+  (fn [_world pred] (first pred)))
+
+(defmethod holds? :solid
+  [world [_ p]]
+  (boolean (some-> (terrain/block-at world p)
+                   blocks/solid?)))
+(defmethod holds? :not-solid
+  [world [_ p]]
+  (boolean (some-> (terrain/block-at world p)
+                   blocks/solid?
+                   not)))
+(defmethod holds? :filled
+  [world [_ p]]
+  (let [id (terrain/block-at world p)] (boolean (and id (not= :air (blocks/name-of id))))))
+(defmethod holds? :block
+  [world [_ p n]]
+  (= n
+     (some-> (terrain/block-at world p)
+             blocks/name-of)))
+(defmethod holds? :lava-source [world [_ p]] (= blocks/lava-base (terrain/block-at world p)))
+(defmethod holds? :no-water
+  [world [_ p]]
+  (not (contains? blocks/water-states (terrain/block-at world p))))
+(defmethod holds? :dimension [world [_ d]] (= d (:player/dimension world)))
+(defmethod holds? :or [world [_ & ps]] (boolean (some #(holds? world %) ps)))
+(defmethod holds? :and [world [_ & ps]] (every? #(holds? world %) ps))
+
+(defn satisfied?
+  "Is op done in world (its :build/done holds)?"
+  [world op]
+  (holds? world (:build/done op)))
+
+;; ---------------------------------------------------------------- positions
+
+(defn turn
+  "A point [x z] on the plane, written for the bot working from +z, turned for facing."
+  [facing [x z]]
+  (case facing
+    :south [x z]
+    :north [(- x) (- z)]
+    :east [z (- x)]
+    :west [(- z) x]))
+
+(defn point
+  "The absolute point at [x y z] from origin (real coordinates, written for :south), turned for
+   facing about the middle of the origin's cell, so the origin's cell stays where it is."
+  [[bx by bz] facing [x y z]]
+  (let [[tx tz] (turn facing [(- x 0.5) (- z 0.5)])] [(+ bx 0.5 tx) (+ by y) (+ bz 0.5 tz)]))
+
+(defn cell
+  "The absolute cell at [dx dy dz] from origin (written for :south), turned for facing: the cell
+   its centre turns into, so a cell and the points inside it turn alike."
+  [origin facing [dx dy dz]]
+  (mapv #(long (math/floor %)) (point origin facing [(+ dx 0.5) dy (+ dz 0.5)])))
+
+(defn aim
+  "The absolute point at offset [ax ay az] inside the cell [dx dy dz] from origin, turned for
+   facing."
+  [origin facing [dx dy dz] [ax ay az]]
+  (point origin facing [(+ dx ax) (+ dy ay) (+ dz az)]))
+
+;; ---------------------------------------------------------------- the mold
+
+(defn cast?
+  "The predicate of a frame cell [dx dy] being cast: obsidian."
+  [at [dx dy]]
+  [:block (at [dx dy 0]) :obsidian])
+
+(defn layer-cast?
+  "The predicate of every cell of a layer being cast."
+  [at cells]
+  (into [:and] (map #(cast? at %) cells)))
+
+(defn place-op
+  "Place a block at pos from stand, done once something solid is there or guard holds."
+  [pos stand guard step]
+  {:build/op :place
+   :build/item :cobblestone
+   :build/pos pos
+   :build/stand stand
+   :build/step step
+   :build/done (if guard [:or guard [:solid pos]] [:solid pos])})
+
+(defn dig-op
+  "Dig a solid at pos from stand, done once nothing solid is there, guard holds, or it is obsidian:
+   a dig never takes obsidian (ruststeve dug its own frame and restarted forever)."
+  [pos stand guard step]
+  {:build/op :dig
+   :build/pos pos
+   :build/stand stand
+   :build/step step
+   :build/done (cond-> [:or [:block pos :obsidian] [:not-solid pos]] guard (conj guard))})
+
+(defn pad-ops
+  "The pad: a floor under the whole work area (dx -1..5, dz -1..2), each cell from the one in
+   front of it."
+  [at]
+  (for [dz (range -1 3) dx (range -1 6)] (place-op (at [dx -1 dz]) (at [dx 0 (inc dz)]) nil :pad)))
+
+(defn rim-ops
+  "The rim: a ring at pad level round the footprint (dx -2..6, dz -2..3), only where it is air, so
+   spilled water never reaches a pool."
+  [at]
+  (for [dz (range -2 4)
+        dx (range -2 7)
+        :when (or (#{-2 3} dz) (#{-2 6} dx))
+        :let [p (at [dx 0 dz])]]
+    {:build/op :place
+     :build/item :cobblestone
+     :build/pos p
+     :build/stand (at [(max -1 (min 5 dx)) 0 (max -1 (min 2 dz))])
+     :build/step :rim
+     :build/done [:filled p]}))
+
+(defn stair-ops
+  "The stair up to layer li's work level: steps east of the platform, the top one beside the
+   platform's back row, each a block lower going east, placed bottom up from the step below."
+  [at li guard]
+  (for [j (range (dec li) -1 -1)]
+    (place-op (at [(+ 5 j) (- li 1 j) 2]) (at [(+ 6 j) (- li 1 j) 2]) guard :stair)))
+
+(defn platform-ops
+  "The platform at layer li: two rows (dz 1 and 2) from dx 4 down to -1 at height li, the front
+   row placed standing on the level below, then the back row standing on the front row, so the
+   bot never places into its own cell (ruststeve: a ghost block)."
+  [at li guard]
+  (concat (for [dx (range 4 -2 -1)] (place-op (at [dx li 1]) (at [dx li 2]) guard :platform))
+          (for [dx (range 4 -2 -1)]
+            (place-op (at [dx li 2]) (at [dx (inc li) 1]) guard :platform))))
+
+(defn cell-ops
+  "Cast frame cell [dx dy] of layer cells: from its stance (dx, dy+1, +1) the cup's floor and
+   walls (north, east, west; the south wall is the platform), the bowl's north wall and the bowl's
+   east and west where no cell of the same layer is, clear the cup and the bowl, pour lava into
+   the cup, water into the bowl, scoop the bowl back. Every op but the scoop is done once the cup
+   is obsidian."
+  [at origin facing cells [dx dy :as c]]
+  (let [stand (at [dx (inc dy) 1])
+        cup (at [dx dy 0])
+        bowl (at [dx (inc dy) 0])
+        done (cast? at c)
+        sibling? (set cells)
+        walls (concat [[dx (dec dy) 0] [dx dy -1] [(inc dx) dy 0] [(dec dx) dy 0] [dx (inc dy) -1]]
+                      (when-not (sibling? [(inc dx) dy]) [[(inc dx) (inc dy) 0]])
+                      (when-not (sibling? [(dec dx) dy]) [[(dec dx) (inc dy) 0]]))]
+    (concat (for [w walls] (place-op (at w) stand done :wall))
+            [(dig-op cup stand done :cup) (dig-op bowl stand done :bowl)
+             {:build/op :pour
+              :build/item :lava_bucket
+              :build/stand stand
+              :build/aim (aim origin facing [dx dy 0] lava-aim)
+              :build/into cup
+              :build/cell c
+              :build/step :lava
+              :build/done [:or done [:lava-source cup]]}
+             {:build/op :pour
+              :build/item :water_bucket
+              :build/stand stand
+              :build/aim (aim origin facing [dx dy 0] water-aim)
+              :build/into bowl
+              :build/cell c
+              :build/step :water
+              :build/done done}
+             {:build/op :scoop
+              :build/item :bucket
+              :build/pos bowl
+              :build/stand stand
+              :build/aim (aim origin facing [dx dy 0] bowl-aim)
+              :build/step :scoop
+              :build/done [:no-water bowl]}])))
+
+(defn layer-ops
+  "Everything layer li needs: its stair, its platform (both done once the layer is cast) and its
+   cells in order."
+  [at origin facing li]
+  (let [cells (nth layers li)
+        guard (layer-cast? at cells)]
+    (concat (stair-ops at li guard)
+            (platform-ops at li guard)
+            (mapcat #(cell-ops at origin facing cells %) cells))))
+
+(defn front-ops
+  "After the frame: the front cleared (the platform and anything else solid in dx 0..3, dz 1..2,
+   dy 0..5, never obsidian), standing on the rim; then the interior scooped and dug out."
+  [at]
+  (concat (for [dx (range 4)
+                dz [2 1]
+                dy (range 5 -1 -1)]
+            (dig-op (at [dx dy dz]) (at [dx 1 3]) nil :front))
+          (mapcat (fn [[dx dy]]
+                    (let [p (at [dx dy 0])
+                          stand (at [dx 0 2])]
+                      [{:build/op :scoop
+                        :build/item :bucket
+                        :build/pos p
+                        :build/stand stand
+                        :build/step :interior
+                        :build/done [:no-water p]} (dig-op p stand nil :interior)]))
+           interior)))
+
+(defn light-op
+  "Flint and steel on the top of the frame's bottom cell (1, 0), from two blocks in front of it,
+   out of the fire's reach: done when the portal is there."
+  [at]
+  {:build/op :use-on
+   :build/item :flint_and_steel
+   :build/pos (at [1 0 0])
+   :build/face :up
+   :build/stand (at [1 0 2])
+   :build/step :light
+   :build/done [:block (at [1 1 0]) :nether_portal]})
+
+(defn enter-op
+  "Stand in the portal until the dimension is the Nether."
+  [at]
+  {:build/op :stand-in
+   :build/pos (at [1 1 0])
+   :build/stand (at [1 1 0])
+   :build/step :enter
+   :build/done [:dimension "minecraft:the_nether"]})
+
+(defn mold
+  "The ops shared by every plan from origin facing: the pad and the rim."
+  [at]
+  (concat (pad-ops at) (rim-ops at)))
+
+(defn cast-one-plan
+  "The mold from origin facing up to one cast cell, the first: the stage the gym's cast-one row
+   judges."
+  [origin facing]
+  (let [at #(cell origin facing %)
+        [first-cell] (first layers)]
+    (vec (concat (mold at)
+                 (platform-ops at 0 (cast? at first-cell))
+                 (cell-ops at origin facing (first layers) first-cell)))))
+
+(defn frame-plan
+  "The mold from origin facing to a complete frame, then a lit portal, and with enter? the step
+   through it."
+  [origin facing enter?]
+  (let [at #(cell origin facing %)]
+    (vec (concat (mold at)
+                 (mapcat #(layer-ops at origin facing %) (range (count layers)))
+                 (front-ops at)
+                 [(light-op at)]
+                 (when enter? [(enter-op at)])))))
+
+(defn portal-plan
+  "The whole cast from origin [bx by bz] facing (one of facings): the mold, ten cells, the front
+   opened, the portal lit and stepped through. A pure function: equal arguments, an equal plan."
+  [origin facing]
+  (frame-plan origin facing true))

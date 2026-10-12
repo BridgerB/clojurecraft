@@ -4,6 +4,7 @@
    this namespace and `instrument` in tests; nothing here runs in the hot loop."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [clojurecraft.build :as build]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -24,6 +25,34 @@
 
 (s/def ::vec3 (s/coll-of double? :kind vector? :count 3))
 (s/def ::block-pos (s/coll-of int? :kind vector? :count 3))
+
+;; ---------------------------------------------------------------- build plans (issue #8)
+
+(s/def :build/op #{:place :dig :pour :scoop :use-on :stand-in})
+(s/def :build/pos ::block-pos)
+(s/def :build/stand ::block-pos)
+(s/def :build/into ::block-pos)
+(s/def :build/item keyword?)
+(s/def :build/aim (s/coll-of number? :kind vector? :count 3))
+(s/def :build/face keyword?)
+(s/def :build/step keyword?)
+(s/def :build/cell (s/tuple int? int?))
+(s/def :build/done (s/and vector? #(keyword? (first %)))) ; a predicate as data, read by build/holds?
+(s/def ::op
+  (s/keys :req [:build/op :build/stand :build/done]
+          :opt [:build/pos :build/into :build/item :build/aim :build/face :build/step :build/cell]))
+(s/def ::plan (s/coll-of ::op :kind vector?))
+
+(s/fdef build/portal-plan
+  :args
+  (s/cat :origin ::block-pos
+         :facing build/facings)
+  :ret ::plan)
+(s/fdef build/cast-one-plan
+  :args
+  (s/cat :origin ::block-pos
+         :facing build/facings)
+  :ret ::plan)
 
 ;; bot
 (s/def :bot/phase #{:handshake :login :configuration :play})
