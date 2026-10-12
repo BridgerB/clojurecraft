@@ -86,38 +86,43 @@
   [world src]
   (<= (physics/distance (game/eye world) (physics/centre src)) intent/reach))
 
+(defn surface-water?
+  "Is the source at src surface water, not cave water: no more than memory/surface-water-below
+   under the eye, or deeper but under the open sky (terrain/under-sky?). Gym batch solid-b1 run
+   9 stood on a hill at y 70 over ponds at y 62, and the depth rule alone refused every one."
+  [world [_ y _ :as src] eye-y]
+  (or (>= y (- eye-y memory/surface-water-below)) (terrain/under-sky? world src)))
+
 (defn sources
-  "The surface water sources in the loaded terrain within search-radius of the eye, no more than
-   memory/surface-water-below under it, not blacklisted, nearest first. Asked of the terrain
-   through the block overlay, so a source just scooped is air."
+  "The surface water sources in the loaded terrain within search-radius of the eye
+   (surface-water?), not blacklisted, nearest first. Asked of the terrain through the block
+   overlay, so a source just scooped is air."
   [world]
   (let [eye (game/eye world)
-        lo (- (physics/y-of eye) memory/surface-water-below)
         blacklist (:plan/blacklist world #{})]
     (memory/nearest-first eye
                           search-radius
                           (->> (chunk/find-blocks (stone/near-chunks world) #{blocks/water-base})
                                (map (fn [[x y z _]] [x y z]))
-                               (filter (fn [[_ y _]] (>= y lo)))
                                (remove blacklist)
-                               (filter #(surface-source? world %))))))
+                               (filter #(surface-source? world %))
+                               (filter #(surface-water? world % (physics/y-of eye)))))))
 
 (defn pools-near
-  "The remembered water pools within pool-radius, no deeper than surface water, not blacklisted,
-   nearest first, leaving out one in a loaded chunk that is not a surface source to scoop
-   (memory's pool is the highest source with no water above it, which may be under stone):
-   what is loaded near it, the terrain search sees."
+  "The remembered water pools within pool-radius, not blacklisted, nearest first, leaving out one
+   in a loaded chunk that is not surface water to scoop (surface-source? and surface-water?:
+   memory's pool is the highest source with no water above it, which may be under stone or deep
+   in a cave): what is loaded near it, the terrain search sees."
   [world]
   (let [eye (game/eye world)
-        lo (- (physics/y-of eye) memory/surface-water-below)
         blacklist (:plan/blacklist world #{})]
     (memory/nearest-first eye
                           pool-radius
                           (->> (vals (memory/pools world :water))
-                               (filter (fn [[_ y _]] (>= y lo)))
                                (remove blacklist)
                                (remove #(and (terrain/chunk-loaded? world %)
-                                             (not (surface-source? world %))))))))
+                                             (not (and (surface-source? world %)
+                                                       (surface-water? world % (physics/y-of eye))))))))))
 
 (defn ground
   "The highest cell of column [x z] the feet could stand in, from surface-above over the eye down

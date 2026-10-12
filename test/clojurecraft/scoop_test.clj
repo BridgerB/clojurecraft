@@ -55,6 +55,16 @@
   (let [w (game/step w e)]
     (if (and (= :tick (:event/kind e)) (:plan/intent w)) (intent/run w (:plan/intent w) e) w)))
 
+(deftest a-pond-below-a-hill-is-surface-water
+  ;; gym batch solid-b1 run 9 stood on a hill at y 70 over ponds at y 62: the rule that water more
+  ;; than five under the eye is cave water refused every one, and it waited :no-water. Surface
+  ;; water is water under the open sky, whatever the height
+  (let [hill (merge pond ; a slope a block down a step, from y 74 at x 0 to the pond's bank
+                    (into {} (for [x (range 0 10) y (range 64 (- 74 x)) z (range 16)] [[x y z] 1])))
+        w (assoc (standing hill [0.5 8.5]) :player/pos [0.5 74.0 8.5])]
+    (is (= [10 63 8] (first (scoop/sources w))))
+    (is (= :walk (:intent/kind (scoop/scoop-next w))))))
+
 (deftest a-scoop-the-server-never-answers-fails-no-scoop
   (let [w (assoc (standing pond [8.5 8.5])
                  :plan/intent
