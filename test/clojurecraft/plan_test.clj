@@ -206,6 +206,24 @@
   (is (= [:pickaxe] (plan/goals-for "pickaxe")))
   (is (nil? (plan/goals-for "play"))))
 
+(deftest the-current-stage-is-the-furthest-target
+  (is (= "nether" (plan/current-until)))
+  (is (= [:nether] (plan/goals-for (plan/current-until))))
+  (is (= "later"
+         (plan/current-until
+          [{:goal/id :wood :goal/target? true :goal/priority 1 :goal/until "wood"}
+           {:goal/id :escape
+            :goal/target? true
+            :goal/always? true
+            :goal/priority 30
+            :goal/until "escape"}
+           {:goal/id :old
+            :goal/target? true
+            :goal/priority 40
+            :goal/until "old"
+            :goal/superseded-by :later}
+           {:goal/id :later :goal/target? true :goal/priority 9 :goal/until "later"}]))))
+
 (def superseding-table
   "A table where :wood was fixed as :wood-2 and :wood-2 again as :wood-3."
   [{:goal/id :wood

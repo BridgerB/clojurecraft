@@ -52,6 +52,19 @@
   [until]
   (some (fn [g] (when (= until (:goal/until g)) [(:goal/id g)])) targets))
 
+(defn current-until
+  "The --until name a fresh run aims at. Of the live targets that name a :goal/until and are not
+   :goal/always?, it is the one with the greatest :goal/priority. Escapes stay in play on any
+   --until. Nil when none qualify."
+  ([] (current-until goals))
+  ([table]
+   (->> (targets-of table)
+        (remove :goal/always?)
+        (filter :goal/until)
+        (sort-by :goal/priority)
+        last
+        :goal/until)))
+
 (def landing-timeout 30000)           ; a :go that names a landing waits this long for the bot to be there
 (def landing-reach 2.0)               ; horizontal distance from :go/at that counts as landed
 

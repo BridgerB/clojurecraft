@@ -101,7 +101,7 @@ clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data ge
 bb datagen                            # regenerate the EDN tables (needs the jar)
 ```
 
-The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI is five workflows. `test.yml` runs the tests and the brain checker on every push; its forest property is eight sim shards. `gym.yml` runs every goal once on push and N trials of one goal on dispatch, one runner and one pregenerated landing per trial, judged by RESULT plus the server's truth commands and reported with a 95% interval (`clojure -M:gym`, `brain/bot/tooling/gym-on-runners.md`). `world.yml` builds a landing set's world once and caches it. `plan.yml` runs one plan file (`ci/plan/`, `clojure -M:plan`) as many jobs. `timer.yml` dispatches the next plan every twenty minutes. Write code, push, and read the runs: the runners do the compute.
+The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI is six workflows. `test.yml` runs the tests and the brain checker on every push; its forest property is eight sim shards. `gym.yml` runs every goal once on push and N trials of one goal on dispatch, one runner and one pregenerated landing per trial, judged by RESULT plus the server's truth commands and reported with a 95% interval (`clojure -M:gym`, `brain/bot/tooling/gym-on-runners.md`). `world.yml` builds a landing set's world once and caches it. `plan.yml` runs one plan file (`ci/plan/`, `clojure -M:plan`) as many jobs. `timer.yml` dispatches the next plan every twenty minutes. `full.yml` is one fresh world and one bot with nothing given, from spawn, aimed at the current stage (`plan/current-until`) for 5.5 hours. It runs on a pull request. A later push to that request cancels its own attempt. Another request keeps its own. Write code, push, and read the runs: the runners do the compute.
 
 ## Words
 
@@ -113,6 +113,7 @@ GitHub's words stay GitHub's. Actions is the product, a workflow is one yaml fil
 - **job** is one share of a plan (`--job N`, matrix key `job`, artifact `plan-<label>-job-<n>`).
 - **shard** is only a seeded slice of a sim property (`:exp/shards`, and the same word on `test.yml`'s forest matrix).
 - **soak** is the repeated plan, `ci/plan/soak.edn`. **timer** (`timer.yml`) dispatches the next file in `ci/plan/queue/`, or the soak when the queue is empty.
+- **full** is the one fresh-world attempt (`full.yml`): nothing given, from spawn, at the current stage, for 5.5 hours. It is a pull-request check, one attempt per request, always that request's latest push.
 
 ## Server facts
 

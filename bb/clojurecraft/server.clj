@@ -1,6 +1,6 @@
 (ns clojurecraft.server
-  "Start or stop a vanilla 26.1.2 server: CI's gym trials, the gym world build, a plan's
-   jobs, and this Mac's own server all go through here.
+  "Start or stop a vanilla 26.1.2 server: CI's gym trials, the full run, the gym world build, a
+   plan's jobs, and this Mac's own server all go through here.
 
      PORT=25565 RCON_PORT=25575 RCON_PASS=secret WORLD=work/world bb server start
      WORLD=work/world bb server stop

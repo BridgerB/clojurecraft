@@ -5,7 +5,7 @@ type: reference
 tags: [bot, tooling, ci, gym]
 aliases: [gym.yml, world.yml, test.yml, wood.yml, clojure -M:gym, GYMRESULT, result.edn, landing set, landings.edn, truth command, outcome, Wilson, paired landings, CI]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-12
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/gym.clj#def gyms
@@ -26,6 +26,7 @@ sourceRefs:
   - bb/clojurecraft/worlds.clj#a forceload was left behind
   - ".github/workflows/gym.yml#fail-on-cache-miss: true"
   - ".github/workflows/gym.yml#max-parallel: 20"
+  - .github/workflows/full.yml#One fresh world, nothing given.
   - test/clojurecraft/gym_test.clj#outcome-is-judged-twice
   - test/clojurecraft/recordings_test.clj#every-recorded-run-replays
 related:
@@ -37,7 +38,7 @@ related:
 
 # Gym on runners
 
-Three workflows. `test.yml` runs the suite and the brain checker on every push, spread over nine runners ([[test-fixtures]]: the parallel runner, and the forests as eight shards). `gym.yml` runs real runs of goals on real terrain: on push every goal once (the smoke test `wood.yml` used to be), on dispatch one goal `runs` times (`goal`, `runs`, `landing-set`, `label`). `world.yml` builds a landing set's world once and caches it.
+`test.yml` runs the suite and the brain checker on every push, spread over nine runners ([[test-fixtures]]: the parallel runner, and the forests as eight shards). `gym.yml` runs real runs of goals on real terrain: on push every goal once (the smoke test `wood.yml` used to be), on dispatch one goal `runs` times (`goal`, `runs`, `landing-set`, `label`). `world.yml` builds a landing set's world once and caches it. `full.yml` is the one fresh world, nothing given: spawn, the current stage, 5.5 hours, one attempt per pull request, and a later push to that request cancels its own.
 
 ## How a batch runs
 1. **plan**: refuses when more than 20 jobs are already running in the repository, then `clojure -M:gym plan --goals ... --runs N` prints the trial matrix; only goal, run number and job minutes cross the job boundary.
