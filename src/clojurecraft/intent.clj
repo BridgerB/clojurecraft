@@ -29,10 +29,10 @@
                                       ; bank, where nothing stands between the eyes and its surface
 (def pickup-rise 2)                   ; a drop resting more than 2 blocks above the feet is above
                                       ; the pickup box (1.8 tall, grown 0.5 up)
-(def settle-ms 500)                   ; let the server catch up before START
+(def settle-ms 150)                   ; let the server catch up before START: three still ticks
 (def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks (dig/ms derives it now)
-(def finish-margin 1.35)              ; FINISH is sent this late: an early one aborts the break
-(def finish-slack 200)                ; ms added to the margin
+(def finish-margin 1.15)              ; FINISH is sent this late: the server takes it at 70% of its own ticks, aborts it before
+(def finish-slack 100)                ; ms added to the margin
 (def confirm-ticks 10)                ; after FINISH, ticks to wait for the server's ack or its refusal
 
 (defn penalties

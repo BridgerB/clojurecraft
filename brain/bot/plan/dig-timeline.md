@@ -1,6 +1,6 @@
 ---
 title: Dig timeline
-description: Settle, choose the tool, START, swings every 350 ms, FINISH at 1.35x the block's own time plus 200 ms, then a confirm stage that waits for the server's ack or its refusal; all as absolute times compared to :time/now.
+description: Settle, choose the tool, START, swings every 350 ms, FINISH at 1.15x the block's own time plus 100 ms, then a confirm stage that waits for the server's ack or its refusal; all as absolute times compared to :time/now.
 type: reference
 tags: [bot, plan, dig]
 aliases: [dig intent, player-action, swing cadence, finish-delay, :confirm, :rejected, :needs-tool, :tool-broke]
@@ -35,12 +35,12 @@ related:
 
 # Dig timeline
 
-The `:dig` intent has three stages. `:settle`: look at the block, refuse at once if it is gone, out of reach, a tiered block no held tool of its kind reaches (`:needs-tool`), obsidian, or a block with water or lava in any of its six neighbours, or resting on gravel or sand stacked over it (`fluid-over-falling?`: the stack would fall into the cut and the fluid follow; gym batch iron-a4 run 1 tunnelled under a riverbed and the river came down after the gravel), unless the intent says `:intent/exposes-ok?` (`:unsafe`, [[water-escape]]); require three consecutive still ticks (horizontal velocity under 0.05, on ground) and 500 ms since the stage began; then choose the tool (`choose-tool`), send `set-carried-item` for its hotbar slot (0 for the hand), `player-action` status `:start-destroy` (0, START; `packet/value :dig`) with the face nearest the eye (`face-toward`, named as `packet/value :face` numbers it), and a `swing`. `:digging`: swing every 350 ms; at `finish-at` (START + `finish-delay` of the block's own time with that tool) send `player-action` status 2 (FINISH) with the next sequence number and overlay the target as air locally. `:confirm`: up to ten ticks for the server's answer; a `block-changed-ack` for the FINISH sequence ends the dig, the block back at its START state fails it `:rejected`, and silence after ten ticks trusts the overlay.
+The `:dig` intent has three stages. `:settle`: look at the block, refuse at once if it is gone, out of reach, a tiered block no held tool of its kind reaches (`:needs-tool`), obsidian, or a block with water or lava in any of its six neighbours, or resting on gravel or sand stacked over it (`fluid-over-falling?`: the stack would fall into the cut and the fluid follow; gym batch iron-a4 run 1 tunnelled under a riverbed and the river came down after the gravel), unless the intent says `:intent/exposes-ok?` (`:unsafe`, [[water-escape]]); require three consecutive still ticks (horizontal velocity under 0.05, on ground) and 150 ms since the stage began (`settle-ms`; 500 until gym batch solid-b1); then choose the tool (`choose-tool`), send `set-carried-item` for its hotbar slot (0 for the hand), `player-action` status `:start-destroy` (0, START; `packet/value :dig`) with the face nearest the eye (`face-toward`, named as `packet/value :face` numbers it), and a `swing`. `:digging`: swing every 350 ms; at `finish-at` (START + `finish-delay` of the block's own time with that tool) send `player-action` status 2 (FINISH) with the next sequence number and overlay the target as air locally. `:confirm`: up to ten ticks for the server's answer; a `block-changed-ack` for the FINISH sequence ends the dig, the block back at its START state fails it `:rejected`, and silence after ten ticks trusts the overlay.
 
 ## Key files
 - `intent.clj`, `dig-time` - `dig/ms` for the block, the held item and the penalties in force; 3000 (a log by hand) for a block the tables do not know ([[hardness-and-tools]]).
 - `intent.clj`, `penalties` - `{:off-ground? :eyes-in-water?}` from `:player/on-ground?` and `:player/eye-in-water?`; each divides the speed by five ([[hardness-and-tools]]).
-- `intent.clj`, `finish-delay` - `ms * 1.35 + 200`: 4250 for a log by hand, 1752 for stone with a wooden pickaxe.
+- `intent.clj`, `finish-delay` - `ms * 1.15 + 100`: 3550 for a log by hand, 1442 for stone with a wooden pickaxe ([[early-finish-aborts]]).
 - `intent.clj`, `choose-tool` - `dig/best-tool` over the hotbar; `[0 nil]` for the hand; `:needs-tool` when the block needs a tier no held tool of its kind reaches.
 - `intent.clj`, `swing-every` 350 ms, `confirm-ticks` 10.
 - `intent.clj`, `still?` - horizontal-only stillness, on the ground or afloat in a liquid; see [[resting-vertical-velocity]].
