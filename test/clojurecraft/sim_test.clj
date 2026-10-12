@@ -893,6 +893,53 @@
   [sim pkt]
   (sim/step sim {:sim/kind :packet :sim/packet pkt}))
 
+;; ---------------------------------------------------------------- pours (issue #8)
+
+(def cup
+  "One cell of ruststeve's mold at [5 64 5] in a stone floor: the cup, stone round it (north,
+   east, west, and the stand to the south at [5 64 6]), the bowl over it at [5 65 5] walled north,
+   east and west, the player on the stand with its feet at [5 65 6]."
+  (into {} (for [c [[5 64 4] [4 64 5] [6 64 5] [5 64 6] [5 65 4] [4 65 5] [6 65 5]]] [c 1])))
+
+(defn pour-sim
+  "A model in play over cup, the player standing on the stand, holding item in the first hotbar
+   place, with the cells in extra placed."
+  [item extra]
+  (-> (sim/init {:column (world/column-bytes cup)
+                 :spawn [5.5 65.0 6.5]
+                 :inventory {[:hotbar 0] {:item (recipe/item-id item) :count 1}}})
+      (assoc :sim/phase :play :sim/player-pos [5.5 65.0 6.5])
+      (update :sim/placed merge extra)))
+
+(defn use-toward
+  "The model after the player uses its held item looking at point from its standing eye."
+  [sim point]
+  (let [[yaw pitch] (physics/look-at [5.5 (+ 65.0 physics/eye-height) 6.5] point)]
+    (client-sends sim {:packet/name :use-item :hand 0 :sequence 7 :y-rot yaw :x-rot pitch})))
+
+(deftest a-lava-pour-aimed-at-the-cups-north-wall-fills-the-cup
+  ;; ruststeve's aim: the north wall's inner face, low; the ray goes through the bowl and the cup
+  (let [sim (use-toward (pour-sim :lava_bucket {}) [5.5 64.3 4.98])]
+    (is (= blocks/lava-base (sim/block-at sim [5 64 5])))
+    (is (= (recipe/item-id :bucket) (get-in sim [:sim/inv (inventory/slot [:hotbar 0]) :item])))))
+
+(deftest water-poured-into-the-bowl-turns-the-lava-under-it-to-obsidian
+  (let [sim (use-toward (pour-sim :water_bucket {[5 64 5] blocks/lava-base}) [5.5 65.5 4.98])]
+    (is (= :obsidian (blocks/name-of (sim/block-at sim [5 64 5]))))
+    (is (= blocks/water-base (sim/block-at sim [5 65 5])) "the water stays in the bowl")))
+
+(deftest water-aimed-at-the-floor-goes-through-the-lava-and-replaces-it
+  ;; a filled bucket's ray ignores fluids: ruststeve's floor aim replaced its lava source
+  (let [sim (use-toward (pour-sim :water_bucket {[5 64 5] blocks/lava-base}) [5.5 64.0 5.5])]
+    (is (= blocks/water-base (sim/block-at sim [5 64 5])))
+    (is (not= :obsidian (blocks/name-of (sim/block-at sim [5 64 5]))))))
+
+(deftest an-empty-bucket-scoops-lava
+  (let [sim (use-toward (pour-sim :bucket {[5 64 5] blocks/lava-base}) [5.5 64.85 5.5])]
+    (is (= blocks/air (sim/block-at sim [5 64 5])))
+    (is (= (recipe/item-id :lava_bucket)
+           (get-in sim [:sim/inv (inventory/slot [:hotbar 0]) :item])))))
+
 (defn open-furnace
   "The model after the client right-clicks the furnace."
   [sim]

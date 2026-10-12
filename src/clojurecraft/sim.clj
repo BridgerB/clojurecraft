@@ -862,43 +862,114 @@
   (let [[px py pz] (:sim/player-pos sim)]
     (physics/cells-along [px (+ py 1.62) pz] (physics/direction look) use-range ray-step)))
 
+(def bucket-fluids
+  "What each bucket holds, by item id: the empty one nothing, the filled ones the source state they
+   pour."
+  {(get blocks/items :bucket) nil
+   (get blocks/items :water_bucket) blocks/water-base
+   (get blocks/items :lava_bucket) blocks/lava-base})
+
+(def filled-bucket
+  "The bucket a scooped source state fills an empty one into."
+  {blocks/water-base (get blocks/items :water_bucket)
+   blocks/lava-base (get blocks/items :lava_bucket)})
+
 (defn scooped
-  "The water source a bucket used along look takes: the first water source on the ray, unless a
-   solid block comes first (the eyes do not see through it); nil when none."
+  "The fluid source an empty bucket used along look takes: the first water or lava source on the
+   ray (BucketItem with ClipContext.Fluid.SOURCE_ONLY), unless a solid block comes first (the eyes
+   do not see through it); nil when none."
   [sim look]
   (reduce (fn [_ cell]
             (let [id (block-at sim cell)]
-              (cond (= id blocks/water-base) (reduced cell)
+              (cond (contains? filled-bucket id) (reduced cell)
                     (and id (blocks/solid? id)) (reduced nil)
                     :else nil)))
           nil
           (ray-cells sim look)))
 
+(defn poured
+  "Where a filled bucket used along look puts its fluid: the cell before the first solid block on
+   the ray, the ray passing through every fluid (ClipContext.Fluid.NONE: a water pour aimed at the
+   floor under a lava source goes through the lava and replaces it), when that cell can take a
+   fluid (air, a plant, a fluid); nil when no solid block is in reach."
+  [sim look]
+  (reduce (fn [before cell]
+            (let [id (block-at sim cell)]
+              (cond (nil? id) (reduced nil)
+                    (blocks/solid? id) (reduced before)
+                    :else cell)))
+          nil
+          (ray-cells sim look)))
+
+(def quench-sides
+  "The cells round a lava block water turns it to stone from: above and the four sides, never
+   below (LiquidBlock.shouldSpreadLiquid over POSSIBLE_FLOW_DIRECTIONS, each one's opposite)."
+  [[0 1 0] [0 0 -1] [0 0 1] [1 0 0] [-1 0 0]])
+
+(defn quench
+  "The model after water meets lava at or round pos: each lava block there with water above it or
+   beside it becomes obsidian when a source, cobblestone when flowing, and the client is told."
+  [sim pos]
+  (reduce (fn [sim cell]
+            (let [id (block-at sim cell)
+                  water? (some #(contains? blocks/water-states (block-at sim (mapv + cell %)))
+                               quench-sides)]
+              (cond (not (and (contains? blocks/lava-states id) water?)) sim
+                    :else
+                    (let [stone (blocks/default-state
+                                 (if (= id blocks/lava-base) :obsidian :cobblestone))]
+                      (-> sim
+                          (assoc-in [:sim/placed cell] stone)
+                          (send {:packet/name :block-update :pos cell :state stone}))))))
+          sim
+          (cons pos (map #(mapv + pos %) [[0 1 0] [0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]))))
+
+(defn swap-held
+  "The model with the one held item in the held slot exchanged for item (a bucket filled or
+   emptied), the client told what window 0 now holds."
+  [sim item]
+  (let [slot (held-slot sim)
+        held (get-in sim [:sim/inv slot])
+        before (full (:sim/inv sim) (inventory/layouts :inventory))
+        stack {:item item :count 1}
+        inv (if (= 1 (:count held))
+              (assoc (:sim/inv sim) slot stack)
+              (first (insert (take-one (:sim/inv sim) slot)
+                             (inventory/store-slots (inventory/layouts :inventory))
+                             stack)))]
+    (-> sim
+        (assoc :sim/inv inv)
+        (sync-window :inventory before (:sim/cursor sim) false))))
+
 (defmethod on-packet [:play :use-item]
-  ;; a held empty bucket aimed by the look at a water source fills: the source becomes air and
-  ;; the bucket a water bucket; anything else does nothing here. Either way, the ack.
+  ;; a held bucket used along the look: an empty one aimed at a water or lava source fills and the
+  ;; source becomes air; a filled one puts its fluid in the cell before the first solid block,
+  ;; empties, and water meeting lava turns it to stone. Anything else does nothing here. Either
+  ;; way, the ack.
   [sim {:keys [sequence y-rot x-rot]}]
   (let [ack {:packet/name :block-changed-ack :sequence sequence}
-        slot (held-slot sim)
-        held (get-in sim [:sim/inv slot])
-        src (when (and (:sim/player-pos sim) (= (:item held) (get blocks/items :bucket)))
-              (scooped sim [y-rot x-rot]))]
-    (if src
-      (let [before (full (:sim/inv sim) (inventory/layouts :inventory))
-            filled {:item (get blocks/items :water_bucket) :count 1}
-            inv (if (= 1 (:count held))
-                  (assoc (:sim/inv sim) slot filled)
-                  (first (insert (take-one (:sim/inv sim) slot)
-                                 (inventory/store-slots (inventory/layouts :inventory))
-                                 filled)))]
-        (-> sim
-            (assoc-in [:sim/placed src] blocks/air)
-            (disturb src)
-            (assoc :sim/inv inv)
-            (send {:packet/name :block-update :pos src :state blocks/air})
-            (sync-window :inventory before (:sim/cursor sim) false)
-            (send ack)))
-      (send sim ack))))
+        item (:item (get-in sim [:sim/inv (held-slot sim)]))
+        look [y-rot x-rot]
+        bucket? (and (:sim/player-pos sim) (contains? bucket-fluids item))
+        fluid (get bucket-fluids item)
+        src (when (and bucket? (nil? fluid)) (scooped sim look))
+        into (when (and bucket? fluid) (poured sim look))]
+    (cond src
+          (let [state (block-at sim src)]
+            (-> sim
+                (assoc-in [:sim/placed src] blocks/air)
+                (disturb src)
+                (send {:packet/name :block-update :pos src :state blocks/air})
+                (swap-held (filled-bucket state))
+                (send ack)))
+          into
+          (-> sim
+              (assoc-in [:sim/placed into] fluid)
+              (send {:packet/name :block-update :pos into :state fluid})
+              (quench into)
+              (swap-held (get blocks/items :bucket))
+              (send ack))
+          :else (send sim ack))))
 
 ;; ---------------------------------------------------------------- falling blocks
 
