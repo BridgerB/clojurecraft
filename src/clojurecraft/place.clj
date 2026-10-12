@@ -140,7 +140,7 @@
         held (:player/held-slot world)]
     (cond (nil? p) (intent/fail world :not-held)
           (= p held) (intent/assoc-intent world :intent/stage then)
-          (<= 0 p 8)
+          (inventory/hotbar? p)
           (-> world
               (game/emit {:packet/name :set-carried-item :slot p})
               (assoc :player/held-slot p)

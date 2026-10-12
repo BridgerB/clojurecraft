@@ -913,16 +913,21 @@
 
 (defn furnace [sim] (get-in sim [:sim/furnaces furnace-pos]))
 
+(defn in-furnace
+  "The furnace window's slot that shows place (inventory/slot-in)."
+  [place]
+  (inventory/slot-in :furnace place))
+
 (defn loaded
-  "A furnace opened with input in hotbar slot 0 and fuel in hotbar slot 1 (furnace window slots
-   30 and 31), the fuel then the input laid in with left clicks."
+  "A furnace opened with input in hotbar slot 0 and fuel in hotbar slot 1, the fuel then the
+   input laid in with left clicks."
   [input fuel]
-  (-> (furnace-sim {36 input 37 fuel})
+  (-> (furnace-sim {[:hotbar 0] input [:hotbar 1] fuel})
       open-furnace
-      (click-in 31 0 0)
-      (click-in 1 0 0)
-      (click-in 30 0 0)
-      (click-in 0 0 0)))
+      (click-in (in-furnace [:hotbar 1]) 0 0)
+      (click-in (in-furnace [:fuel]) 0 0)
+      (click-in (in-furnace [:hotbar 0]) 0 0)
+      (click-in (in-furnace [:input]) 0 0)))
 
 (deftest a-furnace-opens-with-its-slots-and-properties
   (let [sim (open-furnace (furnace-sim {[:hotbar 0] {:item (item :raw_iron) :count 4}}))
@@ -932,7 +937,7 @@
            (mapv :packet/name out)))
     (is (= (blocks/menus :furnace) (:menu-type (second out))))
     (is (= 39 (count (:items (nth out 2)))) "three of its own, then the player's 36")
-    (is (= {:item (item :raw_iron) :count 4} (get (:items (nth out 2)) 30)) "hotbar 0 at 30")
+    (is (= {:item (item :raw_iron) :count 4} (get (:items (nth out 2)) (in-furnace [:hotbar 0]))))
     (is (= #{0 1 2 3} (set (map :property (drop 3 out)))))))
 
 (deftest four-raw-iron-cook-on-one-coal-in-200-ticks-each
@@ -1138,7 +1143,7 @@
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes gravel-floor)
                                     :spawn [2.5 64.0 8.5]
-                                    :inventory {36 {:item (item :stone_pickaxe) :count 1}}
+                                    :inventory {[:hotbar 0] {:item (item :stone_pickaxe) :count 1}}
                                     :seed 4}) ; gravel drops gravel on the first dig
                          #(or (plan/done? %) (plan/failed? %))
                          60000
@@ -1158,7 +1163,7 @@
                      :goal/provides {:item/raw_iron 1}
                      :goal/done? :provided?})
         junk {:item (item :dirt) :count 1}
-        inv (assoc (into {} (for [h (range 9)] [[:hotbar h] junk]))
+        inv (assoc (into {} (for [h (range inventory/hotbar-slots)] [[:hotbar h] junk]))
                    [:main 0]
                    {:item (item :stone_pickaxe) :count 1})
         [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
@@ -1432,7 +1437,7 @@
   ;; of what mining picked up) and their stairs stopped :no-pickaxe; the dig chooses from the
   ;; hotbar, so the pickaxe is swapped into the hand first
   (let [junk {:item (item :dirt) :count 1}
-        inv (assoc (into {} (for [h (range 9)] [[:hotbar h] junk]))
+        inv (assoc (into {} (for [h (range inventory/hotbar-slots)] [[:hotbar h] junk]))
                    [:main 0]
                    {:item (item :stone_pickaxe) :count 1})
         [w sim]

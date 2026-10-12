@@ -314,7 +314,7 @@
 (defn hotbar
   "The hotbar slots of the inventory, {slot item}: the only slots a dig can hold a tool from."
   [world]
-  (into {} (filter (fn [[s _]] (<= 0 s 8)) (:player/inventory world))))
+  (into {} (filter (fn [[s _]] (inventory/hotbar? s)) (:player/inventory world))))
 
 (defn stowed-tool
   "[slot item-id] of the tool to dig block id with when it is only in the main inventory, nil
@@ -324,7 +324,7 @@
   [world id]
   (when-not (dig/best-tool id (hotbar world) (penalties world))
     (when-let [[slot _ :as t] (dig/best-tool id (:player/inventory world) (penalties world))]
-      (when (> slot 8) t))))
+      (when-not (inventory/hotbar? slot) t))))
 
 (defn choose-tool
   "[slot item-id] of the tool to dig block id with from the hotbar, [0 nil] for the hand, or

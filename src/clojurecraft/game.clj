@@ -293,7 +293,7 @@
         :else w))
 (defmethod on-packet [:play :set-held-slot]
   [w {:keys [slot]}]
-  (if (<= 0 slot 8) (assoc w :player/held-slot slot) w))
+  (if (inventory/hotbar? slot) (assoc w :player/held-slot slot) w))
 (defmethod on-packet [:play :set-cursor-item]
   [w {:keys [item]}]
   (if item (assoc w :window/cursor item) (dissoc w :window/cursor)))

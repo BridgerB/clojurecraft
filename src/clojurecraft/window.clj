@@ -89,4 +89,4 @@
   "A player-inventory slot with nothing in it, as a slot of this view."
   [world {:view/keys [slot-of]}]
   (some (fn [p] (when-not (get-in world [:player/inventory p]) (slot-of p)))
-        (concat (range 9 36) (range 0 9))))
+        inventory/main-then-hotbar))

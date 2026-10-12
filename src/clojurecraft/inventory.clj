@@ -56,6 +56,18 @@
 
 (def main-slots 27)                    ; player slots 9-35, shown first
 (def hotbar-slots 9)                   ; player slots 0-8, shown after the main ones
+(def head-slot 39)                     ; the player slot of the helmet; the boots are 36, the armour counts down
+(def offhand-slot 40)                  ; the player slot of the offhand
+
+(defn hotbar?
+  "Is player slot p one of the hotbar's, the only slots the hand can hold from?"
+  [p]
+  (< -1 p hotbar-slots))
+
+(def main-then-hotbar
+  "Every player slot of the main inventory and the hotbar, the main inventory first: the order a
+   free slot is looked for in, so the hotbar stays for what the hand needs."
+  (concat (range hotbar-slots (+ hotbar-slots main-slots)) (range hotbar-slots)))
 
 (defn window->player-slot
   "A slot of a window with layout → the player-inventory slot it shows (the key space of
@@ -64,8 +76,8 @@
   (let [i (- s inventory)]
     (cond (< -1 i main-slots) (+ i hotbar-slots)
           (< (dec main-slots) i (+ main-slots hotbar-slots)) (- i main-slots)
-          (and armour (<= armour s (+ armour 3))) (- 39 (- s armour)) ; head..feet are player 39..36
-          (= s offhand) 40
+          (and armour (<= armour s (+ armour 3))) (- head-slot (- s armour)) ; head to feet
+          (= s offhand) offhand-slot
           :else nil)))
 
 (defn player->window-slot
@@ -74,7 +86,7 @@
   [{:keys [inventory offhand]} p]
   (cond (<= 0 p (dec hotbar-slots)) (+ inventory main-slots p)
         (<= hotbar-slots p (+ hotbar-slots main-slots -1)) (+ inventory (- p hotbar-slots))
-        (and offhand (= p 40)) offhand
+        (and offhand (= p offhand-slot)) offhand
         :else nil))
 
 (defn store-slots
@@ -87,29 +99,41 @@
   [{:keys [inventory]}]
   (+ inventory main-slots))
 
-(defn slot
-  "The window-0 slot of a place in the player's own screen, named: [:hotbar n] (0-8, left to
-   right), [:main n] (0-26, from the top left), [:armour n] (0-3, head to feet), [:offhand]. The
-   numbers are read from (layouts :inventory), so a test or a fixture says where an item is
-   rather than which wire slot that is ([:hotbar 0] is 36)."
-  [[area n]]
-  (let [l (layouts :inventory)
+(defn crafting?
+  "Does a window with layout craft: a grid whose slot 0 shows what it makes? A furnace does not."
+  [layout]
+  (pos? (:size layout)))
+
+(defn slot-in
+  "The slot of window k (a layout name: :inventory, :table, :furnace) that shows a place, named:
+   [:hotbar n] (0-8, left to right), [:main n] (0-26, from the top left), in window 0 also
+   [:armour n] (0-3, head to feet) and [:offhand]; a crafting window's [:result] and [:grid n]
+   (1..size², by rows); a furnace's [:input], [:fuel] and [:output]. The numbers are read from
+   layouts, so code and tests say where an item is rather than which wire slot that is
+   ([:hotbar 0] is 36 in window 0, 30 in a furnace). nil for a place the window does not show."
+  [k [area n]]
+  (let [l (layouts k)
         n (or n 0)]
     (case area
       :hotbar (+ (hotbar-start l) n)
       :main (+ (:inventory l) n)
-      :armour (+ (:armour l) n)
-      :offhand (:offhand l))))
+      :armour
+      (some-> (:armour l)
+              (+ n))
+      :offhand (:offhand l)
+      :result (when (crafting? l) 0)
+      :grid (when (crafting? l) n)
+      (:input :fuel :output) (get l area))))
+
+(defn slot
+  "The window-0 slot of a place in the player's own screen (slot-in :inventory): [:hotbar 0] is 36."
+  [place]
+  (slot-in :inventory place))
 
 (defn grid-slots
   "The crafting-grid slots of a layout, 1..size²."
   [{:keys [size]}]
   (range 1 (inc (* size size))))
-
-(defn crafting?
-  "Does a window with layout craft: a grid whose slot 0 shows what it makes? A furnace does not."
-  [layout]
-  (pos? (:size layout)))
 
 (defn own-slots
   "The slots of a window with layout that hold the container's own items, not the player's: a
