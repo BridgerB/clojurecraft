@@ -2,7 +2,8 @@
 ;; a function; executing is open). A row says what it needs, what it provides, which registered
 ;; predicate decides it is done, and which registered act satisfies it once its needs are met.
 ;; Need and provide keys: :item/<name> n, :tag/<item-tag> n, :block/<name> :near. A row's :goal/holds
-;; are needs it keeps rather than spends (a tool): planned for once, never netted per run. A :mine
+;; are needs it keeps rather than spends (a tool): planned for once, never netted per run; its
+;; :goal/spares one more of a held tool each, made only from what is held and near. A :mine
 ;; row names the blocks it digs (:goal/blocks, stone when absent) and how deep it may cut stairs
 ;; looking for them (:goal/depth, unbounded when absent); what it collects is their loot table's.
 ;; Targets (:goal/target? true) are what a run is for; --until <:goal/until> puts one in play. Producers are
@@ -173,8 +174,9 @@
  {:goal/id :fill-bucket
   :goal/priority 10
   :goal/doc
-  "scoop a surface water source with an empty bucket, walking to the nearest one in sight or remembered; two pickaxes are held for the stairs up out of a mine, since one wears out on the way (a stone pickaxe lasts 131 blocks, a climb of fifty stairs digs about 150) and there may be no table or wood up there to make another"
-  :goal/holds {:tag/pickaxes 2}
+  "scoop a surface water source with an empty bucket, walking to the nearest one in sight or remembered; a pickaxe is held for the stairs up out of a mine, and a spare made when what is held makes one, since one wears out on the way (a stone pickaxe lasts 131 blocks, a climb of fifty stairs digs about 150) and there may be no table or wood up there to make another"
+  :goal/holds {:tag/pickaxes 1}
+  :goal/spares {:tag/pickaxes 1}
   :goal/needs {:item/bucket 1}
   :goal/provides {:item/water_bucket 1}
   :goal/act :scoop

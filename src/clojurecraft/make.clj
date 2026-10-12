@@ -33,6 +33,7 @@
 (def table-search 24)                 ; how far a remembered crafting table counts as :near
 (def block-window {:crafting_table :table :furnace :furnace}) ; the window a placed block opens
 (def max-depth 12)                    ; item needs the needs planner may chain before it is :stuck
+(def fetching-acts #{:gather :mine})  ; acts that go out for what is not held: never done for a spare
 
 ;; ---------------------------------------------------------------- needs as data
 
@@ -145,12 +146,31 @@
           [counts nil]
           (:goal/holds row)))
 
+(defn fetch?
+  "Would action send the bot out for something: :stuck, or a row whose act gathers or mines?"
+  [action]
+  (or (= :stuck action) (contains? fetching-acts (:goal/act action))))
+
+(defn resolve-spares
+  "[counts action] for the tools a row keeps one more of than it holds (:goal/spares, beside
+   :goal/holds): planned only when it can be made from what is held and near; one that would
+   send the bot out for wood or stone is no need at all (nil). Gym batch iron-a7 runs 1-3, deep
+   in the mine with a working pickaxe and no wood, waited :no-log for a second pickaxe the fill
+   row held."
+  [world table counts row path]
+  (reduce (fn [[c _] [k n]]
+            (let [[_ a] (resolve-need world table c k (+ n (get (:goal/holds row) k 0)) path)]
+              (if (and a (not (fetch? a))) (reduced [c a]) [c nil])))
+          [counts nil]
+          (:goal/spares row)))
+
 (defn resolve-row
   "Try to get times × row done: [counts row-to-act-on] (a producer whose needs are met, maybe
-   this row), or [counts :stuck]. What the row holds is resolved once; what it needs, times
-   over."
+   this row), or [counts :stuck]. What the row holds is resolved once, then its spares
+   (resolve-spares); what it needs, times over."
   [world table counts row times path]
   (let [[c a] (resolve-holds world table counts row path)
+        [c a] (if a [c a] (resolve-spares world table counts row path))
         [c a] (if a
                 [c a]
                 (reduce (fn [[c _] [k n]]

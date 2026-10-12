@@ -181,6 +181,7 @@
         :near #{:near}))
 (s/def :goal/needs (s/map-of ::need-key ::amount))
 (s/def :goal/holds (s/map-of ::need-key ::amount))    ; needs a row keeps rather than spends (a tool)
+(s/def :goal/spares (s/map-of ::need-key ::amount))   ; one more of a held tool, made only from what is held
 (s/def :goal/provides (s/map-of ::need-key ::amount :min-count 1))
 (s/def :goal/done? keyword?)
 (s/def :goal/act keyword?)
@@ -197,8 +198,8 @@
 (s/def ::goal
   (s/keys :req [:goal/id :goal/priority :goal/done?]
           :opt
-          [:goal/needs :goal/holds :goal/act :goal/target? :goal/until :goal/doc :goal/superseded-by
-           :goal/always? :goal/trap :goal/plan :goal/blocks :goal/depth]))
+          [:goal/needs :goal/holds :goal/spares :goal/act :goal/target? :goal/until :goal/doc
+           :goal/superseded-by :goal/always? :goal/trap :goal/plan :goal/blocks :goal/depth]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]

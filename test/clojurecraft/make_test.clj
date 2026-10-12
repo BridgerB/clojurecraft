@@ -269,4 +269,12 @@
     (is (= :craft/bucket (row {:stone_pickaxe 2 :iron_ingot 3 :flint_and_steel 1} :table? true)))
     (is (= :fill-bucket (row {:stone_pickaxe 2 :bucket 1 :flint_and_steel 1}))
         "the bucket is iron spent")
+    (is (= :fill-bucket (row {:stone_pickaxe 1 :bucket 1 :flint_and_steel 1}))
+        "one pickaxe and no wood: a spare is never worth a trip for wood (gym batch iron-a7)")
+    (is (=
+         :craft/stone_pickaxe
+         (row {:stone_pickaxe 1 :bucket 1 :flint_and_steel 1 :stick 2 :cobblestone 3} :table? true))
+        "a spare made from what is held and near")
+    (is (= :mine-iron (row {:stone_pickaxe 1 :iron_ingot 2 :flint_and_steel 1} :table? true))
+        "the third ingot's ore, not wood for a spare")
     (is (nil? (row {:water_bucket 1 :flint_and_steel 1})) "the kit held: nothing to do")))
