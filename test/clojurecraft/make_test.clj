@@ -21,6 +21,7 @@
             [clojurecraft.spec]
             [clojurecraft.stone]
             [clojurecraft.swim :as swim]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
 (def pickaxe (first (filter #(= :pickaxe (:goal/id %)) plan/goals)))
@@ -281,3 +282,14 @@
     (is (= :mine-iron (row {:stone_pickaxe 1 :iron_ingot 2 :flint_and_steel 1} :table? true))
         "the third ingot's ore, not wood for a spare")
     (is (nil? (row {:water_bucket 1 :flint_and_steel 1})) "the kit held: nothing to do")))
+
+(deftest a-last-stone-pickaxe-underground-goes-for-a-log
+  ;; full run 068485c wore the last stone pickaxe out at y 16, then the wooden one broke on the
+  ;; stairs and three :no-pickaxe failures ended the plan. The spare is gathered while the
+  ;; pickaxe still digs, which underground is a climb; on the open sky with no tree it is not.
+  (let [w (assoc (with-furnace (world-holding {:stone_pickaxe 1 :coal 1} false))
+                 :player/pos
+                 [5.5 50.0 5.5])]
+    (is (not (terrain/under-sky? w (intent/feet w))))
+    (is (= :gather-log
+           (:goal/id (make/next-row w {:goal/provides {:item/iron_ingot 4}} plan/goals))))))

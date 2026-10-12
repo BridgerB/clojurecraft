@@ -3,7 +3,8 @@
 ;; predicate decides it is done, and which registered act satisfies it once its needs are met.
 ;; Need and provide keys: :item/<name> n, :tag/<item-tag> n, :block/<name> :near. A row's :goal/holds
 ;; are needs it keeps rather than spends (a tool): planned for once, never netted per run; its
-;; :goal/spares one more of a held tool each, made only from what is held and near. A :mine
+;; :goal/spares one more of a held tool each, made when it can be started now (a gather only
+;; when a log can be walked to or climbed for; never a mine). A :mine
 ;; row names the blocks it digs (:goal/blocks, stone when absent) and how deep it may cut stairs
 ;; looking for them (:goal/depth, unbounded when absent); what it collects is their loot table's.
 ;; Targets (:goal/target? true) are what a run is for; --until <:goal/until> puts one in play. Producers are
@@ -178,8 +179,9 @@
  {:goal/id :mine-iron
   :goal/priority 10
   :goal/doc
-  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest"
+  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest. A spare pickaxe is made before more ore is dug, gathering the wood when a log can be started, so the last one is not worn out at the bottom"
   :goal/holds {:item/stone_pickaxe 1}
+  :goal/spares {:item/stone_pickaxe 1}
   :goal/provides {:item/raw_iron 1}
   :goal/act :mine
   :goal/blocks [:iron_ore :deepslate_iron_ore]

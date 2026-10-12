@@ -7,7 +7,6 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
-            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
 
@@ -88,25 +87,15 @@
    :intent/for :log
    :intent/trunk bottom})
 
-(defn way-home?
-  "Does walk i have a route, or waypoints to start along? From a mine the way back to a surface
-   tree can be longer than one search, so the plan comes back :partial while the target's chunk
-   is still loaded, which routable? refuses. The walk follows those waypoints and plans again.
-   A wooden pickaxe cannot cut the stone over a mine, so the open tunnel is the way out."
-  [world i]
-  (let [{:path/keys [status waypoints]}
-        (path/plan world (path/feet-cell (:player/pos world)) (intent/walk-goal i))]
-    (or (= :found status) (boolean (seq waypoints)))))
-
 (defn climb-out
   "No trunk in the near band. Underground, the trees are on the surface: walk to the nearest
-   remembered one a way leads to, else cut stairs up until out of the ground (stairs/out? ends
-   them; terrain/top-y is the top of the world). nil under the open sky, where there is nothing
-   to climb and the caller waits :no-log. Full run 5be14e7 stood at y 16 with one plank and a
-   wooden pickaxe, no log within 12 of the eye, and the plan waited :no-log until it failed."
+   remembered one a route reaches (intent/routable?), else cut stairs up until out of the ground
+   (stairs/out? ends them; terrain/top-y is the top of the world). nil under the open sky.
+   A :partial route through ground already loaded is not started: full run 068485c took six of
+   them from y 16, each failed :no-path within seconds, and the trunks were blacklisted."
   [world]
   (when-not (terrain/under-sky? world (intent/feet world))
-    (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (way-home? world i) i)))
+    (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
               (->> (memory/positions-now world blocks/log-states)
                    (remove (skipped world))
                    (filter #(standing-trunk? world %))
