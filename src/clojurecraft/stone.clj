@@ -31,6 +31,7 @@
 (def default-blocks [:stone])         ; a :mine row that names no blocks mines stone, as the first one did
 (def max-candidates 3)                ; the nearest targets a route is planned to before none counts as in sight
 (def tunnel-length 12)                ; level steps a tunnel at a row's depth cuts before looking again
+(def sides [[1 0] [-1 0] [0 1] [0 -1]]) ; the horizontal neighbours a block is dug from, in the order tried
 
 (def states-of-row
   "row → every state id of the blocks it mines. Memoized: a row is a value."
@@ -52,19 +53,31 @@
     (when (and (blocks/drops-need-tool? s) (nil? (dig/best-tool s (:player/inventory world) {})))
       (keyword (str "no-" (name (blocks/tool-of s)))))))
 
+(defn step-down?
+  "Would digging the block at [x y z] leave a hole one deep that the body can step down into: a
+   solid block under it and the two cells over it clear? Then its drop lands in the hole and a
+   collect walks in after it."
+  [world [x y z]]
+  (and (= :solid (path/classify world [x (dec y) z]))
+       (path/clear? world [x (inc y) z])
+       (path/clear? world [x (+ y 2) z])))
+
 (defn beside
   "A cell a route could stand in to dig a block at pos from, or nil: one of its horizontal
    neighbours at its level or a block lower (the block at the head), or the cell under it with
-   the head just below it (the block overhead). From each the drop comes to rest inside the
-   pickup box. Dug from the surface above, the drop lies a block under the feet and is never
-   picked up, so a block under the feet never counts. In a tunnel two high, only the walls at
-   the feet counted before the head and the ceiling did: batch iron-a2 run 4 tunnelled over a
-   hundred blocks at y 16 without one iron ore in sight."
-  [world [x y z]]
+   the head just below it (the block overhead), or, when it leaves a step down (step-down?), a
+   horizontal neighbour a block up (the block in the floor beside the feet). From each the drop
+   comes to rest inside the pickup box, or in the hole the collect steps into. A block under the
+   feet never counts: its drop lies a block under them and nothing walks in after it. In a
+   tunnel two high, only the walls at the feet counted before the head and the ceiling did:
+   batch iron-a2 run 4 tunnelled over a hundred blocks at y 16 without one iron ore in sight;
+   and before the floor did, live run 14 tunnelled for gravel over five in its own floor."
+  [world [x y z :as pos]]
   (first (filter #(path/standable? world %)
-                 (concat
-                  (for [dy [0 -1] [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]] [(+ x dx) (+ y dy) (+ z dz)])
-                  [[x (- y 2) z]]))))
+                 (concat (for [dy [0 -1] [dx dz] sides] [(+ x dx) (+ y dy) (+ z dz)])
+                         [[x (- y 2) z]]
+                         (when (step-down? world pos)
+                           (for [[dx dz] sides] [(+ x dx) (inc y) (+ z dz)]))))))
 
 (defn exposed?
   "Can a player stand beside the block at pos and dig it?"
@@ -182,28 +195,31 @@
    when neither can; wait for the tool. The live runs that waited at the depth
    with nothing in sight failed there; a tunnel's walls are where the ore shows."
   [world row]
-  (or (continue-mine world row)
-      (let [missing (tool-missing world row)
-            stowed (intent/stowed-tool world (first (states-of-row row)))
-            walk-to
-            (fn [t]
-              {:intent/kind :walk :intent/target t :intent/for (:goal/id row) :intent/pickup? true})
-            walk (when-not missing
-                   (->> (exposed-of-states world (states-of-row row))
-                        (take max-candidates)
-                        (map walk-to)
-                        (filter #(intent/routable? world %))
-                        first))]
-        (cond missing {:plan/wait missing}
-              stowed {:intent/kind :equip :intent/item (recipe/item-name (second stowed))}
-              walk walk
-              :else
-              (or (stairs world row)
-                  (when-let [d (tunnel-heading world)]
-                    {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
-                  (deeper world)
-                  (retreat world)
-                  {:plan/wait :boxed})))))
+  (or
+   (continue-mine world row)
+   (let [missing (tool-missing world row)
+         stowed (intent/stowed-tool world (first (states-of-row row)))
+         walk-to
+         (fn [t]
+           (cond->
+             {:intent/kind :walk :intent/target t :intent/for (:goal/id row) :intent/pickup? true}
+             (= (inc (second t)) (second (beside world t))) (assoc :intent/step-down? true)))
+         walk (when-not missing
+                (->> (exposed-of-states world (states-of-row row))
+                     (take max-candidates)
+                     (map walk-to)
+                     (filter #(intent/routable? world %))
+                     first))]
+     (cond missing {:plan/wait missing}
+           stowed {:intent/kind :equip :intent/item (recipe/item-name (second stowed))}
+           walk walk
+           :else
+           (or (stairs world row)
+               (when-let [d (tunnel-heading world)]
+                 {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
+               (deeper world)
+               (retreat world)
+               {:plan/wait :boxed})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
 

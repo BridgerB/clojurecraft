@@ -310,6 +310,7 @@
 (s/def :intent/reason some?)
 (s/def :intent/for keyword?)
 (s/def :intent/pickup? boolean?)
+(s/def :intent/step-down? boolean?)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
@@ -355,7 +356,9 @@
 (s/def :goal/pos ::block-pos)
 (s/def :goal/range number?)
 (s/def :goal/rise nat-int?)
-(s/def ::path-goal (s/keys :req [:goal/kind :goal/pos] :opt [:goal/range :goal/rise]))
+(s/def :goal/step-down? boolean?)
+(s/def ::path-goal
+  (s/keys :req [:goal/kind :goal/pos] :opt [:goal/range :goal/rise :goal/step-down?]))
 (s/def :intent/logs-before nat-int?)
 (s/def :intent/drops (s/coll-of int? :kind set?))
 (s/def :intent/drops-before nat-int?)

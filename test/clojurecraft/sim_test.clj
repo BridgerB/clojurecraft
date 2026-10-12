@@ -1113,6 +1113,34 @@
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
     (is (empty? (:sim/violations sim)))))
 
+(def gravel-floor
+  "The tunnel of ore-corridor with no ore, and gravel in its floor at x 9, stone under it."
+  (merge (into {} (for [x (range 16) y (range 64 71) z (range 16)] [[x y z] 1]))
+         (into {} (for [x (range 2 13) y [64 65]] [[x y 8] blocks/air]))
+         {[9 63 8] (blocks/default-state :gravel)}))
+
+(deftest gravel-in-the-tunnel-floor-is-dug-and-picked-up-from-its-hole
+  ;; live run 14 tunnelled for gravel at y 18 over five gravel blocks in its own floor
+  (let [table (conj plan/goals
+                    {:goal/id :gravel-test
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:item/gravel 1}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes gravel-floor)
+                                    :spawn [2.5 64.0 8.5]
+                                    :inventory {36 {:item (item :stone_pickaxe) :count 1}}
+                                    :seed 4}) ; gravel drops gravel on the first dig
+                         #(or (plan/done? %) (plan/failed? %))
+                         60000
+                         {:event/kind :go :go/goals [:gravel-test]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= #{[9 63 8]} (:sim/broken sim)) "the gravel, nothing else")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations sim)))))
+
 (deftest ore-is-mined-with-a-pickaxe-from-the-main-inventory
   ;; the mine act puts a stowed pickaxe in hand before it walks to the ore (iron ore by hand drops
   ;; nothing, and the dig chooses from the hotbar)

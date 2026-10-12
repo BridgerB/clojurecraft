@@ -167,38 +167,41 @@
 
 ;; ---------------------------------------------------------------- walk
 
-(defn arrived?
-  "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
-   the pickup box: for a log, no more than pickup-rise below it (not on a bank above the box);
-   for a block mined from beside (:intent/pickup?: stone, ore), neither above it (the drop would
-   lie under the box) nor more than pickup-rise below it, and within pickup-range of its cell on
-   the plane: the drop lands in the block's own cell, and a collect walks straight at it, so
-   from farther, round a tunnel's corner, it walked into the wall until it failed. For water to
-   scoop, on its bank: the feet level with the cell over the source or a block lower, within
-   scoop-range on the plane, where the eyes look down on its surface; the tenth live run's walk
-   ended in reach but in its own stair pit two below the surface, and saw no water."
-  [world {:intent/keys [target for pickup?]} d]
-  (let [rise (- (second target) (long (math/floor (second (:player/pos world)))))]
-    (and (<= d reach)
-         (cond pickup?
-               (and (<= 0 rise pickup-rise) (<= (path/octile (feet world) target) pickup-range))
-               (= :scoop for)
-               (and (<= -1 rise 0) (<= (path/octile (feet world) target) scoop-range))
-               (= :log for) (<= rise pickup-rise)
-               :else true))))
-
 (defn walk-goal
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell
    within pickup-range of it whose feet are where the drop lands in reach (path's :pickup goal:
    the block at or up to pickup-rise above them; no single cell beside it, which a wall may
-   close off); for water to scoop, its bank (arrived?: path's :pickup goal at the cell over the
+   close off), and with :intent/step-down? a straight neighbour a block up too (the block in the
+   floor beside the feet, path's :goal/step-down?); for water to scoop, its bank (arrived?: path's :pickup goal at the cell over the
    source, rise 1); else anywhere within goal-range."
-  [{:intent/keys [target for pickup?]}]
+  [{:intent/keys [target for pickup? step-down?]}]
   (cond pickup?
-        {:goal/kind :pickup :goal/pos target :goal/range pickup-range :goal/rise pickup-rise}
+        (cond->
+          {:goal/kind :pickup :goal/pos target :goal/range pickup-range :goal/rise pickup-rise}
+          step-down? (assoc :goal/step-down? true))
         (= :scoop for)
         {:goal/kind :pickup :goal/pos (update target 1 inc) :goal/range scoop-range :goal/rise 1}
         :else {:goal/kind :near :goal/pos target :goal/range goal-range}))
+
+(defn arrived?
+  "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
+   the pickup box: for a log, no more than pickup-rise below it (not on a bank above the box);
+   for a block mined from beside (:intent/pickup?: stone, ore), its walk-goal: neither above it
+   (the drop would lie under the box) nor more than pickup-rise below it, and within
+   pickup-range of its cell on the plane, or a block up beside it with :intent/step-down?: the
+   drop lands in the block's own cell, and a collect walks straight at it, so from farther,
+   round a tunnel's corner, it walked into the wall until it failed. For water to
+   scoop, on its bank: the feet level with the cell over the source or a block lower, within
+   scoop-range on the plane, where the eyes look down on its surface; the tenth live run's walk
+   ended in reach but in its own stair pit two below the surface, and saw no water."
+  [world {:intent/keys [target for pickup?] :as i} d]
+  (let [rise (- (second target) (long (math/floor (second (:player/pos world)))))]
+    (and (<= d reach)
+         (cond pickup? (path/goal-done? (walk-goal i) (feet world))
+               (= :scoop for)
+               (and (<= -1 rise 0) (<= (path/octile (feet world) target) scoop-range))
+               (= :log for) (<= rise pickup-rise)
+               :else true))))
 
 (defn routable?
   "Is there a way to walk intent i's goal from the feet: the planner's route is :found, or

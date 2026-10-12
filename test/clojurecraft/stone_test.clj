@@ -128,4 +128,17 @@
     (is (contains? seen [5 65 9])
         "in the wall at the head: dug from the cell beside it, a block lower")
     (is (contains? seen [8 66 8]) "in the ceiling: dug from under it")
-    (is (not (contains? seen [11 63 8])) "in the floor: the drop would lie under the feet")))
+    (is (contains? seen [11 63 8])
+        "in the floor: dug from the tunnel beside it, its drop picked up from the hole it leaves")
+    (is (= [12 64 8] (stone/beside w [11 63 8])) "from a cell beside it, a block up")))
+
+(deftest a-block-in-the-floor-counts-only-where-it-leaves-a-step-down
+  ;; live run 14 tunnelled for gravel at y 18 over five gravel blocks in its own floor
+  (let [w (assoc (standing 64 :stone_pickaxe)
+                 :player/pos [2.5 64.0 8.5]
+                 :world/chunks {[0 0] (world/column corridor)})
+        dug (fn [cells] (assoc w :world/chunks {[0 0] (world/column (merge corridor cells))}))]
+    (is (nil? (stone/beside (dug {[11 62 8] blocks/air}) [11 63 8]))
+        "nothing under it: a drop, not a step")
+    (is (nil? (stone/beside (dug {[11 64 8] 1}) [11 63 8]))
+        "stone over it: nowhere to step down from")))

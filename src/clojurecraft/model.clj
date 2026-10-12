@@ -160,6 +160,9 @@
    [:intent/pickup?
     "a walk toward a block to mine from beside: it ends where the dug block's drop lands in the pickup box"
     "a :mine walk"]
+   [:intent/step-down?
+    "a :mine walk toward a block in the floor: it may end a block up beside it, the drop landing in the hole the dig leaves"
+    "a :mine walk to a block that leaves a step down"]
    [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"
     "gather-chain intents"]
    [:intent/stage "executor stage, e.g. :settle :digging :click :verify :take" "staged intents"]
