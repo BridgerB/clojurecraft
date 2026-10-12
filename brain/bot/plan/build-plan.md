@@ -17,6 +17,7 @@ sourceRefs:
   - src/clojurecraft/build.clj#defmethod intent/run :build
   - src/clojurecraft/build.clj#defn op-child
   - src/clojurecraft/build.clj#defn station-among
+  - src/clojurecraft/build.clj#def footprint
   - src/clojurecraft/build.clj#defn foundation
   - src/clojurecraft/build.clj#defn choose-site
   - src/clojurecraft/memory.clj#defn site
@@ -53,6 +54,7 @@ ruststeve's template mold ([[sib-portal-mold]]) as data, pure (`the-plan-never-p
 ## Gotchas
 - **The tower stands until the frame does.** A layer's stair and platform are done only once all ten cells are cast: later layers stand on them, so a resumed cast whose lower layers are obsidian still builds them.
 - **A plan ends in its goal.** cast-one ends in a `:verify` (the cell cast and the bowl dry); its last cell op, the scoop, holds before anything is poured.
+- **The footprint is the plan's, not the mold's box**: the stair to the top layer runs to dx 8, past the box (dx -2..6). `footprint` is the box plus every cell an op works in, so no site has lava under a step and no station's source is under one (a step placed into a source destroys it); `no-op-touches-a-column-a-station-may-be-in` holds it.
 - **Lava is not renewable**: a scoop takes a source for good, and a station needs ground beside the cell over its source, so the gym's pit is a one-wide trench.
 - **A dig never takes obsidian**: `dig-op`'s done holds when its cell is obsidian (`no-dig-can-take-obsidian`); a cell's bowl can be another cell (the bowl of (0,1) is (0,2)).
 - **Facings turn about the origin cell's middle** (`point`), so the origin cell stays put and a cell and the points inside it turn alike.

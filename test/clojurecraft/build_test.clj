@@ -61,6 +61,17 @@
                                   (= plan (build/portal-plan o facing))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
 
+(deftest no-op-touches-a-column-a-station-may-be-in
+  ;; station-among refuses a source under the footprint, so the footprint must cover every cell
+  ;; the plan works in: the stair to the top layer runs east past the mold's box, and a step
+  ;; placed into a station's source would destroy it
+  (let [r (tc/quick-check 200
+                          (prop/for-all [o gen-origin facing gen-facing]
+                                        (every? (fn [[x _ z]] (build/footprint? o facing [x z]))
+                                                (keep #(or (:build/pos %) (:build/into %))
+                                                      (build/portal-plan o facing)))))]
+    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
+
 (deftest turning-the-facing-moves-every-cell-and-loses-none
   (let [cells (fn [facing] (set (keep :build/pos (build/portal-plan origin facing))))]
     (doseq [facing build/facings]

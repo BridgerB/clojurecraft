@@ -390,12 +390,22 @@
           (> (- (now world) started) await-ms) (intent/fail world :not-yet)
           :else world)))
 
+(def footprint
+  "[origin facing] → the set of cells a frame there works in: the box round the mold (dx -2..6,
+   dy -1..1, dz -2..3) and every cell an op of its plan places, digs or pours into, since the
+   stair to the top layer runs east past the box. No lava may be in it, and no station's source
+   under it. Memoized: the plan is pure."
+  (memoize
+   (fn [origin facing]
+     (into (set
+            (for [dx (range -2 7) dy (range -1 2) dz (range -2 4)] (cell origin facing [dx dy dz])))
+           (keep #(or (:build/pos %) (:build/into %)))
+           (portal-plan origin facing)))))
+
 (defn footprint?
-  "Is column [x z] inside the mold's footprint from origin facing (dx -2..6, dz -2..3), where a
-   station must not be?"
+  "Is column [x z] under any cell of the footprint at origin facing, where a station must not be?"
   [origin facing [x z]]
-  (some (fn [[dx dz]] (= [x z] (let [[cx _ cz] (cell origin facing [dx 0 dz])] [cx cz])))
-        (for [dx (range -2 7) dz (range -2 4)] [dx dz])))
+  (boolean (some (fn [[cx _ cz]] (and (= x cx) (= z cz))) (footprint origin facing))))
 
 (defn lava-sources
   "Every lava source in the loaded terrain, as the block overlay says now."
@@ -524,13 +534,11 @@
 (def site-radius 4)                   ; blocks from the feet a frame origin is looked for
 
 (defn site-ok?
-  "Can a frame be cast at origin facing: every cell of the footprint (dx -2..6, dy -1..1, dz
-   -2..3) loaded and no lava in it (a block placed into lava destroys the source, and lava under
-   the mold is no stance: ruststeve's lava sea), the ground under the origin solid, and a station
-   among sources?"
+  "Can a frame be cast at origin facing: every cell of the footprint loaded and no lava in it (a
+   block placed into lava destroys the source, and lava under the mold is no stance: ruststeve's
+   lava sea), the ground under the origin solid, and a station among sources?"
   [world sources origin facing]
-  (let [cells
-        (for [dx (range -2 7) dy (range -1 2) dz (range -2 4)] (cell origin facing [dx dy dz]))]
+  (let [cells (footprint origin facing)]
     (and (every? #(some? (terrain/block-at world %)) cells)
          (not-any? #(contains? blocks/lava-states (terrain/block-at world %)) cells)
          (holds? world [:solid (update origin 1 dec)])
