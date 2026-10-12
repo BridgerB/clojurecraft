@@ -26,7 +26,7 @@ related:
 
 ## Key files
 - `bb/clojurecraft/server.clj`, `local-opts` - this Mac's ports, the password, the world; `bb local-server`.
-- `bb/clojurecraft/server.clj`, `start!` / `stop!` - shared by this Mac, CI's gym shards, the world build and the fleet's workers (`bb server start|stop`, set up by `PORT RCON_PORT RCON_PASS WORLD`): writes `eula.txt` and `server.properties` (`properties`, ordered pairs as data), starts `java ... nogui` detached, waits for `Done (` in `server.log` (180 s cap); `stop!` kills the pid, forcing it after 60 s. Babashka has no `ProcessHandle`, so liveness is `kill -0`, as the shell script did.
+- `bb/clojurecraft/server.clj`, `start!` / `stop!` - shared by this Mac, CI's gym trials, the world build and a plan's jobs (`bb server start|stop`, set up by `PORT RCON_PORT RCON_PASS WORLD`): writes `eula.txt` and `server.properties` (`properties`, ordered pairs as data), starts `java ... nogui` detached, waits for `Done (` in `server.log` (180 s cap); `stop!` kills the pid, forcing it after 60 s. Babashka has no `ProcessHandle`, so liveness is `kill -0`, as the shell script did.
 
 ## Properties that matter
 - `online-mode=false` - offline UUIDs, no encryption.

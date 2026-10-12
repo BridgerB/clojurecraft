@@ -41,7 +41,7 @@
         "eye is west of the block, so its west face")))
 
 (deftest a-branch-is-not-a-trunk-bottom
-  ;; recorded by the gym and the fleet at landing 21280,18720 (wood-a2 run 5, smoke2 run 5): a
+  ;; recorded by the gym and a plan at landing 21280,18720 (wood-a2 run 5, smoke2 run 5): a
   ;; branch log with air under it passed for a trunk bottom, and its drop came to rest on the
   ;; trunk below it, out of reach. A trunk bottom stands on ground, or over its own dug base.
   (let [col (world/column

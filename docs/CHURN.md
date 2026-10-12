@@ -42,14 +42,14 @@ gh run list --repo BridgerB/clojurecraft --workflow gym.yml --event workflow_dis
 gh run watch <run-id> --repo BridgerB/clojurecraft --exit-status   # in the background: wakes you at the end
 ```
 
-A shard's job ends "success" whether the bot passed or not (only the push gym fails on a failed run). The verdict is in the artifacts:
+A trial's job ends "success" whether the bot passed or not (only the push gym fails on a failed run). The verdict is in the artifacts:
 
 ```bash
 gh run download <run-id> --repo BridgerB/clojurecraft -n gym-<label>-<goal>-<run> -D <dir>/gym-<label>-<goal>-<run>
 scripts/clj -M:gym report --dir <dir>          # pass k/n with a 95% interval, one row per run, outcomes, reasons
 ```
 
-Each shard's artifact holds `trial/result.edn` (the judged row), `trial/bot.log` (the bot's stderr), `trial/run.edn.zst` (the recording), `trial/landed.edn`, and `work/world/logs/latest.log` (the server's own log: deaths, crashes, warnings). Artifacts are kept 3 days.
+Each trial's artifact holds `trial/result.edn` (the judged row), `trial/bot.log` (the bot's stderr), `trial/run.edn.zst` (the recording), `trial/landed.edn`, and `work/world/logs/latest.log` (the server's own log: deaths, crashes, warnings). Artifacts are kept 3 days.
 
 ### Going wide
 
@@ -76,7 +76,7 @@ Today the aggregate job writes a summary and comments it on the branch's PR. The
    - the outcome, the reason and the run's seconds;
    - the last 20 lines of `probe story` (or of `bot.log` when the recording is missing);
    - the artifact name and the commands of Part 2's first steps, filled in;
-   - a note that the artifact expires in 3 days (raise `retention-days` for failed shards if fixes lag).
+   - a note that the artifact expires in 3 days (raise `retention-days` for failed trials if fixes lag).
 4. **Permissions:** the workflow needs `issues: write`; `gh issue create` and `gh issue comment` with `GH_TOKEN: ${{ github.token }}`.
 
 A sketch of the step, after the aggregate job folds the results:

@@ -1,14 +1,15 @@
-(ns clojurecraft.fleet
-  "The fleet: many runners kept busy at once, from one plan file. A plan (ci/fleet/<label>.edn)
-   is data: how many workers, how wide, and the experiments to run. The planner is pure: it
-   expands experiments into units (a gym unit is k trials sharing one server, each its own bot on
-   its own landing; a sim unit is one seeded shard of a generated-world property), then schedules
-   units onto workers longest first. Only worker numbers cross the job boundary; each worker
-   recomputes its own assignment from the plan, so every worker and the aggregate agree.
+(ns clojurecraft.plans
+  "Run one plan file across many jobs. A plan (ci/plan/<label>.edn) is data: how many jobs, how
+   wide, and the experiments to run. The namespace is plans because plan is the bot's planner.
+   The planner here is pure: it expands experiments into units (a gym unit is k trials sharing
+   one server, each its own bot on its own landing; a sim unit is one seeded shard of a
+   generated-world property), then schedules units onto jobs longest first. Only job numbers
+   cross the job boundary; each job recomputes its own assignment from the plan, so every job
+   and the aggregate agree.
 
-   Workers are processes speaking data: the worker starts each bot as its own JVM, lands it and
-   tells it to go through its stdin (the gym's fixture), judges it from its log and the server,
-   and leaves a result file per trial. The aggregate folds every result into one report."
+   A job is a process speaking data: it starts each bot as its own JVM, lands it and tells it to
+   go through its stdin (the gym's fixture), judges it from its log and the server, and leaves a
+   result file per trial. The aggregate folds every result into one report."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.math :as math]
@@ -21,12 +22,12 @@
 (set! *warn-on-reflection* true)
 
 ;; the shape of a plan file
-(s/def :fleet/label string?)
-(s/def :fleet/workers (s/int-in 1 257))              ; a matrix holds at most 256 jobs
-(s/def :fleet/max-parallel (s/int-in 1 21))
-(s/def :fleet/max-worker-s pos-int?)
-(s/def :fleet/issue pos-int?)
-(s/def :fleet/salt string?)                         ; a repeated plan's run, so its sims sample fresh worlds
+(s/def :plans/label string?)
+(s/def :plans/jobs (s/int-in 1 257))                 ; a matrix holds at most 256 jobs
+(s/def :plans/max-parallel (s/int-in 1 21))
+(s/def :plans/max-job-s pos-int?)
+(s/def :plans/issue pos-int?)
+(s/def :plans/salt string?)                         ; a repeated plan's run, so its sims sample fresh worlds
 (s/def :exp/name string?)
 (s/def :exp/kind #{:gym :sim})
 (s/def :exp/goal string?)
@@ -48,12 +49,12 @@
          #(case (:exp/kind %)
             :gym (and (:exp/goal %) (:exp/runs %))
             :sim (and (:exp/property %) (:exp/shards %) (:exp/worlds %)))))
-(s/def :fleet/experiments (s/coll-of ::experiment :kind vector? :min-count 1))
+(s/def :plans/experiments (s/coll-of ::experiment :kind vector? :min-count 1))
 (s/def ::plan
-  (s/keys :req [:fleet/label :fleet/workers :fleet/experiments]
-          :opt [:fleet/max-parallel :fleet/max-worker-s :fleet/issue :fleet/salt]))
+  (s/keys :req [:plans/label :plans/jobs :plans/experiments]
+          :opt [:plans/max-parallel :plans/max-job-s :plans/issue :plans/salt]))
 
-(def default-max-worker-s 19800)        ; 5.5 h: a GitHub job may run 6 h
+(def default-max-job-s 19800)           ; 5.5 h: a GitHub job may run 6 h
 (def server-overhead-s 60)              ; copy the world, start the server, stop it
 (def default-bots 1)                    ; bots per server unless the plan or capacity says more
 (def default-arms [{:arm/name "head"}]) ; the code being tested, at the plan's own commit
@@ -95,7 +96,7 @@
 
 (defn units
   "Every unit a plan asks for, in plan order."
-  [{:fleet/keys [label salt experiments]}]
+  [{:plans/keys [label salt experiments]}]
   (vec (mapcat (fn [exp]
                  (case (:exp/kind exp)
                    :gym (gym-units exp)
@@ -103,47 +104,47 @@
         experiments)))
 
 (defn schedule
-  "Units onto workers, longest first, each to the least loaded worker: {worker [unit ...]}.
-   Throws when a worker would pass max-worker-s, so a plan that cannot fit fails before it
-   starts rather than when a job is killed at six hours."
-  [{:fleet/keys [workers max-worker-s] :as plan}]
-  (let [limit (or max-worker-s default-max-worker-s)
+  "Units onto jobs, longest first, each to the least loaded job: {job [unit ...]}.
+   Throws when a job would pass max-job-s, so a plan that cannot fit fails before it
+   starts rather than when a runner is killed at six hours."
+  [{:plans/keys [jobs max-job-s] :as plan}]
+  (let [limit (or max-job-s default-max-job-s)
         ordered (sort-by (juxt (comp - :unit/est-s) :unit/id) (units plan))
         loads (reduce (fn [loads u]
                         (let [[w {:keys [s]}] (first (sort-by (fn [[w {:keys [s]}]] [s w]) loads))
                               s' (+ s (:unit/est-s u))]
                           (when (> s' limit)
-                            (throw (ex-info "plan does not fit its workers"
-                                            {:unit (:unit/id u) :worker w :seconds s'})))
+                            (throw (ex-info "plan does not fit its jobs"
+                                            {:unit (:unit/id u) :job w :seconds s'})))
                           (update loads
                                   w
                                   (fn [l]
                                     (-> l
                                         (update :s + (:unit/est-s u))
                                         (update :units conj u))))))
-                      (into (sorted-map) (for [w (range 1 (inc workers))] [w {:s 0 :units []}]))
+                      (into (sorted-map) (for [w (range 1 (inc jobs))] [w {:s 0 :units []}]))
                       ordered)]
     (into (sorted-map) (for [[w {:keys [units]}] loads :when (seq units)] [w units]))))
 
-(defn assignment "The units worker w runs." [plan w] (get (schedule plan) w []))
+(defn assignment "The units job n runs." [plan n] (get (schedule plan) n []))
 
 (defn matrix
-  "The workflow matrix: only the worker numbers that have work."
+  "The workflow matrix: only the job numbers that have work."
   [plan]
-  (str "{\"worker\":[" (str/join "," (keys (schedule plan))) "]}"))
+  (str "{\"job\":[" (str/join "," (keys (schedule plan))) "]}"))
 
 (defn width
-  "How many of this fleet's workers to run at once: the plan's width, no more than the free
+  "How many of this plan's jobs to run at once: the plan's width, no more than the free
    runners (cap minus busy jobs elsewhere), and at least one."
-  [{:fleet/keys [max-parallel workers]} cap busy]
-  (max 1 (min (or max-parallel workers) (- cap busy))))
+  [{:plans/keys [max-parallel jobs]} cap busy]
+  (max 1 (min (or max-parallel jobs) (- cap busy))))
 
 (defn read-plan
   "A plan file, read and checked against its spec: a malformed plan fails in the plan job."
   [path]
   (let [plan (edn/read-string (slurp path))]
     (when-not (s/valid? ::plan plan)
-      (throw (ex-info (str path " is not a fleet plan: " (s/explain-str ::plan plan)) {})))
+      (throw (ex-info (str path " is not a plan: " (s/explain-str ::plan plan)) {})))
     plan))
 
 ;; ---------------------------------------------------------------- reporting
@@ -164,13 +165,13 @@
                [""]))))
 
 (defn report
-  "The fleet's markdown report: each gym experiment and arm through gym/report, then each sim."
+  "A plan's markdown report: each gym experiment and arm through gym/report, then each sim."
   [gym-rows sim-rows]
   (str/join "\n"
             (concat
-             (for [[[exp arm] rows] (sort-by key (group-by (juxt :fleet/exp :fleet/arm) gym-rows))]
+             (for [[[exp arm] rows] (sort-by key (group-by (juxt :plans/exp :plans/arm) gym-rows))]
                (str "## " exp " (" arm ")\n\n" (gym/report rows)))
-             (for [[exp rows] (sort-by key (group-by :fleet/exp sim-rows))] (sim-line exp rows)))))
+             (for [[exp rows] (sort-by key (group-by :plans/exp sim-rows))] (sim-line exp rows)))))
 
 (defn failures
   "The trials and shards a person should look at: every row that is not a pass, with where it
@@ -184,20 +185,20 @@
   "One failure as a line: what failed, why, and the directory holding its recording and logs."
   [{:keys [row path]}]
   (if (contains? row :gym/outcome)
-    (str "- " (:fleet/exp row)
-         " (" (:fleet/arm row)
+    (str "- " (:plans/exp row)
+         " (" (:plans/arm row)
          ") run " (:gym/run row)
          " " (:gym/outcome row)
          " " (:gym/reason row)
          " at " (pr-str (:gym/landing row))
          ": " path)
-    (str "- sim " (:fleet/exp row)
+    (str "- sim " (:plans/exp row)
          " seed " (:seed row)
          " smallest " (pr-str (:smallest row))
          ": " path)))
 
 (def properties
-  "Sim properties a fleet can shard, by name: the test var that runs one."
+  "Sim properties a plan can shard, by name: the test var that runs one."
   {"forests" "clojurecraft.sim-test/the-wood-goal-holds-in-generated-forests"})
 
 (defn bot-name
@@ -243,10 +244,10 @@
                                                        :pass pass
                                                        :landings landings
                                                        :commit commit
-                                                       :tags {:fleet/exp (:unit/exp unit)
-                                                              :fleet/arm (:arm/name (:unit/arm
+                                                       :tags {:plans/exp (:unit/exp unit)
+                                                              :plans/arm (:arm/name (:unit/arm
                                                                                      unit))
-                                                              :fleet/unit (:unit/id unit)}})))
+                                                              :plans/unit (:unit/id unit)}})))
                                 (:unit/runs unit)))]
            (spit (io/file dir "forceload-stop.txt")
                  (rcon/with-rcon "127.0.0.1" 25575 pass #(rcon/command! % "forceload query")))
@@ -261,7 +262,7 @@
                     (cli/exec! ["zstd" "-19" "-q" "--rm" (str f)] {:log log}))))))
 
 (defn sim-unit!
-  "A sim unit: one seeded shard of a property, run as its test with the fleet's seed and size;
+  "A sim unit: one seeded shard of a property, run as its test with the plan's seed and size;
    the verdict is read back as data."
   [unit {:keys [out]}]
   (let [dir (io/file out (:unit/id unit))
@@ -275,15 +276,15 @@
     (let [row (assoc (if (.exists verdict)
                        (edn/read-string (slurp verdict))
                        {:pass? false :num-tests 0 :seed (:unit/seed unit)})
-                     :fleet/exp (:unit/exp unit)
-                     :fleet/unit (:unit/id unit))]
+                     :plans/exp (:unit/exp unit)
+                     :plans/unit (:unit/id unit))]
       (spit verdict (pr-str row))
       row)))
 
 (defn work!
-  "Run worker w's assignment of a plan, unit after unit, leaving every result under out."
-  [plan w opts]
-  (doseq [[i unit] (map-indexed vector (assignment plan w))]
+  "Run job n's assignment of a plan, unit after unit, leaving every result under out."
+  [plan n opts]
+  (doseq [[i unit] (map-indexed vector (assignment plan n))]
     (cli/log "unit" (:unit/id unit))
     (try (case (:unit/kind unit)
            :gym (gym-unit! unit (inc i) opts)
@@ -299,12 +300,12 @@
     [(filterv :gym/outcome rows) (vec (remove :gym/outcome rows))]))
 
 (defn pull!
-  "Download a fleet run's worker artifacts into data/runs/<run-id>/ (gh run download), print its report
+  "Download a plan run's job artifacts into data/runs/<run-id>/ (gh run download), print its report
    and every failure with the directory that holds its recording."
   [run-id]
   (let [dir (io/file "data" "runs" (str run-id))]
     (.mkdirs dir)
-    (cli/exec! ["gh" "run" "download" (str run-id) "--pattern" "fleet-*-w*" "--dir" (str dir)] {}) ; workers only: the summary repeats their rows
+    (cli/exec! ["gh" "run" "download" (str run-id) "--pattern" "plan-*-job-*" "--dir" (str dir)] {}) ; jobs only: the summary repeats their rows
     (let [[g s] (rows-in dir)
           fs (failures (gym/located-in dir #{"result.edn" "sim.edn"}))]
       (println (report g s))
@@ -312,23 +313,23 @@
       (doseq [f fs] (println (failure-line f))))))
 
 (defn -main
-  "clojure -M:fleet <command> --key value ...
-     plan   --plan ci/fleet/x.edn [--busy N] [--salt s]   matrix=..., width=..., label=... for $GITHUB_OUTPUT
-     work   --plan ci/fleet/x.edn --worker N --out dir [--worlds cache/worlds] [--salt s]
+  "clojure -M:plan <command> --key value ...
+     plan   --plan ci/plan/x.edn [--busy N] [--salt s]   matrix=..., width=..., label=... for $GITHUB_OUTPUT
+     work   --plan ci/plan/x.edn --job N --out dir [--worlds cache/worlds] [--salt s]
      report --dir artifacts
      pull   --run <run id>   download into data/runs/<id>/, print the report and every failure"
   [command & args]
-  (let [{:keys [plan worker out worlds dir busy salt run]} (cli/options args)
-        read (fn [p] (cond-> (read-plan p) salt (assoc :fleet/salt salt)))]
+  (let [{:keys [plan job out worlds dir busy salt run]} (cli/options args)
+        read (fn [p] (cond-> (read-plan p) salt (assoc :plans/salt salt)))]
     (case command
       "plan"
       (let [p (read plan)]
         (println (str "matrix=" (matrix p)))
         (println (str "width=" (width p 20 (parse-long (or busy "0")))))
-        (println (str "label=" (:fleet/label p))))
+        (println (str "label=" (:plans/label p))))
       "work"
       (work! (read plan)
-             (parse-long worker)
+             (parse-long job)
              {:out out
               :worlds (or worlds "cache/worlds")
               :bot-dir "."

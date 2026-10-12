@@ -8,6 +8,6 @@
  style/eq-zero {:enabled false}
  ;; The socket's two threads are the one place an Error is caught: a reader or writer thread that
  ;; dies of one must still tell the loop the socket closed, or the bot waits on a dead wire. Every
- ;; other edge (the gym, the fleet, the harness) catches Exception and lets an Error end the
+ ;; other edge (the gym, a plan, the harness) catches Exception and lets an Error end the
  ;; process.
  lint/catch-throwable {:excludes ["glob:**/conn.clj"]}}

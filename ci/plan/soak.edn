@@ -1,15 +1,15 @@
-;; The soak: what the launcher runs when the queue is spent, each time with a fresh salt, so the
+;; The soak: what the timer runs when the queue is spent, each time with a fresh salt, so the
 ;; sims sample new worlds every run. Sims are the bug finders: 28 worlds a second on one runner,
 ;; measured on a 300,000-world shard of the first launched soak (2,000-world smoke runs said 50,
 ;; with the JVM's start amortised over too few worlds). The gym walks landing set A once per goal
 ;; to catch what only real terrain shows. No issue: the report lands in the run's summary, and failures are pulled with
-;; clojure -M:fleet pull --run <id>. Pushed (rather than launched) it runs unsalted. Ten workers,
+;; clojure -M:plan pull --run <id>. Pushed (rather than launched) it runs unsalted. Ten jobs,
 ;; not twenty: the soak leaves half the runners for pushes (tests and the gym) and dispatched
 ;; batches, which otherwise queue behind it for an hour or more.
-{:fleet/label "soak"
- :fleet/workers 10
- :fleet/max-parallel 10
- :fleet/experiments
+{:plans/label "soak"
+ :plans/jobs 10
+ :plans/max-parallel 10
+ :plans/experiments
  [{:exp/name "forests"
    :exp/kind :sim
    :exp/property "forests"

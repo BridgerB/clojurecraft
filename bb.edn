@@ -44,16 +44,16 @@
            :task (apply clojure "-M:harness" *command-line-args*)}
   gym {:doc "The gym: plan, landings, trial, report (clojure -M:gym <command> ...)"
        :task (apply clojure "-M:gym" *command-line-args*)}
-  fleet {:doc "The fleet: plan, work, report, pull (clojure -M:fleet <command> ...)"
-         :task (apply clojure "-M:fleet" *command-line-args*)}
+  plan {:doc "A plan: plan, work, report, pull (clojure -M:plan <command> ...)"
+        :task (apply clojure "-M:plan" *command-line-args*)}
   server {:doc
           "A vanilla 26.1.2 server: bb server start|stop, set up by PORT RCON_PORT RCON_PASS WORLD"
           :requires ([clojurecraft.server :as server])
           :task (server/command! (first *command-line-args*) (server/env-opts))}
   prepare-world
-  {:doc "Build a gym landing set's world into cache/worlds/<set> (gym-world.yml): SET RCON_PASS"
-   :requires ([clojurecraft.gym-world :as gym-world])
-   :task (gym-world/-main)}
+  {:doc "Build a gym landing set's world into cache/worlds/<set> (world.yml): SET RCON_PASS"
+   :requires ([clojurecraft.worlds :as worlds])
+   :task (worlds/-main)}
   local-server {:doc "This Mac's vanilla server on 25571 / RCON 25581: bb local-server start|stop"
                 :requires ([clojurecraft.server :as server])
                 :task (server/command! (or (first *command-line-args*) "start")

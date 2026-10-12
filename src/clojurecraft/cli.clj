@@ -1,7 +1,7 @@
 (ns clojurecraft.cli
   "What every command-line entry point shares: reading --key value arguments, and one
    timestamped line on stderr (stdout is each process's own channel: RESULT for the bot, the :go
-   event for the fixture, a report for the gym and the fleet), and starting another process."
+   event for the fixture, a report for the gym and a plan), and starting another process."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]))
 

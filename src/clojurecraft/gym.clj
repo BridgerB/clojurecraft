@@ -8,7 +8,7 @@
                                 more attempt on the same landing if it lost its connection
      clojure -M:gym report --dir artifacts/   (folds every result.edn into one summary)
 
-   gym.yml runs one trial per runner; the fleet runs several on one server, tagging each row.
+   gym.yml runs one trial per runner; a plan runs several on one server, tagging each row.
 
    `gyms` is the registry, a table like plan/goals: which goal, the --until that runs it, what
    to give the bot first, how long it may take, and the truth commands that must all pass.
@@ -147,7 +147,7 @@
 
 (def z95 1.959964)                      ; the normal quantile for a two-sided 95% interval
 (def judge-grace-ms 120000)             ; past the goal's timeout, how long the judge waits for RESULT
-(def shard-overhead-minutes 8)          ; setup, server start and judging, on top of a goal's timeout
+(def trial-overhead-minutes 8)          ; setup, server start and judging, on top of a goal's timeout
 
 ;; ---------------------------------------------------------------- data
 
@@ -274,8 +274,8 @@
                                  (str "reasons: " (tally (map :gym/reason rs))) ""])))))
 
 (defn plan-matrix
-  "The shard matrix for goals x runs as JSON, {\"include\": [{\"goal\", \"run\", \"minutes\"}]}.
-   Only goals, run numbers and the job's minutes cross the job boundary; each shard recomputes
+  "The trial matrix for goals x runs as JSON, {\"include\": [{\"goal\", \"run\", \"minutes\"}]}.
+   Only goals, run numbers and the job's minutes cross the job boundary; each trial recomputes
    the rest from the registry."
   [goals runs]
   (str "{\"include\":["
@@ -288,7 +288,7 @@
                         "\",\"run\":"
                         run
                         ",\"minutes\":"
-                        (+ shard-overhead-minutes (quot (:gym/timeout-ms row) 60000))
+                        (+ trial-overhead-minutes (quot (:gym/timeout-ms row) 60000))
                         "}")))
        "]}"))
 
@@ -381,7 +381,7 @@
   "One bot on a running server: start it as its own JVM (classpath cp, in bot-dir), land it
    (landing!) and send its :go through its stdin, judge it from its log and the server
    (judge!), and leave result.edn, landed.edn, bot.log and run.edn in dir. Returns the result
-   row with tags merged in (the fleet's experiment, arm and unit)."
+   row with tags merged in (the plan's experiment, arm and unit)."
   [{:keys [goal run name dir cp bot-dir port rcon-port pass landings commit tags]
     :or {bot-dir "." port 25565 rcon-port 25575}}]
   (.mkdirs (io/file dir))
@@ -461,7 +461,7 @@
 
 (defn -main
   "clojure -M:gym <command> --key value ...
-     plan     --goals wood,table --runs N       the shard matrix as JSON
+     plan     --goals wood,table --runs N       the trial matrix as JSON
      landings --set A --plan ci/gym.edn --rcon-port P --rcon-pass S --out landings.edn
      trial    --goal wood --run 3 --name N --rcon-pass S --landings f --dir trial
               [--port 25565] [--rcon-port 25575] [--commit sha] [--strict true]

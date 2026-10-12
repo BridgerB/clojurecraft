@@ -20,7 +20,7 @@ on:
         description: names this batch's artifacts and summary
         required: true
       world-key:
-        description: override the world's cache key (a key with no entry shows a shard failing fast instead of building)
+        description: override the world's cache key (a key with no entry shows a trial failing fast instead of building)
         default: ''
 
 permissions:
@@ -72,7 +72,7 @@ jobs:
             ~/.gitlibs
           key: clj-${{ hashFiles('deps.edn') }}
       - id: plan
-        name: The shard matrix
+        name: The trial matrix
         run: |
           if [ "${{ github.event_name }}" = push ]; then goals=wood,table,pickaxe,cobblestone,stone-pickaxe,furnace,ingots,bucket,flint-and-steel; runs=1; else goals=${{ inputs.goal }}; runs=${{ inputs.runs }}; fi
           matrix=$(clojure -M:gym plan --goals "$goals" --runs "$runs")
@@ -80,11 +80,11 @@ jobs:
           echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
 
   world:
-    uses: ./.github/workflows/gym-world.yml
+    uses: ./.github/workflows/world.yml
     with:
       set: ${{ inputs.landing-set || 'A' }}
 
-  shard:
+  trial:
     needs: [plan, world]
     name: ${{ matrix.goal }}-${{ matrix.run }}
     runs-on: ubuntu-24.04
@@ -158,7 +158,7 @@ jobs:
           if-no-files-found: ignore
 
   aggregate:
-    needs: [plan, shard]
+    needs: [plan, trial]
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
