@@ -137,9 +137,11 @@
   ;; sight and the hunt looked for ground near the bot's own height; both failed :no-water
   (let [w (assoc (standing mine [14.5 8.5]) :player/pos [14.5 66.0 8.5] :plan/go-at [4.5 76.0 8.5])]
     (is (= {:intent/kind :walk :intent/target [4 76 8] :intent/for :surface} (scoop/scoop-next w))))
-  (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
-         (scoop/scoop-next (assoc (standing mine [14.5 8.5]) :player/pos [14.5 66.0 8.5])))
-      "no landing to climb to: out of the ground"))
+  (let [w (assoc (standing mine [14.5 8.5]) :player/pos [14.5 66.0 8.5])
+        i (scoop/scoop-next w)]
+    (is (= :walk (:intent/kind i)) "no landing to walk back to: the stair already cut")
+    (is (= :opening (:intent/for i)))
+    (is (terrain/under-sky? w (:intent/target i)))))
 
 (deftest inside-a-hill-at-the-landings-height-the-bot-cuts-out
   ;; live run 17 climbed out of its mine by stairs to the landing's height, y 65, which 145 blocks

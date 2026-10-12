@@ -26,6 +26,7 @@
 (def flat-shape 0.125)                ; a shape no taller is walked over like the floor (a carpet, a layer of snow)
 (def max-fall 3)                      ; blocks a drop may fall; vanilla damage starts above 3
 (def default-max-nodes 6000)          ; expansions one plan may spend
+(def sky-weight 4.0)                  ; a block of height in the :sky heuristic, more than a jump costs
 (def walk-cost 1.0)                   ; one cell on the level
 (def jump-cost 2.0)                   ; one cell up
 (def diagonal-cost (math/sqrt 2.0))   ; one cell on the level, cornerwise
@@ -228,6 +229,20 @@
 (defmethod heuristic :away
   [{:goal/keys [pos range]} node]
   (max 0.0 (- range (flat-distance node pos))))
+
+(defmethod goal-done? :sky
+  ;; a standable cell the open sky is over. The world rides on the goal: goal-done? sees the node
+  ;; and not the world it was reached in
+  [{:goal/keys [world]} node]
+  (boolean (and world (terrain/under-sky? world node))))
+(defmethod heuristic :sky
+  ;; Higher is closer to an opening, and weighted past what a jump costs, so the air already dug
+  ;; is climbed before a mine is filled. Not admissible: any way out will do. Full run 4528031
+  ;; stood at y 17 in the iron mine, a stair already cut down behind it, and the search toward a
+  ;; tree 140 blocks off spent its budget in the tunnels; a new stair was cut and the only
+  ;; pickaxe broke.
+  [_ [_ y _]]
+  (* sky-weight (max 0 (- terrain/top-y (long y)))))
 
 (defn step-down-node?
   "Is node a straight neighbour of pos a block up, where a block dug at pos is in the floor

@@ -196,6 +196,13 @@
   (and (= cell (feet world))
        (<= (physics/horizontal-distance (:player/pos world) (physics/centre cell)) centred-within)))
 
+(defn goal-of
+  "The path goal a walk is planned toward. A walk up to the open sky (:intent/for :opening) has
+   no cell it must stand in: path's :sky, which climbs the air already dug. The world rides on
+   that goal for the search only, and is not stored on the intent."
+  [world i]
+  (if (= :opening (:intent/for i)) {:goal/kind :sky :goal/world world} (walk-goal i)))
+
 (defn arrived?
   "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
    the pickup box: for a log, no more than pickup-rise below it (not on a bank above the box);
@@ -207,16 +214,20 @@
    scoop, on its bank: the feet level with the cell over the source or a block lower, within
    scoop-range on the plane, where the eyes look down on its surface; the tenth live run's walk
    ended in reach but in its own stair pit two below the surface, and saw no water. For a build's
-   stand (#8: a pour is aimed from it), the feet in that cell near its middle (centred?)."
+   stand (#8: a pour is aimed from it), the feet in that cell near its middle (centred?). For a
+   walk up to the open sky (:intent/for :opening), the feet under it, however far the mouth is:
+   within reach of the mouth the bot is still in the shaft."
   [world {:intent/keys [target for pickup?] :as i} d]
-  (let [rise (- (physics/y-of target) (long (math/floor (physics/y-of (:player/pos world)))))]
-    (and (<= d reach)
-         (cond pickup? (path/goal-done? (walk-goal i) (feet world))
-               (= :scoop for)
-               (and (<= -1 rise 0) (<= (path/octile (feet world) target) scoop-range))
-               (= :log for) (<= rise pickup-rise)
-               (= :build for) (centred? world target)
-               :else true))))
+  (if (= :opening for)
+    (terrain/under-sky? world (feet world))
+    (let [rise (- (physics/y-of target) (long (math/floor (physics/y-of (:player/pos world)))))]
+      (and (<= d reach)
+           (cond pickup? (path/goal-done? (walk-goal i) (feet world))
+                 (= :scoop for)
+                 (and (<= -1 rise 0) (<= (path/octile (feet world) target) scoop-range))
+                 (= :log for) (<= rise pickup-rise)
+                 (= :build for) (centred? world target)
+                 :else true)))))
 
 (defn routable?
   "Is there a way to walk intent i's goal from the feet: the planner's route is :found, or
@@ -229,7 +240,7 @@
    walked at: three such walks in a row ended live runs among ore and water in caves."
   [world {:intent/keys [target] :as i}]
   (let [{:path/keys [status waypoints]}
-        (path/plan world (path/feet-cell (:player/pos world)) (walk-goal i))]
+        (path/plan world (path/feet-cell (:player/pos world)) (goal-of world i))]
     (case status
       :found true
       (:partial :none) (boolean (and (seq waypoints) (not (terrain/chunk-loaded? world target))))
@@ -255,11 +266,24 @@
         up? (> wy (+ (math/floor py) 0.5))]
     (update (toward world centre 0.0) :control/jump? #(or % (and up? near?)))))
 
+(defn opening
+  "A walk up to the open sky, or nil. The way already dug is open air: path's :sky climbs it
+   before filling a mine and the walk follows that to the mouth. nil when the feet are already
+   under the sky, and nil when no mouth is reached. Full run 4528031 had cut its stair down to
+   the iron at y 17, then cut a new one up through stone; the only pickaxe broke at y 49 and
+   three :no-pickaxe failures ended the plan."
+  [world]
+  (let [feet (feet world)]
+    (when-not (terrain/under-sky? world feet)
+      (let [r (path/plan world feet {:goal/kind :sky :goal/world world})]
+        (when (and (= :found (:path/status r)) (seq (:path/waypoints r)))
+          {:intent/kind :walk :intent/target (last (:path/waypoints r)) :intent/for :opening})))))
+
 (defn route!
   "The intent with a fresh route from the feet toward its walk-goal, counting the plan and
    noting how many chunks were loaded when it was made."
   [world {:intent/keys [replans] :or {replans 0} :as i}]
-  (let [r (path/plan world (path/feet-cell (:player/pos world)) (walk-goal i))]
+  (let [r (path/plan world (path/feet-cell (:player/pos world)) (goal-of world i))]
     (assoc-intent world
                   :intent/waypoints (:path/waypoints r)
                   :intent/route (:path/status r)

@@ -137,6 +137,26 @@
     (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
            (wood/gather-next w)))))
 
+(def sky-shaft
+  "Air from a pocket at [2 50 8] up a stair to [8 56 8], that column open to the sky. A log at
+   [14 70 14] is sealed in stone, past the near band, and no route reaches it."
+  (merge (into {} (for [i (range 7) dy [0 1 2]] [[(+ 2 i) (+ 50 i dy) 8] blocks/air]))
+         (into {} (for [y (range 59 64)] [[8 y 8] blocks/air]))
+         (into {} (for [x (range 12 17) y (range 68 74) z (range 12 17)] [[x y z] 1]))
+         {[14 70 14] 136}))
+
+(deftest a-shaft-to-the-sky-is-walked-not-cut
+  ;; full run 4528031 cut a new stair out of the iron mine and the only pickaxe broke on it
+  (let [w (remembered sky-shaft [2.5 50.0 8.5])
+        i (wood/gather-next w)]
+    (is (not (terrain/under-sky? w (intent/feet w))))
+    (is
+     (nil?
+      (memory/nearest-log w (game/eye w) wood/search-radius (wood/skipped w) wood/standing-trunk?))
+     "the log is in the stone, past the near band")
+    (is (= {:intent/kind :walk :intent/target [8 56 8] :intent/for :opening} i))
+    (is (terrain/under-sky? w (:intent/target i)))))
+
 (deftest a-trunk-above-the-band-is-walked-to
   (let [w (remembered shaft [0.5 40.0 8.5])
         eye (game/eye w)]

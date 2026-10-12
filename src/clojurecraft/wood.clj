@@ -88,28 +88,32 @@
    :intent/trunk bottom})
 
 (defn climb-out
-  "No trunk in the near band. Underground, with a standing trunk remembered further off: walk to
-   the nearest one a route reaches (intent/routable?), else cut stairs up until out of the ground
-   (stairs/out? ends them; terrain/top-y is the top of the world). nil under the open sky, and
+  "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest
+   one a route reaches (intent/routable?), under the open sky or not. Underground, with none of
+   those a route reaches: walk up the air already dug (intent/opening) and cut stairs only when
+   that mouth cannot be walked to (stairs/out? ends them; terrain/top-y is the top of the world).
    nil when no trunk is remembered yet. Full run 29ef069 cut a stair at spawn before any tree
-   was remembered, failed :stair-not-taken, and the plan then waited :no-log."
+   was remembered, failed :stair-not-taken, and the plan then waited :no-log. Full run 4528031
+   remembered the trees, found no route through the mine, and cut a new stair; the only pickaxe
+   broke."
   [world]
-  (when-not (terrain/under-sky? world (intent/feet world))
-    (let [trunks (->> (memory/positions-now world blocks/log-states)
-                      (remove (skipped world))
-                      (filter #(standing-trunk? world %))
-                      (memory/nearest-first (game/eye world) far-radius)
-                      (take far-candidates))]
-      (when (seq trunks)
-        (or (some (fn [bottom]
-                    (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
-                  trunks)
-            {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface})))))
+  (let [feet (intent/feet world)
+        trunks (->> (memory/positions-now world blocks/log-states)
+                    (remove (skipped world))
+                    (filter #(standing-trunk? world %))
+                    (memory/nearest-first (game/eye world) far-radius)
+                    (take far-candidates))]
+    (when (seq trunks)
+      (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
+                trunks)
+          (when-not (terrain/under-sky? world feet)
+            (or (intent/opening world)
+                {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}))))))
 
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
-   trunk. Any goal that needs a log uses this. With none in the near band and the sky not open,
-   climb out to the trees instead of waiting :no-log."
+   trunk. Any goal that needs a log uses this. With none in the near band, climb out to the
+   trees instead of waiting :no-log."
   [world]
   (or (continue-gather world)
       (when-let [bottom (memory/nearest-log world
