@@ -163,6 +163,18 @@
         w (assoc (standing rock [3.5 8.5]) :plan/go-at [40.5 80.0 8.5])]
     (is (= {:intent/kind :walk :intent/target [40 80 8] :intent/for :surface} (scoop/climb w)))))
 
+(deftest in-a-pit-with-no-way-out-the-bot-tunnels-out
+  ;; gym batch solid-b1 run 13 came up its stairs into a pit under the open sky, leaves and rock
+  ;; round it with no room to jump out: no hunt had a route, and it waited :no-water
+  (let [shaft (merge (into {} (for [x (range 16) y (range 64 71) z (range 16)] [[x y z] 1]))
+                     (into {} (for [y (range 64 71)] [[8 y 8] blocks/air])))
+        w (standing shaft [8.5 8.5])]
+    (is (= {:intent/kind :tunnel
+            :intent/dir [1 0]
+            :intent/length scoop/tunnel-out-length
+            :intent/for :water-hunt}
+           (scoop/scoop-next w)))))
+
 (deftest with-no-way-back-up-the-bot-cuts-stairs-up
   ;; batch iron-a2 run 2 mined an iron ore out of the floor under one of its stairs, run 5 dug a
   ;; niche under one: the staircase down was no way back up

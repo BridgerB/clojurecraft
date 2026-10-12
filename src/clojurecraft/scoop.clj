@@ -44,6 +44,7 @@
 (def hunt-distance 40)                ; blocks a water hunt walks along a bearing before looking again
 (def surface-above 16)                ; how far above the eye a hunt looks for the ground to stand on
 (def surface-below 24)                ; and how far below it
+(def tunnel-out-length 8)             ; level steps cut out of a pit no route leaves, before looking again
 
 (defn- now [world] (:time/now world))
 
@@ -208,11 +209,21 @@
   (when-not (terrain/under-sky? world (intent/feet world))
     {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}))
 
+(defn tunnel-out
+  "A tunnel of tunnel-out-length level steps at the feet's height along stone/tunnel-heading (one
+   it can cut, away from the landing), for a hunt that has no route anywhere; nil when no
+   heading can be cut. Gym batch solid-b1 run 13 came up its stairs into a pit under the open
+   sky, leaves and rock round it with no room to jump out, and waited :no-water."
+  [world]
+  (when-let [d (stone/tunnel-heading world)]
+    {:intent/kind :tunnel :intent/dir d :intent/length tunnel-out-length :intent/for :water-hunt}))
+
 (defn scoop-next
   "The next step toward a filled bucket: scoop the nearest surface source in reach and in sight,
    else walk to the bank of the nearest one a route reaches, or to such a remembered pool, or climb
    out (to the landing, or by stairs cut up) when deep under it, or hunt for one (hunt-targets),
-   or cut out of the ground (dig-out); else wait :no-water."
+   or cut out of the ground (dig-out), or tunnel out of a pit (tunnel-out); else wait
+   :no-water."
   [world]
   (let [srcs (sources world)
         src (first (filter #(and (in-reach? world %) (sees? world %)) srcs))]
@@ -223,6 +234,7 @@
               (climb world)
               (first-walk world :water-hunt (hunt-targets world))
               (dig-out world)
+              (tunnel-out world)
               {:plan/wait :no-water}))))
 
 (defmethod plan/act :scoop [world _] (scoop-next world))
