@@ -4,7 +4,8 @@ run-name: "plan ${{ inputs.plan || 'push' }}${{ inputs.salt && format(' salt {0}
 # Many jobs from one plan file (ci/plan/<label>.edn). The plan job reads the plan, counts the
 # jobs already running and emits only job numbers; each job recomputes its own share from the
 # plan (clojure -M:plan work). The aggregate folds every result into one report. A plan runs
-# when it is pushed (a new or changed file under ci/plan/) or dispatched by path.
+# when it is pushed (a new or changed file under ci/plan/) or dispatched by path. Pushing the
+# soak starts it too, and that plan does not finish inside a job; the timer is what launches it.
 
 on:
   push:
