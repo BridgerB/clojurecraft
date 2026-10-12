@@ -893,6 +893,55 @@
   [sim pkt]
   (sim/step sim {:sim/kind :packet :sim/packet pkt}))
 
+;; ---------------------------------------------------------------- the portal (issue #8)
+
+(def frame
+  "A portal frame along x at z 8 with its corner origin [4 64 8]: ten obsidian round an interior
+   [5..6, 65..67], on the stone floor."
+  (into {}
+        (for [[dx dy] [[1 0] [2 0] [0 1] [3 1] [0 2] [3 2] [0 3] [3 3] [1 4] [2 4]]]
+          [[(+ 4 dx) (+ 64 dy) 8] (blocks/default-state :obsidian)])))
+
+(defn lighter-sim
+  "A model in play over blocks, the player at [5.5 64 10.5] holding flint and steel."
+  [blocks]
+  (-> (sim/init {:column (world/column-bytes blocks)
+                 :spawn [5.5 64.0 10.5]
+                 :inventory {[:hotbar 0] {:item (recipe/item-id :flint_and_steel) :count 1}}})
+      (assoc :sim/phase :play :sim/player-pos [5.5 64.0 10.5])))
+
+(defn strike
+  "The model after the player uses its held item on the top face of the block at pos."
+  [sim pos]
+  (client-sends sim
+                {:packet/name :use-item-on
+                 :hand 0
+                 :pos pos
+                 :face (packet/value :face :up)
+                 :cursor-x 0.5
+                 :cursor-y 1.0
+                 :cursor-z 0.5
+                 :inside-block false
+                 :world-border-hit false
+                 :sequence 9}))
+
+(deftest flint-and-steel-in-a-complete-frame-lights-the-portal
+  (let [sim (strike (lighter-sim frame) [5 64 8])]
+    (is (every? #(= :nether_portal (blocks/name-of (sim/block-at sim %)))
+                (for [x [5 6] y [65 66 67]] [x y 8])))
+    (is (= :fire (blocks/name-of (sim/block-at (strike (lighter-sim {}) [5 63 8]) [5 64 8])))
+        "no frame: a fire, no portal")))
+
+(deftest standing-in-the-portal-four-seconds-goes-to-the-nether
+  (let [lit (-> (strike (lighter-sim frame) [5 64 8])
+                (assoc :sim/player-pos [5.5 65.0 8.5] :sim/out []))
+        at (fn [sim ms] (sim/step sim {:sim/kind :tick :sim/now ms}))
+        early (reduce at lit (range 1000 4950 50))
+        later (reduce at early (range 4950 5200 50))]
+    (is (not-any? #(= :respawn (:packet/name %)) (:sim/out early)) "not before four seconds")
+    (is (= "minecraft:the_nether" (:sim/dimension later)))
+    (is (some #(= "minecraft:the_nether" (:dimension %)) (:sim/out later)))))
+
 ;; ---------------------------------------------------------------- pours (issue #8)
 
 (def cup

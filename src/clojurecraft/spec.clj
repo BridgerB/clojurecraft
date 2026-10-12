@@ -426,6 +426,8 @@
 (s/def :sim/rng int?)
 (s/def :sim/furnaces (s/map-of ::block-pos map?))
 (s/def :sim/falls (s/map-of ::block-pos int?))
+(s/def :sim/dimension string?)
+(s/def :sim/portal-since int?)
 (s/def :sim/falling (s/map-of ::block-pos map?))
 (s/def :sim/next-window int?)
 (s/def :sim/clicks nat-int?)

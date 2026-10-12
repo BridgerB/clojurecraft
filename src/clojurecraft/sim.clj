@@ -802,6 +802,97 @@
                  :flags 0})))
     sim))
 
+;; ---------------------------------------------------------------- fire and portals (issue #8)
+
+(def portal-ms 4000)                  ; a survival player in a portal this long changes dimension (80 game ticks)
+(def nether
+  "The respawn the model sends for the Nether: the dimension change a portal makes."
+  (assoc respawn :dimension-type 3 :dimension "minecraft:the_nether"))
+
+(defn frame-around
+  "The six interior cells of a complete portal frame round cell along axis (:x or :z), or nil: an
+   interior two wide and three high, air (or fire) inside, obsidian on its four sides, the
+   corners not needed (PortalShape)."
+  [sim [x y z] axis]
+  (let [along (fn [[a b c] d] (if (= axis :x) [(+ a d) b c] [a b (+ c d)]))
+        obsidian? #(= :obsidian (blocks/name-of (block-at sim %)))
+        open? #(contains? #{:air :fire} (blocks/name-of (block-at sim %)))]
+    (first (for [da [0 -1]
+                 dy [0 -1 -2]
+                 :let [base (along [x (+ y dy) z] da)
+                       inside (for [a [0 1] b [0 1 2]] (update (along base a) 1 + b))
+                       frame (concat (for [a [0 1]] (update (along base a) 1 dec))
+                                     (for [a [0 1]] (update (along base a) 1 + 3))
+                                     (for [b [0 1 2]] (update (along base -1) 1 + b))
+                                     (for [b [0 1 2]] (update (along base 2) 1 + b)))]
+                 :when (and (every? open? inside) (every? obsidian? frame))]
+             inside))))
+
+(defn light
+  "use-item-on with flint and steel: fire in the cell the clicked face looks into when it is air;
+   fire inside a complete frame becomes the portal instead (BaseFireBlock.onPlace finds the
+   PortalShape round it). Then the ack."
+  [sim pos face ack]
+  (let [dest (mapv + pos (faces face))
+        inside (when (= :air (blocks/name-of (block-at sim dest)))
+                 (or (some-> (frame-around sim dest :x)
+                             (vector (blocks/default-state :nether_portal)))
+                     (some-> (frame-around sim dest :z)
+                             (vector (inc (blocks/default-state :nether_portal))))))
+        fire (blocks/default-state :fire)]
+    (cond (nil? (block-at sim dest)) (send sim ack)
+          inside
+          (let [[cells state] inside]
+            (-> (reduce (fn [sim c]
+                          (-> sim
+                              (assoc-in [:sim/placed c] state)
+                              (send {:packet/name :block-update :pos c :state state})))
+                        sim
+                        cells)
+                (send ack)))
+          (= :air (blocks/name-of (block-at sim dest)))
+          (-> sim
+              (assoc-in [:sim/placed dest] fire)
+              (send {:packet/name :block-update :pos dest :state fire})
+              (send ack))
+          :else (send sim ack))))
+
+(defn through-portal
+  "The model a tick on: a player whose feet stand in a nether portal portal-ms on end changes
+   dimension (the Nether's respawn, then a teleport where it stands and the column again, as the
+   one-column model has only one); out of a portal, the count starts over."
+  [sim now]
+  (let [[x y z :as pos] (:sim/player-pos sim)
+        in? (and pos
+                 (= :nether_portal
+                    (blocks/name-of (block-at sim (mapv #(long (math/floor %)) [x (+ y 0.1) z])))))
+        since (:sim/portal-since sim)]
+    (cond (not in?) (dissoc sim :sim/portal-since)
+          (= "minecraft:the_nether" (:sim/dimension sim)) sim
+          (nil? since) (assoc sim :sim/portal-since now)
+          (< (- now since) portal-ms) sim
+          :else
+          (-> sim
+              (assoc :sim/dimension "minecraft:the_nether")
+              (dissoc :sim/portal-since)
+              (send nether)
+              (send {:packet/name :player-position
+                     :teleport-id 3
+                     :x x
+                     :y y
+                     :z z
+                     :dx 0.0
+                     :dy 0.0
+                     :dz 0.0
+                     :yaw 0.0
+                     :pitch 0.0
+                     :flags 0})
+              (send {:packet/name :level-chunk-with-light
+                     :x 0
+                     :z 0
+                     :heightmaps []
+                     :data (:sim/column sim)})))))
+
 (defn place
   "use-item-on that is not on a container: place the held block item at pos + face when the
    destination is empty, the clicked block is solid and the block would not overlap the
@@ -850,7 +941,9 @@
       (-> sim
           (send ack)
           (open-furnace pos))
-      (place sim pos face ack))))
+      (if (= (:item (get-in sim [:sim/inv (held-slot sim)])) (get blocks/items :flint_and_steel))
+        (light sim pos face ack)
+        (place sim pos face ack)))))
 
 (def use-range 4.5)                   ; how far the eyes reach for a block, as the server's interaction range
 (def ray-step 0.05)                   ; the length of one step along a ray
@@ -1079,10 +1172,11 @@
 
 (defn tick
   "Advance the server clock to now, one game tick: send a keep-alive when one is due, breathe
-   or drown, cook in every furnace, let gravel and sand fall, and hand over every item whose pickup delay has passed and
+   or drown, cook in every furnace, let gravel and sand fall, carry a player through a portal,
+   and hand over every item whose pickup delay has passed and
    that the player stands within reach of."
   [sim now]
-  (let [sim (tick-falls (tick-furnaces (drown (assoc sim :sim/now now))))
+  (let [sim (through-portal (tick-falls (tick-furnaces (drown (assoc sim :sim/now now)))) now)
         sim (if (>= now (:sim/next-keep-alive sim))
               (-> sim
                   (send {:packet/name :keep-alive :id now})
