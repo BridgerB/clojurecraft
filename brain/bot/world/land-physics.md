@@ -24,7 +24,7 @@ related:
 
 ## Key files
 - `physics.clj`, `step` - the tick; writes `:player/pos :player/vel :player/on-ground? :player/horizontal-collision? :player/jump-ticks`.
-- `physics.clj`, constants - gravity 0.08, vertical drag 0.98, ground inertia 0.546, air 0.91, jump 0.42, AABB 0.6 by 1.8, eye 1.62; `ground-acceleration` is 0.1 times 0.16277136 over inertia cubed.
+- `physics.clj`, constants - gravity 0.08, vertical drag 0.98, ground inertia 0.546, air 0.91, jump 0.42, AABB 0.6 by 1.8, eye 1.62; `ground-acceleration` is 0.1 times 0.16277136 over inertia cubed. `tick-ms` (50) is the one game tick every per-tick constant counts in, and the only place the bot, the server model and the main loop read its length; `forward-input` 0.98 (a held forward key), `jump-cooldown` 10 ticks, `bank-probe` 0.6 (how far up the box is moved to ask whether a bank's top is free).
 - `terrain.clj`, `solid-fn` - unknown (unloaded) blocks are solid.
 - `blocks.clj`, `passable-types` - block definition types with no full-cube collision; everything else is solid.
 

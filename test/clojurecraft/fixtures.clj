@@ -2,6 +2,7 @@
   "Shared test helpers: spec instrumentation, event folding, effect filters."
   (:require [clojure.spec.test.alpha :as stest]
             [clojurecraft.game :as game]
+            [clojurecraft.physics :as physics]
             [clojurecraft.spec]))
 
 (defn instrument!
@@ -53,5 +54,7 @@
 (defn sent [fx] (for [[t {:effect/keys [kind packet]}] fx :when (= kind :send)] [t packet]))
 (defn names [fx] (mapv (comp :packet/name second) (sent fx)))
 (defn packets [fx] (mapv second (sent fx)))
-(defn ticks [from to] (for [t (range from to 50)] {:event/kind :tick :event/now t :event/rand 0.5}))
+(defn ticks
+  [from to]
+  (for [t (range from to physics/tick-ms)] {:event/kind :tick :event/now t :event/rand 0.5}))
 (defn packet [p] {:event/kind :packet :event/packet p})

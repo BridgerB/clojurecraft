@@ -16,6 +16,7 @@
 
 (set! *warn-on-reflection* true)
 
+(def ^:const tick-ms 50)               ; one game tick: the server runs twenty a second; per tick below means per one of these
 (def gravity 0.08)                    ; blocks per tick², subtracted from vy each tick
 (def vertical-drag 0.98)              ; vy is multiplied by this each tick
 (def half-width 0.3)                  ; the player box is 0.6 wide
@@ -35,6 +36,9 @@
 (def swim-up 0.04)                    ; vy added per tick while jumping in a liquid
 (def swim-down 0.04)                  ; vy taken per tick while sneaking in a liquid
 (def out-of-liquid-impulse 0.3)       ; the lift when pressing into a bank whose top is free
+(def bank-probe 0.6)                  ; how far up the box is moved to ask whether a bank's top is free
+(def forward-input 0.98)              ; the movement input a held forward key gives (vanilla scales input by 0.98)
+(def jump-cooldown 10)                ; ticks after a jump before the next one
 (def water-contract [0.001 0.401 0.001]) ; the box shrinks by this before asking "in water?"
 (def lava-contract [0.1 0.4 0.1])     ; and by this for "in lava?"
 
@@ -193,11 +197,11 @@
                   (and liquid? jump?) (+ vy swim-up)
                   (and liquid? sneak?) (- vy swim-down)
                   :else vy)
-         jump-ticks (if jumping? 10 jump-ticks)
+         jump-ticks (if jumping? jump-cooldown jump-ticks)
          accel (cond liquid? liquid-acceleration
                      on-ground? ground-acceleration
                      :else air-acceleration)
-         f (if forward? 0.98 0.0)
+         f (if forward? forward-input 0.0)
          rad (math/to-radians (double (or yaw 0.0)))
          vx (- vx (* f accel (math/sin rad)))
          vz (+ vz (* f accel (math/cos rad)))
@@ -211,7 +215,7 @@
                  :else gravity)
          vy' (if liquid? (- (* vy inertia) g) (* (- vy gravity) vertical-drag))
          ;; the one real lift out of a liquid: pressing into a bank whose top is free
-         vy' (if (and liquid? hit? (free? solid? fluid-at (aabb pos') [vx (+ vy' 0.6) vz]))
+         vy' (if (and liquid? hit? (free? solid? fluid-at (aabb pos') [vx (+ vy' bank-probe) vz]))
                out-of-liquid-impulse
                vy')
          fall (cond (or liquid? landed?) 0.0

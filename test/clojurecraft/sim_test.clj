@@ -18,6 +18,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.record :as record]
@@ -921,7 +922,8 @@
 (defn game-ticks
   "The model after n game ticks, 50 ms apart."
   [sim n]
-  (reduce (fn [sim k] (sim/step sim {:sim/kind :tick :sim/now (+ (:sim/now sim) (* 50 k))}))
+  (reduce (fn [sim k]
+            (sim/step sim {:sim/kind :tick :sim/now (+ (:sim/now sim) (* physics/tick-ms k))}))
           sim
           (repeat n 1)))
 

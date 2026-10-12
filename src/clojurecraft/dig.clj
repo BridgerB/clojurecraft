@@ -11,11 +11,11 @@
    speed. Every number comes from the generated tables (clojurecraft.blocks); nothing here is
    typed in or read from a clock."
   (:require [clojure.math :as math]
-            [clojurecraft.blocks :as blocks]))
+            [clojurecraft.blocks :as blocks]
+            [clojurecraft.physics :as physics]))
 
 (set! *warn-on-reflection* true)
 
-(def tick-ms 50)                      ; one game tick
 (def harvest-divisor 30)              ; damage divisor when the tool harvests the block
 (def no-harvest-divisor 100)          ; when it does not: the block breaks but drops nothing
 (def penalty 5.0)                     ; the eyes in water, or the feet off the ground: speed / 5 each
@@ -52,7 +52,7 @@
                 eyes-in-water? (/ penalty)
                 off-ground? (/ penalty))
             damage (/ s h (if (harvest? id held) harvest-divisor no-harvest-divisor))]
-        (if (>= damage 1.0) 0 (long (* tick-ms (math/ceil (/ 1.0 damage)))))))))
+        (if (>= damage 1.0) 0 (long (* physics/tick-ms (math/ceil (/ 1.0 damage)))))))))
 
 (defn drop-tries
   "[[item-name chance] ...]: what block id drops when it is harvested, in the order the game's

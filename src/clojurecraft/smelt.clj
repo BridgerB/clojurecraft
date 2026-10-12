@@ -27,6 +27,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.window :as window]))
 
@@ -34,7 +35,6 @@
 
 (def stage-timeout 5000)              ; ms a smelt stage waits on the server before it fails
 (def cook-slack 5000)                 ; ms past the batch's cook time before the cook stage fails
-(def tick-ms 50)                      ; a game tick: cook and burn times are counted in them
 (def max-batch 64)                    ; the input slot holds one stack
 (def max-lost 3)                      ; clicks the server may lose in one smelt before it fails
 (def input-slot (inventory/slot-in :furnace [:input]))   ; the furnace window's own slots
@@ -207,7 +207,7 @@
                 (intent/assoc-intent
                  world
                  :intent/cook-by
-                 (+ (now world) (* (:count input) (:smelt/ticks r) tick-ms) cook-slack))
+                 (+ (now world) (* (:count input) (:smelt/ticks r) physics/tick-ms) cook-slack))
                 (> (- (now world) since) stage-timeout) (intent/fail world :not-loaded)
                 :else world)
           (and input (nil? (get grid fuel-slot)) (zero? (lit world)))

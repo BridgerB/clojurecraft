@@ -13,6 +13,7 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.spec]
             [clojurecraft.swim]
@@ -116,7 +117,8 @@
   ([gaps] (uneven-ticks gaps 10000))
   ([gaps horizon]
    (let [ts (reductions + 0 gaps)]
-     (for [t (concat ts (range (+ (last ts) 50) (+ (last ts) horizon) 50))]
+     (for [t (concat ts
+                     (range (+ (last ts) physics/tick-ms) (+ (last ts) horizon) physics/tick-ms))]
        {:event/kind :tick :event/now t :event/rand 0.5}))))
 
 (deftest a-dig-never-finishes-before-its-deadline
@@ -274,7 +276,7 @@
   (gen/fmap (fn [xs]
               (second (reduce (fn [[t evs] x]
                                 (if (= :tick x)
-                                  [(+ t 50)
+                                  [(+ t physics/tick-ms)
                                    (conj evs {:event/kind :tick :event/now t :event/rand 0.5})]
                                   [t (conj evs (fx/packet x))]))
                               [1000 []]

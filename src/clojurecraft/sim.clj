@@ -994,7 +994,7 @@
         air (if under? (max 0 (dec (:sim/air sim))) (min max-air (+ (:sim/air sim) 4)))
         hurt? (and under?
                    (zero? air)
-                   (zero? (mod (quot (:sim/now sim) 50) drown-every))
+                   (zero? (mod (quot (:sim/now sim) physics/tick-ms) drown-every))
                    (pos? (:sim/health sim)))
         health (if hurt? (max 0.0 (- (:sim/health sim) drown-damage)) (:sim/health sim))]
     (cond-> (assoc sim :sim/air air :sim/health health)
@@ -1042,13 +1042,13 @@
   (mapv :effect/packet (filter #(= :send (:effect/kind %)) (:bot/effects world))))
 
 (defn run
-  "Run a bot reducer against the model from a fresh handshake, 50 ms per tick, until (stop?
+  "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a time, until (stop?
    world) or max-ms. Sends go (default {:event/kind :go}) once the bot is loaded. Returns
    [world sim]. :sim/lag-ticks in sim0 delays every server→client packet by that many ticks,
    in order: a slow network as an input."
   [bot-step world0 sim0 stop? max-ms & [go]]
   (let [w (bot-step world0 {:event/kind :start})
-        lag (* 50 (:sim/lag-ticks sim0 0))]
+        lag (* physics/tick-ms (:sim/lag-ticks sim0 0))]
     (loop [world (assoc w :bot/effects [])
            sim sim0
            pending (sends w)
@@ -1069,15 +1069,14 @@
             world (assoc world :bot/effects [])]
         (if (or (stop? world) (> t max-ms))
           [world (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out)] ; deliver the last tick's packets
-          (recur world sim out (+ t 50) (or went? go?) inflight))))))
+          (recur world sim out (+ t physics/tick-ms) (or went? go?) inflight))))))
 
 ;;;; I/O: the model behind a channel pair, on a thread of its own ;;;;
 
-(def tick-ms 50)                        ; the model's tick, as the vanilla server's
 
 (defn connect!
   "The model behind a channel pair shaped like conn/open!'s: {:in chan :out chan :close! fn}.
-   Packet maps the client puts on :out are stepped into the model; every tick-ms of wall time
+   Packet maps the client puts on :out are stepped into the model; every physics/tick-ms of wall time
    the model ticks; whatever it says for the client goes onto :in, in order. Both channels are
    bounded, as conn's are. :in closes when the client closes :out or calls :close!, which the
    loop reads as the socket closing."
@@ -1087,7 +1086,7 @@
         stop (async/chan)
         t0 (System/currentTimeMillis)]
     (async/thread (loop [sim sim0
-                         next-tick tick-ms]
+                         next-tick physics/tick-ms]
                     (let [wait (max 0 (- next-tick (- (System/currentTimeMillis) t0)))
                           [v ch] (async/alts!! [stop out (async/timeout wait)] :priority true)
                           closed? (or (= ch stop) (and (= ch out) (nil? v)))
@@ -1098,5 +1097,5 @@
                       (doseq [p said] (async/>!! in p))
                       (cond closed? (async/close! in)
                             (= ch out) (recur sim next-tick)
-                            :else (recur sim (+ next-tick tick-ms))))))
+                            :else (recur sim (+ next-tick physics/tick-ms))))))
     {:in in :out out :close! (fn [] (async/close! stop) (async/close! out))}))
