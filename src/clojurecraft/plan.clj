@@ -11,6 +11,7 @@
    under :plan/*."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
@@ -84,6 +85,7 @@
 (def landing-reach 2.0)               ; horizontal distance from :go/at that counts as landed
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
+(def max-unwalkable 12)               ; consecutive walks that failed :no-path before the plan fails
 (def wait-timeout 20000)              ; a goal that has nothing to do for this long has failed
 
 (defmulti done-by
@@ -116,14 +118,29 @@
          (filter #(or (nil? goals) (:goal/always? %) (contains? goals (:goal/id %))))
          (sort-by :goal/priority))))
 
-(defn choose
-  "The highest-priority target in play the world does not satisfy and the run has not already
-   reached (:plan/reached, a chained run's milestones)."
+(defn here?
+  "Is goal worked in the dimension the bot is in: it names none, or this one (:goal/dimension)?"
+  [world goal]
+  (let [d (:goal/dimension goal)] (or (nil? d) (= d (dimension/of world)))))
+
+(defn undone
+  "The targets in play the world does not satisfy and the run has not already reached
+   (:plan/reached, a chained run's milestones), highest priority first, wherever they are worked."
   [world table]
   (->> (in-play world table)
        (remove #(contains? (:plan/reached world #{}) (:goal/id %)))
-       (remove #(done-by world %))
-       first))
+       (remove #(done-by world %))))
+
+(defn choose
+  "The highest-priority undone target that is worked here (here?), or nil."
+  [world table]
+  (first (filter #(here? world %) (undone world table))))
+
+(defn elsewhere?
+  "Is a target still undone that is worked in another dimension? Then no target here is not the
+   end of the plan: it waits for the dimension to change."
+  [world table]
+  (boolean (seq (remove #(here? world %) (undone world table)))))
 
 (defn reach
   "A chained run's milestones: on a :plan/chain? plan, every target in play that holds now joins
@@ -150,7 +167,8 @@
              :plan/since (:time/now world)
              :plan/blacklist #{}
              :plan/trunk-failures {}
-             :plan/attempts 0)
+             :plan/attempts 0
+             :plan/unwalkable 0)
       (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
       (cond-> chain? (assoc :plan/chain? true :plan/reached #{}))
@@ -177,39 +195,42 @@
         :else world))
 
 (defn finish-intent
-  "An intent that succeeds ends any failure streak: attempts count consecutive failures, so a
-   long goal is not killed by three unrelated hiccups an hour apart."
+  "An intent that succeeds ends any failure streak: attempts and unwalkable walks count
+   consecutive failures, so a long goal is not killed by three unrelated hiccups an hour apart."
   [world i]
   (-> world
       (memory/remember-intention i :done)
-      (assoc :plan/last i :plan/attempts 0)
+      (assoc :plan/last i :plan/attempts 0 :plan/unwalkable 0)
       (dissoc :plan/intent)))
 
 (defn fail-intent
   "An intent failed: stop moving, blacklist its target (and count a failure against its trunk's
    column, for a log: digging the base moves the bottom up, the column stays), count the attempt.
    max-attempts failures in a row fail the plan with the intent's reason. A walk that failed
-   :no-path does not count. Its route was accepted and then could not be walked, so the target is
-   given up and the next candidate is tried: three such walks, each a different place, used to end
-   a run that was still searching. A staircase that died :boxed blacklists the cell it stood on,
-   so the next descent does not start there and a later stair will not step back onto it."
+   :no-path counts apart, in :plan/unwalkable: its route was accepted and then could not be
+   walked, so the target is given up and the next candidate is tried (three such walks, each a
+   different place, used to end a run that was still searching), but max-unwalkable of them in
+   a row fail the plan too, so a search whose places keep changing cannot run for hours. A
+   staircase that died :boxed records the cell it stood on in :plan/boxed-at, so the next descent
+   does not start there and a later stair will not step back onto it."
   [world i]
-  (let [attempts (cond-> (:plan/attempts world 0)
-                   (not (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))) inc)]
+  (let [unwalkable? (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))
+        attempts (cond-> (:plan/attempts world 0) (not unwalkable?) inc)
+        unwalkable (if unwalkable? (inc (:plan/unwalkable world 0)) 0)]
     (-> world
         (memory/remember-intention i :failed)
         (assoc :player/controls {})
         (cond-> (:intent/target i) (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (cond-> (and (= :stairs-down (:intent/kind i)) (= :boxed (:intent/reason i)))
-                (update :plan/blacklist (fnil conj #{}) (intent/feet world)))
+                (update :plan/boxed-at (fnil conj #{}) (intent/feet world)))
         (cond-> (:intent/trunk i)
                 (update-in [:plan/trunk-failures (let [[x _ z] (:intent/trunk i)] [x z])]
                            (fnil inc 0)))
-        (assoc :plan/attempts attempts)
+        (assoc :plan/attempts attempts :plan/unwalkable unwalkable)
         (dissoc :plan/intent :plan/last)
         (game/say
          (str "intent " (:intent/kind i) " failed: " (:intent/reason i) " (attempt " attempts ")"))
-        (cond-> (>= attempts max-attempts)
+        (cond-> (or (>= attempts max-attempts) (>= unwalkable max-unwalkable))
                 (assoc :plan/status :failed :plan/reason (:intent/reason i))))))
 
 (declare plan-tick)
@@ -285,6 +306,11 @@
     (cond (not active?) world
           (and i (or (nil? goal) preempt?) (not (can-abandon? world)))
           (run-intent world i event table)
+          (and (nil? goal) (elsewhere? world table))
+          (-> world
+              (cond-> i (abandon-intent i :goal-met))
+              (dissoc :plan/intent)
+              (wait :other-dimension))
           (nil? goal)
           (-> world
               (cond-> i (abandon-intent i :goal-met))

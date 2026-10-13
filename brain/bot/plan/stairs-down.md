@@ -61,7 +61,7 @@ related:
 ## Key files
 - `stairs.clj`, `stair-cells` - the three cells a stair ahead opens: head-up, head, and the new feet one block down.
 - `stairs.clj`, `exposed` - what the stair exposes to the body: those three, the floor under the new feet, and every horizontal neighbour of the three.
-- `stairs.clj`, `safe?` - none of the opened cells water, lava or unloaded; no lava in any exposed cell; a floor under the new feet. A new feet cell on `:plan/blacklist` is refused.
+- `stairs.clj`, `safe?` - none of the opened cells water, lava or unloaded; no lava in any exposed cell; a floor under the new feet. A new feet cell in `:plan/boxed-at` (where a staircase died `:boxed`) is refused.
 - `intent.clj`, `feet` - y a touch below the position, since physics jitter dips it under the integer.
 - `intent.clj`, `run-child` - the child `:dig` (`intent/child-dig`) stands in as `:plan/intent` for one tick of the dig executor, then returns to `:intent/child`: intents composing intents, with one rule for breaking blocks ([[dig-timeline]]).
 - `stairs.clj`, `max-turns` 4, `step-timeout-ticks` 200.

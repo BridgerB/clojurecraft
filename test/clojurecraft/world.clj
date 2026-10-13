@@ -2,7 +2,8 @@
   "Test fixture: build chunk-column bytes from a {[lx y lz] state-id} map on top of a stone
    floor (y < 64)."
   (:require [clojurecraft.bytes :as b]
-            [clojurecraft.chunk :as chunk]))
+            [clojurecraft.chunk :as chunk]
+            [clojurecraft.dimension :as dimension]))
 
 (defn direct-section
   [o cells]
@@ -32,24 +33,29 @@
 
 (defn column-bytes
   "blocks: {[lx y lz] id} with world y; everything below y=64 is stone unless blocks says
-   otherwise (a listed cell below the floor, e.g. air for a trench or water for a pond, wins)."
-  [blocks]
-  (b/with-out
-   (fn [o]
-     (dotimes [si 24]
-       (let [y0 (+ chunk/min-y (* 16 si))
-             listed
-             (into {} (for [[[lx y lz] id] blocks :when (<= y0 y (+ y0 15))] [[lx (- y y0) lz] id]))
-             stone (when (and (seq listed) (< y0 floor-y))
-                     (into {}
-                           (for [lx (range 16)
-                                 ly (range 16)
-                                 lz (range 16)
-                                 :when (< (+ y0 ly) floor-y)]
-                             [[lx ly lz] 1])))
-             cells (merge stone listed)]
-         (cond (seq cells) (direct-section o cells)
-               (< y0 64) (single-section o 1)
-               :else (single-section o 0)))))))
+   otherwise (a listed cell below the floor, e.g. air for a trench or water for a pond, wins).
+   With a dimension name, a column of that dimension's height (16 sections from y 0 in the
+   Nether), else the overworld's."
+  ([blocks] (column-bytes blocks dimension/overworld))
+  ([blocks dim]
+   (let [{:dimension/keys [min-y sections]} (dimension/by-name dim)]
+     (b/with-out
+      (fn [o]
+        (dotimes [si sections]
+          (let [y0 (+ min-y (* 16 si))
+                listed
+                (into {}
+                      (for [[[lx y lz] id] blocks :when (<= y0 y (+ y0 15))] [[lx (- y y0) lz] id]))
+                stone (when (and (seq listed) (< y0 floor-y))
+                        (into {}
+                              (for [lx (range 16)
+                                    ly (range 16)
+                                    lz (range 16)
+                                    :when (< (+ y0 ly) floor-y)]
+                                [[lx ly lz] 1])))
+                cells (merge stone listed)]
+            (cond (seq cells) (direct-section o cells)
+                  (< y0 64) (single-section o 1)
+                  :else (single-section o 0)))))))))
 
 (defn column [blocks] (chunk/decode (column-bytes blocks)))

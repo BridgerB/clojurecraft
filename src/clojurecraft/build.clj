@@ -80,6 +80,10 @@
   [world [_ p]]
   (not (contains? blocks/water-states (terrain/block-at world p))))
 (defmethod holds? :dimension [world [_ d]] (= d (:player/dimension world)))
+(defmethod holds? :feet [world [_ p]] (= p (intent/feet world)))
+(defmethod holds? :no-lava
+  [world [_ p]]
+  (not (contains? blocks/lava-states (terrain/block-at world p))))
 (defmethod holds? :or [world [_ & ps]] (boolean (some #(holds? world %) ps)))
 (defmethod holds? :and [world [_ & ps]] (every? #(holds? world %) ps))
 
@@ -573,12 +577,15 @@
 (defn approach-stand
   "The child that gets the feet centred for op, or nil when they already are: on the
    designated stand, or, for a place or a dig whose stand cannot be occupied, on a cell that
-   already reaches the block. A keyword is why no such cell exists."
+   already reaches the block. A keyword is why no such cell exists. Ground in the way is dug
+   only for a :build, whose mold says which cobblestone to keep; a :tunnel-to step (fortress)
+   works the same ops with no build of its own, and opens its own way."
   [world i {:build/keys [op stand pos]}]
   (cond (intent/centred? world stand) nil
         :else
         (let [blocked
-              (clear-stand world stand (:intent/build i) (:intent/origin i) (:intent/facing i))]
+              (when (:intent/build i)
+                (clear-stand world stand (:intent/build i) (:intent/origin i) (:intent/facing i)))]
           (cond blocked blocked
                 (or (path/standable? world stand) (not (#{:place :dig} op)))
                 {:intent/kind :walk :intent/target stand :intent/for :build}
@@ -621,35 +628,46 @@
               :stand-in {:intent/kind :await :intent/expect done}
               :verify :unverified))))
 
+(defn next-op
+  "The op of plan to work now: the first not satisfied, or nil when the plan's last op holds (its
+   goal: past it, as in another dimension, the earlier ops' cells are not even loaded)."
+  [world plan]
+  (when-not (satisfied? world (peek plan)) (first (remove #(satisfied? world %) plan))))
+
+(defn work-op
+  "One tick of the running intent i working op next through a child (op-child): a new op drops
+   the child of the old one (the world moved on), a child that failed fails i, one that is done
+   makes way for the next. Shared by every intent that works a plan of ops."
+  [world {:intent/keys [child op] :as i} next event]
+  (cond (not= next op)
+        (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child)
+        (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
+        (and child (intent/failed? child))
+        (-> world
+            (assoc :player/controls {})
+            (intent/fail (:intent/reason child)))
+        child (intent/run-child world event)
+        :else
+        (let [c (op-child world i next)]
+          (cond (keyword? c) (intent/fail world c)
+                :else
+                (intent/run-child
+                 (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
+                 event)))))
+
 (defmethod intent/run :build
-  ;; work the first op of the plan not satisfied; done when the last op is (the plan's goal: past
-  ;; it, as in another dimension, the earlier ops' cells are not even loaded). A child works the op;
-  ;; when the op changes under it (the world moved on) the child is dropped and the new op begun
-  [world {:intent/keys [child op origin facing] :as i} event]
+  ;; work the first op of the plan not satisfied (next-op, work-op); done when the last op holds.
+  ;; The site is remembered once, so a new life resumes the build there
+  [world {:intent/keys [origin facing] :as i} event]
   (let [world (cond-> world
                 (not= {:site/origin origin :site/facing facing} (memory/site world))
                 (memory/remember-site origin facing))
-        plan (plan-for (:intent/build i) (:intent/origin i) (:intent/facing i))
-        next (when-not (satisfied? world (peek plan)) (first (remove #(satisfied? world %) plan)))]
-    (cond (nil? next)
-          (-> world
-              (assoc :player/controls {})
-              intent/done)
-          (not= next op)
-          (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child)
-          (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
-          (and child (intent/failed? child))
-          (-> world
-              (assoc :player/controls {})
-              (intent/fail (:intent/reason child)))
-          child (intent/run-child world event)
-          :else
-          (let [c (op-child world i next)]
-            (cond (keyword? c) (intent/fail world c)
-                  :else
-                  (intent/run-child
-                   (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
-                   event))))))
+        next (next-op world (plan-for (:intent/build i) origin facing))]
+    (if (nil? next)
+      (-> world
+          (assoc :player/controls {})
+          intent/done)
+      (work-op world i next event))))
 
 ;; ---------------------------------------------------------------- the site and the targets
 

@@ -186,6 +186,7 @@
                     "brain/siblings/sib-lava-safety.md"]}
  {:problem/stage :nether-and-fortress
   :problem/issue 11
+  :problem/goals [:fortress]
   :problem/statement
   "The world value is overworld-only, so after a portal the bot cannot tell which dimension it is in, decodes Nether chunks with the wrong height, and has no safe way to reach a fortress across the lava sea."
   :problem/needs
@@ -194,6 +195,11 @@
    "Sightings keyed by dimension, watching nether_bricks, spawner, portal, obsidian and lava"
    "Real chunk data after arrival before any step runs, not a timer"
    "Lava next to each tunnel step and missing floors ahead"]
+  :problem/decisions
+  ["Chunks stay a snapshot of the dimension the bot is in, emptied on a change, as the server streams them again; memory keeps every dimension, each fact saying which"
+   "A column's height is the sections the server sent (16 or 24), looked up in dimensions.edn: the reader thread decodes without knowing the dimension"
+   "The dimension is the respawn's and login's name (:player/dimension, from #8), not the registry id, which only dimensions.edn's row order explains"
+   "No lava capping: a cell behind a wall cannot be capped before the wall is dug, so a tunnel step never opens a cell beside lava and tries another step instead"]
   :problem/risks
   ["Stale overworld columns answer Nether lookups (a brick reported exactly 64 blocks off)"
    "Parsing a Nether chunk as 24 sections runs off the buffer"

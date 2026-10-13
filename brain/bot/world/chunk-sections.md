@@ -5,8 +5,8 @@ type: reference
 tags: [bot, world, chunks]
 aliases: [chunk decode, paletted container, block-at, section]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: 38bab1d
+lastUpdated: 2026-10-12
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/chunk.clj#defn decode
   - src/clojurecraft/chunk.clj#defn section-get
@@ -14,6 +14,8 @@ sourceRefs:
   - src/clojurecraft/chunk.clj#defn section-may-contain?
   - src/clojurecraft/game.clj#defn load-chunk
   - src/clojurecraft/chunk.clj#defn attach
+  - src/clojurecraft/dimension.clj#defn min-y-of-sections
+  - test/clojurecraft/chunk_test.clj#a-nether-column-is-sixteen-sections-from-y-zero
 related:
   - "[[bot/world/_moc|World]]"
   - "[[memory-sightings]]"
@@ -22,10 +24,10 @@ related:
 
 # Chunk sections
 
-A column is `{:sections [s0 .. s23]}`; a section is the paletted container straight off the wire: `{:single id}` or `{:bits n :palette [...] :longs long[]}` (palette nil when direct). Nothing is expanded to 4096 entries; `section-get` indexes the bits on demand.
+A column is `{:sections [s0 ..] :chunk/min-y y}`: as many sections as the server sent (24 from y -64 in the overworld, 16 from y 0 in the Nether and the End); a section is the paletted container straight off the wire: `{:single id}` or `{:bits n :palette [...] :longs long[]}` (palette nil when direct). Nothing is expanded to 4096 entries; `section-get` indexes the bits on demand.
 
 ## Key files
-- `chunk.clj`, `decode` - 24 sections for the overworld (`section-count`, `min-y` -64); each reads i16 block count, i16 fluid count (new in 26.1), the block container, the biome container.
+- `chunk.clj`, `decode` - every section the bytes hold, and the column's lowest y from `dimension/min-y-of-sections` (`dimensions.edn`, generated from the jar); each reads i16 block count, i16 fluid count (new in 26.1), the block container, the biome container.
 - `chunk.clj`, `section-get` - `valuesPerLong = 64 / bits`, entries never straddle longs.
 - `chunk.clj`, `block-at` - nil when the chunk is not loaded or y is outside the column.
 - `chunk.clj`, `section-may-contain?` - palette check that lets scans skip sections.
@@ -39,7 +41,7 @@ A column is `{:sections [s0 .. s23]}`; a section is the paletted container strai
 
 ## Gotchas
 - `nil` from `block-at` means unknown, not air; physics treats unknown as solid so the bot never falls out of the world.
-- The section count is a constant today; the Nether needs a per-dimension value (see [[mc-dimensions]]).
+- A column says its own height by its size, so the reader thread decodes without knowing the dimension; `block-at` and `find-blocks` read `:chunk/min-y` (a column without it is an overworld one). ruststeve read Nether columns as overworld ones and saw brick 64 blocks off ([[mc-dimensions]]).
 
 ## See also
 - [[memory-sightings]] - what survives when a column unloads.

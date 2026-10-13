@@ -10,6 +10,7 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/game.clj#defn change-dimension
   - test/clojurecraft/game_test.clj#a-respawn-into-another-dimension-forgets-the-old-one
+  - test/clojurecraft/game_test.clj#a-login-says-the-dimension-the-bot-joins-in
   - src/clojurecraft/game.clj#defn die
   - src/clojurecraft/game.clj#defn breathe
   - src/clojurecraft/game.clj#def max-air 300
@@ -45,7 +46,7 @@ The `respawn` packet (its fields now modelled: dimension type, dimension, seed, 
 `sim/drown`: each tick, the model's `:sim/air` falls while the position the client last reported puts the eye in a water block of its column and refills otherwise; at zero it takes `drown-damage` (2) every `drown-every` (20) ticks and tells the client with `set-health`. `client-command` 0 from a dead player (health 0) respawns it at `:sim/respawn` (an input to `sim/init`, the spawn by default: a gym landing differs from the world spawn) with full health and breath, sending `respawn` then the teleport. `held-under-water-the-bot-drowns-and-respawns-with-no-intent` runs it: a well drowns the bot in 25 s of model time and it comes back on the world spawn beside it, lungs full, one death counted, the death a fact.
 
 ## Gotchas
-- **A respawn can change the dimension** (a portal, #8). `change-dimension` sets `:player/dimension` from the packet's `:dimension` name; when it differs from the one the bot is in (the overworld before any respawn: the login packet's dimension is not read), the columns and the block overlay go and `:player/loaded?` is false, so the teleport that places the bot sends `player-loaded` again. A Nether chunk decoded as 24 sections runs off its buffer and `chunk/attach` records `:chunk/error`, so nothing crashes; Nether heights are #11's.
+- **A respawn can change the dimension** (a portal, #8). `change-dimension` sets `:player/dimension` from the packet's `:dimension` name; when it differs from the one the bot is in (`dimension/of`: the login's, which now reads the spawn info, else the overworld), the columns and the block overlay go and `:player/loaded?` is false, so the teleport that places the bot sends `player-loaded` again. Nether chunks decode at their own height ([[chunk-sections]], #11).
 - A hand-built `{:packet/name :respawn}` no longer passes the packet spec: use `fixtures/respawn` (the decoder's shape).
 - Whether 26.1.2 wants `player-loaded` again after a respawn teleport, and whether a `game-event` precedes `respawn`, is still to be read from a recorded death ([[water-escape]] has no live death yet).
 

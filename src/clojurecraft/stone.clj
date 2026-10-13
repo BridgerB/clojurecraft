@@ -126,13 +126,13 @@
 
 (defn stairs
   "The staircase to cut when nothing is in sight: stair-depth down from the feet, never below
-   the row's :goal/depth; nil when the feet are already there, or when the feet cell is
-   blacklisted, a stairs-down having died :boxed there. Another one from that cell dies the
+   the row's :goal/depth; nil when the feet are already there, or when the feet cell is in
+   :plan/boxed-at, a stairs-down having died :boxed there. Another one from that cell dies the
    same way; the act tunnels, goes deeper or retreats instead."
   [world {:goal/keys [depth]}]
   (let [feet (long (math/floor (physics/y-of (:player/pos world))))
         to (cond-> (- feet stair-depth) depth (max depth))]
-    (when (and (< to feet) (not (contains? (:plan/blacklist world #{}) (intent/feet world))))
+    (when (and (< to feet) (not (contains? (:plan/boxed-at world #{}) (intent/feet world))))
       {:intent/kind :stairs-down :intent/to-y to})))
 
 (def floor-margin 8)                  ; blocks above the bottom of the world a staircase deeper stops

@@ -1,11 +1,13 @@
 (ns clojurecraft.chunk
-  "Chunk columns as values. A column is {:sections [section ...]} with 24 sections for the
-   overworld (y -64..319). A section is the paletted container straight off the wire:
+  "Chunk columns as values. A column is {:sections [section ...] :chunk/min-y y}: 24 sections
+   from y -64 in the overworld, 16 from y 0 in the Nether and the End, as many as the server sent
+   (a column without :chunk/min-y is an overworld one). A section is the paletted container straight off the wire:
    {:single id} or {:bits n :palette [ids] :longs long[]} (palette nil when direct). Nothing is
    expanded to 4096 entries; block-at indexes the bits on demand. The long[] is never mutated
    after decode, so a section is a value."
   (:require [clojure.math :as math]
-            [clojurecraft.bytes :as b])
+            [clojurecraft.bytes :as b]
+            [clojurecraft.dimension :as dimension])
   (:import [java.nio ByteBuffer]))
 
 (set! *warn-on-reflection* true)
@@ -39,9 +41,15 @@
     blocks))
 
 (defn decode
-  "The chunkData bytes of level_chunk_with_light → column."
+  "The chunkData bytes of level_chunk_with_light → column: every section the bytes hold (the
+   server writes exactly its dimension's count, 16 in the Nether), and the lowest y that many
+   sections start at (dimension/min-y-of-sections). Throws when no dimension is that tall."
   [^bytes data]
-  (let [buf (b/buffer data)] {:sections (vec (repeatedly section-count #(read-section buf)))}))
+  (let [^ByteBuffer buf (b/buffer data)
+        sections (loop [acc []] (if (.hasRemaining buf) (recur (conj acc (read-section buf))) acc))
+        min-y (dimension/min-y-of-sections (count sections))]
+    (when-not min-y (throw (ex-info "no dimension is this tall" {:sections (count sections)})))
+    {:sections sections :chunk/min-y min-y}))
 
 (defn section-get
   "The id at index idx (0-4095 for blocks) of a section, through the palette when
@@ -64,10 +72,10 @@
   ^long [^long lx ^long ly ^long lz]
   (bit-or (bit-shift-left ly 8) (bit-shift-left lz 4) lx))
 
-(defn section-index
-  "Which of the 24 sections holds world y; outside 0-23 when y is out of the world."
-  ^long [^long y]
-  (bit-shift-right (- y min-y) 4))
+(defn column-min-y
+  "The lowest block y of col: its :chunk/min-y, the overworld's for a column without one."
+  ^long [col]
+  (long (:chunk/min-y col min-y)))
 
 (defn block-at
   "State id at world [x y z] from a {[cx cz] column} map, or nil when the chunk is not loaded."
@@ -76,8 +84,8 @@
         y (long y)
         z (long z)]
     (when-let [col (get chunks [(bit-shift-right x 4) (bit-shift-right z 4)])]
-      (let [si (section-index y)]
-        (when (< -1 si section-count)
+      (let [si (bit-shift-right (- y (column-min-y col)) 4)]
+        (when (< -1 si (count (:sections col)))
           (section-get (nth (:sections col) si)
                        (block-index (bit-and x 15) (bit-and y 15) (bit-and z 15))))))))
 
@@ -104,7 +112,7 @@
   (for [[[cx cz] col] chunks
         [si section] (map-indexed vector (:sections col))
         [lx ly lz id] (section-find section pred)]
-    [(+ (* 16 cx) lx) (+ min-y (* 16 si) ly) (+ (* 16 cz) lz) id]))
+    [(+ (* 16 cx) lx) (+ (column-min-y col) (* 16 si) ly) (+ (* 16 cz) lz) id]))
 
 (defn attach
   "The packet with its column decoded under :chunk/column (or {:chunk/error msg}), when it is a

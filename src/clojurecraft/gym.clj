@@ -39,8 +39,10 @@
 (s/def :truth/ok? boolean?)
 (s/def :gym/truth (s/coll-of (s/keys :req [:truth/cmd :truth/re]) :kind vector? :min-count 1))
 (s/def :gym/setup (s/coll-of string? :kind vector?)) ; RCON commands that build the row's arena round the landing (fill-in)
+(s/def :gym/land keyword?)               ; how the bot is landed (land!): :surface when absent
 (s/def ::row
-  (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth] :opt [:gym/setup]))
+  (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]
+          :opt [:gym/setup :gym/land]))
 (s/def :gym/run pos-int?)
 (s/def :gym/landing (s/coll-of int? :kind vector? :count 3))
 (s/def :gym/landed? boolean?)
@@ -55,6 +57,8 @@
           :opt [:gym/landing :gym/ms :gym/reason :gym/commit :gym/result]))
 
 (def arena-reach 16)                  ; blocks round the landing an arena's setup is forceloaded over
+(def fortress-offset 48)              ; blocks west of a located fortress the Nether pad is carved
+(def pad-y 72)                        ; the Nether pad's feet height: over the lava sea (y 31), under the roof
 
 (def portal-arena
   "The portal rows' arena round the landing (issue #8): a stone floor two thick and air over it,
@@ -174,6 +178,20 @@
     :gym/timeout-ms 2400000
     :gym/truth [{:truth/cmd "data get entity {name} Dimension" :truth/re "the_nether"}]}
    ;; issue #5: wade in, get out; the server must see the bot on dry land (steve's onDryLand judge)
+   ;; issue #11: from a pad carved in the Nether 48 blocks west of a located fortress, tunnel to
+   ;; it; judged in the bot's own dimension: the Nether, and fortress bricks within 6 (a filtered
+   ;; clone of the cube round it counts them)
+   {:gym/goal :fortress
+    :gym/until "fortress"
+    :gym/land :nether-fortress
+    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64"]
+    :gym/timeout-ms 900000
+    :gym/truth
+    [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_nether"
+      :truth/re "Test passed"}
+     {:truth/cmd
+      "execute as {name} at @s run clone ~-6 ~-6 ~-6 ~6 ~6 ~6 ~-6 ~20 ~-6 filtered minecraft:nether_bricks"
+      :truth/re "cloned [1-9]"}]}
    {:gym/goal :shore
     :gym/until "shore"
     :gym/prereqs []
@@ -351,38 +369,95 @@
 
 ;;;; I/O: RCON, files, stdout ;;;;
 
+(defmulti land!
+  "Put the bot where row starts, given this run's landing [x z y] of the set: build the row's
+   arena and teleport it there. Returns the landing its truths are filled in with. Keyed by
+   :gym/land (:surface when absent); a new kind of start is a defmethod."
+  {:arglists '([rc row name landing])}
+  (fn [_rc row _name _landing] (:gym/land row :surface)))
+
+(defmethod land! :surface
+  ;; the row's arena round the landing, the teleport onto its surface, the spawn pinned there
+  [rc row name [x z y :as landing]]
+  (when-let [cmds (seq (:gym/setup row))]
+    (fixture/with-forceload rc
+                            [(- x arena-reach) (- z arena-reach) (+ x arena-reach)
+                             (+ z arena-reach)]
+                            #(doseq [c cmds] (rcon/command! rc (fill-in c name landing)))))
+  (fixture/teleport! rc name [x z])
+  (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
+  landing)
+
+(defn in-nether "cmd run in the Nether." [cmd] (str "execute in minecraft:the_nether run " cmd))
+
+(defmethod land! :nether-fortress
+  ;; the fortress nearest the landing's Nether coordinates (an eighth of the overworld's, so each
+  ;; landing has its own), a pocket of netherrack fortress-offset blocks west of it at pad-y
+  ;; (a hollow box: rock round three cells of air), and the bot in it
+  [rc _row name [x z _]]
+  (let [reply (rcon/command! rc
+                             (str "execute in minecraft:the_nether positioned "
+                                  (quot x 8)
+                                  " 64 "
+                                  (quot z 8)
+                                  " run locate structure minecraft:fortress"))
+        [fx fz] (or (fixture/parse-located reply)
+                    (throw (ex-info "no fortress located" {:reply reply})))
+        [px pz] [(- fx fortress-offset) fz]
+        where (str px " " pz)]
+    (rcon/command! rc (in-nether (str "forceload add " where)))
+    (try (loop [i 0]
+           (when (and (< i 150)
+                      (not (fixture/passed? (rcon/command!
+                                             rc
+                                             (str "execute in minecraft:the_nether if loaded " px
+                                                  " 0 " pz)))))
+             (Thread/sleep 200)
+             (recur (inc i))))
+         (rcon/command! rc
+                        (in-nether (str "fill "
+                                        (- px 2)
+                                        " "
+                                        (dec pad-y)
+                                        " "
+                                        (- pz 2)
+                                        " "
+                                        (+ px 2)
+                                        " "
+                                        (+ pad-y 3)
+                                        " "
+                                        (+ pz 2)
+                                        " minecraft:netherrack hollow")))
+         (cli/log "tp:"
+                  (rcon/command! rc (in-nether (str "tp " name " " px ".5 " pad-y " " pz ".5"))))
+         (finally (rcon/command! rc (in-nether (str "forceload remove " where)))))
+    [px pz pad-y]))
+
 (defn landing!
   "The fixture's work for one run: wait for the bot, reset it (survival, empty inventory), give
-   the goal's prerequisites, land it on this run's landing of the set and pin its spawn there.
-   Returns what happened: {:gym/landed? true :gym/landing :gym/at :gym/started}, or
-   {:gym/landed? false :gym/error ...}; never throws."
+   the goal's prerequisites and land it (land!: on this run's landing of the set, or where the
+   row starts from it). Returns what happened: {:gym/landed? true :gym/landing :gym/at
+   :gym/started}, or {:gym/landed? false :gym/error ...}; never throws."
   [{:keys [goal run name host rcon-port rcon-pass landings]}]
   (let [row (gym goal)
-        [x z y :as landing] (landings/landing-for (landings/read-landings landings)
-                                                  (parse-long (str run)))
+        landing (landings/landing-for (landings/read-landings landings) (parse-long (str run)))
         started (System/currentTimeMillis)]
-    (try (rcon/with-rcon
-          (or host "127.0.0.1")
-          (parse-long (str rcon-port))
-          rcon-pass
-          (fn [rc]
-            (when-not (fixture/wait-online! rc name fixture/online-timeout)
-              (throw (ex-info "bot never came online" {:name name})))
-            (rcon/command! rc (str "gamemode survival " name))
-            (rcon/command! rc (str "clear " name))
-            (doseq [p (:gym/prereqs row)] (rcon/command! rc (str "give " name " " p)))
-            (when-let [cmds (seq (:gym/setup row))] ; the row's arena, round the landing
-              (fixture/with-forceload
-               rc
-               [(- x arena-reach) (- z arena-reach) (+ x arena-reach) (+ z arena-reach)]
-               #(doseq [c cmds] (rcon/command! rc (fill-in c name landing)))))
-            (fixture/teleport! rc name [x z])
-            (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
-            (Thread/sleep (long fixture/settle-ms))
-            {:gym/landed? true
-             :gym/landing landing
-             :gym/at (fixture/position rc name)
-             :gym/started started}))
+    (try (rcon/with-rcon (or host "127.0.0.1")
+                         (parse-long (str rcon-port))
+                         rcon-pass
+                         (fn [rc]
+                           (when-not (fixture/wait-online! rc name fixture/online-timeout)
+                             (throw (ex-info "bot never came online" {:name name})))
+                           (rcon/command! rc (str "gamemode survival " name))
+                           (rcon/command! rc (str "clear " name))
+                           (doseq [p (:gym/prereqs row)]
+                             (rcon/command! rc (str "give " name " " p)))
+                           (let [landing (land! rc row name landing)]
+                             (Thread/sleep (long fixture/settle-ms))
+                             {:gym/landed? true
+                              :gym/landing landing
+                              :gym/at (fixture/position rc name)
+                              :gym/started started})))
          (catch Exception e
            (cli/log "landing failed:" e)
            {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))

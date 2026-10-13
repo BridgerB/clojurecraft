@@ -88,12 +88,12 @@
 (defn safe?
   "May a stair (or a level step) be cut: none of the cells it opens is water, lava or unloaded,
    no lava is beside or under them, and a floor lies under the new feet, the last cell (the
-   step is one block, not a drop). A new feet cell on :plan/blacklist is refused: a staircase
+   step is one block, not a drop). A new feet cell in :plan/boxed-at is refused: a staircase
    died :boxed standing there, and stepping back onto it digs the same pocket again."
   [world cells]
   (let [[fx fy fz] (last cells)
         kind #(path/classify world %)]
-    (and (not (contains? (:plan/blacklist world #{}) [fx fy fz]))
+    (and (not (contains? (:plan/boxed-at world #{}) [fx fy fz]))
          (every? #(not (#{:water :lava :unknown} (kind %))) cells)
          (every? #(not= :lava (kind %)) (exposed cells))
          (= :solid (kind [fx (dec fy) fz])))))

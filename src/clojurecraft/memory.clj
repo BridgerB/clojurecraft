@@ -7,6 +7,12 @@
    ever retracted: a block later seen as air is a newer fact, and the history stays queryable
    (`history`). The latest observation at a position is the one with the highest entity id.
 
+   A position is a place in one dimension: each observation also says where, :sight/dimension
+   (a fact without one, written before the bot knew dimensions, is the overworld's), and every
+   question is asked in the dimension the bot is in now (dimension/of), so the Nether's [4 61 147]
+   is never the overworld's (ruststeve read Nether brick 64 blocks off through overworld columns).
+   Pools likewise carry :pool/dimension.
+
    Only block kinds that `watched?` accepts start a record (logs, tables and furnaces); a
    position already on record is followed through every change, so a dug log becomes air.
 
@@ -26,6 +32,7 @@
    :answer/count. A broken block needs no answer fact: it is a sighting of air where it stood."
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.physics :as physics]
             [datascript.core :as d]))
 
@@ -52,44 +59,76 @@
    remembered wherever they are seen, like logs."
   #{:crafting_table :furnace})
 
+(def landmark-kinds
+  "Blocks that say where something is: a fortress (its bricks, fences and stairs) and a lit
+   portal, the way back (issue #11). Only blocks the overworld never generates, so watching them
+   changes nothing a forest run remembers (obsidian and spawners do: the wood recording's 1098
+   sightings became 1121)."
+  #{:nether_bricks :nether_brick_fence :nether_brick_stairs :nether_portal})
+
 (defn watched?
-  "Does seeing this state start a record? Logs and the placed-kinds: things rare enough to
-   remember after their chunk is gone. Stone is not: ten chunks hold 120,000 of it, and
+  "Does seeing this state start a record? Logs, the placed-kinds and the landmark-kinds: things
+   rare enough to remember after their chunk is gone. Stone is not: ten chunks hold 120,000 of it, and
    recording them made every chunk load and every planner tick take seconds (gym batch
    cobble-a1, 2026-10-10: eleven of twelve bots timed out). What is exposed now is the
    terrain's question, not memory's."
   [id]
-  (or (blocks/log? id) (contains? placed-kinds (blocks/name-of id))))
+  (or (blocks/log? id)
+      (let [n (blocks/name-of id)] (or (contains? placed-kinds n) (contains? landmark-kinds n)))))
 
 ;; ---------------------------------------------------------------- reading
 
+(defn sight-dimension
+  "The dimension an observation entity e was seen in: the overworld for one written before
+   observations said."
+  [e]
+  (:sight/dimension e dimension/overworld))
+
+(defn sightings-at
+  "The observations at pos in dimension dim, as entity ids, oldest first."
+  [db dim pos]
+  (->> (d/datoms db :avet :sight/pos pos)
+       (map :e)
+       (filter #(= dim (sight-dimension (d/entity db %))))
+       sort))
+
 (defn latest-entity
-  "The newest observation at pos, as a DataScript entity, or nil."
-  [db pos]
-  (when-let [datoms (seq (d/datoms db :avet :sight/pos pos))]
-    (d/entity db (apply max (map :e datoms)))))
+  "The newest observation at pos in dimension dim, as a DataScript entity, or nil."
+  [db dim pos]
+  (some->> (seq (sightings-at db dim pos))
+           last
+           (d/entity db)))
 
 (defn remembered
-  "The last state seen at pos, or nil."
+  "The last state seen at pos in the bot's dimension, or nil."
   [world pos]
-  (:sight/state (latest-entity (:world/facts world) pos)))
+  (:sight/state (latest-entity (:world/facts world) (dimension/of world) pos)))
 
 (defn history
-  "Every observation at pos, oldest first: [{:block/state id :block/seen-at ms} ...]."
+  "Every observation at pos in the bot's dimension, oldest first:
+   [{:block/state id :block/seen-at ms} ...]."
   [world pos]
   (let [db (:world/facts world)]
-    (->> (d/datoms db :avet :sight/pos pos)
-         (map :e)
-         sort
-         (mapv #(let [e (d/entity db %)]
-                  {:block/state (:sight/state e) :block/seen-at (:sight/at e)})))))
+    (mapv #(let [e (d/entity db %)] {:block/state (:sight/state e) :block/seen-at (:sight/at e)})
+          (sightings-at db (dimension/of world) pos))))
+
+(def in-dimension
+  "The Datalog rule (in-dimension ?e ?dim): observation ?e was seen in ?dim, an observation
+   without :sight/dimension in the overworld."
+  '[[(in-dimension ?e ?dim) [(get-else $ ?e :sight/dimension "minecraft:overworld") ?d]
+     [(= ?d ?dim)]]])
 
 (defn latest
-  "The latest observation at every position on record: {pos {:block/state id :block/seen-at ms}}."
+  "The latest observation at every position on record in the bot's dimension:
+   {pos {:block/state id :block/seen-at ms}}."
   [world]
   (let [db (:world/facts world)]
     (into {}
-          (for [[pos e] (d/q '[:find ?pos (max ?e) :where [?e :sight/pos ?pos]] db)
+          (for [[pos e] (d/q '[:find ?pos (max ?e) :in $ % ?dim :where [?e :sight/pos ?pos]
+                               (in-dimension ?e ?dim)]
+                             db
+                             in-dimension
+                             (dimension/of world))
                 :let [ent (d/entity db e)]]
             [pos {:block/state (:sight/state ent) :block/seen-at (:sight/at ent)}]))))
 
@@ -98,26 +137,31 @@
    essay's \"the nearest log I have ever seen that I have not confirmed gone\", as one Datalog
    query over the facts (no later fact at the place with a state outside the set)."
   [world states]
-  (d/q '[:find [?pos ...] :in $ [?s ...] ?all :where [?e :sight/state ?s] [?e :sight/pos ?pos]
+  (d/q '[:find [?pos ...] :in $ % [?s ...] ?all ?dim :where [?e :sight/state ?s]
+         [?e :sight/pos ?pos] (in-dimension ?e ?dim)
          (not-join
-          [?e ?pos ?all]
+          [?e ?pos ?all ?dim]
           [?later :sight/pos ?pos]
           [(> ?later ?e)]
+          (in-dimension ?later ?dim)
           [?later :sight/state ?t]
           [(contains? ?all ?t) ?kept]
           [(false? ?kept)])]
        (:world/facts world)
+       in-dimension
        states
-       (set states)))
+       (set states)
+       (dimension/of world)))
 
 ;; ---------------------------------------------------------------- writing
 
 (defn observation
-  "The fact to append for seeing id at pos, or nil when it adds nothing (same as the last)."
-  [db pos id now]
-  (let [last (latest-entity db pos)]
+  "The fact to append for seeing id at pos in dimension dim, or nil when it adds nothing (same as
+   the last there)."
+  [db dim pos id now]
+  (let [last (latest-entity db dim pos)]
     (when (and (not= id (:sight/state last)) (or last (watched? id)))
-      {:sight/pos pos :sight/state id :sight/at now})))
+      {:sight/pos pos :sight/state id :sight/at now :sight/dimension dim})))
 
 (defn remember-column
   "Record every watched block in a freshly loaded chunk column, and any change at a position
@@ -125,7 +169,8 @@
   [world key column]
   (let [db (:world/facts world)
         now (:time/now world)
-        tx (keep (fn [[x y z id]] (observation db [x y z] id now))
+        dim (dimension/of world)
+        tx (keep (fn [[x y z id]] (observation db dim [x y z] id now))
                  (chunk/find-blocks {key column} watched?))]
     (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))
 
@@ -139,7 +184,7 @@
   "The pool fact for one fluid kind in a freshly loaded column: its highest surface source,
    nearest the chunk's centre among those, or nil when the chunk holds none. Highest first
    because the pool under the sky is the one to walk to; cave water is the aquifer trap."
-  [[cx cz] fluids kind now]
+  [[cx cz] fluids kind now dim]
   (let [[mx mz] [(+ (* 16 cx) 8) (+ (* 16 cz) 8)]
         cells (for [[[x y z :as pos] id] fluids
                     :when (and (= kind (:fluid/kind (blocks/fluid id)))
@@ -150,15 +195,25 @@
       {:pool/chunk [cx cz]
        :pool/kind kind
        :pool/pos (:pos (first (sort-by :rank cells)))
-       :pool/at now})))
+       :pool/at now
+       :pool/dimension dim})))
+
+(def pool-in-dimension
+  "The Datalog rule (pool-in-dimension ?e ?dim): pool fact ?e is of ?dim, one without
+   :pool/dimension of the overworld."
+  '[[(pool-in-dimension ?e ?dim) [(get-else $ ?e :pool/dimension "minecraft:overworld") ?d]
+     [(= ?d ?dim)]]])
 
 (defn latest-pool
-  "The newest pool fact for a chunk and kind, as an entity, or nil."
-  [db key kind]
-  (let [es (d/q '[:find [?e ...] :in $ ?c ?k :where [?e :pool/chunk ?c] [?e :pool/kind ?k]]
+  "The newest pool fact for a chunk and kind in dimension dim, as an entity, or nil."
+  [db dim key kind]
+  (let [es (d/q '[:find [?e ...] :in $ % ?c ?k ?dim :where [?e :pool/chunk ?c] [?e :pool/kind ?k]
+                  (pool-in-dimension ?e ?dim)]
                 db
+                pool-in-dimension
                 key
-                kind)]
+                kind
+                dim)]
     (when (seq es) (d/entity db (apply max es)))))
 
 (defn remember-pools
@@ -167,9 +222,10 @@
   (let [db (:world/facts world)
         fluids (into {}
                      (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)] [[x y z] id]))
+        dim (dimension/of world)
         tx (for [kind [:water :lava]
-                 :let [pool (pool-of key fluids kind (:time/now world))]
-                 :when (and pool (not= (:pool/pos pool) (:pool/pos (latest-pool db key kind))))]
+                 :let [pool (pool-of key fluids kind (:time/now world) dim)]
+                 :when (and pool (not= (:pool/pos pool) (:pool/pos (latest-pool db dim key kind))))]
              pool)]
     (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))
 
@@ -177,7 +233,7 @@
   "A single block changed: append the fact if it is watched or the position is on record."
   [world pos id]
   (let [db (:world/facts world)]
-    (if-let [fact (observation db pos id (:time/now world))]
+    (if-let [fact (observation db (dimension/of world) pos id (:time/now world))]
       (assoc world :world/facts (d/db-with db [fact]))
       world)))
 
@@ -292,14 +348,16 @@
                 (for [[p {:block/keys [state]}] (latest world) :when (pred state)] p))))
 
 (defn pools
-  "Every chunk's latest pool of a kind: {[cx cz] [x y z]}."
+  "Every chunk's latest pool of a kind in the bot's dimension: {[cx cz] [x y z]}."
   [world kind]
   (let [db (:world/facts world)]
     (into {}
-          (for [[c e] (d/q '[:find ?c (max ?e) :in $ ?k :where [?e :pool/kind ?k]
-                             [?e :pool/chunk ?c]]
+          (for [[c e] (d/q '[:find ?c (max ?e) :in $ % ?k ?dim :where [?e :pool/kind ?k]
+                             [?e :pool/chunk ?c] (pool-in-dimension ?e ?dim)]
                            db
-                           kind)]
+                           pool-in-dimension
+                           kind
+                           (dimension/of world))]
             [c (:pool/pos (d/entity db e))]))))
 
 (def surface-water-below 5)           ; a pool deeper under the eye than this is cave water: never dive for it (steve's aquifer trap)

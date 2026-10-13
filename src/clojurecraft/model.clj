@@ -143,7 +143,14 @@
    [:plan/blacklist "targets that failed, skipped when choosing" "from the :go event"]
    [:plan/trunk-failures
     "failed gather intents per trunk column [x z]; a column that failed twice is skipped when choosing a log"
-    "from the :go event"] [:plan/attempts "intent failures in a row" "from the :go event"]
+    "from the :go event"]
+   [:plan/attempts "intent failures in a row, a walk that failed :no-path aside (:plan/unwalkable)"
+    "from the :go event"]
+   [:plan/unwalkable "walks in a row that failed :no-path; max-unwalkable of them fail the plan"
+    "from the :go event"]
+   [:plan/boxed-at
+    "feet cells where a staircase died :boxed: no descent starts there again, no stair steps onto one"
+    "after a :boxed staircase"]
    [:plan/intents "intents started so far; the next one's :intent/id" "after the first intent"]
    [:plan/intent "the intent being executed" "while one runs"]
    [:plan/last "the last intent that ended, with its outcome" "after one ends"]
@@ -153,7 +160,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :smelt :redig :scoop :equip :build :pour :use-on :await"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -177,11 +184,18 @@
    [:intent/build "which plan a :build works: :cast-one, :portal or :nether" ":build"]
    [:intent/origin "a build's frame origin [bx by bz]" ":build"]
    [:intent/facing "the side of the frame a build works from: :south :north :east :west" ":build"]
-   [:intent/op "the plan op a :build works now; a new op drops the child" ":build"]
+   [:intent/op "the plan op a :build or a :tunnel-to step works now; a new op drops the child"
+    ":build, :tunnel-to"]
    [:intent/aim "the point a :pour or :use-on looks at to act" ":pour, :use-on"]
    [:intent/expect "the predicate (build/holds?) that shows a :pour, :use-on or :await worked"
     ":pour, :use-on, :await"]
    [:intent/fluid "what a :scoop takes: :water (when absent) or :lava" "a :scoop for lava"]
+   [:intent/steps "how many steps a :tunnel-to takes before the planner looks again" ":tunnel-to"]
+   [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
+   [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
+    ":tunnel-to, during a step"]
+   [:intent/from "the feet a :tunnel-to's step started from, where its ops are worked"
+    ":tunnel-to, during a step"]
    [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"
     "gather-chain intents"]
    [:intent/stage "executor stage, e.g. :settle :digging :click :verify :take" "staged intents"]
@@ -282,7 +296,9 @@
    ;; ---- packets
    [:packet/name "which packet; its other fields are the wire's names, unqualified" "every packet"]
    [:chunk/column "the decoded column, added on the reader thread; never recorded"
-    "level-chunk packets"]])
+    "level-chunk packets"]
+   [:chunk/min-y "a column's lowest block y: -64 for 24 sections, 0 for 16 (the Nether, the End)"
+    "every decoded column"]])
 
 (def by-attribute
   "attribute → {:doc meaning :when lifetime}."
