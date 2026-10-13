@@ -34,15 +34,23 @@
    26.x pauses an empty server after 60 s, and forceloaded landings would stop generating.
    max-tick-time: the watchdog's limit on one tick, 60000 ms unless MAX_TICK_TIME says (-1 turns
    it off: a race's locate biome far from any forest took a 60 s tick and the watchdog killed
-   the server under ten bots). max-players: 20 unless MAX_PLAYERS says (a capacity ramp seats 150)."
-  [{:keys [port rcon-port rcon-pass level-seed difficulty max-tick-time max-players]}]
+   the server under ten bots). max-players: 20 unless MAX_PLAYERS says (a capacity ramp seats 150).
+   network-compression-threshold: vanilla's 256 unless COMPRESSION_THRESHOLD says (-1, none: a
+   race's bots are on the same machine, where zlib is only CPU, the server deflating every chunk
+   for every bot and each bot inflating it). sync-chunk-writes: vanilla's true unless
+   SYNC_CHUNK_WRITES says (false: a race's world is thrown away, and a synchronous write per
+   saved chunk is time the server's one tick thread waits)."
+  [{:keys [port rcon-port rcon-pass level-seed difficulty max-tick-time max-players
+           compression-threshold sync-chunk-writes]}]
   [["online-mode" false] ["allow-flight" true] ["level-seed" level-seed]
    ["level-type" "minecraft:normal"] ["difficulty" difficulty] ["gamemode" "survival"] ["pvp" false]
    ["spawn-protection" 0] ["view-distance" 6] ["simulation-distance" 4] ["server-port" port]
    ["server-ip" "127.0.0.1"] ["pause-when-empty-seconds" 0] ["enable-rcon" true]
    ["rcon.port" rcon-port] ["rcon.password" rcon-pass] ["enforce-secure-profile" false]
    ["motd" "clojurecraft"] ["max-tick-time" (or max-tick-time 60000)]
-   ["max-players" (or max-players 20)]])
+   ["max-players" (or max-players 20)]
+   ["network-compression-threshold" (or compression-threshold 256)]
+   ["sync-chunk-writes" (or sync-chunk-writes true)]])
 
 (defn properties-text
   "The pairs as the file's lines."
@@ -94,21 +102,17 @@
 (defn start!
   "Write the world's eula.txt and server.properties, start the server detached (it outlives bb),
    and wait for its \"Done (\" line. Returns true when it came up."
-  [{:keys [world jar java heap-mb] :as opts}]
+  [{:keys [world jar java heap-mb java-opts] :as opts}]
   (ensure-jar! jar)
   (fs/create-dirs world)
   (spit (fs/file world "eula.txt") "eula=true\n")
   (spit (fs/file world "server.properties") (properties-text (properties opts)))
   (let [log (fs/file world "server.log")
-        proc (p/process {:dir world :out log :err :out}
-                        "nohup"
-                        java
-                        "-Xms512M"
-                        (str "-Xmx" heap-mb "M")
-                        "-XX:+UseG1GC"
-                        "-jar"
-                        jar
-                        "nogui")
+        proc (apply p/process
+                    {:dir world :out log :err :out}
+                    (concat ["nohup" java "-Xms512M" (str "-Xmx" heap-mb "M") "-XX:+UseG1GC"]
+                            (remove str/blank? (str/split (or java-opts "") #"\s+")) ; SERVER_JAVA_OPTS: a capacity run's flight recording
+                            ["-jar" jar "nogui"]))
         pid (.pid (:proc proc))]
     (spit (fs/file world "server.pid") (str pid "\n"))
     (println (str "server pid " pid ", waiting for Done"))
@@ -149,7 +153,10 @@
      :level-seed (or (env "LEVEL_SEED") "typecraft")
      :difficulty (or (env "DIFFICULTY") "peaceful")
      :max-tick-time (env "MAX_TICK_TIME")
-     :max-players (env "MAX_PLAYERS")}))
+     :max-players (env "MAX_PLAYERS")
+     :compression-threshold (env "COMPRESSION_THRESHOLD")
+     :sync-chunk-writes (env "SYNC_CHUNK_WRITES")
+     :java-opts (env "SERVER_JAVA_OPTS")}))
 
 (defn local-opts
   "This Mac's server: its ports, a random RCON password kept in data/local-server/rcon.pass

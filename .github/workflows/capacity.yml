@@ -60,7 +60,12 @@ jobs:
       DIFFICULTY: peaceful
       MAX_TICK_TIME: '-1'
       MAX_PLAYERS: ${{ needs.plan.outputs.max-players }}
+      COMPRESSION_THRESHOLD: '-1'        # as the race: bots on the same machine, zlib would be only CPU
+      SYNC_CHUNK_WRITES: 'false'
       LEVEL_SEED: capacity-${{ github.run_id }}-${{ matrix.runner }}
+      # Runners 1 and 2 record a flight recording of each JVM for the whole ramp (what the server's
+      # tick and the bots spend their CPU on, at every load); the others measure undisturbed.
+      PROFILE: ${{ matrix.runner <= 2 && 'true' || '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -87,18 +92,28 @@ jobs:
       - name: Server
         run: |
           clojure -P -M:race
+          mkdir -p data/race
+          if [ -n "$PROFILE" ]; then
+            export SERVER_JAVA_OPTS="-XX:StartFlightRecording=name=cap,filename=$PWD/data/race/server.jfr,dumponexit=true,maxsize=400m"
+          fi
           bb server start
       - name: Ramp
         run: |
-          mkdir -p data/race
           bb capacity sample data/race/sys.edn ${{ matrix.runner }} > data/race/sampler.log 2>&1 &
           sleep 20   # preflight: a sampler that wrote nothing fails the job now, readable, not after the ramp
           if [ ! -s data/race/sys.edn ]; then echo "::error::the machine sampler wrote nothing"; cat data/race/sampler.log; exit 1; fi
           head -c 600 data/race/sys.edn
-          clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/capacity.edn --port "$PORT" \
+          JFR=""
+          if [ -n "$PROFILE" ]; then JFR="-J-XX:StartFlightRecording=name=cap,filename=$PWD/data/race/bots.jfr,dumponexit=true,maxsize=400m"; fi
+          clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m $JFR -M:race --config ci/capacity.edn --port "$PORT" \
             --rcon-port "$RCON_PORT" --rcon-pass "$RCON_PASS" --record-dir data/race \
             --commit "$GITHUB_SHA" --seed "$LEVEL_SEED" --runner ${{ matrix.runner }} > data/race/race.log 2>&1 || true
           grep -E '^(RACE|SAMPLE)' data/race/race.log | tail -n 3 || true
+      - name: Dump the server's flight recording
+        if: ${{ !cancelled() && env.PROFILE == 'true' }}
+        run: |
+          jcmd "$(cat "$WORLD/server.pid")" JFR.dump name=cap filename="$PWD/data/race/server.jfr" || true
+          ls -la data/race/*.jfr || true
       - name: Stop the server
         if: always()
         run: bb server stop || true
@@ -119,6 +134,7 @@ jobs:
             data/race/race.log
             data/race/server.log
             data/race/sampler.log
+            data/race/*.jfr
 
   report:
     needs: ramp

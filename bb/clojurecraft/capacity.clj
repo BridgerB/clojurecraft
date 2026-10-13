@@ -4,7 +4,7 @@
      bb capacity sample <out.edn> <runner>      the machine every 15 s, beside a ramping race
      bb capacity report <dir>                    from every runner's samples: the knee and the sizing
 
-   The race ramps (ci/capacity.edn): ten bots, then ten more every five minutes. Two observers
+   The race ramps (ci/capacity.edn, :race/ramp): some bots, then more in steps. Two observers
    write facts beside it: the race's sampler (SAMPLE, samples.edn: bots joined and playing, their
    ticks per second, the server's tick times, the bots' heap) and this one (sys.edn: each JVM's
    resident memory, CPU and heap, the machine's free memory, swap and load). The report reads
