@@ -235,4 +235,30 @@
   "clojurecraft has never attempted this. ruststeve solved blaze combat in an arena after sessions of zero damage (interact instead of attack, 40 swings in 66 ms); steve's stronghold finder is a stub, its dragon attempts f7 1/3/5 were slain by endermen before a single bed, and RCON showed no beds on the bot in the End. No sibling has located a stronghold by eyes."
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
                     "brain/bot/plan/roadmap-issues.md" "brain/siblings/sib-775-attack-packet.md"
-                    "brain/siblings/sib-blaze-combat.md" "brain/siblings/sib-end-and-dragon.md"]}]
+                    "brain/siblings/sib-blaze-combat.md" "brain/siblings/sib-end-and-dragon.md"]}
+ {:problem/stage :race
+  :problem/issue 17
+  :problem/statement
+  "One bot proves a stage once; a pass rate needs many bots from many starts at once. The runners give twenty servers of 16 GB and four cores, each of which can carry the server and several bots, and the bots must not get in each other's way: two on one forest share its trees and its ground."
+  :problem/needs
+  ["Each bot its own world value, loop, socket and recording, exactly as one bot runs alone, so a racer's run replays alone"
+   "One thing shared, the landing cells, as values on one bounded channel, folded first come first served"
+   "A landing per bot on ground of its own: a forest near a cell no other bot holds, judged by the server's answers"
+   "Every step from empty hands to the target in play, the reached ones staying reached (a chained run)"
+   "A different world on each runner, so twenty runners are twenty starts and not one start twenty times"
+   "A measure of how many bots a server carries: its tick time, read while the race runs"]
+  :problem/risks
+  ["Fresh players generating chunks at once time each other out (steve's races 610 and 611 ghosted after their teleports)"
+   "Too many bots for four cores: the server's ticks stretch and every bot's timing with them"
+   "Two bots claiming one forest" "A crashed racer taking the others down with it"
+   "Reconnecting bots colliding with themselves (steve: relaunch without killing the old race halved its throughput)"]
+  :problem/done
+  "On every runner a RESULT line per bot and a RACE summary; a bot that reached the target is confirmed by the server (data get entity <name> Dimension reads the Nether); no cell granted twice."
+  :problem/last-failure
+  "clojurecraft has never raced. steve raced five bots per runner from a forest grid and its best race put 22 of 140 bots into the Nether; ruststeve raced five per server on a shared box, lanes on land placed by RCON. Neither shared anything but the server between its bots, and neither had claims: lanes were fixed by the bot's index."
+  :problem/decisions
+  ["One JVM per runner, a thread per bot (main/run-bot!): one bot's whole life is a function, so many run side by side, each its own atom; no process per bot"
+   "The fixture claims for each bot, through the claims channel, and speaks to the bot only through its own bounded event queue"
+   "Cells are 96 blocks square from where the first bot joins; the forest nearest a cell's middle is claimed by the cell it lies in"
+   "keep_inventory on, as the siblings race; peaceful, as the full run"]
+  :problem/sources ["docs/hickey.md" "brain/bot/plan/roadmap-issues.md"]}]

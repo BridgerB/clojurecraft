@@ -52,7 +52,10 @@
    is left behind (the server is stopped either way)."
   [set-name pass heap-mb]
   (let [world (str server/root "/cache/worlds/" set-name)
-        opts (merge (server/env-opts) ports {:rcon-pass pass :world world :heap-mb heap-mb})
+        seed (get-in (edn/read-string (slurp (str server/root "/ci/gym.edn")))
+                     [:landing-sets set-name :seed])
+        opts (cond-> (merge (server/env-opts) ports {:rcon-pass pass :world world :heap-mb heap-mb})
+               seed (assoc :level-seed seed)) ; a set's own seed lives on in its level.dat
         landings-file (str world "/landings.edn")]
     (fs/delete-tree world)
     (fs/create-dirs world)

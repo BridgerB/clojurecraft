@@ -50,6 +50,19 @@
           "A vanilla 26.1.2 server: bb server start|stop, set up by PORT RCON_PORT RCON_PASS WORLD"
           :requires ([clojurecraft.server :as server])
           :task (server/command! (first *command-line-args*) (server/env-opts))}
+  capacity {:doc
+            "The capacity experiment (capacity.yml): sample <out> <runner> | report <dir> [title]"
+            :requires ([clojurecraft.capacity :as capacity])
+            :task (apply capacity/-main *command-line-args*)}
+  race-board
+  {:doc
+   "The race's one comment on its pull request (race.yml): create <title> | follow <id> <runner>"
+   :requires ([clojurecraft.race-board :as board])
+   :task (apply board/-main *command-line-args*)}
+  failures
+  {:doc "Failed runs become issues, one per signature (simrace.yml, race.yml): report <dir> <title>"
+   :requires ([clojurecraft.failures :as failures])
+   :task (apply failures/-main *command-line-args*)}
   prepare-world
   {:doc "Build a gym landing set's world into cache/worlds/<set> (world.yml): SET RCON_PASS"
    :requires ([clojurecraft.worlds :as worlds])

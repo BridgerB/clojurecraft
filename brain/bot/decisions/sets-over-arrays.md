@@ -33,5 +33,7 @@ No measurable difference, so the plainer value wins.
 ## What would change the answer
 A profile of a long race showing block predicates on the hot path. Then arrays come back, with that profile cited here.
 
+A ten-bot race profile (2026-10-12, [[remembered-by-identity]]) had the route search's cell reads at a fifth of all samples, but `classify-id` (the set lookups) at 5.6% and `terrain/block-at` (hashing a fresh vector for the overlay and another for the chunk key) at 17%. The fix was reading each cell once per search (`path/cells`), not arrays; the sets stay.
+
 ## See also
 - [[blocks-tables]]

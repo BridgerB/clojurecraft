@@ -114,7 +114,9 @@
         blacklist (:plan/blacklist world #{})]
     (memory/nearest-first eye
                           search-radius
-                          (->> (chunk/find-blocks (stone/near-chunks world) #{blocks/water-base})
+                          (->> (chunk/find-blocks (stone/near-chunks (:world/chunks world)
+                                                                     (stone/feet-chunk world))
+                                                  #{blocks/water-base})
                                (map (fn [[x y z _]] [x y z]))
                                (remove blacklist)
                                (filter #(surface-source? world %))

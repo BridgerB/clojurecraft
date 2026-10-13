@@ -25,6 +25,7 @@ related:
 - [[spot-two-blocks-away]] - where a table goes: rings 1-3 around the feet, ±1 in height, never inside the player (and why the first design failed in CI).
 - [[public-by-default]] - defn everywhere; defn- only for one-line local aliases, so the REPL reaches everything.
 - [[sets-over-arrays]] - block predicates are sets; primitive arrays and hints went when a replay measured no difference.
+- [[remembered-by-identity]] - the planner's costliest questions remembered by the world's parts (memo/by), a search reading each cell once, the overlay kept identical; the race profiles that asked for each.
 - [[one-planner]] - the recipe-only walk was removed once the needs planner covered it.
 - [[any-log-species]] - gather the nearest log of any kind; the next plan picks the planks recipe.
 

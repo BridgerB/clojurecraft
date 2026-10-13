@@ -1,0 +1,244 @@
+name: race
+
+# The race (issue #17): every runner the repo has, each with ci/race.edn's servers on one of the
+# race's pregenerated landing sets (the same worlds and landings every commit), each server
+# carrying ci/race.edn's bots from landings of their own to the target (clojure -M:race). A push
+# to the race branch cancels the race running and starts the new commit's.
+# The board (BOARD lines in the Race step's log) shows every bot each minute while it runs. The
+# race's one comment on its pull request (bb race-board) gathers every runner's milestone facts
+# as they happen: the first bot to each milestone, each runner's furthest, the Nether arrivals.
+
+on:
+  push:
+    branches: [race]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write                  # the board's comment on the race's pull request
+  issues: write
+
+concurrency:
+  group: race-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      runners: ${{ steps.read.outputs.runners }}
+      servers: ${{ steps.read.outputs.servers }}
+      sets: ${{ steps.read.outputs.sets }}
+      bots: ${{ steps.read.outputs.bots }}
+      server-heap: ${{ steps.read.outputs.server-heap }}
+      bot-heap: ${{ steps.read.outputs.bot-heap }}
+      comment: ${{ steps.comment.outputs.id }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read ci/race.edn
+        id: read
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+          bb -e '(let [r (clojure.edn/read-string (slurp "ci/race.edn"))]
+                   (println (str "runners=" (cheshire.core/generate-string (vec (range 1 (inc (:race/runners r)))))))
+                   (println (str "servers=" (:race/servers r 1)))
+                   (println (str "sets=" (cheshire.core/generate-string (:race/landing-sets r))))
+                   (println (str "bots=" (:race/bots r)))
+                   (println (str "server-heap=" (:race/server-heap-mb r)))
+                   (println (str "bot-heap=" (:race/bot-heap-mb r))))' >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+      - name: The race's comment
+        id: comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          r=$(bb -e '(:race/runners (clojure.edn/read-string (slurp "ci/race.edn")))')
+          s=$(bb -e '(:race/servers (clojure.edn/read-string (slurp "ci/race.edn")) 1)')
+          b=$(bb -e '(:race/bots (clojure.edn/read-string (slurp "ci/race.edn")))')
+          u=$(bb -e '(:race/until (clojure.edn/read-string (slurp "ci/race.edn")))')
+          id=$(bb race-board create "### Race ${{ github.run_id }} at ${GITHUB_SHA::7}: $r runners x $s servers x $b bots, spawn to $u")
+          echo "comment $id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
+  worlds:
+    # each of the race's landing sets (ci/gym.edn R1-R4), built once and cached (world.yml); a
+    # race that finds its set cached spends a restore here, never a build
+    needs: plan
+    strategy:
+      matrix:
+        set: ${{ fromJSON(needs.plan.outputs.sets) }}
+    uses: ./.github/workflows/world.yml
+    with:
+      set: ${{ matrix.set }}
+
+  race:
+    needs: [plan, worlds]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        runner: ${{ fromJSON(needs.plan.outputs.runners) }}
+    # A runner races on one landing set (:race/landing-sets, runner r on set (r-1) mod the sets),
+    # a pregenerated world restored from the cache, and carries :race/servers servers, each its
+    # own copy of that world, ports (game 25565+k-1, RCON 25575+k-1), race process and record
+    # directory (data/race/s<k>): a vanilla server ticks on one thread, so one server stops at the
+    # bots that thread can carry, and more servers use the runner's other cores. Each server's bots
+    # start at their own offset into the set's landings, so the runners sharing a set and the
+    # servers sharing a runner land their bots on different landings, the same ones every commit.
+    env:
+      SERVERS: ${{ needs.plan.outputs.servers }}
+      BOTS: ${{ needs.plan.outputs.bots }}
+      RCON_PASS: race
+      HEAP_MB: ${{ needs.plan.outputs.server-heap }}
+      DIFFICULTY: peaceful
+      MAX_TICK_TIME: '-1'                # no watchdog: a slow locate biome stalls the race, it does not end it
+      MAX_PLAYERS: '80'                  # vanilla seats 20; the race seats its bots with room to reconnect
+      COMPRESSION_THRESHOLD: '-1'        # bots on the same machine: zlib would be only CPU, both ends
+      SYNC_CHUNK_WRITES: 'false'         # a thrown-away world: no synchronous write per saved chunk
+    steps:
+      - uses: actions/checkout@v7
+      - name: Which landing set
+        id: set
+        env:
+          SETS: ${{ needs.plan.outputs.sets }}
+        run: |
+          n=$(echo "$SETS" | jq length)
+          r=${{ matrix.runner }}
+          echo "set=$(echo "$SETS" | jq -r ".[$(( (r - 1) % n ))]")" >> "$GITHUB_OUTPUT"
+          before=$(( (r - 1) / n ))   # runners on this set before this one (integer division)
+          echo "first=$(( before * SERVERS * BOTS ))" >> "$GITHUB_OUTPUT"   # this runner's first landing
+          cat "$GITHUB_OUTPUT"
+      - name: The pregenerated world (never built here)
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/worlds/${{ steps.set.outputs.set }}
+          # world.yml's key, the same expression: a matrix of world.yml calls returns no key per set
+          key: world-${{ steps.set.outputs.set }}-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj') }}
+          fail-on-cache-miss: true
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI and Babashka
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: clj-${{ hashFiles('deps.edn') }}
+      - uses: actions/cache@v6
+        with:
+          path: data/local-server/server-26.1.2.jar
+          key: server-26.1.2
+      - name: Servers
+        run: |
+          clojure -P -M:race
+          mkdir -p work
+          for k in $(seq 1 "$SERVERS"); do
+            echo "server $k: set ${{ steps.set.outputs.set }}, $BOTS bots from landing $(( ${{ steps.set.outputs.first }} + (k - 1) * BOTS ))"
+            cp -r "cache/worlds/${{ steps.set.outputs.set }}" "work/world-$k"   # the seed is the set's own, in its level.dat
+            PORT=$((25564 + k)) RCON_PORT=$((25574 + k)) WORLD="$PWD/work/world-$k" bb server start
+          done
+      - name: Race
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          races=""
+          for k in $(seq 1 "$SERVERS"); do mkdir -p "data/race/s$k"; touch "data/race/s$k/race.log"; done
+          tail -n +1 -F data/race/s*/race.log 2>/dev/null | grep --line-buffered -E '^(BOARD|MILESTONE|RACE) ' &
+          if [ -n "${{ needs.plan.outputs.comment }}" ]; then
+            # one follower a runner, for all its servers, publishing in batches (race-board follow!)
+            tail -n +1 -F data/race/s*/race.log 2>/dev/null | grep --line-buffered -E '^(MILESTONE|RACE) ' \
+              | bb race-board follow ${{ needs.plan.outputs.comment }} ${{ matrix.runner }} &
+          fi
+          for k in $(seq 1 "$SERVERS"); do
+            dir="data/race/s$k"
+            server=""
+            if [ "$SERVERS" -gt 1 ]; then server="--server $k"; fi
+            # shellcheck disable=SC2086 # $server is two words or none
+            clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/race.edn --port $((25564 + k)) \
+              --rcon-port $((25574 + k)) --rcon-pass "$RCON_PASS" --record-dir "$dir" --commit "$GITHUB_SHA" \
+              --seed "${{ steps.set.outputs.set }}" --runner ${{ matrix.runner }} $server \
+              --landings "cache/worlds/${{ steps.set.outputs.set }}/landings.edn" \
+              --landing-offset $(( ${{ steps.set.outputs.first }} + (k - 1) * BOTS )) \
+              > "$dir/race.log" 2>&1 &
+            races="$races $!"
+          done
+          # shellcheck disable=SC2086 # one pid per word
+          wait $races || true   # the races alone: the followers above never end on their own. Bots
+                                # failing is what the report's issues are for; the step is red
+                                # only when the race itself could not run
+          sleep 15              # one more of the follower's batches (10 s) before the step ends
+      - name: Summary
+        if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for k in $(seq 1 "$SERVERS"); do
+            log="data/race/s$k/race.log"
+            if [ -n "${{ needs.plan.outputs.comment }}" ]; then
+              # the RACE line alone: the follower published every milestone live, and publishing
+              # them all again one at a time took a runner 90 minutes (race 38355274936)
+              { grep -E '^RACE ' "$log" || echo 'RACE #:race{:ok 0 :reasons {:no-race-line 1}}'
+              } | bb race-board follow ${{ needs.plan.outputs.comment }} ${{ matrix.runner }} || true
+            fi
+            {
+              echo "### runner ${{ matrix.runner }}, server $k, landing set ${{ steps.set.outputs.set }}"
+              echo '```'
+              grep -E '^(RACE|RESULT) ' "$log" | cut -c1-400 || true
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+      - name: Stop the servers
+        if: always()
+        run: |
+          for k in $(seq 1 "$SERVERS"); do WORLD="$PWD/work/world-$k" bb server stop || true; done
+      - name: Pack
+        if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
+        run: |
+          for f in data/race/s*/*.edn; do [ -f "$f" ] && [ "$(basename "$f")" != summary.edn ] && zstd -q -3 -T0 --rm "$f"; done
+          for k in $(seq 1 "$SERVERS"); do cp "work/world-$k/server.log" "data/race/s$k/server.log" 2>/dev/null || true; done
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
+        with:
+          name: race-${{ github.sha }}-${{ matrix.runner }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: data/race/
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}   # the race logs alone, for the failures report
+        with:
+          name: racelog-${{ github.sha }}-${{ matrix.runner }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: data/race/s*/race.log
+
+  report:
+    needs: race
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: racelog-${{ github.sha }}-*
+          path: runs
+      - name: Failures become issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+          # the newest reporter on the branch, not this run's: a rule change reaches runs already going
+          git fetch --depth=1 origin "$GITHUB_REF_NAME" && git checkout FETCH_HEAD -- bb bb.edn
+          bb failures report runs "Race ${{ github.run_id }} at ${GITHUB_SHA::7}" | tee failures.txt
+          { echo '### failures'; echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

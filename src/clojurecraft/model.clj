@@ -293,6 +293,46 @@
    ;; ---- effects: everything the reducer asks for
    [:effect/kind ":send or :log" "every effect"] [:effect/packet "packet to send" "send"]
    [:effect/message "line to log" "log"]
+   ;; ---- the race (claims and the board; values the race folds, never a bot's world)
+   [:claim/by "the bot a landing cell is claimed for" "a claim"]
+   [:claim/cell "the landing cell [cx cz], claims/cell-size blocks square from the race's centre"
+    "a claim"]
+   [:claim/granted? "whether the claims loop gave the cell: no one held it, or the claimant did"
+    "a claim's answer"] [:race/target "the target a racer works now" "a board line"]
+   [:race/reached "how many of the chain's targets a racer has reached" "a board line"]
+   [:race/dimension "the dimension a racer is in" "a board line"]
+   [:race/y "a racer's feet height" "a board line"] [:race/deaths "a racer's deaths" "a board line"]
+   [:race/status "a racer's plan status" "a board line"]
+   [:race/bots "how many bots raced" "a race summary"]
+   [:race/ok "how many reached the target" "a race summary"]
+   [:race/reasons "why the racers stopped, counted" "a race summary"]
+   [:race/runs "each racer's name, outcome, milestones and the server's word" "a race summary"]
+   [:race/seed "the world seed the runner's server made" "a race summary"]
+   [:race/commit "the code that raced" "a race summary"]
+   [:race/until "the race's target" "a race summary"]
+   [:sample/runner "the runner a sample was taken on" "a race sample"]
+   [:sample/server "which of the runner's servers, when it carries more than one; nil with one"
+    "a race sample"]
+   [:race/server "which of the runner's servers the race ran on"
+    "a race summary, with more than one"]
+   [:milestone/server "which of the runner's servers it was reached on"
+    "a milestone fact, with more than one"] [:sample/at "when, ms" "a race sample"]
+   [:sample/joined "bots in the world" "a race sample"]
+   [:sample/landed "bots the fixture has landed" "a race sample"]
+   [:sample/playing "bots in the world and still racing" "a race sample"]
+   [:sample/ended "bots whose plan is done or failed" "a race sample"]
+   [:sample/cut-off "bots whose socket closed or was disconnected" "a race sample"]
+   [:sample/tick-rate "playing bots' ticks per second since the last sample: median, p10, min"
+    "a race sample"] [:sample/milestones "targets reached by every bot, in all" "a race sample"]
+   [:sample/server-tick "the server's tick times, ms: avg, p50, p95, p99" "a race sample"]
+   [:sample/bot-heap-mb "the bots' JVM heap in use" "a race sample"]
+   [:milestone/runner "the runner a milestone was reached on" "a milestone fact"]
+   [:milestone/seed "that runner's world seed" "a milestone fact"]
+   [:milestone/bot "the bot that reached it" "a milestone fact"]
+   [:milestone/goal "the target it reached (joined :plan/reached)" "a milestone fact"]
+   [:milestone/at "when, ms (:time/now)" "a milestone fact"]
+   [:milestone/after-s "seconds after its plan began, its landing"
+    "a milestone fact, once a plan began"]
    ;; ---- packets
    [:packet/name "which packet; its other fields are the wire's names, unqualified" "every packet"]
    [:chunk/column "the decoded column, added on the reader thread; never recorded"

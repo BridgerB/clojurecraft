@@ -5,6 +5,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.build :as build]
+            [clojurecraft.claims :as claims]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -458,6 +459,48 @@
 (s/def :answer/count int?)
 
 ;; problem statements (resources/clojurecraft/problems.edn), written before each stage is built
+(s/def :claim/by string?)
+(s/def :claim/cell (s/tuple int? int?))
+(s/def :claim/granted? boolean?)
+(s/def ::claim (s/keys :req [:claim/by :claim/cell] :opt [:claim/granted?]))
+(s/fdef claims/claim
+  :args
+  (s/cat :claims (s/map-of :claim/cell :claim/by)
+         :request ::claim)
+  :ret (s/tuple (s/map-of :claim/cell :claim/by) ::claim))
+(s/def :race/target (s/nilable keyword?))
+(s/def :race/reached nat-int?)
+(s/def :race/dimension (s/nilable string?))
+(s/def :race/y (s/nilable int?))
+(s/def :race/deaths nat-int?)
+(s/def :race/status (s/nilable keyword?))
+(s/def :race/bots nat-int?)
+(s/def :race/ok nat-int?)
+(s/def :race/reasons (s/map-of any? pos-int?))
+(s/def :race/runs vector?)
+(s/def :race/seed (s/nilable string?))
+(s/def :race/commit (s/nilable string?))
+(s/def :race/until string?)
+(s/def :sample/runner (s/nilable int?))
+(s/def :sample/server (s/nilable int?))
+(s/def :race/server int?)
+(s/def :milestone/server int?)
+(s/def :sample/at int?)
+(s/def :sample/joined nat-int?)
+(s/def :sample/landed nat-int?)
+(s/def :sample/playing nat-int?)
+(s/def :sample/ended nat-int?)
+(s/def :sample/cut-off nat-int?)
+(s/def :sample/tick-rate (s/map-of #{:median :p10 :min} (s/nilable number?)))
+(s/def :sample/milestones nat-int?)
+(s/def :sample/server-tick (s/map-of #{:avg :p50 :p95 :p99} number?))
+(s/def :sample/bot-heap-mb nat-int?)
+(s/def :milestone/runner (s/nilable int?))
+(s/def :milestone/seed (s/nilable string?))
+(s/def :milestone/bot string?)
+(s/def :milestone/goal keyword?)
+(s/def :milestone/at int?)
+(s/def :milestone/after-s int?)
 (s/def :problem/stage keyword?)
 (s/def :problem/issue pos-int?)
 (s/def :problem/goals (s/coll-of keyword? :kind vector?))
@@ -503,8 +546,13 @@
 (s/def :sim/violations vector?)
 (s/def :sim/keep-alive-every pos-int?)
 (s/def :sim/lag-ticks nat-int?)
-(s/def :sim/column bytes?)
-(s/def :sim/chunk map?)
+(s/def ::column-key (s/tuple int? int?))
+(s/def :sim/columns (s/map-of ::column-key bytes?))   ; the world: each column as a server sent it
+(s/def :sim/decoded (s/map-of ::column-key map?))     ; the same columns decoded once, shared by every run
+(s/def :sim/view (s/coll-of ::column-key :kind set?)) ; the columns the client holds now
+(s/def :sim/view-at ::column-key)                     ; the column the player was streamed from
+(s/def :sim/view-distance pos-int?)
+(s/def :sim/tick-seed int?)                           ; where a run's tick randomness starts
 (s/def :sim/spawn ::vec3)
 (s/def :sim/broken (s/coll-of ::block-pos :kind set?))
 (s/def :sim/items (s/map-of int? map?))

@@ -29,6 +29,7 @@
             [clojurecraft.dig :as dig]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.memo :as memo]
             [clojurecraft.packet :as packet]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]))
@@ -38,15 +39,36 @@
 (def dig-ms 3000)                       ; a log by hand (hardness 2), the fallback for an unknown block
 (def break-threshold 0.7)               ; the server breaks once this share of the block's time has passed
 
+(def decode-once
+  "A column's bytes → the column: chunk/decode remembered by the bytes' identity (memo/by), for a
+   world given as bytes alone (a hand-built fixture column)."
+  (memo/by [:identical] 64 chunk/decode))
+
+(defn column-key
+  "The chunk column [cx cz] block or position [x y z] stands in."
+  [[x _ z]]
+  [(bit-shift-right (long (math/floor x)) 4) (bit-shift-right (long (math/floor z)) 4)])
+
+(defn column-of
+  "The decoded column k of the world: the one the world came with (:sim/decoded, decoded once
+   when the world was read and shared by every run of it), else its bytes decoded."
+  [sim k]
+  (or (get (:sim/decoded sim) k)
+      (some-> (get (:sim/columns sim) k)
+              decode-once)))
+
 (defn block-at
-  "The server's view of a block: placed blocks, broken positions (air), else the fixture column."
+  "The server's view of a block: placed blocks, broken positions (air), else the world's column
+   (:sim/columns); nil where the world has no column."
   [sim pos]
   #_{:splint/disable [style/prefer-condp]} ; two maps asked about one pos: a condp would hide that
   (cond (contains? (:sim/placed sim) pos) (get-in sim [:sim/placed pos])
         (contains? (:sim/broken sim) pos) 0
-        :else (chunk/block-at {[0 0] (:sim/chunk sim)} pos)))
+        :else
+        (let [k (column-key pos)]
+          (when-let [column (column-of sim k)] (chunk/block-at {k column} pos)))))
 
-(declare disturb full sync-window)
+(declare disturb full sync-window stream-from)
 
 (defn held-slot
   "The window-0 slot of the hotbar place the client last selected (set-carried-item), the
@@ -117,17 +139,24 @@
 (def drop-rise 0.25)                  ; how far over the bottom of a broken block its drop appears
 
 (defn init
-  "A fresh server before the handshake, from {:column bytes :spawn [x y z]} plus optional
+  "A fresh server before the handshake, from {:columns {[cx cz] bytes} :spawn [x y z]} (a world:
+   its chunk columns as a real server sent them, a capture of one; or {:column bytes}, the world
+   of the one column [0 0]), with optional :decoded {[cx cz] column} (the same columns decoded,
+   once, when the world was read, so the runs of one world share them); the whole world goes to
+   the client at login and stays, unless the
+   optional :view-distance r streams the columns within r chunks as the player moves, as a
+   server does. Then the optional
    :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {slot item} (a slot is a named place,
    [:hotbar 0] as inventory/slot reads it, or a window-0 slot number), :lag-ticks,
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
-   from the world spawn), :seed (where the loot rolls start, 0 when absent), :kill-at ms (the
+   from the world spawn), :seed (where the loot rolls start, 0 when absent), :tick-seed (where
+   a run's tick randomness starts; 0.5 every tick when absent), :kill-at ms (the
    player dies then, a fault as an input: a death mid-task), :dimension (the dimension the
    player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
    there) and :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
    and where the player arrives)."
-  [{:keys [column spawn keep-alive-every drop-clicks inventory lag-ticks respawn seed kill-at
-           dimension nether]
+  [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks inventory
+           lag-ticks respawn seed tick-seed kill-at dimension nether]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -147,8 +176,8 @@
      :sim/keep-alive-every keep-alive-every
      :sim/now 0
      :sim/out []
-     :sim/column column
-     :sim/chunk (chunk/decode column)
+     :sim/columns (or columns {[0 0] column})
+     :sim/view #{}
      :sim/spawn spawn
      :sim/respawn (or respawn spawn)
      :sim/broken #{}
@@ -159,11 +188,71 @@
      :sim/next-eid 100
      :sim/next-keep-alive keep-alive-every
      :sim/keep-alives-pending #{}}
+    decoded (assoc :sim/decoded decoded)
+    tick-seed (assoc :sim/tick-seed tick-seed)
+    view-distance (assoc :sim/view-distance view-distance)
     kill-at (assoc :sim/kill-at kill-at)
     dimension (assoc :sim/dimension dimension)
     nether (assoc :sim/nether nether)))
 
 (defn send "Queue pkt for the client in :sim/out." [sim pkt] (update sim :sim/out conj pkt))
+
+(defn in-view
+  "The world's columns the client holds with the player where it stands: every one (the whole
+   world, sent once at login and never forgotten: a captured run's world is tens of megabytes,
+   one value every run shares), or, with :sim/view-distance r, those within r chunks of the
+   player's column (a square, as a server counts it)."
+  [sim]
+  (let [[cx cz] (column-key (:sim/player-pos sim (:sim/spawn sim)))
+        r (:sim/view-distance sim)
+        columns (:sim/columns sim)]
+    (cond (nil? r) (set (keys columns))
+          :else
+          (set (for [x (range (- cx r) (inc (+ cx r)))
+                     z (range (- cz r) (inc (+ cz r)))
+                     :when (contains? columns [x z])]
+                 [x z])))))
+
+(defn packed
+  "A chunk column [cx cz] as forget-level-chunk packs it: x in the low 32 bits, z in the high
+   (terrain/chunk-key reads it back)."
+  [[cx cz]]
+  (bit-or (bit-and (long cx) 0xFFFFFFFF) (bit-shift-left (long cz) 32)))
+
+(defn stream
+  "The model as a server keeps a player's chunks: every column that came into view since the last
+   look is sent, in one batch, and every one that left it is forgotten, as the player walks, is
+   teleported or respawns. Nearest first, so the column under the feet comes before the rest.
+   Nothing to do while the player stays in the column it was streamed from (:sim/view-at)."
+  [sim]
+  (let [here (column-key (:sim/player-pos sim (:sim/spawn sim)))]
+    (cond (= here (:sim/view-at sim)) sim
+          :else (stream-from sim here))))
+
+(defn stream-from
+  "stream's work for a player in column here: send what came into view, forget what left it."
+  [sim here]
+  (let [now (in-view sim)
+        sent (:sim/view sim)
+        gone (sort (remove now sent))
+        fresh (sort-by (fn [[x z]] [(+ (abs (- x (first here))) (abs (- z (second here)))) x z])
+                       (remove sent now))
+        sim
+        (reduce (fn [sim k] (send sim {:packet/name :forget-level-chunk :pos (packed k)})) sim gone)
+        sim (reduce (fn [sim [x z :as k]]
+                      (send sim
+                            {:packet/name :level-chunk-with-light
+                             :x x
+                             :z z
+                             :heightmaps []
+                             :data (get-in sim [:sim/columns k])
+                             ;; decoded already, as the socket's reader thread attaches it: the
+                             ;; one column every run of this world shares, so no run decodes it
+                             :chunk/column (column-of sim k)}))
+                    sim
+                    fresh)]
+    (cond-> (assoc sim :sim/view now :sim/view-at here)
+      (seq fresh) (send {:packet/name :chunk-batch-finished :batch-size (count fresh)}))))
 
 (defmulti on-packet
   "The server's answer to one client packet, by [phase packet-name]; unknown packets are
@@ -229,16 +318,14 @@
                :items (mapv #(get-in sim [:sim/inv %])
                             (range (inventory/slot-count (inventory/layouts :inventory))))
                :carried nil})
-        (send
-         {:packet/name :level-chunk-with-light :x 0 :z 0 :heightmaps [] :data (:sim/column sim)})
-        (send {:packet/name :chunk-batch-finished :batch-size 1}))))
+        stream)))
 
 (defmethod on-packet [:play :move-player-pos-rot]
   [sim {:keys [x y z]}]
-  (assoc sim :sim/player-pos [x y z]))
+  (stream (assoc sim :sim/player-pos [x y z])))
 (defmethod on-packet [:play :move-player-pos]
   [sim {:keys [x y z]}]
-  (assoc sim :sim/player-pos [x y z]))
+  (stream (assoc sim :sim/player-pos [x y z])))
 (defmethod on-packet [:play :keep-alive]
   [sim {:keys [id]}]
   (update sim :sim/keep-alives-pending disj id))
@@ -827,7 +914,8 @@
                  :dz 0.0
                  :yaw 0.0
                  :pitch 0.0
-                 :flags 0})))
+                 :flags 0})
+          stream))
     sim))
 
 ;; ---------------------------------------------------------------- fire and portals (issue #8)
@@ -893,13 +981,14 @@
    one, the same column where the player stood (a one-column model of the portal alone)."
   [sim]
   (if-let [{:keys [column at]} (:sim/nether sim)]
-    (assoc sim
-           :sim/column column
-           :sim/chunk (chunk/decode column)
-           :sim/placed {}
-           :sim/broken #{}
-           :sim/player-pos at)
-    sim))
+    (-> sim
+        (assoc :sim/columns {[0 0] column}
+               :sim/placed {}
+               :sim/broken #{}
+               :sim/player-pos at
+               :sim/view #{}) ; a dimension change drops every chunk the client held
+        (dissoc :sim/view-at))
+    (dissoc sim :sim/view-at)))
 
 (defn through-portal
   "The model a tick on: a player whose feet stand in a nether portal portal-ms on end changes
@@ -934,11 +1023,8 @@
                        :yaw 0.0
                        :pitch 0.0
                        :flags 0})
-                (send {:packet/name :level-chunk-with-light
-                       :x 0
-                       :z 0
-                       :heightmaps []
-                       :data (:sim/column sim)}))))))
+                (assoc :sim/view #{}) ; the client dropped the old dimension's chunks
+                stream)))))
 
 (defn place
   "use-item-on that is not on a container: place the held block item at pos + face when the
@@ -1272,11 +1358,19 @@
   [world]
   (mapv :effect/packet (filter #(= :send (:effect/kind %)) (:bot/effects world))))
 
+(defn tick-rand
+  "[r' x]: the next state of a tick seed r and its roll x in [0, 1), by the same pure step as
+   the loot's rolls (roll)."
+  [r]
+  (let [[{r' :sim/rng} x] (roll {:sim/rng r})] [r' x]))
+
 (defn run
   "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a time, until (stop?
    world) or max-ms. Sends go (default {:event/kind :go}) once the bot is loaded. Returns
    [world sim]. :sim/lag-ticks in sim0 delays every server→client packet by that many ticks,
-   in order: a slow network as an input."
+   in order: a slow network as an input. Each tick's :event/rand is 0.5, or, with
+   :sim/tick-seed in sim0, the next of a pure generator started there (tick-rand), so runs of
+   one world with different seeds are different runs, each the same every time."
   [bot-step world0 sim0 stop? max-ms & [go]]
   (let [w (bot-step world0 {:event/kind :start})
         lag (* physics/tick-ms (:sim/lag-ticks sim0 0))]
@@ -1285,7 +1379,8 @@
            pending (sends w)
            t 0
            went? false
-           inflight []]
+           inflight []
+           r (:sim/tick-seed sim0)]
       (let [sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim pending)
             sim (step sim {:sim/kind :tick :sim/now t})
             [sim fresh] (drain sim)
@@ -1293,14 +1388,15 @@
             inbound (map second (take-while #(<= (first %) t) inflight))
             inflight (vec (drop-while #(<= (first %) t) inflight))
             world (reduce #(bot-step %1 {:event/kind :packet :event/packet %2}) world inbound)
-            world (bot-step world {:event/kind :tick :event/now t :event/rand 0.5})
+            [r rand] (if r (tick-rand r) [nil 0.5])
+            world (bot-step world {:event/kind :tick :event/now t :event/rand rand})
             go? (and (not went?) (:player/loaded? world))
             world (if go? (bot-step world (or go {:event/kind :go})) world)
             out (sends world)
             world (assoc world :bot/effects [])]
         (if (or (stop? world) (> t max-ms))
           [world (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out)] ; deliver the last tick's packets
-          (recur world sim out (+ t physics/tick-ms) (or went? go?) inflight))))))
+          (recur world sim out (+ t physics/tick-ms) (or went? go?) inflight r))))))
 
 ;;;; I/O: the model behind a channel pair, on a thread of its own ;;;;
 

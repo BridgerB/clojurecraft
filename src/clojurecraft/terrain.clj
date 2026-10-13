@@ -85,12 +85,21 @@
             world
             blocks)))
 
+(defn superseded
+  "The block overlay m without the blocks in column-key's column [cx cz], which a fresh one supersedes:
+   m itself, the same object, when it holds none there, so whatever is remembered by the
+   overlay's identity (memo/by) stays remembered while chunks arrive that it never touched."
+  [m column-key]
+  (let [gone (into [] (comp (map key) (filter #(in-chunk? column-key %))) m)]
+    (cond (seq gone) (apply dissoc m gone)
+          :else (or m {}))))
+
 (defn put-column
   "Column key [cx cz] is now column: replace it, drop overlay blocks it supersedes, and remember
    what it holds."
   [world key column]
   (-> world
       (assoc-in [:world/chunks key] column)
-      (update :world/blocks (fn [m] (into {} (remove (fn [[pos _]] (in-chunk? key pos)) m))))
+      (update :world/blocks superseded key)
       (memory/remember-column key column)
       (memory/remember-pools key column)))

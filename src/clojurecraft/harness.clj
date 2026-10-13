@@ -31,17 +31,7 @@
 (defn land!
   "Land the bot in a forest on ground the fixture can use; returns where it stands, or nil."
   [rc name]
-  (when-let [[fx fz] (locate-forest! rc name)]
-    (loop [[[ox oz] & more] fixture/landing-offsets]
-      (fixture/teleport! rc name [(+ fx ox) (+ fz oz)])
-      (Thread/sleep (long fixture/settle-ms))
-      (let [why (fixture/bad-landing (mapv (fn [[reason test]]
-                                             [reason
-                                              (rcon/command! rc (str "execute at " name " " test))])
-                                           fixture/checks))]
-        (if (and why (seq more))
-          (do (cli/log "bad landing" why "- trying another spot") (recur more))
-          (fixture/position rc name))))))
+  (when-let [forest (locate-forest! rc name)] (fixture/land-at! rc name forest)))
 
 (defn -main
   "clojure -M:harness [--host H] --rcon-port P --rcon-pass S --name N --until U"

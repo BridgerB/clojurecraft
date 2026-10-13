@@ -5,4 +5,33 @@
 {:landing-sets
  {"A" {:center [20000 20000] :n 20 :spacing 640 :biome "#minecraft:is_forest" :pregen-r 96}
   ;; W: shores (issue #5), after steve's landing set W: a bank with swimmable water near it
-  "W" {:center [26000 20000] :n 20 :spacing 640 :biome "#minecraft:is_beach" :pregen-r 96}}}
+  "W" {:center [26000 20000] :n 20 :spacing 640 :biome "#minecraft:is_beach" :pregen-r 96}
+  ;; R1-R4: the race's worlds (race.yml, :race/landing-sets), each its own seed (kept in its
+  ;; level.dat), 48 forest landings 320 apart with 112 blocks pregenerated round each (15x15 = 225
+  ;; chunks, one forceload): the same worlds and landings every commit, so races compare landing
+  ;; by landing, and no runner's server generates a fresh world round each bot or runs a locate
+  ;; biome per bot in one of its ticks.
+  "R1" {:seed "race-R1"
+        :center [3000 3000]
+        :n 48
+        :spacing 320
+        :biome "#minecraft:is_forest"
+        :pregen-r 112}
+  "R2" {:seed "race-R2"
+        :center [3000 3000]
+        :n 48
+        :spacing 320
+        :biome "#minecraft:is_forest"
+        :pregen-r 112}
+  "R3" {:seed "race-R3"
+        :center [3000 3000]
+        :n 48
+        :spacing 320
+        :biome "#minecraft:is_forest"
+        :pregen-r 112}
+  "R4" {:seed "race-R4"
+        :center [3000 3000]
+        :n 48
+        :spacing 320
+        :biome "#minecraft:is_forest"
+        :pregen-r 112}}}

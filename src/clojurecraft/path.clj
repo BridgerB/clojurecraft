@@ -18,6 +18,7 @@
    floor nor clear, so routes go around them. Nothing here reads a clock or the atom."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.memo :as memo]
             [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]))
 
@@ -73,31 +74,69 @@
   [world pos]
   (classify-id (terrain/block-at world pos)))
 
+(defn cell-key
+  "One long naming the cell [x y z]: x and z in 26 bits each, y in 12, which holds every cell
+   inside the world border (±30,000,000) at any height a dimension has, each to its own key."
+  ^long [^long x ^long y ^long z]
+  (bit-or (bit-shift-left (bit-and x 0x3FFFFFF) 38)
+          (bit-shift-left (bit-and z 0x3FFFFFF) 12)
+          (bit-and y 0xFFF)))
+
+(defn cells
+  "The cells of w as a route sees them: a function of [x y z] to classify's answer. w is a world,
+   or such a function already, returned as it is, so every predicate below takes either. Made
+   from a world, each cell is read through the terrain once and its answer held for the life of
+   the function: one search or one scan asks about the same few thousand cells hundreds of
+   thousands of times (a race's profile: the route search a fifth of all the bots' CPU, nearly
+   all of it reading cells it had read). It answers about one world value, so what it holds is
+   what that value says; it is made inside one question and never kept, so no two threads share
+   it."
+  [w]
+  (cond (fn? w) w
+        :else
+        (let [held (java.util.HashMap.)]
+          (fn [[x y z :as pos]]
+            (let [k (cell-key x y z)
+                  known (.get held k)]
+              (cond known known
+                    :else
+                    (let [c (classify w pos)]
+                      (.put held k c)
+                      c)))))))
+
 (def around
   "The four horizontal neighbours of a cell, as offsets."
   [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]])
 
+(def lava-sides
+  "The cells lava-near? looks at, as offsets: the four horizontal neighbours and the one under."
+  (conj around [0 -1 0]))
+
 (defn lava-near?
   "Is there lava in any of the four horizontal neighbours of pos, or under it? Such a cell is
-   never entered: a misstep from it is a death (ruststeve's lava_around_body)."
+   never entered: a misstep from it is a death (ruststeve's lava_around_body). world is a world
+   or its cells."
   [world [x y z]]
-  (boolean (some (fn [[dx dy dz]] (= :lava (classify world [(+ x dx) (+ y dy) (+ z dz)])))
-                 (conj around [0 -1 0]))))
+  (let [at (cells world)]
+    (boolean (some (fn [[dx dy dz]] (= :lava (at [(+ x dx) (+ y dy) (+ z dz)]))) lava-sides))))
 
 (defn floor?
-  "Can the feet stand on the block at pos: a full cube."
+  "Can the feet stand on the block at pos: a full cube. world is a world or its cells."
   [world pos]
-  (= :solid (classify world pos)))
+  (= :solid ((cells world) pos)))
 
 (defn clear?
-  "May the body occupy pos: passable, not a liquid, no lava beside or under it."
+  "May the body occupy pos: passable, not a liquid, no lava beside or under it. world is a world
+   or its cells."
   [world pos]
-  (and (= :clear (classify world pos)) (not (lava-near? world pos))))
+  (let [at (cells world)] (and (= :clear (at pos)) (not (lava-near? at pos)))))
 
 (defn standable?
-  "Could the feet rest at node [x y z]: a floor under it, body and head clear."
+  "Could the feet rest at node [x y z]: a floor under it, body and head clear. world is a world
+   or its cells."
   [world [x y z]]
-  (and (floor? world [x (dec y) z]) (clear? world [x y z]) (clear? world [x (inc y) z])))
+  (let [at (cells world)]
+    (and (floor? at [x (dec y) z]) (clear? at [x y z]) (clear? at [x (inc y) z]))))
 
 ;; ---------------------------------------------------------------- moves as data
 
@@ -143,7 +182,8 @@
   (vec (for [m templates rot rotations] (rotate-move rot m))))
 
 (defn need-met?
-  "Does the cell at offset from node satisfy what (:floor, :clear, :not-floor)?"
+  "Does the cell at offset from node satisfy what (:floor, :clear, :not-floor)? world is a world
+   or its cells."
   [world [x y z] [what [dx dy dz]]]
   (let [cell [(+ x dx) (+ y dy) (+ z dz)]]
     (case what
@@ -155,38 +195,43 @@
   "Where a drop from cell comes to rest, falling at most max-fall blocks: the node whose floor
    is the first solid below, with the body and head there clear and nothing but clear cells in
    between; nil when the fall is too far or lands on anything but a floor (water, lava, an
-   awkward shape or an unloaded chunk are all refused)."
+   awkward shape or an unloaded chunk are all refused). world is a world or its cells."
   [world [x y z]]
-  (reduce (fn [_ fall]
-            (let [feet [x (- y fall) z]
-                  below [x (- y fall 1) z]]
-              (cond (not (clear? world feet)) (reduced nil)
-                    (floor? world below) (reduced {:node feet :fall fall})
-                    (= :clear (classify world below)) nil
-                    :else (reduced nil))))
-          nil
-          (range 1 (inc max-fall))))
+  (let [at (cells world)]
+    (reduce (fn [_ fall]
+              (let [feet [x (- y fall) z]
+                    below [x (- y fall 1) z]]
+                (cond (not (clear? at feet)) (reduced nil)
+                      (floor? at below) (reduced {:node feet :fall fall})
+                      (= :clear (at below)) nil
+                      :else (reduced nil))))
+            nil
+            (range 1 (inc max-fall)))))
 
 (defn apply-move
-  "The node and cost a move leads to from node, or nil when the world does not allow it."
+  "The node and cost a move leads to from node, or nil when the world does not allow it. world
+   is a world or its cells."
   [world [x y z :as node] {:move/keys [to cost needs fall?]}]
-  (when (every? #(need-met? world node %) needs)
-    (let [[dx dy dz] to
-          there [(+ x dx) (+ y dy) (+ z dz)]]
-      (if fall?
-        (when-let [{:keys [node fall]} (landing world there)]
-          {:node node :cost (+ cost (* fall-cost-per-block fall))})
-        {:node there :cost cost}))))
+  (let [at (cells world)]
+    (when (every? #(need-met? at node %) needs)
+      (let [[dx dy dz] to
+            there [(+ x dx) (+ y dy) (+ z dz)]]
+        (if fall?
+          (when-let [{:keys [node fall]} (landing at there)]
+            {:node node :cost (+ cost (* fall-cost-per-block fall))})
+          {:node there :cost cost})))))
 
 (defn neighbors
   "Every node reachable from node in one move, with the move's cost: [{:node :cost :move} ...].
-   A drop and a walk to the same cell cannot both apply (a walk needs a floor the drop forbids)."
+   A drop and a walk to the same cell cannot both apply (a walk needs a floor the drop forbids).
+   world is a world or its cells."
   [world node]
-  (into []
-        (keep (fn [m]
-                (some-> (apply-move world node m)
-                        (assoc :move (:move/id m)))))
-        moves))
+  (let [at (cells world)]
+    (into []
+          (keep (fn [m]
+                  (some-> (apply-move at node m)
+                          (assoc :move (:move/id m)))))
+          moves)))
 
 ;; ---------------------------------------------------------------- goals as data
 
@@ -297,9 +342,11 @@
    {:path/waypoints :path/cost :path/status}: :found when a node satisfies the goal, else
    :partial (the budget ran out) or :none (the frontier did) with the route to the node that
    came nearest by the heuristic. The waypoints omit the start. The open set is a sorted set of
-   [f g node], so ties break on the node itself and the search is deterministic."
+   [f g node], so ties break on the node itself and the search is deterministic. Its cells are
+   read once each (cells); the goal and the traps read the world."
   [world start goal max-nodes]
-  (let [h0 (heuristic goal start)
+  (let [at (cells world)
+        h0 (heuristic goal start)
         done (fn [status parents best g]
                {:path/waypoints (vec (rest (route parents best)))
                 :path/cost (double (get g best 0.0))
@@ -331,7 +378,7 @@
                                          (assoc g next g') (assoc parents next node)]
                                         [open g parents])))
                                   [open g parents]
-                                  (neighbors world node))]
+                                  (neighbors at node))]
                       (recur open g parents closed best best-h (inc expanded)))))))))
 
 (defn feet-cell
@@ -345,13 +392,35 @@
    sit on a block edge floors into the neighbouring column, which on a hillside is inside the
    hill (recorded by the gym at landing 21280,18720: the feet at x 21281.0 on a stone edge, the
    cell they floor into solid, every plan :none); the box rests on the cell beside it. nil when
-   nothing near can be stood on."
+   nothing near can be stood on. world is a world or its cells."
   [world [x y z :as from]]
-  (if (standable? world from)
-    from
-    (->> (for [dy [0 -1 1] dx [0 -1 1] dz [0 -1 1]] [(+ x dx) (+ y dy) (+ z dz)])
-         (filter #(standable? world %))
-         first)))
+  (let [at (cells world)]
+    (if (standable? at from)
+      from
+      (->> (for [dy [0 -1 1] dx [0 -1 1] dz [0 -1 1]] [(+ x dx) (+ y dy) (+ z dz)])
+           (filter #(standable? at %))
+           first))))
+
+(defn traps-in-force
+  "The traps of :world/traps younger than trap-ttl at :time/now: the only part of the clock a
+   route depends on."
+  [world]
+  (let [now (:time/now world 0)]
+    (filterv (fn [{:trap/keys [at]}] (<= (- now at) trap-ttl)) (:world/traps world))))
+
+(def plan-on
+  "[chunks blocks traps from goal max-nodes] → the route plan gives over that terrain with those
+   traps in force, remembered by the terrain's identity (memo/by): an act asked whether each of
+   its candidates could be walked to every tick, a full search each (a race's profile: a sixth of
+   all its CPU), over terrain that changes when a chunk arrives or a block changes."
+  (memo/by [:identical :identical :equal :equal :equal :equal]
+           256
+           (fn [chunks blocks traps from goal max-nodes]
+             ;; every trap here is in force, so the clock is not needed: trap-factor counts them all at 0
+             (let [world {:world/chunks chunks :world/blocks blocks :world/traps traps}]
+               (if-let [start (start-cell world from)]
+                 (assoc (search world start goal max-nodes) :path/from start)
+                 {:path/waypoints [] :path/cost 0.0 :path/status :none})))))
 
 (defn plan
   "A route for the feet from the cell `from` toward goal: {:path/waypoints [[x y z] ...]
@@ -362,6 +431,9 @@
    toward it, which is the walker's cue to move and plan again."
   ([world from goal] (plan world from goal {}))
   ([world from goal {:path/keys [max-nodes] :or {max-nodes default-max-nodes}}]
-   (if-let [start (start-cell world from)]
-     (assoc (search world start goal max-nodes) :path/from start)
-     {:path/waypoints [] :path/cost 0.0 :path/status :none})))
+   (plan-on (:world/chunks world)
+            (:world/blocks world)
+            (traps-in-force world)
+            from
+            goal
+            max-nodes)))
