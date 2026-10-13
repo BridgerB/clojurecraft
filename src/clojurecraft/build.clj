@@ -577,12 +577,15 @@
 (defn approach-stand
   "The child that gets the feet centred for op, or nil when they already are: on the
    designated stand, or, for a place or a dig whose stand cannot be occupied, on a cell that
-   already reaches the block. A keyword is why no such cell exists."
+   already reaches the block. A keyword is why no such cell exists. Ground in the way is dug
+   only for a :build, whose mold says which cobblestone to keep; a :tunnel-to step (fortress)
+   works the same ops with no build of its own, and opens its own way."
   [world i {:build/keys [op stand pos]}]
   (cond (intent/centred? world stand) nil
         :else
         (let [blocked
-              (clear-stand world stand (:intent/build i) (:intent/origin i) (:intent/facing i))]
+              (when (:intent/build i)
+                (clear-stand world stand (:intent/build i) (:intent/origin i) (:intent/facing i)))]
           (cond blocked blocked
                 (or (path/standable? world stand) (not (#{:place :dig} op)))
                 {:intent/kind :walk :intent/target stand :intent/for :build}

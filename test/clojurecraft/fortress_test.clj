@@ -6,6 +6,7 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.build :as build]
             [clojurecraft.fortress :as fortress]))
 
 (def netherrack (blocks/default-state :netherrack))
@@ -48,6 +49,14 @@
     (is (not (fortress/safe? (rock {[1 64 0] nil}) [0 64 0] [1 0 0])) "never into the unknown")
     (testing "the tunnel goes round: up when lava is beside the level step"
       (is (= [1 1 0] (fortress/choose-move (rock {[1 64 1] lava}) [0 64 0] [4 64 0]))))))
+
+(deftest a-step-is-walked-into-with-no-build-of-its-own
+  ;; build/approach-stand digs ground in the way of a :build's stand using its mold; a tunnel
+  ;; step has no mold (no :intent/build), so the walk into the cell it opened is just a walk
+  (let [w (rock {[1 64 0] air [1 65 0] air})
+        op (peek (fortress/step-plan [0 64 0] [1 0 0]))]
+    (is (= {:intent/kind :walk :intent/target [1 64 0] :intent/for :build}
+           (build/op-child w {:intent/kind :tunnel-to :intent/target [9 64 0]} op)))))
 
 (def gen-move
   (gen/elements (for [d [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [(first d) dy (second d)])))
