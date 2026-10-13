@@ -13,6 +13,7 @@ related:
 
 - [[local-server]] - the Mac's own vanilla server: ports, password, properties that matter.
 - [[gym-on-runners]] - test.yml, and gym.yml: a goal on real terrain, one runner per run, judged by RESULT and the server, reported with an interval.
+- [[race]] - many bots on one server, each its own atom and loop, one claims channel for landing cells; race.yml on every runner.
 - [[record-replay]] - every run is a file; replay it with no server.
 - [[server-model]] - the pure vanilla-server model tests run the whole bot against.
 - [[datagen]] - six EDN tables: four from --reports, recipes and tags from the inner jar.

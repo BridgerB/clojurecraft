@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   full:
+    if: github.head_ref != 'race'   # the race request races on every runner instead (race.yml)
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     steps:

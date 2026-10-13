@@ -145,6 +145,48 @@
              ::go
              (fn [k r _ w] (when (:player/loaded? w) (remove-watch r k) (async/put! queue go)))))
 
+(defn run-bot!
+  "One bot's whole life: connect as name, fold the socket's packets, the clock's ticks and the
+   events put on events (a bounded channel: a fixture's :go) into its own world atom until the
+   goal holds, a planned run fails, the deadline passes or the socket closes; record it when
+   record names a file. Then (on-result result) while still connected, hold hold-ms for an
+   outside judge when ok, and close. world* is the bot's atom (one is made when none is given;
+   a watcher may be on it already). With no events channel and a plan, the run starts where it
+   stands as soon as it is loaded. Returns {:result r :world final}. Nothing is shared with
+   another bot: a race runs many of these, each its own atom and loop."
+  [{:keys [host port name until timeout-ms hold-ms record commit chain events on-result world*]
+    :or {host "127.0.0.1" until "wood" timeout-ms 120000 hold-ms 0 on-result (fn [_])}}]
+  (let [opts {:host host :port port :name name}
+        deadline (+ (now) timeout-ms)
+        ;; --chain plays every step up to --until. A gym stage names only its own target.
+        planned (if chain (plan/through until) (plan/goals-for until))
+        goal? (goal-fn until)
+        stop? (fn [w] (or (goal? w) (and planned (plan/failed? w)) (> (now) deadline)))
+        tap (when record (record/tap! record (if commit {:record/commit commit} {}))) ; the code that made the run
+        c (conn/open! opts)
+        queue (or events (async/chan 16))
+        world* (or world* (atom (game/init opts)))]
+    (cli/log "connected to" host port "as" name)
+    (when (and (nil? events) planned)
+      (go-when-loaded! world*
+                       queue
+                       (cond-> {:event/kind :go :go/goals planned} ; no fixture: start where we stand
+                         chain (assoc :go/chain? true)))) ; milestones (plan/reach)
+    (apply-event! world*
+                  {:event/kind :start :start/host host :start/port port :start/name name}
+                  (:out c)
+                  tap)
+    (let [final (run-loop! c queue world* stop? tap)
+          ok (ok? final until)
+          r (result final until ok)]
+      (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT
+      (on-result r)
+      (when (and ok (pos? hold-ms))
+        (cli/log "holding" hold-ms "ms for an outside judge")
+        (let [until (+ (now) hold-ms)] (run-loop! c queue world* (fn [_] (> (now) until)) nil)))
+      ((:close! c))
+      {:result r :world final})))
+
 (defn -main
   "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,
    hold for an outside judge when ok, and exit 0 when ok else 1."
@@ -157,43 +199,26 @@
               timeout-ms "120000"
               hold-ms "0"}}
         (cli/options args)
-        opts {:host host :port (Long/parseLong port) :name name}
-        deadline (+ (now) (Long/parseLong timeout-ms))
-        hold (Long/parseLong hold-ms)
-        ;; --chain plays every step up to --until. A gym stage names only its own target.
-        planned (if (= chain "true") (plan/through until) (plan/goals-for until))
-        goal? (goal-fn until)
-        stop? (fn [w] (or (goal? w) (and planned (plan/failed? w)) (> (now) deadline)))
-        tap (when record (record/tap! record (if commit {:record/commit commit} {}))) ; the code that made the run
-        c (conn/open! opts)
-        queue (async/chan 16)
-        world* (atom (game/init opts))
+        queue (when (= events "stdin") (async/chan 16))
+        world* (atom (game/init {:host host :port (Long/parseLong port) :name name}))
         watcher (some->> telemetry
                          (watch/telemetry! world*))]
-    (cli/log "connected to" host port "as" name)
-    (cond (= events "stdin") (read-events! *in* queue) ; a fixture speaks through the pipe
-          planned
-          (go-when-loaded! world*
-                           queue
-                           (cond-> {:event/kind :go :go/goals planned} ; no fixture: start where we stand
-                             (= chain "true") (assoc :go/chain? true)))) ; milestones (plan/reach)
-    (apply-event! world*
-                  {:event/kind :start :start/host host :start/port (:port opts) :start/name name}
-                  (:out c)
-                  tap)
-    (let [final (run-loop! c queue world* stop? tap)
-          ok (ok? final until)
-          r (result final until ok)]
-      (prn 'RESULT r)
-      (flush)
-      (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT
-      (when (and ok (pos? hold))
-        (cli/log "holding" hold "ms for an outside judge")
-        (let [until (+ (now) hold)] (run-loop! c queue world* (fn [_] (> (now) until)) nil)))
+    (when queue (read-events! *in* queue)) ; a fixture speaks through the pipe
+    (let [{r :result} (run-bot! {:host host
+                                 :port (Long/parseLong port)
+                                 :name name
+                                 :until until
+                                 :timeout-ms (Long/parseLong timeout-ms)
+                                 :hold-ms (Long/parseLong hold-ms)
+                                 :record record
+                                 :commit commit
+                                 :chain (= chain "true")
+                                 :events queue
+                                 :world* world*
+                                 :on-result (fn [r] (prn 'RESULT r) (flush))})]
       (when watcher ((:close watcher)) (cli/log "telemetry dropped" ((:dropped watcher)) "lines"))
-      ((:close! c))
       (shutdown-agents)
-      (System/exit (if ok 0 1)))))
+      (System/exit (if (:ok r) 0 1)))))
 
 (defn outcome
   "A RESULT as a replay is held to it: everything but the last intent (an executor's internals

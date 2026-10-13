@@ -6,6 +6,7 @@ name: gym
 
 on:
   push:
+    branches-ignore: [race]   # the race branch is for the race (race.yml): every runner races
   workflow_dispatch:
     inputs:
       goal:

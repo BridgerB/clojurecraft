@@ -1,0 +1,114 @@
+name: race
+
+# The race (issue #17): every runner the repo has, each its own server and its own world seed,
+# each carrying ci/race.edn's bots from landing cells of their own to the target (clojure
+# -M:race). A push to the race branch cancels the race running and starts the new commit's.
+# The board (BOARD lines in the Race step's log) shows every bot each minute while it runs.
+
+on:
+  push:
+    branches: [race]
+  workflow_dispatch:
+
+concurrency:
+  group: race-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      runners: ${{ steps.read.outputs.runners }}
+      bots: ${{ steps.read.outputs.bots }}
+      server-heap: ${{ steps.read.outputs.server-heap }}
+      bot-heap: ${{ steps.read.outputs.bot-heap }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read ci/race.edn
+        id: read
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+          bb -e '(let [r (clojure.edn/read-string (slurp "ci/race.edn"))]
+                   (println (str "runners=" (cheshire.core/generate-string (vec (range 1 (inc (:race/runners r))))))))
+                   (println (str "bots=" (:race/bots r)))
+                   (println (str "server-heap=" (:race/server-heap-mb r)))
+                   (println (str "bot-heap=" (:race/bot-heap-mb r))))' >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  race:
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        runner: ${{ fromJSON(needs.plan.outputs.runners) }}
+    env:
+      PORT: '25565'
+      RCON_PORT: '25575'
+      RCON_PASS: race
+      WORLD: ${{ github.workspace }}/work/world
+      HEAP_MB: ${{ needs.plan.outputs.server-heap }}
+      DIFFICULTY: peaceful
+      LEVEL_SEED: race-${{ github.run_id }}-${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI and Babashka
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: clj-${{ hashFiles('deps.edn') }}
+      - uses: actions/cache@v6
+        with:
+          path: data/local-server/server-26.1.2.jar
+          key: server-26.1.2
+      - name: Server
+        run: |
+          echo "seed $LEVEL_SEED, ${{ needs.plan.outputs.bots }} bots"
+          clojure -P -M:race
+          bb server start
+      - name: Race
+        run: |
+          set -o pipefail
+          mkdir -p data/race
+          clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/race.edn --port "$PORT" \
+            --rcon-port "$RCON_PORT" --rcon-pass "$RCON_PASS" --record-dir data/race \
+            --commit "$GITHUB_SHA" --seed "$LEVEL_SEED" 2>&1 | tee data/race/race.log
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### runner ${{ matrix.runner }}, seed $LEVEL_SEED"
+            echo '```'
+            grep -E '^(RACE|RESULT) ' data/race/race.log | cut -c1-400 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Stop the server
+        if: always()
+        run: bb server stop || true
+      - name: Pack
+        if: always()
+        run: |
+          for f in data/race/*.edn; do [ -f "$f" ] && [ "$(basename "$f")" != summary.edn ] && zstd -q -19 --rm "$f"; done
+          cp "$WORLD/server.log" data/race/server.log 2>/dev/null || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: race-${{ github.sha }}-${{ matrix.runner }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: data/race/

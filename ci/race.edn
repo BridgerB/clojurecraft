@@ -1,0 +1,12 @@
+;; The race (issue #17, clojure -M:race): one server per runner, these bots on it, each from a
+;; landing cell of its own to the target. bots is the number a 16 GB, 4-core runner carries
+;; with the server: the board prints the server's tick time each minute, and that measure, not a
+;; guess, is what moves it.
+{:race/runners 20          ; GitHub runners, one server and one world seed each
+ :race/bots 10             ; bots per runner, one JVM, each its own atom and loop
+ :race/prefix "Clj_r"      ; bot names: Clj_r01, Clj_r02, ...
+ :race/until "nether"      ; the target; the run plays every step up to it (plan/through)
+ :race/timeout-ms 19500000 ; 5 h 25 min, inside the runner's six hours
+ :race/stagger-ms 3000     ; between bots joining: fresh players generating chunks at once time each other out
+ :race/server-heap-mb 6144 ; the server's JVM
+ :race/bot-heap-mb 8192}                ; the one JVM all the bots share

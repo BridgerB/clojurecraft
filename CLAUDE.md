@@ -19,7 +19,7 @@ Read `docs/hickey.md` first; it is the design brief. In short:
 - **Every run is a file**: `--record run.edn` writes each event and the effects it produced, through a bounded channel tap with its own writer thread; `clojure -M:replay run.edn` folds the reducer over it with no server and verifies every effect. Keep this true (no hidden inputs). Observers watch the atom and never touch the reducers: `--telemetry` writes what changed, dropping rather than slowing the loop.
 - **Specs** live in `spec.clj` (every attribute in `model`, every packet derived from `packet/specs`) and are instrumented in tests; properties in `props_test.clj` and `make_test.clj`; the whole bot runs against the pure server model in `sim.clj` (`sim_test.clj`), including in the 2,000 worlds test.check generates on every push, with no Java process.
 - **The hammock**: every stage of the run has a problem statement in `resources/clojurecraft/problems.edn` (needs, risks, done in world terms, the last recorded failure), written before its goal; when a run fails in a new way, its row is updated.
-- I/O lives only below a `;;;; I/O ;;;;` fence, in `conn` (the socket and its threads), `rcon`, `main` (the loop, the clock, stderr), `record` (recording files), `watch` (telemetry), `replay`, and `harness`, the RCON fixture, which is its own process (`clojure -M:harness`) and reaches the bot only as EDN events on its stdin (`--events stdin`). Everything else is values in, values out.
+- I/O lives only below a `;;;; I/O ;;;;` fence, in `conn` (the socket and its threads), `rcon`, `main` (the loop, the clock, stderr), `record` (recording files), `watch` (telemetry), `replay`, `race` (many bots, a thread each, the claims loop, the landing fixture and the board), and `harness`, the RCON fixture, which is its own process (`clojure -M:harness`) and reaches the bot only as EDN events on its stdin (`--events stdin`). Everything else is values in, values out.
 
 Every public function has a docstring stating what it returns and the invariant it relies on; `docs_test.clj` fails otherwise. Functions are public: `defn-` only for a one-line local alias (`now`, `set-intent`), never to hide a domain function from the REPL. A new attribute gets a row in `model/attributes` and a spec in the same change. A function that reads the world states which attributes it needs as a selection `fdef` (`spec/requires`, listed in `spec/selected`): schema and selection stay apart. A namespace runs top-down from data to helpers to its entry point; any I/O comes last, after a `;;;; I/O: ... ;;;;` fence. Branch with `cond`, never an `if` nested in an `if` (`style_test.clj` holds it). Walk a collection with `reduce` (with `reduced` to stop early), not `loop`, unless the loop is hot (the packet decoders) or iterates until a condition (the sim's driver). Prefer a new pure function over a flag; a map over a record; data over a protocol; a defmethod over an edit to a case. Never change the meaning of an attribute: add a new name beside it. A packet spec only gains fields, appended: record the new spec in `test/clojurecraft/packet_specs_ever.edn` (`packet-specs-only-grow` holds it).
 
@@ -61,6 +61,8 @@ src/clojurecraft/record.clj   the recording: a channel tap, reading it back, rep
 src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server, print RESULT
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin
+src/clojurecraft/claims.clj   landing cells as values: the pure claims reducer (first come first served) and the spiral of cells
+src/clojurecraft/race.clj     the race: N bots (main/run-bot!, each its own atom and loop) on one server, one claims channel, the board
 src/clojurecraft/fixture.clj  what every fixture asks the server over RCON: wait, load, teleport, judge a landing; the :go event
 src/clojurecraft/rcon.clj     RCON client (fixtures, CI judge); `clojure -M:rcon`
 src/clojurecraft/gym.clj      the gym: registry, one trial (land, judge, retry a disconnect), report (`clojure -M:gym`)
@@ -91,6 +93,7 @@ clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.p
 clojure -M:run --port 25571 --until play --hold-ms 20000     # just connect and stay in-world
 clojure -M:run ... --record data/runs/x.edn                   # record every event
 clojure -M:replay data/runs/x.edn                             # replay it with no server
+clojure -M:race --config ci/race.edn --port 25571 --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)"   # a race on one server (race.yml: every runner)
 clojure -M:run ... --telemetry data/runs/t.edn                # one EDN line per change of the world
 clojure -M:fmt fix|check                                      # format (zprint, settings in .zprint.edn); the pre-commit hook does it for staged files
 clojure -M:lint --lint src dev test                           # lint (clj-kondo, held at zero findings); the pre-commit hook lints staged files

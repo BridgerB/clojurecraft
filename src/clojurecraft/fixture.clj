@@ -112,3 +112,24 @@
                     (wait-loaded! rc x z)
                     (cli/log "tp:"
                              (rcon/command! rc (on-surface x z (str "tp " name " ~0.5 ~ ~0.5")))))))
+
+(defn land-at!
+  "Teleport the bot onto the surface at [x z] and judge the landing by the server's own answers
+   (checks), trying the landing-offsets round it until one will do; returns where it stands, or
+   nil when it is not in the world. The forest harness and the race land this way."
+  [rc name [x z]]
+  (loop [[[ox oz] & more] landing-offsets]
+    (teleport! rc name [(+ x ox) (+ z oz)])
+    (Thread/sleep (long settle-ms))
+    (let [why (bad-landing (mapv (fn [[reason test]]
+                                   [reason (rcon/command! rc (str "execute at " name " " test))])
+                                 checks))]
+      (if (and why (seq more))
+        (do (cli/log "bad landing" why "- trying another spot") (recur more))
+        (position rc name)))))
+
+(defn locate-forest!
+  "The nearest forest to column [x z], [x z], or nil."
+  [rc [x z]]
+  (parse-located
+   (rcon/command! rc (str "execute positioned " x " 64 " z " run locate biome minecraft:forest"))))

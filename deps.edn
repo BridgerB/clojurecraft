@@ -17,6 +17,7 @@
                  :main-opts ["-m" "clojure-lsp.main"]}
            :nrepl {:extra-deps {nrepl/nrepl {:mvn/version "1.8.0"}}
                    :main-opts ["-m" "nrepl.cmdline"]}
+           :race {:main-opts ["-m" "clojurecraft.race"]}
            :rcon {:main-opts ["-m" "clojurecraft.rcon"]}
            :replay {:main-opts ["-m" "clojurecraft.replay"]}
            :run {:main-opts ["-m" "clojurecraft.main"]}

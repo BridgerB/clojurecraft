@@ -293,6 +293,23 @@
    ;; ---- effects: everything the reducer asks for
    [:effect/kind ":send or :log" "every effect"] [:effect/packet "packet to send" "send"]
    [:effect/message "line to log" "log"]
+   ;; ---- the race (claims and the board; values the race folds, never a bot's world)
+   [:claim/by "the bot a landing cell is claimed for" "a claim"]
+   [:claim/cell "the landing cell [cx cz], claims/cell-size blocks square from the race's centre"
+    "a claim"]
+   [:claim/granted? "whether the claims loop gave the cell: no one held it, or the claimant did"
+    "a claim's answer"] [:race/target "the target a racer works now" "a board line"]
+   [:race/reached "how many of the chain's targets a racer has reached" "a board line"]
+   [:race/dimension "the dimension a racer is in" "a board line"]
+   [:race/y "a racer's feet height" "a board line"] [:race/deaths "a racer's deaths" "a board line"]
+   [:race/status "a racer's plan status" "a board line"]
+   [:race/bots "how many bots raced" "a race summary"]
+   [:race/ok "how many reached the target" "a race summary"]
+   [:race/reasons "why the racers stopped, counted" "a race summary"]
+   [:race/runs "each racer's name, outcome, milestones and the server's word" "a race summary"]
+   [:race/seed "the world seed the runner's server made" "a race summary"]
+   [:race/commit "the code that raced" "a race summary"]
+   [:race/until "the race's target" "a race summary"]
    ;; ---- packets
    [:packet/name "which packet; its other fields are the wire's names, unqualified" "every packet"]
    [:chunk/column "the decoded column, added on the reader thread; never recorded"

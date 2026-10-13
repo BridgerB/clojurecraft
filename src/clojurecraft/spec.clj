@@ -5,6 +5,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.build :as build]
+            [clojurecraft.claims :as claims]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -458,6 +459,28 @@
 (s/def :answer/count int?)
 
 ;; problem statements (resources/clojurecraft/problems.edn), written before each stage is built
+(s/def :claim/by string?)
+(s/def :claim/cell (s/tuple int? int?))
+(s/def :claim/granted? boolean?)
+(s/def ::claim (s/keys :req [:claim/by :claim/cell] :opt [:claim/granted?]))
+(s/fdef claims/claim
+  :args
+  (s/cat :claims (s/map-of :claim/cell :claim/by)
+         :request ::claim)
+  :ret (s/tuple (s/map-of :claim/cell :claim/by) ::claim))
+(s/def :race/target (s/nilable keyword?))
+(s/def :race/reached nat-int?)
+(s/def :race/dimension (s/nilable string?))
+(s/def :race/y (s/nilable int?))
+(s/def :race/deaths nat-int?)
+(s/def :race/status (s/nilable keyword?))
+(s/def :race/bots nat-int?)
+(s/def :race/ok nat-int?)
+(s/def :race/reasons (s/map-of any? pos-int?))
+(s/def :race/runs vector?)
+(s/def :race/seed (s/nilable string?))
+(s/def :race/commit (s/nilable string?))
+(s/def :race/until string?)
 (s/def :problem/stage keyword?)
 (s/def :problem/issue pos-int?)
 (s/def :problem/goals (s/coll-of keyword? :kind vector?))
