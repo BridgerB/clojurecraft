@@ -83,6 +83,16 @@
                         :milestone/server))
         "with one, the fact is as it was")))
 
+(deftest a-racer-lands-on-its-own-landing-of-the-set
+  ;; racer i of a server whose bots start at offset lands on landing offset + i, wrapping: the
+  ;; servers and runners sharing a set land on different landings, the same ones every commit
+  (let [set [[10 20 70] [30 40 71] [50 60 72]]]
+    (is (= [[10 20] [30 40] [50 60]] (map #(race/landing-of set 0 %) [0 1 2])))
+    (is (= [50 60] (race/landing-of set 2 0)) "a server's bots start at its offset")
+    (is (= [10 20] (race/landing-of set 2 1)) "past the end, round to the start")
+    (is (= (race/landing-of set 5 7) (race/landing-of set 5 7))
+        "the same racer, the same landing")))
+
 (deftest a-ramp-joins-bots-in-steps
   (let [cfg {:race/stagger-ms 3000 :race/ramp #:ramp{:start 10 :step 10 :every-ms 300000}}]
     (is (= [0 3000 27000] (map #(race/start-at cfg %) [0 1 9]))

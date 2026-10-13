@@ -4,8 +4,9 @@
 ;; 9% of a core per bot and three cores from 30 bots up; the server's main thread takes the fourth
 ;; from 20 up, and past 30 its ticks run 60-90 ms. Memory never neared a limit (5 GB or more free
 ;; at 150 bots), so the heaps are generous: spare heap keeps collection rare on a CPU-bound box.
-{:race/runners 20          ; GitHub runners
- :race/servers 1           ; servers per runner, each its own world seed, race process and bots
+{:race/runners 20 ; GitHub runners
+ :race/servers 1  ; servers per runner, each its own world copy, race process and bots
+ :race/landing-sets ["R1" "R2" "R3" "R4"] ; ci/gym.edn's race worlds: runner r races on set (r-1) mod 4
  :race/bots 20             ; bots per server: the most before the four cores run out (400 racers in all)
  :race/prefix "Clj_r"      ; bot names: Clj_r01, Clj_r02, ...
  :race/until "nether"      ; the target; the run plays every step up to it (plan/through)

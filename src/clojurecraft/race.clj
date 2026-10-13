@@ -3,10 +3,17 @@
 
      clojure -M:race --config ci/race.edn --port 25565 --rcon-port 25575 --rcon-pass S \\
        [--record-dir data/race] [--commit sha] [--seed s] [--runner n] [--server k]
+       [--landings cache/worlds/R1/landings.edn --landing-offset n]
 
    --server names which of a runner's servers this race is on, when a runner carries more than
    one (:race/servers): each server is its own world, seed and race process, and its facts say
    which (:milestone/server, :sample/server). A runner stays the machine.
+
+   --landings races on a landing set's pregenerated world (ci/gym.edn, world.yml): bot i lands on
+   the set's landing offset + i, wrapping (landing-of), and nothing is searched or claimed. Every
+   commit then races the same worlds from the same landings, so two commits compare landing by
+   landing, and the server neither generates a fresh world round each bot nor runs a locate
+   biome per bot in one of its ticks. Without it, the forest search and the claims below.
 
    docs/hickey.md, Conveyance: each bot is its own atom and loop (main/run-bot!, the same life a
    lone bot lives), and bots share nothing but one bounded channel, the claims of landing cells,
@@ -26,6 +33,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.fixture :as fixture]
             [clojurecraft.game :as game]
+            [clojurecraft.landings :as landings]
             [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
             [clojurecraft.rcon :as rcon]))
@@ -211,12 +219,19 @@
           nil
           (take claim-tries (drop offset (claims/spiral)))))
 
+(defn landing-of
+  "The [x z] racer i (from 0) lands on in a landing set ([[x z y] ...]), offset into it: the
+   set's landing offset + i, wrapping, so a runner's servers and the runners sharing a set start
+   their bots on different landings, and the same racer always on the same one."
+  [set offset i]
+  (let [[x z _] (landings/landing-for set (inc (+ offset i)))] [x z]))
+
 (defn fixture!
   "The race's fixture, on a thread of its own: wait for each bot, keep inventories over deaths,
-   land it on its claimed cell, pin its spawn there, and put its :go (every step up to until,
-   milestones on, :go/at where it landed) on its queue. A bot whose landing fails starts where
-   it stands."
-  [{:keys [host rcon-port rcon-pass until]} bots ch config t0]
+   land it (on its landing of the set, with landings; else on its claimed cell), pin its spawn
+   there, and put its :go (every step up to until, milestones on, :go/at where it landed) on its
+   queue. A bot whose landing fails starts where it stands."
+  [{:keys [host rcon-port rcon-pass until landings landing-offset]} bots ch config t0]
   (async/thread
    (try (rcon/with-rcon
          host
@@ -231,7 +246,11 @@
                (let [due (- (+ t0 (start-at config i)) (System/currentTimeMillis))
                      at (when (fixture/wait-online! rc name (+ fixture/online-timeout (max 0 due)))
                           (rcon/command! rc (str "gamemode survival " name))
-                          (land! rc ch name centre i))]
+                          (cond landings
+                                (fixture/land-at! rc
+                                                  name
+                                                  (landing-of landings (or landing-offset 0) i))
+                                :else (land! rc ch name centre i)))]
                  (when at
                    (rcon/command! rc
                                   (str "spawnpoint " name
@@ -328,18 +347,22 @@
    a RESULT line per bot as it ends and a RACE summary at the end, and write the summary to the
    record directory. Exits 0 when any bot reached the target."
   [& args]
-  (let [{:keys [config host port rcon-port rcon-pass record-dir commit seed runner]
+  (let [{:keys [config host port rcon-port rcon-pass record-dir commit seed runner landing-offset]
          which :server ; which of the runner's servers (--server); server below is the one connected to
+         landings-file :landings
          :or {config "ci/race.edn" host "127.0.0.1" record-dir "data/race"}}
         (cli/options args)
         config (edn/read-string (slurp config))
         {:race/keys [bots prefix until timeout-ms]} config
         t0 (System/currentTimeMillis)
-        server {:host host
-                :port (Long/parseLong port)
-                :rcon-port (Long/parseLong rcon-port)
-                :rcon-pass rcon-pass
-                :until until}
+        server (cond-> {:host host
+                        :port (Long/parseLong port)
+                        :rcon-port (Long/parseLong rcon-port)
+                        :rcon-pass rcon-pass
+                        :until until}
+                 landings-file
+                 (assoc :landings (landings/read-landings landings-file)
+                        :landing-offset (parse-long (or landing-offset "0"))))
         _ (.mkdirs (io/file record-dir))
         ch (claims!)
         racers (mapv (fn [k]

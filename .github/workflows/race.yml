@@ -1,8 +1,9 @@
 name: race
 
-# The race (issue #17): every runner the repo has, each its own server and its own world seed,
-# each carrying ci/race.edn's bots from landing cells of their own to the target (clojure
-# -M:race). A push to the race branch cancels the race running and starts the new commit's.
+# The race (issue #17): every runner the repo has, each with ci/race.edn's servers on one of the
+# race's pregenerated landing sets (the same worlds and landings every commit), each server
+# carrying ci/race.edn's bots from landings of their own to the target (clojure -M:race). A push
+# to the race branch cancels the race running and starts the new commit's.
 # The board (BOARD lines in the Race step's log) shows every bot each minute while it runs. The
 # race's one comment on its pull request (bb race-board) gathers every runner's milestone facts
 # as they happen: the first bot to each milestone, each runner's furthest, the Nether arrivals.
@@ -27,6 +28,7 @@ jobs:
     outputs:
       runners: ${{ steps.read.outputs.runners }}
       servers: ${{ steps.read.outputs.servers }}
+      sets: ${{ steps.read.outputs.sets }}
       bots: ${{ steps.read.outputs.bots }}
       server-heap: ${{ steps.read.outputs.server-heap }}
       bot-heap: ${{ steps.read.outputs.bot-heap }}
@@ -41,6 +43,7 @@ jobs:
           bb -e '(let [r (clojure.edn/read-string (slurp "ci/race.edn"))]
                    (println (str "runners=" (cheshire.core/generate-string (vec (range 1 (inc (:race/runners r)))))))
                    (println (str "servers=" (:race/servers r 1)))
+                   (println (str "sets=" (cheshire.core/generate-string (:race/landing-sets r))))
                    (println (str "bots=" (:race/bots r)))
                    (println (str "server-heap=" (:race/server-heap-mb r)))
                    (println (str "bot-heap=" (:race/bot-heap-mb r))))' >> "$GITHUB_OUTPUT"
@@ -58,8 +61,19 @@ jobs:
           echo "comment $id"
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
-  race:
+  worlds:
+    # each of the race's landing sets (ci/gym.edn R1-R4), built once and cached (world.yml); a
+    # race that finds its set cached spends a restore here, never a build
     needs: plan
+    strategy:
+      matrix:
+        set: ${{ fromJSON(needs.plan.outputs.sets) }}
+    uses: ./.github/workflows/world.yml
+    with:
+      set: ${{ matrix.set }}
+
+  race:
+    needs: [plan, worlds]
     runs-on: ubuntu-24.04
     timeout-minutes: 345
     strategy:
@@ -67,12 +81,16 @@ jobs:
       max-parallel: 20
       matrix:
         runner: ${{ fromJSON(needs.plan.outputs.runners) }}
-    # A runner carries :race/servers servers (ci/race.edn), each its own process, world, seed
-    # (race-<run>-<runner>-<server>), ports (game 25565+k-1, RCON 25575+k-1), race process and
-    # record directory (data/race/s<k>): a vanilla server ticks on one thread, so one server stops
-    # at the bots that thread can carry, and more servers use the runner's other cores.
+    # A runner races on one landing set (:race/landing-sets, runner r on set (r-1) mod the sets),
+    # a pregenerated world restored from the cache, and carries :race/servers servers, each its
+    # own copy of that world, ports (game 25565+k-1, RCON 25575+k-1), race process and record
+    # directory (data/race/s<k>): a vanilla server ticks on one thread, so one server stops at the
+    # bots that thread can carry, and more servers use the runner's other cores. Each server's bots
+    # start at their own offset into the set's landings, so the runners sharing a set and the
+    # servers sharing a runner land their bots on different landings, the same ones every commit.
     env:
       SERVERS: ${{ needs.plan.outputs.servers }}
+      BOTS: ${{ needs.plan.outputs.bots }}
       RCON_PASS: race
       HEAP_MB: ${{ needs.plan.outputs.server-heap }}
       DIFFICULTY: peaceful
@@ -82,6 +100,24 @@ jobs:
       SYNC_CHUNK_WRITES: 'false'         # a thrown-away world: no synchronous write per saved chunk
     steps:
       - uses: actions/checkout@v7
+      - name: Which landing set
+        id: set
+        env:
+          SETS: ${{ needs.plan.outputs.sets }}
+        run: |
+          n=$(echo "$SETS" | jq length)
+          r=${{ matrix.runner }}
+          echo "set=$(echo "$SETS" | jq -r ".[$(( (r - 1) % n ))]")" >> "$GITHUB_OUTPUT"
+          before=$(( (r - 1) / n ))   # runners on this set before this one (integer division)
+          echo "first=$(( before * SERVERS * BOTS ))" >> "$GITHUB_OUTPUT"   # this runner's first landing
+          cat "$GITHUB_OUTPUT"
+      - name: The pregenerated world (never built here)
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/worlds/${{ steps.set.outputs.set }}
+          # world.yml's key, the same expression: a matrix of world.yml calls returns no key per set
+          key: world-${{ steps.set.outputs.set }}-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj') }}
+          fail-on-cache-miss: true
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -106,10 +142,11 @@ jobs:
       - name: Servers
         run: |
           clojure -P -M:race
+          mkdir -p work
           for k in $(seq 1 "$SERVERS"); do
-            echo "server $k: seed race-${{ github.run_id }}-${{ matrix.runner }}-$k, ${{ needs.plan.outputs.bots }} bots"
-            PORT=$((25564 + k)) RCON_PORT=$((25574 + k)) WORLD="$PWD/work/world-$k" \
-              LEVEL_SEED="race-${{ github.run_id }}-${{ matrix.runner }}-$k" bb server start
+            echo "server $k: set ${{ steps.set.outputs.set }}, $BOTS bots from landing $(( ${{ steps.set.outputs.first }} + (k - 1) * BOTS ))"
+            cp -r "cache/worlds/${{ steps.set.outputs.set }}" "work/world-$k"   # the seed is the set's own, in its level.dat
+            PORT=$((25564 + k)) RCON_PORT=$((25574 + k)) WORLD="$PWD/work/world-$k" bb server start
           done
       - name: Race
         env:
@@ -129,7 +166,9 @@ jobs:
             # shellcheck disable=SC2086 # $server is two words or none
             clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/race.edn --port $((25564 + k)) \
               --rcon-port $((25574 + k)) --rcon-pass "$RCON_PASS" --record-dir "$dir" --commit "$GITHUB_SHA" \
-              --seed "race-${{ github.run_id }}-${{ matrix.runner }}-$k" --runner ${{ matrix.runner }} $server \
+              --seed "${{ steps.set.outputs.set }}" --runner ${{ matrix.runner }} $server \
+              --landings "cache/worlds/${{ steps.set.outputs.set }}/landings.edn" \
+              --landing-offset $(( ${{ steps.set.outputs.first }} + (k - 1) * BOTS )) \
               > "$dir/race.log" 2>&1 &
             races="$races $!"
           done
@@ -148,7 +187,7 @@ jobs:
               } | bb race-board follow ${{ needs.plan.outputs.comment }} ${{ matrix.runner }} || true
             fi
             {
-              echo "### runner ${{ matrix.runner }}, server $k, seed race-${{ github.run_id }}-${{ matrix.runner }}-$k"
+              echo "### runner ${{ matrix.runner }}, server $k, landing set ${{ steps.set.outputs.set }}"
               echo '```'
               grep -E '^(RACE|RESULT) ' "$log" | cut -c1-400 || true
               echo '```'
