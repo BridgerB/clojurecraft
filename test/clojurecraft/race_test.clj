@@ -76,6 +76,42 @@
             :milestone/after-s 60}
            (race/milestone {:runner 7 :seed "race-1-7"} "Clj_r03" world :kit)))))
 
+(deftest a-ramp-joins-bots-in-steps
+  (let [cfg {:race/stagger-ms 3000 :race/ramp #:ramp{:start 10 :step 10 :every-ms 300000}}]
+    (is (= [0 3000 27000] (map #(race/start-at cfg %) [0 1 9]))
+        "the first ten together, a stagger apart")
+    (is (= [300000 303000 600000] (map #(race/start-at cfg %) [10 11 20]))
+        "then ten more every five minutes")
+    (is (= 6000 (race/start-at {:race/stagger-ms 3000} 2)) "no ramp: a stagger apart")))
+
+(deftest the-servers-tick-times-are-read-from-its-answer
+  (is
+   (=
+    {:avg 4.0 :p50 3.6 :p95 5.0 :p99 18.7}
+    (race/tick-times
+     "The game is running normallyTarget tick rate: 20.0 per second. Average time per tick: 4.0ms (Target: 50.0ms)Percentiles: P50: 3.6ms P95: 5.0ms P99: 18.7ms. Sample: 100")))
+  (is (= {} (race/tick-times nil))))
+
+(deftest a-sample-is-the-race-at-one-moment
+  (let [playing {:bot/phase :play
+                 :player/loaded? true
+                 :player/pos [0 64 0]
+                 :plan/go-at [0 64 0]
+                 :plan/status :active
+                 :plan/reached #{:wood}}
+        worlds {"a" (assoc playing :time/tick 400)
+                "b" (assoc playing :time/tick 300 :plan/reached #{:wood :kit})
+                "c" {:bot/phase :play :bot/disconnected "gone" :player/pos [0 64 0]}
+                "d" (assoc playing :time/tick 100 :plan/status :done)}
+        s (race/sample {:runner 3} worlds {"a" 100 "b" 100 "d" 100} 15000 {:p95 5.0} 900 1000)]
+    (is (= 4 (:sample/joined s)))
+    (is (= 2 (:sample/playing s)))
+    (is (= 1 (:sample/cut-off s)))
+    (is (= 4 (:sample/milestones s)))
+    (is (= 1 (:sample/ended s)) "d reached its target: no longer playing, its loop stopped")
+    (is (= 20.0 (:median (:sample/tick-rate s))) "a: 300 ticks in 15 s")
+    (is (< 13.0 (:min (:sample/tick-rate s)) 14.0) "b fell behind: 200 ticks in 15 s")))
+
 (deftest the-summary-is-a-fold-of-results
   (let [s (race/summary [{:name "a" :result {:ok true :reason :goal :plan {:plan/reached #{:wood}}}}
                          {:name "b" :result {:ok false :reason :no-site}}

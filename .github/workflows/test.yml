@@ -7,7 +7,7 @@ name: test
 
 on:
   push:
-    branches-ignore: [race]   # the race branch is for the race (race.yml): every runner races
+    branches-ignore: [race, race-capacity]   # the race branches are for races (race.yml, capacity.yml): every runner races
   workflow_dispatch:
 
 concurrency:

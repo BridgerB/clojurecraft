@@ -34,14 +34,15 @@
    26.x pauses an empty server after 60 s, and forceloaded landings would stop generating.
    max-tick-time: the watchdog's limit on one tick, 60000 ms unless MAX_TICK_TIME says (-1 turns
    it off: a race's locate biome far from any forest took a 60 s tick and the watchdog killed
-   the server under ten bots)."
-  [{:keys [port rcon-port rcon-pass level-seed difficulty max-tick-time]}]
+   the server under ten bots). max-players: 20 unless MAX_PLAYERS says (a capacity ramp seats 150)."
+  [{:keys [port rcon-port rcon-pass level-seed difficulty max-tick-time max-players]}]
   [["online-mode" false] ["allow-flight" true] ["level-seed" level-seed]
    ["level-type" "minecraft:normal"] ["difficulty" difficulty] ["gamemode" "survival"] ["pvp" false]
    ["spawn-protection" 0] ["view-distance" 6] ["simulation-distance" 4] ["server-port" port]
    ["server-ip" "127.0.0.1"] ["pause-when-empty-seconds" 0] ["enable-rcon" true]
    ["rcon.port" rcon-port] ["rcon.password" rcon-pass] ["enforce-secure-profile" false]
-   ["motd" "clojurecraft"] ["max-tick-time" (or max-tick-time 60000)]])
+   ["motd" "clojurecraft"] ["max-tick-time" (or max-tick-time 60000)]
+   ["max-players" (or max-players 20)]])
 
 (defn properties-text
   "The pairs as the file's lines."
@@ -147,7 +148,8 @@
      :jar (or (env "JAR") (str root "/data/local-server/server-26.1.2.jar"))
      :level-seed (or (env "LEVEL_SEED") "typecraft")
      :difficulty (or (env "DIFFICULTY") "peaceful")
-     :max-tick-time (env "MAX_TICK_TIME")}))
+     :max-tick-time (env "MAX_TICK_TIME")
+     :max-players (env "MAX_PLAYERS")}))
 
 (defn local-opts
   "This Mac's server: its ports, a random RCON password kept in data/local-server/rcon.pass

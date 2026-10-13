@@ -50,6 +50,10 @@
           "A vanilla 26.1.2 server: bb server start|stop, set up by PORT RCON_PORT RCON_PASS WORLD"
           :requires ([clojurecraft.server :as server])
           :task (server/command! (first *command-line-args*) (server/env-opts))}
+  capacity {:doc
+            "The capacity experiment (capacity.yml): sample <out> <runner> | report <dir> [title]"
+            :requires ([clojurecraft.capacity :as capacity])
+            :task (apply capacity/-main *command-line-args*)}
   race-board
   {:doc
    "The race's one comment on its pull request (race.yml): create <title> | follow <id> <runner>"

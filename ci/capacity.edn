@@ -1,0 +1,16 @@
+;; The capacity experiment (capacity.yml, bb capacity): every runner races from spawn to the
+;; nether while bots join in steps, ten and then ten more every five minutes, up to a hundred and
+;; fifty; the race's sampler and the machine's sampler record every fifteen seconds, and the
+;; report finds the most bots a runner carries healthy and how to split its memory. Generous
+;; heaps here, so the measure is what the JVMs use, not what they were given.
+{:race/runners 20
+ :race/bots 150            ; the ramp's top
+ :race/prefix "Clj_c"
+ :race/until "nether"
+ :race/timeout-ms 4800000  ; a bot that joins at once races 80 minutes
+ :race/deadline-ms 4800000 ; every bot stops 80 minutes after the first joined, however late it joined
+ :race/stagger-ms 3000
+ :race/ramp #:ramp{:start 10 :step 10 :every-ms 300000}
+ :race/server-heap-mb 6144
+ :race/bot-heap-mb 8192
+ :race/max-players 200}

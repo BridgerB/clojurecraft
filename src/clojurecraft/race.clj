@@ -34,6 +34,7 @@
 (def forests "#minecraft:is_forest")  ; every forest kind: nearer than plain forest, and so a shorter search
 (def claims-buffer 16)                ; requests the claims loop holds before a claimant waits
 (def events-buffer 16)                ; events a bot's queue holds before the fixture waits
+(def sample-every-ms 15000)            ; how often the sampler records the race as one fact
 (def milestones-buffer 256)           ; milestone facts waiting for the writer; a bot reaches at most a chain's worth
 
 (defn bot-name
@@ -64,6 +65,67 @@
     (str/join " "
               [name (or status :waiting) (str "at " (or target "-")) (str "reached " reached)
                dimension (str "y " (or y "?")) (str "deaths " deaths)])))
+
+(defn start-at
+  "When racer i (from 0) joins, ms after the race begins. With a ramp ({:ramp/start s :ramp/step n
+   :ramp/every-ms e}), the first s join at once and n more every e, so one runner measures the
+   load from s bots up; without, every racer joins at once. Within a batch, stagger-ms apart."
+  [{:race/keys [ramp stagger-ms]} i]
+  (let [{:ramp/keys [start step every-ms]} ramp]
+    (cond (or (nil? ramp) (< i start)) (* i stagger-ms)
+          :else
+          (+ (* every-ms (inc (quot (- i start) step))) (* stagger-ms (rem (- i start) step))))))
+
+(defn tick-times
+  "The server's tick times in ms, {:avg :p50 :p95 :p99}, from its tick query reply; {} when the
+   reply has none."
+  [reply]
+  (let [ms (fn [re]
+             (some->> (re-find re (str reply))
+                      second
+                      parse-double))]
+    (into {}
+          (remove (comp nil? val))
+          {:avg (ms #"Average time per tick: ([\d.]+)ms")
+           :p50 (ms #"P50: ([\d.]+)ms")
+           :p95 (ms #"P95: ([\d.]+)ms")
+           :p99 (ms #"P99: ([\d.]+)ms")})))
+
+(defn quantile
+  "The q quantile (0 to 1) of numbers xs, nearest rank; nil when there are none."
+  [q xs]
+  (let [v (vec (sort xs))] (when (seq v) (nth v (min (dec (count v)) (long (* q (count v))))))))
+
+(defn sample
+  "The race at one moment as a fact, from every bot's world now ({name world}) and the tick each
+   was at dt-ms before ({name tick}): how many bots have joined, landed, are playing (in the world
+   and still racing: a bot that ended stops ticking), ended or were cut off; each playing bot's ticks per second (a bot whose machine is short of CPU falls below
+   20 first), as its median, tenth percentile and least; milestones reached in all; the server's
+   tick times and the bots' JVM heap."
+  [race worlds before dt-ms tick heap-mb now]
+  (let [playing (filter (fn [[_ w]]
+                          (and (= :play (:bot/phase w))
+                               (:player/loaded? w)
+                               (not (:bot/closed w))
+                               (not (:bot/disconnected w))
+                               (not (#{:done :failed} (:plan/status w)))))
+                        worlds)
+        rates (keep (fn [[name w]]
+                      (when-let [t0 (get before name)]
+                        (/ (* 1000.0 (- (:time/tick w 0) t0)) (max 1 dt-ms))))
+                    playing)]
+    {:sample/runner (:runner race)
+     :sample/at now
+     :sample/joined (count (filter (comp :player/pos val) worlds))
+     :sample/landed (count (filter (comp :plan/go-at val) worlds))
+     :sample/playing (count playing)
+     :sample/ended (count (filter (comp #{:done :failed} :plan/status val) worlds))
+     :sample/cut-off (count (filter (fn [[_ w]] (or (:bot/closed w) (:bot/disconnected w))) worlds))
+     :sample/tick-rate
+     {:median (quantile 0.5 rates) :p10 (quantile 0.1 rates) :min (quantile 0 rates)}
+     :sample/milestones (reduce + (map (comp count :plan/reached val) worlds))
+     :sample/server-tick tick
+     :sample/bot-heap-mb heap-mb}))
 
 (defn reached-new
   "The targets world reached that before did not: what a chained run's step just added to
@@ -123,10 +185,11 @@
   "Land the bot named name on a cell of its own: down the spiral from centre, search-stride cells
    apart, the forest nearest each point (any forest kind) is claimed for it by the cell it lies in;
    the first granted is where it lands (fixture/land-at!). Returns where it stands, or nil when no
-   cell was granted or the landing failed. Each search is a locate biome, which the server runs
+   cell was granted or the landing failed. Racer offset starts that far down the spiral, so the
+   fortieth bot does not search the first bots' points again. Each search is a locate biome, which the server runs
    in one tick: a race with plain forest searched 40 times per bot from points with none near,
    one search took 60 s and the watchdog killed the server."
-  [rc ch name centre]
+  [rc ch name centre offset]
   (reduce (fn [_ cell]
             (let [forest (fixture/locate-biome! rc
                                                 forests
@@ -139,14 +202,14 @@
                         (reduced (fixture/land-at! rc name forest)))
                     :else nil)))
           nil
-          (take claim-tries (claims/spiral))))
+          (take claim-tries (drop offset (claims/spiral)))))
 
 (defn fixture!
   "The race's fixture, on a thread of its own: wait for each bot, keep inventories over deaths,
    land it on its claimed cell, pin its spawn there, and put its :go (every step up to until,
    milestones on, :go/at where it landed) on its queue. A bot whose landing fails starts where
    it stands."
-  [{:keys [host rcon-port rcon-pass until]} bots ch]
+  [{:keys [host rcon-port rcon-pass until]} bots ch config t0]
   (async/thread
    (try (rcon/with-rcon
          host
@@ -157,10 +220,11 @@
            (let [first-at (fixture/wait-online! rc (:name (first bots)) fixture/online-timeout)
                  centre [(long (first first-at)) (long (nth first-at 2))]]
              (cli/log "race centre" centre)
-             (doseq [{:keys [name queue]} bots]
-               (let [at (when (fixture/wait-online! rc name fixture/online-timeout)
+             (doseq [[i {:keys [name queue]}] (map-indexed vector bots)]
+               (let [due (- (+ t0 (start-at config i)) (System/currentTimeMillis))
+                     at (when (fixture/wait-online! rc name (+ fixture/online-timeout (max 0 due)))
                           (rcon/command! rc (str "gamemode survival " name))
-                          (land! rc ch name centre))]
+                          (land! rc ch name centre i))]
                  (when at
                    (rcon/command! rc
                                   (str "spawnpoint " name
@@ -188,6 +252,32 @@
                   (try (board-line name @world*)
                        (catch Exception e (str name " unreadable: " (ex-message e))))))
        (flush)))))
+
+(defn sampler!
+  "The sampler, on a thread of its own: every sample-every-ms until done is delivered, the race
+   as one fact (sample) from each bot's world as it is, the server's tick query and this JVM's
+   heap, printed as a SAMPLE line and appended to samples.edn in record-dir: the measure the
+   capacity experiment sizes a runner by."
+  [{:keys [host rcon-port rcon-pass]} race bots record-dir done]
+  (async/thread
+   (with-open [w (io/writer (io/file record-dir "samples.edn") :append true)]
+     (loop [before {}
+            at (System/currentTimeMillis)]
+       (when (= :wait (deref done sample-every-ms :wait))
+         (let [now (System/currentTimeMillis)
+               worlds (into {} (map (fn [{:keys [name world*]}] [name @world*])) bots)
+               tick (tick-times
+                     (try (rcon/with-rcon host rcon-port rcon-pass #(rcon/command! % "tick query"))
+                          (catch Exception _ nil)))
+               heap (quot (.getUsed (.getHeapMemoryUsage
+                                     (java.lang.management.ManagementFactory/getMemoryMXBean)))
+                          (* 1024 1024))
+               fact (sample race worlds before (- now at) tick heap now)]
+           (println "SAMPLE" (pr-str fact))
+           (flush)
+           (.write w (str (pr-str fact) "\n"))
+           (.flush w)
+           (recur (into {} (map (fn [[name w]] [name (:time/tick w 0)])) worlds) now)))))))
 
 (defn milestones!
   "The milestones observer: a watch on every bot's atom that turns each target newly reached into
@@ -234,7 +324,9 @@
   (let [{:keys [config host port rcon-port rcon-pass record-dir commit seed runner]
          :or {config "ci/race.edn" host "127.0.0.1" record-dir "data/race"}}
         (cli/options args)
-        {:race/keys [bots prefix until timeout-ms stagger-ms]} (edn/read-string (slurp config))
+        config (edn/read-string (slurp config))
+        {:race/keys [bots prefix until timeout-ms]} config
+        t0 (System/currentTimeMillis)
         server {:host host
                 :port (Long/parseLong port)
                 :rcon-port (Long/parseLong rcon-port)
@@ -249,39 +341,50 @@
                           :world* (atom (game/init {:host host :port (:port server) :name name}))}))
                      (range 1 (inc bots)))
         done (promise)
-        runs (mapv (fn [{:keys [name queue world*]}]
-                     (Thread/sleep (long stagger-ms)) ; fresh players generating chunks at once time each other out
-                     (async/thread
-                      (try (let [truth (promise)
-                                 {r :result} (main/run-bot!
-                                              {:host host
-                                               :port (:port server)
-                                               :name name
-                                               :until until
-                                               :chain true
-                                               :timeout-ms timeout-ms
-                                               :record (str (io/file record-dir (str name ".edn")))
-                                               :commit commit
-                                               :events queue
-                                               :world* world*
-                                               :on-result (fn [r]
-                                                            (deliver truth (truth! server name))
-                                                            (println "RESULT" name (pr-str r))
-                                                            (flush))})]
-                             {:name name :result r :truth @truth})
-                           (catch Exception e
-                             (cli/log name "failed:" e)
-                             {:name name
-                              :result {:ok false :reason :crashed :error (ex-message e)}}))))
-                   racers)]
+        deadline (:race/deadline-ms config)
+        runs (mapv
+              (fn [i {:keys [name queue world*]}]
+                (async/thread
+                 (Thread/sleep (long
+                                (max 0 (- (+ t0 (start-at config i)) (System/currentTimeMillis))))) ; its join, by the schedule
+                 (try (let [truth (promise)
+                            {r :result} (main/run-bot!
+                                         {:host host
+                                          :port (:port server)
+                                          :name name
+                                          :until until
+                                          :chain true
+                                          :timeout-ms (if deadline
+                                                        (max 60000 (- deadline (start-at config i)))
+                                                        timeout-ms)
+                                          :record (str (io/file record-dir (str name ".edn")))
+                                          :commit commit
+                                          :events queue
+                                          :world* world*
+                                          :on-result (fn [r]
+                                                       (deliver truth (truth! server name))
+                                                       (println "RESULT" name (pr-str r))
+                                                       (flush))})]
+                        {:name name :result r :truth @truth})
+                      (catch Exception e
+                        (cli/log name "failed:" e)
+                        {:name name :result {:ok false :reason :crashed :error (ex-message e)}}))))
+              (range)
+              racers)]
     (cli/log "race:" bots "bots to" until "seed" seed)
     (let [stop-milestones (milestones! {:runner (some-> runner
                                                         parse-long)
                                         :seed seed}
                                        racers
                                        record-dir)]
-      (fixture! server racers ch)
+      (fixture! server racers ch config t0)
       (board! server racers done)
+      (sampler! server
+                {:runner (some-> runner
+                                 parse-long)}
+                racers
+                record-dir
+                done)
       (let [results (mapv async/<!! runs)
             s (assoc (summary results) :race/seed seed :race/commit commit :race/until until)]
         (deliver done true)
