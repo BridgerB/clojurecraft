@@ -116,7 +116,7 @@ jobs:
             --rcon-port "$RCON_PORT" --rcon-pass "$RCON_PASS" --record-dir data/race \
             --commit "$GITHUB_SHA" --seed "$LEVEL_SEED" --runner ${{ matrix.runner }} 2>&1 | tee data/race/race.log
       - name: Summary
-        if: always()
+        if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -135,12 +135,12 @@ jobs:
         if: always()
         run: bb server stop || true
       - name: Pack
-        if: always()
+        if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
         run: |
-          for f in data/race/*.edn; do [ -f "$f" ] && [ "$(basename "$f")" != summary.edn ] && zstd -q -19 --rm "$f"; done
+          for f in data/race/*.edn; do [ -f "$f" ] && [ "$(basename "$f")" != summary.edn ] && zstd -q -3 -T0 --rm "$f"; done
           cp "$WORLD/server.log" data/race/server.log 2>/dev/null || true
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
         with:
           name: race-${{ github.sha }}-${{ matrix.runner }}
           retention-days: 7
