@@ -92,6 +92,9 @@ jobs:
         run: |
           mkdir -p data/race
           bb capacity sample data/race/sys.edn ${{ matrix.runner }} > data/race/sampler.log 2>&1 &
+          sleep 20   # preflight: a sampler that wrote nothing fails the job now, readable, not after the ramp
+          if [ ! -s data/race/sys.edn ]; then echo "::error::the machine sampler wrote nothing"; cat data/race/sampler.log; exit 1; fi
+          head -c 600 data/race/sys.edn
           clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/capacity.edn --port "$PORT" \
             --rcon-port "$RCON_PORT" --rcon-pass "$RCON_PASS" --record-dir data/race \
             --commit "$GITHUB_SHA" --seed "$LEVEL_SEED" --runner ${{ matrix.runner }} > data/race/race.log 2>&1 || true
