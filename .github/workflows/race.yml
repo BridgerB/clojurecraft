@@ -10,6 +10,11 @@ on:
     branches: [race]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write                  # the board's comment on the race's pull request
+  issues: write
+
 concurrency:
   group: race-${{ github.ref }}
   cancel-in-progress: true
@@ -82,15 +87,22 @@ jobs:
           clojure -P -M:race
           bb server start
       - name: Race
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -o pipefail
           mkdir -p data/race
+          touch data/race/race.log
+          scripts/race-board data/race/race.log ${{ matrix.runner }} "$LEVEL_SEED" ${{ needs.plan.outputs.bots }} &
           clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/race.edn --port "$PORT" \
             --rcon-port "$RCON_PORT" --rcon-pass "$RCON_PASS" --record-dir data/race \
             --commit "$GITHUB_SHA" --seed "$LEVEL_SEED" 2>&1 | tee data/race/race.log
       - name: Summary
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          scripts/race-board data/race/race.log ${{ matrix.runner }} "$LEVEL_SEED" ${{ needs.plan.outputs.bots }} once || true
           {
             echo "### runner ${{ matrix.runner }}, seed $LEVEL_SEED"
             echo '```'

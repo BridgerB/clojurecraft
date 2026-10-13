@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# The race's window for people (race.yml): this runner's latest board and every RESULT line so
+# far, as one comment on the race's pull request, edited in place every 5 minutes, and once more
+# with "once" when the race has ended. An observer: it reads the race's log and never touches
+# the race. The comment's id is kept beside the log, so the last post edits the same comment.
+#
+#   scripts/race-board <log> <runner> <seed> <bots> [once]    (GH_TOKEN, GITHUB_REPOSITORY set)
+set -uo pipefail
+log=$1 runner=$2 seed=$3 bots=$4 mode=${5:-loop}
+idfile="$(dirname "$log")/board-comment-id"
+pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --head race --json number --jq '.[0].number' 2>/dev/null)
+[ -n "$pr" ] || exit 0
+
+post() {
+  local board results body id
+  board=$(grep '^BOARD' "$log" 2>/dev/null | tail -n $((bots + 1)) | cut -c7-)
+  results=$(grep -E '^(RESULT|RACE) ' "$log" 2>/dev/null | cut -c1-300)
+  body=$(printf '### race runner %s, seed `%s` (%s UTC%s)\n```\n%s\n```\n```\n%s\n```\n' \
+    "$runner" "$seed" "$(date -u +%H:%M)" "$([ "$mode" = once ] && echo ', ended')" \
+    "${board:-no board yet}" "${results:-no bot has ended yet}")
+  id=$(cat "$idfile" 2>/dev/null)
+  if [ -z "$id" ]; then
+    gh api "repos/$GITHUB_REPOSITORY/issues/$pr/comments" -f body="$body" --jq '.id' > "$idfile" 2>/dev/null
+  else
+    gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" -f body="$body" >/dev/null 2>&1 || true
+  fi
+}
+
+if [ "$mode" = once ]; then post; exit 0; fi
+while true; do sleep 300; post; done
