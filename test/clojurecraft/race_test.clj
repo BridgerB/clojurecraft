@@ -62,6 +62,20 @@
     (is (= "Clj_r01 :active at :wood reached 0 overworld y 70 deaths 0"
            (race/board-line "Clj_r01" w)))))
 
+(deftest a-milestone-is-a-fact-of-what-was-reached
+  ;; the observer diffs successive world values: what :plan/reached gained is what happened
+  (let [before {:plan/reached #{:wood}}
+        world {:plan/reached #{:wood :kit} :time/now 90000 :plan/since 30000}]
+    (is (= [:kit] (race/reached-new before world)))
+    (is (empty? (race/reached-new world world)) "nothing new, no fact")
+    (is (= {:milestone/runner 7
+            :milestone/seed "race-1-7"
+            :milestone/bot "Clj_r03"
+            :milestone/goal :kit
+            :milestone/at 90000
+            :milestone/after-s 60}
+           (race/milestone {:runner 7 :seed "race-1-7"} "Clj_r03" world :kit)))))
+
 (deftest the-summary-is-a-fold-of-results
   (let [s (race/summary [{:name "a" :result {:ok true :reason :goal :plan {:plan/reached #{:wood}}}}
                          {:name "b" :result {:ok false :reason :no-site}}

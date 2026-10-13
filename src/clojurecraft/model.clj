@@ -310,6 +310,13 @@
    [:race/seed "the world seed the runner's server made" "a race summary"]
    [:race/commit "the code that raced" "a race summary"]
    [:race/until "the race's target" "a race summary"]
+   [:milestone/runner "the runner a milestone was reached on" "a milestone fact"]
+   [:milestone/seed "that runner's world seed" "a milestone fact"]
+   [:milestone/bot "the bot that reached it" "a milestone fact"]
+   [:milestone/goal "the target it reached (joined :plan/reached)" "a milestone fact"]
+   [:milestone/at "when, ms (:time/now)" "a milestone fact"]
+   [:milestone/after-s "seconds after its plan began, its landing"
+    "a milestone fact, once a plan began"]
    ;; ---- packets
    [:packet/name "which packet; its other fields are the wire's names, unqualified" "every packet"]
    [:chunk/column "the decoded column, added on the reader thread; never recorded"

@@ -3,7 +3,9 @@ name: race
 # The race (issue #17): every runner the repo has, each its own server and its own world seed,
 # each carrying ci/race.edn's bots from landing cells of their own to the target (clojure
 # -M:race). A push to the race branch cancels the race running and starts the new commit's.
-# The board (BOARD lines in the Race step's log) shows every bot each minute while it runs.
+# The board (BOARD lines in the Race step's log) shows every bot each minute while it runs. The
+# race's one comment on its pull request (bb race-board) gathers every runner's milestone facts
+# as they happen: the first bot to each milestone, each runner's furthest, the Nether arrivals.
 
 on:
   push:
@@ -27,6 +29,7 @@ jobs:
       bots: ${{ steps.read.outputs.bots }}
       server-heap: ${{ steps.read.outputs.server-heap }}
       bot-heap: ${{ steps.read.outputs.bot-heap }}
+      comment: ${{ steps.comment.outputs.id }}
     steps:
       - uses: actions/checkout@v7
       - name: Read ci/race.edn
@@ -40,6 +43,17 @@ jobs:
                    (println (str "server-heap=" (:race/server-heap-mb r)))
                    (println (str "bot-heap=" (:race/bot-heap-mb r))))' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
+      - name: The race's comment
+        id: comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          r=$(bb -e '(:race/runners (clojure.edn/read-string (slurp "ci/race.edn")))')
+          b=$(bb -e '(:race/bots (clojure.edn/read-string (slurp "ci/race.edn")))')
+          u=$(bb -e '(:race/until (clojure.edn/read-string (slurp "ci/race.edn")))')
+          id=$(bb race-board create "### Race ${{ github.run_id }} at ${GITHUB_SHA::7}: $r runners x $b bots, spawn to $u")
+          echo "comment $id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
 
   race:
     needs: plan
@@ -57,6 +71,7 @@ jobs:
       WORLD: ${{ github.workspace }}/work/world
       HEAP_MB: ${{ needs.plan.outputs.server-heap }}
       DIFFICULTY: peaceful
+      MAX_TICK_TIME: '-1'                # no watchdog: a slow locate biome stalls the race, it does not end it
       LEVEL_SEED: race-${{ github.run_id }}-${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
@@ -93,16 +108,23 @@ jobs:
           set -o pipefail
           mkdir -p data/race
           touch data/race/race.log
-          scripts/race-board data/race/race.log ${{ matrix.runner }} "$LEVEL_SEED" ${{ needs.plan.outputs.bots }} &
+          if [ -n "${{ needs.plan.outputs.comment }}" ]; then
+            tail -n +1 -F data/race/race.log 2>/dev/null | grep --line-buffered -E '^(MILESTONE|RACE) ' \
+              | bb race-board follow ${{ needs.plan.outputs.comment }} ${{ matrix.runner }} &
+          fi
           clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/race.edn --port "$PORT" \
             --rcon-port "$RCON_PORT" --rcon-pass "$RCON_PASS" --record-dir data/race \
-            --commit "$GITHUB_SHA" --seed "$LEVEL_SEED" 2>&1 | tee data/race/race.log
+            --commit "$GITHUB_SHA" --seed "$LEVEL_SEED" --runner ${{ matrix.runner }} 2>&1 | tee data/race/race.log
       - name: Summary
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          scripts/race-board data/race/race.log ${{ matrix.runner }} "$LEVEL_SEED" ${{ needs.plan.outputs.bots }} once || true
+          if [ -n "${{ needs.plan.outputs.comment }}" ]; then
+            { grep -E '^(MILESTONE|RACE) ' data/race/race.log || true
+              grep -q '^RACE ' data/race/race.log || echo 'RACE #:race{:ok 0 :reasons {:no-race-line 1}}'
+            } | bb race-board follow ${{ needs.plan.outputs.comment }} ${{ matrix.runner }} || true
+          fi
           {
             echo "### runner ${{ matrix.runner }}, seed $LEVEL_SEED"
             echo '```'

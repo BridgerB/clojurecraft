@@ -128,8 +128,9 @@
         (do (cli/log "bad landing" why "- trying another spot") (recur more))
         (position rc name)))))
 
-(defn locate-forest!
-  "The nearest forest to column [x z], [x z], or nil."
-  [rc [x z]]
-  (parse-located
-   (rcon/command! rc (str "execute positioned " x " 64 " z " run locate biome minecraft:forest"))))
+(defn locate-biome!
+  "The nearest biome (a name, minecraft:forest, or a tag, #minecraft:is_forest) to column [x z],
+   [x z], or nil. A search far from any can take the server tens of seconds in one tick."
+  [rc biome [x z]]
+  (parse-located (rcon/command! rc
+                                (str "execute positioned " x " 64 " z " run locate biome " biome))))

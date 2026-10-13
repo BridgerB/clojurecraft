@@ -2,7 +2,7 @@
   "A race (issue #17): many bots on one server, from where each lands to the race's target.
 
      clojure -M:race --config ci/race.edn --port 25565 --rcon-port 25575 --rcon-pass S \\
-       [--record-dir data/race] [--commit sha] [--seed s]
+       [--record-dir data/race] [--commit sha] [--seed s] [--runner n]
 
    docs/hickey.md, Conveyance: each bot is its own atom and loop (main/run-bot!, the same life a
    lone bot lives), and bots share nothing but one bounded channel, the claims of landing cells,
@@ -10,7 +10,9 @@
    over RCON, and speaks to that bot only through the bot's own bounded event queue (its :go).
    The board is an observer: once a minute it takes each bot's world as it is and prints a line;
    it never touches a loop. Every bot's run is its own recording and replays alone. The race's
-   settings are data (ci/race.edn)."
+   settings are data (ci/race.edn). Milestones are facts: an observer on each bot's atom turns
+   each target newly reached into one {:milestone/bot :milestone/goal :milestone/at ...} line
+   (MILESTONE on stdout, milestones.edn), which the race's board (bb race-board) publishes."
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -27,9 +29,12 @@
 (set! *warn-on-reflection* true)
 
 (def board-every-ms 60000)            ; how often the board prints every bot's line
-(def claim-tries 40)                  ; cells of the spiral a landing tries before the bot starts where it stands
+(def claim-tries 12)                  ; searches a landing makes before the bot starts where it stands
+(def search-stride 3)                 ; cells between the points a landing searches from, so searches find different forests
+(def forests "#minecraft:is_forest")  ; every forest kind: nearer than plain forest, and so a shorter search
 (def claims-buffer 16)                ; requests the claims loop holds before a claimant waits
 (def events-buffer 16)                ; events a bot's queue holds before the fixture waits
+(def milestones-buffer 256)           ; milestone facts waiting for the writer; a bot reaches at most a chain's worth
 
 (defn bot-name
   "The name of racer k (from 1) with prefix: a server name, sixteen characters at most."
@@ -59,6 +64,24 @@
     (str/join " "
               [name (or status :waiting) (str "at " (or target "-")) (str "reached " reached)
                dimension (str "y " (or y "?")) (str "deaths " deaths)])))
+
+(defn reached-new
+  "The targets world reached that before did not: what a chained run's step just added to
+   :plan/reached, in no particular order."
+  [before world]
+  (remove (set (:plan/reached before)) (:plan/reached world)))
+
+(defn milestone
+  "The fact that bot name reached goal in world: on which runner and seed, when (:time/now, ms),
+   and how long after its plan began (its landing)."
+  [{:keys [runner seed]} name world goal]
+  (cond-> {:milestone/runner runner
+           :milestone/seed seed
+           :milestone/bot name
+           :milestone/goal goal
+           :milestone/at (:time/now world)}
+    (:plan/since world)
+    (assoc :milestone/after-s (quot (- (:time/now world) (:plan/since world)) 1000))))
 
 (defn summary
   "The race as a value, from each bot's {:name :result :truth}: how many bots, how many reached
@@ -97,12 +120,18 @@
     (async/<!! reply)))
 
 (defn land!
-  "Land the bot named name on a cell of its own: down the spiral from centre, the forest nearest
-   each cell's middle, claimed for it; the first granted is where it lands (fixture/land-at!).
-   Returns where it stands, or nil when no cell was granted or the landing failed."
+  "Land the bot named name on a cell of its own: down the spiral from centre, search-stride cells
+   apart, the forest nearest each point (any forest kind) is claimed for it by the cell it lies in;
+   the first granted is where it lands (fixture/land-at!). Returns where it stands, or nil when no
+   cell was granted or the landing failed. Each search is a locate biome, which the server runs
+   in one tick: a race with plain forest searched 40 times per bot from points with none near,
+   one search took 60 s and the watchdog killed the server."
   [rc ch name centre]
   (reduce (fn [_ cell]
-            (let [forest (fixture/locate-forest! rc (claims/middle centre cell))
+            (let [forest (fixture/locate-biome! rc
+                                                forests
+                                                (claims/middle centre
+                                                               (mapv #(* search-stride %) cell)))
                   mine (when forest (claims/cell-of centre forest))]
               (cond (nil? forest) nil
                     (:claim/granted? (claim! ch {:claim/by name :claim/cell mine}))
@@ -160,6 +189,33 @@
                        (catch Exception e (str name " unreadable: " (ex-message e))))))
        (flush)))))
 
+(defn milestones!
+  "The milestones observer: a watch on every bot's atom that turns each target newly reached into
+   a milestone fact, put on a bounded channel and never blocking the bot's loop (a full channel
+   drops, as telemetry does); a writer thread prints each as a MILESTONE line and appends it to
+   milestones.edn in record-dir. Returns a function that stops watching and finishes the file."
+  [race bots record-dir]
+  (let [ch (async/chan milestones-buffer)
+        writer (async/thread
+                (with-open [w (io/writer (io/file record-dir "milestones.edn") :append true)]
+                  (loop []
+                    (when-let [fact (async/<!! ch)]
+                      (println "MILESTONE" (pr-str fact))
+                      (flush)
+                      (.write w (str (pr-str fact) "\n"))
+                      (.flush w)
+                      (recur)))))]
+    (doseq [{:keys [name world*]} bots]
+      (add-watch world*
+                 ::milestones
+                 (fn [_ _ before world]
+                   (doseq [goal (reached-new before world)]
+                     (async/offer! ch (milestone race name world goal))))))
+    (fn []
+      (doseq [{:keys [world*]} bots] (remove-watch world* ::milestones))
+      (async/close! ch)
+      (async/<!! writer))))
+
 (defn truth!
   "The server's word on where a bot is: its Dimension, asked while it is still connected."
   [{:keys [host rcon-port rcon-pass]} name]
@@ -175,7 +231,7 @@
    a RESULT line per bot as it ends and a RACE summary at the end, and write the summary to the
    record directory. Exits 0 when any bot reached the target."
   [& args]
-  (let [{:keys [config host port rcon-port rcon-pass record-dir commit seed]
+  (let [{:keys [config host port rcon-port rcon-pass record-dir commit seed runner]
          :or {config "ci/race.edn" host "127.0.0.1" record-dir "data/race"}}
         (cli/options args)
         {:race/keys [bots prefix until timeout-ms stagger-ms]} (edn/read-string (slurp config))
@@ -219,14 +275,20 @@
                               :result {:ok false :reason :crashed :error (ex-message e)}}))))
                    racers)]
     (cli/log "race:" bots "bots to" until "seed" seed)
-    (fixture! server racers ch)
-    (board! server racers done)
-    (let [results (mapv async/<!! runs)
-          s (assoc (summary results) :race/seed seed :race/commit commit :race/until until)]
-      (deliver done true)
-      (println "RACE" (pr-str (dissoc s :race/runs)))
-      (spit (io/file record-dir "summary.edn") (pr-str s))
-      (flush)
-      (async/close! ch)
-      (shutdown-agents)
-      (System/exit (if (pos? (:race/ok s)) 0 1)))))
+    (let [stop-milestones (milestones! {:runner (some-> runner
+                                                        parse-long)
+                                        :seed seed}
+                                       racers
+                                       record-dir)]
+      (fixture! server racers ch)
+      (board! server racers done)
+      (let [results (mapv async/<!! runs)
+            s (assoc (summary results) :race/seed seed :race/commit commit :race/until until)]
+        (deliver done true)
+        (stop-milestones)
+        (println "RACE" (pr-str (dissoc s :race/runs)))
+        (spit (io/file record-dir "summary.edn") (pr-str s))
+        (flush)
+        (async/close! ch)
+        (shutdown-agents)
+        (System/exit (if (pos? (:race/ok s)) 0 1))))))
