@@ -31,7 +31,7 @@
 
 (set! *warn-on-reflection* true)
 
-(def default-radius 10)               ; chunks taken round a landing on each axis: 21x21 columns, 160 blocks out
+(def default-radius 12)               ; chunks taken round a landing on each axis: 25x25 columns, 192 blocks out
 (def view 6)                          ; the view distance the client asks for (game's client-information)
 (def stop-chunks (* 2 view))          ; stops this many chunks apart: each sees the 13 columns across round it
 (def settle-ms 2000)                  ; no new column this long after a teleport: the server sent what it will

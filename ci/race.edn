@@ -1,16 +1,19 @@
-;; The race (issue #17, clojure -M:race): one server per runner, these bots on it, each from a
-;; landing cell of its own to the target. Sized by the capacity experiment (ci/capacity.edn, run
-;; 38333898855, PR #35): a 4-core runner is CPU-bound, not memory-bound. The bots' JVM takes about
-;; 9% of a core per bot and three cores from 30 bots up; the server's main thread takes the fourth
-;; from 20 up, and past 30 its ticks run 60-90 ms. Memory never neared a limit (5 GB or more free
-;; at 150 bots), so the heaps are generous: spare heap keeps collection rare on a CPU-bound box.
-{:race/runners 20 ; GitHub runners
- :race/servers 1  ; servers per runner, each its own world copy, race process and bots
+;; The race (issue #17, clojure -M:race): every runner carries servers on one of the race's
+;; pregenerated landing sets, each server its own race process and bots, each bot from a landing
+;; of its own to the target. The other runners play the sim race (ci/simrace.edn).
+;;
+;; Sized by the capacity ramp of run 38348283421 (b2f34ea): with the bot's CPU cut to a third
+;; (memo/by, path/cells), the slowest tenth of the bots held 20 ticks a second at every load up to
+;; 210 bots a runner, so the bots are not the limit. A vanilla server ticks on one thread: its p95
+;; tick was 67 ms at 30 bots and about 130 ms from 50. So two servers of 25 bots a runner. Memory:
+;; a server's live heap is about 0.8 GB + 0.06 GB a bot, a race process's under 1 GB at 50 bots.
+{:race/runners 10 ; GitHub runners; the sim race has the other ten
+ :race/servers 2  ; servers per runner, each its own world copy, race process and bots
  :race/landing-sets ["R1" "R2" "R3" "R4"] ; ci/gym.edn's race worlds: runner r races on set (r-1) mod 4
- :race/bots 20             ; bots per server: the most before the four cores run out (400 racers in all)
+ :race/bots 25             ; bots per server (500 racers in all)
  :race/prefix "Clj_r"      ; bot names: Clj_r01, Clj_r02, ...
  :race/until "nether"      ; the target; the run plays every step up to it (plan/through)
  :race/timeout-ms 19500000 ; 5 h 25 min, inside the runner's six hours
- :race/stagger-ms 3000     ; between bots joining: fresh players generating chunks at once time each other out
- :race/server-heap-mb 4096 ; the server's JVM: live about 0.8 GB + 0.06 GB a bot
- :race/bot-heap-mb 4096}   ; the one JVM all the bots share: live about 0.02 GB a bot
+ :race/stagger-ms 3000     ; between bots joining a server
+ :race/server-heap-mb 3072 ; each server's JVM: about 2.3 GB live at 25 bots
+ :race/bot-heap-mb 2048}                ; each race process's JVM, its 25 bots

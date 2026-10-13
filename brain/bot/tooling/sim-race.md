@@ -12,7 +12,11 @@ sourceRefs:
   - src/clojurecraft/capture.clj#defn take-landing!
   - src/clojurecraft/capture.clj#defn chunk-tap
   - src/clojurecraft/simrace.clj#defn run
-  - src/clojurecraft/simrace.clj#defn signature
+  - src/clojurecraft/failure.clj#defn signature
+  - src/clojurecraft/simrace.clj#defn shard
+  - src/clojurecraft/simrace.clj#defn jobs
+  - bb/clojurecraft/failures.clj#defn report!
+  - .github/workflows/simrace.yml#bb failures report
   - src/clojurecraft/simrace.clj#defn prepared
   - "src/clojurecraft/sim.clj#The model as a server keeps a player's chunks"
   - src/clojurecraft/sim.clj#defn column-of
@@ -39,6 +43,12 @@ A real server carries about 25 bots on its one tick thread (capacity runs 383338
 
 ## A run
 `simrace/run world seed until max-ms`: the bot from empty hands on the landing's surface, `:go/chain? true` with `plan/through until`, against the model, rolling loot and tick randomness from seed (`:seed`, `:tick-seed`, `sim/tick-rand`). Its RESULT is `main/result`, the same map a real run prints, with `:run/world`, `:run/seed`, `:run/ms` and `:run/violations`. A run is a pure function of world, seed and code: never saved, reproduced with `--world f --seed s` at the commit. `clojure -M:simrace --worlds <dir> --seeds n --threads t` plays every world's seeds on a pool, a SIMRUN line per run, `runs.edn`, and the SIMRACE tally: failures grouped by `signature`, [the target it was on, why it stopped, the last intent's kind].
+
+## On the runners
+`simrace.yml` runs on every push to the race branch, beside `race.yml`, and both restart with the new code: `ci/simrace.edn` gives `:simrace/runners` (10) runners, the sets (R1-R4), the target, the simulated minutes a run may take and the wall budget a runner plays (300 minutes). `world.yml` builds each set's server world once; `simworld.yml` captures each set's worlds once from it (`clojure -M:capture`, radius 12: 25x25 columns a landing) and caches them under a key of the world's files and `capture.clj`; each sim runner restores every set and plays its share of the 192 worlds (`--runner k --runners n`, `shard`), each world with seed after seed (`jobs`), on every core, until the budget is spent. Its runs are an artifact (`runs.edn`).
+
+## Failures become issues
+Every failed run carries `:run/signature` (`failure/signature`: the target it was on, why it stopped, the last intent's kind); the real race's RESULT lines carry it too. A report job after each race (`simrace.yml` and `race.yml`) runs `bb failures report <runs> <title>` (`bb/clojurecraft/failures.clj`): the failed runs grouped by signature, the most frequent first; one open issue labelled `bot-failure` per signature, found again by a marker in its body (`<!-- signature [...] -->`); each report adds one section to that issue's body (how many runs, how many landings, up to five reproductions: the sim race's `--world f --seed s --seeds 1` at the commit, or the real bot's recording), and opens at most ten new issues.
 
 ## First result
 The local 49-column world, two runs to the Nether, 16 s wall: both reached wood, kit, pickaxe, cobblestone, stone pickaxe and furnace in about 15 simulated minutes, then failed `[:ingots :no-pickaxe]`, the reason five of runner 13's bots stopped with in race 38340947798.

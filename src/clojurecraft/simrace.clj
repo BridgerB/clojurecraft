@@ -11,7 +11,7 @@
    kept: its world, seed and commit are the reproduction (--world f --seed s replays one), and
    it is the same run on any machine. Each run ends in a RESULT the way a real run does
    (main/result), printed as a SIMRUN line and kept in <out>/runs.edn; a failure's signature
-   (signature: the target it was on and why it stopped) is what groups failures into one
+   (failure/signature: the target it was on and why it stopped) is what groups failures into one
    issue however many runs hit it.
 
    A world is read once and its columns decoded once (prepared); every run of it shares that
@@ -21,11 +21,11 @@
             [clojurecraft.capture :as capture]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.cli :as cli]
+            [clojurecraft.failure :as failure]
             [clojurecraft.game :as game]
             [clojurecraft.main :as main]
             [clojurecraft.plan :as plan]
-            [clojurecraft.sim :as sim])
-  (:import (java.util.concurrent Callable Executors ExecutorService Future)))
+            [clojurecraft.sim :as sim]))
 
 (set! *warn-on-reflection* true)
 
@@ -39,8 +39,11 @@
 
 (defn prepared
   "A world file's value with its columns decoded once (:capture/decoded), for every run of it to
-   share."
+   share. Throws when it is not a world (no landing, no columns): every run of it would crash,
+   as fast as a run can start."
   [w]
+  (when-not (and (:capture/landing w) (seq (:capture/columns w)))
+    (throw (ex-info "not a captured world" {:keys (keys w)})))
   (assoc w
          :capture/decoded
          (into {} (map (fn [[k bytes]] [k (chunk/decode bytes)])) (:capture/columns w))))
@@ -49,16 +52,6 @@
   "Where a run starts: on the landing ([x z y], its surface) at the column's centre."
   [{[x z y] :capture/landing}]
   [(+ x 0.5) (double y) (+ z 0.5)])
-
-(defn stage
-  "The target a run was on when it stopped: the first of until's chain it had not reached."
-  [until reached]
-  (first (remove (set reached) (plan/through until))))
-
-(defn signature
-  "What groups failures: [the target the run was on, why it stopped, the last intent's kind]."
-  [{:keys [until reason plan]}]
-  [(stage until (:plan/reached plan)) reason (get-in plan [:plan/last :intent/kind])])
 
 (defn run
   "One run: the bot from empty hands on world w's landing, playing every step up to until,
@@ -91,10 +84,23 @@
   {:simrace/runs (count runs)
    :simrace/ok (count (filter :ok runs))
    :simrace/failures (->> (remove :ok runs)
-                          (map signature)
+                          (map failure/signature)
                           frequencies
                           (sort-by (comp - val))
                           vec)})
+
+(defn shard
+  "Runner k's share of n runners' worth of items: every n-th, from the k-th (1-based)."
+  [items k n]
+  (vec (take-nth n (drop (dec k) items))))
+
+(defn jobs
+  "The runs to play, [world-index seed] each: every world with one seed, then every world with
+   the next, from first-seed; seeds of them when given, else without end (a time budget ends it)."
+  [n-worlds first-seed seeds]
+  (for [s (if seeds (range first-seed (+ first-seed seeds)) (iterate inc first-seed))
+        i (range n-worlds)]
+    [i s]))
 
 ;;;; I/O: the world files, the threads, the lines ;;;;
 
@@ -107,59 +113,70 @@
          (sort-by #(parse-long (first (str/split (file-name %) #"\."))))
          vec)))
 
-(defn play-world!
-  "Every seed of one world on the pool, each run's RESULT printed as it ends and appended to
-   out; returns the runs."
-  [^ExecutorService pool w seeds until max-ms out]
-  (let [futures (mapv (fn [seed]
-                        (.submit pool
-                                 ^Callable
-                                 (fn []
-                                   (let [r (try (run w seed until max-ms)
-                                                (catch Exception e
-                                                  {:ok false
-                                                   :until until
-                                                   :reason :crashed
-                                                   :error (str e)
-                                                   :run/world
-                                                   (select-keys w [:capture/set :capture/landing])
-                                                   :run/seed seed}))]
-                                     (locking out
-                                       (println "SIMRUN" (pr-str (dissoc r :plan)))
-                                       (spit out (str (pr-str r) "\n") :append true)
-                                       (flush))
-                                     r))))
-                      seeds)]
-    (mapv #(.get ^Future %) futures)))
+(defn play!
+  "One run, never throwing (a run that throws is a :crashed RESULT), its RESULT printed as a
+   SIMRUN line and appended to out as it ends, with what reproduces it (:run/file, :run/seed,
+   :run/commit) and, when it failed, its :run/signature; returns it."
+  [w seed until max-ms commit out]
+  (let [r (try (run w seed until max-ms)
+               (catch Exception e
+                 {:ok false
+                  :until until
+                  :reason :crashed
+                  :error (str e)
+                  :run/world (select-keys w [:capture/set :capture/landing])
+                  :run/seed seed}))
+        r (cond-> (assoc r :run/commit commit :run/file (:capture/file w))
+            (not (:ok r)) (assoc :run/signature (failure/signature r)))]
+    (locking out
+      (println "SIMRUN" (pr-str (dissoc r :plan :stats)))
+      (spit out (str (pr-str r) "\n") :append true)
+      (flush))
+    r))
 
 (defn -main
-  "Play --seeds runs of every world under --worlds (or of the one --world, from --seed) on
-   --threads threads (the cores when absent); print a SIMRUN line per run and the SIMRACE
-   tally, keep every run in <out>/runs.edn."
+  "Play the worlds under --worlds (directories, comma-separated; this runner's share of them with
+   --runner k --runners n) on --threads threads (the cores when absent): each world with seeds
+   from --seed (1) up, round the worlds, until --budget-minutes of wall time have passed (or
+   --seeds each when no budget is given). --world f plays one file. Prints a SIMRUN line per
+   run and the SIMRACE tally; keeps every run in <out>/runs.edn."
   [& args]
   (let [o (cli/options args)
-        {:keys [worlds seed seeds until threads out] minutes :max-minutes :or {out "data/simrace"}}
+        {:keys [worlds seed seeds until threads out runner runners commit]
+         minutes :max-minutes
+         :or {out "data/simrace"}}
         o
         world (get o :world)
+        budget (get o :budget-minutes)
         until (or until default-until)
         max-ms (* 60000 (Long/parseLong (or minutes (str default-max-minutes))))
-        n (Long/parseLong (or seeds (str default-seeds)))
         first-seed (Long/parseLong (or seed "1"))
-        files (if world [(io/file world)] (world-files worlds))
-        pool (Executors/newFixedThreadPool
-              (int (Long/parseLong (or threads (str (.availableProcessors (Runtime/getRuntime)))))))
-        runs-file (str (io/file out "runs.edn"))]
+        files (if world
+                [(io/file world)]
+                (shard (into [] (mapcat world-files) (str/split worlds #","))
+                       (Long/parseLong (or runner "1"))
+                       (Long/parseLong (or runners "1"))))
+        ws (mapv (fn [f]
+                   (cli/log "world" (str f))
+                   (assoc (prepared (capture/read-world f)) :capture/file (str f)))
+                 files)
+        deadline (when budget (+ (System/currentTimeMillis) (* 60000 (Long/parseLong budget))))
+        todo (atom (jobs (count ws)
+                         first-seed
+                         (when-not budget (Long/parseLong (or seeds (str default-seeds))))))
+        take! (fn [] (let [[old _] (swap-vals! todo rest)] (first old)))
+        runs-file (str (io/file out "runs.edn"))
+        n-threads (Long/parseLong (or threads (str (.availableProcessors (Runtime/getRuntime)))))
+        worker (fn []
+                 (loop [done []]
+                   (let [job (when (or (nil? deadline) (< (System/currentTimeMillis) deadline))
+                               (take!))]
+                     (if-let [[i s] job]
+                       (recur (conj done (play! (ws i) s until max-ms commit runs-file)))
+                       done))))]
     (io/make-parents runs-file)
-    (let [runs (into []
-                     (mapcat (fn [f]
-                               (cli/log "world" (str f))
-                               (play-world! pool
-                                            (prepared (capture/read-world f))
-                                            (range first-seed (+ first-seed n))
-                                            until
-                                            max-ms
-                                            runs-file)))
-                     files)]
+    (cli/log "simrace:" (count ws) "worlds," n-threads "threads, until" until)
+    (let [workers (mapv (fn [_] (future (worker))) (range n-threads))
+          runs (into [] (mapcat deref) workers)]
       (println "SIMRACE" (pr-str (tally runs))))
-    (.shutdown pool)
     (shutdown-agents)))

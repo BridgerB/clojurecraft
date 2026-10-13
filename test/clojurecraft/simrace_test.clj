@@ -2,6 +2,7 @@
   "The sim race: a run over a world of many columns crosses from one to the next as the game's
    do, a run is the same run every time, and failures group by what they were doing and why."
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [clojurecraft.failure :as failure]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.simrace :as simrace]
             [clojurecraft.wood]
@@ -39,7 +40,7 @@
            :reason :no-pickaxe
            :plan {:plan/reached #{:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace}
                   :plan/last {:intent/kind :mine}}}]
-    (is (= :ingots (simrace/stage "nether" (get-in r [:plan :plan/reached]))))
-    (is (= [:ingots :no-pickaxe :mine] (simrace/signature r)))
+    (is (= :ingots (failure/stage "nether" (get-in r [:plan :plan/reached]))))
+    (is (= [:ingots :no-pickaxe :mine] (failure/signature r)))
     (is (= #:simrace{:runs 3 :ok 1 :failures [[[:ingots :no-pickaxe :mine] 2]]}
            (simrace/tally [r r {:ok true}])))))

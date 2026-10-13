@@ -209,3 +209,29 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
           path: data/race/
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}   # the race logs alone, for the failures report
+        with:
+          name: racelog-${{ github.sha }}-${{ matrix.runner }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: data/race/s*/race.log
+
+  report:
+    needs: race
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: racelog-${{ github.sha }}-*
+          path: runs
+      - name: Failures become issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+          bb failures report runs "Race ${{ github.run_id }} at ${GITHUB_SHA::7}" | tee failures.txt
+          { echo '### failures'; echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

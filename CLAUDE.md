@@ -95,7 +95,11 @@ clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.p
 clojure -M:run --port 25571 --until play --hold-ms 20000     # just connect and stay in-world
 clojure -M:run ... --record data/runs/x.edn                   # record every event
 clojure -M:replay data/runs/x.edn                             # replay it with no server
-clojure -M:race --config ci/race.edn --port 25571 --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)"   # a race on one server (race.yml: every runner)
+clojure -M:race --config ci/race.edn --port 25571 --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)"   # a race on one server (race.yml: ten runners)
+clojure -M:capture --port 25571 --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)" --landings l.edn --set S --out d   # real worlds for the model
+clojure -M:simrace --worlds cache/sim-worlds/R1 --seeds 2       # the bot in captured worlds against the model (simrace.yml: ten runners)
+clojure -M:simrace --world cache/sim-worlds/R1/7.edn.gz --seed 3 --seeds 1   # one run again, as an issue reproduces it
+bb failures report <dir> <title>                                # failed runs by signature, one issue each (the races' report jobs)
 clojure -M:run ... --telemetry data/runs/t.edn                # one EDN line per change of the world
 clojure -M:fmt fix|check                                      # format (zprint, settings in .zprint.edn); the pre-commit hook does it for staged files
 clojure -M:lint --lint src dev test                           # lint (clj-kondo, held at zero findings); the pre-commit hook lints staged files
@@ -108,7 +112,7 @@ clojure -M:rcon --port 25581 --pass "$(cat data/local-server/rcon.pass)" data ge
 bb datagen                            # regenerate the EDN tables (needs the jar)
 ```
 
-The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI is six workflows. `test.yml` runs the tests and the brain checker on every push; its forest property is eight sim shards. `gym.yml` runs every goal once on push and N trials of one goal on dispatch, one runner and one pregenerated landing per trial, judged by RESULT plus the server's truth commands and reported with a 95% interval (`clojure -M:gym`, `brain/bot/tooling/gym-on-runners.md`). `world.yml` builds a landing set's world once and caches it. `plan.yml` runs one plan file (`ci/plan/`, `clojure -M:plan`) as many jobs. `timer.yml` dispatches the next plan every twenty minutes. `full.yml` is one fresh world and one bot with nothing given, from spawn, playing every step up to the current stage (`plan/current-until`, `--chain`) for 5.5 hours. It runs on a pull request. A later push to that request cancels its own attempt. Another request keeps its own. Write code, push, and read the runs: the runners do the compute.
+The bot prints one `RESULT {...}` EDN line on stdout and exits 0 when `:ok true`. CI is the workflows below, and the race branch's two: `race.yml` (real servers on the race's pregenerated landing sets, ten runners) and `simrace.yml` (the bot in the same worlds, captured once by `simworld.yml`, against the model, ten runners), each ending in a report that files failures as issues, one per signature (`brain/bot/tooling/sim-race.md`). `test.yml` runs the tests and the brain checker on every push; its forest property is eight sim shards. `gym.yml` runs every goal once on push and N trials of one goal on dispatch, one runner and one pregenerated landing per trial, judged by RESULT plus the server's truth commands and reported with a 95% interval (`clojure -M:gym`, `brain/bot/tooling/gym-on-runners.md`). `world.yml` builds a landing set's world once and caches it. `plan.yml` runs one plan file (`ci/plan/`, `clojure -M:plan`) as many jobs. `timer.yml` dispatches the next plan every twenty minutes. `full.yml` is one fresh world and one bot with nothing given, from spawn, playing every step up to the current stage (`plan/current-until`, `--chain`) for 5.5 hours. It runs on a pull request. A later push to that request cancels its own attempt. Another request keeps its own. Write code, push, and read the runs: the runners do the compute.
 
 ## Words
 

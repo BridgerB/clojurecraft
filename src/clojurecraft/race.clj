@@ -31,6 +31,7 @@
             [clojurecraft.claims :as claims]
             [clojurecraft.cli :as cli]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.failure :as failure]
             [clojurecraft.fixture :as fixture]
             [clojurecraft.game :as game]
             [clojurecraft.landings :as landings]
@@ -347,11 +348,13 @@
    a RESULT line per bot as it ends and a RACE summary at the end, and write the summary to the
    record directory. Exits 0 when any bot reached the target."
   [& args]
-  (let [{:keys [config host port rcon-port rcon-pass record-dir commit seed runner landing-offset]
-         which :server ; which of the runner's servers (--server); server below is the one connected to
-         landings-file :landings
+  (let [o (cli/options args)
+        {:keys [config host port rcon-port rcon-pass record-dir commit seed landing-offset]
          :or {config "ci/race.edn" host "127.0.0.1" record-dir "data/race"}}
-        (cli/options args)
+        o
+        runner (get o :runner)
+        which (get o :server) ; which of the runner's servers (--server); server below is the one connected to
+        landings-file (get o :landings)
         config (edn/read-string (slurp config))
         {:race/keys [bots prefix until timeout-ms]} config
         t0 (System/currentTimeMillis)
@@ -379,23 +382,28 @@
                  (Thread/sleep (long
                                 (max 0 (- (+ t0 (start-at config i)) (System/currentTimeMillis))))) ; its join, by the schedule
                  (try (let [truth (promise)
-                            {r :result} (main/run-bot!
-                                         {:host host
-                                          :port (:port server)
-                                          :name name
-                                          :until until
-                                          :chain true
-                                          :timeout-ms (if deadline
-                                                        (max 60000 (- deadline (start-at config i)))
-                                                        timeout-ms)
-                                          :record (str (io/file record-dir (str name ".edn")))
-                                          :commit commit
-                                          :events queue
-                                          :world* world*
-                                          :on-result (fn [r]
-                                                       (deliver truth (truth! server name))
-                                                       (println "RESULT" name (pr-str r))
-                                                       (flush))})]
+                            {r :result}
+                            (main/run-bot!
+                             {:host host
+                              :port (:port server)
+                              :name name
+                              :until until
+                              :chain true
+                              :timeout-ms
+                              (if deadline (max 60000 (- deadline (start-at config i))) timeout-ms)
+                              :record (str (io/file record-dir (str name ".edn")))
+                              :commit commit
+                              :events queue
+                              :world* world*
+                              :on-result (fn [r]
+                                           (deliver truth (truth! server name))
+                                           (println "RESULT"
+                                                    name
+                                                    (pr-str (cond-> r
+                                                              (not (:ok r))
+                                                              (assoc :run/signature
+                                                                     (failure/signature r))))) ; what bb failures groups by
+                                           (flush))})]
                         {:name name :result r :truth @truth})
                       (catch Exception e
                         (cli/log name "failed:" e)

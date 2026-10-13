@@ -1,0 +1,172 @@
+name: simrace
+
+# The sim race (clojure -M:simrace, ci/simrace.edn): runners that play the whole bot, from empty
+# hands at every landing of the race's captured worlds to the target, against the server model,
+# on every core, seed after seed until their budget is spent. The real-server race (race.yml) has
+# the other runners; a push to the race branch restarts both with the new code. Every failed run
+# carries its signature; the report files them as issues, one per signature (bb failures).
+
+on:
+  push:
+    branches: [race]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: simrace-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      runners: ${{ steps.read.outputs.runners }}
+      count: ${{ steps.read.outputs.count }}
+      sets: ${{ steps.read.outputs.sets }}
+      until: ${{ steps.read.outputs.until }}
+      max-minutes: ${{ steps.read.outputs.max-minutes }}
+      budget: ${{ steps.read.outputs.budget }}
+      heap: ${{ steps.read.outputs.heap }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read ci/simrace.edn
+        id: read
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+          bb -e '(let [r (clojure.edn/read-string (slurp "ci/simrace.edn"))]
+                   (println (str "runners=" (cheshire.core/generate-string (vec (range 1 (inc (:simrace/runners r)))))))
+                   (println (str "count=" (:simrace/runners r)))
+                   (println (str "sets=" (cheshire.core/generate-string (:simrace/sets r))))
+                   (println (str "until=" (:simrace/until r)))
+                   (println (str "max-minutes=" (:simrace/max-minutes r)))
+                   (println (str "budget=" (:simrace/budget-minutes r)))
+                   (println (str "heap=" (:simrace/heap-mb r))))' >> "$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  worlds:
+    needs: plan
+    strategy:
+      matrix:
+        set: ${{ fromJSON(needs.plan.outputs.sets) }}
+    uses: ./.github/workflows/world.yml
+    with:
+      set: ${{ matrix.set }}
+
+  captures:
+    needs: [plan, worlds]
+    strategy:
+      matrix:
+        set: ${{ fromJSON(needs.plan.outputs.sets) }}
+    uses: ./.github/workflows/simworld.yml
+    with:
+      set: ${{ matrix.set }}
+
+  sim:
+    needs: [plan, captures]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 345
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        runner: ${{ fromJSON(needs.plan.outputs.runners) }}
+    steps:
+      - uses: actions/checkout@v7
+      # one restore a set: steps cannot loop, so every set ci/simrace.edn may name has its step
+      - name: R1's captured worlds
+        if: contains(fromJSON(needs.plan.outputs.sets), 'R1')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R1
+          key: simworld-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
+      - name: R2's captured worlds
+        if: contains(fromJSON(needs.plan.outputs.sets), 'R2')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R2
+          key: simworld-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
+      - name: R3's captured worlds
+        if: contains(fromJSON(needs.plan.outputs.sets), 'R3')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R3
+          key: simworld-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
+      - name: R4's captured worlds
+        if: contains(fromJSON(needs.plan.outputs.sets), 'R4')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R4
+          key: simworld-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: clj-${{ hashFiles('deps.edn') }}
+      - name: Sim race
+        env:
+          SETS: ${{ needs.plan.outputs.sets }}
+        run: |
+          worlds=$(echo "$SETS" | jq -r 'map("cache/sim-worlds/" + .) | join(",")')
+          clojure -J-Xmx${{ needs.plan.outputs.heap }}m -M:simrace --worlds "$worlds" \
+            --runner ${{ matrix.runner }} --runners ${{ needs.plan.outputs.count }} \
+            --until ${{ needs.plan.outputs.until }} --max-minutes ${{ needs.plan.outputs.max-minutes }} \
+            --budget-minutes ${{ needs.plan.outputs.budget }} --commit "$GITHUB_SHA" --out data/simrace \
+            > data-simrace.log 2>&1 || true
+          mkdir -p data/simrace
+          mv data-simrace.log data/simrace/simrace.log
+          grep -E '^SIMRACE ' data/simrace/simrace.log || tail -n 40 data/simrace/simrace.log
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "### sim runner ${{ matrix.runner }}"
+            echo '```'
+            grep -E '^SIMRACE ' data/simrace/simrace.log | cut -c1-2000 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: simrace-${{ github.sha }}-${{ matrix.runner }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: |
+            data/simrace/runs.edn
+            data/simrace/simrace.log
+
+  report:
+    needs: sim
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: simrace-${{ github.sha }}-*
+          path: runs
+      - name: Failures become issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+          bb failures report runs "Sim race ${{ github.run_id }} at ${GITHUB_SHA::7}" | tee failures.txt
+          { echo '### failures'; echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
