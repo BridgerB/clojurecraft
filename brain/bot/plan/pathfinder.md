@@ -11,6 +11,7 @@ sourceRefs:
   - src/clojurecraft/path.clj#defn plan
   - src/clojurecraft/path.clj#defn search
   - src/clojurecraft/path.clj#defn classify-id
+  - src/clojurecraft/path.clj#defn cells
   - src/clojurecraft/path.clj#def awkward-types
   - src/clojurecraft/path.clj#def templates
   - src/clojurecraft/path.clj#defn landing
@@ -36,6 +37,7 @@ related:
 
 ## Key files
 - `path.clj`, `classify-id` / `classify` - what a block state is to a route: `:water`, `:lava`, `:awkward` (a block whose collision shape the game says is neither nothing nor a full cube and stands taller than `flat-shape`, 0.125, read from the game into `shapes.edn`, `blocks/partial-shapes`: a cocoa pod, a slab, a lantern, but not a carpet; or a definition type in `awkward-types`, the hand list kept for full cubes the physics cannot simulate, slime, ice, magma, cobwebs. Gym batch iron-a9 run 5 walked into a cocoa pod on a jungle log the hand list lacked and never moved again), `:solid` (a full cube), `:clear` (passable, not a liquid), `:unknown` (the chunk is not loaded).
+- `path.clj`, `cells` / `cell-key` - one search's view of the cells: a function from a cell to its class that reads each cell through the terrain once and holds the answer under one long key. Every cell predicate below takes a world or its cells; the search and the stone scan make one and pass it down, so a cell asked a hundred times is read once ([[remembered-by-identity]]).
 - `path.clj`, `templates` / `moves` - four move templates along +x, rotated to the eight directions: `:walk` (cost 1), `:jump-up` (2), `:diagonal` (√2, both corner columns clear), `:drop` (1 + 0.5 per block fallen, at most `max-fall` 3). Each template lists what cells must be what; `neighbors` interprets them.
 - `path.clj`, `floor?` / `clear?` / `standable?` - a floor is `:solid`; a clear cell is `:clear` with no lava in its four horizontal neighbours or under it (`lava-near?`); a node is standable with a floor below and body and head clear.
 - `path.clj`, `landing` - where a drop comes to rest: the first floor within `max-fall`, with only clear cells on the way; water, lava, an awkward block or an unloaded chunk under the fall refuse it.

@@ -315,6 +315,46 @@
                               (path/goal-done? w goal (path/feet-cell (settle w pos vel))))))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed])))))
 
+(defn shuffle-by
+  "coll in an order fixed by seed: a generated order that shrinks and replays."
+  [seed coll]
+  (let [l (java.util.ArrayList. ^java.util.Collection coll)]
+    (java.util.Collections/shuffle l (java.util.Random. seed))
+    (vec l)))
+
+(deftest the-cells-of-a-world-answer-as-classify-does
+  ;; a search reads each cell once through path/cells; whatever it holds must be what classify
+  ;; says of the world, asked in any order, any number of times, loaded or not (x and z -1 and
+  ;; 16 are outside the one column), and every predicate answers the same from either
+  (let [r (tc/quick-check
+           50
+           (prop/for-all
+            [{:keys [blocks]} terrain-gen lava-at
+             (gen/tuple (gen/choose 0 15) (gen/choose 64 70) (gen/choose 0 15)) order gen/nat]
+            (let [w (world-of (assoc blocks lava-at lava) [0.5 80.0 0.5])
+                  at (path/cells w)
+                  cells (vec (for [x (range -1 17) y (range 62 74) z (range -1 17)] [x y z]))
+                  asked (concat (shuffle-by order cells) cells)]
+              (and (every? #(= (path/classify w %) (at %)) asked)
+                   (identical? at (path/cells at))
+                   (every? #(= (path/standable? w %) (path/standable? at %)) cells)
+                   (every? #(= (path/landing w %) (path/landing at %)) cells)))))]
+    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed])))))
+
+(deftest no-two-cells-share-a-key
+  ;; cells inside the world border, at any height from -64 to 2047, each to its own key
+  (let [cell (gen/tuple (gen/choose -30000000 30000000)
+                        (gen/choose -64 2047)
+                        (gen/choose -30000000 30000000))
+        r (tc/quick-check 2000
+                          (prop/for-all [a cell b cell]
+                                        (= (= a b)
+                                           (= (apply path/cell-key a) (apply path/cell-key b)))))]
+    (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed]))))
+  (is (= 5
+         (count (set (map #(apply path/cell-key %)
+                          [[0 64 0] [0 64 1] [1 64 0] [0 65 0] [-1 -64 -1]]))))))
+
 (deftest a-start-on-a-block-edge-searches-from-the-cell-the-box-rests-on
   ;; gym landing 21280,18720: the feet at x 21281.0 on the edge of a stone step, flooring into
   ;; the step itself; the standable cell is the one beside it. Before this the walk failed

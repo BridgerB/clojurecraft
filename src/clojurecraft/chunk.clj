@@ -97,14 +97,39 @@
           palette (boolean (some pred palette))
           :else true)))
 
+(defn cell-of-index
+  "The local cell [lx ly lz] of index idx (0-4095) in a section, with id: [lx ly lz id]."
+  [^long idx id]
+  [(bit-and idx 15) (bit-shift-right idx 8) (bit-and (bit-shift-right idx 4) 15) id])
+
 (defn section-find
-  "Seq of [lx ly lz id] for cells whose id satisfies pred."
+  "[lx ly lz id] for every cell whose id satisfies pred, in index order (nil when none can). A
+   section of one id asks pred once; a paletted one asks it once per palette entry and tests each
+   cell's index against those answers; the cells are walked over the packed longs unboxed. Every
+   load scans a column's sections, and the lazy walk, pred asked of all 4096 cells, was a tenth of
+   a race's CPU."
   [section pred]
-  (when (section-may-contain? section pred)
-    (for [idx (range 4096)
-          :let [id (section-get section idx)]
-          :when (pred id)]
-      [(bit-and idx 15) (bit-shift-right idx 8) (bit-and (bit-shift-right idx 4) 15) id])))
+  (let [{:keys [single bits palette longs]} section]
+    (cond (some? single) (when (pred single) (into [] (map #(cell-of-index % single)) (range 4096)))
+          (and palette (not-any? pred palette)) nil
+          :else
+          (let [bits (long bits)
+                ^longs longs longs
+                per-long (quot 64 bits)
+                mask (dec (bit-shift-left 1 bits))
+                ^booleans want (when palette (boolean-array (map (comp boolean pred) palette)))]
+            (loop [idx 0
+                   acc (transient [])]
+              (if (== idx 4096)
+                (not-empty (persistent! acc))
+                (let [v (bit-and (unsigned-bit-shift-right (aget longs (quot idx per-long))
+                                                           (* bits (rem idx per-long)))
+                                 mask)
+                      hit (if want (aget want (int v)) (pred v))]
+                  (recur (inc idx)
+                         (if hit
+                           (conj! acc (cell-of-index idx (if palette (nth palette v) v)))
+                           acc)))))))))
 
 (defn find-blocks
   "Seq of [x y z id] over loaded chunks for cells satisfying pred."

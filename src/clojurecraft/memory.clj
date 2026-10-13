@@ -33,6 +33,7 @@
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.memo :as memo]
             [clojurecraft.physics :as physics]
             [datascript.core :as d]))
 
@@ -132,26 +133,37 @@
                 :let [ent (d/entity db e)]]
             [pos {:block/state (:sight/state ent) :block/seen-at (:sight/at ent)}]))))
 
+(def positions-in
+  "[facts states dimension] → the positions-now of those facts: a Datalog query over every
+   sighting, remembered by the facts' identity (memo/by): facts change only when a sighting is
+   added, and the planner asked this every tick (a race's profile: a fifth of all its CPU)."
+  (memo/by
+   [:identical :equal :equal]
+   64
+   (fn [facts states dim]
+     (d/q '[:find [?pos ...] :in $ % [?s ...] ?all ?dim :where [?e :sight/state ?s]
+            [?e :sight/pos ?pos] (in-dimension ?e ?dim)
+            (not-join
+             [?e ?pos ?all ?dim]
+             [?later :sight/pos ?pos]
+             [(> ?later ?e)]
+             (in-dimension ?later ?dim)
+             [?later :sight/state ?t]
+             [(contains? ?all ?t) ?kept]
+             [(false? ?kept)])]
+          facts
+          in-dimension
+          states
+          (set states)
+          dim))))
+
 (defn positions-now
   "Positions where one of states was seen and nothing seen there since is outside states: the
    essay's \"the nearest log I have ever seen that I have not confirmed gone\", as one Datalog
-   query over the facts (no later fact at the place with a state outside the set)."
+   query over the facts (no later fact at the place with a state outside the set), remembered by
+   the facts (positions-in)."
   [world states]
-  (d/q '[:find [?pos ...] :in $ % [?s ...] ?all ?dim :where [?e :sight/state ?s]
-         [?e :sight/pos ?pos] (in-dimension ?e ?dim)
-         (not-join
-          [?e ?pos ?all ?dim]
-          [?later :sight/pos ?pos]
-          [(> ?later ?e)]
-          (in-dimension ?later ?dim)
-          [?later :sight/state ?t]
-          [(contains? ?all ?t) ?kept]
-          [(false? ?kept)])]
-       (:world/facts world)
-       in-dimension
-       states
-       (set states)
-       (dimension/of world)))
+  (positions-in (:world/facts world) states (dimension/of world)))
 
 ;; ---------------------------------------------------------------- writing
 
@@ -174,22 +186,25 @@
                  (chunk/find-blocks {key column} watched?))]
     (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))
 
+(def source-states "The states of a water or a lava source." #{blocks/water-base blocks/lava-base})
+
 (defn surface-fluid?
-  "Is the fluid at [x y z] of a column (its fluid states, {[x y z] id}) exposed: nothing of its
-   kind directly above it?"
-  [fluids [x y z] kind]
-  (not= kind (:fluid/kind (blocks/fluid (get fluids [x (inc y) z])))))
+  "Is the fluid at [x y z] exposed: nothing of its kind directly above it, as at (a cell → its
+   state) reads the column?"
+  [at [x y z] kind]
+  (not= kind (:fluid/kind (blocks/fluid (at [x (inc y) z])))))
 
 (defn pool-of
-  "The pool fact for one fluid kind in a freshly loaded column: its highest surface source,
+  "The pool fact for one fluid kind in a freshly loaded column, from its sources ([x y z id])
+   and at (a cell → its state): its highest surface source,
    nearest the chunk's centre among those, or nil when the chunk holds none. Highest first
    because the pool under the sky is the one to walk to; cave water is the aquifer trap."
-  [[cx cz] fluids kind now dim]
+  [[cx cz] sources at kind now dim]
   (let [[mx mz] [(+ (* 16 cx) 8) (+ (* 16 cz) 8)]
-        cells (for [[[x y z :as pos] id] fluids
+        cells (for [[x y z id] sources
+                    :let [pos [x y z]]
                     :when (and (= kind (:fluid/kind (blocks/fluid id)))
-                               (blocks/source? id)
-                               (surface-fluid? fluids pos kind))]
+                               (surface-fluid? at pos kind))]
                 {:rank [(- y) (+ (abs (- x mx)) (abs (- z mz)))] :pos pos})]
     (when (seq cells)
       {:pool/chunk [cx cz]
@@ -220,11 +235,11 @@
   "Append a pool fact per fluid kind the loaded column holds, when the chunk's pool changed."
   [world key column]
   (let [db (:world/facts world)
-        fluids (into {}
-                     (for [[x y z id] (chunk/find-blocks {key column} blocks/fluid)] [[x y z] id]))
+        sources (chunk/find-blocks {key column} source-states) ; the sources alone: an ocean's every water cell was a map entry
+        at #(chunk/block-at {key column} %)
         dim (dimension/of world)
         tx (for [kind [:water :lava]
-                 :let [pool (pool-of key fluids kind (:time/now world) dim)]
+                 :let [pool (pool-of key sources at kind (:time/now world) dim)]
                  :when (and pool (not= (:pool/pos pool) (:pool/pos (latest-pool db dim key kind))))]
              pool)]
     (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))

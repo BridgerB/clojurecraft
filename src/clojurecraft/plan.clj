@@ -153,7 +153,10 @@
     (update world
             :plan/reached
             (fnil into #{})
-            (comp (remove :goal/always?) (filter #(done-by world %)) (map :goal/id))
+            (comp (remove :goal/always?)
+                  (remove #(contains? (:plan/reached world #{}) (:goal/id %))) ; reached is reached: never asked again
+                  (filter #(done-by world %))
+                  (map :goal/id))
             (in-play world table))
     world))
 

@@ -14,6 +14,7 @@
             [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memo :as memo]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
@@ -56,11 +57,12 @@
 (defn step-down?
   "Would digging the block at [x y z] leave a hole one deep that the body can step down into: a
    solid block under it and the two cells over it clear? Then its drop lands in the hole and a
-   collect walks in after it."
+   collect walks in after it. world is a world or its cells (path/cells)."
   [world [x y z]]
-  (and (= :solid (path/classify world [x (dec y) z]))
-       (path/clear? world [x (inc y) z])
-       (path/clear? world [x (+ y 2) z])))
+  (let [at (path/cells world)]
+    (and (= :solid (at [x (dec y) z]))
+         (path/clear? at [x (inc y) z])
+         (path/clear? at [x (+ y 2) z]))))
 
 (defn beside
   "A cell a route could stand in to dig a block at pos from, or nil: one of its horizontal
@@ -71,29 +73,54 @@
    feet never counts: its drop lies a block under them and nothing walks in after it. In a
    tunnel two high, only the walls at the feet counted before the head and the ceiling did:
    batch iron-a2 run 4 tunnelled over a hundred blocks at y 16 without one iron ore in sight;
-   and before the floor did, live run 14 tunnelled for gravel over five in its own floor."
+   and before the floor did, live run 14 tunnelled for gravel over five in its own floor. world
+   is a world or its cells (path/cells)."
   [world [x y z :as pos]]
-  (first (filter #(path/standable? world %)
-                 (concat (for [dy [0 -1] [dx dz] sides] [(+ x dx) (+ y dy) (+ z dz)])
-                         [[x (- y 2) z]]
-                         (when (step-down? world pos)
-                           (for [[dx dz] sides] [(+ x dx) (inc y) (+ z dz)]))))))
+  (let [at (path/cells world)]
+    (first (filter #(path/standable? at %)
+                   (concat (for [dy [0 -1] [dx dz] sides] [(+ x dx) (+ y dy) (+ z dz)])
+                           [[x (- y 2) z]]
+                           (when (step-down? at pos)
+                             (for [[dx dz] sides] [(+ x dx) (inc y) (+ z dz)])))))))
 
 (defn exposed?
-  "Can a player stand beside the block at pos and dig it?"
+  "Can a player stand beside the block at pos and dig it? world is a world or its cells."
   [world pos]
   (some? (beside world pos)))
 
-(defn near-chunks
-  "The loaded chunk columns within search-radius of the feet: the terrain a search reads."
+(defn feet-chunk
+  "The chunk column [cx cz] the feet stand in."
   [world]
-  (let [[x _ z] (:player/pos world)
-        cx (bit-shift-right (long (math/floor x)) 4)
-        cz (bit-shift-right (long (math/floor z)) 4)
-        r (inc (quot search-radius 16))]
+  (let [[x _ z] (:player/pos world)]
+    [(bit-shift-right (long (math/floor x)) 4) (bit-shift-right (long (math/floor z)) 4)]))
+
+(defn near-chunks
+  "The chunk columns of chunks within search-radius of chunk column [cx cz]: the terrain a
+   search reads."
+  [chunks [cx cz]]
+  (let [r (inc (quot search-radius 16))]
     (into {}
-          (filter (fn [[[kx kz] _]] (and (<= (abs (- kx cx)) r) (<= (abs (- kz cz)) r)))
-                  (:world/chunks world)))))
+          (filter (fn [[[kx kz] _]] (and (<= (abs (- kx cx)) r) (<= (abs (- kz cz)) r))) chunks))))
+
+(def exposed-cells
+  "[chunks blocks feet-chunk states blacklist lo hi] → the blocks of states in the chunks near
+   feet-chunk, at heights lo to hi, not blacklisted, that a player can stand beside and dig, as
+   the overlay of block updates says now: the scan of every near chunk and a standing test for
+   each candidate, remembered by the terrain's identity (memo/by). The terrain changes when a
+   chunk arrives or a block changes; the planner asked this every tick (a race's profile: a
+   quarter of all its CPU)."
+  (memo/by [:identical :identical :equal :equal :equal :equal :equal]
+           64
+           (fn [chunks blocks feet-chunk states blacklist lo hi]
+             (let [terrain {:world/chunks chunks :world/blocks blocks}
+                   at (path/cells terrain)]
+               (into []
+                     (comp (map (fn [[x y z _]] [x y z]))
+                           (filter (fn [[_ y _]] (<= lo y hi)))
+                           (remove blacklist)
+                           (filter #(contains? states (terrain/block-at terrain %)))
+                           (filter #(exposed? at %)))
+                     (chunk/find-blocks (near-chunks chunks feet-chunk) #(contains? states %)))))))
 
 (defn exposed-of-states
   "The blocks of states within search-radius of the eye and search-height of its height that
@@ -104,18 +131,16 @@
    block just dug is air."
   [world states]
   (let [eye (game/eye world)
-        ey (physics/y-of eye)
-        blacklist (:plan/blacklist world #{})
-        lo (- ey search-height)
-        hi (+ ey search-height)]
+        ey (physics/y-of eye)]
     (memory/nearest-first eye
                           search-radius
-                          (->> (chunk/find-blocks (near-chunks world) #(contains? states %))
-                               (map (fn [[x y z _]] [x y z]))
-                               (filter (fn [[_ y _]] (<= lo y hi)))
-                               (remove blacklist)
-                               (filter #(contains? states (terrain/block-at world %)))
-                               (filter #(exposed? world %))))))
+                          (exposed-cells (:world/chunks world)
+                                         (:world/blocks world)
+                                         (feet-chunk world)
+                                         states
+                                         (:plan/blacklist world #{})
+                                         (long (math/ceil (- ey search-height)))
+                                         (long (math/floor (+ ey search-height)))))))
 
 (defn continue-mine
   "The next intent of the row's chain in flight, or nil: walk → dig → collect, tagged
