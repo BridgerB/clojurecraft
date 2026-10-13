@@ -74,7 +74,14 @@
             :milestone/goal :kit
             :milestone/at 90000
             :milestone/after-s 60}
-           (race/milestone {:runner 7 :seed "race-1-7"} "Clj_r03" world :kit)))))
+           (race/milestone {:runner 7 :seed "race-1-7"} "Clj_r03" world :kit)))
+    (is (= 2
+           (:milestone/server
+            (race/milestone {:runner 7 :server 2 :seed "race-1-7-2"} "Clj_r03" world :kit)))
+        "a runner with several servers says which")
+    (is (not (contains? (race/milestone {:runner 7 :server nil :seed "s"} "Clj_r03" world :kit)
+                        :milestone/server))
+        "with one, the fact is as it was")))
 
 (deftest a-ramp-joins-bots-in-steps
   (let [cfg {:race/stagger-ms 3000 :race/ramp #:ramp{:start 10 :step 10 :every-ms 300000}}]

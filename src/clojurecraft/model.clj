@@ -311,7 +311,13 @@
    [:race/commit "the code that raced" "a race summary"]
    [:race/until "the race's target" "a race summary"]
    [:sample/runner "the runner a sample was taken on" "a race sample"]
-   [:sample/at "when, ms" "a race sample"] [:sample/joined "bots in the world" "a race sample"]
+   [:sample/server "which of the runner's servers, when it carries more than one; nil with one"
+    "a race sample"]
+   [:race/server "which of the runner's servers the race ran on"
+    "a race summary, with more than one"]
+   [:milestone/server "which of the runner's servers it was reached on"
+    "a milestone fact, with more than one"] [:sample/at "when, ms" "a race sample"]
+   [:sample/joined "bots in the world" "a race sample"]
    [:sample/landed "bots the fixture has landed" "a race sample"]
    [:sample/playing "bots in the world and still racing" "a race sample"]
    [:sample/ended "bots whose plan is done or failed" "a race sample"]

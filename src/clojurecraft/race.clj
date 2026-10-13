@@ -2,7 +2,11 @@
   "A race (issue #17): many bots on one server, from where each lands to the race's target.
 
      clojure -M:race --config ci/race.edn --port 25565 --rcon-port 25575 --rcon-pass S \\
-       [--record-dir data/race] [--commit sha] [--seed s] [--runner n]
+       [--record-dir data/race] [--commit sha] [--seed s] [--runner n] [--server k]
+
+   --server names which of a runner's servers this race is on, when a runner carries more than
+   one (:race/servers): each server is its own world, seed and race process, and its facts say
+   which (:milestone/server, :sample/server). A runner stays the machine.
 
    docs/hickey.md, Conveyance: each bot is its own atom and loop (main/run-bot!, the same life a
    lone bot lives), and bots share nothing but one bounded channel, the claims of landing cells,
@@ -115,6 +119,7 @@
                         (/ (* 1000.0 (- (:time/tick w 0) t0)) (max 1 dt-ms))))
                     playing)]
     {:sample/runner (:runner race)
+     :sample/server (:server race)
      :sample/at now
      :sample/joined (count (filter (comp :player/pos val) worlds))
      :sample/landed (count (filter (comp :plan/go-at val) worlds))
@@ -134,14 +139,16 @@
   (remove (set (:plan/reached before)) (:plan/reached world)))
 
 (defn milestone
-  "The fact that bot name reached goal in world: on which runner and seed, when (:time/now, ms),
-   and how long after its plan began (its landing)."
-  [{:keys [runner seed]} name world goal]
+  "The fact that bot name reached goal in world: on which runner (and which of its servers, when
+   it carries more than one) and seed, when (:time/now, ms), and how long after its plan began
+   (its landing)."
+  [{:keys [runner server seed]} name world goal]
   (cond-> {:milestone/runner runner
            :milestone/seed seed
            :milestone/bot name
            :milestone/goal goal
            :milestone/at (:time/now world)}
+    server (assoc :milestone/server server)
     (:plan/since world)
     (assoc :milestone/after-s (quot (- (:time/now world) (:plan/since world)) 1000))))
 
@@ -322,6 +329,7 @@
    record directory. Exits 0 when any bot reached the target."
   [& args]
   (let [{:keys [config host port rcon-port rcon-pass record-dir commit seed runner]
+         which :server ; which of the runner's servers (--server); server below is the one connected to
          :or {config "ci/race.edn" host "127.0.0.1" record-dir "data/race"}}
         (cli/options args)
         config (edn/read-string (slurp config))
@@ -372,21 +380,18 @@
               (range)
               racers)]
     (cli/log "race:" bots "bots to" until "seed" seed)
-    (let [stop-milestones (milestones! {:runner (some-> runner
-                                                        parse-long)
-                                        :seed seed}
-                                       racers
-                                       record-dir)]
+    (let [where {:runner (some-> runner
+                                 parse-long)
+                 :server (some-> which
+                                 parse-long)}
+          stop-milestones (milestones! (assoc where :seed seed) racers record-dir)]
       (fixture! server racers ch config t0)
       (board! server racers done)
-      (sampler! server
-                {:runner (some-> runner
-                                 parse-long)}
-                racers
-                record-dir
-                done)
+      (sampler! server where racers record-dir done)
       (let [results (mapv async/<!! runs)
-            s (assoc (summary results) :race/seed seed :race/commit commit :race/until until)]
+            s (cond->
+                (assoc (summary results) :race/seed seed :race/commit commit :race/until until)
+                (:server where) (assoc :race/server (:server where)))]
         (deliver done true)
         (stop-milestones)
         (println "RACE" (pr-str (dissoc s :race/runs)))

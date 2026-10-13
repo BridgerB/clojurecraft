@@ -39,23 +39,31 @@
   [ms]
   (subs (str (java.time.Instant/ofEpochMilli ms)) 11 19))
 
+(defn where
+  "Where a fact happened, as the board shows it: its runner, and which of the runner's servers
+   when the runner carries more than one (13/2)."
+  [runner server]
+  (str runner (when server (str "/" server))))
+
 (defn render
   "The comment for title and facts: the Nether arrivals, the first bot to each milestone in the
-   order they were first reached, each runner's furthest bot, the runners that ended, then every
-   fact by time."
+   order they were first reached, each server's furthest bot, the races that ended, then every
+   fact by time. A runner with one server shows as its number, with more as runner/server."
   [title facts]
   (let [ms (sort-by :milestone/at (filter :milestone/goal facts))
-        ends (sort-by :race/runner (filter :race/runner facts))
+        ends (sort-by (juxt :race/runner :race/server) (filter :race/runner facts))
         firsts (->> (group-by :milestone/goal ms)
                     vals
                     (map first)
                     (sort-by :milestone/at))
-        furthest (->> (group-by (juxt :milestone/runner :milestone/bot) ms)
-                      (map (fn [[[runner bot] fs]]
-                             {:runner runner :bot bot :n (count fs) :latest (last fs)}))
-                      (group-by :runner)
+        furthest (->> (group-by (juxt :milestone/runner :milestone/server :milestone/bot) ms)
+                      (map
+                       (fn [[[runner server bot] fs]]
+                         {:runner runner :server server :bot bot :n (count fs) :latest (last fs)}))
+                      (group-by (juxt :runner :server))
                       (map (fn [[_ xs]] (apply max-key :n xs)))
-                      (sort-by :runner))
+                      (sort-by (juxt :runner :server)))
+        at (fn [f] (where (:milestone/runner f) (:milestone/server f)))
         nether (filter #(= :nether (:milestone/goal %)) ms)
         row (fn [& cells] (str "| " (str/join " | " cells) " |"))]
     (str/join
@@ -65,7 +73,7 @@
                 (str "**Nether: "
                      (str/join ", "
                                (map #(str (:milestone/bot %)
-                                          " on runner " (:milestone/runner %)
+                                          " on runner " (at %)
                                           " at " (when-utc (:milestone/at %)))
                                     nether))
                      "**")
@@ -75,32 +83,37 @@
              (for [f firsts]
                (row (name (:milestone/goal f))
                     (:milestone/bot f)
-                    (:milestone/runner f)
+                    (at f)
                     (when-utc (:milestone/at f))
                     (str (:milestone/after-s f "?") " s")))
              ["" "**Furthest bot per runner**" "" (row "runner" "bot" "milestones" "last")
               (row "---" "---" "---" "---")]
-             (for [{:keys [runner bot n latest]} furthest]
-               (row runner bot n (name (:milestone/goal latest))))
+             (for [{:keys [runner server bot n latest]} furthest]
+               (row (where runner server) bot n (name (:milestone/goal latest))))
              [""
               (str "**Runners ended:** "
                    (count ends)
                    (when (seq ends)
                      (str " ("
-                          (str/join ", " (map #(str (:race/runner %) ": " (:race/ok %) " ok") ends))
+                          (str/join
+                           ", "
+                           (map
+                            #(str (where (:race/runner %) (:race/server %)) ": " (:race/ok %) " ok")
+                            ends))
                           ")"))) "" "<details><summary>facts</summary>" "" (str fence "edn")]
              (map pr-str (sort-by (fn [f] [(:milestone/at f Long/MAX_VALUE) (pr-str f)]) facts))
              [fence "</details>"]))))
 
 (defn line-fact
   "The fact a race log line carries, for a runner: a MILESTONE line's map, a RACE line's summary
-   as a runner's end (no time on it: published twice, once live and once when the job ends, it is
-   one fact), or nil for any other line."
+   as a race's end, with the server it ran on when the line says (no time on it: published twice,
+   once live and once when the job ends, it is one fact), or nil for any other line."
   [runner line]
   (cond (str/starts-with? line "MILESTONE ") (edn/read-string (subs line 10))
         (str/starts-with? line "RACE ")
         (let [s (edn/read-string (subs line 5))]
-          {:race/runner runner :race/ok (:race/ok s) :race/reasons (:race/reasons s)})
+          (cond-> {:race/runner runner :race/ok (:race/ok s) :race/reasons (:race/reasons s)}
+            (:race/server s) (assoc :race/server (:race/server s))))
         :else nil))
 
 ;;;; I/O: the GitHub API ;;;;
