@@ -59,7 +59,9 @@ src/clojurecraft/model.clj    the information model: every attribute, its meanin
 src/clojurecraft/spec.clj     specs for attributes, events, effects, intents, packets; fdefs on the reducers
 src/clojurecraft/record.clj   the recording: a channel tap, reading it back, replay and verify
 src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server, print RESULT
-src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs
+src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs; holds a whole world of columns
+src/clojurecraft/capture.clj  real worlds for the model: a real server's chunk columns round each landing, one world file a landing
+src/clojurecraft/simrace.clj  the sim race: the whole bot in captured worlds against the model, every core, failures by signature
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin
 src/clojurecraft/claims.clj   landing cells as values: the pure claims reducer (first come first served) and the spiral of cells
 src/clojurecraft/race.clj     the race: N bots (main/run-bot!, each its own atom and loop) on one server, one claims channel, the board

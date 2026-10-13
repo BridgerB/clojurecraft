@@ -149,13 +149,14 @@
    :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {slot item} (a slot is a named place,
    [:hotbar 0] as inventory/slot reads it, or a window-0 slot number), :lag-ticks,
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
-   from the world spawn), :seed (where the loot rolls start, 0 when absent), :kill-at ms (the
+   from the world spawn), :seed (where the loot rolls start, 0 when absent), :tick-seed (where
+   a run's tick randomness starts; 0.5 every tick when absent), :kill-at ms (the
    player dies then, a fault as an input: a death mid-task), :dimension (the dimension the
    player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
    there) and :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
    and where the player arrives)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks inventory
-           lag-ticks respawn seed kill-at dimension nether]
+           lag-ticks respawn seed tick-seed kill-at dimension nether]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -188,6 +189,7 @@
      :sim/next-keep-alive keep-alive-every
      :sim/keep-alives-pending #{}}
     decoded (assoc :sim/decoded decoded)
+    tick-seed (assoc :sim/tick-seed tick-seed)
     view-distance (assoc :sim/view-distance view-distance)
     kill-at (assoc :sim/kill-at kill-at)
     dimension (assoc :sim/dimension dimension)
@@ -1356,11 +1358,19 @@
   [world]
   (mapv :effect/packet (filter #(= :send (:effect/kind %)) (:bot/effects world))))
 
+(defn tick-rand
+  "[r' x]: the next state of a tick seed r and its roll x in [0, 1), by the same pure step as
+   the loot's rolls (roll)."
+  [r]
+  (let [[{r' :sim/rng} x] (roll {:sim/rng r})] [r' x]))
+
 (defn run
   "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a time, until (stop?
    world) or max-ms. Sends go (default {:event/kind :go}) once the bot is loaded. Returns
    [world sim]. :sim/lag-ticks in sim0 delays every server→client packet by that many ticks,
-   in order: a slow network as an input."
+   in order: a slow network as an input. Each tick's :event/rand is 0.5, or, with
+   :sim/tick-seed in sim0, the next of a pure generator started there (tick-rand), so runs of
+   one world with different seeds are different runs, each the same every time."
   [bot-step world0 sim0 stop? max-ms & [go]]
   (let [w (bot-step world0 {:event/kind :start})
         lag (* physics/tick-ms (:sim/lag-ticks sim0 0))]
@@ -1369,7 +1379,8 @@
            pending (sends w)
            t 0
            went? false
-           inflight []]
+           inflight []
+           r (:sim/tick-seed sim0)]
       (let [sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim pending)
             sim (step sim {:sim/kind :tick :sim/now t})
             [sim fresh] (drain sim)
@@ -1377,14 +1388,15 @@
             inbound (map second (take-while #(<= (first %) t) inflight))
             inflight (vec (drop-while #(<= (first %) t) inflight))
             world (reduce #(bot-step %1 {:event/kind :packet :event/packet %2}) world inbound)
-            world (bot-step world {:event/kind :tick :event/now t :event/rand 0.5})
+            [r rand] (if r (tick-rand r) [nil 0.5])
+            world (bot-step world {:event/kind :tick :event/now t :event/rand rand})
             go? (and (not went?) (:player/loaded? world))
             world (if go? (bot-step world (or go {:event/kind :go})) world)
             out (sends world)
             world (assoc world :bot/effects [])]
         (if (or (stop? world) (> t max-ms))
           [world (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out)] ; deliver the last tick's packets
-          (recur world sim out (+ t physics/tick-ms) (or went? go?) inflight))))))
+          (recur world sim out (+ t physics/tick-ms) (or went? go?) inflight r))))))
 
 ;;;; I/O: the model behind a channel pair, on a thread of its own ;;;;
 

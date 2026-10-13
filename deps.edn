@@ -1,4 +1,5 @@
 {:aliases {:brain {:extra-paths ["dev"] :main-opts ["-m" "clojurecraft.brain"]}
+           :capture {:main-opts ["-m" "clojurecraft.capture"]}
            :datagen {:extra-deps {org.clojure/data.json {:mvn/version "2.5.2"}}
                      :extra-paths ["dev"]
                      :main-opts ["-m" "clojurecraft.datagen"]}
@@ -21,6 +22,7 @@
            :rcon {:main-opts ["-m" "clojurecraft.rcon"]}
            :replay {:main-opts ["-m" "clojurecraft.replay"]}
            :run {:main-opts ["-m" "clojurecraft.main"]}
+           :simrace {:main-opts ["-m" "clojurecraft.simrace"]}
            :splint {:extra-deps {io.github.noahtheduke/splint {:mvn/version "1.25.0"}}
                     :main-opts ["-m" "noahtheduke.splint"]}
            :test {:extra-deps {eftest/eftest {:mvn/version "0.6.0"}
