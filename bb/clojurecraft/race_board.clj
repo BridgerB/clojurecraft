@@ -18,6 +18,8 @@
             [clojure.string :as str]))
 
 (def tries 10)                          ; reads, merges and writes before a publish gives up
+(def batch-ms 10000)                    ; how often the follower publishes what has gathered
+(def last-rounds 30)                    ; batches tried for the last facts once the race's output ends
 (def fence "```")
 
 ;; ---------------------------------------------------------------- the comment as values
@@ -148,9 +150,34 @@
             (>= n tries) (do (binding [*out* *err*] (println "race-board: gave up on" new)) false)
             :else (do (Thread/sleep (long (+ 500 (rand-int 2500)))) (recur (inc n)))))))
 
+(defn follow!
+  "Publish every MILESTONE and RACE line on stdin to comment id, in batches: a reader collects
+   facts as they come and, every batch-ms, all those pending go in one read, merge and write. A
+   batch that loses to the other runners' writes stays pending for the next one, so a fact is
+   never dropped while the race runs; once stdin ends, the last pending facts get last-rounds
+   more batches. Twenty writers publishing one fact each read, merged and wrote so often that
+   they gave facts up (race 38395034172); one write a batch keeps the comment's traffic to a
+   few writes a minute a runner."
+  [id runner]
+  (let [pending (atom #{})
+        ended (promise)]
+    (future (doseq [line (line-seq (java.io.BufferedReader. *in*))
+                    :let [fact (line-fact runner line)]
+                    :when fact]
+              (swap! pending conj fact))
+            (deliver ended true))
+    (loop [after-end 0]
+      (Thread/sleep (long batch-ms))
+      (let [batch @pending]
+        (when (and (seq batch) (publish! id batch)) (swap! pending #(reduce disj % batch)))
+        (cond (not (realized? ended)) (recur 0)
+              (and (seq @pending) (< after-end last-rounds)) (recur (inc after-end))
+              (seq @pending) (binding [*out* *err*] (println "race-board: gave up on" @pending))
+              :else nil)))))
+
 (defn -main
   "create <title>: open the race's comment on the race branch's pull request and print its id.
-   follow <id> <runner>: publish every MILESTONE and RACE line on stdin as it comes."
+   follow <id> <runner>: publish every MILESTONE and RACE line on stdin, in batches (follow!)."
   [& [cmd a b]]
   (case cmd
     "create"
@@ -162,8 +189,4 @@
       (println (:id (gh! (str "repos/" (repo) "/issues/" pr "/comments")
                          "-f"
                          (str "body=" (render a #{}))))))
-    "follow"
-    (doseq [line (line-seq (java.io.BufferedReader. *in*))
-            :let [fact (line-fact (parse-long b) line)]
-            :when fact]
-      (publish! a #{fact}))))
+    "follow" (follow! a (parse-long b))))

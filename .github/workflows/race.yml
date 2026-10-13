@@ -155,12 +155,13 @@ jobs:
           races=""
           for k in $(seq 1 "$SERVERS"); do mkdir -p "data/race/s$k"; touch "data/race/s$k/race.log"; done
           tail -n +1 -F data/race/s*/race.log 2>/dev/null | grep --line-buffered -E '^(BOARD|MILESTONE|RACE) ' &
+          if [ -n "${{ needs.plan.outputs.comment }}" ]; then
+            # one follower a runner, for all its servers, publishing in batches (race-board follow!)
+            tail -n +1 -F data/race/s*/race.log 2>/dev/null | grep --line-buffered -E '^(MILESTONE|RACE) ' \
+              | bb race-board follow ${{ needs.plan.outputs.comment }} ${{ matrix.runner }} &
+          fi
           for k in $(seq 1 "$SERVERS"); do
             dir="data/race/s$k"
-            if [ -n "${{ needs.plan.outputs.comment }}" ]; then
-              tail -n +1 -F "$dir/race.log" 2>/dev/null | grep --line-buffered -E '^(MILESTONE|RACE) ' \
-                | bb race-board follow ${{ needs.plan.outputs.comment }} ${{ matrix.runner }} &
-            fi
             server=""
             if [ "$SERVERS" -gt 1 ]; then server="--server $k"; fi
             # shellcheck disable=SC2086 # $server is two words or none
@@ -173,7 +174,10 @@ jobs:
             races="$races $!"
           done
           # shellcheck disable=SC2086 # one pid per word
-          wait $races   # the races alone: the followers above never end on their own
+          wait $races || true   # the races alone: the followers above never end on their own. Bots
+                                # failing is what the report's issues are for; the step is red
+                                # only when the race itself could not run
+          sleep 15              # one more of the follower's batches (10 s) before the step ends
       - name: Summary
         if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
         env:
