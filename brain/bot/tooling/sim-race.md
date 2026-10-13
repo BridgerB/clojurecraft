@@ -13,6 +13,8 @@ sourceRefs:
   - src/clojurecraft/capture.clj#defn chunk-tap
   - src/clojurecraft/simrace.clj#defn run
   - src/clojurecraft/failure.clj#defn signature
+  - src/clojurecraft/failure.clj#defn mark
+  - test/clojurecraft/simrace_test.clj#a-failure-the-server-caused-is-marked-not-the-bots
   - src/clojurecraft/simrace.clj#defn shard
   - src/clojurecraft/simrace.clj#defn jobs
   - bb/clojurecraft/failures.clj#defn report!
@@ -48,7 +50,12 @@ A real server carries about 25 bots on its one tick thread (capacity runs 383338
 `simrace.yml` runs on every push to the race branch, beside `race.yml`, and both restart with the new code: `ci/simrace.edn` gives `:simrace/runners` (10) runners, the sets (R1-R4), the target, the simulated minutes a run may take and the wall budget a runner plays (300 minutes). `world.yml` builds each set's server world once; `simworld.yml` captures each set's worlds once from it (`clojure -M:capture`, radius 12: 25x25 columns a landing) and caches them under a key of the world's files and `capture.clj`; each sim runner restores every set and plays its share of the 192 worlds (`--runner k --runners n`, `shard`), each world with seed after seed (`jobs`), on every core, until the budget is spent. Its runs are an artifact (`runs.edn`).
 
 ## Failures become issues
-Every failed run carries `:run/signature` (`failure/signature`: the target it was on, why it stopped, the last intent's kind); the real race's RESULT lines carry it too. A report job after each race (`simrace.yml` and `race.yml`) runs `bb failures report <runs> <title>` (`bb/clojurecraft/failures.clj`): the failed runs grouped by signature, the most frequent first; one open issue labelled `bot-failure` per signature, found again by a marker in its body (`<!-- signature [...] -->`); each report adds one section to that issue's body (how many runs, how many landings, up to five reproductions: the sim race's `--world f --seed s --seeds 1` at the commit, or the real bot's recording), and opens at most ten new issues.
+Every failed run is marked (`failure/mark`): `:run/signature` (`failure/signature`: [the target it was on, why it stopped]; one bug met in several intents is one signature, the intents listed inside its issue) and `:run/infra?` (the server closed or disconnected it: not the bot's play); the real race's RESULT lines carry both too. A report job after each race (`simrace.yml` and `race.yml`) fetches the newest reporter from the branch head and runs `bb failures report <runs> <title>` (`bb/clojurecraft/failures.clj`):
+- failed runs grouped by signature, the most frequent first; infrastructure stops and one-offs (fewer than `min-runs`, 3) are counted in the output, never filed;
+- one issue labelled `bot-failure` per signature, found again by a marker in its body (`<!-- signature [...] -->`), open or closed: a closed one whose signature comes back is reopened and its section says regressed;
+- the issues are read again right before one is opened, so two reports finishing together do not open the same one twice;
+- each report adds one section to the issue's body (how many runs, sim or real, the last intents, how many landings, up to five reproductions: the sim race's `--world f --seed s --seeds 1` at the commit, or the real bot's recording), and labels it `sim`, `real` or both: a failure only the model produces may be the model's, not the bot's;
+- at most ten new issues a report.
 
 ## First result
 The local 49-column world, two runs to the Nether, 16 s wall: both reached wood, kit, pickaxe, cobblestone, stone pickaxe and furnace in about 15 simulated minutes, then failed `[:ingots :no-pickaxe]`, the reason five of runner 13's bots stopped with in race 38340947798.

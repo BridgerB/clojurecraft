@@ -116,7 +116,7 @@
 (defn play!
   "One run, never throwing (a run that throws is a :crashed RESULT), its RESULT printed as a
    SIMRUN line and appended to out as it ends, with what reproduces it (:run/file, :run/seed,
-   :run/commit) and, when it failed, its :run/signature; returns it."
+   :run/commit) and, when it failed, what bb failures reads (failure/mark); returns it."
   [w seed until max-ms commit out]
   (let [r (try (run w seed until max-ms)
                (catch Exception e
@@ -126,8 +126,7 @@
                   :error (str e)
                   :run/world (select-keys w [:capture/set :capture/landing])
                   :run/seed seed}))
-        r (cond-> (assoc r :run/commit commit :run/file (:capture/file w))
-            (not (:ok r)) (assoc :run/signature (failure/signature r)))]
+        r (failure/mark (assoc r :run/commit commit :run/file (:capture/file w)))]
     (locking out
       (println "SIMRUN" (pr-str (dissoc r :plan :stats)))
       (spit out (str (pr-str r) "\n") :append true)

@@ -35,12 +35,19 @@
 (deftest a-run-is-the-same-run-every-time
   (is (= (simrace/run two-columns 7 "wood" 120000) (simrace/run two-columns 7 "wood" 120000))))
 
-(deftest a-failure-is-signed-by-its-target-its-reason-and-its-intent
+(deftest a-failure-is-signed-by-its-target-and-its-reason
+  ;; one bug met in two intents (the pickaxe gone while mining or tunnelling) is one signature
   (let [r {:until "nether"
            :reason :no-pickaxe
            :plan {:plan/reached #{:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace}
-                  :plan/last {:intent/kind :mine}}}]
+                  :plan/last {:intent/kind :mine}}}
+        tunnelling (assoc-in r [:plan :plan/last :intent/kind] :tunnel)]
     (is (= :ingots (failure/stage "nether" (get-in r [:plan :plan/reached]))))
-    (is (= [:ingots :no-pickaxe :mine] (failure/signature r)))
-    (is (= #:simrace{:runs 3 :ok 1 :failures [[[:ingots :no-pickaxe :mine] 2]]}
-           (simrace/tally [r r {:ok true}])))))
+    (is (= [:ingots :no-pickaxe] (failure/signature r) (failure/signature tunnelling)))
+    (is (= #:simrace{:runs 3 :ok 1 :failures [[[:ingots :no-pickaxe] 2]]}
+           (simrace/tally [r tunnelling {:ok true}])))))
+
+(deftest a-failure-the-server-caused-is-marked-not-the-bots
+  (is (:run/infra? (failure/mark {:ok false :until "nether" :reason :disconnected})))
+  (is (false? (:run/infra? (failure/mark {:ok false :until "nether" :reason :no-path}))))
+  (is (= {:ok true} (failure/mark {:ok true})) "a pass is unchanged"))

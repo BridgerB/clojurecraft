@@ -397,12 +397,7 @@
                               :world* world*
                               :on-result (fn [r]
                                            (deliver truth (truth! server name))
-                                           (println "RESULT"
-                                                    name
-                                                    (pr-str (cond-> r
-                                                              (not (:ok r))
-                                                              (assoc :run/signature
-                                                                     (failure/signature r))))) ; what bb failures groups by
+                                           (println "RESULT" name (pr-str (failure/mark r))) ; what bb failures groups by
                                            (flush))})]
                         {:name name :result r :truth @truth})
                       (catch Exception e
