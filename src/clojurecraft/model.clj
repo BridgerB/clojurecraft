@@ -143,7 +143,14 @@
    [:plan/blacklist "targets that failed, skipped when choosing" "from the :go event"]
    [:plan/trunk-failures
     "failed gather intents per trunk column [x z]; a column that failed twice is skipped when choosing a log"
-    "from the :go event"] [:plan/attempts "intent failures in a row" "from the :go event"]
+    "from the :go event"]
+   [:plan/attempts "intent failures in a row, a walk that failed :no-path aside (:plan/unwalkable)"
+    "from the :go event"]
+   [:plan/unwalkable "walks in a row that failed :no-path; max-unwalkable of them fail the plan"
+    "from the :go event"]
+   [:plan/boxed-at
+    "feet cells where a staircase died :boxed: no descent starts there again, no stair steps onto one"
+    "after a :boxed staircase"]
    [:plan/intents "intents started so far; the next one's :intent/id" "after the first intent"]
    [:plan/intent "the intent being executed" "while one runs"]
    [:plan/last "the last intent that ended, with its outcome" "after one ends"]

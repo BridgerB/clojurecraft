@@ -137,14 +137,15 @@
               (assoc w :plan/blacklist #{} :plan/attempts 0)
               {:intent/kind :stairs-down :intent/reason :boxed :intent/status :failed :intent/id 7})
         r (stone/mine-next died (row :mine-iron))]
-    (is (contains? (:plan/blacklist died) [5 32 5]) "the cell it died on")
+    (is (contains? (:plan/boxed-at died) [5 32 5]) "the cell it died on")
+    (is (not (contains? (:plan/blacklist died) [5 32 5])) "not a target blacklisted")
     (is (= [:walk :retreat] [(:intent/kind r) (:intent/for r)]) (pr-str r))
     (is (= {:intent/kind :stairs-down :intent/to-y 26} (stone/mine-next w (row :mine-iron)))
         "the first descent still starts")
     (let [stone (into {} (for [x (range 16) y (range 28 36) z (range 16)] [[x y z] 1]))
           hill (assoc w :world/chunks {[0 0] (world/column (assoc stone [5 32 5] 0 [5 33 5] 0))})]
       (is (stairs/safe? hill (stairs/stair-cells [5 32 5] [1 0])) "solid rock ahead is a stair")
-      (is (not (stairs/safe? (assoc hill :plan/blacklist #{[6 31 5]})
+      (is (not (stairs/safe? (assoc hill :plan/boxed-at #{[6 31 5]})
                              (stairs/stair-cells [5 32 5] [1 0])))
           "a later descent does not step back onto the cell"))))
 

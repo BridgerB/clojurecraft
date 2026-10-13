@@ -312,7 +312,7 @@
                    (or (not= :found (:path/status route))
                        (let [[reached pos vel] (drive w (:path/from route) (:path/waypoints route))]
                          (and (= (count reached) (count (:path/waypoints route)))
-                              (path/goal-done? goal (path/feet-cell (settle w pos vel))))))))))]
+                              (path/goal-done? w goal (path/feet-cell (settle w pos vel))))))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed])))))
 
 (deftest a-start-on-a-block-edge-searches-from-the-cell-the-box-rests-on

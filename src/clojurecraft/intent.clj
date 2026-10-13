@@ -198,10 +198,9 @@
 
 (defn goal-of
   "The path goal a walk is planned toward. A walk up to the open sky (:intent/for :opening) has
-   no cell it must stand in: path's :sky, which climbs the air already dug. The world rides on
-   that goal for the search only, and is not stored on the intent."
-  [world i]
-  (if (= :opening (:intent/for i)) {:goal/kind :sky :goal/world world} (walk-goal i)))
+   no cell it must stand in: path's :sky, which climbs the air already dug."
+  [i]
+  (if (= :opening (:intent/for i)) {:goal/kind :sky} (walk-goal i)))
 
 (defn arrived?
   "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
@@ -222,7 +221,7 @@
     (terrain/under-sky? world (feet world))
     (let [rise (- (physics/y-of target) (long (math/floor (physics/y-of (:player/pos world)))))]
       (and (<= d reach)
-           (cond pickup? (path/goal-done? (walk-goal i) (feet world))
+           (cond pickup? (path/goal-done? world (walk-goal i) (feet world))
                  (= :scoop for)
                  (and (<= -1 rise 0) (<= (path/octile (feet world) target) scoop-range))
                  (= :log for) (<= rise pickup-rise)
@@ -240,7 +239,7 @@
    walked at: three such walks in a row ended live runs among ore and water in caves."
   [world {:intent/keys [target] :as i}]
   (let [{:path/keys [status waypoints]}
-        (path/plan world (path/feet-cell (:player/pos world)) (goal-of world i))]
+        (path/plan world (path/feet-cell (:player/pos world)) (goal-of i))]
     (case status
       :found true
       (:partial :none) (boolean (and (seq waypoints) (not (terrain/chunk-loaded? world target))))
@@ -275,7 +274,7 @@
   [world]
   (let [feet (feet world)]
     (when-not (terrain/under-sky? world feet)
-      (let [r (path/plan world feet {:goal/kind :sky :goal/world world})]
+      (let [r (path/plan world feet {:goal/kind :sky})]
         (when (and (= :found (:path/status r)) (seq (:path/waypoints r)))
           {:intent/kind :walk :intent/target (last (:path/waypoints r)) :intent/for :opening})))))
 
@@ -283,7 +282,7 @@
   "The intent with a fresh route from the feet toward its walk-goal, counting the plan and
    noting how many chunks were loaded when it was made."
   [world {:intent/keys [replans] :or {replans 0} :as i}]
-  (let [r (path/plan world (path/feet-cell (:player/pos world)) (goal-of world i))]
+  (let [r (path/plan world (path/feet-cell (:player/pos world)) (goal-of i))]
     (assoc-intent world
                   :intent/waypoints (:path/waypoints r)
                   :intent/route (:path/status r)

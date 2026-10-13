@@ -191,12 +191,14 @@
 ;; ---------------------------------------------------------------- goals as data
 
 (defmulti goal-done?
-  "Is node where the goal wants the feet? Open on :goal/kind."
-  {:arglists '([goal node])}
-  (fn [goal _node] (:goal/kind goal)))
+  "Is node where the goal wants the feet, in world? Open on :goal/kind. The goal is data, never
+   the world: a goal that asks about the terrain (:sky) reads the world it is given."
+  {:arglists '([world goal node])}
+  (fn [_world goal _node] (:goal/kind goal)))
 
 (defmulti heuristic
-  "An admissible estimate of the cost from node to the goal. Open on :goal/kind."
+  "An estimate of the cost from node to the goal, admissible except where a kind says (:sky, where
+   any way out will do). Open on :goal/kind."
   {:arglists '([goal node])}
   (fn [goal _node] (:goal/kind goal)))
 
@@ -213,28 +215,27 @@
   (+ (octile a b) (abs (- ay by))))
 
 (defmethod goal-done? :near
-  [{:goal/keys [pos range]} node]
+  [_ {:goal/keys [pos range]} node]
   (<= (flat-distance node pos) (or range 3)))
 (defmethod heuristic :near
   [{:goal/keys [pos range]} node]
   (max 0.0 (- (flat-distance node pos) (or range 3))))
 
-(defmethod goal-done? :block [{:goal/keys [pos]} node] (= node pos))
+(defmethod goal-done? :block [_ {:goal/keys [pos]} node] (= node pos))
 (defmethod heuristic :block [{:goal/keys [pos]} node] (flat-distance node pos))
 
-(defmethod goal-done? :xz [{[px _ pz] :goal/pos} [x _ z]] (= [x z] [px pz]))
+(defmethod goal-done? :xz [_ {[px _ pz] :goal/pos} [x _ z]] (= [x z] [px pz]))
 (defmethod heuristic :xz [{:goal/keys [pos]} node] (octile node pos))
 
-(defmethod goal-done? :away [{:goal/keys [pos range]} node] (> (flat-distance node pos) range))
+(defmethod goal-done? :away [_ {:goal/keys [pos range]} node] (> (flat-distance node pos) range))
 (defmethod heuristic :away
   [{:goal/keys [pos range]} node]
   (max 0.0 (- range (flat-distance node pos))))
 
 (defmethod goal-done? :sky
-  ;; a standable cell the open sky is over. The world rides on the goal: goal-done? sees the node
-  ;; and not the world it was reached in
-  [{:goal/keys [world]} node]
-  (boolean (and world (terrain/under-sky? world node))))
+  ;; a standable cell the open sky is over
+  [world _ node]
+  (terrain/under-sky? world node))
 (defmethod heuristic :sky
   ;; Higher is closer to an opening, and weighted past what a jump costs, so the air already dug
   ;; is climbed before a mine is filled. Not admissible: any way out will do. Full run 4528031
@@ -253,7 +254,7 @@
 (defmethod goal-done? :pickup
   ;; where a block dug at pos drops within the pickup box: within range on the plane, with pos at
   ;; the feet's height or up to rise above it; or, with :goal/step-down?, in the floor beside them
-  [{:goal/keys [pos range rise step-down?]} [_ ny _ :as node]]
+  [_ {:goal/keys [pos range rise step-down?]} [_ ny _ :as node]]
   (or (and (<= (octile node pos) range) (<= ny (physics/y-of pos) (+ ny rise)))
       (boolean (and step-down? (step-down-node? pos node)))))
 (defmethod heuristic :pickup
@@ -316,7 +317,7 @@
             (let [[_ gn node :as entry] (first open)
                   open (disj open entry)]
               (cond (closed node) (recur open g parents closed best best-h expanded)
-                    (goal-done? goal node) (done :found parents node g)
+                    (goal-done? world goal node) (done :found parents node g)
                     :else
                     (let [closed (conj closed node)
                           hn (heuristic goal node)

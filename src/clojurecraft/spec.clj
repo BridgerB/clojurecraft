@@ -205,6 +205,8 @@
 (s/def :go/at ::vec3)
 (s/def :plan/blacklist (s/coll-of ::block-pos :kind set?))
 (s/def :plan/trunk-failures (s/map-of (s/tuple int? int?) pos-int?))
+(s/def :plan/boxed-at (s/coll-of ::block-pos :kind set?)) ; feet cells where a staircase died :boxed
+(s/def :plan/unwalkable nat-int?)
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :plan/chain? boolean?)
 (s/def :plan/reached (s/coll-of keyword? :kind set?))
@@ -257,7 +259,7 @@
            :player/loaded? :player/dimension :player/entity-id :player/inventory :player/controls
            :world/chunks :world/blocks :world/facts :world/entities :window/state-id :window/grid
            :window/cursor :window/open :player/held-slot :plan/intent :plan/status :plan/blacklist
-           :plan/trunk-failures :plan/chain? :plan/reached]))
+           :plan/trunk-failures :plan/chain? :plan/reached :plan/boxed-at :plan/unwalkable]))
 
 (s/fdef game/step
   :args
@@ -420,7 +422,7 @@
 (s/def :goal/rise nat-int?)
 (s/def :goal/step-down? boolean?)
 (s/def ::path-goal
-  ;; :sky carries the world and no :goal/pos: the mouth is wherever the open sky is reached
+  ;; :sky has no :goal/pos: the mouth is wherever the open sky is reached
   (s/and (s/keys :req [:goal/kind] :opt [:goal/pos :goal/range :goal/rise :goal/step-down?])
          #(or (= :sky (:goal/kind %)) (contains? % :goal/pos))))
 (s/def :intent/logs-before nat-int?)

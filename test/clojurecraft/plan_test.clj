@@ -490,7 +490,27 @@
            (:intent/reason (first (filter #(= :failed (:intention/event %)) (memory/intentions w)))
                            (:intention/reason (first (filter #(= :failed (:intention/event %))
                                                              (memory/intentions w))))))
-        "for :no-path")))
+        "for :no-path")
+    (is (= 1 (:plan/unwalkable w)) "it counts apart")))
+
+(deftest walks-that-never-arrive-still-end-the-plan
+  ;; a :no-path walk spends no attempt, so a search whose places keep changing would never fail;
+  ;; max-unwalkable of them in a row do, and anything that succeeds starts the count again
+  (let [no-path (fn [n]
+                  {:intent/kind :walk :intent/reason :no-path :intent/target [n 64 0] :intent/id n})
+        active (plan/begin (world-state [0.5 64.0 0.5]) {:go/goals [:wood]} plan/goals)
+        fail-n (fn [n] (reduce plan/fail-intent active (map no-path (range n))))
+        failed (fail-n plan/max-unwalkable)]
+    (is (= :active (:plan/status (fail-n (dec plan/max-unwalkable)))))
+    (is (= :failed (:plan/status failed)))
+    (is (= :no-path (:plan/reason failed)))
+    (is (zero? (:plan/attempts failed)) "none of them an attempt")
+    (is (zero? (:plan/unwalkable (plan/finish-intent (fail-n 5) {:intent/kind :dig :intent/id 99})))
+        "a success starts the count again")
+    (is (zero? (:plan/unwalkable (plan/fail-intent
+                                  (fail-n 1)
+                                  {:intent/kind :dig :intent/reason :target-gone :intent/id 2})))
+        "any other failure breaks the streak")))
 
 ;; ---------------------------------------------------------------- digging with tools
 
