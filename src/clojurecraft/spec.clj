@@ -546,8 +546,12 @@
 (s/def :sim/violations vector?)
 (s/def :sim/keep-alive-every pos-int?)
 (s/def :sim/lag-ticks nat-int?)
-(s/def :sim/column bytes?)
-(s/def :sim/chunk map?)
+(s/def ::column-key (s/tuple int? int?))
+(s/def :sim/columns (s/map-of ::column-key bytes?))   ; the world: each column as a server sent it
+(s/def :sim/decoded (s/map-of ::column-key map?))     ; the same columns decoded once, shared by every run
+(s/def :sim/view (s/coll-of ::column-key :kind set?)) ; the columns the client holds now
+(s/def :sim/view-at ::column-key)                     ; the column the player was streamed from
+(s/def :sim/view-distance pos-int?)
 (s/def :sim/spawn ::vec3)
 (s/def :sim/broken (s/coll-of ::block-pos :kind set?))
 (s/def :sim/items (s/map-of int? map?))
