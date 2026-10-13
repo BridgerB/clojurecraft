@@ -4,6 +4,8 @@
    and one signature is one issue however many runs hit it (bb failures)."
   (:require [clojurecraft.plan :as plan]))
 
+(set! *warn-on-reflection* true)
+
 (defn stage
   "The target a run was on when it stopped: the first of until's chain it had not reached."
   [until reached]
