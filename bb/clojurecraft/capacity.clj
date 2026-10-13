@@ -56,6 +56,12 @@
        (remove (comp empty? second))
        (sort-by first)))
 
+(defn overhead
+  "A JVM's resident memory outside its heap, MB, or nil when the sample lacks either (jstat does
+   not always answer a busy JVM)."
+  [{:keys [rss-mb heap-cap-mb]}]
+  (when (and rss-mb heap-cap-mb) (- rss-mb heap-cap-mb)))
+
 (defn judge
   "A runner at one load, from its settled samples: the worst of each measure and whether all are
    inside the limits."
@@ -81,12 +87,12 @@
      :server-overhead-mb (median (keep #(some-> %
                                                 :sys
                                                 :sys/server
-                                                ((fn [j] (- (:rss-mb j) (:heap-cap-mb j)))))
+                                                overhead)
                                        ss))
      :bot-overhead-mb (median (keep #(some-> %
                                              :sys
                                              :sys/bots
-                                             ((fn [j] (- (:rss-mb j) (:heap-cap-mb j)))))
+                                             overhead)
                                     ss))
      :cpu-busy-pct (median (keep (comp :sys/cpu-busy-pct :sys) ss))
      :milestones-per-bot-hour (when (and playing (pos? playing) (pos? minutes))
