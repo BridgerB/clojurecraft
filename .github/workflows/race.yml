@@ -182,8 +182,9 @@ jobs:
           for k in $(seq 1 "$SERVERS"); do
             log="data/race/s$k/race.log"
             if [ -n "${{ needs.plan.outputs.comment }}" ]; then
-              { grep -E '^(MILESTONE|RACE) ' "$log" || true
-                grep -q '^RACE ' "$log" || echo 'RACE #:race{:ok 0 :reasons {:no-race-line 1}}'
+              # the RACE line alone: the follower published every milestone live, and publishing
+              # them all again one at a time took a runner 90 minutes (race 38355274936)
+              { grep -E '^RACE ' "$log" || echo 'RACE #:race{:ok 0 :reasons {:no-race-line 1}}'
               } | bb race-board follow ${{ needs.plan.outputs.comment }} ${{ matrix.runner }} || true
             fi
             {
