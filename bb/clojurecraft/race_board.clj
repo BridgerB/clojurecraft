@@ -36,6 +36,40 @@
                    (take-while #(not= fence %)))]
     (into #{} (keep #(try (edn/read-string %) (catch Exception _ nil))) block)))
 
+(def rank
+  "A milestone's place in the run: its target row's :goal/priority (goals.edn), so the furthest
+   of two milestones is the one with the greater rank."
+  (into {}
+        (for [g (edn/read-string (slurp "resources/clojurecraft/goals.edn"))
+              :when (:goal/until g)]
+          [(:goal/id g) (:goal/priority g)])))
+
+(defn compact
+  "The facts the comment keeps, from any set of facts: every Nether arrival and every race's end,
+   the first fact of each milestone (the earliest), and each server's furthest (the greatest
+   rank, the earliest of equals). Each part merges in any order (a union, a least, a greatest),
+   so (compact (into a b)) is (compact (into (compact a) (compact b))) and writers need no lock;
+   and the comment stays a few dozen lines however many bots race. A race of 500 bots made
+   6,500 milestones, past the 65,536 characters a comment holds: every write after was refused
+   and the board stood still (race 38469907232). Every fact is still kept in each runner's
+   milestones.edn."
+  [facts]
+  (let [ms (filter :milestone/goal facts)
+        earliest (fn [fs] (first (sort-by (juxt :milestone/at pr-str) fs)))
+        furthest (fn [fs]
+                   (earliest (let [top (apply max (map #(rank (:milestone/goal %) -1) fs))]
+                               (filter #(= top (rank (:milestone/goal %) -1)) fs))))]
+    (into #{}
+          cat
+          [(filter :race/runner facts) (filter #(= :nether (:milestone/goal %)) ms)
+           (map earliest (vals (group-by :milestone/goal ms)))
+           (map furthest (vals (group-by (juxt :milestone/runner :milestone/server) ms)))])))
+
+(defn covered?
+  "Does held, a comment's facts, already say all that new would add (compact of both is held)?"
+  [held new]
+  (= (compact (into held new)) held))
+
 (defn when-utc
   "A fact's time as HH:MM:SS UTC."
   [ms]
@@ -58,12 +92,13 @@
                     vals
                     (map first)
                     (sort-by :milestone/at))
-        furthest (->> (group-by (juxt :milestone/runner :milestone/server :milestone/bot) ms)
+        furthest (->> (group-by (juxt :milestone/runner :milestone/server) ms)
                       (map
-                       (fn [[[runner server bot] fs]]
-                         {:runner runner :server server :bot bot :n (count fs) :latest (last fs)}))
-                      (group-by (juxt :runner :server))
-                      (map (fn [[_ xs]] (apply max-key :n xs)))
+                       (fn [[[runner server] fs]]
+                         (let [top (apply max-key
+                                          #(rank (:milestone/goal %) -1)
+                                          (reverse (sort-by :milestone/at fs)))]
+                           {:runner runner :server server :bot (:milestone/bot top) :latest top})))
                       (sort-by (juxt :runner :server)))
         at (fn [f] (where (:milestone/runner f) (:milestone/server f)))
         nether (filter #(= :nether (:milestone/goal %)) ms)
@@ -88,10 +123,13 @@
                     (at f)
                     (when-utc (:milestone/at f))
                     (str (:milestone/after-s f "?") " s")))
-             ["" "**Furthest bot per runner**" "" (row "runner" "bot" "milestones" "last")
+             ["" "**Furthest bot per runner**" "" (row "runner" "bot" "furthest" "at (UTC)")
               (row "---" "---" "---" "---")]
-             (for [{:keys [runner server bot n latest]} furthest]
-               (row (where runner server) bot n (name (:milestone/goal latest))))
+             (for [{:keys [runner server bot latest]} furthest]
+               (row (where runner server)
+                    bot
+                    (name (:milestone/goal latest))
+                    (when-utc (:milestone/at latest))))
              [""
               (str "**Runners ended:** "
                    (count ends)
@@ -137,16 +175,16 @@
   (:body (gh! (str "repos/" (repo) "/issues/comments/" id))))
 
 (defn publish!
-  "Add new facts to comment id: read, merge, write, read again; start over until they are in the
-   comment or tries run out. Returns whether they are in."
+  "Add new facts to comment id: read, merge (compact), write, read again; start over until the
+   comment covers them or tries run out. Returns whether it does."
   [id new]
   (loop [n 0]
     (let [body (body! id)
-          merged (into (facts body) new)]
+          merged (compact (into (facts body) new))]
       (gh! "-X"
            "PATCH" (str "repos/" (repo) "/issues/comments/" id)
            "-f" (str "body=" (render (title body) merged)))
-      (cond (every? (facts (body! id)) new) true
+      (cond (covered? (facts (body! id)) new) true
             (>= n tries) (do (binding [*out* *err*] (println "race-board: gave up on" new)) false)
             :else (do (Thread/sleep (long (+ 500 (rand-int 2500)))) (recur (inc n)))))))
 
