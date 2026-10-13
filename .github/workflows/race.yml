@@ -30,7 +30,7 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
           sudo bash /tmp/bb.sh --version 1.13.225
           bb -e '(let [r (clojure.edn/read-string (slurp "ci/race.edn"))]
-                   (println (str "runners=" (cheshire.core/generate-string (vec (range 1 (inc (:race/runners r))))))))
+                   (println (str "runners=" (cheshire.core/generate-string (vec (range 1 (inc (:race/runners r)))))))
                    (println (str "bots=" (:race/bots r)))
                    (println (str "server-heap=" (:race/server-heap-mb r)))
                    (println (str "bot-heap=" (:race/bot-heap-mb r))))' >> "$GITHUB_OUTPUT"
