@@ -131,6 +131,14 @@
 (def pickup-delay 500)                ; ms before a dropped item can be picked up (vanilla: 10 ticks)
 (def keep-alive-every 15000)          ; ms between the model's keep-alives (vanilla: 15 s)
 (def max-stack 64)                    ; items per slot
+
+(defn stack-size
+  "How many of item one slot holds: one for a tool (blocks/tool: the game's tools never stack,
+   each wears on its own), max-stack for anything else. With every item stacking to 64, a spare
+   pickaxe went into the slot of the one in use, and the dig that broke one emptied the slot of
+   both (issue #36: the sim's runs lost their spare at the moment it was needed)."
+  [item]
+  (if (blocks/tool item) 1 max-stack))
 (def max-air 300)                     ; a full breath, as the game's
 (def drown-every 20)                  ; ticks between drowning hurts at zero air
 (def drown-damage 2.0)                ; health taken by each
@@ -451,7 +459,7 @@
                            (if (zero? n)
                              (reduced [view n])
                              (let [have (:count (get view s) 0)
-                                   k (min n (- max-stack have))]
+                                   k (min n (- (stack-size item) have))]
                                [(assoc view s {:item item :count (+ have k)}) (- n k)])))
                          [view count]
                          order)]
@@ -501,7 +509,7 @@
   [view cursor slot]
   (let [at (get view slot)]
     (if (and at (= (:item at) (:item cursor)))
-      (let [k (min (:count at) (- max-stack (:count cursor)))
+      (let [k (min (:count at) (- (stack-size (:item cursor)) (:count cursor)))
             left (- (:count at) k)]
         {:view (if (pos? left) (assoc view slot (assoc at :count left)) (dissoc view slot))
          :cursor (update cursor :count + k)})
@@ -533,7 +541,8 @@
           (= mode (inventory/click-modes :quick-move))
           {:view (craft-all view layout) :cursor cursor}
           (or (nil? cursor)
-              (and (= (:item cursor) (:item out)) (<= (+ (:count cursor) (:count out)) max-stack)))
+              (and (= (:item cursor) (:item out))
+                   (<= (+ (:count cursor) (:count out)) (stack-size (:item out)))))
           {:view (craft-once view layout) :cursor (update out :count + (:count cursor 0))}
           :else {:view view :cursor cursor})))
 
@@ -571,7 +580,7 @@
           (not (accepts? layout slot cursor)) (take-onto view cursor slot)
           (nil? at) {:view (assoc view slot cursor) :cursor nil}
           (= (:item at) (:item cursor))
-          (let [k (min (:count cursor) (- max-stack (:count at)))
+          (let [k (min (:count cursor) (- (stack-size (:item at)) (:count at)))
                 left (- (:count cursor) k)]
             {:view (assoc view slot (update at :count + k))
              :cursor (when (pos? left) (assoc cursor :count left))})
@@ -589,7 +598,7 @@
              :view (if (pos? rest) (assoc view slot (assoc at :count rest)) (dissoc view slot))})
           (nil? cursor) {:view view :cursor nil}
           (not (accepts? layout slot cursor)) (take-onto view cursor slot)
-          (or (nil? at) (and (= (:item at) (:item cursor)) (< (:count at) max-stack)))
+          (or (nil? at) (and (= (:item at) (:item cursor)) (< (:count at) (stack-size (:item at)))))
           {:view (assoc view slot {:item (:item cursor) :count (inc (:count at 0))})
            :cursor (when (> (:count cursor) 1) (update cursor :count dec))}
           :else {:view view :cursor cursor})))

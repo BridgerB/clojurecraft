@@ -14,7 +14,8 @@ concurrency:
 
 jobs:
   full:
-    if: github.head_ref != 'race' && github.head_ref != 'race-capacity'   # the race requests race on every runner instead
+    # the race requests race on every runner instead; a fix request has issue.yml alone
+    if: github.head_ref != 'race' && github.head_ref != 'race-capacity' && !startsWith(github.head_ref, 'fix/')
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     steps:

@@ -10,6 +10,8 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#defmulti click-view
   - src/clojurecraft/sim.clj#defn click-kind
+  - src/clojurecraft/sim.clj#defn stack-size
+  - test/clojurecraft/sim_test.clj#tools-never-stack-and-wear-one-at-a-time
   - src/clojurecraft/inventory.clj#def layouts
   - src/clojurecraft/sim.clj#defn result-of
   - src/clojurecraft/sim.clj#defn insert
@@ -48,7 +50,7 @@ The sim stores the player's window-0 slots in `:sim/inv` (1-44 meaningful), the 
 
 ## Gotchas
 - `insert` fills same-item stacks then empty slots in store order, so a picked-up log lands in main slot 9 first rather than the hotbar as vanilla prefers. Bot code reads any slot.
-- `max-stack` is 64 for every item; tools and unstackables are not modelled.
+- `stack-size` is 1 for a tool (`blocks/tool`: the game's tools never stack, each wears on its own) and `max-stack` (64) for anything else; other unstackables (buckets, flint and steel) are not modelled. With every item stacking, a spare pickaxe joined the one in use and the dig that broke one emptied the slot of both (issue #36, `tools-never-stack-and-wear-one-at-a-time`).
 - Closing the table window returns its grid items to the inventory (as vanilla does) and syncs window 0; a furnace keeps its slots. Opening a container while another is open closes the old one first, with a `container-close` to the client (`open-window`).
 
 ## See also

@@ -1,0 +1,88 @@
+name: issue
+
+# A fix's one check: a pull request from fix/<issue>-<what> plays the runs the bot-failure issue
+# lists as its reproductions (the race's captured worlds, the same world and seed) with the fix,
+# and passes when every one was played and none ends with the issue's signature (bb issue-check).
+# test, gym and full skip fix branches: this is the only check a fix gets.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: issue-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    if: startsWith(github.head_ref, 'fix/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - name: Which issue
+        id: issue
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          n=$(echo "$HEAD_REF" | sed -E 's|^fix/([0-9]+).*|\1|')
+          case "$n" in ''|*[!0-9]*) echo "::error::branch $HEAD_REF names no issue number"; exit 1;; esac
+          echo "issue $n"
+          echo "n=$n" >> "$GITHUB_OUTPUT"
+      # the race's captured worlds (simworld.yml), the key simrace.yml restores
+      - name: R1's captured worlds
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R1
+          key: simworld-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+      - name: R2's captured worlds
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R2
+          key: simworld-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+      - name: R3's captured worlds
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R3
+          key: simworld-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+      - name: R4's captured worlds
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R4
+          key: simworld-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI and Babashka
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: clj-${{ hashFiles('deps.edn') }}
+      - name: The issue's reproductions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bb issue-check plan ${{ steps.issue.outputs.n }} data/check
+      - name: Play them with the fix
+        run: |
+          mkdir -p data/played
+          clojure -M:simrace --runs data/check/runs.edn --until nether --commit "$GITHUB_SHA" --out data/played \
+            > data/played/simrace.log 2>&1 || true
+          grep -E '^SIMRACE ' data/played/simrace.log || tail -n 60 data/played/simrace.log
+      - name: Verdict
+        run: |
+          set -o pipefail
+          bb issue-check verdict data/check data/played/runs.edn | tee data/check/verdict.txt
+          { echo "### issue #${{ steps.issue.outputs.n }}"; echo '```'; cat data/check/verdict.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
