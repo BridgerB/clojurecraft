@@ -72,6 +72,7 @@ jobs:
       HEAP_MB: ${{ needs.plan.outputs.server-heap }}
       DIFFICULTY: peaceful
       MAX_TICK_TIME: '-1'                # no watchdog: a slow locate biome stalls the race, it does not end it
+      MAX_PLAYERS: '40'                  # vanilla seats 20; the race seats its bots with room to reconnect
       LEVEL_SEED: race-${{ github.run_id }}-${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
