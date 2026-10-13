@@ -110,19 +110,36 @@
             (or (intent/opening world)
                 {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}))))))
 
+(defn near-walk
+  "A walk to the nearest standing trunk in the near band (search-radius, no more than 12 above or
+   below the eye: memory/nearest-log) that a route reaches, of the far-candidates nearest, or nil.
+   Asked before it is chosen, as the mine asks of its ore (intent/routable?): a trunk no route
+   reaches is passed over, not walked at. It was walked at: in sim race 38395033917 (world R3/24,
+   108 runs) the bot stood at the bottom of two staircases that met, the second having dug out the
+   riser of the first, with no way up at all; every walk to a trunk in the band failed :no-path
+   the tick it started, blacklisted that trunk, and the next was tried, twelve times, until the
+   plan failed (issue #75). With none, climb-out has the far trunks and the way up."
+  [world]
+  (let [eye (game/eye world)
+        skip (skipped world)]
+    (first (reduce
+            (fn [[_ tried] _]
+              (if-let [bottom (memory/nearest-log world
+                                                  eye
+                                                  search-radius
+                                                  (fn [p] (or (skip p) (contains? tried p)))
+                                                  standing-trunk?)]
+                (let [i (log-walk world bottom)]
+                  (if (intent/routable? world i) (reduced [i tried]) [nil (conj tried bottom)]))
+                (reduced [nil tried])))
+            [nil #{}]
+            (range far-candidates)))))
+
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
-   trunk. Any goal that needs a log uses this. With none in the near band, climb out to the
-   trees instead of waiting :no-log."
+   trunk a route reaches (near-walk). Any goal that needs a log uses this. With none in the near
+   band a route reaches, climb out to the trees instead of waiting :no-log."
   [world]
-  (or (continue-gather world)
-      (when-let [bottom (memory/nearest-log world
-                                            (game/eye world)
-                                            search-radius
-                                            (skipped world)
-                                            standing-trunk?)]
-        (log-walk world bottom))
-      (climb-out world)
-      {:plan/wait :no-log}))
+  (or (continue-gather world) (near-walk world) (climb-out world) {:plan/wait :no-log}))
 
 
