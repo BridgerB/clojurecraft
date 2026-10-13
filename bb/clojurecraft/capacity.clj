@@ -236,6 +236,12 @@
   (let [r (apply p/shell {:out :string :err :string :continue true} cmd)]
     (when (zero? (:exit r)) (:out r))))
 
+(defn proc
+  "A /proc file's text, read by cat: procfs files report a size of 0, and slurp's bulk copy of one
+   fails with Invalid argument (the first capacity run lost every machine sample to it)."
+  [path]
+  (or (sh "cat" path) ""))
+
 (defn pid
   "The pid of the process whose command line matches pattern, or nil."
   [pattern]
@@ -247,13 +253,13 @@
 (defn proc-ticks
   "utime + stime of pid, in clock ticks."
   [pid]
-  (let [f (str/split (slurp (str "/proc/" pid "/stat")) #"\s+")]
+  (let [f (str/split (proc (str "/proc/" pid "/stat")) #"\s+")]
     (+ (parse-long (nth f 13)) (parse-long (nth f 14)))))
 
 (defn rss-mb
   "Resident memory of pid, MB."
   [pid]
-  (some->> (re-find #"VmRSS:\s+(\d+)" (slurp (str "/proc/" pid "/status")))
+  (some->> (re-find #"VmRSS:\s+(\d+)" (proc (str "/proc/" pid "/status")))
            second
            parse-long
            (#(quot % 1024))))
@@ -272,48 +278,57 @@
 (defn meminfo
   "{field kB} from /proc/meminfo."
   []
-  (into {} (for [[_ k v] (re-seq #"(\w+):\s+(\d+)" (slurp "/proc/meminfo"))] [k (parse-long v)])))
+  (into {} (for [[_ k v] (re-seq #"(\w+):\s+(\d+)" (proc "/proc/meminfo"))] [k (parse-long v)])))
 
 (defn cpu-total
   "[busy total] jiffies of the whole machine."
   []
-  (let [[_ & xs] (str/split (first (str/split-lines (slurp "/proc/stat"))) #"\s+")
+  (let [[_ & xs] (str/split (first (str/split-lines (proc "/proc/stat"))) #"\s+")
         v (mapv parse-long xs)]
     [(- (reduce + v) (nth v 3) (nth v 4)) (reduce + v)]))
 
 (defn sample!
-  "Sample the machine every every-ms until killed: one sys fact per line in out."
+  "Sample the machine every every-ms until killed: one sys fact per line in out. A sample that
+   throws is logged on stderr and the next is taken: an observer that dies measures nothing."
   [out runner]
   (loop [prev nil]
-    (let [now (System/currentTimeMillis)
-          server (pid "server-26.1.2.jar")
-          bots (pid "clojurecraft.race")
-          cpu (cpu-total)
-          ticks (into {}
-                      (for [[k id] {:server server :bots bots}
-                            :when id]
-                        [k (try (proc-ticks id) (catch Exception _ nil))]))
-          jvm (fn [k id]
-                (when id
-                  (try (merge {:rss-mb (rss-mb id)}
-                              (heap id)
-                              (when-let [[t0 at0] (get-in prev [:ticks k])]
-                                {:cpu-pct (/ (* 100.0 (- (get ticks k) t0)) (/ (- now at0) 10.0))}))
-                       (catch Exception _ nil))))
-          mem (meminfo)
-          fact {:sys/runner runner
-                :sys/at now
-                :sys/mem-total-mb (quot (get mem "MemTotal" 0) 1024)
-                :sys/mem-available-mb (quot (get mem "MemAvailable" 0) 1024)
-                :sys/swap-used-mb (quot (- (get mem "SwapTotal" 0) (get mem "SwapFree" 0)) 1024)
-                :sys/load1 (parse-double (first (str/split (slurp "/proc/loadavg") #"\s+")))
-                :sys/cpu-busy-pct (when-let [[b0 t0] (:cpu prev)]
-                                    (/ (* 100.0 (- (first cpu) b0)) (max 1 (- (second cpu) t0))))
-                :sys/server (jvm :server server)
-                :sys/bots (jvm :bots bots)}]
-      (spit out (str (pr-str fact) "\n") :append true)
+    (let [next
+          (try
+            (let [now (System/currentTimeMillis)
+                  server (pid "server-26.1.2.jar")
+                  bots (pid "clojurecraft.race")
+                  cpu (cpu-total)
+                  ticks (into {}
+                              (for [[k id] {:server server :bots bots}
+                                    :when id]
+                                [k (try (proc-ticks id) (catch Exception _ nil))]))
+                  jvm (fn [k id]
+                        (when id
+                          (try (merge {:rss-mb (rss-mb id)}
+                                      (heap id)
+                                      (when-let [[t0 at0] (get-in prev [:ticks k])]
+                                        {:cpu-pct (/ (* 100.0 (- (get ticks k) t0))
+                                                     (/ (- now at0) 10.0))}))
+                               (catch Exception _ nil))))
+                  mem (meminfo)
+                  fact
+                  {:sys/runner runner
+                   :sys/at now
+                   :sys/mem-total-mb (quot (get mem "MemTotal" 0) 1024)
+                   :sys/mem-available-mb (quot (get mem "MemAvailable" 0) 1024)
+                   :sys/swap-used-mb (quot (- (get mem "SwapTotal" 0) (get mem "SwapFree" 0)) 1024)
+                   :sys/load1 (parse-double (first (str/split (proc "/proc/loadavg") #"\s+")))
+                   :sys/cpu-busy-pct (when-let [[b0 t0] (:cpu prev)]
+                                       (/ (* 100.0 (- (first cpu) b0)) (max 1 (- (second cpu) t0))))
+                   :sys/server (jvm :server server)
+                   :sys/bots (jvm :bots bots)}]
+              (spit out (str (pr-str fact) "\n") :append true)
+              {:cpu cpu :ticks (into {} (for [[k t] ticks :when t] [k [t now]]))})
+            (catch Exception e
+              (binding [*out* *err*] (println "sample failed:" (ex-message e)))
+              prev))]
       (Thread/sleep (long every-ms))
-      (recur {:cpu cpu :ticks (into {} (for [[k t] ticks :when t] [k [t now]]))}))))
+      (recur next))))
 
 (defn read-edn-lines
   "Every EDN map in file f, one per line."

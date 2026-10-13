@@ -91,7 +91,7 @@ jobs:
       - name: Ramp
         run: |
           mkdir -p data/race
-          bb capacity sample data/race/sys.edn ${{ matrix.runner }} &
+          bb capacity sample data/race/sys.edn ${{ matrix.runner }} > data/race/sampler.log 2>&1 &
           clojure -J-Xmx${{ needs.plan.outputs.bot-heap }}m -M:race --config ci/capacity.edn --port "$PORT" \
             --rcon-port "$RCON_PORT" --rcon-pass "$RCON_PASS" --record-dir data/race \
             --commit "$GITHUB_SHA" --seed "$LEVEL_SEED" --runner ${{ matrix.runner }} > data/race/race.log 2>&1 || true
@@ -115,6 +115,7 @@ jobs:
             data/race/summary.edn
             data/race/race.log
             data/race/server.log
+            data/race/sampler.log
 
   report:
     needs: ramp
