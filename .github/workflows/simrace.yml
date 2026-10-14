@@ -3,12 +3,13 @@ name: simrace
 # The sim race (clojure -M:simrace, ci/simrace.edn): runners that play the whole bot, from empty
 # hands at every landing of the race's captured worlds to the target, against the server model,
 # on every core, seed after seed until their budget is spent. The real-server race (race.yml) has
-# the other runners; a push to the race branch restarts both with the new code. Every failed run
+# the other runners; a push to main restarts both with the merged code. Every failed run
 # carries its signature; the report files them as issues, one per signature (bb failures).
 
 on:
   push:
-    branches: [race]
+    branches: [main]
+    paths-ignore: ['brain/**', 'docs/**', '**.md']   # a note does not restart a five-hour round
   workflow_dispatch:
 
 permissions:
