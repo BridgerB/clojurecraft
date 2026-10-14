@@ -169,6 +169,16 @@
 
 (defmethod place-stage :equip [world {:intent/keys [item]}] (equip world item :spot))
 
+(defn droppable?
+  "Can a held tool drop the block id: one in the hotbar (intent/choose-tool, not :needs-tool)
+   or one stowed in the main inventory (intent/stowed-tool), which the niche's dig puts in the
+   hand first. Equipping the furnace swaps the pickaxe out of the hand into the main inventory
+   when the hotbar is full of what mining picked up, and a niche asked of the hotbar alone was
+   then refused everywhere: sim race 38477665389 world R1/43 (issue #94, 11 runs) held two
+   stone pickaxes and the furnace at the end of its iron tunnel at y 16, :no-spot three times."
+  [world id]
+  (boolean (or (intent/stowed-tool world id) (not= :needs-tool (intent/choose-tool world id)))))
+
 (defn niche
   "A cell beside the feet at their level, or beside the head when none is there (the block
    goes into the wall at head height, still in reach to open: race 38477665442 bot Clj_r12 at
@@ -198,7 +208,7 @@
                             (solid-at? world (update c 1 inc))
                             (not (blocks/falls? (terrain/block-at world (update c 1 inc))))
                             (not (intent/exposes-fluid? world c))
-                            (not= :needs-tool (intent/choose-tool world (terrain/block-at world c)))
+                            (droppable? world (terrain/block-at world c))
                             (not (contains? (into intent/never-dug memory/placed-kinds)
                                             (blocks/name-of (terrain/block-at world c)))))]
              c))))
@@ -245,15 +255,26 @@
   (let [[against face :as given] (when at (support world at))
         found (when-not at (spot world))
         n (when-not (or at found) (niche world))
+        [_ stowed-item :as stowed] (when n (intent/stowed-tool world (terrain/block-at world n)))
         [target from] (or found (when (and (nil? at) (nil? n) passage-ok?) (spot world true)))]
     (cond given (settle-at world at against face)
           at (intent/fail world :no-support)
           target (settle-at world target from :up)
+          ;; the tool the niche needs is in the main inventory: in the hand first, then the dig
+          stowed
+          (intent/assoc-intent world
+                               :intent/stage :niche
+                               :intent/child
+                               {:intent/kind :equip
+                                :intent/item (recipe/item-name stowed-item)
+                                :intent/status :active})
           n (intent/assoc-intent world :intent/stage :niche :intent/child (intent/child-dig n))
           :else (intent/fail world :no-spot))))
 
 (defn dig-niche
-  "One tick of digging the niche (the child :dig); done and the cell confirmed by the server
+  "One tick of digging the niche (the child :dig, or first the child :equip of its tool from the
+   main inventory, which done starts the dig of the niche found again, the tool now in the
+   hotbar); done and the cell confirmed by the server
    (terrain/confirmed?), or the server silent for answer-ms since the dig's FINISH, equip again
    (the dig chose its own held slot) and look for the spot; failed, fail with its reason. A
    loaded server acks the FINISH at once and breaks the block seconds later, by its own clock
@@ -261,7 +282,11 @@
    niche a second after the ack, the server answered with the stone still there, and three
    such placements failed the plan :rejected."
   [world {:intent/keys [child]} event]
-  (cond (and (intent/done? child)
+  (cond (and (= :equip (:intent/kind child)) (intent/done? child))
+        (if-let [n (niche world)]
+          (intent/assoc-intent world :intent/child (intent/child-dig n))
+          (intent/fail world :no-spot))
+        (and (intent/done? child)
              (or (terrain/confirmed? world (:intent/target child))
                  (> (- (now world) (:intent/since child)) answer-ms)))
         (-> world

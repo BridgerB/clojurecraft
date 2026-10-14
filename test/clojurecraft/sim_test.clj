@@ -1078,6 +1078,43 @@
     (is (empty? (:sim/violations sim)))))
 
 
+(deftest a-furnace-is-placed-in-a-niche-cut-with-the-stowed-pickaxe
+  ;; sim race 38477665389 world R1/43 (issue #94, 11 runs): the furnace at the end of its iron
+  ;; tunnel at y 16, the table behind it in the passage, two stone pickaxes held, and :no-spot
+  ;; three times. The hotbar was full of what mining picked up, so equipping the furnace swapped
+  ;; the pickaxe into the main inventory, and a niche asked of the hotbar alone was refused as
+  ;; a block the tools cannot drop. A stowed pickaxe counts, and is put in hand before the dig
+  (let [tunnel (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] 1]))
+                      (into {} (for [x (range 2 9) y [64 65]] [[x y 8] 0]))
+                      {[7 64 8] (blocks/default-state :crafting_table)})
+        junk {:item (get blocks/items :dirt) :count 1}
+        inv (assoc (into {} (for [h (range 1 inventory/hotbar-slots)] [[:hotbar h] junk]))
+                   [:hotbar 0]
+                   {:item (get blocks/items :furnace) :count 1}
+                   [:main 0]
+                   {:item (get blocks/items :stone_pickaxe) :count 1})
+        table (conj plan/goals
+                    {:goal/id :furnace-near
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:block/furnace :near}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes tunnel)
+                                    :spawn [8.5 64.0 8.5]
+                                    :inventory inv})
+                         #(or (plan/done? %) (plan/failed? %))
+                         60000
+                         {:event/kind :go :go/goals [:furnace-near]})
+        placed (some (fn [[pos id]] (when (= :furnace (blocks/name-of id)) pos)) (:sim/placed sim))]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (contains? #{[8 64 7] [8 64 9] [8 65 7] [8 65 9] [9 64 8] [9 65 8]} placed)
+        "in a niche cut in a wall of the tunnel")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (contains? (:sim/broken sim) placed) "the niche was dug, which only the pickaxe drops")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest a-table-is-never-placed-into-a-flower
   ;; race 38477665442 bot Clj_r23: every spot the bot tried held wildflowers, which the server
   ;; keeps (a flower bed is not replaceable), and the table was refused three times
