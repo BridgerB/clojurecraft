@@ -101,7 +101,8 @@ clojure -M:simrace --worlds cache/sim-worlds/R1 --seeds 2       # the bot in cap
 clojure -M:simrace --world cache/sim-worlds/R1/7.edn.gz --seed 3 --seeds 1   # one run again, as an issue reproduces it
 clojure -M:simrace --snapshot test/issues/37/R2-16-3.edn.gz   # a failed run's moment played on: does its signature recur?
 bb issue-check fetch 37                                        # an issue's snapshots into test/issues/37/, for a fix/37-* PR to commit
-bb failures report <dir> <title>                                # failed runs by signature, one issue each (the races' report jobs)
+bb failures report <dir> <title>                                # failed runs by signature, one issue each, one comment a round (the races' report jobs)
+bb win release <dir> <run> <sha>                                # a real race's winners become a release with their recordings (race.yml)
 bb page round <dir> real|sim <run> <commit> <at>                # a round's facts from those runs; bb page wall <dir> ranks the failures by stage;
 bb page build rounds.edn out/                                   # the results page from the rounds (the report jobs publish it to gh-pages)
 clojure -M:run ... --telemetry data/runs/t.edn                # one EDN line per change of the world
