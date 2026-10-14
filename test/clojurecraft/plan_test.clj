@@ -137,6 +137,28 @@
     (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
            (wood/gather-next w)))))
 
+(deftest a-near-trunk-with-no-route-is-climbed-for-too
+  ;; sim race 38395033917, world R3/24 (issue #75): at the bottom of two staircases that met, the
+  ;; second having dug out the first's riser, no route led up, and every walk to a trunk within
+  ;; the near band failed :no-path at once, blacklisting one trunk a tick until the plan failed.
+  ;; A trunk in the band is asked for a route before it is walked at, as a far one is.
+  (let [w (remembered {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [12 60 8] 136}
+                      [8.5 50.0 8.5])
+        eye (game/eye w)]
+    (is (= [12 60 8]
+           (memory/nearest-log w eye wood/search-radius (wood/skipped w) wood/standing-trunk?))
+        "the trunk is in the near band: within 12 of the eye, on stone")
+    (is (not (intent/routable? w (wood/log-walk w [12 60 8]))) "sealed in stone: no route")
+    (is (nil? (wood/near-walk w)))
+    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+           (wood/gather-next w))
+        "climbed for, never walked at")))
+
+(deftest a-near-trunk-a-route-reaches-is-walked-to
+  ;; the plain case, unchanged: on the surface with a trunk in reach the gather walks to it
+  (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/trunk [3 64 0]}
+         (wood/gather-next (world-state [0.5 64.0 0.5])))))
+
 (def sky-shaft
   "Air from a pocket at [2 50 8] up a stair to [8 56 8], that column open to the sky. A log at
    [14 70 14] is sealed in stone, past the near band, and no route reaches it."
