@@ -1,9 +1,10 @@
 name: test
 
-# The suite on every push, spread over the runners: one job runs every test but the forest
-# property, all namespaces and vars in parallel on the runner's cores (unit.yml: clojurecraft.runner,
-# eftest); eight more each run 250 of the 2,000 generated forests with their own seed.
-# The serial suite on one runner took nine minutes, most of it the sim namespace.
+# The suite on every push, minutes not hours, three jobs, so it fits the four runners the rounds
+# leave free: one job runs every test but the forest property, all namespaces and vars in parallel
+# on the runner's cores (unit.yml: clojurecraft.runner, eftest), about four minutes; one more runs
+# 250 generated forests with a fresh seed; actionlint. A dispatch runs all eight forest shards
+# (the 2,000). The serial suite on one runner took nine minutes, most of it the sim namespace.
 
 on:
   push:
@@ -24,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard: ${{ fromJSON(github.event_name == 'workflow_dispatch' && '[1, 2, 3, 4, 5, 6, 7, 8]' || '[1]') }}
     env:
       FOREST_TRIALS: '250'
       FOREST_SEED: ${{ github.run_id }}${{ matrix.shard }}   # a fresh seed every push, printed on failure so it replays

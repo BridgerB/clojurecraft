@@ -1,12 +1,11 @@
 name: gym
 
 # Real runs of a goal on real terrain, one runner each, judged by the bot's RESULT and by the
-# server's truth commands. On push: every goal once (the smoke test that wood.yml was). On
-# dispatch: one goal, N runs, paired landings (run k always lands on landing k of the set).
+# server's truth commands. By hand only: one goal, N runs, paired landings (run k always lands on
+# landing k of the set). It ran every goal once on every push until the rounds (race.yml) made that
+# twelve runners a push for what a round already says.
 
 on:
-  push:
-    branches-ignore: [race-capacity, "fix/**", gh-pages]   # race-capacity is the capacity experiment (capacity.yml); a fix branch has issue.yml alone; gh-pages is the results page's data
   workflow_dispatch:
     inputs:
       goal:
