@@ -21,6 +21,7 @@ sourceRefs:
   - src/clojurecraft/swim.clj#defn dig-afloat
   - src/clojurecraft/swim.clj#def notch-radius 4
   - test/clojurecraft/sim_test.clj#a-flooded-cave-with-no-bank-is-left-by-a-notch-dug-in-its-wall
+  - test/clojurecraft/sim_test.clj#a-retreat-from-a-scooped-ponds-edge-notches-the-bank
   - src/clojurecraft/swim.clj#defn dig-or-sink
   - src/clojurecraft/swim.clj#defn dig-from-floor?
   - src/clojurecraft/swim.clj#defn swim-controls
@@ -88,6 +89,7 @@ Four model fixtures from the issue, the siblings' deaths and the sim race: a two
 - Lava deaths are modelled in the trap only: fire and the burning state are not in the server model yet.
 - Bank search is a terrain scan (33 × 33 × 5 cells) once per pick and every 20 ticks while rising; memory is not consulted, because what is beside the body now is the terrain's question ([[memory-sightings]]).
 - A notch is dug at the water's top level plus one, never at the top itself: a cell opened at the water's level fills from the pool (the model does not flow water; a server does), and a ledge one over the float level is what the impulse lifts onto, as a pond's bank is.
+- **A scooped pond's edge is a flooded cave to the escape.** The bucket filled from the edge, the bot stands in the one or two of water its source left, with the bank one over the water's top and so two over the float-top: outside the band, and no cap over the head. Sim race 38477665389 world R2/23 (issue #92, 48 runs at 1d31d21, before the notch): the mine for the portal's cobblestone retreated by a `:swim-out` that held jump until it timed out, three times, `:no-escape`. The notch takes the shore as it takes a cave wall (`a-retreat-from-a-scooped-ponds-edge-notches-the-bank`); the place acts get ashore the same way before they look for a spot ([[place-intent]]).
 
 ## See also
 - [[fluid-physics]] - the flags this reads.

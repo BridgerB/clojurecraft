@@ -2178,6 +2178,35 @@
     (is (:player/on-ground? w))
     (is (empty? (:sim/violations sim)))))
 
+(def scooped-shore
+  "A pond's edge after a scoop (sim race 38477665389, world R2/23, issue #92): a bank whose top
+   is y 64 west of x 8 (its feet level 65), the pond two deep (y 63-64) from x 8 east, and the
+   cell the bucket was filled from, [8 64 8], air over the one of water left under it. A body
+   there stands in water one deep with its eye in air: no trap, and the bank two over its feet,
+   beyond the impulse's band."
+  (merge (into {} (for [x (range 8) z (range 16)] [[x 64 z] 1]))
+         (into {} (for [x (range 8 16) y [63 64] z (range 16)] [[x y z] blocks/water-base]))
+         {[8 64 8] blocks/air}))
+
+(deftest a-retreat-from-a-scooped-ponds-edge-notches-the-bank
+  ;; issue #92 (48 sim runs of R2/23 at 1d31d21): the bucket filled from the pond's edge, the
+  ;; mine for the portal's cobblestone had nothing to cut from the water and retreated by a
+  ;; swim-out, which found no bank in its band (the shore two over the feet), no cap, and held
+  ;; jump until it timed out, three times, :no-escape. The notch (issue #73) cuts the bank
+  (let [[w sim] (intent-run {:intent/kind :swim-out :intent/for :retreat}
+                            scooped-shore
+                            63
+                            (item :stone_pickaxe)
+                            120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/bank])))
+    (is (not (:player/in-water? w)))
+    (is (:player/on-ground? w))
+    (is (= 0 (terrain/block-at w [7 64 8])) "the bank is notched")
+    (is (<= (first (intent/feet w)) 7) "on the bank")
+    (is (zero? (:stats/deaths w 0)))
+    (is (empty? (:sim/violations sim)))))
+
 (deftest gravel-over-the-head-is-never-dug-under
   ;; a stair up opens the cell over the head first; gravel over that cell would fall through it
   ;; onto the bot, so every stair from here is refused and a level step leads out from under it
