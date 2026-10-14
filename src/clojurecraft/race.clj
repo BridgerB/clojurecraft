@@ -1,5 +1,8 @@
 (ns clojurecraft.race
-  "A race (issue #17): many bots on one server, from where each lands to the race's target.
+  "A race (issue #17): many bots on one server, from where each lands to the race's target, the
+   server always full (issue #127): :race/bots slots, each starting a fresh bot the moment its bot
+   ends, for the job's length (run-ms), so no bot waits for another and a slow one plays as long
+   as it likes; a bot the job's end stops is cut (failure/cut), never a failure.
 
      clojure -M:race --config ci/race.edn --port 25565 --rcon-port 25575 --rcon-pass S \\
        [--record-dir data/race] [--commit sha] [--seed s] [--runner n] [--server k]
@@ -23,7 +26,7 @@
    it never touches a loop. Every bot's run is its own recording and replays alone. The race's
    settings are data (ci/race.edn). Milestones are facts: an observer on each bot's atom turns
    each target newly reached into one {:milestone/bot :milestone/goal :milestone/at ...} line
-   (MILESTONE on stdout, milestones.edn), which the race's board (bb race-board) publishes."
+   (MILESTONE on stdout, milestones.edn), which the churn's reports read (bb churn)."
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
             [clojure.java.io :as io]
@@ -49,6 +52,7 @@
 (def events-buffer 16)                ; events a bot's queue holds before the fixture waits
 (def sample-every-ms 15000)            ; how often the sampler records the race as one fact
 (def milestones-buffer 256)           ; milestone facts waiting for the writer; a bot reaches at most a chain's worth
+(def min-play-ms 300000)              ; a slot starts no bot with less of the job left than this: it would only be cut
 
 (defn bot-name
   "The name of racer k (from 1) with prefix: a server name, sixteen characters at most."
@@ -88,6 +92,21 @@
     (cond (or (nil? ramp) (< i start)) (* i stagger-ms)
           :else
           (+ (* every-ms (inc (quot (- i start) step))) (* stagger-ms (rem (- i start) step))))))
+
+(defn run-ms
+  "How long a race plays, ms: :race/deadline-ms (the capacity ramp's one deadline), else
+   :race/run-minutes (the churn's job, up to GitHub's cap), else :race/timeout-ms."
+  [{:race/keys [deadline-ms run-minutes timeout-ms]}]
+  (or deadline-ms
+      (some-> run-minutes
+              (* 60000))
+      timeout-ms))
+
+(defn marked
+  "A RESULT as the race prints it: marked for bb failures (failure/mark), and cut (failure/cut)
+   when the job's end stopped the bot (a :timeout, the only timeout a churn bot has)."
+  [r]
+  (cond-> (failure/mark r) (= :timeout (:reason r)) failure/cut))
 
 (defn tick-times
   "The server's tick times in ms, {:avg :p50 :p95 :p99}, from its tick query reply; {} when the
@@ -227,54 +246,55 @@
   [set offset i]
   (let [[x z _] (landings/landing-for set (inc (+ offset i)))] [x z]))
 
-(defn fixture!
-  "The race's fixture, on a thread of its own: wait for each bot, keep inventories over deaths,
-   land it (on its landing of the set, with landings; else on its claimed cell), pin its spawn
+(defn set-gamerules!
+  "What every race asks of its server once: keep inventories over deaths."
+  [{:keys [host rcon-port rcon-pass]}]
+  (try (rcon/with-rcon host rcon-port rcon-pass #(rcon/command! % "gamerule keep_inventory true"))
+       (catch Exception e (cli/log "gamerule failed:" e))))
+
+(defn land-bot!
+  "Land one bot, on a thread of its own with an RCON session of its own: wait for it to be
+   online, make it a survival player, land it (on landing i of the set, with landings; else on a
+   cell claimed for it round the race's centre, which the first bot online decides), pin its spawn
    there, and put its :go (every step up to until, milestones on, :go/at where it landed) on its
    queue. A bot whose landing fails starts where it stands."
-  [{:keys [host rcon-port rcon-pass until landings landing-offset]} bots ch config t0]
+  [{:keys [host rcon-port rcon-pass until landings landing-offset]} ch centre name queue i]
   (async/thread
    (try (rcon/with-rcon
          host
          rcon-port
          rcon-pass
          (fn [rc]
-           (rcon/command! rc "gamerule keep_inventory true")
-           (let [first-at (fixture/wait-online! rc (:name (first bots)) fixture/online-timeout)
-                 centre [(long (first first-at)) (long (nth first-at 2))]]
-             (cli/log "race centre" centre)
-             (doseq [[i {:keys [name queue]}] (map-indexed vector bots)]
-               (let [due (- (+ t0 (start-at config i)) (System/currentTimeMillis))
-                     at (when (fixture/wait-online! rc name (+ fixture/online-timeout (max 0 due)))
-                          (rcon/command! rc (str "gamemode survival " name))
-                          (cond landings
-                                (fixture/land-at! rc
-                                                  name
-                                                  (landing-of landings (or landing-offset 0) i))
-                                :else (land! rc ch name centre i)))]
-                 (when at
-                   (rcon/command! rc
-                                  (str "spawnpoint " name
-                                       " " (long (first at))
-                                       " " (long (second at))
-                                       " " (long (nth at 2)))))
-                 (cli/log name "landed at" at)
-                 (async/>!! queue
-                            (cond-> {:event/kind :go :go/goals (plan/through until) :go/chain? true}
-                              at (assoc :go/at at))))))))
-        (catch Exception e (cli/log "race fixture failed:" e)))))
+           (let [online (fixture/wait-online! rc name fixture/online-timeout)
+                 _ (when online (deliver centre [(long (first online)) (long (nth online 2))]))
+                 at (when online
+                      (rcon/command! rc (str "gamemode survival " name))
+                      (cond landings
+                            (fixture/land-at! rc name (landing-of landings (or landing-offset 0) i))
+                            :else (land! rc ch name @centre i)))]
+             (when at
+               (rcon/command! rc
+                              (str "spawnpoint " name
+                                   " " (long (first at))
+                                   " " (long (second at))
+                                   " " (long (nth at 2)))))
+             (cli/log name "landed at" at)
+             (async/>!! queue
+                        (cond-> {:event/kind :go :go/goals (plan/through until) :go/chain? true}
+                          at (assoc :go/at at))))))
+        (catch Exception e (cli/log name "landing failed:" e)))))
 
 (defn board!
   "The board, on a thread of its own: every board-every-ms until done (a promise) is delivered,
-   one BOARD line per bot from its world as it is now, and the server's tick time, the measure
-   of how many bots a server can carry."
-  [{:keys [host rcon-port rcon-pass]} bots done]
+   one BOARD line per bot playing now (live, an atom of {name world-atom}) and the server's tick
+   time, the measure of how many bots a server can carry."
+  [{:keys [host rcon-port rcon-pass]} live done]
   (async/thread
    (while (= :wait (deref done board-every-ms :wait))
      (let [tick (try (rcon/with-rcon host rcon-port rcon-pass #(rcon/command! % "tick query"))
                      (catch Exception e (str "tick query failed: " (ex-message e))))]
-       (println "BOARD" (str/replace (str tick) #"\s+" " "))
-       (doseq [{:keys [name world*]} bots]
+       (println "BOARD" (str/replace (str tick) #"\s+" " ") (str "playing " (count @live)))
+       (doseq [[name world*] (sort-by key @live)]
          (println "BOARD"
                   (try (board-line name @world*)
                        (catch Exception e (str name " unreadable: " (ex-message e))))))
@@ -282,17 +302,17 @@
 
 (defn sampler!
   "The sampler, on a thread of its own: every sample-every-ms until done is delivered, the race
-   as one fact (sample) from each bot's world as it is, the server's tick query and this JVM's
-   heap, printed as a SAMPLE line and appended to samples.edn in record-dir: the measure the
-   capacity experiment sizes a runner by."
-  [{:keys [host rcon-port rcon-pass]} race bots record-dir done]
+   as one fact (sample) from each playing bot's world as it is (live), the server's tick query and
+   this JVM's heap, printed as a SAMPLE line and appended to samples.edn in record-dir: the
+   measure the capacity experiment sizes a runner by."
+  [{:keys [host rcon-port rcon-pass]} race live record-dir done]
   (async/thread
    (with-open [w (io/writer (io/file record-dir "samples.edn") :append true)]
      (loop [before {}
             at (System/currentTimeMillis)]
        (when (= :wait (deref done sample-every-ms :wait))
          (let [now (System/currentTimeMillis)
-               worlds (into {} (map (fn [{:keys [name world*]}] [name @world*])) bots)
+               worlds (into {} (map (fn [[name world*]] [name @world*])) @live)
                tick (tick-times
                      (try (rcon/with-rcon host rcon-port rcon-pass #(rcon/command! % "tick query"))
                           (catch Exception _ nil)))
@@ -307,11 +327,13 @@
            (recur (into {} (map (fn [[name w]] [name (:time/tick w 0)])) worlds) now)))))))
 
 (defn milestones!
-  "The milestones observer: a watch on every bot's atom that turns each target newly reached into
-   a milestone fact, put on a bounded channel and never blocking the bot's loop (a full channel
-   drops, as telemetry does); a writer thread prints each as a MILESTONE line and appends it to
-   milestones.edn in record-dir. Returns a function that stops watching and finishes the file."
-  [race bots record-dir]
+  "The milestones observer: a writer thread prints each milestone fact as a MILESTONE line and
+   appends it to milestones.edn in record-dir; facts come on a bounded channel that never blocks
+   a bot's loop (a full channel drops, as telemetry does). Returns {:watch (fn [name world*])
+   :unwatch (fn [world*]) :stop (fn [])}: watch puts a watch on a bot's atom that turns each
+   target newly reached into a fact, unwatch takes it off when the bot ends, stop finishes the
+   file."
+  [race record-dir]
   (let [ch (async/chan milestones-buffer)
         writer (async/thread
                 (with-open [w (io/writer (io/file record-dir "milestones.edn") :append true)]
@@ -322,16 +344,14 @@
                       (.write w (str (pr-str fact) "\n"))
                       (.flush w)
                       (recur)))))]
-    (doseq [{:keys [name world*]} bots]
-      (add-watch world*
-                 ::milestones
-                 (fn [_ _ before world]
-                   (doseq [goal (reached-new before world)]
-                     (async/offer! ch (milestone race name world goal))))))
-    (fn []
-      (doseq [{:keys [world*]} bots] (remove-watch world* ::milestones))
-      (async/close! ch)
-      (async/<!! writer))))
+    {:watch (fn [name world*]
+              (add-watch world*
+                         ::milestones
+                         (fn [_ _ before world]
+                           (doseq [goal (reached-new before world)]
+                             (async/offer! ch (milestone race name world goal))))))
+     :unwatch (fn [world*] (remove-watch world* ::milestones))
+     :stop (fn [] (async/close! ch) (async/<!! writer))}))
 
 (defn truth!
   "The server's word on where a bot is: its Dimension, asked while it is still connected."
@@ -342,11 +362,61 @@
                        #(str (rcon/command! % (str "data get entity " name " Dimension"))))
        (catch Exception e (str "truth failed: " (ex-message e)))))
 
+(defn play-one!
+  "One bot's whole life in a slot: the next serial's name (serials, an atom shared by the slots),
+   its own atom and queue, on the board (live) and watched for milestones while it plays, landed on
+   landing serial - 1 of the set (land-bot!), and played until its goal, its plan failing, a crash
+   or the job's end (deadline): no cap of its own. Its RESULT line is printed as it ends, marked
+   cut (failure/cut) when the job's end stopped it. Returns {:name :result :truth}."
+  [{:keys [server ch centre serials live watcher prefix record-dir commit deadline]}]
+  (let [n (swap! serials inc)
+        name (bot-name prefix n)
+        queue (async/chan events-buffer)
+        world* (atom (game/init {:host (:host server) :port (:port server) :name name}))]
+    (swap! live assoc name world*)
+    ((:watch watcher) name world*)
+    (land-bot! server ch centre name queue (dec n))
+    (try (let [truth (promise)
+               {r :result} (main/run-bot! {:host (:host server)
+                                           :port (:port server)
+                                           :name name
+                                           :until (:until server)
+                                           :chain true
+                                           :timeout-ms (max 1000
+                                                            (- deadline (System/currentTimeMillis)))
+                                           :record (str (io/file record-dir (str name ".edn")))
+                                           :commit commit
+                                           :events queue
+                                           :world* world*
+                                           :on-result (fn [r]
+                                                        (deliver truth (truth! server name))
+                                                        (println "RESULT" name (pr-str (marked r))) ; what bb failures groups by
+                                                        (flush))})]
+           {:name name :result r :truth @truth})
+         (catch Exception e
+           (cli/log name "failed:" e)
+           {:name name :result {:ok false :reason :crashed :error (ex-message e)}})
+         (finally ((:unwatch watcher) world*) (swap! live dissoc name)))))
+
+(defn slot!
+  "One bot slot, on a thread of its own: it joins at its place in the schedule (start-at), then
+   plays bot after bot (play-one!), the next the moment the last ends, until less than
+   min-play-ms is left of the job. Returns a channel of its results."
+  [{:keys [config t0 deadline] :as ctx} i]
+  (async/thread (Thread/sleep (long
+                               (max 0 (- (+ t0 (start-at config i)) (System/currentTimeMillis)))))
+                (loop [results []]
+                  (if (< (- deadline (System/currentTimeMillis)) min-play-ms)
+                    results
+                    (recur (conj results (play-one! ctx)))))))
+
 (defn -main
   "Run the race ci/race.edn (or --config) describes on the server at --port, its RCON at
-   --rcon-port with --rcon-pass: start the bots a stagger apart, land them, show the board, print
-   a RESULT line per bot as it ends and a RACE summary at the end, and write the summary to the
-   record directory. Exits 0 when any bot reached the target."
+   --rcon-port with --rcon-pass, for the job's length (run-ms): :race/bots slots, each refilled
+   with a fresh bot the moment its bot ends, so the server always carries its bots (issue #127);
+   the board, the sampler and the milestones watch whichever bots play now. A RESULT line per
+   bot as it ends, a RACE summary of every bot at the end, written to the record directory.
+   Exits 0 when any bot reached the target."
   [& args]
   (let [o (cli/options args)
         {:keys [config host port rcon-port rcon-pass record-dir commit seed landing-offset]
@@ -356,7 +426,7 @@
         which (get o :server) ; which of the runner's servers (--server); server below is the one connected to
         landings-file (get o :landings)
         config (edn/read-string (slurp config))
-        {:race/keys [bots prefix until timeout-ms]} config
+        {:race/keys [bots prefix until]} config
         t0 (System/currentTimeMillis)
         server (cond-> {:host host
                         :port (Long/parseLong port)
@@ -367,62 +437,37 @@
                  (assoc :landings (landings/read-landings landings-file)
                         :landing-offset (parse-long (or landing-offset "0"))))
         _ (.mkdirs (io/file record-dir))
-        ch (claims!)
-        racers (mapv (fn [k]
-                       (let [name (bot-name prefix k)]
-                         {:name name
-                          :queue (async/chan events-buffer)
-                          :world* (atom (game/init {:host host :port (:port server) :name name}))}))
-                     (range 1 (inc bots)))
+        where {:runner (some-> runner
+                               parse-long)
+               :server (some-> which
+                               parse-long)}
         done (promise)
-        deadline (:race/deadline-ms config)
-        runs (mapv
-              (fn [i {:keys [name queue world*]}]
-                (async/thread
-                 (Thread/sleep (long
-                                (max 0 (- (+ t0 (start-at config i)) (System/currentTimeMillis))))) ; its join, by the schedule
-                 (try (let [truth (promise)
-                            {r :result}
-                            (main/run-bot!
-                             {:host host
-                              :port (:port server)
-                              :name name
-                              :until until
-                              :chain true
-                              :timeout-ms
-                              (if deadline (max 60000 (- deadline (start-at config i))) timeout-ms)
-                              :record (str (io/file record-dir (str name ".edn")))
-                              :commit commit
-                              :events queue
-                              :world* world*
-                              :on-result (fn [r]
-                                           (deliver truth (truth! server name))
-                                           (println "RESULT" name (pr-str (failure/mark r))) ; what bb failures groups by
-                                           (flush))})]
-                        {:name name :result r :truth @truth})
-                      (catch Exception e
-                        (cli/log name "failed:" e)
-                        {:name name :result {:ok false :reason :crashed :error (ex-message e)}}))))
-              (range)
-              racers)]
-    (cli/log "race:" bots "bots to" until "seed" seed)
-    (let [where {:runner (some-> runner
-                                 parse-long)
-                 :server (some-> which
-                                 parse-long)}
-          stop-milestones (milestones! (assoc where :seed seed) racers record-dir)]
-      (fixture! server racers ch config t0)
-      (board! server racers done)
-      (sampler! server where racers record-dir done)
-      (let [results (mapv async/<!! runs)
-            s (cond->
-                (assoc (summary results) :race/seed seed :race/commit commit :race/until until)
-                (:server where) (assoc :race/server (:server where)))]
-        (deliver done true)
-        (stop-milestones)
-        (println "RACE" (pr-str (dissoc s :race/runs)))
-        (spit (io/file record-dir "summary.edn") (pr-str s))
-        (flush)
-        (async/close! ch)
-        (shutdown-agents)
-        (System/exit (if (pos? (:race/ok s)) 0 1))))))
+        live (atom {})
+        ctx {:server server
+             :ch (claims!)
+             :centre (promise)
+             :serials (atom 0)
+             :live live
+             :watcher (milestones! (assoc where :seed seed) record-dir)
+             :prefix prefix
+             :record-dir record-dir
+             :commit commit
+             :config config
+             :t0 t0
+             :deadline (+ t0 (run-ms config))}]
+    (cli/log "race:" bots "slots to" until "seed" seed "for" (quot (run-ms config) 60000) "min")
+    (set-gamerules! server)
+    (board! server live done)
+    (sampler! server where live record-dir done)
+    (let [slots (mapv #(slot! ctx %) (range bots))
+          results (into [] (mapcat async/<!!) slots)
+          s (cond-> (assoc (summary results) :race/seed seed :race/commit commit :race/until until)
+              (:server where) (assoc :race/server (:server where)))]
+      (deliver done true)
+      ((:stop (:watcher ctx)))
+      (println "RACE" (pr-str (dissoc s :race/runs)))
+      (spit (io/file record-dir "summary.edn") (pr-str s))
+      (flush)
+      (async/close! (:ch ctx))
+      (shutdown-agents)
+      (System/exit (if (pos? (:race/ok s)) 0 1)))))

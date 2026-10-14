@@ -158,7 +158,7 @@
 (defn round
   "The round as a value (see the namespace): runs and marks are what the report job downloaded,
    the rest is the run's own facts."
-  [runs marks milestones {:keys [kind run commit at started ended issues]}]
+  [runs marks milestones {:keys [kind run commit at started ended issues runner batch]}]
   (cond-> {:round/run run
            :round/kind kind
            :round/commit commit
@@ -170,9 +170,66 @@
            :round/failures (mapv (fn [[sig rs]] [sig (count rs)]) (failures/grouped runs))}
     started (assoc :round/started started)
     ended (assoc :round/ended ended)
+    runner (assoc :round/runner runner)
+    batch (assoc :round/batch batch)
     (seq marks) (assoc :round/first-at (first-at marks))
     (seq issues) (assoc :round/issues issues)
     (leader runs marks milestones) (assoc :round/leader (leader runs marks milestones))))
+
+(defn best-leader
+  "Of leaders, the one that got furthest: most milestones, then the earliest last one."
+  [leaders]
+  (first (sort-by (fn [{:keys [splits]}] [(- (count splits)) (reduce max 0 (vals splits))])
+                  leaders)))
+
+(defn combine
+  "One row from the batches of a run and kind (a churn job reports each runner's finished bots
+   every 20 minutes, issue #127): counts summed, failures summed by signature (most first),
+   each milestone's fastest the least and its median the batches' medians weighted by their runs,
+   the earliest start and first reach, the latest end, the furthest leader. One batch is itself."
+  [batches]
+  (let [speeds (keep :round/speed batches)
+        goals (distinct (mapcat keys speeds))
+        some-of (fn [k] (some k batches))]
+    (cond-> {:round/run (some-of :round/run)
+             :round/kind (some-of :round/kind)
+             :round/commit (some-of :round/commit)
+             :round/at (some-of :round/at)
+             :round/runs (reduce + (keep :round/runs batches))
+             :round/ok (reduce + (keep :round/ok batches))
+             :round/reached (apply merge-with + (keep :round/reached batches))
+             :round/speed (into {}
+                                (for [g goals
+                                      :let [xs (keep #(get % g) speeds)
+                                            n (reduce + (map :n xs))]
+                                      :when (pos? n)]
+                                  [g
+                                   {:n n
+                                    :fastest-s (apply min (map :fastest-s xs))
+                                    :median-s (/ (reduce + (map #(* (:n %) (:median-s %)) xs))
+                                                 (double n))}]))
+             :round/failures (->> (mapcat :round/failures batches)
+                                  (reduce (fn [m [sig c]] (update m sig (fnil + 0) c)) {})
+                                  (sort-by (comp - val))
+                                  (mapv vec))}
+      (seq (keep :round/started batches))
+      (assoc :round/started (first (sort (keep :round/started batches))))
+      (seq (keep :round/ended batches))
+      (assoc :round/ended (last (sort (keep :round/ended batches))))
+      (seq (keep :round/first-at batches))
+      (assoc :round/first-at
+             (apply merge-with #(first (sort [%1 %2])) (keep :round/first-at batches)))
+      (seq (keep :round/issues batches))
+      (assoc :round/issues (apply merge (keep :round/issues batches)))
+      (seq (keep :round/leader batches))
+      (assoc :round/leader (best-leader (keep :round/leader batches))))))
+
+(defn rows
+  "The page's rows from rounds.edn's entries, oldest first: the batches of each run and kind
+   combined into one row, in the order each run first appears."
+  [entries]
+  (let [groups (group-by (juxt :round/run :round/kind) entries)]
+    (mapv #(combine (groups %)) (distinct (map (juxt :round/run :round/kind) entries)))))
 
 (defn wall
   "The failures by the stage the bot was on, the furthest stage first: [[stage total
@@ -564,7 +621,7 @@
   [rounds-path out-dir]
   (fs/create-dirs out-dir)
   (let [rounds (read-rounds rounds-path)]
-    (spit (str (fs/path out-dir "index.html")) (html rounds (chain (goals)) (repo)))
+    (spit (str (fs/path out-dir "index.html")) (html (rows rounds) (chain (goals)) (repo)))
     (println "built" (str (fs/path out-dir "index.html")) "from" (count rounds) "rounds")))
 
 (defn git!
@@ -572,14 +629,33 @@
   [dir & args]
   (apply p/shell {:dir (str dir)} "git" args))
 
-(defn publish!
-  "Append the round in round-path to rounds.edn on the gh-pages branch (replacing an earlier
-   entry for the same run and kind), rebuild index.html there, commit and push; a push another
-   report won meanwhile is retried on top of it, three times."
-  [round-path]
-  (let [round (edn/read-string {:default (fn [_ v] v)} (slurp round-path))
-        dir (str (fs/path (fs/parent (fs/absolutize "."))
-                          (str "pages-" (:round/run round) "-" (name (:round/kind round)))))
+(defn entry-key
+  "What makes an entry the same entry: run, kind, runner and batch."
+  [r]
+  ((juxt :round/run :round/kind :round/runner :round/batch) r))
+
+(defn deploy!
+  "Ask GitHub to deploy gh-pages (pages.yml): the branch is the page's data, the deployment is
+   what the site serves. A failed request is printed, never thrown: the next publish asks again."
+  []
+  (let [r (p/shell {:continue true :out :string :err :string}
+                   "gh" "workflow"
+                   "run" "pages.yml"
+                   "--repo" (repo)
+                   "--ref" "main")]
+    (println (if (zero? (:exit r)) "deploy requested" (str "deploy request failed: " (:err r))))))
+
+(defn publish-round!
+  "Append round (a value) to rounds.edn on the gh-pages branch (replacing an earlier entry with
+   the same run, kind, runner and batch), rebuild index.html there, commit and push; a push another
+   report won meanwhile is retried on top of it, three times. The branch is worked in a worktree
+   of its own, removed after."
+  [round]
+  (let [dir (str (fs/path (fs/parent (fs/absolutize "."))
+                          (str "pages-" (:round/run round)
+                               "-" (name (:round/kind round))
+                               "-" (:round/runner round 0)
+                               "-" (:round/batch round 0))))
         fetched (zero? (:exit (p/shell {:continue true :out :string :err :string}
                                        "git" "fetch"
                                        "origin" branch)))]
@@ -591,9 +667,7 @@
     (loop [tries 3]
       (when fetched (git! dir "reset" "-q" "--hard" (str "origin/" branch)))
       (let [rounds (str (fs/path dir rounds-file))
-            kept (remove #(and (= (:round/run %) (:round/run round))
-                               (= (:round/kind %) (:round/kind round)))
-                         (read-rounds rounds))]
+            kept (remove #(= (entry-key %) (entry-key round)) (read-rounds rounds))]
         (spit rounds (str/join "" (map #(str (pr-str %) "\n") (concat kept [round]))))
         (build! rounds dir)
         (git! dir "add" "-A")
@@ -608,10 +682,18 @@
         (let [pushed (zero? (:exit (p/shell {:dir dir :continue true}
                                             "git" "push"
                                             "origin" (str "HEAD:" branch))))]
-          (cond pushed (println "published round" (:round/run round) "to" branch)
+          (cond pushed
+                (do (println "published round" (:round/run round) "to" branch)
+                    (p/shell {:continue true} "git" "worktree" "remove" "--force" dir)
+                    (deploy!))
                 (and (pos? (dec tries)) fetched)
                 (do (git! "." "fetch" "origin" branch) (recur (dec tries)))
                 :else (throw (ex-info "could not push the page" {:branch branch}))))))))
+
+(defn publish!
+  "Publish the round in the EDN file at round-path (publish-round!)."
+  [round-path]
+  (publish-round! (edn/read-string {:default (fn [_ v] v)} (slurp round-path))))
 
 (defn -main
   "round <dir> <kind> <run> <commit> <at>, wall <dir>, build <rounds.edn> <out-dir>, publish <round.edn>."

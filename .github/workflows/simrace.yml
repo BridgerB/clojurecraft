@@ -2,9 +2,11 @@ name: simrace
 
 # The sim race (clojure -M:simrace, ci/simrace.edn): runners that play the whole bot, from empty
 # hands at every landing of the race's captured worlds to the target, against the server model,
-# on every core, seed after seed until their budget is spent. The real-server race (race.yml) has
-# the other runners; a push to main restarts both with the merged code. Every failed run
-# carries its signature; the report files them as issues, one per signature (bb failures).
+# on every core, seed after seed until their budget is spent: a core that ends a run starts the
+# next at once (issue #127). The real-server race (race.yml) has the other runners; a push to main
+# restarts both with the merged code. Every failed run carries its signature. Every 20 minutes,
+# staggered by runner, the runner reports the runs that ended since its last report (bb churn
+# batch): failures to the issues, one per signature, facts to the results page as a batch.
 
 # The rounds never stop (the churn), as race.yml: one at a time on the latest main, back to back; a
 # push to main preempts, anything else (the next job, the schedule backstop, a dispatch) waits as the
@@ -20,6 +22,7 @@ on:
 
 permissions:
   contents: write                       # the results page's branch, gh-pages (bb page publish)
+  actions: write                        # each publish dispatches pages.yml, the page's deployment
   issues: write
 
 concurrency:
@@ -28,7 +31,7 @@ concurrency:
 
 jobs:
   plan:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       runners: ${{ steps.read.outputs.runners }}
       count: ${{ steps.read.outputs.count }}
@@ -54,27 +57,11 @@ jobs:
                    (println (str "heap=" (:simrace/heap-mb r))))' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
-  worlds:
-    needs: plan
-    strategy:
-      matrix:
-        set: ${{ fromJSON(needs.plan.outputs.sets) }}
-    uses: ./.github/workflows/world.yml
-    with:
-      set: ${{ matrix.set }}
-
-  captures:
-    needs: [plan, worlds]
-    strategy:
-      matrix:
-        set: ${{ fromJSON(needs.plan.outputs.sets) }}
-    uses: ./.github/workflows/simworld.yml
-    with:
-      set: ${{ matrix.set }}
-
   sim:
-    needs: [plan, captures]
-    runs-on: ubuntu-24.04
+    # the captured worlds are made once by simworld.yml (dispatch it when a set's key changes) and
+    # only restored here: a miss fails the job at once
+    needs: plan
+    runs-on: ubuntu-26.04
     timeout-minutes: 355              # GitHub kills a job at 360; a runner plays :simrace/budget-minutes (330)
     strategy:
       fail-fast: false
@@ -116,10 +103,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
-      - name: Install the Clojure CLI
+      - name: Install the Clojure CLI and Babashka
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
       - uses: actions/cache@v6
         with:
           path: |
@@ -130,14 +119,35 @@ jobs:
       - name: Sim race
         env:
           SETS: ${{ needs.plan.outputs.sets }}
+          GH_TOKEN: ${{ github.token }}   # the churn's reports: issues, the page
+          RUNNER_N: ${{ matrix.runner }}
         run: |
           worlds=$(echo "$SETS" | jq -r 'map("cache/sim-worlds/" + .) | join(",")')
+          mkdir -p data/simrace
           clojure -J-Xmx${{ needs.plan.outputs.heap }}m -M:simrace --worlds "$worlds" \
             --runner ${{ matrix.runner }} --runners ${{ needs.plan.outputs.count }} \
             --until ${{ needs.plan.outputs.until }} --max-minutes ${{ needs.plan.outputs.max-minutes }} \
             --budget-minutes ${{ needs.plan.outputs.budget }} --commit "$GITHUB_SHA" --out data/simrace \
-            > data-simrace.log 2>&1 || true
-          mkdir -p data/simrace
+            > data-simrace.log 2>&1 &
+          sim=$!
+          code_at=$(git show -s --format=%cI "$GITHUB_SHA")
+          report() {
+            bb churn batch sim data/simrace "simrace-$GITHUB_SHA-$RUNNER_N" "$GITHUB_RUN_ID" "$GITHUB_SHA" "$code_at" "$RUNNER_N" \
+              || echo "churn: the batch's report failed; its lines wait for the next"
+          }
+          # every 20 minutes while the sim plays, runner r's first 75 s more than 2.5 min x (r-1)
+          # later than runner 1's, so its page pushes fall between the real race's
+          (
+            next=$(( $(date +%s) + 1200 + (RUNNER_N - 1) * 150 + 75 ))
+            while kill -0 "$sim" 2>/dev/null; do
+              if [ "$(date +%s)" -ge "$next" ]; then report; next=$(( $(date +%s) + 1200 )); fi
+              sleep 60
+            done
+          ) &
+          churn=$!
+          wait "$sim" || true
+          wait "$churn" || true
+          report                # the runs that ended since the last report
           mv data-simrace.log data/simrace/simrace.log
           grep -E '^SIMRACE ' data/simrace/simrace.log || tail -n 40 data/simrace/simrace.log
       - name: Summary
@@ -160,41 +170,11 @@ jobs:
             data/simrace/simrace.log
             data/simrace/snapshots/
 
-  report:
-    needs: sim
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: simrace-${{ github.sha }}-*
-          path: runs
-      - name: Failures become issues
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
-          sudo bash /tmp/bb.sh --version 1.13.225
-          # the newest reporter on the branch, not this run's: a rule change reaches runs already going
-          git fetch --depth=1 origin "$GITHUB_REF_NAME" && git checkout FETCH_HEAD -- bb bb.edn
-          bb failures report runs "Sim race ${{ github.run_id }} at ${GITHUB_SHA::7}" "$(git show -s --format=%cI "$GITHUB_SHA")" | tee failures.txt
-          bb page wall runs | tee wall.txt
-          { echo '### the wall: failures by the stage the bot was on, furthest first'; echo '```'; cat wall.txt; echo '```';
-            echo '### failures'; echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-      - name: The results page (gh-pages, issue #116)
-        env:
-          GH_TOKEN: ${{ github.token }}   # the run's start, the issues the round's signatures are filed as
-        run: |
-          bb page round runs sim "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(git show -s --format=%cI "$GITHUB_SHA")" > round.edn
-          cat round.edn
-          bb page publish round.edn
-
   next:
     # the next round on main as it is now, queued as the group's pending run (see race.yml)
-    needs: report
+    needs: sim
     if: ${{ !cancelled() && vars.RACE_CONTINUOUS != 'false' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       actions: write

@@ -213,12 +213,13 @@
   (str section (when run-url (str "\nRun: " run-url "\n"))))
 
 (defn summary-lines
-  "What a report prints beyond the issues: the infrastructure stops and the one-offs, counted."
-  [runs groups]
+  "What a report prints beyond the issues: the infrastructure stops and the one-offs, counted
+   (by counts, the job's runs so far, when given)."
+  [runs groups counts]
   (concat [(str "infrastructure stops (not filed): "
                 (pr-str (frequencies (map :reason (filter #(and (not (:ok %)) (infra? %)) runs)))))]
           (for [[sig rs] groups
-                :when (< (count rs) min-runs)]
+                :when (< (get counts sig (count rs)) min-runs)]
             (str "one-off (not filed): " (count rs) " " (pr-str sig)))))
 
 ;;;; I/O: the files, the GitHub API ;;;;
@@ -312,23 +313,26 @@
             (when (:number made) (comment! (:number made) text))
             :opened))))
 
-(defn report!
-  "File every signature hit at least min-runs times, the most frequent first, opening at most
-   max-new issues; print what was filed and what was not."
-  [dir report-title code-at]
+(defn report-runs!
+  "File runs (values): every signature hit at least min-runs times, the most frequent first,
+   opening at most max-new issues; print what was filed and what was not. counts, when given, is
+   how many runs of each signature the job has had so far ({signature n}): a churn batch is judged
+   by those (issue #127), so a signature a few runs a batch hit is still filed once it adds up;
+   with no counts, by runs alone."
+  [runs report-title code-at counts]
   (doseq [[l color] [[label "d93f0b"] ["sim" "1d76db"] ["real" "0e8a16"]]]
     (gh! "-X"
          "POST" (str "repos/" (repo) "/labels")
          "-f" (str "name=" l)
          "-f" (str "color=" color)))
-  (let [runs (runs-under dir)
-        groups (grouped runs)]
+  (let [groups (grouped runs)
+        seen (fn [sig rs] (get counts sig (count rs)))]
     (println "runs:" (count runs)
              "failed and filed-able:" (count (mapcat second groups))
              "signatures:" (count groups))
-    (doseq [line (summary-lines runs groups)] (println line))
+    (doseq [line (summary-lines runs groups counts)] (println line))
     (reduce (fn [opened [sig rs]]
-              (cond (or (< (count rs) min-runs) ; a one-off
+              (cond (or (< (seen sig rs) min-runs) ; a one-off, so far
                         (and (>= opened max-new) (nil? (issue-for (issues) sig)))) ; no room for a new issue
                     opened
                     :else
@@ -337,6 +341,11 @@
                       (if (= :opened what) (inc opened) opened))))
             0
             groups)))
+
+(defn report!
+  "File the failed runs under dir (report-runs!)."
+  [dir report-title code-at]
+  (report-runs! (runs-under dir) report-title code-at nil))
 
 (defn -main
   "report <dir> <title> [code-at]: file the failures under dir as issues."

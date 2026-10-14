@@ -18,11 +18,11 @@
 
 (defn winners
   "The real runs that reached the goal: [{:bot name :runner n} ...], from the RESULT lines under
-   dir (a racelog artifact is racelog-<sha>-<runner>)."
+   dir (a racelog artifact is racelog-<sha>-<runner>, a churn batch's race-<sha>-<runner>)."
   [runs]
   (vec (for [r runs
              :when (and (:ok r) (= :real (failures/source r)))
-             :let [[_ n] (re-matches #"racelog-[0-9a-f]+-(\d+)" (str (:run/artifact r)))]]
+             :let [[_ n] (re-matches #"(?:racelog|race)-[0-9a-f]+-(\d+)" (str (:run/artifact r)))]]
          {:bot (:run/bot r)
           :runner (some-> n
                           parse-long)})))
@@ -55,15 +55,28 @@
              "-D" (str (fs/path dir (str runner)))))
   (vec (for [{:keys [bot]} ws f (fs/glob dir (str "**/" bot ".edn.zst"))] (str f))))
 
-(defn release!
-  "Tag sha as nether-<run> and create the release with the winners' recordings; nothing when no
-   run won. Prints what it did."
-  [dir run sha]
-  (let [ws (winners (failures/runs-under dir))]
-    (cond (empty? ws) (println "no winner in" dir)
+(defn local-recordings
+  "The winners' recordings under dir (the job's own record directory, while the churn plays):
+   each bot's .edn.zst, else its .edn."
+  [dir ws]
+  (vec (for [{:keys [bot]} ws
+             :let [f (or (first (fs/glob dir (str "**/" bot ".edn.zst")))
+                         (first (fs/glob dir (str "**/" bot ".edn"))))]
+             :when f]
+         (str f))))
+
+(defn release-runs!
+  "Tag sha nether-<run>-<first winner> and create the release with the winners among runs and
+   their recordings (from rec-dir when given, the churn's own files; else downloaded from the
+   run's race artifacts); nothing when no run won. Prints what it did."
+  [runs run sha rec-dir]
+  (let [ws (winners runs)]
+    (cond (empty? ws) (println "no winner")
           :else
-          (let [tag (str tag-prefix run)
-                files (recordings! run sha ws (fs/create-dirs (str "win-" run)))]
+          (let [tag (str tag-prefix run "-" (:bot (first ws)))
+                files (if rec-dir
+                        (local-recordings rec-dir ws)
+                        (recordings! run sha ws (fs/create-dirs (str "win-" run))))]
             (apply
              p/shell
              "gh"
@@ -80,6 +93,12 @@
             (println "released" tag
                      "with" (count files)
                      "recordings:" (str/join ", " (map :bot ws)))))))
+
+(defn release!
+  "The winners among the runs under dir become a release (release-runs!), their recordings from
+   the run's race artifacts."
+  [dir run sha]
+  (release-runs! (failures/runs-under dir) run sha nil))
 
 (defn -main
   "release <dir> <run> <sha>: the winners under dir become a release."

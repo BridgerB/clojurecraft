@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   plan:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       runners: ${{ steps.read.outputs.runners }}
       server-heap: ${{ steps.read.outputs.server-heap }}
@@ -44,7 +44,7 @@ jobs:
 
   ramp:
     needs: plan
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 110
     strategy:
       fail-fast: false
@@ -139,7 +139,7 @@ jobs:
   report:
     needs: ramp
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
