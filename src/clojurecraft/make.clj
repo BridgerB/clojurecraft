@@ -425,9 +425,10 @@
 (defmethod plan/act :gather [world _] (wood/gather-next world))
 
 (defmethod plan/act :place
-  [_ row]
-  (cond-> {:intent/kind :place :intent/item (:goal/item row)}
-    (:goal/passage-ok? row) (assoc :intent/passage-ok? true)))
+  [world row]
+  (place/ashore world
+                (cond-> {:intent/kind :place :intent/item (:goal/item row)}
+                  (:goal/passage-ok? row) (assoc :intent/passage-ok? true))))
 
 (defn at-container
   "The intent i once the window of the placed block (a table, a furnace) is open; before that,

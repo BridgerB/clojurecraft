@@ -154,8 +154,8 @@
    [:plan/unwalkable "walks in a row that failed :no-path; max-unwalkable of them fail the plan"
     "from the :go event"]
    [:plan/boxed-at
-    "feet cells where a staircase died :boxed: no descent starts there again, no stair steps onto one"
-    "after a :boxed staircase"]
+    "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
+    "after a :boxed staircase or tunnel"]
    [:plan/intents "intents started so far; the next one's :intent/id" "after the first intent"]
    [:plan/intent "the intent being executed" "while one runs"]
    [:plan/last "the last intent that ended, with its outcome" "after one ends"]
@@ -291,6 +291,9 @@
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
    [:intent/item "item to place" "place, redig"]
    [:intent/against "block the placement is against" "place"]
+   [:intent/refused
+    "cells the server refused a placement into with nothing in them (a body stood there); the next spot is another, place/max-refusals of them fail :rejected"
+    "place, after such a refusal"]
    [:intent/sequence "sequence number of the placement, or of the bucket's use"
     "place and scoop, after sending"]
    [:intent/tries "scoops sent at this source; the last of scoop/max-tries fails :no-scoop"

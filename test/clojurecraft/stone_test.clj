@@ -5,6 +5,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.plan :as plan]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
@@ -160,6 +161,38 @@
     (is (some? (stone/deeper (standing 16 :stone_pickaxe))) "plain rock: stairs deeper")
     (is (nil? (stone/deeper w)) "water beside every stair: none")))
 
+(deftest boxed-in-by-water-with-no-way-away-the-mine-climbs-out
+  ;; race 38515209959 (issue #105): runner 3 bot Clj_r19 and runner 9 bot Clj_r18 tunnelled for
+  ;; gravel at y 38-40 into underground water, swam out onto a cell every stair and tunnel from
+  ;; which was refused, with no route away along the flooded tunnel, and waited :boxed out
+  ;; holding 405 and 466 cobblestone; runner 3 bot Clj_r13 started three tunnels in a row from
+  ;; one pocket between two sheets of water, each :boxed a step or two on
+  (let [water (into {[5 16 5] 0 [5 17 5] 0} ; the pocket, water two cells off every way
+                    (for [[dx dz] stairs/directions]
+                      [[(+ 5 (* 2 dx)) 16 (+ 5 (* 2 dz))] blocks/water-base]))
+        pocket (assoc (standing 16 :stone_pickaxe :cobblestone)
+                      :world/chunks
+                      {[0 0] (world/column water)})]
+    (is (nil? (stone/tunnel-heading pocket)) "every first step borders the water")
+    (is (nil? (stone/deeper pocket)) "so does every stair down")
+    (is (nil? (stone/retreat pocket)) "rock all round: no route away")
+    (is (= {:intent/kind :stairs-up :intent/to-y 24 :intent/for :boxed}
+           (stone/mine-next pocket (row :dig-gravel)))
+        "a climb, eight stairs at a time")
+    (is (nil? (stone/climb (standing 64 :stone_pickaxe))) "out of the ground there is none"))
+  (testing "a tunnel that died :boxed is not started again from its pocket"
+    (let [w (standing 16 :stone_pickaxe)
+          died (plan/fail-intent
+                (assoc w :plan/blacklist #{} :plan/attempts 0)
+                {:intent/kind :tunnel :intent/reason :boxed :intent/status :failed :intent/id 7})]
+      (is (some? (stone/tunnel-heading w)) "plain rock: a tunnel")
+      (is (contains? (:plan/boxed-at died) [5 16 5]) "the cell it died on")
+      (is (nil? (stone/tunnel-heading died)))
+      (is (some? (stone/deeper w)) "plain rock: stairs deeper")
+      (is (nil? (stone/deeper died)) "no descent from the cell either")
+      (is (= :stairs-up (:intent/kind (stone/mine-next died (row :mine-iron))))
+          "encased in rock with no way away: the climb"))))
+
 (def sealed-ore
   "Iron ore buried in the floor at [8 61 8], with a two-cell pocket beside it to stand in
    ([9 61 8] and [9 62 8]) and stone all round: exposed, and no route from the surface reaches
@@ -213,3 +246,29 @@
         "nothing under it: a drop, not a step")
     (is (nil? (stone/beside (dug {[11 64 8] 1}) [11 63 8]))
         "stone over it: nowhere to step down from")))
+
+(deftest a-stair-up-asked-for-mid-jump-waits-for-the-ground
+  ;; race 38515209959 (issue #107, at 7239df5) bots Clj_r04 (runner 3) and Clj_r06 (runner 7): a
+  ;; collect jumping against a two-high wall had the climb out asked for at y 65.17, mid-jump,
+  ;; so its cells were planned a block too high, the step under the new feet was never cut, and
+  ;; the jump met the wall for 10 s, :stair-not-taken three times. The third bot, Clj_r03
+  ;; (runner 9), walked into a stair cell the lagging server had not cut, its FINISH dropped
+  ;; behind a delayed destroy; a dig ends on the block update since ac38129. Covered since
+  ;; a54c3ec: a staircase waits in :plan for the ground (stairs/airborne?)
+  (let [wall {[6 64 5] 1 [6 65 5] 1}
+        up {:intent/kind :stairs-up :intent/to-y 70 :intent/to-height? true :intent/status :active}
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        jumping (assoc (standing 64 :stone_pickaxe)
+                       :player/pos [5.5 65.17 5.5]
+                       :player/on-ground? false
+                       :world/chunks {[0 0] (world/column wall)}
+                       :plan/intent up)
+        w (intent/run jumping up tick)]
+    (is (stairs/airborne? jumping))
+    (is (nil? (:intent/stage (:plan/intent w))) "still in :plan, nothing planned from the air")
+    (is (= {} (:player/controls w)) "and no push: the body lands")
+    (let [landed (assoc jumping :player/pos [5.5 64.0 5.5] :player/on-ground? true)
+          w (intent/run landed up tick)]
+      (is (= :open (:intent/stage (:plan/intent w))))
+      (is (= [[5 66 5] [6 66 5] [6 65 5]] (:intent/cells (:plan/intent w)))
+          "the stair from the landed feet, its new feet on the wall's lower block"))))

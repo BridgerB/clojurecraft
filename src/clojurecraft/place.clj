@@ -27,6 +27,7 @@
 (def open-reach 4.5)                  ; eye → container centre for opening it; the server allows about 4.5
 (def settle-ms 300)                   ; standing still this long before using an item on a block
 (def answer-ms 3000)                  ; ms to wait for the server to answer a placement or an open
+(def max-refusals 3)                  ; spots the server refused with nothing in them before a placement fails :rejected
 
 (defn- now [world] (:time/now world))
 
@@ -74,10 +75,12 @@
    table three times to place a gravel and failed :rejected), not inside the player, within
    reach. A passage is allowed when passage-ok? (a block placed only to be dug again at once,
    which leaves the way open: gym batch iron-a6 run 1, at the foot of its stairs between its
-   table and furnace, found no spot for a gravel but the stair behind it). Pure; nil when there
-   is none."
+   table and furnace, found no spot for a gravel but the stair behind it). A cell in refused is
+   passed over: the server answered a placement there with the cell still empty, a body
+   standing in it (give-up). Pure; nil when there is none."
   ([world] (spot world false))
-  ([world passage-ok?]
+  ([world passage-ok?] (spot world passage-ok? #{}))
+  ([world passage-ok? refused]
    (let [[px py pz] (:player/pos world)
          fx (long (math/floor px))
          fy (long (math/floor py))
@@ -90,6 +93,7 @@
                         s (terrain/block-at world support)]
                   :when (and t
                              s
+                             (not (contains? refused target))
                              (blocks/replaceable? t)
                              (terrain/confirmed? world target)
                              (blocks/solid? s)
@@ -98,6 +102,17 @@
                              (not (inside-player? world target))
                              (<= (physics/distance eye (physics/centre target)) place-reach))]
               [target support])))))
+
+(defn ashore
+  "intent, or, with the body in water, a :swim-out for :retreat first (done on dry land, swim):
+   a spot is sought round the feet, and afloat at a pond's edge every cell round them is water
+   and the bank is above the impulse's reach, so the place fails :no-spot the tick it starts,
+   three times in half a second, before the trap can preempt it. Sim race 38515210080 world
+   R4/41 (issue #95, 15 runs; four real bots of race 38515209959): the bucket filled, the bot
+   was afloat in the column its source left, two under the bank, and the gravel to dig again
+   for flint found no spot."
+  [world intent]
+  (if (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat} intent))
 
 (defn use-item-on
   "Right-click face of the block at pos with the held item: emit use-item-on with a fresh
@@ -158,6 +173,16 @@
 
 (defmethod place-stage :equip [world {:intent/keys [item]}] (equip world item :spot))
 
+(defn droppable?
+  "Can a held tool drop the block id: one in the hotbar (intent/choose-tool, not :needs-tool)
+   or one stowed in the main inventory (intent/stowed-tool), which the niche's dig puts in the
+   hand first. Equipping the furnace swaps the pickaxe out of the hand into the main inventory
+   when the hotbar is full of what mining picked up, and a niche asked of the hotbar alone was
+   then refused everywhere: sim race 38477665389 world R1/43 (issue #94, 11 runs) held two
+   stone pickaxes and the furnace at the end of its iron tunnel at y 16, :no-spot three times."
+  [world id]
+  (boolean (or (intent/stowed-tool world id) (not= :needs-tool (intent/choose-tool world id)))))
+
 (defn niche
   "A cell beside the feet at their level, or beside the head when none is there (the block
    goes into the wall at head height, still in reach to open: race 38477665442 bot Clj_r12 at
@@ -187,7 +212,7 @@
                             (solid-at? world (update c 1 inc))
                             (not (blocks/falls? (terrain/block-at world (update c 1 inc))))
                             (not (intent/exposes-fluid? world c))
-                            (not= :needs-tool (intent/choose-tool world (terrain/block-at world c)))
+                            (droppable? world (terrain/block-at world c))
                             (not (contains? (into intent/never-dug memory/placed-kinds)
                                             (blocks/name-of (terrain/block-at world c)))))]
              c))))
@@ -230,19 +255,31 @@
   ;; a given cell (:intent/cell, a build's) against a solid neighbour; else a plain spot, else a
   ;; niche cut in the wall, else (passage-ok?) a spot in the passage: a table or a gravel to dig
   ;; again leaves the way open when the bot goes on
-  [world {:intent/keys [passage-ok?] at :intent/cell}]
+  [world {:intent/keys [passage-ok? refused] at :intent/cell :or {refused #{}}}]
   (let [[against face :as given] (when at (support world at))
-        found (when-not at (spot world))
+        found (when-not at (spot world false refused))
         n (when-not (or at found) (niche world))
-        [target from] (or found (when (and (nil? at) (nil? n) passage-ok?) (spot world true)))]
+        [_ stowed-item :as stowed] (when n (intent/stowed-tool world (terrain/block-at world n)))
+        [target from] (or found
+                          (when (and (nil? at) (nil? n) passage-ok?) (spot world true refused)))]
     (cond given (settle-at world at against face)
           at (intent/fail world :no-support)
           target (settle-at world target from :up)
+          ;; the tool the niche needs is in the main inventory: in the hand first, then the dig
+          stowed
+          (intent/assoc-intent world
+                               :intent/stage :niche
+                               :intent/child
+                               {:intent/kind :equip
+                                :intent/item (recipe/item-name stowed-item)
+                                :intent/status :active})
           n (intent/assoc-intent world :intent/stage :niche :intent/child (intent/child-dig n))
           :else (intent/fail world :no-spot))))
 
 (defn dig-niche
-  "One tick of digging the niche (the child :dig); done and the cell confirmed by the server
+  "One tick of digging the niche (the child :dig, or first the child :equip of its tool from the
+   main inventory, which done starts the dig of the niche found again, the tool now in the
+   hotbar); done and the cell confirmed by the server
    (terrain/confirmed?), or the server silent for answer-ms since the dig's FINISH, equip again
    (the dig chose its own held slot) and look for the spot; failed, fail with its reason. A
    loaded server acks the FINISH at once and breaks the block seconds later, by its own clock
@@ -250,7 +287,11 @@
    niche a second after the ack, the server answered with the stone still there, and three
    such placements failed the plan :rejected."
   [world {:intent/keys [child]} event]
-  (cond (and (intent/done? child)
+  (cond (and (= :equip (:intent/kind child)) (intent/done? child))
+        (if-let [n (niche world)]
+          (intent/assoc-intent world :intent/child (intent/child-dig n))
+          (intent/fail world :no-spot))
+        (and (intent/done? child)
              (or (terrain/confirmed? world (:intent/target child))
                  (> (- (now world) (:intent/since child)) answer-ms)))
         (-> world
@@ -279,12 +320,33 @@
               (intent/assoc-intent :intent/stage :sent))
           :else (intent/assoc-intent world :intent/still still))))
 
+(defn give-up
+  "Back to :spot with target among the cells refused (:intent/refused), so the next spot is
+   another one: the server answered the placement with the cell still empty, which is a body
+   standing in it, not a block (the game refuses a block into any player, its own included).
+   Race 38515209959 runner 9 bot Clj_r17 (issue #106): bot Clj_r24, landed at the same cell,
+   walked through the furnace's spot collecting the same drops, and the same spot was sent
+   three times in two seconds, :rejected. A placement refused with a block in the cell (the
+   stone of a niche put back) is still :rejected at once."
+  [world target refused]
+  (-> world
+      (intent/assoc-intent :intent/stage :spot :intent/refused (conj refused target))
+      (intent/dissoc-intent :intent/target
+                            :intent/against :intent/click-face
+                            :intent/sequence :intent/sent-at)
+      (game/say (str "place: " target " refused with nothing in it, another spot"))))
+
 (defmethod place-stage :sent
-  [world {:intent/keys [item target sequence sent-at]}]
-  (let [placed (terrain/block-at world target)]
+  ;; a chosen cell the server refused with nothing in it is given up for another (give-up), up
+  ;; to max-refusals; a given cell (a build's) is judged by the server alone
+  [world {:intent/keys [item target sequence sent-at refused] at :intent/cell :or {refused #{}}}]
+  (let [placed (terrain/block-at world target)
+        answered? (and (>= (or (:stats/last-ack world) -1) sequence)
+                       (> (- (now world) sent-at) 500))]
     (cond (= item (blocks/name-of placed)) (intent/done world) ; any state of the block: a furnace faces as the server chose
-          (and (>= (or (:stats/last-ack world) -1) sequence) (> (- (now world) sent-at) 500))
-          (intent/fail world :rejected)
+          (and answered? (nil? at) (blocks/replaceable? placed) (< (count refused) max-refusals))
+          (give-up world target refused)
+          answered? (intent/fail world :rejected)
           (> (- (now world) sent-at) answer-ms) (intent/fail world :no-answer)
           :else world)))
 

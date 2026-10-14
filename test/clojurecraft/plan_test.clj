@@ -178,6 +178,88 @@
     (is (= :walk (:intent/kind (wood/gather-next ground)))
         "on open ground the trunk is walked to")))
 
+(def quarry
+  "A quarry two wide and two deep in the stone, open to the sky, as the stone mine digs round its
+   feet: the floor at y 62 under [8 8] and [9 8], and a trunk on the ground four blocks east."
+  {[8 62 8] blocks/air
+   [8 63 8] blocks/air
+   [9 62 8] blocks/air
+   [9 63 8] blocks/air
+   [12 64 8] 136
+   [12 65 8] 136})
+
+(deftest a-quarry-with-a-level-step-across-its-floor-is-climbed-out-of
+  ;; race 38515209959 (issue #102, 16 real bots; #103, 14) and the sim race in worlds R3/36 and
+  ;; R3/32: the stone mine dug its cobblestone round the bot's feet, the stairs it came down by
+  ;; among them, and left it at the bottom of a quarry two or three deep and a few cells wide
+  ;; with the trees seven blocks off. The sky was over the feet and a level step crossed the
+  ;; floor, so stairs/out? said out and nothing was cut; no route reached a trunk, the hunt had
+  ;; none either, and each waited :no-log. A quarry is a pit: its floor has a wall every way
+  (let [w (remembered quarry [8.5 62.0 8.5])
+        feet (intent/feet w)]
+    (is (terrain/under-sky? w feet) "the sky is over the quarry")
+    (is (stairs/open-step? w (stairs/level-cells feet [1 0])) "a level step east, across its floor")
+    (is (= 64 (stairs/pit-rim w feet)) "walls two high every way: the rim is the ground")
+    (is (not (stairs/out? w feet)) "a quarry is not out of the ground")
+    (is (not (intent/routable? w (wood/log-walk w [12 64 8]))) "two deep: no jump climbs it")
+    (is (nil? (wood/hunt w)) "no ground a hunt could walk to")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y (stairs/climb-to w terrain/top-y)
+            :intent/for :surface}
+           (wood/gather-next w))))
+  (let [ground (remembered {[12 64 8] 136 [12 65 8] 136} [8.5 64.0 8.5])
+        feet (intent/feet ground)]
+    (is (nil? (stairs/pit-rim ground feet)) "open ground is no pit")
+    (is (stairs/out? ground feet))))
+
+(def crevice
+  "A crevice two deep in the stone under the canopy of a chopped tree, like the sim race's in world
+   R2/45 at [2256 68 4598]: the floor at y 62 under [8 8] and [8 9], a notch one up at [8 63 7]
+   that the leaves at y 65 cap, so no jump leaves it, and a trunk on the ground six blocks north."
+  {[8 62 8] blocks/air
+   [8 63 8] blocks/air
+   [8 62 9] blocks/air
+   [8 63 9] blocks/air
+   [8 63 7] blocks/air
+   [8 65 7] 252
+   [8 65 8] 252
+   [8 64 2] 136
+   [8 65 2] 136
+   [8 66 2] 136
+   [8 67 2] 252})
+
+(deftest a-crevice-under-the-canopy-is-climbed-out-of
+  ;; sim race 38515210080, world R2/45 (issue #104, 19 runs; race 38515209959, 4 real bots): the
+  ;; first log came down into a crevice of the forest floor two deep under its own canopy, and
+  ;; the kit's sticks sent the bot for a second with the trunk two blocks off. A level step ran
+  ;; along the crevice's floor and the leaves over it are not cover, so stairs/out? said out;
+  ;; the one notch up ended under the leaves, no route reached a trunk or a hunt's ground, and
+  ;; the bot waited :no-log. The crevice is a pit (stairs/pit-rim): stairs are cut up out of it
+  (let [w (remembered crevice [8.5 62.0 8.5])
+        feet (intent/feet w)]
+    (is (terrain/under-sky? w feet) "leaves are not cover: the sky is over the crevice")
+    (is (stairs/open-step? w (stairs/level-cells feet [0 1])) "a level step south, along it")
+    (is (= 64 (stairs/pit-rim w feet)) "a wall every way past the notch: the rim is the ground")
+    (is (not (stairs/out? w feet)) "a crevice is not out of the ground")
+    (is (not (intent/routable? w (wood/log-walk w [8 64 2]))) "the notch ends under the leaves")
+    (is (nil? (wood/hunt w)) "no ground a hunt could walk to")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y (stairs/climb-to w terrain/top-y)
+            :intent/for :surface}
+           (wood/gather-next w))))
+  ;; played on (issue check, PR #114): the first stair up put the bot in the notch, one deep
+  ;; under the leaves; every column round it had a cell to stand in a block up, so pit-rim took
+  ;; it for open ground, the climb ended and the wait began again. A step up needs the jump's
+  ;; headroom: under the leaves the notch is still a pit
+  (let [w (remembered crevice [8.5 63.0 7.5])
+        notch (intent/feet w)]
+    (is (= [8 63 7] notch))
+    (is (= [-1 0] (stairs/step-rises w notch)) "leaves over the head: no step goes up")
+    (is (= 64 (stairs/pit-rim w notch)) "a wall every way")
+    (is (not (stairs/out? w notch)))
+    (is (nil? (stairs/pit-rim (remembered (dissoc crevice [8 65 7]) [8.5 63.0 7.5]) notch))
+        "with the sky clear over the head, the ground a block up is stepped onto: no pit")))
+
 (def canopy-pocket
   "A pocket one deep under an oak canopy, like race 38477665442 runner 10 Clj_r16's at
    [2256 69 4597]: walls two high round the feet at [8 64 8], the one step north open at body

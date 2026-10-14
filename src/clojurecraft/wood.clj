@@ -100,6 +100,11 @@
    (Clj_r20), into a notch under an overhang by a pond (Clj_r09), onto a ledge of its own quarry
    (Clj_r01) and onto a lakeshore under a cliff (Clj_r12); every trunk was up the wall no jump
    climbs, twelve walks failed :no-path, and the sky over the feet said there was nothing to cut.
+   Nor is the floor of a quarry with a level step across it (stairs/pit-rim): race 38515209959
+   (issues #102, #103) and the sim race in worlds R3/36 and R3/32 stood at the bottom of the
+   quarry the stone mine had dug round their feet, its stairs eaten by the digs, with the trees
+   seven blocks off and no route to any; the sky over the feet and a step across the floor said
+   out, the hunt had no route either, and each waited :no-log for the table's log.
    nil when no trunk is remembered yet. Full run 29ef069 cut a stair at spawn before any tree was
    remembered, failed :stair-not-taken, and the plan then waited :no-log. Full run 4528031
    remembered the trees, found no route through the mine, and cut a new stair; the only pickaxe

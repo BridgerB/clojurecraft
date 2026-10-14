@@ -445,6 +445,7 @@
 (s/def :intent/awaiting-window int?)
 (s/def :intent/sent-at int?)
 (s/def :intent/against ::block-pos)
+(s/def :intent/refused (s/coll-of ::block-pos :kind set?))
 (s/def :intent/sequence int?)
 (s/def :chunk/column map?)
 (s/def :chunk/min-y #{-64 0})
@@ -641,7 +642,12 @@
 (s/fdef place/spot
   :args
   (s/cat :world (requires :player/pos :world/chunks)
-         :passage-ok? (s/? boolean?)))
+         :passage-ok? (s/? boolean?)
+         :refused (s/? :intent/refused)))
+(s/fdef place/ashore
+  :args
+  (s/cat :world (requires :player/in-water?)
+         :intent map?))
 (s/fdef path/plan
   :args
   (s/cat :world (requires :world/chunks)
@@ -662,6 +668,6 @@
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
-   `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `window/view `path/plan
-   `path/classify])
+   `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
+   `window/view `path/plan `path/classify])
 (s/def :stats/deaths pos-int?)
