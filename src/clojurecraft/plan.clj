@@ -207,6 +207,7 @@
       (dissoc :plan/intent)))
 
 (def placing-kinds #{:place :redig})  ; intents whose target is a cell they chose to put a block in, not a place they failed to reach
+(def boxing-kinds #{:stairs-down :tunnel}) ; intents that die :boxed standing in a pocket, which :plan/boxed-at remembers
 
 (defn fail-intent
   "An intent failed: stop moving, blacklist its target (and count a failure against its trunk's
@@ -221,8 +222,9 @@
    walked, so the target is given up and the next candidate is tried (three such walks, each a
    different place, used to end a run that was still searching), but max-unwalkable of them in
    a row fail the plan too, so a search whose places keep changing cannot run for hours. A
-   staircase that died :boxed records the cell it stood on in :plan/boxed-at, so the next descent
-   does not start there and a later stair will not step back onto it."
+   staircase or a tunnel that died :boxed (boxing-kinds) records the cell it stood on in
+   :plan/boxed-at, so the next descent or tunnel does not start there and a later stair will not
+   step back onto it."
   [world i]
   (let [unwalkable? (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))
         attempts (cond-> (:plan/attempts world 0) (not unwalkable?) inc)
@@ -232,7 +234,7 @@
         (assoc :player/controls {})
         (cond-> (and (:intent/target i) (not (contains? placing-kinds (:intent/kind i))))
                 (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
-        (cond-> (and (= :stairs-down (:intent/kind i)) (= :boxed (:intent/reason i)))
+        (cond-> (and (contains? boxing-kinds (:intent/kind i)) (= :boxed (:intent/reason i)))
                 (update :plan/boxed-at (fnil conj #{}) (intent/feet world)))
         (cond-> (:intent/trunk i)
                 (update-in [:plan/trunk-failures (let [[x _ z] (:intent/trunk i)] [x z])]

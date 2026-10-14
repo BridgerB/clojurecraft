@@ -154,8 +154,8 @@
    [:plan/unwalkable "walks in a row that failed :no-path; max-unwalkable of them fail the plan"
     "from the :go event"]
    [:plan/boxed-at
-    "feet cells where a staircase died :boxed: no descent starts there again, no stair steps onto one"
-    "after a :boxed staircase"]
+    "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
+    "after a :boxed staircase or tunnel"]
    [:plan/intents "intents started so far; the next one's :intent/id" "after the first intent"]
    [:plan/intent "the intent being executed" "while one runs"]
    [:plan/last "the last intent that ended, with its outcome" "after one ends"]

@@ -160,6 +160,38 @@
     (is (some? (stone/deeper (standing 16 :stone_pickaxe))) "plain rock: stairs deeper")
     (is (nil? (stone/deeper w)) "water beside every stair: none")))
 
+(deftest boxed-in-by-water-with-no-way-away-the-mine-climbs-out
+  ;; race 38515209959 (issue #105): runner 3 bot Clj_r19 and runner 9 bot Clj_r18 tunnelled for
+  ;; gravel at y 38-40 into underground water, swam out onto a cell every stair and tunnel from
+  ;; which was refused, with no route away along the flooded tunnel, and waited :boxed out
+  ;; holding 405 and 466 cobblestone; runner 3 bot Clj_r13 started three tunnels in a row from
+  ;; one pocket between two sheets of water, each :boxed a step or two on
+  (let [water (into {[5 16 5] 0 [5 17 5] 0} ; the pocket, water two cells off every way
+                    (for [[dx dz] stairs/directions]
+                      [[(+ 5 (* 2 dx)) 16 (+ 5 (* 2 dz))] blocks/water-base]))
+        pocket (assoc (standing 16 :stone_pickaxe :cobblestone)
+                      :world/chunks
+                      {[0 0] (world/column water)})]
+    (is (nil? (stone/tunnel-heading pocket)) "every first step borders the water")
+    (is (nil? (stone/deeper pocket)) "so does every stair down")
+    (is (nil? (stone/retreat pocket)) "rock all round: no route away")
+    (is (= {:intent/kind :stairs-up :intent/to-y 24 :intent/for :boxed}
+           (stone/mine-next pocket (row :dig-gravel)))
+        "a climb, eight stairs at a time")
+    (is (nil? (stone/climb (standing 64 :stone_pickaxe))) "out of the ground there is none"))
+  (testing "a tunnel that died :boxed is not started again from its pocket"
+    (let [w (standing 16 :stone_pickaxe)
+          died (plan/fail-intent
+                (assoc w :plan/blacklist #{} :plan/attempts 0)
+                {:intent/kind :tunnel :intent/reason :boxed :intent/status :failed :intent/id 7})]
+      (is (some? (stone/tunnel-heading w)) "plain rock: a tunnel")
+      (is (contains? (:plan/boxed-at died) [5 16 5]) "the cell it died on")
+      (is (nil? (stone/tunnel-heading died)))
+      (is (some? (stone/deeper w)) "plain rock: stairs deeper")
+      (is (nil? (stone/deeper died)) "no descent from the cell either")
+      (is (= :stairs-up (:intent/kind (stone/mine-next died (row :mine-iron))))
+          "encased in rock with no way away: the climb"))))
+
 (def sealed-ore
   "Iron ore buried in the floor at [8 61 8], with a two-cell pocket beside it to stand in
    ([9 61 8] and [9 62 8]) and stone all round: exposed, and no route from the surface reaches

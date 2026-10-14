@@ -153,7 +153,7 @@
   "The staircase to cut when nothing is in sight: stair-depth down from the feet, never below
    the row's :goal/depth; nil when the feet are already there, or when the feet cell is in
    :plan/boxed-at, a stairs-down having died :boxed there. Another one from that cell dies the
-   same way; the act tunnels, goes deeper or retreats instead."
+   same way; the act tunnels, goes deeper, retreats or climbs out instead."
   [world {:goal/keys [depth]}]
   (let [feet (long (math/floor (physics/y-of (:player/pos world))))
         to (cond-> (- feet stair-depth) depth (max depth))]
@@ -169,7 +169,12 @@
    landing (:plan/go-at; +x first without one), the first whose first level step is allowed
    (stairs/level-safe?) and has rock to cut, so never back along an open tunnel nor straight at
    what refused the last; nil when none. With the heading fixed, gym batches iron-a3 and
-   iron-a4 retried tunnels :boxed by an aquifer three times in a second and failed."
+   iron-a4 retried tunnels :boxed by an aquifer three times in a second and failed. nil too
+   when the feet cell is in :plan/boxed-at: a tunnel died :boxed standing there (plan/fail-intent),
+   and one started again from the pocket dies the same way, since each heading's first step is
+   all this looks at. Race 38515209959 runner 3 bot Clj_r13 (issue #105): at y 34 between two
+   sheets of water, three tunnels in a row were started from the same pocket, each refused a
+   step or two on and :boxed, and the plan failed in 25 seconds with 511 cobblestone in hand."
   [world]
   (let [[x _ z] (:player/pos world)
         [fx _ fz :as feet] (intent/feet world)
@@ -182,20 +187,23 @@
                                                                                home))
                                                0)])
                         stairs/directions)]
-    (first (filter (fn [d]
-                     (let [cells (stairs/level-cells feet d)]
-                       (and (stairs/level-safe? world cells)
-                            (some #(some-> (terrain/block-at world %)
-                                           blocks/solid?)
-                                  cells))))
-                   ranked))))
+    (when-not (contains? (:plan/boxed-at world #{}) feet)
+      (first (filter (fn [d]
+                       (let [cells (stairs/level-cells feet d)]
+                         (and (stairs/level-safe? world cells)
+                              (some #(some-> (terrain/block-at world %)
+                                             blocks/solid?)
+                                    cells))))
+                     ranked)))))
 
 (def retreat-distance 12)             ; blocks a retreat walks from where nothing could be cut
 
 (defn deeper
   "Stairs stair-depth below the feet when no tunnel can be cut here, the row's depth notwithstanding
    (ore lies below it too), when a stair from here can be cut at all and the bottom of the world is
-   not near; else nil. Cut means dug too: no cell of the stair borders water or lava
+   not near; else nil, and nil from a feet cell in :plan/boxed-at, where a staircase died :boxed
+   already, as stairs is: a descent from there dies the same way whatever its depth. Cut means
+   dug too: no cell of the stair borders water or lava
    (stairs/level-safe?), which the dig refuses; or cast, its floor laid from what is carried
    (stairs/lay). Gym batch iron-a6 run 3 was sent down stairs that could not be cut and failed
    :boxed three times in a second; batch iron-a8 run 3 down stairs whose every cell bordered
@@ -207,7 +215,9 @@
                     (let [cells (stairs/stair-cells feet d)]
                       (or (stairs/level-safe? world cells)
                           (and (stairs/level-clear? world cells) (stairs/lay world feet cells)))))]
-    (when (and (> to (+ chunk/min-y floor-margin)) (some cuttable? stairs/directions))
+    (when (and (not (contains? (:plan/boxed-at world #{}) feet))
+               (> to (+ chunk/min-y floor-margin))
+               (some cuttable? stairs/directions))
       {:intent/kind :stairs-down :intent/to-y to})))
 
 (defn retreat
@@ -226,13 +236,32 @@
       (when (= :found (:path/status r))
         {:intent/kind :walk :intent/target (last (:path/waypoints r)) :intent/for :retreat}))))
 
+(defn climb
+  "Stairs up out of the ground, climb-stairs at a time (stairs/climb-to), when nothing can be
+   tunnelled, cut or walked to from here and the feet are not out (stairs/out?); nil when they
+   are. A stair up seals the water beside its cells and lays its step from carried cobblestone
+   (stairs/up-lay), which a level step does not, so it is the one cut out of a pocket an
+   aquifer closed; up top the search starts afresh and the next descent begins elsewhere,
+   never from the pocket (:plan/boxed-at). Race 38515209959 (issue #105, four real bots at the
+   flint and steel): runner 3 bot Clj_r19 and runner 9 bot Clj_r18 tunnelled for gravel at
+   y 38-40 into underground water, swam out onto a cell every stair and tunnel from which was
+   refused, found no route away along the flooded tunnel, and waited :boxed out holding 405
+   and 466 cobblestone."
+  [world]
+  (let [feet (intent/feet world)]
+    (when-not (stairs/out? world feet)
+      {:intent/kind :stairs-up
+       :intent/to-y (stairs/climb-to world terrain/top-y)
+       :intent/for :boxed})))
+
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
    (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
    ends where the drop lands in reach, :intent/pickup?), or cut stairs down toward them, or at
    the row's depth a tunnel (tunnel-heading), or deeper stairs when none can be cut, or a retreat
-   when neither can; wait for the tool. The live runs that waited at the depth
-   with nothing in sight failed there; a tunnel's walls are where the ore shows."
+   when neither can, or a climb out when there is no way away either (climb); wait for the
+   tool. The live runs that waited at the depth with nothing in sight failed there; a tunnel's
+   walls are where the ore shows."
   [world row]
   (or (continue-mine world row)
       (let [missing (tool-missing world row)
@@ -259,6 +288,7 @@
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
                   (deeper world)
                   (retreat world)
+                  (climb world)
                   {:plan/wait :boxed})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
