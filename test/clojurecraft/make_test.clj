@@ -196,6 +196,22 @@
 
 (defn ingots [n] {:goal/id :ingots :goal/provides {:item/iron_ingot n} :goal/done? :provided?})
 
+(deftest a-pickaxe-for-the-coal-is-made-from-what-is-carried
+  ;; issue #36: race 38477665442 bot Clj_r20 at y 15 held raw iron, a wooden pickaxe, two sticks,
+  ;; a table and cobblestone, and no coal. The ingots' fuel counted the sticks as fuel, so the
+  ;; stone pickaxe they make was short of them, and the coal was dug with the last pickaxe until
+  ;; it broke. Now the sticks are a pickaxe's, and the coal row keeps a spare.
+  (let [held {:raw_iron 6 :wooden_pickaxe 1 :stick 2 :cobblestone 64 :crafting_table 1}
+        world (fn [held table?]
+                (cond-> (with-furnace (world-holding held false))
+                  table? (memory/observe [3 64 5] memory/crafting-table))) ; the furnace is at [7 64 5]
+        row (fn [held table?] (:goal/id (make/next-row (world held table?) (ingots 4) plan/goals)))]
+    (is (= :place-table (row held false))
+        "the table goes down for a stone pickaxe, not up for wood")
+    (is (= :craft/stone_pickaxe (row held true)) "with the table near, the stone pickaxe is made")
+    (is (= :mine-coal (row (assoc held :stone_pickaxe 1) true))
+        "two pickaxes held, one and its spare: the coal is dug")))
+
 (deftest fuel-is-planned-before-a-smelt
   (let [row #(:goal/id
               (make/next-row (with-furnace (world-holding % false)) (ingots 2) plan/goals))]
@@ -207,13 +223,16 @@
     (is (= :gather-log (row {:raw_iron 2})) "nothing to burn: wood, until coal can be mined")
     (is (= :craft/oak_planks (row {:raw_iron 2 :oak_log 2 :stone_pickaxe 1}))
         "a held log burns before coal is mined for, one kept back for a new pickaxe")
-    (is (= :mine-coal (row {:raw_iron 2 :oak_log 1 :stone_pickaxe 1}))
+    ;; a spare pickaxe held too: the coal row keeps one (issue #36), and these are about the fuel
+    (is (= :mine-coal (row {:raw_iron 2 :oak_log 1 :stone_pickaxe 1 :wooden_pickaxe 1}))
         "the last log is kept back: coal")
     (is (= :mine-coal
-           (:goal/id (make/next-row
-                      (with-furnace (world-holding {:raw_iron 9 :oak_log 1 :stone_pickaxe 1} false))
-                      (ingots 9)
-                      plan/goals)))
+           (:goal/id (make/next-row (with-furnace
+                                     (world-holding
+                                      {:raw_iron 9 :oak_log 1 :stone_pickaxe 1 :wooden_pickaxe 1}
+                                      false))
+                                    (ingots 9)
+                                    plan/goals)))
         "nine ingots need more than a log's four planks: coal"))
   (testing "fuel is netted after the row's other needs and the target's earlier provides"
     (is (= [{:coal 0 :oak_planks 1} 0] (make/burn {:coal 1 :oak_planks 1} 1600)) "coal first")

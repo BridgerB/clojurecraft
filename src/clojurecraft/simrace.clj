@@ -16,7 +16,8 @@
 
    A world is read once and its columns decoded once (prepared); every run of it shares that
    value. The model holds the whole world: nothing loads or unloads."
-  (:require [clojure.java.io :as io]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojurecraft.capture :as capture]
             [clojurecraft.chunk :as chunk]
@@ -102,6 +103,13 @@
         i (range n-worlds)]
     [i s]))
 
+(defn given-jobs
+  "The runs a list names, [[world-file seed] ...], as jobs [world-index seed] over files (the
+   distinct world files of the list, in its order)."
+  [given files]
+  (let [index (into {} (map-indexed (fn [i f] [(str f) i])) files)]
+    (mapv (fn [[f s]] [(index (str f)) s]) given)))
+
 ;;;; I/O: the world files, the threads, the lines ;;;;
 
 (defn world-files
@@ -137,8 +145,9 @@
   "Play the worlds under --worlds (directories, comma-separated; this runner's share of them with
    --runner k --runners n) on --threads threads (the cores when absent): each world with seeds
    from --seed (1) up, round the worlds, until --budget-minutes of wall time have passed (or
-   --seeds each when no budget is given). --world f plays one file. Prints a SIMRUN line per
-   run and the SIMRACE tally; keeps every run in <out>/runs.edn."
+   --seeds each when no budget is given). --world f plays one file. --runs f plays exactly the
+   runs an EDN file lists, [[world-file seed] ...] (an issue's reproductions, bb issue-check).
+   Prints a SIMRUN line per run and the SIMRACE tally; keeps every run in <out>/runs.edn."
   [& args]
   (let [o (cli/options args)
         {:keys [worlds seed seeds until threads out runner runners commit]
@@ -147,22 +156,28 @@
         o
         world (get o :world)
         budget (get o :budget-minutes)
+        given (some-> (get o :runs)
+                      slurp
+                      edn/read-string)
         until (or until default-until)
         max-ms (* 60000 (Long/parseLong (or minutes (str default-max-minutes))))
         first-seed (Long/parseLong (or seed "1"))
-        files (if world
-                [(io/file world)]
-                (shard (into [] (mapcat world-files) (str/split worlds #","))
-                       (Long/parseLong (or runner "1"))
-                       (Long/parseLong (or runners "1"))))
+        files (cond given (mapv io/file (distinct (map first given)))
+                    world [(io/file world)]
+                    :else
+                    (shard (into [] (mapcat world-files) (str/split worlds #","))
+                           (Long/parseLong (or runner "1"))
+                           (Long/parseLong (or runners "1"))))
         ws (mapv (fn [f]
                    (cli/log "world" (str f))
                    (assoc (prepared (capture/read-world f)) :capture/file (str f)))
                  files)
         deadline (when budget (+ (System/currentTimeMillis) (* 60000 (Long/parseLong budget))))
-        todo (atom (jobs (count ws)
-                         first-seed
-                         (when-not budget (Long/parseLong (or seeds (str default-seeds))))))
+        todo (atom (if given
+                     (given-jobs given files)
+                     (jobs (count ws)
+                           first-seed
+                           (when-not budget (Long/parseLong (or seeds (str default-seeds)))))))
         take! (fn [] (let [[old _] (swap-vals! todo rest)] (first old)))
         runs-file (str (io/file out "runs.edn"))
         n-threads (Long/parseLong (or threads (str (.availableProcessors (Runtime/getRuntime)))))

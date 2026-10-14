@@ -9,13 +9,14 @@
 (def iron (recipe/smelt-by-id :iron_ingot_from_smelting_raw_iron))
 (def charcoal (recipe/smelt-by-id :charcoal))
 
-(deftest coal-burns-first-then-planks-and-sticks
+(deftest coal-burns-first-then-planks-never-sticks
   (is (= #{:coal :charcoal} (first smelt/burn-order)))
-  (is (= #{:stick} (last smelt/burn-order)))
+  (is (contains? (last smelt/burn-order) :oak_planks))
+  (is (not-any? #(contains? % :stick) smelt/burn-order) "a stick is a pickaxe's handle (issue #36)")
   (is (not-any? #(contains? % :crimson_planks) smelt/burn-order) "the game does not burn it")
   (is (not-any? #(contains? % :crafting_table) smelt/burn-order) "a table burns, but is kept")
   (is (not-any? #(contains? % :oak_log) smelt/burn-order) "a log is worth four planks")
-  (is (= [[:coal 1] [:oak_planks 2] [:stick 3]]
+  (is (= [[:coal 1] [:oak_planks 2]]
          (smelt/fuels {:stick 3 :oak_planks 2 :coal 1 :wooden_pickaxe 1} :raw_iron))))
 
 (deftest a-batch-is-what-the-held-fuel-cooks

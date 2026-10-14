@@ -299,6 +299,19 @@
     (is (contains? (:sim/broken sim) [1 64 0]))
     (is (empty? (:sim/items sim)) "the wrong tier: no drop")))
 
+(deftest tools-never-stack-and-wear-one-at-a-time
+  ;; issue #36: the model stacked every item to 64, so a spare pickaxe joined the one in use and
+  ;; the dig that broke one emptied the slot of both
+  (let [slots (map inventory/slot [[:hotbar 0] [:hotbar 1] [:hotbar 2]])
+        [view left] (sim/insert {} slots {:item wooden-pickaxe :count 2})]
+    (is (= 1 (sim/stack-size wooden-pickaxe)))
+    (is (= 64 (sim/stack-size (get blocks/items :cobblestone))))
+    (is (nil? left))
+    (is (= [1 1] (keep #(:count (get view %)) slots)) "two pickaxes, two slots")
+    (let [worn (sim/wear (assoc-in view [(first slots) :durability] 1) (first slots))]
+      (is (nil? (get worn (first slots))) "the one worn out is gone")
+      (is (= {:item wooden-pickaxe :count 1} (get worn (second slots))) "the spare is not"))))
+
 (deftest a-worn-out-tool-leaves-its-slot
   (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] stone-id})
                                :spawn [0.5 64.0 0.5]
