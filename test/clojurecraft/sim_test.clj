@@ -1985,6 +1985,32 @@
     (is (< (:intent/level-steps (:plan/intent w) 0) 4) "climbed, not walked")
     (is (empty? (:sim/violations sim)))))
 
+(def aquifer-round-the-pocket
+  "pocket with a water source beside every cell the first stair up each way would open: at
+   y 67 and 68, two blocks out from the shaft along each axis."
+  (reduce (fn [b [x z]] (assoc b [x 67 z] blocks/water-base [x 68 z] blocks/water-base))
+          pocket
+          [[10 8] [6 8] [8 10] [8 6]]))
+
+(deftest stairs-up-through-an-aquifer-are-sealed-with-cobblestone
+  ;; race 38477665442 runner 8 bot Clj_r01 (issue #54): underground with its bucket, water
+  ;; beside every stair cell of the climb out, each child dig refused :unsafe, the staircase
+  ;; :boxed twice, and twelve walks to the water beside it failed :no-path. The water beside a
+  ;; stair is sealed with carried cobblestone first, then the stair is cut as any other
+  (let [[w sim] (intent-run-holding {:intent/kind :stairs-up :intent/to-y 72}
+                                    aquifer-round-the-pocket
+                                    66
+                                    {[:hotbar 0] {:item (item :stone_pickaxe) :count 1}
+                                     [:hotbar 1] {:item (item :cobblestone) :count 64}}
+                                    120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns
+                              :intent/level-steps])))
+    (is (<= 72.0 (second (:player/pos w))) "six stairs up, out of the pocket")
+    (is (not (:player/in-water? w)) "no water came down the shaft")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest the-table-is-taken-along-when-the-bot-goes-out
   ;; gym batch iron-a7 run 1 crafted three tables on its way down, a log each, and ran out of wood
   ;; for a pickaxe; a table left behind is a log spent on the next one

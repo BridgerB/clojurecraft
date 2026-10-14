@@ -213,13 +213,65 @@
   (when (and (not (falls-over? world cells)) (not-any? #(intent/exposes-fluid? world %) cells))
     (cells-to-lay world cells (step-to-lay world cells))))
 
+(defn water-beside
+  "The water cells among the four horizontal neighbours of each of cells (path/around; water
+   alone: lava beside a stair refuses it, clear-way?), distinct, in the cells' order; what the
+   child dig would let in from the side (intent/exposes-fluid?), and what a seal lays a block
+   into."
+  [world cells]
+  (distinct (for [[x y z] cells
+                  [dx _ dz] path/around
+                  :let [n [(+ x dx) y (+ z dz)]]
+                  :when (= :water (terrain/fluid-kind world n))]
+              n)))
+
+(defn water-over?
+  "Does a fluid stand straight over or under any of cells, or rest on gravel or sand over one
+   (intent/fluid-over-falling?)? A lake overhead is not sealed from below: the climb steps out
+   from under it toward the shore (step-aside) as before."
+  [world cells]
+  (boolean (some (fn [[x y z :as cell]]
+                   (or (terrain/fluid-kind world [x (inc y) z])
+                       (terrain/fluid-kind world [x (dec y) z])
+                       (intent/fluid-over-falling? world cell)))
+                 cells)))
+
+(defn up-sealed?
+  "May a stair up be cut as it stands: up-safe?, and none of its cells borders water, which the
+   child dig would refuse to open (:unsafe, intent/exposes-fluid?)."
+  [world cells]
+  (and (up-safe? world cells) (not-any? #(intent/exposes-fluid? world %) cells)))
+
+(defn seal
+  "The water cells beside a stair up's cells to lay a filler into (water-beside; a block placed
+   into a source takes its place), before the stair is cut as any other: when the stair is
+   otherwise allowed (up-safe?), the water is beside its cells alone (not water-over?), each
+   has a solid neighbour to place against (place/support) and enough of a filler is carried;
+   nil when the stair needs none (up-sealed?) or cannot be sealed. Race 38477665442 runner 8
+   bot Clj_r01 (issue #54): underground with its bucket, an aquifer round the shaft put water
+   beside every stair cell of the climb out; each child dig refused :unsafe, the staircase was
+   :boxed twice, and twelve walks to that water failed :no-path."
+  [world _feet cells]
+  (when (and (up-safe? world cells) (not (up-sealed? world cells)) (not (water-over? world cells)))
+    (let [cells (vec (water-beside world cells))]
+      (when (and (seq cells) (every? #(place/support world %) cells) (filler world (count cells)))
+        cells))))
+
+(defn up-lay
+  "The cells to lay before a stair up from feet can be cut: the seal over the water beside its
+   cells (seal, issue #54) when there is any, else its missing step (step-lay, issue #61); nil
+   when the stair needs none or none can be laid. The seal comes first: a step laid beside
+   open water is a stair the child dig then refuses (intent/exposes-fluid?)."
+  [world feet cells]
+  (or (seal world feet cells) (step-lay world feet cells)))
+
 (def shapes
   "How each kind of staircase is cut: the cells a stair opens (top first, the new feet last), the
-   rule that lets it be cut, which way the feet go when it is taken, and what to lay where the
-   floor under its new feet is missing: for stairs down the floor and its holder (lay), for
-   stairs up the step (step-lay)."
+   rule that lets it be cut, which way the feet go when it is taken, and what to lay before it
+   can be: for stairs down the floor where it is missing and its holder (lay), for stairs up a
+   seal over the water beside its cells, else its missing step (up-lay)."
   {:stairs-down {:cells stair-cells :safe? safe? :rise -1 :lay lay}
-   :stairs-up {:cells up-cells :safe? up-safe? :rise 1 :lay step-lay}})
+   :stairs-up {:cells up-cells :safe? up-sealed? :rise 1 :lay up-lay}})
 
 (defn tool-missing
   "The reason to stop, :no-pickaxe, when the block at cell is rock that would be dug by hand for
@@ -466,7 +518,7 @@
                                    :intent/stage :lay
                                    :intent/started-y (physics/y-of (:player/pos world))
                                    :intent/started-tick (:time/tick world))
-              (game/say (str "stairs: no floor toward " dir ", laying one at " to-lay)))
+              (game/say (str "stairs: laying " to-lay " before the stair toward " dir)))
           (boxed? turns) (step-aside world (assoc i :intent/dir dir))
           :else (turned world dir turns (str "stairs: refused toward " dir ", turning")))))
 
