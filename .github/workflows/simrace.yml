@@ -128,7 +128,7 @@ jobs:
             --runner ${{ matrix.runner }} --runners ${{ needs.plan.outputs.count }} \
             --until ${{ needs.plan.outputs.until }} --max-minutes ${{ needs.plan.outputs.max-minutes }} \
             --budget-minutes ${{ needs.plan.outputs.budget }} --commit "$GITHUB_SHA" --out data/simrace \
-            > data-simrace.log 2>&1 &
+            > data/simrace/simrace.log 2>&1 &
           sim=$!
           code_at=$(git show -s --format=%cI "$GITHUB_SHA")
           report() {
@@ -147,11 +147,17 @@ jobs:
           churn=$!
           wait "$sim" || true
           wait "$churn" || true
-          report                # the runs that ended since the last report
-          mv data-simrace.log data/simrace/simrace.log
           grep -E '^SIMRACE ' data/simrace/simrace.log || tail -n 40 data/simrace/simrace.log
+      - name: Last report
+        # the runs that ended since the last batch; a cancel (a merge's push) runs it too
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bb churn batch sim data/simrace "simrace-$GITHUB_SHA-${{ matrix.runner }}" "$GITHUB_RUN_ID" "$GITHUB_SHA" \
+            "$(git show -s --format=%cI "$GITHUB_SHA")" "${{ matrix.runner }}" || echo "churn: the last report failed"
       - name: Summary
-        if: ${{ !cancelled() }}
+        if: always()
         run: |
           {
             echo "### sim runner ${{ matrix.runner }}"
@@ -160,7 +166,7 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
+        if: always()              # a cancelled round's artifact too: the issues its batches filed name its snapshots
         with:
           name: simrace-${{ github.sha }}-${{ matrix.runner }}
           retention-days: 7
