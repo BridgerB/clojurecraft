@@ -94,7 +94,7 @@ In solid rock the cast places four blocks: the walls its own digging opened (the
 ## Gotchas
 - **A dig never takes obsidian**: `dig-op`'s done holds when its cell is obsidian (`no-dig-can-take-obsidian`).
 - **Water above, never beside.** The model ([[server-model]]) turns a lava source with water above or beside it to obsidian, as vanilla does; the bot puts the water above because on a server the source's open side flows first.
-- **The landing is reached at the lava's height**: a way dug toward a stand starts at the feet's column at the stand's height, so `clear-stand` only digs toward a stand at the feet's height; another height is stairs first (`to-height`).
+- **The landing is reached at the lava's height**: a way dug toward a stand starts at the feet's column at the stand's height, so `clear-stand` only digs toward a stand at the feet's height; another height is stairs first (`to-height`). The landing's ops go through `toward-stand` alone: as a room cell, out of reach 23 over the sea, it had no stand and the cast failed `:no-stand`.
 - **The footprint is every cell the plan works** (`every-cell-the-plan-works-is-in-its-footprint`), so the site's fluid check covers them all.
 - **A stand inside the ground is dug, not walked** (`a-stand-inside-a-hill-is-dug`), and the frame's rock in the way is kept.
 - **A stand over water is not walked onto**: the place is made from a cell that already reaches the block (`a-pad-stand-over-water-is-placed-from-the-shore`, `a-stand-up-a-bank-is-passed-over-for-one-a-route-reaches`, issue #45).

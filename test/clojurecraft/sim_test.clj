@@ -2740,7 +2740,7 @@
   ;; remembers, and the first op the world says is not done is the one worked. The new life
   ;; begins off the frame (the site was chosen at the landing, and vanilla never respawns a
   ;; player inside blocks), so it walks back to the site
-  (let [[w sim] (nether-run step {:kill-at 240000 :respawn [12.5 64.0 14.5]})]
+  (let [[w sim] (nether-run step {:kill-at 120000 :respawn [12.5 64.0 14.5]})]
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
     (is (= 1 (:stats/deaths w)) "it died once")
     (is (= "minecraft:the_nether" (:player/dimension w)))
@@ -2780,11 +2780,10 @@
                                     :inventory hunt-kit})
                          #(or (plan/done? %) (plan/failed? %))
                          900000
-                         {:event/kind :go :go/goals [:cast-one]})
-        kinds (set (map :intention/kind (memory/intentions w)))]
+                         {:event/kind :go :go/goals [:cast-one]})]
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
-    (is (contains? kinds :stairs-down) "it went down")
+    (is (< (second (:player/pos w)) 50) "it went down to the sea's height")
     (let [{:site/keys [origin]} (memory/site w)]
       (is (some? origin) "a site was chosen")
       (is (< (second origin) 41) "the frame cut into the stone under the sea's stand")

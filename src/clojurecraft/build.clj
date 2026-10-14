@@ -766,15 +766,17 @@
        first))
 
 (defn approach-stand
-  "The child that gets the feet where op is worked from, or nil when they are there: a room cell
-   (its stand the cell itself) is dug from anywhere that reaches it, the nearest such cell a route
+  "The child that gets the feet where op is worked from, or nil when they are there: the room's
+   landing is gone to at its height (toward-stand: stairs to it first, then a level way dug); a
+   room cell (its stand the cell itself) is dug from anywhere that reaches it, the nearest such cell a route
    reaches (reachable-stand); any other op from its designated stand (toward), or, for a place or
    a dig whose stand cannot be occupied, a cell that already reaches the block. A keyword is why
    no such cell exists. Ground in the way is dug only for a :build, whose plan says which rock to
    keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
-  [world i {:build/keys [op stand pos]}]
+  [world i {:build/keys [op stand pos step]}]
   (let [{:intent/keys [build origin facing]} i]
-    (cond (and (= :dig op) (= stand pos))
+    (cond (and (= :landing step) build) (toward-stand world stand build origin facing)
+          (and (= :dig op) (= stand pos))
           (cond (within-reach? world pos) nil
                 :else
                 (let [alt (or (reachable-stand world pos pos)
