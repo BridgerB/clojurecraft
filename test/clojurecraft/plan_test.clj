@@ -246,7 +246,19 @@
     (is (= {:intent/kind :stairs-up
             :intent/to-y (stairs/climb-to w terrain/top-y)
             :intent/for :surface}
-           (wood/gather-next w)))))
+           (wood/gather-next w))))
+  ;; played on (issue check, PR #114): the first stair up put the bot in the notch, one deep
+  ;; under the leaves; every column round it had a cell to stand in a block up, so pit-rim took
+  ;; it for open ground, the climb ended and the wait began again. A step up needs the jump's
+  ;; headroom: under the leaves the notch is still a pit
+  (let [w (remembered crevice [8.5 63.0 7.5])
+        notch (intent/feet w)]
+    (is (= [8 63 7] notch))
+    (is (= [-1 0] (stairs/step-rises w notch)) "leaves over the head: no step goes up")
+    (is (= 64 (stairs/pit-rim w notch)) "a wall every way")
+    (is (not (stairs/out? w notch)))
+    (is (nil? (stairs/pit-rim (remembered (dissoc crevice [8 65 7]) [8.5 63.0 7.5]) notch))
+        "with the sky clear over the head, the ground a block up is stepped onto: no pit")))
 
 (def canopy-pocket
   "A pocket one deep under an oak canopy, like race 38477665442 runner 10 Clj_r16's at

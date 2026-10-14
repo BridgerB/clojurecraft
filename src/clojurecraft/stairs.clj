@@ -745,9 +745,19 @@
 
 (defn steppable?
   "Could the feet step into column [x z] from feet height y: a cell to stand in there
-   (path/standable?) a block down, level, or a block up, the step a walk takes?"
+   (path/standable?) at one of the rises, the steps a walk takes (a block down, level, and a
+   block up when the jump has its headroom, step-rises)?"
+  [world [x y z] rises]
+  (boolean (some #(path/standable? world [x (+ y %) z]) rises)))
+
+(defn step-rises
+  "The rises a step from feet may take: a block down, level, and a block up only when the cell
+   two over the feet is clear, which the jump needs (path's :jump-up). Under a canopy whose
+   leaves fill it no step goes up: sim race 38515210080 world R2/45 (issue #104), one stair up
+   out of the crevice into a notch under the leaves, every column round it standable a block
+   up, and the notch was taken for open ground."
   [world [x y z]]
-  (boolean (some #(path/standable? world [x (+ y %) z]) [-1 0 1])))
+  (if (path/clear? world [x (+ y 2) z]) [-1 0 1] [-1 0]))
 
 (defn ground-over
   "The feet height on the ground of column [x z] over feet height y: a block over the highest
@@ -775,11 +785,13 @@
    two deep, under the canopy of the tree just chopped. The sky was over the feet, a level step
    crossed the floor, no route reached a trunk or any ground a hunt could walk to, and each
    waited :no-log out."
-  [world [x y z]]
-  (let [edges (map (fn [[dx dz]]
+  [world [x y z :as feet]]
+  (let [rises (step-rises world feet)
+        edges (map (fn [[dx dz]]
                      (some (fn [k]
                              (let [c [(+ x (* k dx)) y (+ z (* k dz))]]
-                               (when-not (steppable? world c) (or (ground-over world c) :drop))))
+                               (when-not (steppable? world c rises)
+                                 (or (ground-over world c) :drop))))
                            (range 1 (inc rim-reach))))
                    directions)
         walls (filter number? edges)]
