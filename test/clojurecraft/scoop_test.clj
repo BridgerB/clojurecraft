@@ -104,7 +104,16 @@
     (let [w (wide [8.5 8.5] #{[-2 0]} [-31.5 64.0 8.5])
           [x _ _] (first (scoop/hunt-targets w))]
       (is (<= 8 x) "the low ground to the west is behind the bot: the hunt never goes back west")))
-  (is (empty? (scoop/hunt-targets (standing {} [8.5 8.5]))) "nothing loaded out there: no hunt"))
+  (is (empty? (scoop/hunt-targets (standing {} [8.5 8.5]))) "nothing loaded out there: no hunt")
+  (testing
+    "never into a cave: race 38477665442 bot Clj_r15 hunted into a floor under a roof, climbed out to the pit it came from, and went between the two for an hour"
+    (let [roofed (merge low-ground (into {} (for [x (range 16) z (range 16)] [[x 70 z] 1])))
+          w (assoc-in (wide [8.5 8.5] #{[3 0]} [8.5 64.0 8.5])
+             [:world/chunks [3 0]]
+             (world/column roofed))]
+      (is (every? #(terrain/under-sky? w %) (scoop/hunt-targets w)))
+      (is (not= 3 (bit-shift-right (ffirst (scoop/hunt-targets w)) 4))
+          "not the roofed low ground"))))
 
 (deftest water-the-eyes-cannot-reach-is-no-target
   ;; live iron-kit run 3 (local landing 2360,2360): three scoops at aquifer sources with stone

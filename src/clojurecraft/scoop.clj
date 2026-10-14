@@ -155,8 +155,11 @@
 
 (defn hunt-targets
   "Where a water hunt may walk next: the ground hunt-distance along each of the eight bearings
-   that has some, lowest first (water lies low), leaving out any nearer the landing
-   (:plan/go-at) than the bot is now, so a hunt goes out and never doubles back."
+   that has some under the open sky (terrain/under-sky?: a floor in a cave is no place to look
+   for surface water from, and the climb out of it leads back to the pit the hunt left; race
+   38477665442 bot Clj_r15 went between the two for an hour), lowest first (water lies low),
+   leaving out any nearer the landing (:plan/go-at) than the bot is now, so a hunt goes out
+   and never doubles back."
   [world]
   (let [[px _ pz] (:player/pos world)
         ey (physics/y-of (game/eye world))
@@ -172,6 +175,7 @@
                           (long (math/floor (+ pz (* dz hunt-distance))))]
                          ey)))
          (filter out?)
+         (filter #(terrain/under-sky? world %))
          (remove (:plan/blacklist world #{}))
          (sort-by second))))
 
