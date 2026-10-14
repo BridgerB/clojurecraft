@@ -646,7 +646,7 @@
          :refused (s/? :intent/refused)))
 (s/fdef place/ashore
   :args
-  (s/cat :world (requires :player/in-water?)
+  (s/cat :world (requires) ; reads :player/in-water?, absent before the first physics tick: dry
          :intent map?))
 (s/fdef path/plan
   :args
