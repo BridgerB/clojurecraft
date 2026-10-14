@@ -6,8 +6,8 @@ name: race
 # to main (a merge) cancels the race running and starts the new code's: the races always run
 # what is merged, and there is no second branch to keep in step.
 # The board (BOARD lines in the Race step's log) shows every bot each minute while it runs. The
-# race's one comment on the race-board issue (bb race-board) gathers every runner's milestone facts
-# as they happen: the first bot to each milestone, each runner's furthest, the Nether arrivals.
+# round's facts (how many reached each milestone, the failures by signature) go to the results
+# page on gh-pages (bb page, issue #116) when the report job ends.
 
 on:
   push:
@@ -16,8 +16,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  issues: write                         # the board's comment on the race-board issue, the failures' issues
+  contents: write                       # the results page's branch, gh-pages (bb page publish)
+  issues: write                         # the failures' issues
 
 concurrency:
   group: race-${{ github.ref }}
@@ -33,7 +33,6 @@ jobs:
       bots: ${{ steps.read.outputs.bots }}
       server-heap: ${{ steps.read.outputs.server-heap }}
       bot-heap: ${{ steps.read.outputs.bot-heap }}
-      comment: ${{ steps.comment.outputs.id }}
     steps:
       - uses: actions/checkout@v7
       - name: Read ci/race.edn
@@ -49,18 +48,6 @@ jobs:
                    (println (str "server-heap=" (:race/server-heap-mb r)))
                    (println (str "bot-heap=" (:race/bot-heap-mb r))))' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
-      - name: The race's comment (on the race-board issue)
-        id: comment
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          r=$(bb -e '(:race/runners (clojure.edn/read-string (slurp "ci/race.edn")))')
-          s=$(bb -e '(:race/servers (clojure.edn/read-string (slurp "ci/race.edn")) 1)')
-          b=$(bb -e '(:race/bots (clojure.edn/read-string (slurp "ci/race.edn")))')
-          u=$(bb -e '(:race/until (clojure.edn/read-string (slurp "ci/race.edn")))')
-          id=$(bb race-board create "### Race ${{ github.run_id }} at ${GITHUB_SHA::7}: $r runners x $s servers x $b bots, spawn to $u")
-          echo "comment $id"
-          echo "id=$id" >> "$GITHUB_OUTPUT"
 
   worlds:
     # each of the race's landing sets (ci/gym.edn R1-R4), built once and cached (world.yml); a
@@ -156,11 +143,6 @@ jobs:
           races=""
           for k in $(seq 1 "$SERVERS"); do mkdir -p "data/race/s$k"; touch "data/race/s$k/race.log"; done
           tail -n +1 -F data/race/s*/race.log 2>/dev/null | grep --line-buffered -E '^(BOARD|MILESTONE|RACE) ' &
-          if [ -n "${{ needs.plan.outputs.comment }}" ]; then
-            # one follower a runner, for all its servers, publishing in batches (race-board follow!)
-            tail -n +1 -F data/race/s*/race.log 2>/dev/null | grep --line-buffered -E '^(MILESTONE|RACE) ' \
-              | bb race-board follow ${{ needs.plan.outputs.comment }} ${{ matrix.runner }} &
-          fi
           for k in $(seq 1 "$SERVERS"); do
             dir="data/race/s$k"
             server=""
@@ -175,10 +157,9 @@ jobs:
             races="$races $!"
           done
           # shellcheck disable=SC2086 # one pid per word
-          wait $races || true   # the races alone: the followers above never end on their own. Bots
+          wait $races || true   # the races alone: the tail above never ends on its own. Bots
                                 # failing is what the report's issues are for; the step is red
                                 # only when the race itself could not run
-          sleep 15              # one more of the follower's batches (10 s) before the step ends
       - name: Summary
         if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
         env:
@@ -186,12 +167,6 @@ jobs:
         run: |
           for k in $(seq 1 "$SERVERS"); do
             log="data/race/s$k/race.log"
-            if [ -n "${{ needs.plan.outputs.comment }}" ]; then
-              # the RACE line alone: the follower published every milestone live, and publishing
-              # them all again one at a time took a runner 90 minutes (race 38355274936)
-              { grep -E '^RACE ' "$log" || echo 'RACE #:race{:ok 0 :reasons {:no-race-line 1}}'
-              } | bb race-board follow ${{ needs.plan.outputs.comment }} ${{ matrix.runner }} || true
-            fi
             {
               echo "### runner ${{ matrix.runner }}, server $k, landing set ${{ steps.set.outputs.set }}"
               echo '```'
@@ -242,4 +217,11 @@ jobs:
           # the newest reporter on the branch, not this run's: a rule change reaches runs already going
           git fetch --depth=1 origin "$GITHUB_REF_NAME" && git checkout FETCH_HEAD -- bb bb.edn
           bb failures report runs "Race ${{ github.run_id }} at ${GITHUB_SHA::7}" "$(git show -s --format=%cI "$GITHUB_SHA")" | tee failures.txt
-          { echo '### failures'; echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          bb page wall runs | tee wall.txt
+          { echo '### the wall: failures by the stage the bot was on, furthest first'; echo '```'; cat wall.txt; echo '```';
+            echo '### failures'; echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: The results page (gh-pages, issue #116)
+        run: |
+          bb page round runs real "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(git show -s --format=%cI "$GITHUB_SHA")" > round.edn
+          cat round.edn
+          bb page publish round.edn

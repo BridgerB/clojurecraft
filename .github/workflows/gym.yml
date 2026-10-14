@@ -6,7 +6,7 @@ name: gym
 
 on:
   push:
-    branches-ignore: [race-capacity, "fix/**"]   # race-capacity is the capacity experiment (capacity.yml); a fix branch has issue.yml alone
+    branches-ignore: [race-capacity, "fix/**", gh-pages]   # race-capacity is the capacity experiment (capacity.yml); a fix branch has issue.yml alone; gh-pages is the results page's data
   workflow_dispatch:
     inputs:
       goal:
