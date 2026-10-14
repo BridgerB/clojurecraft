@@ -2,6 +2,7 @@
   "The sim race: a run over a world of many columns crosses from one to the next as the game's
    do, a run is the same run every time, and failures group by what they were doing and why."
   (:require [clojure.test :refer [deftest is use-fixtures]]
+            [clojurecraft.capture :as capture]
             [clojurecraft.failure :as failure]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
@@ -75,3 +76,28 @@
     (is (= :active (:plan/status bw)) "the moment before: the plan still running")
     (is (= (:plan/status world) (:plan/status (:world again))) "played on, it ends the same")
     (is (= (:player/inventory world) (:player/inventory (:world again))))))
+
+(deftest a-failed-runs-moment-round-trips-and-plays-on-to-the-same-stop
+  ;; issue #77: the snapshot of a failed run is a value that prints, reads back and, played on
+  ;; with the same code, fails with the same signature; the moment before the stop still has the
+  ;; plan running, so a fix has its say
+  (let [w (assoc (simrace/prepared {:capture/set "test"
+                                    :capture/landing [8 8 64]
+                                    :capture/radius 0
+                                    :capture/columns {[0 0] (world/column-bytes {})}}) ; bare stone, no tree
+                 :capture/file
+                 "bare.edn.gz")
+        r (simrace/run w 3 "nether" 300000)
+        _ (is (= [:wood :no-log] (failure/signature r)) (pr-str (:reason r)))
+        snap (simrace/snapshot w 3 "nether" "abc" (failure/signature r) (:run/before r))
+        path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-snapshot-test.edn.gz")
+        _ (capture/write-world! path snap)
+        back (capture/read-world path)
+        played (simrace/play-snapshot back w simrace/snapshot-budget-ms)]
+    (is (= (dissoc snap :snapshot/world :snapshot/sim) (dissoc back :snapshot/world :snapshot/sim)))
+    (is (= (first (simrace/moment snap w)) (first (simrace/moment back w)))
+        "the world reads back whole, facts too")
+    (is (= :active (get-in snap [:snapshot/world :plan/status])) "the moment before the stop")
+    (is (simrace/recurs? back played) (pr-str (:run/signature played)))
+    (is (<= (:run/ms played) (+ (get-in snap [:snapshot/world :time/now]) 1000))
+        "it fails again at once, not after the budget")))
