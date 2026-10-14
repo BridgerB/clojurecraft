@@ -151,6 +151,7 @@ jobs:
           path: |
             data/simrace/runs.edn
             data/simrace/simrace.log
+            data/simrace/snapshots/
 
   report:
     needs: sim

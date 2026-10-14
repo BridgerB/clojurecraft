@@ -63,9 +63,11 @@
   {:doc "Failed runs become issues, one per signature (simrace.yml, race.yml): report <dir> <title>"
    :requires ([clojurecraft.failures :as failures])
    :task (apply failures/-main *command-line-args*)}
-  issue-check {:doc "A fix's proof (issue.yml): plan <n> <dir> | verdict <dir> <runs.edn>"
-               :requires ([clojurecraft.issue-check :as check])
-               :task (apply check/-main *command-line-args*)}
+  issue-check
+  {:doc
+   "A fix's fixtures (issue.yml, issues-test): fetch <n> brings the issue's snapshots into test/issues/<n>/"
+   :requires ([clojurecraft.issue-check :as check])
+   :task (apply check/-main *command-line-args*)}
   prepare-world
   {:doc "Build a gym landing set's world into cache/worlds/<set> (world.yml): SET RCON_PASS"
    :requires ([clojurecraft.worlds :as worlds])

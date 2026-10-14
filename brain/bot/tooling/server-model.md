@@ -9,7 +9,7 @@ lastUpdated: 2026-10-11
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#defn init
-  - src/clojurecraft/sim.clj#defn run
+  - "src/clojurecraft/sim.clj#Returns [world sim] (run+ for the moment before the stop too)"
   - src/clojurecraft/sim.clj#defn connect!
   - src/clojurecraft/sim.clj#defn loot
   - src/clojurecraft/sim.clj#defn poured
