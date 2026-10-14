@@ -729,6 +729,19 @@
         (is (= [:failed :boxed]
                [(:intent/status (:plan/intent w)) (:intent/reason (:plan/intent w))]))))))
 
+(deftest a-staircase-started-in-the-air-waits-for-the-ground
+  ;; race 38477665442, landing 2361,111,2361 (issue #65): a walk to stone stepped off a cliff,
+  ;; and the staircase the mine started on the way down was planned from the air, refused four
+  ;; ways and failed :boxed three times before the body landed. Ten blocks over the hill
+  (let [[w sim] (stairs-run deep-stone 86 (get blocks/items :wooden_pickaxe) 71 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (= [1 0] (:intent/dir (:plan/intent w))) "never refused: planned once on the ground")
+    (is (<= (second (:player/pos w)) 71.5) "the feet are five stairs down")
+    (is (contains? (:sim/broken sim) [9 75 8]) "the first stair cut from the hilltop")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest lava-ahead-turns-the-stairs
   ;; lava in the floor two cells along +x: the first heading is refused, the next taken
   (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))

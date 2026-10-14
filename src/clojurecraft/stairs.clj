@@ -316,6 +316,16 @@
 
 (def refusals #{:needs-tool :unsafe})  ; a child dig failing for these turns the stairs
 
+(defn airborne?
+  "Is the body in the air, neither on the ground nor in a liquid? A stair is planned from feet
+   that stand: round falling feet every cell is air, so every heading is refused for the drop
+   and the staircase is :boxed before the body lands. Race 38477665442, landing 2361,111,2361
+   (issue #65, three real bots and 89 sim runs a round): a walk to stone stepped off a cliff,
+   the dig failed :out-of-reach on the way down, and the staircase the mine then started was
+   planned, refused four ways and failed :boxed three times in the four seconds of the fall."
+  [world]
+  (not (or (:player/on-ground? world) (:player/in-water? world) (:player/in-lava? world))))
+
 (defmulti stairs-stage
   "Advance a staircase (:stairs-down, :stairs-up, or a :tunnel's level step) one tick in its
    :intent/stage: :plan (choose a safe stair or turn), :open (dig its cells, one child :dig at a
@@ -330,7 +340,8 @@
         feet (intent/feet world)
         cells (cells-of feet dir)
         to-lay (when (and lay (not (safe? world cells))) (lay world feet cells))]
-    (cond (safe? world cells)
+    (cond (airborne? world) (assoc world :player/controls {}) ; land first
+          (safe? world cells)
           (intent/assoc-intent world
                                :intent/dir dir
                                :intent/cells cells
