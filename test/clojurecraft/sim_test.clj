@@ -2783,6 +2783,58 @@
           "the first cell, obsidian"))
     (is (empty? (:sim/violations sim)))))
 
+;; ---------------------------------------------------------------- the rock is the mould (issue #124)
+
+(def rock-kit
+  "What a portal row gives (gym/portal-kit): a bucket each of lava and water, an empty one, a
+   handful of cobblestone, flint and steel, and a stone pickaxe."
+  {[:hotbar 0] {:item (recipe/item-id :lava_bucket) :count 1}
+   [:hotbar 1] {:item (recipe/item-id :water_bucket) :count 1}
+   [:hotbar 2] {:item (recipe/item-id :bucket) :count 1}
+   [:hotbar 3] {:item (recipe/item-id :cobblestone) :count 8}
+   [:hotbar 4] {:item (recipe/item-id :flint_and_steel) :count 1}
+   [:hotbar 8] {:item (recipe/item-id :stone_pickaxe) :count 1}})
+
+(defn rock-run
+  "The planner toward the Nether from rock-kit, spawned at spawn over blocks, until it ends or
+   max-ms. Returns [world sim]."
+  [blocks spawn max-ms]
+  (sim/run step
+           (game/init fx/opts)
+           (sim/init {:column (world/column-bytes blocks) :spawn spawn :inventory rock-kit})
+           #(or (plan/done? %) (plan/failed? %))
+           max-ms
+           {:event/kind :go :go/goals [:nether]}))
+
+(defn cast-frame
+  "The frame's ten cells at the site the world remembers, as the sim holds them."
+  [w sim]
+  (let [{:site/keys [origin facing]} (memory/site w)]
+    (for [[dx dy] build/frame-cells] (sim/block-at sim (build/cell origin facing [dx dy 0])))))
+
+(def sealed-pool
+  "A lava pool three by five at y 40 sealed in the stone (no air round it), and the bot in a
+   pocket of its own two cells high at y 41, six blocks off: nowhere open but where it stands."
+  (merge (into {} (for [x [11 12 13] z (range 2 7)] [[x 40 z] blocks/lava-base]))
+         {[12 41 12] blocks/air [12 42 12] blocks/air}))
+
+(deftest a-portal-is-cut-into-the-rock-beside-a-sealed-pool
+  ;; issue #124: the rock is the mould. The pool is underground with no room anywhere: the bot
+  ;; digs its way to it, the room in front of a face of the rock, each cell a hole lava is poured
+  ;; into and water over, and the inside; a block only where its own holes opened a wall
+  (let [[w sim] (rock-run sealed-pool [12.5 41.0 12.5] 2400000)]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= "minecraft:the_nether" (:player/dimension w)))
+    (is (every? #(= :obsidian
+                    (some-> %
+                            blocks/name-of))
+                (cast-frame w sim))
+        "ten obsidian")
+    (is (zero? (:stats/deaths w 0)))
+    (is (<= (count (filter #(= :cobblestone (blocks/name-of %)) (vals (:sim/placed sim)))) 8)
+        "a handful of blocks placed")
+    (is (empty? (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- the fortress (issue #11)
 
 (def netherrack (blocks/default-state :netherrack))

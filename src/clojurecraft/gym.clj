@@ -61,25 +61,28 @@
 (def pad-y 72)                        ; the Nether pad's feet height: over the lava sea (y 31), under the roof
 
 (def portal-arena
-  "The portal rows' arena round the landing (issue #8): a stone floor two thick and air over it,
-   and a trench of lava sources one wide east of where any frame footprint near the landing can
-   reach, every source with stone beside it to refill from (a scoop takes a source for good)."
-  ["fill {x-8} {y-2} {z-8} {x+16} {y-1} {z+16} minecraft:stone"
+  "The portal rows' arena round the landing: stone ten deep under air, and a trench of lava
+   sources one wide set into its surface east of the landing, every source with stone beside it to
+   refill from (a scoop takes a source for good). The surface case of issue #124: the frame is cut
+   into the rock under the pool's level and the room dug out in front of it, so the stone must be
+   deep enough for a frame six under the surface."
+  ["fill {x-8} {y-10} {z-8} {x+16} {y-1} {z+16} minecraft:stone"
    "fill {x-8} {y} {z-8} {x+16} {y+14} {z+16} minecraft:air"
    "fill {x+14} {y-1} {z-6} {x+14} {y-1} {z+6} minecraft:lava"])
 
 (def portal-kit
-  "What a portal row gives: two buckets of lava, one of water, an empty one, three stacks of
-   cobblestone (the mold places about 150), flint and steel, and the stone pickaxe the rows
-   hold for the mold's digs."
+  "What a portal row gives: two buckets of lava, one of water, an empty one, a handful of
+   cobblestone (a cast cut into the rock places four, the walls its own holes opened: issue #124),
+   flint and steel, and the stone pickaxe the rows hold for the digs."
   ["minecraft:lava_bucket 2" "minecraft:water_bucket 1" "minecraft:bucket 1"
-   "minecraft:cobblestone 192" "minecraft:flint_and_steel 1" "minecraft:stone_pickaxe 1"])
+   "minecraft:cobblestone 8" "minecraft:flint_and_steel 1" "minecraft:stone_pickaxe 1"])
 
 (defn block-count
-  "A truth that counts the blocks named block in the arena: a clone of the arena filtered to them,
-   to air high over it, whose reply says how many (re, a pattern of that reply)."
+  "A truth that counts the blocks named block in the arena, from the floor of its stone to over
+   its air (the frame is cut into the stone): a clone of it filtered to them, to air high over it,
+   whose reply says how many (re, a pattern of that reply)."
   [block re]
-  {:truth/cmd (str "clone {x-8} {y-1} {z-8} {x+16} {y+12} {z+16} {x-8} {y+60} {z-8} filtered "
+  {:truth/cmd (str "clone {x-8} {y-10} {z-8} {x+16} {y+12} {z+16} {x-8} {y+60} {z-8} filtered "
                    block)
    :truth/re re})
 
