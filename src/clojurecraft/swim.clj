@@ -13,7 +13,9 @@
    progress is made for stuck-ticks it digs what is in the way as a child :dig intent (a lid
    over the head first, a wall at head height, a cap when there is no bank at all), the dig
    penalties for the eyes in water and being off the ground slowing it as vanilla does. It never
-   digs the block at feet height ahead: that is the bank the impulse needs to collide with.
+   digs the block at feet height ahead: that is the bank the impulse needs to collide with. With
+   no bank at all and no cap, a flooded cave whose rock walls rise straight from the water, it
+   carves one: a notch two high in the nearest wall just over the float level (issue #73).
 
    :flee is the lava half: the nearest standable cell with no lava beside or under it, walked to
    with forward and jump; the planner ends it the moment the trap clears."
@@ -39,6 +41,7 @@
 (def progress 0.05)                   ; blocks nearer the bank that count as progress
 (def escape-timeout-ticks 2400)       ; 120 s: an escape longer than this has failed
 (def search-every-ticks 20)           ; with no bank in reach yet, look again this often while rising
+(def notch-radius 4)                  ; how far on the plane a wall is notched into for a bank when there is none (a dig's reach)
 (def flee-radius 6)                   ; how far a lava flee looks for footing
 (def flee-timeout-ticks 200)          ; 10 s
 
@@ -104,6 +107,30 @@
           (solid-cell? world over) over
           :else nil)))
 
+(defn notch
+  "With no bank in reach, the cell to dig toward one: a notch in the nearest wall, two cells
+   over a solid at the float-top level (the floor the impulse lifts onto, as a pond's bank is
+   one over the water's top), within notch-radius of feet on the plane and a dig's reach of
+   the afloat eye; the lower cell while it is solid, then the upper. nil with no wall in reach
+   (issue #73: an aquifer's rock walls rise straight from the water, so no cell within sixteen
+   was standable and the escape rose until it timed out)."
+  [world [fx _ fz :as feet] surface]
+  (let [top (float-top world feet surface)
+        eye [(+ fx 0.5) (+ top physics/eye-height) (+ fz 0.5)]]
+    (->> (for [dx (range (- notch-radius) (inc notch-radius))
+               dz (range (- notch-radius) (inc notch-radius))
+               :let [lower [(+ fx dx) (inc top) (+ fz dz)]
+                     upper [(+ fx dx) (+ top 2) (+ fz dz)]]
+               :when (and (solid-cell? world [(+ fx dx) top (+ fz dz)])
+                          (<= (physics/distance eye (physics/centre lower)) intent/reach)
+                          (or (solid-cell? world lower) (solid-cell? world upper)))]
+           [lower upper])
+         (sort-by (fn [[lower _]] [(physics/horizontal-distance (physics/centre feet)
+                                                                (physics/centre lower)) lower]))
+         first
+         (filter #(solid-cell? world %))
+         first)))
+
 (defn child-dig
   "A :dig child for cell that may expose water: the escape digs beside the water it is in."
   [cell]
@@ -146,6 +173,20 @@
         (game/say (str "swim-out: " why ", sinking to the floor to dig " cell)))
     (start-dig world cell why)))
 
+(defn dig-afloat
+  "One tick of the child dig, with jump held when the water's surface is open: the dig looks
+   and swings but holds nothing else, and a body on the floor for the length of a dig under
+   water drowns (issue #73: the notch's first cell took the air). Afloat under an open surface
+   the eye is in air and the dig is no slower than from the floor (off the ground is the same
+   five times as the eye under water); under a roof (a capped well) the floor is where the
+   dig is from and jump is held off."
+  [world event]
+  (let [world (intent/run-child world event)
+        [x _ z :as feet] (intent/feet world)]
+    (cond-> world
+      (and (:player/in-water? world) (not (solid-cell? world [x (surface-y world :water feet) z])))
+      (update :player/controls assoc :control/jump? true))))
+
 (defn swim-controls
   "Toward the bank's centre: in the water, forward with jump held (the swim-up and, pressed
    into the bank, the impulse); out of it, a plain walk, and on dry land nothing at all, so the
@@ -183,7 +224,7 @@
           (-> world
               (assoc :player/controls {})
               (intent/fail (:intent/reason child)))
-          child (intent/run-child world event)
+          child (dig-afloat world event)
           (and dig-when-down (or (:player/on-ground? world) (not (:player/in-water? world))))
           (start-dig world dig-when-down "down")
           dig-when-down (assoc world :player/controls {:control/sneak? true})
@@ -192,12 +233,14 @@
           (nil? bank)
           (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
                 b (banks world feet surface (:plan/blacklist world #{}))
-                cap (when-not b (obstacle world feet nil))]
+                cap (when-not b (obstacle world feet nil))
+                wall (when-not (or b cap) (notch world feet surface))]
             (cond b
                   (-> world
                       (intent/assoc-intent :intent/bank b :intent/target b)
                       (game/say (str "swim-out: bank " b)))
                   cap (dig-or-sink world feet cap "no bank")
+                  wall (start-dig world wall "no bank, notching the wall")
                   ;; nothing in reach: rise (the roof or a bank comes into reach, or the timeout ends it)
                   :else
                   (-> world

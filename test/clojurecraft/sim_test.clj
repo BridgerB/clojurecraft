@@ -576,6 +576,35 @@
     (is (= 1 (inventory/logs-held w)))
     (is (some (:sim/broken sim) (keys ceiling)) "it broke a leaf over the ledge")))
 
+(def canopy-pocket
+  "A pocket one deep under an oak canopy (race 38477665442 runner 10 Clj_r16, issue #63): walls
+   two high round the feet at [8 64 8], the step north open at body height but leaves at head
+   height over it and over the feet, and a trunk on open ground six blocks north."
+  (merge
+   (into
+    {}
+    (for [dx [-1 0 1] dz [-1 0 1] y [64 65] :when (not= [dx dz] [0 0])] [[(+ 8 dx) y (+ 8 dz)] 1]))
+   {[8 65 7] blocks/air}
+   (into {} (for [[x z] [[8 7] [8 8] [7 7] [9 7] [7 8] [9 8] [8 6]]] [[x 66 z] 252]))
+   {[8 64 2] 136 [8 65 2] 136 [8 66 2] 136 [8 67 2] 136 [8 68 2] 252}))
+
+(deftest a-log-is-gathered-from-a-pocket-under-a-canopy
+  ;; issue #63: in the pocket every jump out meets leaves, so no route reaches the trunk; the
+  ;; bot cuts stairs up through the leaves and the wall, then walks to the trunk, with no walk
+  ;; failed :no-path on the way
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes canopy-pocket)
+                                    :spawn [8.5 64.0 8.5]})
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         {:event/kind :go :go/goals [:wood]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (inventory/logs-held w)))
+    (is (zero? (:plan/unwalkable w)) "no walk failed :no-path")
+    (is (zero? (:plan/attempts w)) "no failed attempts")
+    (is (some (:sim/broken sim) [[8 66 8] [8 66 7]]) "it cut up through the leaves")))
+
 (def bank
   "A trunk on a stone bank four blocks high (x 2), the pit beside it walled in (z 2; the chunk's
    unloaded neighbours wall x -1 and z -1)."
@@ -786,6 +815,21 @@
     (is (<= (second (:player/pos w)) 71.5) "the feet are five stairs down")
     (is (contains? (:sim/broken sim) [9 75 8]) "the first stair cut from the hilltop")
     (is (empty? (:sim/violations sim)))))
+
+(deftest a-model-from-before-the-breaks-counter-counts-from-zero
+  ;; the issue check plays snapshots on whose model was saved before :sim/breaks existed
+  ;; (sim race 38515210080 at 7239df5, test/issues/37 and 74): the counter is accretion, so
+  ;; such a model counts its FINISHes from zero instead of throwing on nil
+  (let [sim (-> (dig-on-model 1 wooden-pickaxe 2000)
+                (dissoc :sim/breaks))
+        sim (sim/step sim
+                      {:sim/kind :packet
+                       :sim/packet {:packet/name :player-action
+                                    :status (packet/value :dig :stop-destroy)
+                                    :pos [1 64 0]
+                                    :face (packet/value :face :west)
+                                    :sequence 3}})]
+    (is (= 1 (:sim/breaks sim)))))
 
 (deftest a-stair-the-server-did-not-cut-is-dug-again
   ;; race 38477665442, runner 9 (issues #59, #66): with 25 bots on one server, an early FINISH
@@ -1084,6 +1128,45 @@
          (= [{:packet/name :block-update :pos [9 64 8] :state (blocks/default-state :wildflowers)}
              {:packet/name :block-changed-ack :sequence 1}]
             (:sim/out sim)))))))
+
+(deftest a-block-placed-into-water-takes-the-waters-place
+  ;; sim race 38515210080 (issue #44, 198 runs; the #74 moments at R1/34 reach it): the first
+  ;; op of the portal's pad placed cobblestone into a water cell at the pond's edge from the
+  ;; shore. The game's replaceable tag lists water and lava beside the grasses, so a real
+  ;; server takes the block and the water is gone; the model refused it three times
+  (let [water (first blocks/water-states)
+        pond (-> (into {} (for [x (range 16) z (range 16)] [[x 63 z] 1]))
+                 (assoc [9 64 8] water)) ; the pond floor at y 63 is stone, clicked through the water
+        use-on (fn [pos face]
+                 {:packet/name :use-item-on
+                  :hand 0
+                  :pos pos
+                  :face (packet/value :face face)
+                  :cursor-x 0.5
+                  :cursor-y 1.0
+                  :cursor-z 0.5
+                  :inside-block false
+                  :world-border-hit false
+                  :sequence 1})
+        standing (fn [blocks]
+                   (-> (sim/init {:column (world/column-bytes blocks)
+                                  :spawn [8.5 64.0 8.5]
+                                  :inventory {[:hotbar 0] {:item (get blocks/items :cobblestone)
+                                                           :count 2}}})
+                       (assoc :sim/phase :play :sim/player-pos [7.5 64.0 8.5])))
+        ;; the shore's top face, east of the feet: the destination [9 64 8] is the pond's edge
+        into-water (sim/step (standing pond) {:sim/kind :packet :sim/packet (use-on [9 63 8] :up)})
+        ;; a flower on the shore instead: refused as before
+        into-flower (sim/step (standing (assoc pond [9 64 8] (blocks/default-state :wildflowers)))
+                              {:sim/kind :packet :sim/packet (use-on [9 63 8] :up)})]
+    (is (blocks/placeable-into? water))
+    (is (not (blocks/placeable-into? (blocks/default-state :wildflowers))))
+    (is (= {[9 64 8] (blocks/default-state :cobblestone)} (:sim/placed into-water))
+        "the cobblestone took the water's place")
+    (is (= {:packet/name :block-update :pos [9 64 8] :state (blocks/default-state :cobblestone)}
+           (first (:sim/out into-water))))
+    (is (= 1 (get-in into-water [:sim/inv (sim/held-slot into-water) :count])) "one taken")
+    (is (empty? (:sim/placed into-flower)))))
 
 ;; ---------------------------------------------------------------- the furnace, on the model
 
@@ -1849,6 +1932,85 @@
     (is (not-any? #(<= 9 (first %)) (:sim/broken sim)) "nothing dug east, under the lake")
     (is (empty? (:sim/violations sim)))))
 
+(def aquifer-over-the-pocket
+  "The pocket under an aquifer: stone over the head to y 68, water at y 69 and 70 from x 0 to
+   x 9 across the hill, and stone from y 71 to the hilltop over the water, so the top of every
+   column is dry ground. East of x 9 the rock is dry."
+  (merge pocket (into {} (for [x (range 10) y [69 70] z (range 16)] [[x y z] blocks/water-base]))))
+
+(deftest stairs-up-under-an-aquifer-step-out-from-under-it
+  ;; issue #61 (R3 world 6, 104 sim runs a round): a climb for water from y 37 stood under an
+  ;; aquifer whose floor was two blocks over its head; every stair up was refused :unsafe for
+  ;; the water over the cell it opened, and the level steps, the top of every column dry, went
+  ;; north under the aquifer until :boxed. The sheet ended three columns south. Here it ends two
+  ;; columns east, and north, south and west it runs to the edge of the loaded world
+  (let [[w sim] (staircase-run :stairs-up aquifer-over-the-pocket
+                               66 (get blocks/items :stone_pickaxe)
+                               70 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/level-steps])))
+    (is (<= 70.0 (second (:player/pos w))))
+    (is (every? (fn [[x _ z]] (and (<= 8 x) (= 8 z))) (:sim/broken sim))
+        "nothing dug north, south or west, under the aquifer")
+    (is (not-any? #(= :water
+                      (some-> (sim/block-at sim %)
+                              blocks/fluid
+                              :fluid/kind))
+                  (for [x (range 16) y (range 64 69) z (range 16)] [x y z]))
+        "no water came down")
+    (is (empty? (:sim/violations sim)))))
+
+(def cave-under-the-roof
+  "deep-stone with a cave two high at y 66 and 67 across the hill: the bot stands on its floor
+   at y 65, and no stair up from it has its step."
+  (merge deep-stone (into {} (for [x (range 16) y [66 67] z (range 16)] [[x y z] blocks/air]))))
+
+(deftest stairs-up-lay-their-step-across-a-cave
+  ;; issue #61: the same climb walked thirty level steps along its own mine, a floor laid under
+  ;; each, since every stair up from the mine had no step under its new feet, and was :boxed at
+  ;; the level-step limit. A stair up lays its step as a stair down lays its floor
+  (let [pickaxe {:item (get blocks/items :stone_pickaxe) :count 1}
+        cobblestone {:item (get blocks/items :cobblestone) :count 16}
+        [w sim] (intent-run-holding {:intent/kind :stairs-up :intent/to-y 72}
+                                    cave-under-the-roof
+                                    66
+                                    {[:hotbar 0] pickaxe [:hotbar 1] cobblestone}
+                                    120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/level-steps])))
+    (is (<= 72.0 (second (:player/pos w))))
+    (is (<= 2 (count (:sim/placed sim))) "the steps across the cave were laid")
+    (is (< (:intent/level-steps (:plan/intent w) 0) 4) "climbed, not walked")
+    (is (empty? (:sim/violations sim)))))
+
+(def aquifer-round-the-pocket
+  "pocket with a water source beside every cell the first stair up each way would open: at
+   y 67 and 68, two blocks out from the shaft along each axis."
+  (reduce (fn [b [x z]] (assoc b [x 67 z] blocks/water-base [x 68 z] blocks/water-base))
+          pocket
+          [[10 8] [6 8] [8 10] [8 6]]))
+
+(deftest stairs-up-through-an-aquifer-are-sealed-with-cobblestone
+  ;; race 38477665442 runner 8 bot Clj_r01 (issue #54): underground with its bucket, water
+  ;; beside every stair cell of the climb out, each child dig refused :unsafe, the staircase
+  ;; :boxed twice, and twelve walks to the water beside it failed :no-path. The water beside a
+  ;; stair is sealed with carried cobblestone first, then the stair is cut as any other
+  (let [[w sim] (intent-run-holding {:intent/kind :stairs-up :intent/to-y 72}
+                                    aquifer-round-the-pocket
+                                    66
+                                    {[:hotbar 0] {:item (item :stone_pickaxe) :count 1}
+                                     [:hotbar 1] {:item (item :cobblestone) :count 64}}
+                                    120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns
+                              :intent/level-steps])))
+    (is (<= 72.0 (second (:player/pos w))) "six stairs up, out of the pocket")
+    (is (not (:player/in-water? w)) "no water came down the shaft")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest the-table-is-taken-along-when-the-bot-goes-out
   ;; gym batch iron-a7 run 1 crafted three tables on its way down, a log each, and ran out of wood
   ;; for a pickaxe; a table left behind is a log spent on the next one
@@ -2279,6 +2441,31 @@
     (is (trap/dry-land? w))
     (is (>= (second (:player/pos w)) 64.0) "up on the surface")
     (is (= 0 (terrain/block-at w [0 64 0])) "the cap is gone")
+    (is (empty? (:sim/violations sim)))))
+
+(def flooded-cave
+  "An aquifer's lake in the rock: a pool five by five and three deep (y 30-32) under three
+   cells of air (y 33-35) and a stone roof, its walls rising straight from the water. No cell
+   within sixteen is standable: the air over the pool has water under it, the rest is stone."
+  (merge (into {} (for [x (range 2 7) y [30 31 32] z (range 2 7)] [[x y z] blocks/water-base]))
+         (into {} (for [x (range 2 7) y [33 34 35] z (range 2 7)] [[x y z] 0]))))
+
+(deftest a-flooded-cave-with-no-bank-is-left-by-a-notch-dug-in-its-wall
+  ;; issue #73 (sim race, world R4/44, 217 runs): afloat with the eye in air, no bank in the
+  ;; band and no cap over the head, the escape held jump and searched again every second
+  ;; until it timed out, three times, :no-escape; now it notches the nearest wall
+  (let [[w sim _] (escape-run flooded-cave
+                              [4.5 30.0 4.5]
+                              120000
+                              {:inventory {[:hotbar 0]
+                                           {:item wooden-pickaxe :count 1 :durability 59}}})]
+    (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (trap/dry-land? w))
+    (is (= [1 4] (let [[x _ z] (path/feet-cell (:player/pos w))] [x z]))
+        "out of the pool, in the notch's column")
+    (is (= [0 0] (map #(terrain/block-at w %) [[1 33 4] [1 34 4]]))
+        "the notch is two cells over the wall's top")
     (is (empty? (:sim/violations sim)))))
 
 (def shore

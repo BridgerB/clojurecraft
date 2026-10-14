@@ -149,34 +149,129 @@
           (and (= :clear (kind holder)) (place/support world holder)) [holder floor]
           :else nil)))
 
+#_{:splint/disable [naming/conversion-functions]} ; "the cells to lay", not a conversion
+(defn cells-to-lay
+  "The cells to lay (laid, in order) before a stair (or a level step) whose cells may be opened
+   (clear-way?) can be cut, when enough of a filler is carried; nil when nothing is to lay or
+   none can be."
+  [world cells laid]
+  (when (clear-way? world cells)
+    (when-let [cells (seq laid)] (when (filler world (count cells)) (vec cells)))))
+
 (defn lay
-  "The cells to lay, in order, before a stair (or a level step) from feet whose cells may be
-   opened (clear-way?) can be cut: the floor and what holds it (floor-laying), when enough of a
-   filler is carried; nil when the stair needs none (safe?) or none can be laid. Race
+  "The cells to lay, in order, before a stair down (or a level step) from feet whose cells may
+   be opened (clear-way?) can be cut: the floor and what holds it (floor-laying), when enough of
+   a filler is carried; nil when the stair needs none (safe?) or none can be laid. Race
    38477665442: five of the eight bots on runner 8 that stopped :boxed stood on the lip of a
    cave their staircase had broken into, 7 to 284 cobblestone in hand, every stair refused for
    the drop under it and nothing else to cut from the lip (issue #37)."
   [world feet cells]
-  (when (clear-way? world cells)
-    (when-let [cells (seq (floor-laying world feet cells))]
-      (when (filler world (count cells)) (vec cells)))))
+  (cells-to-lay world cells (floor-laying world feet cells)))
+
+#_{:splint/disable [naming/conversion-functions]} ; "the step to lay", not a conversion
+(defn step-to-lay
+  "The cells to lay so that a stair up has its step, the block ahead at the feet's height, which
+   its new feet cell (the last) stands on: [] when it is solid already; the step alone when it
+   is clear and a solid block borders it to place against (place/support); nil when it is
+   water, lava or unloaded, or nothing can hold it. No holder, as a stair down lays: the cell
+   under the step is beside the feet, and what would hold the holder is the cell the bot stands
+   in."
+  [world cells]
+  (let [[nx ny nz] (last cells)
+        step [nx (dec ny) nz]
+        kind (path/classify world step)]
+    (cond (= :solid kind) []
+          (not= :clear kind) nil
+          (place/support world step) [step]
+          :else nil)))
+
+(defn falls-over?
+  "Would gravel or sand fall through a stair up's first cell, the one over the head, onto the
+   bot: does the block over it fall (blocks/falls?)?"
+  [world cells]
+  (let [[x y z] (first cells)]
+    (boolean (some-> (terrain/block-at world [x (inc y) z])
+                     blocks/falls?))))
 
 (defn up-safe?
   "May a stair up be cut: what any stair needs (safe?), and no gravel or sand over the cell above
-   the head, which would fall through it onto the bot."
+   the head, which would fall through it onto the bot (falls-over?)."
   [world cells]
-  (let [[x y z] (first cells)]
-    (and (safe? world cells)
-         (not (some-> (terrain/block-at world [x (inc y) z])
-                      blocks/falls?)))))
+  (and (safe? world cells) (not (falls-over? world cells))))
+
+(defn step-lay
+  "The cells to lay before a stair up from feet can be cut: its step (step-to-lay), when enough
+   of a filler is carried and the stair would be cut once it is laid: nothing falls onto the bot
+   from over the cell above the head (falls-over?) and no cell it opens borders water or lava,
+   which the child dig refuses (intent/exposes-fluid?), so no step is laid for a stair the dig
+   then turns from. nil when the stair needs none or none can be laid. Issue #61 (R3 world 6,
+   104 sim runs a round): a climb out from under an aquifer at y 37 walked thirty level steps
+   along its own mine at y 36, a floor laid under each, since every stair up from the mine had
+   no step under its new feet, and was :boxed at the level-step limit; a stair up now lays its
+   step as a stair down lays its floor."
+  [world _feet cells]
+  (when (and (not (falls-over? world cells)) (not-any? #(intent/exposes-fluid? world %) cells))
+    (cells-to-lay world cells (step-to-lay world cells))))
+
+(defn water-beside
+  "The water cells among the four horizontal neighbours of each of cells (path/around; water
+   alone: lava beside a stair refuses it, clear-way?), distinct, in the cells' order; what the
+   child dig would let in from the side (intent/exposes-fluid?), and what a seal lays a block
+   into."
+  [world cells]
+  (distinct (for [[x y z] cells
+                  [dx _ dz] path/around
+                  :let [n [(+ x dx) y (+ z dz)]]
+                  :when (= :water (terrain/fluid-kind world n))]
+              n)))
+
+(defn water-over?
+  "Does a fluid stand straight over or under any of cells, or rest on gravel or sand over one
+   (intent/fluid-over-falling?)? A lake overhead is not sealed from below: the climb steps out
+   from under it toward the shore (step-aside) as before."
+  [world cells]
+  (boolean (some (fn [[x y z :as cell]]
+                   (or (terrain/fluid-kind world [x (inc y) z])
+                       (terrain/fluid-kind world [x (dec y) z])
+                       (intent/fluid-over-falling? world cell)))
+                 cells)))
+
+(defn up-sealed?
+  "May a stair up be cut as it stands: up-safe?, and none of its cells borders water, which the
+   child dig would refuse to open (:unsafe, intent/exposes-fluid?)."
+  [world cells]
+  (and (up-safe? world cells) (not-any? #(intent/exposes-fluid? world %) cells)))
+
+(defn seal
+  "The water cells beside a stair up's cells to lay a filler into (water-beside; a block placed
+   into a source takes its place), before the stair is cut as any other: when the stair is
+   otherwise allowed (up-safe?), the water is beside its cells alone (not water-over?), each
+   has a solid neighbour to place against (place/support) and enough of a filler is carried;
+   nil when the stair needs none (up-sealed?) or cannot be sealed. Race 38477665442 runner 8
+   bot Clj_r01 (issue #54): underground with its bucket, an aquifer round the shaft put water
+   beside every stair cell of the climb out; each child dig refused :unsafe, the staircase was
+   :boxed twice, and twelve walks to that water failed :no-path."
+  [world _feet cells]
+  (when (and (up-safe? world cells) (not (up-sealed? world cells)) (not (water-over? world cells)))
+    (let [cells (vec (water-beside world cells))]
+      (when (and (seq cells) (every? #(place/support world %) cells) (filler world (count cells)))
+        cells))))
+
+(defn up-lay
+  "The cells to lay before a stair up from feet can be cut: the seal over the water beside its
+   cells (seal, issue #54) when there is any, else its missing step (step-lay, issue #61); nil
+   when the stair needs none or none can be laid. The seal comes first: a step laid beside
+   open water is a stair the child dig then refuses (intent/exposes-fluid?)."
+  [world feet cells]
+  (or (seal world feet cells) (step-lay world feet cells)))
 
 (def shapes
   "How each kind of staircase is cut: the cells a stair opens (top first, the new feet last), the
-   rule that lets it be cut, which way the feet go when it is taken, and for stairs down what to
-   lay where the floor is missing (lay; a stair up lays nothing, its floor would be the cell the
-   bot stands in)."
+   rule that lets it be cut, which way the feet go when it is taken, and what to lay before it
+   can be: for stairs down the floor where it is missing and its holder (lay), for stairs up a
+   seal over the water beside its cells, else its missing step (up-lay)."
   {:stairs-down {:cells stair-cells :safe? safe? :rise -1 :lay lay}
-   :stairs-up {:cells up-cells :safe? up-safe? :rise 1}})
+   :stairs-up {:cells up-cells :safe? up-sealed? :rise 1 :lay up-lay}})
 
 (defn tool-missing
   "The reason to stop, :no-pickaxe, when the block at cell is rock that would be dug by hand for
@@ -268,6 +363,29 @@
   [world [x _ z] [dx dz]]
   (some #(when (dry-top? world [(+ x (* % dx)) (+ z (* % dz))]) %) (range 1 (inc shore-reach))))
 
+(defn wet-head?
+  "Is a fluid in column [x z] at any of the heights a stair up from feet [x y z] opens over the
+   head or exposes to the one it opens: the head, the cell over it the jump needs, and the one
+   over that, whose water the dig would let in (y + 1 to y + 3)?"
+  [world [x y z]]
+  (boolean (some #(terrain/fluid-at world [x % z]) (range (inc y) (+ y 4)))))
+
+(defn dry-head-distance
+  "How many columns along heading [dx dz] from feet the first loaded one lies with nothing wet
+   over the head (wet-head?), within shore-reach; nil when none. Where a climb stands under an
+   aquifer the top of every column is dry ground (shore-distance tells the headings apart only
+   under a lake or the sea), and the water that refuses each stair is the sheet a block or two
+   over the head: the way out from under it is the heading along which that sheet ends soonest.
+   Issue #61 (R3 world 6, landing 3992,2040,69, 104 sim runs a round): a climb for water from
+   y 37 stood under an aquifer whose floor was two blocks over its head, every stair up refused
+   :unsafe for the water over the cell it opened, and its level steps, the top of every column
+   dry, went north under the aquifer and were :boxed; the sheet ended three columns south."
+  [world [x y z] [dx dz]]
+  (some (fn [n]
+          (let [c [(+ x (* n dx)) y (+ z (* n dz))]]
+            (when (and (terrain/chunk-loaded? world c) (not (wet-head? world c))) n)))
+        (range 1 (inc shore-reach))))
+
 (defn level-step-limit
   "How many level steps a staircase of kind may take before it is :boxed: max-level-steps, and a
    climb as many more as the landing (:plan/go-at) is far from feet on the plane, since under a
@@ -305,14 +423,15 @@
         back (when level-dir (mapv - level-dir))
         round (take 4 (iterate turn (or dir (first directions))))
         home (:plan/go-at world)
-        ways (cond level-dir (cons level-dir (remove #{back} (take 4 (iterate turn level-dir))))
-                   (= :stairs-up kind)
-                   (sort-by
-                    (fn [[dx dz :as d]]
-                      [(or (shore-distance world feet d) Long/MAX_VALUE)
-                       (if home (physics/horizontal-distance [(+ fx dx) 0 (+ fz dz)] home) 0)])
-                    round)
-                   :else round)
+        kept
+        (if level-dir (cons level-dir (remove #{back} (take 4 (iterate turn level-dir)))) round)
+        ways (if (= :stairs-up kind)
+               (sort-by (fn [[dx dz :as d]]
+                          [(or (shore-distance world feet d) Long/MAX_VALUE)
+                           (or (dry-head-distance world feet d) Long/MAX_VALUE)
+                           (if home (physics/horizontal-distance [(+ fx dx) 0 (+ fz dz)] home) 0)])
+                        kept)
+               kept)
         ways (cond->> ways
                (= :stairs-up kind)
                (sort-by #(if (under-falling? world (last (level-cells feet %))) 1 0)))
@@ -399,7 +518,7 @@
                                    :intent/stage :lay
                                    :intent/started-y (physics/y-of (:player/pos world))
                                    :intent/started-tick (:time/tick world))
-              (game/say (str "stairs: no floor toward " dir ", laying one at " to-lay)))
+              (game/say (str "stairs: laying " to-lay " before the stair toward " dir)))
           (boxed? turns) (step-aside world (assoc i :intent/dir dir))
           :else (turned world dir turns (str "stairs: refused toward " dir ", turning")))))
 
