@@ -109,6 +109,17 @@
   [id]
   (contains? solid-states id))
 
+(def air-names
+  "The block names that are air: plain, in a cave, in the void."
+  #{:air :cave_air :void_air})
+
+(defn air?
+  "Is block state id air of any kind (air-names): a cell the eyes' ray passes with nothing to stop
+   at? A plant is not: the game clips a bucket's ray against block outlines (ClipContext.Block
+   OUTLINE), and short grass, sugar cane, kelp and seagrass all have one."
+  [id]
+  (contains? air-names (name-of id)))
+
 (defn falls?
   "Is block state id of a type that falls when the cell under it is free (falling-types)?"
   [id]

@@ -128,6 +128,23 @@
          (scoop/scoop-next (standing {[10 63 8] water} [8.5 8.5])))
       "the same source with the wall gone"))
 
+(deftest a-plant-on-the-ray-is-a-wall
+  ;; race 38477665442 (issue #83): seven bots at beaches sent three scoops each at sources the
+  ;; server acked and never filled, all at y 63 by the sea, where sugar cane grows on the sand.
+  ;; The game's ray for a bucket stops at any block with an outline: the cane over a source, or
+  ;; a grass tuft on the bank between the eyes and the water
+  (let [cane (blocks/default-state :sugar_cane)
+        grass (blocks/default-state :short_grass)]
+    (is (= {:plan/wait :no-water}
+           (scoop/scoop-next (standing {[10 63 8] water [10 64 8] cane} [8.5 8.5])))
+        "cane over the source: no surface to look into")
+    (is (= {:intent/kind :walk :intent/target [10 63 8] :intent/for :scoop}
+           (scoop/scoop-next (standing {[10 63 8] water [9 64 8] grass} [8.5 8.5])))
+        "a grass tuft on the bank between: round it")
+    (is (= {:intent/kind :scoop :intent/target [10 63 8]}
+           (scoop/scoop-next (standing {[10 63 8] water [9 64 8] grass} [10.5 9.5])))
+        "from the other bank the ray is clear")))
+
 (deftest a-remembered-pool-under-stone-is-no-walk
   ;; gym batch water-a3 run 5: the pool memory kept was a source under stone, in reach; the walk
   ;; to it ended the tick it began and began again, every tick, for four minutes

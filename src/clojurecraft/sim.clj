@@ -1161,14 +1161,19 @@
 
 (defn scooped
   "The fluid source an empty bucket used along look takes: the first water or lava source on the
-   ray (BucketItem with ClipContext.Fluid.SOURCE_ONLY), unless a solid block comes first (the eyes
-   do not see through it); nil when none."
+   ray (BucketItem with ClipContext.Fluid.SOURCE_ONLY), unless a block with an outline comes
+   first (ClipContext.Block.OUTLINE: anything but air and water or lava, a plant as much as
+   stone); nil when none."
   [sim look]
   (reduce (fn [_ cell]
             (let [id (block-at sim cell)]
               (cond (contains? filled-bucket id) (reduced cell)
-                    (and id (blocks/solid? id)) (reduced nil)
-                    :else nil)))
+                    (or (nil? id)
+                        (blocks/air? id)
+                        (contains? blocks/water-states id)
+                        (contains? blocks/lava-states id))
+                    nil
+                    :else (reduced nil))))
           nil
           (ray-cells sim look)))
 

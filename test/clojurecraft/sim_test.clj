@@ -25,7 +25,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.record :as record]
-            [clojurecraft.scoop]
+            [clojurecraft.scoop :as scoop]
             [clojurecraft.sim :as sim]
             [clojurecraft.stairs]
             [clojurecraft.stone]
@@ -1972,6 +1972,21 @@
 (def bank-pond
   "A pond of nine water sources sunk in the floor at x 11-13, z 7-9; the spawn is on the bank."
   (into {} (for [x (range 11 14) z (range 7 10)] [[x 63 z] blocks/water-base])))
+
+(deftest the-models-bucket-ray-stops-at-a-plant
+  ;; ClipContext.Block.OUTLINE: the game's ray for a bucket stops at the first block with an
+  ;; outline, sugar cane on the bank as much as stone (issue #83)
+  (let [cane (blocks/default-state :sugar_cane)
+        pos [9.5 64.0 8.5]
+        eye [9.5 65.62 8.5]
+        look (physics/look-at eye (scoop/aim-point [11 63 8]))
+        model
+        (fn [blocks]
+          (assoc (sim/init {:column (world/column-bytes blocks) :spawn pos}) :sim/player-pos pos))]
+    (is (= [11 63 8] (sim/scooped (model bank-pond) look)) "the near source, from the bank")
+    (is (nil? (sim/scooped (model (assoc bank-pond [10 64 8] cane)) look)) "through cane: nothing")
+    (is (nil? (sim/scooped (model (assoc bank-pond [11 64 8] cane)) look))
+        "cane over it: nothing")))
 
 (deftest an-empty-bucket-is-filled-at-a-pond-from-its-bank
   (let [[w sim] (sim/run (game/compose game/step

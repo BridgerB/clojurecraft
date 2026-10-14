@@ -60,13 +60,15 @@
 ;; ---------------------------------------------------------------- where the water is
 
 (defn scoopable?
-  "Is target still a source of fluid with air over it, a surface the eyes look down into?"
+  "Is target still a source of fluid with air over it (blocks/air?: not stone, not a plant), a
+   surface the eyes look down into? Race 38477665442 (issue #83): seven bots at beaches sent
+   three scoops each at sources the server acked and never filled; sugar cane grows on the sand
+   by the water, and the game's ray stops at its outline as at a wall."
   [world [x y z :as target] fluid]
   (let [above (terrain/block-at world [x (inc y) z])]
     (and (= (get-in fluids [fluid :source]) (terrain/block-at world target))
          (some? above)
-         (not (blocks/solid? above))
-         (nil? (blocks/fluid above)))))
+         (blocks/air? above))))
 
 (defn surface-source?
   "Is pos a water source block (plain water at level 0, not a waterlogged block) open to the
@@ -82,16 +84,17 @@
   [(+ x 0.5) (+ y surface-height) (+ z 0.5)])
 
 (defn sees?
-  "Would the eyes reach the surface of the source at src: no solid or unloaded cell on the ray
-   from the eye to its aim-point before the source itself?"
+  "Would the eyes reach the surface of the water source at src: every cell on the ray from the
+   eye to its aim-point before the source itself loaded, and air or water (the game's ray stops
+   at any block with an outline, a grass tuft on the bank as much as a wall; a water cell it
+   passes, or fills the bucket from, which is as good)?"
   [world src]
   (let [eye (game/eye world)
         aim (aim-point src)
         d (physics/distance eye aim)
         dir (mapv #(/ (- %2 %1) d) eye aim)]
-    (every? #(some-> (terrain/block-at world %)
-                     blocks/solid?
-                     not)
+    (every? #(when-let [id (terrain/block-at world %)]
+               (or (blocks/air? id) (contains? blocks/water-states id)))
             (take-while #(not= src %) (physics/cells-along eye dir d ray-step)))))
 
 (defn in-reach?
