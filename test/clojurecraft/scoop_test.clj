@@ -204,6 +204,24 @@
             :intent/for :water-hunt}
            (scoop/scoop-next w)))))
 
+(deftest deep-in-a-pit-under-the-sky-the-bot-climbs-to-the-landings-height
+  ;; race 38477665442 (issue #60): four bots stood at y 6 at the bottom of one ravine, sixty
+  ;; under their landing, the sky open over them; the climb out applies only under the ground,
+  ;; no hunt had a route, nothing lay to tunnel toward, and they waited :no-water out
+  (let [shaft (merge (into {} (for [x (range 16) y (range 64 71) z (range 16)] [[x y z] 1]))
+                     (into {} (for [y (range 64 71)] [[8 y 8] blocks/air])))
+        w (assoc (standing shaft [8.5 8.5]) :plan/go-at [8.5 80.0 8.5])]
+    (is (nil? (scoop/climb w)) "under the sky: not the climb out of the ground")
+    (is
+     (= {:intent/kind :stairs-up
+         :intent/to-y (stairs/climb-to w 80)
+         :intent/for :surface
+         :intent/to-height? true}
+        (scoop/scoop-next w))
+     "stairs up toward the landing's height, a length at a time, the open sky over the pit notwithstanding")
+    (is (= :tunnel (:intent/kind (scoop/scoop-next (assoc w :plan/go-at [8.5 70.0 8.5]))))
+        "six under the landing is not deep: the tunnel out, as before")))
+
 (deftest with-no-way-back-up-the-bot-cuts-stairs-up
   ;; batch iron-a2 run 2 mined an iron ore out of the floor under one of its stairs, run 5 dug a
   ;; niche under one: the staircase down was no way back up

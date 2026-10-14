@@ -201,26 +201,47 @@
        (filter #(intent/routable? world %))
        first))
 
-(defn climb
-  "Out of the ground when the feet are more than underground-depth under the landing
-   (:plan/go-at) and the sky is not open over them: a walk back to the landing when a route
-   reaches it, else a walk up the air already dug (intent/opening), else stairs cut up to its
-   height; nil when not underground. A bot that needs water deep in its mine sees none and its
-   hunt looks for ground near its own height, underground: gym batch iron-a1 runs 3 and 5 got the
-   bucket down there and failed :no-water. The way it came down is often no way back up: batch
-   iron-a2 runs 2 and 5 had mined an ore out of the floor of a stair, or dug a niche under one,
-   and waited :no-water at y 18 and 24 with no route out. The siblings climbed out first too."
+(defn deep?
+  "Are the feet more than underground-depth under the landing (:plan/go-at)? false with no
+   landing."
   [world]
-  (let [home (:plan/go-at world)
-        feet (intent/feet world)]
-    (when (and home
-               (< (physics/y-of feet) (- (physics/y-of home) underground-depth))
-               (not (terrain/under-sky? world feet)))
-      (or (first-walk world :surface [(mapv #(long (math/floor %)) home)])
-          (intent/opening world)
-          {:intent/kind :stairs-up
-           :intent/to-y (stairs/climb-to world (long (math/floor (physics/y-of home))))
-           :intent/for :surface}))))
+  (let [home (:plan/go-at world)]
+    (boolean
+     (and home (< (physics/y-of (intent/feet world)) (- (physics/y-of home) underground-depth))))))
+
+(defn way-up
+  "The way back up to the landing (:plan/go-at): a walk to it when a route reaches it, else a
+   walk up the air already dug (intent/opening), else stairs cut up to its height, which with
+   to-height? end there alone, not at the first open sky."
+  [world to-height?]
+  (let [home (:plan/go-at world)]
+    (or (first-walk world :surface [(mapv #(long (math/floor %)) home)])
+        (intent/opening world)
+        (cond-> {:intent/kind :stairs-up
+                 :intent/to-y (stairs/climb-to world (long (math/floor (physics/y-of home))))
+                 :intent/for :surface}
+          to-height? (assoc :intent/to-height? true)))))
+
+(defn climb
+  "Out of the ground when the feet are deep under the landing (deep?) and the sky is not open
+   over them: the way-up; nil when not underground. A bot that needs water deep in its mine
+   sees none and its hunt looks for ground near its own height, underground: gym batch iron-a1
+   runs 3 and 5 got the bucket down there and failed :no-water. The way it came down is often
+   no way back up: batch iron-a2 runs 2 and 5 had mined an ore out of the floor of a stair, or
+   dug a niche under one, and waited :no-water at y 18 and 24 with no route out. The siblings
+   climbed out first too."
+  [world]
+  (when (and (deep? world) (not (terrain/under-sky? world (intent/feet world))))
+    (way-up world false)))
+
+(defn pit-climb
+  "Out of a pit under the open sky when the feet are deep under the landing (deep?) and no
+   hunt has a route: the way-up, its stairs ending at the landing's height alone (the open sky
+   over the pit's floor is not out). Race 38477665442 (issue #60): four bots stood at y 6 at
+   the bottom of one ravine, sixty under their landing, the sky open over them, no hunt with a
+   route and nothing to tunnel toward, and waited :no-water out. nil when not deep."
+  [world]
+  (when (deep? world) (way-up world true)))
 
 (defn dig-out
   "Out of the ground when the sky is not open over the feet, whatever the height: walk up the
@@ -250,8 +271,8 @@
   "The next step toward a filled bucket: scoop the nearest surface source in reach and in sight,
    else walk to the bank of the nearest one a route reaches, or to such a remembered pool, or climb
    out (to the landing, or by stairs cut up) when deep under it, or hunt for one (hunt-targets),
-   or cut out of the ground (dig-out), or tunnel out of a pit (tunnel-out); else wait
-   :no-water."
+   or climb out of a pit under the sky when deep under the landing (pit-climb), or cut out
+   of the ground (dig-out), or tunnel out of a pit (tunnel-out); else wait :no-water."
   [world]
   (let [srcs (sources world)
         src (first (filter #(and (in-reach? world %) (sees? world %)) srcs))]
@@ -261,6 +282,7 @@
               (first-walk world :scoop (pools-near world))
               (climb world)
               (first-walk world :water-hunt (hunt-targets world))
+              (pit-climb world)
               (dig-out world)
               (tunnel-out world)
               {:plan/wait :no-water}))))

@@ -635,10 +635,12 @@
                       directions))))
 
 (defmethod intent/run :stairs-up
-  ;; done standing at to-y, or out of the ground (out?), whichever comes first
-  [world {:intent/keys [to-y] :as i} event]
+  ;; done standing at to-y, or out of the ground (out?), whichever comes first; one that is
+  ;; :intent/to-height? ends at to-y alone: the open sky over a pit's floor is not out
+  [world {:intent/keys [to-y to-height?] :as i} event]
   (if (and (:player/on-ground? world)
-           (or (>= (physics/y-of (intent/feet world)) to-y) (out? world (intent/feet world))))
+           (or (>= (physics/y-of (intent/feet world)) to-y)
+               (and (not to-height?) (out? world (intent/feet world)))))
     (-> world
         (assoc :player/controls {})
         intent/done)

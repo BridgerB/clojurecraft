@@ -1908,6 +1908,32 @@
     (is (<= 75.0 (second (:player/pos w))) "up to the hilltop, out of the shaft")
     (is (empty? (:sim/violations sim)))))
 
+(def open-pit
+  "A plateau at y 70 with a pit three wide down to y 64 at its middle, open to the sky: the
+   stairs up count its floor as out of the ground."
+  (into {}
+        (for [x (range 16)
+              y (range 64 70)
+              z (range 16)
+              :when (not (and (<= 7 x 9) (<= 7 z 9)))]
+          [[x y z] 1])))
+
+(deftest a-climb-from-a-pit-ends-at-its-height-not-at-the-open-sky
+  ;; issue #60: the floor of a ravine under the sky is out? the tick the stairs start
+  (let [pickaxe (get blocks/items :wooden_pickaxe)
+        [plain _] (staircase-run :stairs-up open-pit 64 pickaxe 70 120000)
+        [w sim] (intent-run {:intent/kind :stairs-up :intent/to-y 70 :intent/to-height? true}
+                            open-pit
+                            64
+                            pickaxe
+                            120000)]
+    (is (= :done (:intent/status (:plan/intent plain))))
+    (is (= 64 (second (intent/feet plain))) "a plain climb is out at once: the sky is open")
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage])))
+    (is (<= 70 (second (intent/feet w))) "to the plateau")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest a-tunnel-never-cuts-under-gravel-under-water
   ;; gym batch iron-a4 run 1 tunnelled under a riverbed: the gravel over a cell it cut fell into
   ;; it and the river followed. Gravel with water on it over the first cell ahead: refused

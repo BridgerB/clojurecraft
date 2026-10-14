@@ -219,6 +219,9 @@
    [:intent/confirm-left "ticks left to wait for the server's word after FINISH"
     "dig, :confirm stage"]
    [:intent/to-y "feet height at or below which the staircase is done" "stairs-down"]
+   [:intent/to-height?
+    "a :stairs-up that ends only at :intent/to-y: the open sky over a pit's floor is not out"
+    "a climb out of a pit under the sky"]
    [:intent/dir "[dx dz] heading the next stair is cut toward" "stairs-down, once planned"]
    [:intent/turns "quarter turns taken after refused stairs; four fail :boxed"
     "stairs-down, after a refusal"]
