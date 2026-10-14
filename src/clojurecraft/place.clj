@@ -357,9 +357,11 @@
     (cond (= :niche (:intent/stage i)) (dig-niche world i event)
           :else
           (case (window/waiting world i)
-            :overdue (intent/fail world :stale-window)
+            :overdue (window/lost world i :equip)
             :waiting world
-            (place-stage world i)))))
+            (if (:intent/resync i)
+              (window/resync world (window/view world :inventory))
+              (place-stage world i))))))
 
 ;; ---------------------------------------------------------------- equip
 
@@ -371,9 +373,11 @@
     (cond (= :held stage) (intent/done world)
           :else
           (case (window/waiting world i)
-            :overdue (intent/fail world :stale-window)
+            :overdue (window/lost world i :equip)
             :waiting world
-            (equip world item :held)))))
+            (if (:intent/resync i)
+              (window/resync world (window/view world :inventory))
+              (equip world item :held))))))
 
 ;; ---------------------------------------------------------------- open
 

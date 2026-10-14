@@ -417,9 +417,11 @@
   (let [i (cond-> i (nil? (:intent/stage i)) (assoc :intent/stage :equip :intent/since (now world)))
         world (assoc world :plan/intent i)]
     (case (window/waiting world i)
-      :overdue (intent/fail world :stale-window)
+      :overdue (window/lost world i :equip)
       :waiting world
-      (act-stage world i))))
+      (if (:intent/resync i)
+        (window/resync world (window/view world :inventory))
+        (act-stage world i)))))
 
 (defmethod intent/run :pour [world i _] (act-run world i))
 (defmethod intent/run :use-on [world i _] (act-run world i))

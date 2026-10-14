@@ -357,6 +357,8 @@
                    (inventory/item-count world (get-in fluids [(:intent/fluid i :water) :bucket]))))
         world (assoc world :plan/intent i)]
     (case (window/waiting world i)
-      :overdue (intent/fail world :stale-window)
+      :overdue (window/lost world i :equip)
       :waiting world
-      (scoop-stage world i))))
+      (if (:intent/resync i)
+        (window/resync world (window/view world :inventory))
+        (scoop-stage world i)))))

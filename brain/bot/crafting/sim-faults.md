@@ -16,7 +16,7 @@ sourceRefs:
   - "src/clojurecraft/sim.clj#:sim/lag-ticks in sim delays every server->client packet by that many ticks"
   - test/clojurecraft/sim_test.clj#no-blind-take-under-lag-or-a-dropped-click
   - src/clojurecraft/sim.clj#(update :sim/violations conj [:place-into-player dest])
-  - test/clojurecraft/sim_test.clj#a-lost-click-is-a-stale-window-never-a-blind-take
+  - test/clojurecraft/sim_test.clj#a-lost-craft-click-is-resynced-never-a-blind-take
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[server-model]]"
@@ -42,7 +42,7 @@ Faults are inputs to `sim/init`, never hidden randomness (`:kill-at ms` kills th
 ## How the tests use them
 - `no-blind-take-under-lag-or-a-dropped-click` enumerates every single lost click (0-27) at lags 0, 3 and 10 ticks (87 runs) and requires no violations, no item but the kit's own (no buttons, no pressure plates), and a table plus sticks or an empty grid. It was mutation-checked: with the grid reclaim disabled, drops 5-8 leave a dirty grid and drop 14 mints a button; a 12-sample random version of the same property missed them, which is why it is enumerated.
 - The kit and pickaxe end-to-end tests assert `:sim/violations` is `[]`.
-- `a-lost-click-is-a-stale-window-never-a-blind-take` drops click 1 (the right-click that lays the first log into the grid). The bot waits, fails `:stale-window` after 3 s, the planner retries, `:settle` puts down the log still on the cursor, and the goal still completes with 4 sticks and no violations.
+- `a-lost-craft-click-is-resynced-never-a-blind-take` drops click 1 (the right-click that lays the first log into the grid). The bot waits 3 s, resyncs (`window/lost`, `window/resync`), `:settle` puts down the log still on the cursor and lays the grid again, and the goal completes with 4 sticks and no violations.
 
 ## Limits
 Lost clicks and uniform lag are injectable. Reordered or duplicated packets, a lost `set-cursor-item`, and server-side resyncs are not modelled.

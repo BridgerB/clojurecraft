@@ -36,7 +36,6 @@
 (def stage-timeout 5000)              ; ms a smelt stage waits on the server before it fails
 (def cook-slack 5000)                 ; ms past the batch's cook time before the cook stage fails
 (def max-batch 64)                    ; the input slot holds one stack
-(def max-lost 3)                      ; clicks the server may lose in one smelt before it fails
 (def input-slot (inventory/slot-in :furnace [:input]))   ; the furnace window's own slots
 (def fuel-slot (inventory/slot-in :furnace [:fuel]))
 (def output-slot (inventory/slot-in :furnace [:output]))
@@ -242,33 +241,11 @@
             intent/done)))
 
 (defn lost
-  "A click went unanswered past window/answer-timeout. The server's slots are the truth, so the
-   intent picks up from them: first a resync (the cursor the world shows may not be the
-   server's), then a lost take or close goes on where it was (both are safe to repeat) and a
-   lost settle or load click starts over at :settle, which puts the cursor down and empties the
-   furnace before laying it again: never a blind next click. The max-lost-th loss fails
-   :stale-window."
-  [world {:intent/keys [stage lost] :or {lost 0}}]
-  (if (>= (inc lost) max-lost)
-    (intent/fail world :stale-window)
-    (-> world
-        (intent/dissoc-intent :intent/awaiting :intent/awaiting-window
-                              :intent/sent-at :intent/clicks)
-        (intent/assoc-intent :intent/lost (inc lost)
-                             :intent/resync true
-                             :intent/stage (if (#{:take :close} stage) stage :settle)
-                             :intent/since (now world)))))
-
-(defn resync
-  "Learn the server's cursor after a lost click: put it down into a free slot with a click the
-   server answers in full (window/resync-click). A loaded cursor is put down, an empty one
-   leaves everything as it was, and either way the whole window and the real cursor come back."
-  [world v]
-  (if-let [s (window/free-slot world v)]
-    (-> world
-        (window/resync-click v (inventory/left-click s))
-        (intent/dissoc-intent :intent/resync))
-    (intent/fail world :inventory-full)))
+  "A click went unanswered past window/answer-timeout (window/lost): a lost take or close goes on
+   where it was (both are safe to repeat) and a lost settle or load click starts over at :settle,
+   which puts the cursor down and empties the furnace before laying it again."
+  [world {:intent/keys [stage] :as i}]
+  (window/lost world i (if (#{:take :close} stage) stage :settle)))
 
 (defmethod intent/run :smelt
   [world i _event]
@@ -281,4 +258,4 @@
           (case (window/waiting world i)
             :overdue (lost world i)
             :waiting world
-            (if (:intent/resync i) (resync world v) (stage world i v))))))
+            (if (:intent/resync i) (window/resync world v) (stage world i v))))))

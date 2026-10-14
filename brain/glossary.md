@@ -29,7 +29,7 @@ lastUpdated: 2026-10-10
 - **Menu type**: the registry index an `open-screen` names; 12 is the crafting table ([[mc-crafting-table-window]]).
 - **Kit**: the `:kit` goal, a crafting table and four sticks; `--until table`.
 - **Junk craft**: a pressure plate or button minted by leftover planks in the grid; see [[junk-crafts]].
-- **Stale window**: `:stale-window`, the craft failure when a click goes unanswered for 3 s.
+- **Stale window**: `:stale-window`, the failure of a window intent (craft, smelt, place, equip, scoop, pour) when a third click goes unanswered for 3 s; the first two are resynced (`window/lost`).
 - **Gather chain**: walk then dig then collect toward a log (`wood/gather-next`), reused by any goal that needs logs.
 - **Violation**: an entry in `:sim/violations`, something a real server would punish or a careful client never does; see [[sim-faults]].
 - **Until**: `--until <name>`, matched against the target rows' `:goal/until` by `plan/goals-for`; the ids go on `:go/goals`; see [[goals-in-play-from-go]].

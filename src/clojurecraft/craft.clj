@@ -106,6 +106,6 @@
     (cond (nil? v) (intent/fail world :no-table-window)
           :else
           (case (window/waiting world i)
-            :overdue (intent/fail world :stale-window)
+            :overdue (window/lost world i (if (= :take (:intent/stage i)) :take :settle))
             :waiting world
-            (stage world i v)))))
+            (if (:intent/resync i) (window/resync world v) (stage world i v))))))

@@ -147,8 +147,34 @@
       (is (= [[(inventory/right-click (inventory/slot-in :table [:grid 1])) 9]] (clicks fx))
           "the full resend moved the state id; the next click carries 9"))))
 
-(deftest a-lost-click-fails-stale-and-never-takes-blind
+(def main-0 (inventory/slot [:main 0]))
+
+(deftest a-lost-click-resyncs-and-never-takes-blind
   (let [[w fx] (fx/fold step (in-play) (map tick (range 50 3500 50)))]
-    (is (= [[(inventory/left-click hotbar-0) 5]] (clicks fx))
-        "the click is never repeated blindly and the result is never clicked")
-    (is (= :stale-window (:intent/reason (:plan/intent w))))))
+    (is (= [[(inventory/left-click hotbar-0) 5] [(inventory/left-click main-0) -1]] (clicks fx))
+        "past the answer timeout the one click sent is a resync into a free slot, never a repeat")
+    (is (= :active (:intent/status (:plan/intent w))))
+    (let [[w fx] (fx/fold step w (map tick (range 3500 10000 50)))]
+      (is (= [[(inventory/left-click main-0) -1]] (clicks fx))
+          "a server that never answers gets one more resync, and the result is never clicked")
+      (is (= :stale-window (:intent/reason (:plan/intent w)))
+          "the third lost click fails the craft"))))
+
+(deftest a-late-server-answers-the-resync-and-the-craft-goes-on
+  ;; issues #131/#132: a loaded server answered later than the timeout; the craft picks up from
+  ;; the full window the resync brings back instead of failing :stale-window
+  (let [[w _] (fx/fold step (in-play) (map tick (range 50 3300 50)))
+        items (assoc (vec (repeat (inventory/slot-count (inventory/layouts :inventory)) nil))
+                     hotbar-0
+                     {:item planks :count 8})
+        [w fx] (fx/fold step
+                        w
+                        [(packet {:packet/name :container-set-content
+                                  :window-id 0
+                                  :state-id 9
+                                  :items items
+                                  :carried nil}) (tick 3350) (tick 3400)])]
+    (is (= [[(inventory/left-click hotbar-0) 9]] (clicks fx))
+        "the craft settles again and lays the planks with the state id the resync brought")
+    (is (= 1 (get-in w [:plan/intent :intent/lost])))
+    (is (= :active (:intent/status (:plan/intent w))))))

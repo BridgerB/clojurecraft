@@ -13,6 +13,8 @@ sourceRefs:
   - src/clojurecraft/craft.clj#defmethod stage :verify
   - src/clojurecraft/craft.clj#defmethod stage :take
   - src/clojurecraft/window.clj#defn waiting
+  - src/clojurecraft/window.clj#defn lost
+  - "src/clojurecraft/window.clj#Learn the server's cursor after a lost click"
   - src/clojurecraft/window.clj#def answer-timeout 3000
 related:
   - "[[bot/crafting/_moc|Crafting]]"
@@ -28,7 +30,7 @@ related:
 
 ## Key files
 - `craft.clj`, `intent/run :craft` - defaults `:intent/window` to `:inventory`, starts at `:settle`, zeroes `:player/controls`, builds the view (nil → fails `:no-table-window`), and gates every stage on `window/waiting`.
-- `window.clj`, `waiting` - a click is unanswered while `:intent/awaiting` equals the current state id of the window it was sent to; past `answer-timeout` (3000 ms) the intent fails `:stale-window`.
+- `window.clj`, `waiting` - a click is unanswered while `:intent/awaiting` equals the current state id of the window it was sent to; past `answer-timeout` (3000 ms) the click is lost (`window/lost`): the next click is a resync (`window/resync`) and the craft starts over at `:settle` (a lost take waits on at `:take`); the third loss fails `:stale-window`.
 - `craft.clj`, `stage` methods - `:settle`, `:click`, `:verify`, `:take`.
 - `window.clj`, `click` - sends a click into a view; see [[phantom-cursor-stale-window]].
 
@@ -39,7 +41,7 @@ related:
 4. **`:take`**: done when the held count of the result reaches `before + makes`; a `:table` craft then emits `container-close` for the table window and drops `:window/open`. 5 s without fails `:not-taken`.
 
 ## Gotchas
-- A click is never sent while the previous one is unanswered: the answer is detected only by the state id moving, so a dropped click is a 3 s `:stale-window`, never a blind next click ([[sim-faults]]).
+- A click is never sent while the previous one is unanswered: the answer is detected only by the state id moving, so a dropped click is a 3 s wait and a resync, never a blind next click ([[sim-faults]]). A loaded server answers late rather than never: issues #131 and #132 failed crafts on the first click left over 3 s.
 - On failure the planner retries the goal, and the next `:settle` reclaims anything left in the grid or on the cursor; that is the recovery path.
 - Slot 0 is never clicked on faith ([[junk-crafts]]).
 - The intent forces `:player/controls {}` every tick, so the bot stands still while crafting.
