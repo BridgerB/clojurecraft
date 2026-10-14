@@ -1791,6 +1791,31 @@
          (into {} (for [x (range 8 16) y [62 63 64] z (range 16)] [[x y z] blocks/water-base]))
          {[8 64 8] blocks/air}))
 
+(deftest a-redig-whose-place-found-no-spot-afloat-gets-ashore-and-places
+  ;; issue #95's snapshots, one tick before the stop: the redig's child place already failed
+  ;; :no-spot afloat, the plan one failure from its end; the redig takes a retreat instead
+  (let [failed {:intent/kind :place
+                :intent/item :gravel
+                :intent/passage-ok? true
+                :intent/status :failed
+                :intent/stage :spot
+                :intent/reason :no-spot}
+        [w sim] (intent-run-holding {:intent/kind :redig
+                                     :intent/item :gravel
+                                     :intent/drops #{(item :gravel) (item :flint)}
+                                     :intent/child failed}
+                                    pond-edge
+                                    62
+                                    {[:hotbar 0] {:item (item :gravel) :count 1}
+                                     [:hotbar 1] {:item (item :stone_pickaxe) :count 1}}
+                                    180000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage])))
+    (is (not (:player/in-water? w)) "ashore")
+    (is (= 1 (+ (get (held w) :gravel 0) (get (held w) :flint 0))) "the gravel dug and picked up")
+    (is (zero? (:stats/deaths w 0)))
+    (is (empty? (:sim/violations sim)))))
+
 (deftest a-redig-afloat-at-a-ponds-edge-gets-ashore-before-it-places
   ;; issue #95 (15 sim runs of R4/41, four real bots): the bucket filled, the bot was afloat in
   ;; the column its source left and the gravel to dig again for flint found no spot, three

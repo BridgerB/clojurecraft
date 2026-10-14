@@ -322,14 +322,34 @@
   {:arglists '([world intent event])}
   (fn [_world i _event] (:intent/stage i :place)))
 
+(defn afloat-no-spot?
+  "Did the child place fail :no-spot with the body in water: afloat at a pond's edge every cell
+   round the feet is water, so the place fails the tick it starts (issue #95's snapshots hold
+   this moment, the child already failed and the plan one failure from its end)."
+  [world child]
+  (boolean (and (= :place (:intent/kind child))
+                (intent/failed? child)
+                (= :no-spot (:intent/reason child))
+                (:player/in-water? world))))
+
 (defmethod redig-stage :place
-  [world {:intent/keys [item] :as i} event]
-  (link world
-        i
-        event
-        {:intent/kind :place :intent/item item :intent/passage-ok? true}
-        (fn [w placed]
-          (intent/assoc-intent w :intent/stage :dig :intent/target (:intent/target placed)))))
+  ;; a place that found no spot afloat is not the redig's failure: a :swim-out for :retreat
+  ;; (done on dry land) takes the child's place, and the place is started again from the bank
+  [world {:intent/keys [item child] :as i} event]
+  (cond (afloat-no-spot? world child)
+        (intent/assoc-intent world
+                             :intent/child
+                             {:intent/kind :swim-out :intent/for :retreat :intent/status :active})
+        (and (= :swim-out (:intent/kind child)) (intent/done? child))
+        (intent/dissoc-intent world :intent/child)
+        :else
+        (link
+         world
+         i
+         event
+         {:intent/kind :place :intent/item item :intent/passage-ok? true}
+         (fn [w placed]
+           (intent/assoc-intent w :intent/stage :dig :intent/target (:intent/target placed))))))
 
 (defmethod redig-stage :dig
   [world {:intent/keys [target] :as i} event]
