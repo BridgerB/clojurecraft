@@ -1281,7 +1281,17 @@
 
 ;; ---------------------------------------------------------------- building the portal (issue #8)
 
-(def build-origin "Where the frame's corner goes in the one-column arena." [4 64 5])
+(def build-origin
+  "Where the frame's corner goes in the one-column arena: the site choose-site picks beside the
+   lava pit, cut into the stone six under its surface facing east, the lava's stand at the surface
+   (access 6, issue #124)."
+  [7 58 12])
+(def build-facing "The side of the frame the bot works from at build-origin." :east)
+(def build-access "The lava's height over the room's floor at build-origin." 6)
+(defn at-build
+  "The cell [dx dy dz] from build-origin facing build-facing."
+  [d]
+  (build/cell build-origin build-facing d))
 
 (def kit
   "What the gym gives a cast: buckets of lava and water, an empty one, cobblestone, flint and
@@ -1299,8 +1309,11 @@
   "Run a :build of kind from build-origin facing south over blocks, from spawn with inv, until it
    ends or max-ms. Returns [world sim]."
   [kind blocks spawn inv max-ms]
-  (let [it
-        {:intent/kind :build :intent/build kind :intent/origin build-origin :intent/facing :south}
+  (let [it {:intent/kind :build
+            :intent/build kind
+            :intent/origin build-origin
+            :intent/facing build-facing
+            :intent/access build-access}
         step
         (fn [w e]
           (let [w (game/step w e)
@@ -1315,31 +1328,32 @@
              #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
              max-ms)))
 
+(def lava-pit
+  "A trench of lava sources set into the floor east of the footprint, one wide so every source
+   has ground beside it to refill from (a scoop takes a source for good)."
+  (into {} (for [z (range 0 12)] [[15 63 z] blocks/lava-base])))
+
 (deftest one-cell-is-cast-from-lava-and-water
-  (let [[w sim] (build-run :cast-one {} [9.5 64.0 10.5] kit 300000)]
+  (let [[w sim] (build-run :cast-one lava-pit [9.5 64.0 10.5] kit 600000)]
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
-    (is (= :obsidian (blocks/name-of (sim/block-at sim [5 64 5]))) "the first cell, obsidian")
+    (is (= :obsidian (blocks/name-of (sim/block-at sim (at-build [1 0 0]))))
+        "the first cell, obsidian")
     (is (= (recipe/item-id :water_bucket)
            (some #(when (= (recipe/item-id :water_bucket) (:item %)) (:item %))
                  (vals (:sim/inv sim))))
         "the water scooped back")
     (is (empty? (:sim/violations sim)))))
 
-(def lava-pit
-  "A trench of lava sources set into the floor east of the footprint, one wide so every source
-   has ground beside it to refill from (a scoop takes a source for good)."
-  (into {} (for [z (range 0 12)] [[15 63 z] blocks/lava-base])))
-
 (deftest the-frame-is-cast-lit-and-stepped-through
   (let [[w sim] (build-run :nether lava-pit [9.5 64.0 10.5] kit 1800000)
-        frame (for [[dx dy] build/frame-cells] [(+ 4 dx) (+ 64 dy) 5])]
+        frame (for [[dx dy] build/frame-cells] (at-build [dx dy 0]))]
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
     (is (every? #(= :obsidian (blocks/name-of (sim/block-at sim %))) frame) "ten obsidian")
     (is (= 6
            (count (filter #(= :nether_portal (blocks/name-of (sim/block-at sim %)))
-                          (for [x [5 6] y [65 66 67]] [x y 5])))))
+                          (for [[dx dy] build/interior] (at-build [dx dy 0]))))))
     (is (= "minecraft:the_nether" (:player/dimension w)))
     (is (empty? (:sim/violations sim)))))
 
@@ -1348,7 +1362,7 @@
   ;; skipped, so four lava pours are needed, one from the kit and three from the trench
   (let [seeded (into {}
                      (for [[dx dy] (take 6 build/frame-cells)]
-                       [[(+ 4 dx) (+ 64 dy) 5] (blocks/default-state :obsidian)]))
+                       [(at-build [dx dy 0]) (blocks/default-state :obsidian)]))
         [w sim] (build-run :portal (merge lava-pit seeded) [9.5 64.0 10.5] kit 1800000)]
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
@@ -2726,7 +2740,7 @@
   ;; remembers, and the first op the world says is not done is the one worked. The new life
   ;; begins off the frame (the site was chosen at the landing, and vanilla never respawns a
   ;; player inside blocks), so it walks back to the site
-  (let [[w sim] (nether-run step {:kill-at 240000 :respawn [12.5 64.0 14.5]})]
+  (let [[w sim] (nether-run step {:kill-at 120000 :respawn [12.5 64.0 14.5]})]
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
     (is (= 1 (:stats/deaths w)) "it died once")
     (is (= "minecraft:the_nether" (:player/dimension w)))
@@ -2754,8 +2768,9 @@
 (deftest with-no-lava-near-the-bot-goes-down-to-the-sea-and-casts-beside-it
   ;; issue #41, the wall before the Nether: race 38477665442's 47 real bots and 950 sim runs
   ;; stood at the surface with the kit, no lava within sixteen of any origin, and waited
-  ;; :no-site out. With no site the planner hunts: stairs down toward the nearest lava loaded,
-  ;; a tunnel toward it, the roof over it dug, and the site chosen beside it
+  ;; :no-site out. Lava under the stone is a site all the same (issue #124: any pool at any
+  ;; depth): the site is chosen beside the sea, the bot goes down to the lava's height, digs its
+  ;; way to the sea and the room in front of the frame, and opens the roof over a source to scoop
   (let [column (world/column-bytes lava-sea)
         [w sim] (sim/run step
                          (game/init fx/opts)
@@ -2765,22 +2780,69 @@
                                     :inventory hunt-kit})
                          #(or (plan/done? %) (plan/failed? %))
                          900000
-                         {:event/kind :go :go/goals [:cast-one]})
-        kinds (set (map :intention/kind (memory/intentions w)))]
+                         {:event/kind :go :go/goals [:cast-one]})]
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)))
-    (is (contains? kinds :stairs-down) "it went down")
-    (is (contains? kinds :tunnel) "and tunnelled toward the sea")
-    (is (some #(and (= :dig (:intention/kind %)) (= 41 (second (:intention/target %))))
-              (memory/intentions w))
-        "the roof over a source was dug")
+    (is (< (second (:player/pos w)) 50) "it went down to the sea's height")
     (let [{:site/keys [origin]} (memory/site w)]
       (is (some? origin) "a site was chosen")
-      (is (= 41 (second origin)) "a block over the sea's level")
+      (is (< (second origin) 41) "the frame cut into the stone under the sea's stand")
       (is (= :obsidian
              (blocks/name-of
               (sim/block-at sim (build/cell origin (:site/facing (memory/site w)) [1 0 0]))))
           "the first cell, obsidian"))
+    (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- the rock is the mould (issue #124)
+
+(def rock-kit
+  "What a portal row gives (gym/portal-kit): a bucket each of lava and water, an empty one, a
+   handful of cobblestone, flint and steel, and a stone pickaxe."
+  {[:hotbar 0] {:item (recipe/item-id :lava_bucket) :count 1}
+   [:hotbar 1] {:item (recipe/item-id :water_bucket) :count 1}
+   [:hotbar 2] {:item (recipe/item-id :bucket) :count 1}
+   [:hotbar 3] {:item (recipe/item-id :cobblestone) :count 8}
+   [:hotbar 4] {:item (recipe/item-id :flint_and_steel) :count 1}
+   [:hotbar 8] {:item (recipe/item-id :stone_pickaxe) :count 1}})
+
+(defn rock-run
+  "The planner toward the Nether from rock-kit, spawned at spawn over blocks, until it ends or
+   max-ms. Returns [world sim]."
+  [blocks spawn max-ms]
+  (sim/run step
+           (game/init fx/opts)
+           (sim/init {:column (world/column-bytes blocks) :spawn spawn :inventory rock-kit})
+           #(or (plan/done? %) (plan/failed? %))
+           max-ms
+           {:event/kind :go :go/goals [:nether]}))
+
+(defn cast-frame
+  "The frame's ten cells at the site the world remembers, as the sim holds them."
+  [w sim]
+  (let [{:site/keys [origin facing]} (memory/site w)]
+    (for [[dx dy] build/frame-cells] (sim/block-at sim (build/cell origin facing [dx dy 0])))))
+
+(def sealed-pool
+  "A lava pool three by five at y 40 sealed in the stone (no air round it), and the bot in a
+   pocket of its own two cells high at y 41, six blocks off: nowhere open but where it stands."
+  (merge (into {} (for [x [11 12 13] z (range 2 7)] [[x 40 z] blocks/lava-base]))
+         {[12 41 12] blocks/air [12 42 12] blocks/air}))
+
+(deftest a-portal-is-cut-into-the-rock-beside-a-sealed-pool
+  ;; issue #124: the rock is the mould. The pool is underground with no room anywhere: the bot
+  ;; digs its way to it, the room in front of a face of the rock, each cell a hole lava is poured
+  ;; into and water over, and the inside; a block only where its own holes opened a wall
+  (let [[w sim] (rock-run sealed-pool [12.5 41.0 12.5] 1200000)]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w) (memory/site w)))
+    (is (= "minecraft:the_nether" (:player/dimension w)))
+    (is (every? #(= :obsidian
+                    (some-> %
+                            blocks/name-of))
+                (cast-frame w sim))
+        "ten obsidian")
+    (is (zero? (:stats/deaths w 0)))
+    (is (<= (count (filter #(= :cobblestone (blocks/name-of %)) (vals (:sim/placed sim)))) 8)
+        "a handful of blocks placed")
     (is (empty? (:sim/violations sim)))))
 
 ;; ---------------------------------------------------------------- the fortress (issue #11)

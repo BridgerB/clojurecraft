@@ -53,12 +53,14 @@
 (s/fdef build/portal-plan
   :args
   (s/cat :origin ::block-pos
-         :facing build/facings)
+         :facing build/facings
+         :h (s/? nat-int?))
   :ret ::plan)
 (s/fdef build/cast-one-plan
   :args
   (s/cat :origin ::block-pos
-         :facing build/facings)
+         :facing build/facings
+         :h (s/? nat-int?))
   :ret ::plan)
 
 ;; bot
@@ -371,6 +373,7 @@
 (s/def :intent/build #{:cast-one :portal :nether})
 (s/def :intent/origin ::block-pos)
 (s/def :intent/facing build/facings)
+(s/def :intent/access nat-int?)
 (s/def :intent/op ::op)
 (s/def :intent/aim (s/coll-of number? :kind vector? :count 3))
 (s/def :intent/expect :build/done)

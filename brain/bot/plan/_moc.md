@@ -22,7 +22,7 @@ related:
 - [[gather-chain]] - walk, dig, collect tagged for :log, continued from :plan/last, up to six leaf digs.
 - [[scoop-intent]] - fill a bucket at surface water in sight or remembered, never cave water; aim at the surface, use-item, done when the water bucket is held.
 - [[mine-act]] - mining rows as data (stone, coal, iron, gravel): the tool, the drops, the walk beside the block, stairs down to the row's depth.
-- [[build-plan]] - a build as data: ops with done-predicates, the first not satisfied is worked; portal-plan, the template mold.
+- [[build-plan]] - a build as data: ops with done-predicates, the first not satisfied is worked; portal-plan, the portal cut into the rock beside a lava pool.
 - [[fortress-tunnel]] - the Nether leg: bricks as sightings, a tunnel whose steps are plans of ops, never opening a cell beside lava.
 - [[roadmap-issues]] - which GitHub issue number is which roadmap step and draft.
 

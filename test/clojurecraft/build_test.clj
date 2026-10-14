@@ -1,6 +1,7 @@
 (ns clojurecraft.build-test
-  "The portal plan as data (issue #8): its geometry against ruststeve's mold, and the properties
-   that keep a cast from pouring lava on the bot or sealing a cup before it is poured."
+  "The portal plan as data (issues #8, #124): each cell a hole cut into the rock, water poured
+   straight over its lava, and the properties that keep a cast from placing into its own stance,
+   digging obsidian or working outside the cells a site checks."
   (:require [clojure.test :refer [deftest is testing]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
@@ -21,17 +22,23 @@
 (deftest the-plan-casts-the-ten-cells-in-layer-order
   (let [plan (build/portal-plan origin :south)
         lava (filter #(= :lava (:build/step %)) plan)
-        water (filter #(= :water (:build/step %)) plan)]
+        water (filter #(= :water (:build/step %)) plan)
+        scoop (filter #(= :scoop (:build/step %)) plan)]
     (is (= build/frame-cells (map :build/cell lava)) "never sorted by height")
-    (is (= build/frame-cells (map :build/cell water)) "two pours a cell")
-    (testing "every pour from the cell's stance: a block over the cell, one toward the bot"
-      (doseq [{[dx dy] :build/cell :as op} (concat lava water)]
-        (is (= [(+ 100 dx) (+ 64 dy 1) 201] (:build/stand op)) (pr-str op))))
-    (testing "lava into the cup, water into the bowl over it"
+    (is (= build/frame-cells (map :build/cell water)) "one water a cell")
+    (testing "lava into the hole cut at the cell"
       (doseq [{[dx dy] :build/cell :as op} lava]
-        (is (= [(+ 100 dx) (+ 64 dy) 200] (:build/into op))))
-      (doseq [{[dx dy] :build/cell :as op} water]
-        (is (= [(+ 100 dx) (+ 64 dy 1) 200] (:build/into op)))))
+        (is (= [(+ 100 dx) (+ 64 dy) 200] (:build/into op)))))
+    (testing "every water op targets the cell directly above its lava cell, never beside it"
+      (doseq [[l w] (map vector lava water)]
+        (is (= (update (:build/into l) 1 inc) (:build/into w)) (pr-str w))))
+    (testing "and the water is scooped back from that same cell, from the same stand"
+      (doseq [[w sc] (map vector water scoop)]
+        (is (= (:build/into w) (:build/pos sc)))
+        (is (= (:build/stand w) (:build/stand sc)))))
+    (testing "every pour from the cell's stand, in front of the frame"
+      (doseq [{c :build/cell :as op} (concat lava water)]
+        (is (= (build/cell origin :south (build/stands c)) (:build/stand op)))))
     (is (= :use-on (:build/op (last (butlast plan)))) "lit")
     (is (= [:dimension "minecraft:the_nether"] (:build/done (last plan))) "then stepped through")))
 
@@ -47,35 +54,32 @@
 (def gen-origin (gen/tuple (gen/choose -1000 1000) (gen/choose -40 200) (gen/choose -1000 1000)))
 (def gen-facing (gen/elements (sort build/facings)))
 
-(defn lid?
-  "Does the place op at index i put a block two over a cup a lava pour after i fills?"
-  [plan i]
-  (let [p (:build/pos (nth plan i))]
-    (some (fn [op] (and (= :lava (:build/step op)) (= p (update (:build/into op) 1 + 2))))
-          (drop (inc i) plan))))
+(def gen-height (gen/choose 0 build/max-access))
 
-(deftest the-plan-never-places-into-its-own-stance-nor-lids-a-cup
+(deftest the-plan-never-places-into-its-own-stance-nor-into-the-room
+  ;; a block placed into the bot's own cell is a ghost (ruststeve); one placed into the room
+  ;; would stand in the ray of a pour
   (let [r (tc/quick-check 200
-                          (prop/for-all
-                           [o gen-origin facing gen-facing]
-                           (let [plan (build/portal-plan o facing)]
-                             (and (every? (fn [{:build/keys [pos stand]}]
-                                            (and (not= pos stand) (not= pos (update stand 1 inc))))
-                                          (ops-of plan :place))
-                                  (not-any? #(and (= :place (:build/op (nth plan %))) (lid? plan %))
-                                            (range (count plan)))
-                                  (= plan (build/portal-plan o facing))))))]
+                          (prop/for-all [o gen-origin facing gen-facing h gen-height]
+                                        (let [plan (build/portal-plan o facing h)
+                                              room (set (map #(build/cell o facing %)
+                                                             (build/room-cells h)))]
+                                          (and (every? (fn [{:build/keys [pos stand]}]
+                                                         (and (not= pos stand)
+                                                              (not= pos (update stand 1 inc))
+                                                              (not (contains? room pos))))
+                                                       (ops-of plan :place))
+                                               (= plan (build/portal-plan o facing h))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
 
-(deftest no-op-touches-a-column-a-station-may-be-in
-  ;; station-among refuses a source under the footprint, so the footprint must cover every cell
-  ;; the plan works in: the stair to the top layer runs east past the mold's box, and a step
-  ;; placed into a station's source would destroy it
+(deftest every-cell-the-plan-works-is-in-its-footprint
+  ;; site-ok? checks the footprint for fluid and loaded chunks, so it must hold every cell an op
+  ;; places, digs or pours into
   (let [r (tc/quick-check 200
-                          (prop/for-all [o gen-origin facing gen-facing]
-                                        (every? (fn [[x _ z]] (build/footprint? o facing [x z]))
+                          (prop/for-all [o gen-origin facing gen-facing h gen-height]
+                                        (every? #(contains? (build/footprint o facing h) %)
                                                 (keep #(or (:build/pos %) (:build/into %))
-                                                      (build/portal-plan o facing)))))]
+                                                      (build/portal-plan o facing h)))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
 
 (deftest turning-the-facing-moves-every-cell-and-loses-none
@@ -91,7 +95,7 @@
   (let [plan (build/cast-one-plan origin :south)]
     (is (= [[1 0]] (keep :build/cell (filter #(= :lava (:build/step %)) plan))))))
 
-(def hill-origin [2 63 8])
+(def hill-origin [2 63 0]) ; the frame far from the way to the stand: nothing on it is the frame's rock
 (def hill-stand [6 63 8])
 
 (def hill-op
@@ -136,11 +140,12 @@
     (let [opened (assoc-in hill [:world/blocks [3 63 8]] blocks/air)]
       (is (= [3 64 8] (:intent/target (build/op-child opened hill-intent hill-op)))
           "then the head over it"))
-    (let [cobble (blocks/default-state :cobblestone)
-          ;; [4 63 8] is a cell the cast places; cobble there is the mold, the stone past it is the hill
-          w (standing-at (open-ground {[4 63 8] cobble [5 63 8] 1 [5 64 8] 1}) pos)]
-      (is (= [5 63 8] (:intent/target (build/op-child w hill-intent hill-op)))
-          "cobblestone the plan places stays; the stone past it is dug"))))
+    (let [;; a frame facing east at [4 63 12] keeps the rock of x 3..4, z 8..13 (build/kept): the
+          ;; stone at [4 63 8] is its frame's, the stone past it is the hill
+          kept-intent (assoc hill-intent :intent/origin [4 63 12] :intent/facing :east)
+          w (standing-at (open-ground {[4 63 8] 1 [5 63 8] 1 [5 64 8] 1}) pos)]
+      (is (= [5 63 8] (:intent/target (build/op-child w kept-intent hill-op)))
+          "the frame's rock stays; the stone past it is dug"))))
 
 (def pond-stand [6 63 8])
 
@@ -206,44 +211,50 @@
            (build/op-child w hill-intent op))
         "the sand cell, which a route reaches, is the stand")))
 (def trench
-  "Lava sources in the floor along z 15: a station for a site west of it, with the floor at z 14
-   to stand on."
+  "Lava sources in the floor along z 15: a surface pool for a site west of it, with the floor at
+   z 14 to stand on."
   (into {} (for [x (range 16)] [[x 62 15] blocks/lava-base])))
-
-(defn dug
-  "The column with every cell of x 0..15, z 0..13 at the heights ys replaced by block, but the
-   column [10 10] the bot stands in."
-  [ys block]
-  (into {} (for [x (range 16) z (range 14) y ys :when (not= [x z] [10 10])] [[x y z] block])))
 
 (def feet-pos [10.5 63.0 10.5])
 
 (defn site-at
-  "The site chosen standing at feet-pos over the plain, with extra blocks laid over it."
-  [extra]
-  (build/choose-site (standing-at (open-ground (merge extra trench)) feet-pos)))
+  "The site chosen standing at feet-pos over the plain, with blocks laid over it."
+  [blocks]
+  (build/choose-site (standing-at (open-ground blocks) feet-pos)))
 
-(deftest a-site-needs-ground-under-its-pad-and-no-water-in-its-footprint
-  ;; issue #74: a pad cell over a cave or a deep pond had no cell to place it from (the
-  ;; foundation reaches four down) and the build failed :no-stand. The site refuses them
-  (is (some? (site-at {})) "a plain beside lava: a site")
-  (is (nil? (site-at (dug (range 54 63) blocks/air)))
-      "a pit nine deep round the feet: no foundation reaches its floor")
-  (is (nil? (site-at (dug [61 62] blocks/water-base)))
-      "a pond round the feet: the pad is not built under water")
-  (is (some? (site-at (dug [61 62] blocks/air))) "a pit two deep: built up from its floor"))
+(defn holds-solid? "Is the block at p solid in w?" [w p] (build/holds? w [:solid p]))
 
-(deftest a-station-is-near-in-three-dimensions-and-open-to-the-air
-  ;; race 38477665442 took the lava sea ninety blocks under the feet, within sixteen on the plane,
-  ;; for a station, and walked at it; and a scoop at a roofed source fails :target-gone (#91)
-  (let [deep (into {} (for [x (range 16)] [[x 20 x] blocks/lava-base]))
-        roofed (into {} (for [x (range 16)] [[x 61 15] blocks/lava-base]))
-        sealed (into {} (for [x (range 16)] [[x 62 15] 1]))]
-    (is (nil? (build/choose-site (standing-at (open-ground deep) feet-pos)))
-        "lava forty under: no station")
-    (is (nil? (build/choose-site (standing-at (open-ground (merge roofed sealed)) feet-pos)))
-        "lava under stone: no station")
-    (is (some? (site-at {})) "lava in the floor, open: a station")))
+(deftest a-site-is-cut-into-the-rock-under-a-surface-pool
+  ;; issue #124: no flat open ground is asked for; the frame goes into the rock under the pool's
+  ;; level, the room dug in front, and the lava's stand over the room's floor so spilled water
+  ;; never runs to it
+  (let [{:keys [origin facing h blocks]} (site-at trench)
+        w (standing-at (open-ground trench) feet-pos)]
+    (is (some? origin) "a site beside the pool")
+    (is (<= 1 h build/max-access))
+    (is (<= blocks build/site-blocks) "a handful of blocks")
+    (is (every? #(holds-solid? w (build/cell origin facing %))
+                (for [[dx dy] build/frame-cells] [dx dy 0]))
+        "every cell of the frame is in the rock, cut out by the cast")))
+
+(deftest a-pool-sealed-in-the-rock-has-a-site-beside-it
+  ;; the pool is underground with no open space round it: the site is beside it all the same,
+  ;; the bot digging its way there
+  (let [sealed (into {} (for [x [11 12 13] z (range 2 7)] [[x 40 z] blocks/lava-base]))
+        {:keys [origin h]} (site-at sealed)]
+    (is (some? origin))
+    (is (= 41 (+ (second origin) h)) "the room's landing at the height of the lava's stand")))
+
+(deftest no-site-touches-water
+  ;; water beside the room spills onto the work, and water beside a hole runs into it: a site
+  ;; whose cells water touches is passed over
+  (let [pond (into {}
+                   (for [x (range 16)
+                         z (range 14)
+                         y [61 62]
+                         :when (not= [x z] [10 10])]
+                     [[x y z] blocks/water-base]))]
+    (is (nil? (site-at (merge trench pond))))))
 
 (def cast-one-row (first (filter #(= :cast-one (:goal/id %)) plan/goals)))
 
@@ -256,7 +267,17 @@
     (is (= {:plan/wait :no-log} (plan/next-intent w cast-one-row plan/goals))
         "nothing held and no tree known: the pickaxe waits for a log")
     (is (= :build
-           (:intent/kind
-            (plan/next-intent (assoc w :player/inventory pickaxe) cast-one-row plan/goals)))
-        "a pickaxe held: the build")))
+           (:intent/kind (plan/next-intent
+                          (assoc w
+                                 :player/inventory
+                                 (assoc pickaxe 1 {:item (recipe/item-id :cobblestone) :count 8}))
+                          cast-one-row
+                          plan/goals)))
+        "a pickaxe held and the blocks the plan places: the build")))
+
+(deftest the-portal-kit-asks-for-no-constant-of-blocks
+  ;; issue #124: the blocks a cast places are counted from the plan for the place chosen
+  ;; (held-first), so the kit holds the buckets alone
+  (let [kit (first (filter #(= :portal-kit (:goal/id %)) plan/goals))]
+    (is (= {:item/water_bucket 1 :item/bucket 1} (:goal/provides kit)))))
 

@@ -114,15 +114,15 @@
   :goal/target? true
   :goal/until "portal-kit"
   :goal/doc
-  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from a pool to the mold, beside the filled water bucket, and three stacks of cobblestone for the mold (its plan places at most 190); the gym's portal rows give these, a run from spawn makes them. The water bucket is counted here too: a chained run reaches a step once and never asks for it again, and race 38477665442 reached this one holding its only bucket still empty, then filled it, and the cast found no bucket for the lava (issue #49)"
-  :goal/provides {:item/water_bucket 1 :item/bucket 1 :item/cobblestone 192}
+  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from the pool to each hole, beside the filled water bucket poured over it and scooped back (issue #124). The few blocks a cast places where the rock is missing are asked for by the build itself, counted from the plan for the place chosen (build/held-first, blocks-needed), never a constant. The water bucket is counted here too: a chained run reaches a step once and never asks for it again, and race 38477665442 reached this one holding its only bucket still empty, then filled it, and the cast found no bucket for the lava (issue #49)"
+  :goal/provides {:item/water_bucket 1 :item/bucket 1}
   :goal/done? :provided?}
  {:goal/id :cast-one
   :goal/priority 14
   :goal/target? true
   :goal/until "cast-one"
   :goal/doc
-  "one obsidian cast in the first cell of a portal mold: lava poured into a cup, water into the bowl over it, the water scooped back (the gym's cast-one stage); a pickaxe is held for the way down to lava and the mold's digs, made before the build starts (sim race 38477665389 dug for its stance with none and failed :needs-tool, issue #70)"
+  "one obsidian cast in the first cell of the frame, cut into the rock beside a lava pool (issue #124): the hole dug, lava poured into it, water poured into the cell straight over it and scooped back (the gym's cast-one stage); a pickaxe is held for the way to the lava and the digs, made before the build starts (sim race 38477665389 dug for its stance with none and failed :needs-tool, issue #70)"
   :goal/holds {:tag/pickaxes 1}
   :goal/plan :build
   :goal/build :cast-one
@@ -132,7 +132,7 @@
   :goal/target? true
   :goal/until "portal"
   :goal/doc
-  "a nether portal cast from lava and water in ruststeve's template mold, never mined, and lit with flint and steel; a pickaxe is held, as for cast-one"
+  "a nether portal cast from lava and water into holes cut in the rock beside a lava pool, a block placed only where the rock is missing, never mined, and lit with flint and steel (issue #124); a pickaxe is held, as for cast-one"
   :goal/holds {:tag/pickaxes 1}
   :goal/plan :build
   :goal/build :portal

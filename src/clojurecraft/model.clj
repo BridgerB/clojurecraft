@@ -193,9 +193,14 @@
    [:intent/build "which plan a :build works: :cast-one, :portal or :nether" ":build"]
    [:intent/origin "a build's frame origin [bx by bz]" ":build"]
    [:intent/facing "the side of the frame a build works from: :south :north :east :west" ":build"]
+   [:intent/access
+    "a build's lava height over its room's floor, which its access steps climb to (build/station)"
+    ":build"]
    [:intent/op "the plan op a :build or a :tunnel-to step works now; a new op drops the child"
     ":build, :tunnel-to"]
-   [:intent/aim "the point a :pour or :use-on looks at to act" ":pour, :use-on"]
+   [:intent/aim
+    "the point a :pour or :use-on looks at to act, and a :scoop through a cell's open side"
+    ":pour, :use-on, a side :scoop"]
    [:intent/expect "the predicate (build/holds?) that shows a :pour, :use-on or :await worked"
     ":pour, :use-on, :await"]
    [:intent/fluid "what a :scoop takes: :water (when absent) or :lava" "a :scoop for lava"]

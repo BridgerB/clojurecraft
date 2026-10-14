@@ -70,6 +70,13 @@
          (some? above)
          (blocks/air? above))))
 
+(defn source?
+  "Is target still a source of fluid, whatever is over it? A scoop aimed through a cell's open
+   side (:intent/aim, the cast's water over a hole, issue #124) needs no air above it: its ray
+   enters from the side."
+  [world target fluid]
+  (= (get-in fluids [fluid :source]) (terrain/block-at world target)))
+
 (defn surface-source?
   "Is pos a water source block (plain water at level 0, not a waterlogged block) open to the
    air above it, a surface the eyes can look down into? A source under stone is a pocket in an
@@ -315,11 +322,14 @@
         (intent/assoc-intent :intent/sequence seq :intent/sent-at (now world)))))
 
 (defmethod scoop-stage :aim
-  [world {:intent/keys [target since still fluid] :or {still 0 fluid :water}}]
-  (let [look (physics/look-at (game/eye world) (aim-point target))
+  ;; an explicit :intent/aim is a scoop through the cell's open side: the source must still be
+  ;; there, with anything over it; else the surface from above, air over it (scoopable?)
+  [world {:intent/keys [target since still fluid aim] :or {still 0 fluid :water}}]
+  (let [look (physics/look-at (game/eye world) (or aim (aim-point target)))
         still (if (intent/still? world) (inc still) 0)
-        world (assoc world :player/controls {:control/look look})]
-    (cond (not (scoopable? world target fluid)) (intent/fail world :target-gone)
+        world (assoc world :player/controls {:control/look look})
+        there? (if aim (source? world target fluid) (scoopable? world target fluid))]
+    (cond (not there?) (intent/fail world :target-gone)
           (and (>= still 3) (> (- (now world) since) settle-ms))
           (-> world
               (use-item look)
