@@ -370,3 +370,56 @@
                              kit
                              plan/goals)))
         "a table already held is not dug for")))
+
+(defn worn
+  "w with its first tool of item name n carrying damage: the server's :damage component."
+  [w n damage]
+  (let [id (recipe/item-id n)
+        slot (some (fn [[s {:keys [item]}]] (when (= item id) s)) (:player/inventory w))]
+    (assoc-in w [:player/inventory slot :components] {:damage damage})))
+
+(deftest a-worn-pickaxe-is-no-spare
+  ;; issue #39: race 38477665442 bot Clj_r22 tunnelled for coal at y 16 holding a stone pickaxe
+  ;; and, as its spare, the wooden one that dug the first cobblestone, 33 digs left in it; both
+  ;; broke in one tunnel with two sticks, a table and 173 cobblestone in hand
+  (let [held {:raw_iron 4 :stone_pickaxe 1 :wooden_pickaxe 1 :stick 2 :cobblestone 64}
+        with-table #(memory/observe % [3 64 5] memory/crafting-table) ; the furnace is at [7 64 5]
+        w (with-table (with-furnace (world-holding held false)))]
+    (is (= 59 (make/uses-left {:item (recipe/item-id :wooden_pickaxe) :count 1})) "fresh")
+    (is (= 33
+           (make/uses-left
+            {:item (recipe/item-id :wooden_pickaxe) :count 1 :components {:damage 26}})))
+    (is (nil? (make/uses-left {:item (recipe/item-id :cobblestone) :count 3})) "no tool")
+    (is (= :mine-coal (:goal/id (make/next-row w (ingots 4) plan/goals)))
+        "a fresh wooden pickaxe beside the stone one is the spare: the coal is dug")
+    (is (= :craft/stone_pickaxe
+           (:goal/id (make/next-row (worn w :wooden_pickaxe 26) (ingots 4) plan/goals)))
+        "worn under spare-uses, it is no spare: a stone one is made from what is carried")
+    (is (= :mine-coal
+           (:goal/id (make/next-row (worn (with-table (with-furnace
+                                                       (world-holding (dissoc held :stick) false)))
+                                          :wooden_pickaxe
+                                          26)
+                                    (ingots 4)
+                                    plan/goals)))
+        "with nothing to make one from, the coal is dug all the same")))
+
+(deftest sticks-for-two-more-pickaxes-are-gathered-before-the-iron
+  ;; issue #39: bots Clj_r23 and Clj_r06 left the forest with three logs' worth, made three
+  ;; stone pickaxes between the stairs down, the tunnels and the climb out for the water, and
+  ;; broke the last on the climb. Four sticks go down with the spare pickaxe, gathered at the
+  ;; trees while a walk to one can be started
+  (let [col (world/column {[8 64 8] 136 [8 65 8] 136})
+        with-tree (fn [held]
+                    (-> (with-furnace (world-holding held false))
+                        (memory/observe [3 64 5] memory/crafting-table) ; the furnace is at [7 64 5]
+                        (assoc :world/chunks {[0 0] col})
+                        (memory/remember-column [0 0] col)))
+        row (fn [w] (:goal/id (make/next-row w (ingots 4) plan/goals)))]
+    (is (= :gather-log (row (with-tree {:stone_pickaxe 2 :coal 1})))
+        "a trunk in reach: the sticks' log, before the descent")
+    (is (= :craft/stick (row (with-tree {:stone_pickaxe 2 :coal 1 :oak_planks 2})))
+        "planks held: the sticks are made")
+    (is (= :mine-iron (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 4}))) "four held: the iron")
+    (is (= :mine-iron (row (with-furnace (world-holding {:stone_pickaxe 2 :coal 1} false))))
+        "no tree to walk to: no trip for the sticks")))

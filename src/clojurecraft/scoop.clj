@@ -28,6 +28,7 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
@@ -211,20 +212,23 @@
       (or (first-walk world :surface [(mapv #(long (math/floor %)) home)])
           (intent/opening world)
           {:intent/kind :stairs-up
-           :intent/to-y (long (math/floor (physics/y-of home)))
+           :intent/to-y (stairs/climb-to world (long (math/floor (physics/y-of home))))
            :intent/for :surface}))))
 
 (defn dig-out
   "Out of the ground when the sky is not open over the feet, whatever the height: walk up the
    air already dug (intent/opening), else stairs cut up until out (stairs/out? ends them first;
-   terrain/top-y is the top of the world). nil under the open sky. The last resort before
+   terrain/top-y is the top of the world), climb-stairs at a time (stairs/climb-to), so the
+   planner looks again between lengths. nil under the open sky. The last resort before
    waiting: live run 17 climbed out of its mine to the landing's height, which 145 blocks east
    was inside a hill, found no route to a pond 22 blocks off nor to any hunt, and waited
    :no-water. Full run 4528031 cut that stair from y 17 with the only pickaxe and it broke."
   [world]
   (when-not (terrain/under-sky? world (intent/feet world))
     (or (intent/opening world)
-        {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface})))
+        {:intent/kind :stairs-up
+         :intent/to-y (stairs/climb-to world terrain/top-y)
+         :intent/for :surface})))
 
 (defn tunnel-out
   "A tunnel of tunnel-out-length level steps at the feet's height along stone/tunnel-heading (one

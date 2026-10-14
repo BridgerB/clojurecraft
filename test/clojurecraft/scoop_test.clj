@@ -9,6 +9,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
@@ -151,9 +152,9 @@
                     {[8 70 8] blocks/air [8 71 8] blocks/air})
         w (assoc (standing hill [8.5 8.5]) :player/pos [8.5 70.0 8.5] :plan/go-at [8.5 70.0 8.5])]
     (is (nil? (scoop/climb w)) "not under the landing")
-    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+    (is (= {:intent/kind :stairs-up :intent/to-y (+ 70 stairs/climb-stairs) :intent/for :surface}
            (scoop/scoop-next w))
-        "stairs up until out of the ground")))
+        "stairs up until out of the ground, a length at a time")))
 
 (deftest the-way-home-runs-out-of-loaded-terrain
   ;; gym batch solid-b1 run 1 climbed under the sea 146 blocks from its landing, where the chunks
@@ -183,7 +184,9 @@
   (let [broken (assoc mine [10 69 8] blocks/air) ; the floor under the stair at [10 70 8]
         w
         (assoc (standing broken [14.5 8.5]) :player/pos [14.5 66.0 8.5] :plan/go-at [4.5 76.0 8.5])]
-    (is (= {:intent/kind :stairs-up :intent/to-y 76 :intent/for :surface} (scoop/scoop-next w))))
+    (is (= {:intent/kind :stairs-up :intent/to-y (+ 66 stairs/climb-stairs) :intent/for :surface}
+           (scoop/scoop-next w))
+        "toward the landing at 76, a length at a time"))
   (testing "under the open sky the bot is out, however low: it hunts instead"
     (let [w (assoc (standing {} [8.5 8.5]) :plan/go-at [8.5 80.0 8.5])]
       (is (nil? (scoop/climb w))))))

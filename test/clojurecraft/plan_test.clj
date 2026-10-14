@@ -135,7 +135,7 @@
   (let [w (remembered
            {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [8 69 8] 1 [8 70 8] 136}
            [8.5 50.0 8.5])]
-    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+    (is (= {:intent/kind :stairs-up :intent/to-y (+ 50 stairs/climb-stairs) :intent/for :surface}
            (wood/gather-next w)))))
 
 (deftest a-near-trunk-with-no-route-is-climbed-for-too
@@ -151,7 +151,7 @@
         "the trunk is in the near band: within 12 of the eye, on stone")
     (is (not (intent/routable? w (wood/log-walk w [12 60 8]))) "sealed in stone: no route")
     (is (nil? (wood/near-walk w)))
-    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+    (is (= {:intent/kind :stairs-up :intent/to-y (+ 50 stairs/climb-stairs) :intent/for :surface}
            (wood/gather-next w))
         "climbed for, never walked at")))
 
@@ -166,7 +166,9 @@
     (is (terrain/under-sky? pit feet) "the sky is over the pit")
     (is (not (stairs/out? pit feet)) "but no level step leads onto open ground")
     (is (not (intent/routable? pit (wood/log-walk pit [12 64 8]))) "two deep: no jump climbs it")
-    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y (stairs/climb-to pit terrain/top-y)
+            :intent/for :surface}
            (wood/gather-next pit))))
   (let [ground (remembered {[12 64 8] 136 [14 64 8] 1 [14 65 8] 1 [14 66 8] 1} [8.5 64.0 8.5])]
     (is (stairs/out? ground (intent/feet ground)))

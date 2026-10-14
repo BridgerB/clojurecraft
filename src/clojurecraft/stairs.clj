@@ -56,6 +56,17 @@
 (def creep-speed 0.06)                ; blocks a tick: the walk onto a stair with nothing beyond it to stop the body pushes only under this
 (def directions [[1 0] [0 1] [-1 0] [0 -1]]) ; the four headings, each a quarter turn from the last
 (def shore-reach 48)                  ; columns along a heading a climb looks for dry ground over
+(def climb-stairs 8)                  ; stairs a climb cuts before the planner looks again, as a descent cuts stone/stair-depth
+
+(defn climb-to
+  "The height a climb from the feet aims at next: to-y, or climb-stairs up when that is nearer.
+   A climb is cut in lengths like a descent, so the planner looks again between them: a spare
+   pickaxe is made while one still digs, and the table is taken along. Race 38477665442 bots
+   Clj_r23 and Clj_r06 climbed 26 and 53 stairs out of the mine in one intent, the climb that a
+   stone pickaxe's 131 digs do not cover, and wore both pickaxes out on the way with sticks and
+   cobblestone in hand (issue #39). stairs/out? still ends any length under the open sky."
+  [world to-y]
+  (min to-y (+ (physics/y-of (intent/feet world)) climb-stairs)))
 
 (defn turn
   "The heading a quarter turn from dir."
