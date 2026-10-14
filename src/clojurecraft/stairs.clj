@@ -168,31 +168,33 @@
    :stairs-up {:cells up-cells :safe? up-safe? :rise 1}})
 
 (defn tool-missing
-  "The reason to stop when the block at cell would be dug by hand for nothing (no-<tool>, as
-   :no-pickaxe): it drops only to a tool and no tool of its kind is held at all, which
-   happens when the pickaxe breaks on the way. Stone by hand takes 7500 ms a block; batch iron-a2
-   runs went on that way, a stair at a time, until a step timed out. A tool of the kind too weak
-   for the block is the child dig's :needs-tool instead, which turns the stairs. nil when it can
-   be dug."
+  "The reason to stop, :no-pickaxe, when the block at cell is rock that would be dug by hand for
+   nothing: it drops only to a pickaxe and none is held at all, which happens when the pickaxe
+   breaks on the way. Stone by hand takes 7500 ms a block; batch iron-a2 runs went on that way,
+   a stair at a time, until a step timed out. A pickaxe too weak for the block is the child
+   dig's :needs-tool instead, which turns the stairs. Only the pickaxe counts: the staircase
+   cuts rock and what drops is not its concern, so a block that drops only to another tool is
+   dug by hand, in the time its hardness gives (snow, 200 ms). Race 38477665442: every bot
+   landed in snow (runners 2, 6 and 10, eight landings) failed :no-shovel on its first stair,
+   a snow block among the cells, a wooden pickaxe in hand (issues #42 and #72). nil when it
+   can be dug."
   [world cell]
-  (let [id (terrain/block-at world cell)
-        kind (some-> id
-                     blocks/tool-of)]
+  (let [id (terrain/block-at world cell)]
     (when (and id
+               (= :pickaxe (blocks/tool-of id))
                (blocks/drops-need-tool? id)
-               (not-any? (fn [[_ {:keys [item]}]] (= kind (:kind (blocks/tool item))))
+               (not-any? (fn [[_ {:keys [item]}]] (= :pickaxe (:kind (blocks/tool item))))
                          (:player/inventory world)))
-      (keyword (str "no-" (name (or kind :tool)))))))
+      :no-pickaxe)))
 
 (defn too-hard?
-  "Is the block at cell one no held item drops, though a tool of its kind is held (ore above the
-   pickaxe's tier)? Dug, it breaks for nothing, so the dig refuses it :needs-tool. With no tool
-   of the kind at all it is tool-missing's instead: the stairs stop for one."
+  "Is the block at cell one that needs a tool tier (blocks/needs-tier) no held item reaches (ore
+   above the pickaxe's tier)? Dug, it breaks for nothing, so the dig refuses it :needs-tool. Rock
+   with no pickaxe at all is tool-missing's instead: the stairs stop for one."
   [world cell]
   (let [id (terrain/block-at world cell)]
     (boolean (and id
-                  (blocks/drops-need-tool? id)
-                  (nil? (tool-missing world cell))
+                  (blocks/needs-tier id)
                   (not-any? (fn [[_ {:keys [item]}]] (dig/harvest? id item))
                             (:player/inventory world))))))
 

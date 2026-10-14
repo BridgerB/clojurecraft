@@ -761,6 +761,20 @@
     (is (not= [1 0] (:intent/dir (:plan/intent w))) "it turned away from the ore")
     (is (not (contains? (:sim/broken sim) [9 75 8])) "the ore was never dug")))
 
+(deftest snow-in-the-stair-is-cleared-by-hand
+  ;; race 38477665442, runners 2, 6 and 10: every bot landed in snow failed :no-shovel on its
+  ;; first stair, a wooden pickaxe in hand, a snow block among the stair's cells (issues #42
+  ;; and #72). Snow drops only to a shovel, but the staircase wants the cell open, not the drop
+  (let [snow (blocks/default-state :snow_block)
+        blocks (assoc deep-stone [9 75 8] snow [9 74 8] snow) ; the first +x stair's new feet, and the next stair's head
+        [w sim] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 74 60000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (= [1 0] (:intent/dir (:plan/intent w))) "straight on through the snow, no turn")
+    (is (contains? (:sim/broken sim) [9 75 8]) "the snow dug, by hand")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest water-beside-a-stair-cell-turns-the-stairs
   ;; live iron-kit trial (local landing 2360,2360, 2026-10-11): at y 36 an aquifer lay beside the
   ;; next stair's cells on three sides; the child dig refused :unsafe (it would let the water in)
