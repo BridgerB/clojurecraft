@@ -4,6 +4,9 @@
   (:require [clojure.test :refer [deftest is use-fixtures]]
             [clojurecraft.failure :as failure]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.game :as game]
+            [clojurecraft.plan :as plan]
+            [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as simrace]
             [clojurecraft.wood]
             [clojurecraft.world :as world]))
@@ -51,3 +54,24 @@
   (is (:run/infra? (failure/mark {:ok false :until "nether" :reason :disconnected})))
   (is (false? (:run/infra? (failure/mark {:ok false :until "nether" :reason :no-path}))))
   (is (= {:ok true} (failure/mark {:ok true})) "a pass is unchanged"))
+
+(deftest a-run-can-be-played-on-from-the-moment-before-it-stopped
+  ;; issue #77: run+ keeps the pair from the tick before the stop; playing on from it with the same
+  ;; code is the same stop, and run's answer is run+'s :world and :sim
+  (let [opts {:host "sim" :port 0 :name "Clj_sim"}
+        w (game/init opts)
+        s (sim/init {:columns (:capture/columns two-columns)
+                     :decoded (:capture/decoded two-columns)
+                     :spawn (simrace/spawn-of two-columns)
+                     :seed 1
+                     :tick-seed 1})
+        stop? #(or (plan/done? %) (plan/failed? %))
+        go {:event/kind :go :go/goals (plan/through "wood") :go/chain? true}
+        {:keys [world before] :as full} (sim/run+ simrace/step w s stop? 120000 go)
+        [bw bs] before
+        again (sim/play-on simrace/step bw bs stop? 120000 (:time/now bw) [] nil)]
+    (is (= [world (:sim full)] (sim/run simrace/step w s stop? 120000 go)) "run is run+'s pair")
+    (is (= :done (:plan/status world)))
+    (is (= :active (:plan/status bw)) "the moment before: the plan still running")
+    (is (= (:plan/status world) (:plan/status (:world again))) "played on, it ends the same")
+    (is (= (:player/inventory world) (:player/inventory (:world again))))))

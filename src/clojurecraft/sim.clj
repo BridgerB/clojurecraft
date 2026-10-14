@@ -1373,23 +1373,27 @@
   [r]
   (let [[{r' :sim/rng} x] (roll {:sim/rng r})] [r' x]))
 
-(defn run
-  "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a time, until (stop?
-   world) or max-ms. Sends go (default {:event/kind :go}) once the bot is loaded. Returns
-   [world sim]. :sim/lag-ticks in sim0 delays every server→client packet by that many ticks,
-   in order: a slow network as an input. Each tick's :event/rand is 0.5, or, with
-   :sim/tick-seed in sim0, the next of a pure generator started there (tick-rand), so runs of
-   one world with different seeds are different runs, each the same every time."
-  [bot-step world0 sim0 stop? max-ms & [go]]
-  (let [w (bot-step world0 {:event/kind :start})
-        lag (* physics/tick-ms (:sim/lag-ticks sim0 0))]
-    (loop [world (assoc w :bot/effects [])
-           sim sim0
-           pending (sends w)
-           t 0
-           went? false
+(defn play-on
+  "Play a bot reducer against the model on from a moment: world and sim as they are, a tick
+   (physics/tick-ms) at a time from t0, until (stop? world) or max-ms of play. Returns
+   {:world :sim :before [world sim]}, :before the pair as it was one tick before the stop: the
+   moment a run that then failed can be played on from (a snapshot, simrace). pending is what the
+   bot has sent and the model not yet taken (the start packets, for a run from the handshake;
+   nothing, on from a snapshot). go is sent once the bot is loaded, or never when nil.
+   :sim/lag-ticks in sim delays every server->client packet by that many ticks, in order: a slow
+   network as an input. Each tick's :event/rand is 0.5, or, with :sim/tick-seed in sim, the
+   next of a pure generator started there (tick-rand), so runs of one world with different seeds
+   are different runs, each the same every time."
+  [bot-step world sim stop? max-ms t0 pending go]
+  (let [lag (* physics/tick-ms (:sim/lag-ticks sim 0))]
+    (loop [world (assoc world :bot/effects [])
+           sim sim
+           pending pending
+           t t0
+           went? (boolean (nil? go))
            inflight []
-           r (:sim/tick-seed sim0)]
+           r (:sim/tick-seed sim)
+           before [world sim]]
       (let [sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim pending)
             sim (step sim {:sim/kind :tick :sim/now t})
             [sim fresh] (drain sim)
@@ -1400,12 +1404,36 @@
             [r rand] (if r (tick-rand r) [nil 0.5])
             world (bot-step world {:event/kind :tick :event/now t :event/rand rand})
             go? (and (not went?) (:player/loaded? world))
-            world (if go? (bot-step world (or go {:event/kind :go})) world)
+            world (if go? (bot-step world go) world)
             out (sends world)
             world (assoc world :bot/effects [])]
-        (if (or (stop? world) (> t max-ms))
-          [world (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out)] ; deliver the last tick's packets
-          (recur world sim out (+ t physics/tick-ms) (or went? go?) inflight r))))))
+        (if (or (stop? world) (> t (+ t0 max-ms)))
+          {:world world
+           :sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out) ; deliver the last tick's packets
+           :before before}
+          (recur world
+                 sim
+                 out
+                 (+ t physics/tick-ms)
+                 (boolean (or went? go?))
+                 inflight
+                 r
+                 [world sim]))))))
+
+(defn run+
+  "Run a bot reducer against the model from a fresh handshake until (stop? world) or max-ms,
+   sending go (default {:event/kind :go}) once the bot is loaded: play-on's answer,
+   {:world :sim :before}."
+  [bot-step world0 sim0 stop? max-ms & [go]]
+  (let [w (bot-step world0 {:event/kind :start})]
+    (play-on bot-step w sim0 stop? max-ms 0 (sends w) (or go {:event/kind :go}))))
+
+(defn run
+  "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a
+   time, until (stop? world) or max-ms. Sends go (default {:event/kind :go}) once the bot is
+   loaded. Returns [world sim] (run+ for the moment before the stop too)."
+  [bot-step world0 sim0 stop? max-ms & [go]]
+  (let [{:keys [world sim]} (run+ bot-step world0 sim0 stop? max-ms go)] [world sim]))
 
 ;;;; I/O: the model behind a channel pair, on a thread of its own ;;;;
 
