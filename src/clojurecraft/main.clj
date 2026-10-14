@@ -14,6 +14,7 @@
    the world, from a watch on the atom (clojurecraft.watch) that never slows the loop."
   (:require [clojure.core.async :as async]
             [clojure.edn :as edn]
+            [clojure.java.shell :as sh]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.build]
@@ -231,19 +232,42 @@
       (update :plan dissoc :plan/last)
       (dissoc :pos)))
 
+(defn replay-code
+  "Whose code a replay folds a recording with: :same when the recording names the commit that
+   is running, :other when it names another (the fold is then another run: newer code decides
+   otherwise and the bot ends up elsewhere, which reads as a truncated file; issue #111 was
+   that, on whole recordings), :unrecorded when the recording names none, :unknown when the
+   running commit cannot be told."
+  [recorded running]
+  (cond (nil? recorded) :unrecorded
+        (nil? running) :unknown
+        (= recorded running) :same
+        :else :other))
+
+(defn running-commit
+  "The commit of the code running, git's HEAD of the working directory, or nil when there is no
+   git to ask."
+  []
+  (try (let [{:keys [exit out]} (sh/sh "git" "rev-parse" "HEAD")]
+         (when (zero? exit) (str/trim out)))
+       (catch Exception _ nil)))
+
 (defn replayed
   "The RESULT of folding the reducer over a recording, judged as the run judged itself (its
-   recorded --until), plus :replay/effects (every effect identical, or the first mismatch) and
+   recorded --until), plus :replay/effects (every effect identical, or the first mismatch),
    :replay/result (:identical when the fold reaches the RESULT the run printed: every attribute
    of its outcome (see outcome), with the same value; attributes the model gained since are
-   accretion, not change)."
+   accretion, not change), :replay/commit (the commit the recording names and the one running,
+   those known) and :replay/code (replay-code's word on the two)."
   [path]
   (let [world0 (game/init {:host "replay" :port 0 :name "Clj_replay"})
         final (record/replay step world0 path)
         check (record/verify step world0 path)
         recorded (record/recorded-result path)
         until (:until recorded "replay")
-        r (result final until (ok? final until))]
+        r (result final until (ok? final until))
+        made-by (:record/commit (record/header path))
+        running (running-commit)]
     (assoc r
            :replay/effects
            (cond (nil? check) :identical
@@ -252,10 +276,26 @@
            :replay/result
            (cond (nil? recorded) :not-recorded
                  (record/accretes? (outcome recorded) (outcome r)) :identical
-                 :else {:recorded recorded}))))
+                 :else {:recorded recorded})
+           :replay/commit
+           (cond-> {}
+             made-by (assoc :recorded made-by)
+             running (assoc :running running))
+           :replay/code (replay-code made-by running))))
 
 (defn replay
-  "clojure -M:replay run.edn → print the replayed RESULT (see replayed)."
+  "clojure -M:replay run.edn → print the replayed RESULT (see replayed). A fold by other code
+   than the recording's is said so on stderr: bb replay folds at the recording's own commit."
   [& [path]]
-  (prn 'RESULT (replayed path))
+  (let [r (replayed path)]
+    (when (= :other (:replay/code r))
+      (cli/log "replay: recorded by"
+               (subs (get-in r [:replay/commit :recorded]) 0 7)
+               "and folded by"
+               (subs (get-in r [:replay/commit :running]) 0 7)
+               "- a recording replays only with the code that made it; this fold is another run."
+               "bb replay"
+               path
+               "folds it at its own commit"))
+    (prn 'RESULT r))
   (shutdown-agents))

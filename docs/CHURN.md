@@ -104,7 +104,7 @@ zstd -d /tmp/f/<label>-<run>/trial/run.edn.zst -o /tmp/f/<label>-<run>/run.edn  
 
 ### 2. Replay it at the commit that ran it
 
-A recording holds every packet the server sent and every event the bot saw, and the bot is a pure reducer, so folding the recording through the bot gives back its world at any moment. But only with the code that made the recording: newer code decides otherwise and the bot ends up somewhere else. So the recording names its code: its first line is `{:record/commit sha}` (the gym passes `--commit` to the bot; `record/header` reads it, and `probe story` prints it first). Replay in a worktree at that commit:
+A recording holds every packet the server sent and every event the bot saw, and the bot is a pure reducer, so folding the recording through the bot gives back its world at any moment. But only with the code that made the recording: newer code decides otherwise and the bot ends up somewhere else. So the recording names its code: its first line is `{:record/commit sha}` (the gym passes `--commit` to the bot; `record/header` reads it, and `probe story` prints it first). `bb replay <file>` does the whole thing for a RESULT (a worktree at that commit under `.worktrees/`, a race artifact's `.zst` unpacked), and `clojure -M:replay` says in its RESULT whose code folded the file (`:replay/code :other` is another run, not a truncated file: issue #111). For the probe, replay in a worktree at that commit by hand:
 
 ```bash
 git worktree add --detach /tmp/wt-<sha> <sha>

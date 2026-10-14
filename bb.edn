@@ -33,8 +33,11 @@
   ;; ---------------------------------------------------------------- running things
   bot {:doc "The bot: clojure -M:run with these args (--port, --name, --until, --record ...)"
        :task (apply clojure "-M:run" *command-line-args*)}
-  replay {:doc "Fold a recording with no server: bb replay data/runs/x.edn"
-          :task (apply clojure "-M:replay" *command-line-args*)}
+  replay
+  {:doc
+   "Fold a recording with the code that made it (a worktree at its commit), no server: bb replay run.edn[.gz|.zst] [--here]"
+   :requires ([clojurecraft.replays :as replays])
+   :task (apply replays/-main *command-line-args*)}
   rcon {:doc "One RCON command: bb rcon --port 25581 --pass P <command words>"
         :task (apply clojure "-M:rcon" *command-line-args*)}
   nrepl {:doc

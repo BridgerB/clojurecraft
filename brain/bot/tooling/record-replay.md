@@ -5,8 +5,8 @@ type: reference
 tags: [bot, tooling, record, replay]
 aliases: [--record, clojure -M:replay, run.edn, event log, record/verify, replay/effects identical, determinism check]
 status: verified
-lastUpdated: 2026-10-10
-verifiedAgainst: b9e38a1
+lastUpdated: 2026-10-14
+verifiedAgainst: HEAD
 sourceRefs:
   - dev/clojurecraft/probe.clj#defn fold
   - src/clojurecraft/record.clj#defn header
@@ -17,6 +17,11 @@ sourceRefs:
   - src/clojurecraft/record.clj#defn wire
   - src/clojurecraft/record.clj#defn recorded-result
   - src/clojurecraft/main.clj#defn replayed
+  - src/clojurecraft/main.clj#defn replay-code
+  - src/clojurecraft/main.clj#defn running-commit
+  - bb/clojurecraft/replays.clj#defn -main
+  - bb/clojurecraft/replays.clj#defn where
+  - test/clojurecraft/record_test.clj#a-replay-says-whose-code-folded-the-recording
   - test/clojurecraft/record_test.clj#a-recording-carries-its-result-and-a-replay-reaches-it
   - src/clojurecraft/record.clj#defn replay
   - src/clojurecraft/record.clj#defn verify
@@ -49,9 +54,10 @@ related:
 2. Because the clock, randomness and the connection are event fields, nothing diverges on replay, and `verify` proves it per event.
 
 ## Looking inside a failed run
-`dev/clojurecraft/probe.clj` folds the bot over a recording to any moment: `fold` stops at the first world a predicate holds of, `at-ms` at a clock time, `story` is every intent's start, end and reason from memory's facts, and `around` draws two slices of the cells round the feet (`#` solid, `.` clear, `W` water, `L` lava, `~` awkward, `g` a falling block). From a shell: `clojure -M:dev -m clojurecraft.probe story run.edn`, `... around run.edn <ms>`. Fold a gym run with the code that ran it (`git worktree add --detach <dir> <commit>`): with newer code the planner decides otherwise and the bot ends up elsewhere. The recording names that code: with `--commit sha` (the gym passes its own) its first line is `{:record/commit sha}` (`record/tap!`'s header, read by `record/header` without the rest; `a-recording-names-the-code-that-made-it`), and `probe story` prints it first. The procedure end to end is `docs/CHURN.md`.
+`dev/clojurecraft/probe.clj` folds the bot over a recording to any moment: `fold` stops at the first world a predicate holds of, `at-ms` at a clock time, `story` is every intent's start, end and reason from memory's facts, and `around` draws two slices of the cells round the feet (`#` solid, `.` clear, `W` water, `L` lava, `~` awkward, `g` a falling block). From a shell: `clojure -M:dev -m clojurecraft.probe story run.edn`, `... around run.edn <ms>`. Fold a gym run with the code that ran it (`bb replay <file>` makes the worktree at the recording's commit and folds there): with newer code the planner decides otherwise and the bot ends up elsewhere. The recording names that code: with `--commit sha` (the gym passes its own) its first line is `{:record/commit sha}` (`record/tap!`'s header, read by `record/header` without the rest; `a-recording-names-the-code-that-made-it`), and `probe story` prints it first. The procedure end to end is `docs/CHURN.md`.
 
 ## Gotchas
+- **A fold by other code is another run, not a truncated file.** Issue #111 took the race's recordings for truncated: folded with `main` of the day, Clj_r11 (race 38477665442, runner 3) ended tens of blocks from its RESULT with the plan still `:active`. The file was whole (96,338 lines, its last tick 50 ms before the race log's RESULT, the `#:record{:result ...}` line last) and at its own commit, 1d31d21, replayed `:replay/result :identical`; with a07f814 the first mismatch was event 7843, a dig that #101 made wait for the server's block update where the old code took the ack. So `replayed` now says whose code folded the file: `:replay/commit {:recorded sha :running sha}` (`record/header`, `running-commit` = git's HEAD) and `:replay/code` (`replay-code`: `:same`, `:other`, `:unrecorded`, `:unknown`); `clojure -M:replay` warns on stderr at `:other`. `bb replay <file>` (`bb/clojurecraft/replays.clj`) folds at the recording's own commit in a detached worktree under `.worktrees/<sha>` (fetched when missing), unpacks a race artifact's `.zst` beside itself, and `--here` folds with the working tree's code on purpose (`a-replay-says-whose-code-folded-the-recording`).
 - A recording ends at RESULT: `main` writes the RESULT into the file (`{:record/result ...}`, read back by `recorded-result`) and closes the tap before any hold, so the hold for an outside judge is not recorded. `main/replayed` judges the fold with the run's own `--until` and the same `ok?` rule, and reports `:replay/result :identical` when it reaches exactly the RESULT the run printed (else the recorded one, to compare). Older recordings without a result report `:not-recorded`.
 - Harness `:go` is an external event and is recorded like any other.
 
