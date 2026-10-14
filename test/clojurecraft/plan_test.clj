@@ -178,6 +178,40 @@
     (is (= :walk (:intent/kind (wood/gather-next ground)))
         "on open ground the trunk is walked to")))
 
+(def quarry
+  "A quarry two wide and two deep in the stone, open to the sky, as the stone mine digs round its
+   feet: the floor at y 62 under [8 8] and [9 8], and a trunk on the ground four blocks east."
+  {[8 62 8] blocks/air
+   [8 63 8] blocks/air
+   [9 62 8] blocks/air
+   [9 63 8] blocks/air
+   [12 64 8] 136
+   [12 65 8] 136})
+
+(deftest a-quarry-with-a-level-step-across-its-floor-is-climbed-out-of
+  ;; race 38515209959 (issue #102, 16 real bots; #103, 14) and the sim race in worlds R3/36 and
+  ;; R3/32: the stone mine dug its cobblestone round the bot's feet, the stairs it came down by
+  ;; among them, and left it at the bottom of a quarry two or three deep and a few cells wide
+  ;; with the trees seven blocks off. The sky was over the feet and a level step crossed the
+  ;; floor, so stairs/out? said out and nothing was cut; no route reached a trunk, the hunt had
+  ;; none either, and each waited :no-log. A quarry is a pit: its floor has a wall every way
+  (let [w (remembered quarry [8.5 62.0 8.5])
+        feet (intent/feet w)]
+    (is (terrain/under-sky? w feet) "the sky is over the quarry")
+    (is (stairs/open-step? w (stairs/level-cells feet [1 0])) "a level step east, across its floor")
+    (is (= 64 (stairs/pit-rim w feet)) "walls two high every way: the rim is the ground")
+    (is (not (stairs/out? w feet)) "a quarry is not out of the ground")
+    (is (not (intent/routable? w (wood/log-walk w [12 64 8]))) "two deep: no jump climbs it")
+    (is (nil? (wood/hunt w)) "no ground a hunt could walk to")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y (stairs/climb-to w terrain/top-y)
+            :intent/for :surface}
+           (wood/gather-next w))))
+  (let [ground (remembered {[12 64 8] 136 [12 65 8] 136} [8.5 64.0 8.5])
+        feet (intent/feet ground)]
+    (is (nil? (stairs/pit-rim ground feet)) "open ground is no pit")
+    (is (stairs/out? ground feet))))
+
 (def canopy-pocket
   "A pocket one deep under an oak canopy, like race 38477665442 runner 10 Clj_r16's at
    [2256 69 4597]: walls two high round the feet at [8 64 8], the one step north open at body

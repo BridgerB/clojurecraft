@@ -2161,8 +2161,8 @@
     (is (empty? (:sim/violations sim)))))
 
 (def open-pit
-  "A plateau at y 70 with a pit three wide down to y 64 at its middle, open to the sky: the
-   stairs up count its floor as out of the ground."
+  "A plateau at y 70 with a pit three wide down to y 64 at its middle, open to the sky: a pit
+   with a wall every way (stairs/pit-rim), which the stairs up climb out of."
   (into {}
         (for [x (range 16)
               y (range 64 70)
@@ -2171,7 +2171,10 @@
           [[x y z] 1])))
 
 (deftest a-climb-from-a-pit-ends-at-its-height-not-at-the-open-sky
-  ;; issue #60: the floor of a ravine under the sky is out? the tick the stairs start
+  ;; issue #60: the floor of a ravine under the sky was out? the tick the stairs started, so a
+  ;; climb for water says :intent/to-height? and ends at its height alone. Since issues #102 and
+  ;; #103 a pit three wide is no longer out (stairs/pit-rim: a wall every way), and a plain climb
+  ;; leaves it too
   (let [pickaxe (get blocks/items :wooden_pickaxe)
         [plain _] (staircase-run :stairs-up open-pit 64 pickaxe 70 120000)
         [w sim] (intent-run {:intent/kind :stairs-up :intent/to-y 70 :intent/to-height? true}
@@ -2180,10 +2183,41 @@
                             pickaxe
                             120000)]
     (is (= :done (:intent/status (:plan/intent plain))))
-    (is (= 64 (second (intent/feet plain))) "a plain climb is out at once: the sky is open")
+    (is (<= 70 (second (intent/feet plain))) "a plain climb leaves the pit: its floor is not out")
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage])))
     (is (<= 70 (second (intent/feet w))) "to the plateau")
+    (is (empty? (:sim/violations sim)))))
+
+(def quarry
+  "A quarry two wide and two deep in the stone, open to the sky, as the stone mine digs round its
+   feet: the floor at y 62 under [8 8] and [9 8], and a trunk on the ground four blocks east."
+  {[8 62 8] blocks/air
+   [8 63 8] blocks/air
+   [9 62 8] blocks/air
+   [9 63 8] blocks/air
+   [12 64 8] 136
+   [12 65 8] 136
+   [12 66 8] 252})
+
+(deftest a-log-is-gathered-out-of-a-quarry
+  ;; race 38515209959 (issues #102 and #103, 30 real bots) and the sim race in worlds R3/36 and
+  ;; R3/32: at the bottom of the quarry the stone mine dug round its feet, the sky over it and
+  ;; a level step across its floor, the bot cut nothing and waited :no-log for the table's log
+  ;; with the trees seven blocks off. The quarry is a pit: stairs are cut up out of it by hand,
+  ;; then the trunk is walked to, with no walk failed :no-path on the way
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes quarry) :spawn [8.5 62.0 8.5]})
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         {:event/kind :go :go/goals [:wood]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (inventory/logs-held w)))
+    (is (zero? (:plan/unwalkable w)) "no walk failed :no-path")
+    (is (zero? (:plan/attempts w)) "no failed attempts")
+    (is (some (:sim/broken sim) [[8 63 7] [8 63 9] [7 63 8] [9 63 7] [9 63 9] [10 63 8]])
+        "it cut a stair up through the quarry's wall")
     (is (empty? (:sim/violations sim)))))
 
 (deftest a-tunnel-never-cuts-under-gravel-under-water

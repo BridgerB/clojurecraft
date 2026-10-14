@@ -741,17 +741,63 @@
                   (some-> (terrain/block-at world [fx (dec fy) fz])
                           blocks/solid?)))))
 
+(def rim-reach 8)                     ; columns out along a heading a pit's wall is looked for: a stone mine's quarry is four wide
+
+(defn steppable?
+  "Could the feet step into column [x z] from feet height y: a cell to stand in there
+   (path/standable?) a block down, level, or a block up, the step a walk takes?"
+  [world [x y z]]
+  (boolean (some #(path/standable? world [x (+ y %) z]) [-1 0 1])))
+
+(defn ground-over
+  "The feet height on the ground of column [x z] over feet height y: a block over the highest
+   block of ground from climb-stairs - 1 above y down to y itself, ground being solid and
+   neither a log nor leaves (a stair up cuts through a canopy, and the feet should not end on
+   one). nil when the span holds none, or is not loaded."
+  [world [x y z]]
+  (some (fn [gy]
+          (when-let [id (terrain/block-at world [x gy z])]
+            (when (and (blocks/solid? id) (not (blocks/log? id)) (not (blocks/leaves? id)))
+              (inc gy))))
+        (range (+ y climb-stairs -1) (dec y) -1)))
+
+(defn pit-rim
+  "The feet height of the ground round the pit the feet are in, or nil when they are in none.
+   Along each heading, the first column within rim-reach the feet could not step into
+   (steppable?) is the pit's edge that way: a wall, with ground over the feet (ground-over), or
+   a drop, water or the unloaded (:drop). In a pit every heading has an edge, and the rim is the
+   lowest wall's ground. nil where a heading runs steppable rim-reach out (open ground: not a
+   pit, whatever a route found) or where no edge is a wall (a ledge over drops: nothing to
+   climb). A level step across a pit's floor is not the way out of it: race 38515209959 (issues
+   #102, #103, 30 real bots) and the sim race in worlds R3/36 and R3/32 stood at the bottom of
+   the quarry the stone mine had dug round their feet, two or three deep and a few cells wide,
+   its stairs eaten by the digs; and world R2/45 (issue #104) in a crevice of the forest floor,
+   two deep, under the canopy of the tree just chopped. The sky was over the feet, a level step
+   crossed the floor, no route reached a trunk or any ground a hunt could walk to, and each
+   waited :no-log out."
+  [world [x y z]]
+  (let [edges (map (fn [[dx dz]]
+                     (some (fn [k]
+                             (let [c [(+ x (* k dx)) y (+ z (* k dz))]]
+                               (when-not (steppable? world c) (or (ground-over world c) :drop))))
+                           (range 1 (inc rim-reach))))
+                   directions)
+        walls (filter number? edges)]
+    (when (and (every? some? edges) (seq walls)) (apply min walls))))
+
 (defn out?
-  "Is the bot out of the ground at feet: the open sky over it, and a level step it can walk onto
-   with nothing to dig, under the open sky too (not the stair it just cut, nor a tunnel). The
-   open sky alone is a pit: the eleventh live run's stairs up stopped under the sky two below
-   the ground, in a shaft one wide, and found no route to water."
+  "Is the bot out of the ground at feet: the open sky over it, a level step it can walk onto
+   with nothing to dig, under the open sky too (not the stair it just cut, nor a tunnel), and
+   no pit round the feet (pit-rim). The open sky alone is a pit: the eleventh live run's stairs
+   up stopped under the sky two below the ground, in a shaft one wide, and found no route to
+   water. A level step alone is a pit's floor: the stone mine's quarry (pit-rim)."
   [world feet]
   (and (terrain/under-sky? world feet)
        (boolean (some (fn [d]
                         (let [cells (level-cells feet d)]
                           (and (open-step? world cells) (terrain/under-sky? world (last cells)))))
-                      directions))))
+                      directions))
+       (nil? (pit-rim world feet))))
 
 (defmethod intent/run :stairs-up
   ;; done standing at to-y, or out of the ground (out?), whichever comes first; one that is
