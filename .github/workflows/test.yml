@@ -7,7 +7,7 @@ name: test
 
 on:
   push:
-    branches-ignore: [race-capacity, "fix/**"]   # race-capacity is the capacity experiment (capacity.yml); a fix branch runs unit.yml through issue.yml
+    branches-ignore: [race-capacity, "fix/**", gh-pages]   # race-capacity is the capacity experiment (capacity.yml); a fix branch runs unit.yml through issue.yml; gh-pages is the results page's data
   workflow_dispatch:
 
 concurrency:

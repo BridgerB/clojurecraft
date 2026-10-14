@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write                       # the results page's branch, gh-pages (bb page publish)
   issues: write
 
 concurrency:
@@ -173,4 +173,11 @@ jobs:
           # the newest reporter on the branch, not this run's: a rule change reaches runs already going
           git fetch --depth=1 origin "$GITHUB_REF_NAME" && git checkout FETCH_HEAD -- bb bb.edn
           bb failures report runs "Sim race ${{ github.run_id }} at ${GITHUB_SHA::7}" "$(git show -s --format=%cI "$GITHUB_SHA")" | tee failures.txt
-          { echo '### failures'; echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          bb page wall runs | tee wall.txt
+          { echo '### the wall: failures by the stage the bot was on, furthest first'; echo '```'; cat wall.txt; echo '```';
+            echo '### failures'; echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: The results page (gh-pages, issue #116)
+        run: |
+          bb page round runs sim "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(git show -s --format=%cI "$GITHUB_SHA")" > round.edn
+          cat round.edn
+          bb page publish round.edn
