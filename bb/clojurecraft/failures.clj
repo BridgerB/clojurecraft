@@ -88,11 +88,19 @@
   (into [label] (map name) (sort (distinct (map source runs)))))
 
 (defn repro
-  "One line that reproduces a run: the sim race's command for a sim run, the recording's replay
-   for a real one."
+  "One line that reproduces a run: for a sim run its snapshot (the failing moment, in the
+   runner's artifact: bb issue-check fetch brings it down) and the sim race's command that made
+   it; the recording's replay for a real one."
   [r]
   (cond (:run/file r)
-        (str "- `clojure -M:simrace --world " (:run/file r)
+        (str "- "
+             (when (:run/snapshot r)
+               (str "snapshot `"
+                    (last (str/split (str (:run/snapshot r)) #"/"))
+                    "` in artifact `"
+                    (:run/artifact r)
+                    "`; or "))
+             "`clojure -M:simrace --world " (:run/file r)
              " --seed " (:run/seed r)
              " --seeds 1` at " (:run/commit r)
              ", landing " (pr-str (get-in r [:run/world :capture/landing])))
@@ -146,12 +154,18 @@
 ;;;; I/O: the files, the GitHub API ;;;;
 
 (defn runs-under
-  "Every run under dir: the lines of each runs.edn and race.log."
+  "Every run under dir: the lines of each runs.edn and race.log, each run saying which artifact
+   it came from (:run/artifact, the directory under dir the file sits in: what the report job
+   downloaded each artifact into)."
   [dir]
   (into []
         (comp (filter #(#{"runs.edn" "race.log"} (fs/file-name %)))
-              (mapcat #(str/split-lines (slurp (fs/file %))))
-              (keep run-of-line))
+              (mapcat (fn [f]
+                        (let [artifact (first (fs/components (fs/relativize dir f)))]
+                          (map #(some-> (run-of-line %)
+                                        (assoc :run/artifact (str artifact)))
+                               (str/split-lines (slurp (fs/file f)))))))
+              (remove nil?))
         (fs/glob dir "**")))
 
 (defn gh!

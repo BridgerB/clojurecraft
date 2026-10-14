@@ -1,128 +1,94 @@
 (ns clojurecraft.issue-check
-  "A fix's proof (issue.yml): the runs a bot-failure issue lists as its reproductions, played
-   again with the fix, none ending with the issue's signature.
+  "A fix's fixtures (issue #77): the failing moments a bot-failure issue lists, brought down into
+   the repository for issues-test to play on.
 
-     bb issue-check plan <n> <dir>               dir/runs.edn ([[world-file seed] ...]) and
-                                                 dir/check.edn ({:issue :signature :runs})
-     bb issue-check verdict <dir> <runs.edn>     exit 1 when a run still ends with the signature
+     bb issue-check fetch <n>     the issue's snapshots into test/issues/<n>/
 
-   The issue is the data: its marker (<!-- signature [...] -->, bb failures writes it) names the
-   signature, and its sections list each reproduction as the sim race's own command (clojure
-   -M:simrace --world f --seed s --seeds 1). A run of the model is a pure function of world,
-   seed and code, so the same world and seed with the fix is the same run but for the fix."
+   The issue is the data: bb failures writes each sim reproduction as its snapshot's file name
+   and the artifact that holds it. fetch downloads each artifact once (gh run download, by name,
+   from the run the artifact's name belongs to) and copies the snapshots named into
+   test/issues/<n>/, which the fix's pull request then commits: the check is a test over
+   committed fixtures, and a fixture never silently updates."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
-            [cheshire.core :as json]
-            [clojure.edn :as edn]
-            [clojure.string :as str]))
+            [cheshire.core :as json]))
+
+(def root "test/issues")
 
 ;; ---------------------------------------------------------------- the issue as values
 
-(defn signature
-  "The signature an issue body's marker names, or nil."
-  [body]
-  (some-> (re-find #"<!-- signature (\[[^\]]*\]) -->" (str body))
-          second
-          edn/read-string))
-
-(defn reproductions
-  "The sim runs an issue body lists, [[world-file seed] ...], each once, in the order listed."
+(defn snapshots
+  "The snapshots an issue body names, [[file artifact] ...], each once, in the order listed."
   [body]
   (into []
         (distinct)
-        (for [[_ f s] (re-seq #"clojure -M:simrace --world (\S+) --seed (\d+) --seeds 1"
-                              (str body))]
-          [f (parse-long s)])))
+        (for [[_ f a] (re-seq #"snapshot `([^`]+)` in artifact `([^`]+)`" (str body))] [f a])))
 
-(defn ended-with
-  "Whether a run (a runs.edn map) ended with signature: its first two parts, the target and the
-   reason, are the signature's."
-  [signature run]
-  (= (vec (take 2 signature)) (vec (take 2 (:run/signature run)))))
-
-(defn unproven?
-  "Does a run prove nothing either way: it failed without a signature to compare?"
-  [run]
-  (and (not (:ok run)) (nil? (:run/signature run))))
-
-(defn verdict
-  "{:pass? :still :endings} for the runs played against an issue's signature and the n runs it
-   lists: a pass when all n were played, none ended with the signature and none failed unsigned.
-   :still the runs that ended with it, :endings how every run ended ([world seed ok reason
-   signature])."
-  [signature n runs]
-  {:pass?
-   (and (= n (count runs)) (not-any? #(ended-with signature %) runs) (not-any? unproven? runs))
-   :still (filterv #(ended-with signature %) runs)
-   :endings (mapv (fn [r] [(:run/file r) (:run/seed r) (:ok r) (:reason r) (:run/signature r)])
-                  runs)})
+(defn by-artifact
+  "{artifact [file ...]}: the snapshots to take from each artifact."
+  [pairs]
+  (reduce (fn [m [f a]] (update m a (fnil conj []) f)) {} pairs))
 
 ;;;; I/O: the GitHub API, the files ;;;;
 
+(defn repo
+  "The repository, owner/name."
+  []
+  (or (System/getenv "GITHUB_REPOSITORY") "BridgerB/clojurecraft"))
+
+(defn gh
+  "gh with args, its stdout; nil when it fails."
+  [& args]
+  (let [r (apply p/shell {:out :string :err :string :continue true} "gh" args)]
+    (when (zero? (:exit r)) (:out r))))
+
 (defn issue-body
-  "Issue n's body, read with gh."
+  "Issue n's body."
   [n]
-  (:body (json/parse-string (:out (p/shell {:out :string}
-                                           "gh"
-                                           "api"
-                                           (str "repos/" (System/getenv "GITHUB_REPOSITORY")
-                                                "/issues/" n)))
-                            true)))
+  (:body (json/parse-string (gh "api" (str "repos/" (repo) "/issues/" n)) true)))
 
-(defn plan!
-  "Write issue n's reproductions and signature into dir; throw when it has none to play."
-  [n dir]
-  (let [body (issue-body n)
-        sig (signature body)
-        runs (reproductions body)]
-    (when-not sig (throw (ex-info (str "issue " n " names no signature") {})))
-    (when (empty? runs)
-      (throw (ex-info (str "issue " n " lists no sim reproduction") {:signature sig})))
-    (fs/create-dirs dir)
-    (spit (str dir "/runs.edn") (pr-str runs))
-    (spit (str dir "/check.edn") (pr-str {:issue n :signature sig :runs runs}))
-    (println "issue" n "signature" (pr-str sig) "-" (count runs) "reproductions:")
-    (doseq [r runs] (println " " (pr-str r)))))
+(defn run-of-artifact
+  "The id of the run that produced the artifact named, or nil: artifacts are searched by name
+   across the repository's recent runs."
+  [artifact]
+  (some-> (gh "api" (str "repos/" (repo) "/actions/artifacts?name=" artifact "&per_page=1"))
+          (json/parse-string true)
+          :artifacts first
+          :workflow_run :id))
 
-(defn verdict!
-  "Judge the runs in runs-file against the check in dir; print every run's ending; exit 1 when one
-   still ends with the issue's signature, or none was played."
-  [dir runs-file]
-  (let [{:keys [issue signature runs]} (edn/read-string (slurp (str dir "/check.edn")))
-        played (into []
-                     (keep #(try (edn/read-string {:default (fn [_ v] v)} %)
-                                 (catch Exception _ nil)))
-                     (str/split-lines (slurp runs-file)))
-        v (verdict signature (count runs) played)]
-    (println "issue"
-             issue
-             (pr-str signature)
-             "-"
-             (count played)
-             "of"
-             (count runs)
-             "reproductions played")
-    (doseq [e (:endings v)] (println " " (pr-str e)))
-    (println (if (:pass? v)
-               (str "PASS: all " (count runs)
-                    " reproductions of issue " issue
-                    " played, none ends with " (pr-str signature))
-               (str "FAIL: "
-                    (count played)
-                    " of "
-                    (count runs)
-                    " played, "
-                    (count (:still v))
-                    " still end with "
-                    (pr-str signature)
-                    ", "
-                    (count (filter unproven? played))
-                    " failed with no signature")))
-    (when-not (:pass? v) (System/exit 1))))
+(defn fetch!
+  "Bring issue n's snapshots into test/issues/<n>/: each artifact downloaded once into a
+   temporary directory, the named files copied over. Prints what landed and what could not be
+   found."
+  [n]
+  (let [pairs (snapshots (issue-body n))
+        dest (fs/path root (str n))]
+    (when (empty? pairs)
+      (println
+       "issue"
+       n
+       "lists no snapshots: its runs predate #77, or the sim race has not run on this code"))
+    (fs/create-dirs dest)
+    (doseq [[artifact files] (by-artifact pairs)]
+      (let [run (run-of-artifact artifact)
+            tmp (fs/create-temp-dir {:prefix "issue-check"})]
+        (cond (nil? run) (println "artifact" artifact "not found (expired after 7 days?)")
+              :else
+              (do (p/shell {:continue true}
+                           "gh" "run"
+                           "download" (str run)
+                           "--repo" (repo)
+                           "-n" artifact
+                           "-D" (str tmp))
+                  (doseq [f files]
+                    (let [from (first (fs/glob tmp (str "**/" f)))]
+                      (cond from
+                            (do (fs/copy from (fs/path dest f) {:replace-existing true})
+                                (println "fetched" (str (fs/path dest f))))
+                            :else (println "missing in" artifact ":" f))))))))
+    (println (count (fs/list-dir dest)) "snapshots under" (str dest))))
 
 (defn -main
-  "plan <n> <dir> | verdict <dir> <runs.edn>."
-  [& [cmd a b]]
-  (case cmd
-    "plan" (plan! (parse-long a) b)
-    "verdict" (verdict! a b)))
+  "fetch <n>: the issue's snapshots into test/issues/<n>/."
+  [& [cmd a]]
+  (case cmd "fetch" (fetch! (parse-long a))))
