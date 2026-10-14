@@ -30,6 +30,7 @@
 (def pickup-rise 2)                   ; a drop resting more than 2 blocks above the feet is above
                                       ; the pickup box (1.8 tall, grown 0.5 up)
 (def settle-ms 150)                   ; let the server catch up before START: three still ticks
+(def settle-deadline 2000)            ; not still by then, START anyway: the server does not ask for stillness
 (def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks (dig/ms derives it now)
 (def finish-margin 1.15)              ; FINISH is sent this late: the server takes it at 70% of its own ticks, aborts it before
 (def finish-slack 100)                ; ms added to the margin
@@ -395,7 +396,7 @@
           (or (contains? never-dug (blocks/name-of at-target))
               (and (not exposes-ok?) (exposes-fluid? world target)))
           (fail world :unsafe)
-          (and (>= still 3) (> (- now since) settle-ms))
+          (or (and (>= still 3) (> (- now since) settle-ms)) (> (- now since) settle-deadline))
           (let [seq (inc (:bot/sequence world))
                 face (face-toward eye target)
                 [slot tool] (choose-tool world at-target)

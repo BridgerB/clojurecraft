@@ -734,3 +734,22 @@
     (is (= {:plan/wait :no-log}
            (wood/gather-next (assoc (remembered {} [8.5 64.0 8.5]) :world/chunks shore)))
         "with no log remembered there is nowhere to hunt toward")))
+(deftest a-dig-that-never-settles-starts-by-the-deadline
+  ;; race 38477665442 bots Clj_r12 (runner 5, on a moss carpet the physics does not know, the
+  ;; server putting it back on the carpet every tick) and Clj_r19 (runner 3, fallen through a
+  ;; guessed air the server kept as stone): never three still ticks, and the dig's settle
+  ;; waited for them for the rest of the run
+  (let [never-still (fn [w e]
+                      (let [w (assoc (game/step w e) :player/on-ground? false)]
+                        (if (and (= :tick (:event/kind e)) (:plan/intent w))
+                          (intent/run w (:plan/intent w) e)
+                          w)))
+        w (assoc (world-state [2.5 64.0 0.5])
+                 :plan/intent
+                 {:intent/kind :dig :intent/target [3 64 0] :intent/status :active})
+        started (fn [fx] (some (fn [[t p]] (when (= :player-action (:packet/name p)) t)) (sent fx)))
+        [_ early] (fold never-still w (ticks 10 (- intent/settle-deadline 100)))
+        [w late] (fold never-still w (ticks 30 (+ intent/settle-deadline 400)))]
+    (is (nil? (started early)) "within the deadline it waits to be still")
+    (is (> (started late) intent/settle-deadline) "past it, START anyway")
+    (is (= :digging (get-in w [:plan/intent :intent/stage])))))
