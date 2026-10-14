@@ -1650,6 +1650,18 @@
     (is (empty? (:sim/broken sim)) "nothing dug by hand")
     (is (< (:time/now w) 2000))))
 
+(deftest stairs-up-with-no-pickaxe-are-cut-by-hand
+  ;; race 38477665442 Clj_r21 (issue #40): the pickaxe broke at y 60 in the iron mine, the stairs
+  ;; up stopped :no-pickaxe, the sticks for another were in the trees up top, and twelve walks
+  ;; to them failed :no-path. The way out is cut by hand, 7500 ms a block of stone
+  (let [[w sim] (staircase-run :stairs-up pocket 66 nil 72 600000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (<= 72.0 (second (:player/pos w))) "six stairs up, by hand")
+    (is (seq (:sim/broken sim)) "stone dug by hand")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest stairs-up-walk-out-from-under-water
   ;; live run 9 cut stairs up from y 22 to y 51 and met water over every stair; its level steps went
   ;; round a square of four cells until it failed :boxed. Water seven wide over the pocket: the

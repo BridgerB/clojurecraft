@@ -393,14 +393,23 @@
   [child]
   (and (intent/failed? child) (= :target-gone (:intent/reason child))))
 
+(defn by-hand?
+  "Is staircase i cut by hand where no tool of a block's kind is held at all? A stair up is:
+   the way out of the ground is worth 7500 ms a block of stone, since the tool is made up there.
+   Race 38477665442 Clj_r21's pickaxe broke at y 60 in the iron mine; its stairs up stopped
+   :no-pickaxe, the sticks for another were in the trees up top, and twelve walks to them failed
+   :no-path (issue #40). A stair down and a tunnel stop for the tool instead (tool-missing)."
+  [i]
+  (= :stairs-up (:intent/kind i)))
+
 (defn dig-next
   "Start a child for cell, the next of a stair's to open: a :dig, or first an :equip of the tool
    when it is only in the main inventory (intent/stowed-tool); or fail with tool-missing's
-   reason, so the planner makes the tool again."
+   reason, so the planner makes the tool again, unless the staircase is cut by hand (by-hand?)."
   [world cell event]
   (let [[_ stowed-item :as stowed] (some->> (terrain/block-at world cell)
                                             (intent/stowed-tool world))
-        missing (tool-missing world cell)
+        missing (when-not (by-hand? (:plan/intent world)) (tool-missing world cell))
         child
         (if stowed
           {:intent/kind :equip :intent/item (recipe/item-name stowed-item) :intent/status :active}
