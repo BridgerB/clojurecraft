@@ -143,32 +143,57 @@
 
 ;; ---------------------------------------------------------------- clicks
 
+(defn sources
+  "[[slot k] ...]: the stacks of inventory (window slots, slot-of) that lay n items of the
+   ingredient set s, with what used already takes out of each: one stack that covers all n
+   when there is one (the lowest slot), else the lowest slots in turn until n are drawn, so
+   7 + 1 cobblestone make a furnace (race 38477665442 bot Clj_r02's pickup had started a
+   second stack, and the craft found no single stack of eight: :no-ingredient three times).
+   nil when the stacks do not hold n together."
+  [inventory slot-of used s n]
+  (let [stacks (for [[slot {:keys [item count]}] (sort-by key inventory)
+                     :let [left (- count (get used slot 0))]
+                     :when (and (slot-of slot) (contains? s (item-name item)) (pos? left))]
+                 [slot left])
+        whole (first (filter (fn [[_ left]] (>= left n)) stacks))
+        [drawn short] (reduce (fn [[acc need] [slot left]]
+                                (if (zero? need)
+                                  (reduced [acc 0])
+                                  [(conj acc [slot (min left need)]) (- need (min left need))]))
+                              [[] n]
+                              stacks)]
+    (cond whole [[(first whole) n]]
+          (zero? short) drawn
+          :else nil)))
+
+(defn lay-from
+  "[used clicks cells-left] after laying k items of the stack in player slot source into the
+   first k of cells (window slots): pick the stack up, right-click one into each, put the
+   remainder back."
+  [inventory slot-of [used acc cells] [source k]]
+  (let [cs (slot-of source)
+        left (- (get-in inventory [source :count]) (get used source 0) k)]
+    [(update used source (fnil + 0) k)
+     (-> acc
+         (conj (inventory/left-click cs))
+         (into (for [[g _] (take k cells)] (inventory/right-click g)))
+         (cond-> (pos? left) (conj (inventory/left-click cs)))) (drop k cells)]))
+
 (defn clicks
   "The clicks that lay one craft of r into the size×size grid of window 0, or nil when the
-   inventory cannot cover it. Each ingredient group comes from a single stack: pick it up,
-   right-click one item into each cell, put the remainder back. Clicks are
-   {:click/slot :click/button :click/mode}. slot-of maps a player-inventory slot to a slot of
-   the window being clicked (window 0 by default)."
+   inventory cannot cover it. Each ingredient group comes from one stack when one covers it,
+   else from the lowest stacks in turn (sources): pick a stack up, right-click one item into
+   each of its cells, put the remainder back (lay-from). Clicks are {:click/slot
+   :click/button :click/mode}. slot-of maps a player-inventory slot to a slot of the window
+   being clicked (window 0 by default)."
   ([inventory r size]
    (clicks inventory r size #(inventory/player->window-slot (inventory/layouts :inventory) %)))
   ([inventory r size slot-of]
-   (some-> (reduce (fn [[used acc] [s cells]]
-                     (let [n (count cells)
-                           source (->> (sort-by key inventory)
-                                       (filter (fn [[slot {:keys [item count]}]]
-                                                 (and (slot-of slot)
-                                                      (contains? s (item-name item))
-                                                      (>= (- count (get used slot 0)) n))))
-                                       ffirst)]
-                       (if-not source
-                         (reduced nil)
-                         (let [cs (slot-of source)
-                               left (- (get-in inventory [source :count]) (get used source 0) n)]
-                           [(update used source (fnil + 0) n)
-                            (-> acc
-                                (conj (inventory/left-click cs))
-                                (into (for [[g _] (sort-by key cells)] (inventory/right-click g)))
-                                (cond-> (pos? left) (conj (inventory/left-click cs))))]))))
-                   [{} []]
-                   (group-by val (placement r size)))
+   (some-> (reduce
+            (fn [[used acc] [s cells]]
+              (if-let [srcs (sources inventory slot-of used s (count cells))]
+                (reduce (partial lay-from inventory slot-of) [used acc (sort-by key cells)] srcs)
+                (reduced nil)))
+            [{} []]
+            (group-by val (placement r size)))
            second)))
