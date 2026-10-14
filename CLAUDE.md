@@ -94,7 +94,7 @@ clojure -M:harness --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.p
   | clojure -M:run --port 25571 --name Clj_wood --until wood --events stdin   # land in a forest, then run
 clojure -M:run --port 25571 --until play --hold-ms 20000     # just connect and stay in-world
 clojure -M:run ... --record data/runs/x.edn                   # record every event
-clojure -M:replay data/runs/x.edn                             # replay it with no server
+bb replay data/runs/x.edn                                     # replay it with no server, at the commit that made it (.zst and .gz too; --here for the working tree's code)
 clojure -M:race --config ci/race.edn --port 25571 --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)"   # a race on one server (race.yml: ten runners)
 clojure -M:capture --port 25571 --rcon-port 25581 --rcon-pass "$(cat data/local-server/rcon.pass)" --landings l.edn --set S --out d   # real worlds for the model
 clojure -M:simrace --worlds cache/sim-worlds/R1 --seeds 2       # the bot in captured worlds against the model (simrace.yml: ten runners)

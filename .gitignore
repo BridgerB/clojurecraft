@@ -5,6 +5,7 @@ target/
 *.log
 work/
 cache/
+.worktrees/
 .nix/
 .clj-kondo/.cache/
 .lsp/.cache/

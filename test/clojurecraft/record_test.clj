@@ -135,3 +135,20 @@
     (let [replayed (main/replayed path)]
       (is (= :identical (:replay/result replayed)) "folding the file reaches exactly that RESULT")
       (is (= :identical (:replay/effects replayed))))))
+
+(deftest a-replay-says-whose-code-folded-the-recording
+  ;; issue #111: race recordings folded with newer code ended elsewhere than their RESULT and
+  ;; were taken for truncated; each was whole and replayed :identical at its own commit. The
+  ;; replay now names both commits and judges them, so the fold's standing is in its RESULT.
+  (is (= :same (main/replay-code "abc" "abc")))
+  (is (= :other (main/replay-code "abc" "def")) "another commit's fold is another run")
+  (is (= :unrecorded (main/replay-code nil "def")) "a recording made without --commit")
+  (is (= :unknown (main/replay-code "abc" nil)) "no git to ask")
+  (let [path (tmp "record-code")
+        tap (record/tap! path {:record/commit "0123456789abcdef0123456789abcdef01234567"})]
+    ((:write tap) (first events))
+    ((:close tap))
+    (let [r (main/replayed path)]
+      (is (= "0123456789abcdef0123456789abcdef01234567" (get-in r [:replay/commit :recorded])))
+      (is (contains? #{:other :unknown} (:replay/code r))
+          "the test's own HEAD is never that commit; without git the fold cannot tell"))))
