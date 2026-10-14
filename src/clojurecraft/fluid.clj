@@ -21,6 +21,8 @@
    and the blocks a flow cannot enter besides solids (doors, signs, ladders, portals)."
   (:require [clojurecraft.blocks :as blocks]))
 
+(set! *warn-on-reflection* true)
+
 ;; ---------------------------------------------------------------- the rules, as data
 
 (def kinds
