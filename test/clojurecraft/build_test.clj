@@ -180,3 +180,26 @@
             boxed-op (assoc op :build/pos [8 62 8] :build/stand [8 63 9])]
         (is (= :no-stand (build/op-child boxed hill-intent boxed-op))
             "with no ground in reach the plan says so, and does not walk onto the water")))))
+
+(deftest a-stand-up-a-bank-is-passed-over-for-one-a-route-reaches
+  ;; race 38477665442 Clj_r25 (issue #45): the water was scooped from a sand cell at the lake's
+  ;; edge under a bank; the cell nearest the pad's stand was the bank's top, a step up that only
+  ;; cells over the water led to, and three builds failed :no-path walking at it, though the
+  ;; sand cell itself reached the pad
+  (let [pos [6.8 63.0 8.5] ; the feet over the water's edge, the box on the sand cell east
+        water (concat (for [x (range 4 7)] [x 62 8]) (for [x (range 3 9) z (range 9 13)] [x 62 z]))
+        bank (merge (into {} (for [x (range 4 7)] [[x 63 7] 1])) ; a step up north, over the water
+                    (into {} (for [[x z] [[7 7] [8 7] [8 8]] y [63 64]] [[x y z] 1]))) ; two high beside the sand
+        w (standing-at (open-ground (merge (into {} (map (fn [c] [c blocks/water-base]) water))
+                                           bank))
+                       pos)
+        op (assoc pond-op :build/pos [4 62 9] :build/stand [4 63 10] :build/done [:solid [4 62 9]])
+        from (path/feet-cell pos)]
+    (is (not (path/standable? w from)) "the feet floor over the water")
+    (is (= [7 63 8] (path/start-cell w from)) "the box rests on the sand")
+    (is (= :none (:path/status (path/plan w from {:goal/kind :block :goal/pos [5 64 7]})))
+        "the bank's top is nearest the stand, and no route climbs to it")
+    (is (build/reaches-from? w [7 63 8] [4 62 9]) "the sand cell reaches the pad")
+    (is (= {:intent/kind :walk :intent/target [7 63 8] :intent/for :build}
+           (build/op-child w hill-intent op))
+        "the sand cell, which a route reaches, is the stand")))

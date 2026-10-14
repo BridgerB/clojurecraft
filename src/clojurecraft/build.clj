@@ -555,14 +555,21 @@
 
 (defn reachable-stand
   "A cell the feet can occupy from which pos is within reach. The feet, when they already
-   can; else the standable cell around pos nearest the designated stand. nil when none, and
-   never the cell being worked. Full run 61abf8c stood on the shore of a pond: the pad cell
-   was water and the stand was air over the next water cell, so a walk there was :partial
-   and six replans failed :no-path."
+   can; else the standable cell around pos nearest the designated stand that a route from the
+   feet reaches (intent/routable?). nil when none, and never the cell being worked. Full run
+   61abf8c stood on the shore of a pond: the pad cell was water and the stand was air over the
+   next water cell, so a walk there was :partial and six replans failed :no-path. Race
+   38477665442 Clj_r25 had scooped its water from a sand cell at the lake's edge under a bank
+   two high; the cell nearest the stand was the bank's top, a step up beside it that only cells
+   over the water led to, and three builds failed :no-path walking at it while the sand cell
+   itself reached the pad (issue #45)."
   [world stand pos]
   (let [feet (intent/feet world)
         ok? (fn [cell]
-              (and (not= cell pos) (path/standable? world cell) (reaches-from? world cell pos)))]
+              (and (not= cell pos) (path/standable? world cell) (reaches-from? world cell pos)))
+        routable? (fn [cell]
+                    (intent/routable? world
+                                      {:intent/kind :walk :intent/target cell :intent/for :build}))]
     (if (ok? feet)
       feet
       (->> (for [dy [0 -1 1]
@@ -572,6 +579,7 @@
                  :when (ok? c)]
              c)
            (sort-by #(physics/distance (physics/centre %) (physics/centre stand)))
+           (filter routable?)
            first))))
 
 (defn approach-stand
