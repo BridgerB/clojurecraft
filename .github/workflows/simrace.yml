@@ -6,11 +6,17 @@ name: simrace
 # the other runners; a push to main restarts both with the merged code. Every failed run
 # carries its signature; the report files them as issues, one per signature (bb failures).
 
+# The rounds never stop (the churn), as race.yml: one at a time on the latest main, back to back; a
+# push to main preempts, anything else (the next job, the schedule backstop, a dispatch) waits as the
+# group's one pending run. RACE_CONTINUOUS=false (a repository variable) stops the chain.
+
 on:
   push:
     branches: [main]
-    paths-ignore: ['brain/**', 'docs/**', '**.md']   # a note does not restart a five-hour round
+    paths-ignore: ['brain/**', 'docs/**', '**.md']   # a note does not restart a round
   workflow_dispatch:
+  schedule:
+    - cron: '53 */2 * * *'              # a backstop: should the next job not start a round, this queues one
 
 permissions:
   contents: write                       # the results page's branch, gh-pages (bb page publish)
@@ -18,7 +24,7 @@ permissions:
 
 concurrency:
   group: simrace-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'push' }}   # new code preempts; anything else waits its turn
 
 jobs:
   plan:
@@ -69,7 +75,7 @@ jobs:
   sim:
     needs: [plan, captures]
     runs-on: ubuntu-24.04
-    timeout-minutes: 345
+    timeout-minutes: 355              # GitHub kills a job at 360; a runner plays :simrace/budget-minutes (330)
     strategy:
       fail-fast: false
       max-parallel: 20
@@ -158,10 +164,6 @@ jobs:
     needs: sim
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write                   # the results page's branch
-      issues: write                     # the failures' issues
-      actions: write                    # the next round (workflow_dispatch)
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -185,10 +187,16 @@ jobs:
           bb page round runs sim "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(git show -s --format=%cI "$GITHUB_SHA")" > round.edn
           cat round.edn
           bb page publish round.edn
-      - name: The next round, on main as it is now
-        # the sim races run without end on the latest main, as race.yml does; RACE_CONTINUOUS=false
-        # (a repository variable) stops the chain
-        if: ${{ vars.RACE_CONTINUOUS != 'false' }}
-        env:
+
+  next:
+    # the next round on main as it is now, queued as the group's pending run (see race.yml)
+    needs: report
+    if: ${{ !cancelled() && vars.RACE_CONTINUOUS != 'false' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run simrace.yml --ref main
+        run: gh workflow run simrace.yml --repo "$GITHUB_REPOSITORY" --ref main

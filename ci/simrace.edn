@@ -5,5 +5,5 @@
  :simrace/sets ["R1" "R2" "R3" "R4"] ; the race's landing sets (ci/gym.edn), captured by simworld.yml
  :simrace/until "nether"             ; the target each run plays every step up to
  :simrace/max-minutes 90             ; simulated minutes a run may take
- :simrace/budget-minutes 300         ; wall minutes a runner plays, inside the job's six hours
+ :simrace/budget-minutes 330         ; wall minutes a runner plays: 300 took 303 with setup (sim race 38515210080), inside the job's 355 of GitHub's 360
  :simrace/heap-mb 12288}                ; the runner's 16 GB, less the system's share

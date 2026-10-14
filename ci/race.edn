@@ -13,7 +13,7 @@
  :race/bots 25             ; bots per server (400 racers in all)
  :race/prefix "Clj_r"      ; bot names: Clj_r01, Clj_r02, ...
  :race/until "nether"      ; the target; the run plays every step up to it (plan/through)
- :race/timeout-ms 14400000 ; 4 h: setup, the summary and the uploads fit in the job's 345 minutes (race 38355274936 lost five runners to it at 5 h 25 min)
+ :race/timeout-ms 19200000 ; 320 min, near GitHub's 6 h job cap: setup takes 1 min and the summary, pack and uploads 1 min (race 38515209959), the job's 355-minute limit leaves 33 to spare
  :race/stagger-ms 3000     ; between bots joining a server
  :race/server-heap-mb 3072 ; each server's JVM: about 2.3 GB live at 25 bots
  :race/bot-heap-mb 2048}                ; each race process's JVM, its 25 bots
