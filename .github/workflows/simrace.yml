@@ -158,6 +158,10 @@ jobs:
     needs: sim
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write                   # the results page's branch
+      issues: write                     # the failures' issues
+      actions: write                    # the next round (workflow_dispatch)
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -181,3 +185,10 @@ jobs:
           bb page round runs sim "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(git show -s --format=%cI "$GITHUB_SHA")" > round.edn
           cat round.edn
           bb page publish round.edn
+      - name: The next round, on main as it is now
+        # the sim races run without end on the latest main, as race.yml does; RACE_CONTINUOUS=false
+        # (a repository variable) stops the chain
+        if: ${{ vars.RACE_CONTINUOUS != 'false' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run simrace.yml --ref main

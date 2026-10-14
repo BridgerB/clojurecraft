@@ -1,21 +1,20 @@
 name: full
 
 # One fresh world, nothing given. The bot stands at spawn and plays every step up to the
-# current stage (plan/current-until, via --chain) for 5.5 hours. A pull request runs it.
-# A new push to that same request cancels its run and starts the new commit. Another
-# request keeps its own.
+# current stage (plan/current-until, via --chain) for 5.5 hours. Run by hand (workflow_dispatch)
+# on any branch when one long look at a single fresh-world bot is wanted; it was a check on every
+# pull request until the races on main (race.yml, simrace.yml) made that a runner held for five
+# hours a request for less than a round says.
 
 on:
-  pull_request:
+  workflow_dispatch:
 
 concurrency:
-  group: full-${{ github.event.pull_request.number }}
+  group: full-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   full:
-    # the capacity request measures instead; a fix request has issue.yml alone
-    if: github.head_ref != 'race-capacity' && !startsWith(github.head_ref, 'fix/')
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     steps:

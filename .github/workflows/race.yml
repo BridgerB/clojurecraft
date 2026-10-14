@@ -202,6 +202,10 @@ jobs:
     needs: race
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write                   # the results page's branch, the win's release
+      issues: write                     # the failures' issues
+      actions: write                    # the next round (workflow_dispatch)
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -229,3 +233,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bb win release runs "$GITHUB_RUN_ID" "$GITHUB_SHA"
+      - name: The next round, on main as it is now
+        # the races run without end on the latest main: a round that finishes starts the next one
+        # (a push to main meanwhile cancels the round and starts its own, so this never races a
+        # push). The repository variable RACE_CONTINUOUS=false stops the chain.
+        if: ${{ vars.RACE_CONTINUOUS != 'false' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run race.yml --ref main
