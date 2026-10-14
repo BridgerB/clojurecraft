@@ -1,7 +1,7 @@
 ;; The sim race (simrace.yml, clojure -M:simrace): runners that play the whole bot in the race's
 ;; captured worlds against the server model, on every core, from every landing with seed after
 ;; seed until the budget is spent. The real-server race (ci/race.edn) has the other runners.
-{:simrace/runners 10                 ; GitHub runners, each a share of the worlds
+{:simrace/runners 8                  ; GitHub runners, each a share of the worlds; the real race has eight, four stay free
  :simrace/sets ["R1" "R2" "R3" "R4"] ; the race's landing sets (ci/gym.edn), captured by simworld.yml
  :simrace/until "nether"             ; the target each run plays every step up to
  :simrace/max-minutes 90             ; simulated minutes a run may take
