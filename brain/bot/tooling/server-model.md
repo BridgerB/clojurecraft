@@ -5,7 +5,7 @@ type: reference
 tags: [bot, tooling, sim, tests]
 aliases: [sim.clj, fake server, socket-free test, sim/run]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-14
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#defn init
@@ -25,6 +25,7 @@ sourceRefs:
   - "test/clojurecraft/sim_test.clj#main's-own-loop-against-the-model-through-channels"
   - src/clojurecraft/sim.clj#def dig-ms
   - src/clojurecraft/sim.clj#observed live on 26.1.2: the breaker gets the block update, then the ack
+  - src/clojurecraft/sim.clj#defn finish-dig
   - test/clojurecraft/sim_test.clj#collects-one-log-against-the-model
   - test/clojurecraft/sim_test.clj#the-wood-goal-holds-in-generated-forests
   - test/clojurecraft/sim_test.clj#the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays
@@ -46,7 +47,7 @@ related:
 A block of one of `blocks/falling-types` looks under itself `fall-delay-ms` (two game ticks) after the block under it changed (`disturb`, called by a break, a placement, a scoop and a fall), as the game's `FallingBlock` schedules its tick on the neighbour update. If the cell under it is then free (air, a liquid, anything passable: `FallingBlock.isFree`), its cell becomes air for the client and it is in the air in `:sim/falling`. Each game tick `fall-tick` moves it as `FallingBlockEntity.tick` does (it gains 0.04 blocks a tick of speed, moves, keeps 98% of it) and lands it on whatever is under it at that moment, so a second gravel lands on the first rather than in the cell the first was still falling into: one block down takes seven ticks. Read in the 26.1.2 jar with `javap`. Not modelled: a block landing in a cell no longer free (the game drops it as an item), and harm to a player under it.
 
 ## Key files
-- `sim.clj`, `init` - takes `{:column bytes :spawn [x y z] :keep-alive-every ms :drop-clicks #{n} :inventory {slot item} :respawn [x y z]}`; an `:inventory` slot is a named place (`[:hotbar 0]`, `[:main 3]`, read by `inventory/slot`) or a window-0 slot number, so a test says where an item is rather than which wire slot that is.
+- `sim.clj`, `init` - takes `{:column bytes :spawn [x y z] :keep-alive-every ms :drop-clicks #{n} :drop-breaks #{n} :inventory {slot item} :respawn [x y z]}` (`:drop-breaks`: the FINISHes, by ordinal, the model answers with the ack alone and the block left standing, as a lagging server does with an early FINISH queued behind another; `finish-dig`); an `:inventory` slot is a named place (`[:hotbar 0]`, `[:main 3]`, read by `inventory/slot`) or a window-0 slot number, so a test says where an item is rather than which wire slot that is.
 - `sim.clj`, `run` - drives a bot reducer against the model 50 ms per tick, sends `:go` once loaded, stops on a predicate.
 - `sim_test.clj`, `the-wood-goal-holds-in-generated-forests` - test.check builds 2,000 worlds (`docs/hickey.md`: "thousands of generated worlds in the time one real run takes"): 1-3 trees of oak, spruce or birch, 3-6 logs high, anywhere in the column; each maybe on a one-block stone mound and maybe under low leaves over every cell within two steps; the spawn varies. The whole bot runs against the instrumented model in each and must end holding a log with no violation. About 16 ms a world; `FOREST_TRIALS=n` overrides the count and `FOREST_SEED=s` the seed, which is how `test.yml` runs it as eight shards of 250 ([[test-fixtures]]). Treating only oak as a log fails it (shrunk to one spruce), and so does removing the blocker's headroom check over a step: the mounds under canopies reproduce the ledge a live run failed on.
 - `sim_test.clj` - end-to-end tests: one log held (`:wood`), a low canopy cleared, a table and four sticks (`:kit`), a placed table and a wooden pickaxe (`:pickaxe`), recovery from a lost click, and the iron kit (`the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays`): from a stone pickaxe, a table, eight cobblestone and four logs on one column with coal, iron, gravel and a pond, to flint and steel and a filled water bucket in 92 simulated seconds, in the kit's order (an ore and a coal, the furnace, one ingot, gravel dug again four times to flint with seed 4, the flint and steel, the pickaxe put back in hand, three more ores, three ingots, the bucket, filled from the bank). The run is recorded through `record/tap!` (each event, then only the effects it added: `sim/run` clears effects once a tick) and `record/verify` replays it with every sent packet the same.

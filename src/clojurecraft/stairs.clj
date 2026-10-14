@@ -315,6 +315,24 @@
       (box world))))
 
 (def refusals #{:needs-tool :unsafe})  ; a child dig failing for these turns the stairs
+(def max-rejections 3)                 ; digs of one stair the server would not do before the staircase fails :rejected
+
+(defn rejected
+  "A child dig the server did not do (:rejected: its ack came with the block still standing):
+   the cell is still to open, so the stair digs it again, up to max-rejections a stair; past
+   that the staircase fails :rejected. Race 38477665442, runner 9 (issues #59, #66): a lagging
+   server with 25 bots queued early FINISHes behind one another and dropped them, and the
+   staircase, believing the ack, walked into rock the server still had there."
+  [world {:intent/keys [rejections child] :or {rejections 0}}]
+  (if (>= (inc rejections) max-rejections)
+    (-> world
+        (assoc :player/controls {})
+        (intent/fail :rejected))
+    (-> world
+        (intent/dissoc-intent :intent/child)
+        (intent/assoc-intent :intent/rejections (inc rejections))
+        (game/say
+         (str "stairs: the server did not cut " (:intent/target child) ", digging again")))))
 
 (defn airborne?
   "Is the body in the air, neither on the ground nor in a liquid? A stair is planned from feet
@@ -437,6 +455,7 @@
   [world {:intent/keys [child cells] :as i} event]
   (cond
     (and child (or (intent/done? child) (fell? child))) (intent/dissoc-intent world :intent/child)
+    (and child (intent/failed? child) (= :rejected (:intent/reason child))) (rejected world i)
     ;; a cell the child will not dig refuses this way, like lava: turn. :needs-tool is ore the
     ;; pickaxe cannot drop; :unsafe a cell beside water or lava, which the dig would let in (a
     ;; live descent through an aquifer at y 36 failed three times on it before this)
@@ -492,7 +511,7 @@
           (-> world
               (assoc :player/controls {})
               (intent/assoc-intent :intent/stage :plan)
-              (intent/dissoc-intent :intent/child :intent/cells))
+              (intent/dissoc-intent :intent/child :intent/cells :intent/rejections))
           (next-to-open world cells) ; gravel or sand fell into the stair: dig it again
           (-> world
               (assoc :player/controls {})
@@ -506,12 +525,13 @@
 (defmethod stairs-stage :level
   ;; dig the level step's cells, one child at a time, then walk onto its feet cell; then plan
   ;; the stairs again from there. The step's time is the walk's: it starts again after each dig
-  [world {:intent/keys [child level-cells started-tick]} event]
+  [world {:intent/keys [child level-cells started-tick] :as i} event]
   (let [[fx fy fz] (last level-cells)]
     (cond (and child (or (intent/done? child) (fell? child)))
           (-> world
               (intent/dissoc-intent :intent/child)
               (intent/assoc-intent :intent/started-tick (:time/tick world)))
+          (and child (intent/failed? child) (= :rejected (:intent/reason child))) (rejected world i)
           (and child (intent/failed? child))
           (-> world
               (assoc :player/controls {})
@@ -522,7 +542,7 @@
           (-> world
               (assoc :player/controls {})
               (intent/assoc-intent :intent/stage :plan)
-              (intent/dissoc-intent :intent/level-cells))
+              (intent/dissoc-intent :intent/level-cells :intent/rejections))
           (> (- (:time/tick world) started-tick) step-timeout-ticks)
           (-> world
               (assoc :player/controls {})

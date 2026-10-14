@@ -637,24 +637,29 @@
 
 (defn intent-run-holding
   "Run intent it alone against the model from a spawn at [8.5 spawn-y 8.5] over column blocks,
-   holding inventory ({[:hotbar n] {:item id :count n}}), until it ends or max-ms. Returns
-   [world sim]."
-  [it blocks spawn-y inventory max-ms]
-  (let [column (world/column-bytes blocks)
-        step
-        (fn [w e]
-          (let [w (game/step w e)
-                i (:plan/intent w)]
-            (cond (= :go (:event/kind e)) (assoc w :plan/intent (assoc it :intent/status :active))
-                  (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
-                  (intent/run w i e)
-                  :else w)))
-        sim0 (sim/init {:column column :spawn [8.5 (double spawn-y) 8.5] :inventory inventory})]
-    (sim/run step
-             (game/init fx/opts)
-             sim0
-             #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
-             max-ms)))
+   holding inventory ({[:hotbar n] {:item id :count n}}), until it ends or max-ms, with the
+   model's other options (sim/init's fault knobs) when given. Returns [world sim]."
+  ([it blocks spawn-y inventory max-ms] (intent-run-holding it blocks spawn-y inventory max-ms {}))
+  ([it blocks spawn-y inventory max-ms sim-opts]
+   (let [column (world/column-bytes blocks)
+         step (fn [w e]
+                (let [w (game/step w e)
+                      i (:plan/intent w)]
+                  (cond (= :go (:event/kind e))
+                        (assoc w :plan/intent (assoc it :intent/status :active))
+                        (and (= :tick (:event/kind e))
+                             (= :active (:intent/status i))
+                             (:player/loaded? w))
+                        (intent/run w i e)
+                        :else w)))
+         sim0 (sim/init (merge
+                         {:column column :spawn [8.5 (double spawn-y) 8.5] :inventory inventory}
+                         sim-opts))]
+     (sim/run step
+              (game/init fx/opts)
+              sim0
+              #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
+              max-ms))))
 
 (defn intent-run
   "intent-run-holding with one item in hotbar slot 0, or nothing."
@@ -740,6 +745,26 @@
     (is (= [1 0] (:intent/dir (:plan/intent w))) "never refused: planned once on the ground")
     (is (<= (second (:player/pos w)) 71.5) "the feet are five stairs down")
     (is (contains? (:sim/broken sim) [9 75 8]) "the first stair cut from the hilltop")
+    (is (empty? (:sim/violations sim)))))
+
+(deftest a-stair-the-server-did-not-cut-is-dug-again
+  ;; race 38477665442, runner 9 (issues #59, #66): with 25 bots on one server, an early FINISH
+  ;; was queued behind another and dropped, its ack coming with the block still standing; the
+  ;; staircase believed the ack, walked into rock the server still had, and was put back by it
+  ;; ten times a second until the step timed out, :stair-not-taken three times. The model
+  ;; drops the second break (the second stair's head cell; the first stair has one cell of
+  ;; rock, under the hilltop): the ack alone, the block left standing
+  (let [[w sim]
+        (intent-run-holding {:intent/kind :stairs-down :intent/to-y 71}
+                            deep-stone
+                            76 {[:hotbar 0] {:item (get blocks/items :wooden_pickaxe) :count 1}}
+                            120000 {:drop-breaks #{1}})]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (<= (second (:player/pos w)) 71.5) "the feet are five stairs down")
+    (is (= 13 (:sim/breaks sim)) "twelve cells of rock, one of them asked for twice")
+    (is (contains? (:sim/broken sim) [10 75 8]) "the dropped cell was dug again")
     (is (empty? (:sim/violations sim)))))
 
 (deftest lava-ahead-turns-the-stairs

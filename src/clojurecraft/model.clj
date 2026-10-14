@@ -209,14 +209,17 @@
    [:intent/tool "item id of the tool the dig holds, nil for the hand" "dig, from START"]
    [:intent/dig-ms "ms the server needs to break the target with that tool" "dig, from START"]
    [:intent/state
-    "the target's state id at START; the same state after FINISH means the server refused"
+    "the target's state id at START; the cell still in it when the ack of FINISH comes means the server did not break it"
     "dig, from START"]
-   [:intent/confirm-left "ticks left to wait for the server's ack after FINISH"
+   [:intent/confirm-left "ticks left to wait for the server's word after FINISH"
     "dig, :confirm stage"]
    [:intent/to-y "feet height at or below which the staircase is done" "stairs-down"]
    [:intent/dir "[dx dz] heading the next stair is cut toward" "stairs-down, once planned"]
    [:intent/turns "quarter turns taken after refused stairs; four fail :boxed"
     "stairs-down, after a refusal"]
+   [:intent/rejections
+    "digs of the current stair (or level step) the server did not do, each dug again; stairs/max-rejections fail :rejected"
+    "stairs-down, after a child dig rejected"]
    [:intent/cells "the three cells the current stair opens, top first"
     "stairs-down, while a stair is cut"]
    [:intent/level-cells

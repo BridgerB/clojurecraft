@@ -13,7 +13,9 @@
    lands where the game's gravity brings it.
 
    Fault knobs are inputs, not hidden state: :sim/drop-clicks is a set of click ordinals
-   (0-based) the server silently loses, and the loot table's chances (gravel's flint) roll from
+   (0-based) the server silently loses, :sim/drop-breaks a set of FINISH ordinals it answers
+   with the ack alone, the block left standing (a lagging server queues an early FINISH
+   behind another and drops it), and the loot table's chances (gravel's flint) roll from
    :sim/rng, a pure generator whose start is the :seed input, so a run's luck replays. :sim/violations records anything a real server would
    punish or a careful client must never do: a click on an empty result slot, a close with a
    loaded cursor.
@@ -154,8 +156,9 @@
    the client at login and stays, unless the
    optional :view-distance r streams the columns within r chunks as the player moves, as a
    server does. Then the optional
-   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {slot item} (a slot is a named place,
-   [:hotbar 0] as inventory/slot reads it, or a window-0 slot number), :lag-ticks,
+   :keep-alive-every ms, :drop-clicks #{ordinal}, :drop-breaks #{ordinal}, :inventory {slot item}
+   (a slot is a named place, [:hotbar 0] as inventory/slot reads it, or a window-0 slot
+   number), :lag-ticks,
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
    from the world spawn), :seed (where the loot rolls start, 0 when absent), :tick-seed (where
    a run's tick randomness starts; 0.5 every tick when absent), :kill-at ms (the
@@ -163,8 +166,8 @@
    player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
    there) and :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
    and where the player arrives)."
-  [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks inventory
-           lag-ticks respawn seed tick-seed kill-at dimension nether]
+  [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
+           inventory lag-ticks respawn seed tick-seed kill-at dimension nether]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -179,6 +182,8 @@
      :sim/next-window 1
      :sim/clicks 0
      :sim/drop-clicks (or drop-clicks #{})
+     :sim/breaks 0
+     :sim/drop-breaks (or drop-breaks #{})
      :sim/rng (or seed 0)
      :sim/violations []
      :sim/keep-alive-every keep-alive-every
@@ -341,46 +346,55 @@
 (defn finish-dig
   "The client says it finished breaking pos: broken, with its drop, when it started breaking that
    block at least the block's break time ago (break-ms); else the real server keeps the block
-   and restores the client's view of it. Either way, the ack of sequence."
+   and restores the client's view of it. Either way, the ack of sequence. A FINISH whose
+   ordinal is in :sim/drop-breaks gets the ack alone, the block left standing and nothing said:
+   what a lagging server does with an early FINISH queued behind another one."
   [sim {:keys [pos sequence]}]
   (let [{:keys [at] dpos :pos} (:sim/dig sim)
         id (block-at sim pos)
         held (held-item sim)
-        slot (held-slot sim)]
-    (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
-      (let [eid (:sim/next-eid sim)
-            [x y z] pos
-            [ix iy iz :as item-pos] [(+ x 0.5) (+ y drop-rise) (+ z 0.5)]
-            [sim item] (loot sim id held)
-            drop (when item {:item item :count 1})
-            before (full (:sim/inv sim) (inventory/layouts :inventory))
-            sim (-> sim
-                    (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
-                    (update :sim/broken conj pos)
-                    (dissoc :sim/dig)
-                    ;; observed live on 26.1.2: the breaker gets the block update, then the ack
-                    (send {:packet/name :block-update :pos pos :state blocks/air})
-                    (send {:packet/name :block-changed-ack :sequence sequence})
-                    (update :sim/inv wear slot)
-                    (disturb pos))
-            sim (sync-window sim :inventory before (:sim/cursor sim) false)]
-        (if drop
+        slot (held-slot sim)
+        n (:sim/breaks sim)
+        sim (update sim :sim/breaks inc)]
+    (cond (contains? (:sim/drop-breaks sim) n)
           (-> sim
-              (assoc :sim/next-eid (inc eid))
-              (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
-              (send {:packet/name :add-entity
-                     :entity-id eid
-                     :uuid nil
-                     :type blocks/item-entity-type
-                     :x ix
-                     :y iy
-                     :z iz}))
-          sim))
-      ;; too early: the real server keeps the block and restores the client's view of it
-      (-> sim
-          (dissoc :sim/dig)
-          (send {:packet/name :block-update :pos pos :state (or id blocks/air)})
-          (send {:packet/name :block-changed-ack :sequence sequence})))))
+              (dissoc :sim/dig)
+              (send {:packet/name :block-changed-ack :sequence sequence}))
+          (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
+          (let [eid (:sim/next-eid sim)
+                [x y z] pos
+                [ix iy iz :as item-pos] [(+ x 0.5) (+ y drop-rise) (+ z 0.5)]
+                [sim item] (loot sim id held)
+                drop (when item {:item item :count 1})
+                before (full (:sim/inv sim) (inventory/layouts :inventory))
+                sim (-> sim
+                        (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
+                        (update :sim/broken conj pos)
+                        (dissoc :sim/dig)
+                        ;; observed live on 26.1.2: the breaker gets the block update, then the ack
+                        (send {:packet/name :block-update :pos pos :state blocks/air})
+                        (send {:packet/name :block-changed-ack :sequence sequence})
+                        (update :sim/inv wear slot)
+                        (disturb pos))
+                sim (sync-window sim :inventory before (:sim/cursor sim) false)]
+            (if drop
+              (-> sim
+                  (assoc :sim/next-eid (inc eid))
+                  (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
+                  (send {:packet/name :add-entity
+                         :entity-id eid
+                         :uuid nil
+                         :type blocks/item-entity-type
+                         :x ix
+                         :y iy
+                         :z iz}))
+              sim))
+          ;; too early: the real server keeps the block and restores the client's view of it
+          :else
+          (-> sim
+              (dissoc :sim/dig)
+              (send {:packet/name :block-update :pos pos :state (or id blocks/air)})
+              (send {:packet/name :block-changed-ack :sequence sequence})))))
 
 (defmethod on-packet [:play :player-action]
   [sim {:keys [status pos] :as p}]
