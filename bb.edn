@@ -62,6 +62,11 @@
    "The results page (issue #116): round <dir> <kind> <run> <commit> <at> | wall <dir> | build <rounds.edn> <out-dir> | publish <round.edn>"
    :requires ([clojurecraft.page :as page])
    :task (apply page/-main *command-line-args*)}
+  win
+  {:doc
+   "A win is a release (race.yml, issue #116): release <dir> <run> <sha> tags the commit and attaches the winners' recordings"
+   :requires ([clojurecraft.win :as win])
+   :task (apply win/-main *command-line-args*)}
   failures
   {:doc "Failed runs become issues, one per signature (simrace.yml, race.yml): report <dir> <title>"
    :requires ([clojurecraft.failures :as failures])

@@ -2,9 +2,11 @@
   "Failures become issues: every failed run, the sim race's (runs.edn, a run map a line) and the
    real race's (race.log, a RESULT line a bot), grouped by its signature (failure/signature: the
    target it was on and why it stopped). One GitHub issue per signature, labelled bot-failure and
-   found again by the signature it carries in a marker, open or closed; each report adds one
-   section to that issue's body (how many runs, the intents they stopped in, how many landings,
-   up to five reproductions), so a signature seen a thousand times is one issue with a tally.
+   found again by the signature it carries in a marker, open or closed; each round adds one
+   comment to that issue (how many runs, the intents they stopped in, how many landings, up to
+   five reproductions, the run's page) and brings the body's tally up to date (rounds, runs,
+   first and last seen), so a signature seen a thousand times is one issue with a tally, and
+   every round notifies (issue #116).
 
    What is not filed: a run that stopped for a reason that is not the bot's play
    (:run/infra?: the server closed the socket or disconnected it), counted in the report's
@@ -145,14 +147,70 @@
        (or (nil? code-at) (nil? (:closed_at issue)) (pos? (compare code-at (:closed_at issue))))))
 
 (defn opening
-  "A new issue's body before its first section."
+  "A new issue's body before its tally."
   [sig]
   (str
    (marker sig)
    "\n\n"
    "Runs stopped with this signature (`clojurecraft.failure/signature`: the target, the reason): `"
    (pr-str sig)
-   "`. Each report below adds how many runs hit it, where, and how to reproduce them.\n\n"))
+   "`. Each round that hits it adds one comment: how many runs, where, and how to reproduce them.\n\n"))
+
+(def tally-marker "<!-- tally ")           ; the line that keeps the issue's count across rounds
+
+(defn tally-of
+  "The tally a body carries, {:rounds n :runs m :first title :last title}, or nil."
+  [body]
+  (some->> (re-find #"<!-- tally (\{.*?\}) -->" (str body))
+           second
+           (edn/read-string {:default (fn [_ v] v)})))
+
+(defn tallied
+  "The tally after one more round of runs under report-title."
+  [tally report-title runs]
+  (-> (or tally {:rounds 0 :runs 0 :first report-title})
+      (update :rounds inc)
+      (update :runs + (count runs))
+      (assoc :last report-title)))
+
+(defn tally-lines
+  "The tally as the body shows it: a sentence, then the marker that keeps it."
+  [{:keys [rounds runs first last]}]
+  (str "Seen in "
+       rounds
+       " round"
+       (when (not= 1 rounds) "s")
+       ", "
+       runs
+       " run"
+       (when (not= 1 runs) "s")
+       ": first in "
+       first
+       ", last in "
+       last
+       ".\n"
+       tally-marker
+       (pr-str {:rounds rounds :runs runs :first first :last last})
+       " -->"))
+
+(defn with-tally
+  "The body with its tally lines replaced, or, for a body from before tallies (its reports in the
+   body), put in after the opening paragraph; the old reports stay below."
+  [body tally]
+  (let [lines (tally-lines tally)]
+    (cond (re-find #"(?m)^Seen in .*\n<!-- tally .*? -->" (str body))
+          (str/replace-first (str body)
+                             #"(?m)^Seen in .*\n<!-- tally .*? -->"
+                             (str/re-quote-replacement lines))
+          :else
+          (let [[marker-line explanation & more] (str/split (str body) #"\n\n" 3)]
+            (str/join "\n\n" (remove nil? (concat [marker-line explanation lines] more)))))))
+
+(defn comment-text
+  "One round's comment on an issue: the section, headed by the run's page when the workflow
+   says where it runs (run-url)."
+  [section run-url]
+  (str section (when run-url (str "\nRun: " run-url "\n"))))
 
 (defn summary-lines
   "What a report prints beyond the issues: the infrastructure stops and the one-offs, counted."
@@ -204,37 +262,55 @@
   (first (sort-by #(if (= "open" (:state %)) 0 1)
                   (filter #(str/includes? (str (:body %)) (marker sig)) all))))
 
+(defn run-url
+  "The page of the run the report runs in, from the workflow's environment, or nil."
+  []
+  (let [server (System/getenv "GITHUB_SERVER_URL")
+        run (System/getenv "GITHUB_RUN_ID")]
+    (when (and server (repo) run) (str server "/" (repo) "/actions/runs/" run))))
+
+(defn comment!
+  "Post one round's comment on issue n."
+  [n text]
+  (gh! "-X" "POST" (str "repos/" (repo) "/issues/" n "/comments") "-f" (str "body=" text)))
+
 (defn file!
-  "One signature's section: added to its issue (reopened when closed and the runs' code is newer
-   than its closing, regressed?), or a new issue. Returns :added, :reopened or :opened."
+  "One signature's round: one comment on its issue (reopened when closed and the runs' code is
+   newer than its closing, regressed?) with the body's tally brought up to date, or a new issue
+   with its first comment. The body is the summary (first seen, last seen, rounds, runs), the
+   comments are the rounds, so every round notifies (issue #116). Returns :added, :reopened or
+   :opened."
   [report-title sig runs code-at]
   (let [existing (issue-for (issues) sig) ; read again now: another report may have just opened it
         closed? (regressed? existing code-at)
-        text (section report-title runs closed?)]
+        text (comment-text (section report-title runs closed?) (run-url))
+        tally (tallied (tally-of (:body existing)) report-title runs)]
     (cond existing
           (do (apply gh!
                      "-X"
                      "PATCH"
                      (str "repos/" (repo) "/issues/" (:number existing))
                      "-f"
-                     (str "body=" (:body existing) "\n" text)
+                     (str "body=" (with-tally (:body existing) tally))
                      (when closed? ["-f" "state=open"]))
+              (comment! (:number existing) text)
               (doseq [l (labels runs)]
                 (gh! "-X"
                      "POST" (str "repos/" (repo) "/issues/" (:number existing) "/labels")
                      "-f" (str "labels[]=" l)))
               (if closed? :reopened :added))
           :else
-          (do (apply gh!
-                     "-X"
-                     "POST"
-                     (str "repos/" (repo) "/issues")
-                     "-f"
-                     (str "title=" (title sig))
-                     "-f"
-                     (str "body=" (opening sig) text)
-                     (mapcat (fn [l] ["-f" (str "labels[]=" l)]) (labels runs)))
-              :opened))))
+          (let [made (apply gh!
+                            "-X"
+                            "POST"
+                            (str "repos/" (repo) "/issues")
+                            "-f"
+                            (str "title=" (title sig))
+                            "-f"
+                            (str "body=" (opening sig) (tally-lines tally))
+                            (mapcat (fn [l] ["-f" (str "labels[]=" l)]) (labels runs)))]
+            (when (:number made) (comment! (:number made) text))
+            :opened))))
 
 (defn report!
   "File every signature hit at least min-runs times, the most frequent first, opening at most

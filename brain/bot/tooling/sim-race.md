@@ -5,7 +5,7 @@ type: reference
 tags: [bot, tooling, sim, race]
 aliases: [capture, capture.clj, simrace, simrace.clj, sim race, captured world, world file, SIMRUN, SIMRACE, :capture/columns]
 status: verified
-lastUpdated: 2026-10-13
+lastUpdated: 2026-10-14
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/capture.clj#defn stops
@@ -24,6 +24,8 @@ sourceRefs:
   - test/clojurecraft/simrace_test.clj#a-failed-runs-moment-round-trips-and-plays-on-to-the-same-stop
   - src/clojurecraft/simrace.clj#defn jobs
   - bb/clojurecraft/failures.clj#defn report!
+  - bb/clojurecraft/failures.clj#defn with-tally
+  - bb/clojurecraft/win.clj#defn winners
   - .github/workflows/simrace.yml#bb failures report
   - src/clojurecraft/simrace.clj#defn prepared
   - "src/clojurecraft/sim.clj#The model as a server keeps a player's chunks"
@@ -60,7 +62,7 @@ Every failed run is marked (`failure/mark`): `:run/signature` (`failure/signatur
 - failed runs grouped by signature, the most frequent first; infrastructure stops and one-offs (fewer than `min-runs`, 3) are counted in the output, never filed;
 - one issue labelled `bot-failure` per signature, found again by a marker in its body (`<!-- signature [...] -->`), open or closed: a closed one whose signature comes back in runs of code committed after its closing is reopened and its section says regressed (`regressed?`; the report gets the commit's date as its third argument), while runs of older code add their section and leave it closed, since they never ran the fix: race 38477665442, on code from before #76 merged, reopened #36 with 66 bots that had run the old planner;
 - the issues are read again right before one is opened, so two reports finishing together do not open the same one twice;
-- each report adds one section to the issue's body (how many runs, sim or real, the last intents, how many landings, up to five reproductions: the sim race's `--world f --seed s --seeds 1` at the commit, or the real bot's recording), and labels it `sim`, `real` or both: a failure only the model produces may be the model's, not the bot's;
+- each round adds one comment to the issue (how many runs, sim or real, the last intents, how many landings, up to five reproductions: the sim race's `--world f --seed s --seeds 1` at the commit, or the real bot's recording; the run's page) and brings the body's tally up to date (`with-tally`: rounds, runs, first and last seen, kept in a `<!-- tally -->` marker; issues from before keep their old sections below it), so every round notifies, and labels it `sim`, `real` or both: a failure only the model produces may be the model's, not the bot's; when a real run wins, the report tags the commit and releases the winners' recordings (`bb win`, `win/winners`), the proof kept past the artifacts' seven days (issue #116);
 - at most ten new issues a report.
 
 ## The issue check: a validation over a recorded moment

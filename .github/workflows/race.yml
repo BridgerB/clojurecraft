@@ -225,3 +225,7 @@ jobs:
           bb page round runs real "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(git show -s --format=%cI "$GITHUB_SHA")" > round.edn
           cat round.edn
           bb page publish round.edn
+      - name: A win is a release (issue #116)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bb win release runs "$GITHUB_RUN_ID" "$GITHUB_SHA"
