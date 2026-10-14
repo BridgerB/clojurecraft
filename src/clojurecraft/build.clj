@@ -824,21 +824,28 @@
 (defn blocks-needed
   "How many blocks plan places where the world shows them missing now, or where an op of plan digs
    before them (a hole's over cell that is later another's wall), its guard not yet holding: what
-   a cast at that place asks to carry (issue #124: counted from the plan, never a constant)."
+   a cast at that place asks to carry (issue #124: counted from the plan, never a constant). A
+   cell dug as a hole is obsidian after, never missing: a column's cell is the next one's floor."
   [world plan]
-  (:n (reduce (fn [{:keys [dug n]} {:build/keys [op pos step done] :as o}]
-                (let [[k guard] done]
-                  (case op
-                    :dig {:dug (cond-> dug (not= :fall-clear step) (conj pos)) :n n}
-                    :place
-                    {:dug dug
-                     :n (cond-> n
-                          (or (not (satisfied? world o))
-                              (and (contains? dug pos) (= :or k) (not (holds? world guard))))
-                          inc)}
-                    {:dug dug :n n})))
-              {:dug #{} :n 0}
-              plan)))
+  (:n
+   (reduce (fn [{:keys [dug n]} {:build/keys [op pos step done] :as o}]
+             (let [[k guard] done]
+               (case op
+                 :dig
+                 {:dug (case step
+                         :fall-clear dug
+                         :hole (disj dug pos)
+                         (conj dug pos))
+                  :n n}
+                 :place
+                 {:dug dug
+                  :n (cond-> n
+                       (or (not (satisfied? world o))
+                           (and (contains? dug pos) (= :or k) (not (holds? world guard))))
+                       inc)}
+                 {:dug dug :n n})))
+           {:dug #{} :n 0}
+           plan)))
 
 (defn site-ok?
   "Can a frame be cut at origin facing with its lava stand h over the room's floor: every cell of

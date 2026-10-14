@@ -2826,7 +2826,7 @@
   ;; issue #124: the rock is the mould. The pool is underground with no room anywhere: the bot
   ;; digs its way to it, the room in front of a face of the rock, each cell a hole lava is poured
   ;; into and water over, and the inside; a block only where its own holes opened a wall
-  (let [[w sim] (rock-run sealed-pool [12.5 41.0 12.5] 2400000)]
+  (let [[w sim] (rock-run sealed-pool [12.5 41.0 12.5] 1200000)]
     (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
     (is (= "minecraft:the_nether" (:player/dimension w)))
     (is (every? #(= :obsidian
