@@ -208,12 +208,28 @@
    to stand on."
   (into {} (for [x (range 16)] [[x 62 15] blocks/lava-base])))
 
+(defn dug
+  "The column with every cell of x 0..15, z 0..13 at the heights ys replaced by block, but the
+   column [10 10] the bot stands in."
+  [ys block]
+  (into {} (for [x (range 16) z (range 14) y ys :when (not= [x z] [10 10])] [[x y z] block])))
+
 (def feet-pos [10.5 63.0 10.5])
 
 (defn site-at
   "The site chosen standing at feet-pos over the plain, with extra blocks laid over it."
   [extra]
   (build/choose-site (standing-at (open-ground (merge extra trench)) feet-pos)))
+
+(deftest a-site-needs-ground-under-its-pad-and-no-water-in-its-footprint
+  ;; issue #74: a pad cell over a cave or a deep pond had no cell to place it from (the
+  ;; foundation reaches four down) and the build failed :no-stand. The site refuses them
+  (is (some? (site-at {})) "a plain beside lava: a site")
+  (is (nil? (site-at (dug (range 54 63) blocks/air)))
+      "a pit nine deep round the feet: no foundation reaches its floor")
+  (is (nil? (site-at (dug [61 62] blocks/water-base)))
+      "a pond round the feet: the pad is not built under water")
+  (is (some? (site-at (dug [61 62] blocks/air))) "a pit two deep: built up from its floor"))
 
 (deftest a-station-is-near-in-three-dimensions-and-open-to-the-air
   ;; race 38477665442 took the lava sea ninety blocks under the feet, within sixteen on the plane,

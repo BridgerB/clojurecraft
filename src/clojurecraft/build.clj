@@ -688,15 +688,30 @@
 
 (def site-radius 4)                   ; blocks from the feet a frame origin is looked for
 
+(def pad-cells
+  "The cells [dx dy dz] the pad floors (pad-ops), from the origin."
+  (vec (for [dz (range -1 3) dx (range -1 6)] [dx -1 dz])))
+
+(defn ground-under?
+  "Is there a solid cell at pos or within foundation-depth under it, so a pad block there has a
+   foundation to be built up from (foundation)? Issue #74: a pad cell over a cave or a deep
+   pond had no cell to place it from, and the build failed :no-stand."
+  [world [x y z]]
+  (boolean (some #(holds? world [:solid [x (- y %) z]]) (range (inc foundation-depth)))))
+
 (defn site-ok?
-  "Can a frame be cast at origin facing: every cell of the footprint loaded and no lava in it (a
-   block placed into lava destroys the source, and lava under the mold is no stance: ruststeve's
-   lava sea), the ground under the origin solid, and a station among sources?"
+  "Can a frame be cast at origin facing: every cell of the footprint loaded and no water or lava
+   in it (a block placed into lava destroys the source, lava under the mold is no stance:
+   ruststeve's lava sea; and a pad over water is built from its bottom, out of reach when the
+   water is deep), the ground under the origin solid and under every pad cell no deeper than a
+   foundation reaches (ground-under?), and a station among sources?"
   [world sources origin facing]
-  (let [cells (footprint origin facing)]
+  (let [cells (footprint origin facing)
+        at #(cell origin facing %)]
     (and (every? #(some? (terrain/block-at world %)) cells)
-         (not-any? #(contains? blocks/lava-states (terrain/block-at world %)) cells)
+         (not-any? #(terrain/fluid-at world %) cells)
          (holds? world [:solid (update origin 1 dec)])
+         (every? #(ground-under? world (at %)) pad-cells)
          (some? (station-among world sources origin facing)))))
 
 (defn choose-site
