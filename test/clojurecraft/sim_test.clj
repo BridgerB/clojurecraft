@@ -1282,10 +1282,16 @@
 ;; ---------------------------------------------------------------- building the portal (issue #8)
 
 (def build-origin
-  "Where the frame's corner goes in the one-column arena: cut into the stone six under the lava
-   pit's surface, the lava's stand at the surface (access 6, issue #124)."
-  [4 58 5])
+  "Where the frame's corner goes in the one-column arena: the site choose-site picks beside the
+   lava pit, cut into the stone six under its surface facing east, the lava's stand at the surface
+   (access 6, issue #124)."
+  [7 58 12])
+(def build-facing "The side of the frame the bot works from at build-origin." :east)
 (def build-access "The lava's height over the room's floor at build-origin." 6)
+(defn at-build
+  "The cell [dx dy dz] from build-origin facing build-facing."
+  [d]
+  (build/cell build-origin build-facing d))
 
 (def kit
   "What the gym gives a cast: buckets of lava and water, an empty one, cobblestone, flint and
@@ -1306,7 +1312,7 @@
   (let [it {:intent/kind :build
             :intent/build kind
             :intent/origin build-origin
-            :intent/facing :south
+            :intent/facing build-facing
             :intent/access build-access}
         step
         (fn [w e]
@@ -1331,7 +1337,8 @@
   (let [[w sim] (build-run :cast-one lava-pit [9.5 64.0 10.5] kit 600000)]
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
-    (is (= :obsidian (blocks/name-of (sim/block-at sim [5 58 5]))) "the first cell, obsidian")
+    (is (= :obsidian (blocks/name-of (sim/block-at sim (at-build [1 0 0]))))
+        "the first cell, obsidian")
     (is (= (recipe/item-id :water_bucket)
            (some #(when (= (recipe/item-id :water_bucket) (:item %)) (:item %))
                  (vals (:sim/inv sim))))
@@ -1340,13 +1347,13 @@
 
 (deftest the-frame-is-cast-lit-and-stepped-through
   (let [[w sim] (build-run :nether lava-pit [9.5 64.0 10.5] kit 1800000)
-        frame (for [[dx dy] build/frame-cells] [(+ 4 dx) (+ 58 dy) 5])]
+        frame (for [[dx dy] build/frame-cells] (at-build [dx dy 0]))]
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))
     (is (every? #(= :obsidian (blocks/name-of (sim/block-at sim %))) frame) "ten obsidian")
     (is (= 6
            (count (filter #(= :nether_portal (blocks/name-of (sim/block-at sim %)))
-                          (for [x [5 6] y [59 60 61]] [x y 5])))))
+                          (for [[dx dy] build/interior] (at-build [dx dy 0]))))))
     (is (= "minecraft:the_nether" (:player/dimension w)))
     (is (empty? (:sim/violations sim)))))
 
@@ -1355,7 +1362,7 @@
   ;; skipped, so four lava pours are needed, one from the kit and three from the trench
   (let [seeded (into {}
                      (for [[dx dy] (take 6 build/frame-cells)]
-                       [[(+ 4 dx) (+ 58 dy) 5] (blocks/default-state :obsidian)]))
+                       [(at-build [dx dy 0]) (blocks/default-state :obsidian)]))
         [w sim] (build-run :portal (merge lava-pit seeded) [9.5 64.0 10.5] kit 1800000)]
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/op])))

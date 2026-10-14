@@ -197,7 +197,7 @@
    far side of the cell for a stand aside, so the ray crosses into the cell's column while still in
    front of the frame and enters the cell through its open face, never through the wall beside it."
   [side]
-  (- 0.5 (* 0.2 (long (math/signum (double side))))))
+  (- 0.5 (* 0.3 (long (math/signum (double side))))))
 
 (defn cell-ops
   "Cast frame cell [dx dy] (issue #124: the rock is the mould): from its stand, make its walls firm
@@ -268,11 +268,13 @@
 (defn room-cells
   "Every cell [dx dy dz] the full cast opens in front of the frame, nearest the landing first, so
    each is dug from cells dug before it: the row against the frame (dz 1) and the floor row (dz 2)
-   six high, the height every ray crosses them at, the stair's steps, and the access steps up to
-   the lava's height h."
+   six high, the height every ray crosses them at, both five wide (a ray from the stair's last
+   step, aside of the frame at x 4, crosses x 4 of the row against the frame when the eye is a
+   little off the step's middle: it met rock there and the lava landed in the room), the stair's
+   steps, and the access steps up to the lava's height h."
   [h]
   (let [from (landing h)]
-    (->> (concat (for [x (range 4) y (range 6)] [x y 1])
+    (->> (concat (for [x (range 5) y (range 6)] [x y 1])
                  (for [x (range 5) y (range 6)] [x y 2])
                  (mapcat (fn [[x feet]] (body [x feet 3])) stair)
                  (mapcat body (access h)))
@@ -283,7 +285,7 @@
   "The cells under every stand and step of the full cast that must be firm: under the two rows in
    front, the stair and the access steps."
   [h]
-  (concat (for [x (range 4)] [x -1 1])
+  (concat (for [x (range 5)] [x -1 1])
           (for [x (range 5)] [x -1 2])
           (for [[x feet dz] (concat (map (fn [[x feet]] [x feet 3]) stair) (access h))]
             [x (dec feet) dz])))
@@ -494,6 +496,15 @@
       [stand src])))
 
 (def station-depth 9)                  ; how far in front of the frame a lava stand may be
+(def station-span 8)                   ; how far aside of the landing's column a lava stand may be
+
+(defn relative
+  "Cell as [dx dy dz] from origin facing: the inverse of cell."
+  [origin facing c]
+  (let [[dx dy dz] (mapv - c origin)
+        back {:south :south :north :north :east :west :west :east}
+        [x z] (turn (back facing) [dx dz])]
+    [x dy z]))
 
 (defn reach-sources
   "The lava sources of sources a bot standing at stand reaches with a bucket, under its feet's
@@ -506,20 +517,22 @@
          (sort-by #(physics/distance eye (physics/centre %))))))
 
 (defn station-among
-  "{:stand :sources :h} to refill lava from for a frame at origin facing: the nearest cell
-   straight out in front of the landing at a height h over the room's floor (its x, dz 4 to
-   station-depth: the way dug to it runs away from the frame and never along the stair), h between
-   one and max-access (water spilled on the floor never runs up to it), the h given first, that
-   the feet can stand in once opened (firm under it, it and the head openable, no fluid touching
-   them, outside the footprint) and from which lava sources are in reach (reach-sources). The
-   stand stays while the pool lasts: a scooped source leaves the next one in reach. nil when none."
+  "{:stand :sources :h} to refill lava from for a frame at origin facing: the cell nearest the
+   landing at a height h over the room's floor (h between one and max-access: water spilled on
+   the floor never runs up to it; the h given first), four to station-depth in front of the frame
+   and up to station-span aside of the landing's column, that the feet can stand in once opened
+   (firm under it, it and the head openable, no fluid touching them, outside the footprint) and
+   from which lava sources are in reach (reach-sources). As a pool's near sources are scooped the
+   next stand along it is the station; the way to one runs straight out from the landing, then
+   aside (refill), never along the stair. nil when none."
   ([world sources origin facing] (station-among world sources origin facing nil))
   ([world sources origin facing prefer]
    (first (for [h (distinct (cons (or prefer 1) (range 1 (inc max-access))))
                 :when (<= 1 h max-access)
                 :let [[lx _ _] (landing h)]
                 dz (range 4 (inc station-depth))
-                :let [stand (cell origin facing [lx h dz])
+                dx (sort-by #(abs (- % lx)) (range (- lx station-span) (inc (+ lx station-span))))
+                :let [stand (cell origin facing [dx h dz])
                       head (update stand 1 inc)]
                 :when (and (holds? world [:firm (update stand 1 dec)])
                            (openable? world stand)
@@ -568,13 +581,14 @@
   (set (keep #(when (= :place (:build/op %)) (:build/pos %)) (plan-for build origin facing 0))))
 
 (defn diggable?
-  "Is pos a solid or awkward block a clear may dig: not unloaded, not obsidian, and not
-   cobblestone the plan places (the mold, already stood up). Stone or dirt where a wall will
-   go later is still dug: the place is satisfied by whatever is solid, and the hill would
-   stay in the way."
-  [world pos placed?]
+  "Is pos a solid or awkward block a clear may dig: not unloaded, not obsidian, not the frame's
+   rock (kept?: the rock the holes are cut into, whatever it is made of), and not cobblestone the
+   plan places. Stone or dirt where a floor will go later is still dug: the place is satisfied by
+   whatever is solid, and the hill would stay in the way."
+  [world pos placed? kept?]
   (when-let [id (terrain/block-at world pos)]
-    (and (not (and (placed? pos) (= :cobblestone (blocks/name-of id))))
+    (and (not (kept? pos))
+         (not (and (placed? pos) (= :cobblestone (blocks/name-of id))))
          (not (contains? intent/never-dug (blocks/name-of id)))
          (contains? #{:solid :awkward} (path/classify-id id)))))
 
@@ -584,14 +598,15 @@
    already clear. Full run 4e59246 stood at a pond and the pad's stand, four blocks east, was
    stone inside the hill; the walk at it was :none."
   [world stand build origin facing]
-  (let [placed? (into (place-cells build origin facing) (kept origin facing))
+  (let [placed? (place-cells build origin facing)
+        kept? (kept origin facing)
         [fx _ fz] (intent/feet world)
         [sx sy sz] stand]
     (loop [x fx
            z fz]
       (let [body [x sy z]]
-        (cond (diggable? world body placed?) body
-              (diggable? world (update body 1 inc) placed?) (update body 1 inc)
+        (cond (diggable? world body placed? kept?) body
+              (diggable? world (update body 1 inc) placed? kept?) (update body 1 inc)
               (and (= x sx) (= z sz)) nil
               :else
               (recur (cond (< x sx) (inc x)
@@ -726,9 +741,14 @@
                                      (blocks/name-of (terrain/block-at world block)))))
                 (assoc (intent/child-dig block) :intent/exposes-ok? true :intent/for :lava)
                 :else :no-station)
-          (or (intent/routable? world {:intent/kind :walk :intent/target stand :intent/for :build})
-              (= (long (physics/y-of (intent/feet world))) (second stand)))
-          (toward-stand world stand build origin facing)
+          (intent/routable? world {:intent/kind :walk :intent/target stand :intent/for :build})
+          {:intent/kind :walk :intent/target stand :intent/for :build}
+          (= (long (physics/y-of (intent/feet world))) (second stand))
+          (let [[lx _ _] (landing h)
+                [_ _ sz] (relative origin facing stand)
+                [_ _ fz] (relative origin facing (intent/feet world))
+                out (cell origin facing [lx h sz])]
+            (toward-stand world (if (< fz sz) out stand) build origin facing))
           :else
           (or (toward-stand world (cell origin facing (landing h)) build origin facing)
               {:intent/kind :walk :intent/target stand :intent/for :build}))))
