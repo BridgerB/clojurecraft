@@ -5,6 +5,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.plan :as plan]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
@@ -245,3 +246,29 @@
         "nothing under it: a drop, not a step")
     (is (nil? (stone/beside (dug {[11 64 8] 1}) [11 63 8]))
         "stone over it: nowhere to step down from")))
+
+(deftest a-stair-up-asked-for-mid-jump-waits-for-the-ground
+  ;; race 38515209959 (issue #107, at 7239df5) bots Clj_r04 (runner 3) and Clj_r06 (runner 7): a
+  ;; collect jumping against a two-high wall had the climb out asked for at y 65.17, mid-jump,
+  ;; so its cells were planned a block too high, the step under the new feet was never cut, and
+  ;; the jump met the wall for 10 s, :stair-not-taken three times. The third bot, Clj_r03
+  ;; (runner 9), walked into a stair cell the lagging server had not cut, its FINISH dropped
+  ;; behind a delayed destroy; a dig ends on the block update since ac38129. Covered since
+  ;; a54c3ec: a staircase waits in :plan for the ground (stairs/airborne?)
+  (let [wall {[6 64 5] 1 [6 65 5] 1}
+        up {:intent/kind :stairs-up :intent/to-y 70 :intent/to-height? true :intent/status :active}
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        jumping (assoc (standing 64 :stone_pickaxe)
+                       :player/pos [5.5 65.17 5.5]
+                       :player/on-ground? false
+                       :world/chunks {[0 0] (world/column wall)}
+                       :plan/intent up)
+        w (intent/run jumping up tick)]
+    (is (stairs/airborne? jumping))
+    (is (nil? (:intent/stage (:plan/intent w))) "still in :plan, nothing planned from the air")
+    (is (= {} (:player/controls w)) "and no push: the body lands")
+    (let [landed (assoc jumping :player/pos [5.5 64.0 5.5] :player/on-ground? true)
+          w (intent/run landed up tick)]
+      (is (= :open (:intent/stage (:plan/intent w))))
+      (is (= [[5 66 5] [6 66 5] [6 65 5]] (:intent/cells (:plan/intent w)))
+          "the stair from the landed feet, its new feet on the wall's lower block"))))
