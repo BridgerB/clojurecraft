@@ -379,7 +379,7 @@
         [:li {:class (if s "done" "todo")} [:span.tick (if s "✓" "·")] [:span (name m)]
          [:span.time (or (clock s) "")]])]]))
 
-(defn round-row
+(defn table-row
   "One row of the rounds table."
   [repo milestones r]
   (let [[m n] (furthest r milestones)]
@@ -492,7 +492,7 @@
         [:thead
          [:tr [:th "started"] [:th "took"] [:th "kind"] [:th "commit"] [:th ""] [:th "runs"]
           [:th "Nether"] [:th "furthest"] [:th "top reasons"]]]
-        [:tbody (for [r (take table-rounds (reverse rounds))] (round-row repo milestones r))]]]
+        [:tbody (for [r (take table-rounds (reverse rounds))] (table-row repo milestones r))]]]
       [:footer "Built by " [:code "bb page"] " from " [:a {:href "rounds.edn"} "rounds.edn"]
        ", one round a line, beside this file. Issue #116."] [:script (h/raw script)]]]))
 
