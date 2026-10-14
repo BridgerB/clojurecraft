@@ -660,7 +660,8 @@
   ;; The site is remembered once, so a new life resumes the build there
   [world {:intent/keys [origin facing] :as i} event]
   (let [world (cond-> world
-                (not= {:site/origin origin :site/facing facing} (memory/site world))
+                (not= {:site/origin origin :site/facing facing}
+                      (select-keys (memory/site world) [:site/origin :site/facing]))
                 (memory/remember-site origin facing))
         next (next-op world (plan-for (:intent/build i) origin facing))]
     (if (nil? next)
@@ -673,37 +674,72 @@
 
 (def site-radius 4)                   ; blocks from the feet a frame origin is looked for
 
+(defn pad-grounded?
+  "Can every op of the pad at origin facing be worked: its stand's body and head hold no water (a
+   stance under a pond's surface is none, and water is not dug away as a hill is), and a pad cell
+   under water lies within reach of a cell on the footprint's plane the feet can stand in, as the
+   shore reaches a pond's edge (reachable-stand). Sim race 38395033917 (issue #74): the bot had
+   scooped from a pond and sunk into it, the site nearest its feet was the pond's bottom, every
+   stand under water, and the build failed :no-stand at its first op, three times in a second."
+  [world origin facing]
+  (let [at (fn [d] (cell origin facing d))
+        ground (for [dx (range -2 7)
+                     dz (range -2 4)
+                     :let [c (at [dx 0 dz])]
+                     :when (path/standable? world c)]
+                 c)]
+    (every? (fn [{:build/keys [pos stand]}]
+              (and (holds? world [:no-water stand])
+                   (holds? world [:no-water (update stand 1 inc)])
+                   (or (holds? world [:no-water pos])
+                       (boolean (some #(reaches-from? world % pos) ground)))))
+            (pad-ops at))))
+
 (defn site-ok?
   "Can a frame be cast at origin facing: every cell of the footprint loaded and no lava in it (a
    block placed into lava destroys the source, and lava under the mold is no stance: ruststeve's
-   lava sea), the ground under the origin solid, and a station among sources?"
+   lava sea), the ground under the origin solid, a station among sources, and the pad's cells
+   each placeable from ground (pad-grounded?)?"
   [world sources origin facing]
   (let [cells (footprint origin facing)]
     (and (every? #(some? (terrain/block-at world %)) cells)
          (not-any? #(contains? blocks/lava-states (terrain/block-at world %)) cells)
          (holds? world [:solid (update origin 1 dec)])
-         (some? (station-among world sources origin facing)))))
+         (some? (station-among world sources origin facing))
+         (pad-grounded? world origin facing))))
 
 (defn choose-site
   "[origin facing] for a new frame: the origin nearest the feet (within site-radius on the plane,
-   at the feet's height) and the first facing that site-ok? accepts; nil when none."
+   at the feet's height) and the first facing that site-ok? accepts; nil when none, and nil while
+   the bot is in water, whose feet's height is a pond's bottom (issue #74: a site chosen while
+   sinking lay inside the bank, every stand to be dug)."
   [world]
   (let [[fx fy fz] (intent/feet world)
         sources (lava-sources world)]
-    (first (for [[dx dz] (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
-                                  (for [dx (range (- site-radius) (inc site-radius))
-                                        dz (range (- site-radius) (inc site-radius))]
-                                    [dx dz]))
-                 facing [:south :west :north :east]
-                 :let [origin [(+ fx dx) fy (+ fz dz)]]
-                 :when (site-ok? world sources origin facing)]
-             [origin facing]))))
+    (when-not (:player/in-water? world)
+      (first (for [[dx dz] (sort-by (fn [[dx dz]] (+ (* dx dx) (* dz dz)))
+                                    (for [dx (range (- site-radius) (inc site-radius))
+                                          dz (range (- site-radius) (inc site-radius))]
+                                      [dx dz]))
+                   facing [:south :west :north :east]
+                   :let [origin [(+ fx dx) fy (+ fz dz)]]
+                   :when (site-ok? world sources origin facing)]
+               [origin facing])))))
+
+(defn stanceless?
+  "Did the build at the remembered site fail :no-stand since the site was remembered? Such a site
+   is no site: the next build chooses another, and remembers it (issue #74: the one at the
+   pond's bottom was resumed as it was, and failed the same way at once, three times)."
+  [world {:site/keys [at]}]
+  (boolean (some #{:no-stand} (memory/failures-since world :build at))))
 
 (defmethod plan/next-intent :build
-  ;; build the row's plan (:goal/build) at the site remembered, else at one chosen now (the
-  ;; :build intent remembers it); with none, wait :no-site
+  ;; build the row's plan (:goal/build) at the site remembered, unless the build there found no
+  ;; stance (stanceless?), else at one chosen now (the :build intent remembers it); with none,
+  ;; wait :no-site
   [world {:goal/keys [build]} _]
-  (let [{:site/keys [origin facing]} (memory/site world)
+  (let [site (memory/site world)
+        {:site/keys [origin facing]} (when-not (and site (stanceless? world site)) site)
         [origin facing] (if origin [origin facing] (choose-site world))]
     (if origin
       {:intent/kind :build :intent/build build :intent/origin origin :intent/facing facing}

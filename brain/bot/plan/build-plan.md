@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, build, portal]
 aliases: [build.clj, portal-plan, cast-one-plan, build/holds?, satisfied?, mold, op, :build/done]
 status: verified
-lastUpdated: 2026-10-12
+lastUpdated: 2026-10-14
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/build.clj#defmulti holds?
@@ -25,7 +25,12 @@ sourceRefs:
   - src/clojurecraft/build.clj#def footprint
   - src/clojurecraft/build.clj#defn foundation
   - src/clojurecraft/build.clj#defn choose-site
+  - src/clojurecraft/build.clj#defn pad-grounded?
+  - src/clojurecraft/build.clj#defn stanceless?
   - src/clojurecraft/memory.clj#defn site
+  - src/clojurecraft/memory.clj#defn failures-since
+  - test/clojurecraft/build_test.clj#a-site-at-the-bottom-of-a-pond-is-no-site
+  - test/clojurecraft/build_test.clj#a-site-the-build-found-no-stance-at-is-passed-over
   - test/clojurecraft/sim_test.clj#the-frame-is-cast-lit-and-stepped-through
   - test/clojurecraft/sim_test.clj#a-cast-six-tenths-done-casts-only-the-other-four
   - test/clojurecraft/build_test.clj#the-plan-casts-the-ten-cells-in-layer-order
@@ -54,7 +59,7 @@ ruststeve's template mold ([[sib-portal-mold]]) as data, pure (`the-plan-never-p
 `{:intent/kind :build :intent/build :cast-one|:portal|:nether :intent/origin o :intent/facing f}`: each tick the plan (`plan-for`, memoized) is read and the first op not satisfied is worked; the build is done when the plan's last op holds (its goal: once in the Nether the earlier ops' cells are not even loaded). `op-child` makes the child that works the op: a lava pour with no lava bucket first refills (`refill`: a walk to the `station`, a lava source outside the footprint within 16 with ground beside the cell over it, then a `:scoop` with `:intent/fluid :lava`); else a solid cell in the body or the head on the way to the stand is dug when it is in reach, or walked to beside, else a walk to the op's stand, ending centred in that cell (`intent/centred?`). A place or a dig whose stand cannot be occupied (air over water) is worked from a standable cell that already reaches the block, the feet when they do (`reachable-stand`); with no such cell the build fails `:no-stand` rather than walking onto the water. Then `:place` into a given `:intent/cell` against a solid neighbour (`place/support`, or a `foundation` built up from below), a child dig, `:pour` (equip, look at the aim, `use-item`, done when `:intent/expect` holds), `:scoop`, `:use-on` (flint and steel on the top face) or `:await` (hold still until the dimension changes). A new op drops the child. In the model a cast from the kit and a lava trench reaches the Nether (`the-frame-is-cast-lit-and-stepped-through`), and one with six cells already obsidian casts only the other four (`a-cast-six-tenths-done-casts-only-the-other-four`).
 
 ## The targets
-`goals.edn` rows `:cast-one`, `:portal` and `:nether` (`--until` the same) plan with `:goal/plan :build` and are done by `:built?`: the last op of the row's plan (`:goal/build`) holds at the remembered site. The site is a fact in memory (`memory/remember-site`, `memory/site`, the latest wins), written by the `:build` intent when it starts; with none the planner chooses one (`choose-site`: the origin nearest the feet within 4, the first facing whose footprint is loaded and free of lava, with solid ground under the origin and a lava station), else waits `:no-site`. After a death the planner starts the build again at the site and the first op not satisfied is worked; the model's `:kill-at` fault tests it.
+`goals.edn` rows `:cast-one`, `:portal` and `:nether` (`--until` the same) plan with `:goal/plan :build` and are done by `:built?`: the last op of the row's plan (`:goal/build`) holds at the remembered site. The site is a fact in memory (`memory/remember-site`, `memory/site`, the latest wins), written by the `:build` intent when it starts; with none, or when the build at the remembered one failed `:no-stand` since it was remembered (`stanceless?`, asked of the intention facts by `memory/failures-since`), the planner chooses one (`choose-site`: the origin nearest the feet within 4, the first facing whose footprint is loaded and free of lava, with solid ground under the origin, a lava station, and every pad op a stance out of the water with its cell placeable from ground, `pad-grounded?`), else waits `:no-site`. After a death the planner starts the build again at the site and the first op not satisfied is worked; the model's `:kill-at` fault tests it.
 
 ## Gotchas
 - **The tower stands until the frame does.** A layer's stair and platform are done only once all ten cells are cast: later layers stand on them, so a resumed cast whose lower layers are obsidian still builds them.
@@ -64,5 +69,6 @@ ruststeve's template mold ([[sib-portal-mold]]) as data, pure (`the-plan-never-p
 - **A dig never takes obsidian**: `dig-op`'s done holds when its cell is obsidian (`no-dig-can-take-obsidian`); a cell's bowl can be another cell (the bowl of (0,1) is (0,2)).
 - **A stand inside the ground is dug, not walked.** Full run 4e59246 stood at a pond with the pad's stand four blocks east inside the hill; the walk at that stone was :none and three :no-path failures ended the plan. The first solid in the body or the head from the feet to the stand is dug when it is in reach (`a-stand-inside-a-hill-is-dug`). Cobblestone the plan places is left alone, so the clear does not take the mold back out; stone where a wall will go later is dug, because a place counts as done on anything solid.
 - **A stand over water is not walked onto.** Full run 61abf8c stood on the bank with the portal kit. The first open pad cell was water and its stand was air over the next water cell; the walk was :partial six times and three :no-path failures ended the plan. The place is made from a cell that already reaches the block (`a-pad-stand-over-water-is-placed-from-the-shore`). A pour still walks to its own stand: the aim is computed for it.
+- **A pond's bottom is no site.** Sim race 38395033917 and three real bots (issue #74): the bot scooped from a pond, sank into it, and the site nearest its feet at their height was the pond's bottom: the pad all water, nothing to stand in within reach of the first op, `:no-stand` three times in a second, since the site was remembered and resumed as it was. `pad-grounded?` asks of a site that no pad stand (body or head) be under water, and that each pad cell under water lie within reach of a cell on the footprint's plane the feet can stand in (`a-site-at-the-bottom-of-a-pond-is-no-site`), and a site the build failed `:no-stand` at is passed over (`a-site-the-build-found-no-stance-at-is-passed-over`). No site is chosen while the bot is in water: its feet's height there is the pond's bottom, and the site that gave was inside the bank, every stand to be dug. In the pond the bot then waits `:no-site`: getting out is the escape goals' business, finding a site further off issue #41's.
 - **Facings turn about the origin cell's middle** (`point`), so the origin cell stays put and a cell and the points inside it turn alike.
 - The stair differs from ruststeve's, whose steps rose away from the platform and left a gap the pathfinder bridged.

@@ -287,11 +287,26 @@
 ;; ---------------------------------------------------------------- questions
 
 (defn site
-  "The latest build site remembered, {:site/origin [x y z] :site/facing f}, or nil."
+  "The latest build site remembered, {:site/origin [x y z] :site/facing f :site/at ms}, or nil."
   [world]
   (let [db (:world/facts world)]
     (when-let [datoms (seq (d/datoms db :aevt :site/origin))]
-      (select-keys (d/entity db (apply max (map :e datoms))) [:site/origin :site/facing]))))
+      (select-keys (d/entity db (apply max (map :e datoms)))
+                   [:site/origin :site/facing :site/at]))))
+
+(defn failures-since
+  "The reasons intentions of kind failed with at or after time t, oldest first: the bot's own
+   story, asked so it can act on it (a build site that proved to have no stance, issue #74)."
+  [world kind t]
+  (let [db (:world/facts world)]
+    (->> (d/q '[:find ?at ?reason :in $ ?kind ?t :where [?e :intention/kind ?kind]
+                [?e :intention/event :failed] [?e :intention/at ?at] [(>= ?at ?t)]
+                [?e :intention/reason ?reason]]
+              db
+              kind
+              t)
+         (sort-by first)
+         (mapv second))))
 
 
 (defn answers

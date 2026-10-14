@@ -9,7 +9,9 @@
             [clojurecraft.build :as build]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
+            [clojurecraft.plan :as plan]
             [clojurecraft.world :as world]))
 
 (def origin [100 64 200])
@@ -180,3 +182,69 @@
             boxed-op (assoc op :build/pos [8 62 8] :build/stand [8 63 9])]
         (is (= :no-stand (build/op-child boxed hill-intent boxed-op))
             "with no ground in reach the plan says so, and does not walk onto the water")))))
+
+(def lava-at [13 62 3])                ; a source outside the footprint, within the station radius
+
+(defn site-world
+  "open-ground with a lava source for the station and water sources at cells, the bot at pos."
+  [pos cells]
+  (standing-at (open-ground
+                (into {lava-at blocks/lava-base} (map (fn [c] [c blocks/water-base])) cells))
+               pos))
+
+(def pond-cells
+  "A pond under every site within four of hill-origin but the origin's own column, and a dry
+   strip at x 12..15 for the station, too far for any pad to be placed from."
+  (for [x (range 0 12) z (range 0 16) :when (not= [x z] [2 8])] [x 62 z]))
+
+(deftest a-site-at-the-bottom-of-a-pond-is-no-site
+  ;; sim race 38395033917 (issue #74): the bot had scooped from a pond and sunk into it; the site
+  ;; nearest its feet, at their height, was the pond's bottom, and the first pad op had no stance
+  (let [pos [2.5 63.0 8.5]
+        sources [lava-at]]
+    (is (build/site-ok? (site-world pos []) sources hill-origin :south) "dry ground is a site")
+    (is (some? (build/choose-site (site-world pos []))))
+    (is (nil? (build/choose-site (assoc (site-world pos []) :player/in-water? true)))
+        "no site is chosen from the water: the feet's height there is a pond's bottom")
+    (is (build/site-ok? (site-world pos [[6 62 7] [6 62 8]]) sources hill-origin :south)
+        "a pond under the pad's edge is placed from the shore")
+    (let [pond (site-world pos pond-cells)]
+      (is (build/station pond hill-origin :south) "the station is not what refuses it")
+      (is (not (build/pad-grounded? pond hill-origin :south)))
+      (is (not (build/site-ok? pond sources hill-origin :south))
+          "a pad all water with no ground in reach has no stance")
+      (is (nil? (build/choose-site pond)) "and no origin within four is any better"))
+    ;; the moment itself: the pond's floor is stone, so the pad is there already, and every stand
+    ;; over it is under the water
+    (let [deep (site-world [2.5 63.0 8.5] (for [[x _ z] pond-cells y [63 64]] [x y z]))]
+      (is (not (build/pad-grounded? deep hill-origin :south)) "a stance under the surface is none")
+      (is (nil? (build/choose-site deep))))))
+
+(deftest a-site-the-build-found-no-stance-at-is-passed-over
+  ;; the site is remembered when the build starts; the pond's bottom was resumed as it was and
+  ;; failed :no-stand three times in a second, the plan with it
+  (let [row (first (filter #(= :cast-one (:goal/id %)) plan/goals))
+        pond (-> (site-world [2.5 63.0 8.5] pond-cells)
+                 (assoc :time/now 1000)
+                 (memory/remember-site hill-origin :south))
+        resumed (plan/next-intent pond row plan/goals)
+        failed (-> pond
+                   (assoc :time/now 1500)
+                   (memory/remember-intention
+                    {:intent/id 7 :intent/kind :build :intent/reason :no-stand}
+                    :failed))]
+    (is (= [hill-origin :south] ((juxt :intent/origin :intent/facing) resumed))
+        "a remembered site is resumed as it is")
+    (is (not (build/stanceless? pond (memory/site pond))))
+    (is (build/stanceless? failed (memory/site failed)))
+    (is (= {:plan/wait :no-site} (plan/next-intent failed row plan/goals))
+        "after :no-stand there it is no site, and the pond offers no other")
+    (let [earlier (-> (site-world [2.5 63.0 8.5] pond-cells)
+                      (assoc :time/now 500)
+                      (memory/remember-intention
+                       {:intent/id 3 :intent/kind :build :intent/reason :no-stand}
+                       :failed)
+                      (assoc :time/now 1000)
+                      (memory/remember-site hill-origin :south))]
+      (is (not (build/stanceless? earlier (memory/site earlier)))
+          "a failure before the site was remembered is another site's"))))
