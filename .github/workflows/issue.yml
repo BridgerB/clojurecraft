@@ -4,8 +4,9 @@ name: issue
 # moments as snapshots under test/issues/<issue>/ (bb issue-check fetch), and issues-test plays
 # each on against the model for two simulated minutes; the check passes when none fails again
 # with the issue's signature. Seconds of test over the race's captured worlds, restored from the
-# cache; nothing is run from spawn. test, gym and full skip fix branches: this is the only check
-# a fix gets.
+# cache; nothing is run from spawn. Beside it, unit.yml: every test but the forest property and
+# the static checks, so a fix that breaks an older assertion is seen here, not on main (#98).
+# test, gym and full skip fix branches: these two are the checks a fix gets.
 
 on:
   pull_request:
@@ -19,6 +20,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  unit:
+    if: startsWith(github.head_ref, 'fix/')
+    uses: ./.github/workflows/unit.yml
+
   check:
     if: startsWith(github.head_ref, 'fix/')
     runs-on: ubuntu-24.04

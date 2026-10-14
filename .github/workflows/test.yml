@@ -1,13 +1,13 @@
 name: test
 
 # The suite on every push, spread over the runners: one job runs every test but the forest
-# property, all namespaces and vars in parallel on the runner's cores (clojurecraft.runner,
+# property, all namespaces and vars in parallel on the runner's cores (unit.yml: clojurecraft.runner,
 # eftest); eight more each run 250 of the 2,000 generated forests with their own seed.
 # The serial suite on one runner took nine minutes, most of it the sim namespace.
 
 on:
   push:
-    branches-ignore: [race-capacity, "fix/**"]   # race-capacity is the capacity experiment (capacity.yml); a fix branch has issue.yml alone
+    branches-ignore: [race-capacity, "fix/**"]   # race-capacity is the capacity experiment (capacity.yml); a fix branch runs unit.yml through issue.yml
   workflow_dispatch:
 
 concurrency:
@@ -16,36 +16,7 @@ concurrency:
 
 jobs:
   unit:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    env:
-      FOREST_TRIALS: '0'               # the forests job runs them
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '25'
-      - name: Install the Clojure CLI
-        run: |
-          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
-          sudo bash /tmp/clj.sh
-      - name: Install Babashka (the flake's version, as bb.edn's :min-bb-version)
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
-          sudo bash /tmp/bb.sh --version 1.13.225
-      - uses: actions/cache@v6
-        with:
-          path: |
-            ~/.m2/repository
-            ~/.gitlibs
-            ~/.deps.clj
-          key: clj-${{ hashFiles('deps.edn') }}
-      # bb ci, in two steps so a red one says which half failed; the same tasks as on a Mac
-      - name: Unit, property and simulation tests (bb test)
-        run: bb test
-      - name: Static checks (bb check - format, lint, idioms, ns forms, unused vars, brain)
-        run: bb check
+    uses: ./.github/workflows/unit.yml   # one definition, shared with issue.yml
 
   forests:
     runs-on: ubuntu-24.04
