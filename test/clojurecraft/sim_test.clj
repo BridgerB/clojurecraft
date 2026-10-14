@@ -2443,6 +2443,31 @@
     (is (= 0 (terrain/block-at w [0 64 0])) "the cap is gone")
     (is (empty? (:sim/violations sim)))))
 
+(def flooded-cave
+  "An aquifer's lake in the rock: a pool five by five and three deep (y 30-32) under three
+   cells of air (y 33-35) and a stone roof, its walls rising straight from the water. No cell
+   within sixteen is standable: the air over the pool has water under it, the rest is stone."
+  (merge (into {} (for [x (range 2 7) y [30 31 32] z (range 2 7)] [[x y z] blocks/water-base]))
+         (into {} (for [x (range 2 7) y [33 34 35] z (range 2 7)] [[x y z] 0]))))
+
+(deftest a-flooded-cave-with-no-bank-is-left-by-a-notch-dug-in-its-wall
+  ;; issue #73 (sim race, world R4/44, 217 runs): afloat with the eye in air, no bank in the
+  ;; band and no cap over the head, the escape held jump and searched again every second
+  ;; until it timed out, three times, :no-escape; now it notches the nearest wall
+  (let [[w sim _] (escape-run flooded-cave
+                              [4.5 30.0 4.5]
+                              120000
+                              {:inventory {[:hotbar 0]
+                                           {:item wooden-pickaxe :count 1 :durability 59}}})]
+    (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (trap/dry-land? w))
+    (is (= [1 4] (let [[x _ z] (path/feet-cell (:player/pos w))] [x z]))
+        "out of the pool, in the notch's column")
+    (is (= [0 0] (map #(terrain/block-at w %) [[1 33 4] [1 34 4]]))
+        "the notch is two cells over the wall's top")
+    (is (empty? (:sim/violations sim)))))
+
 (def shore
   "A plain at y 64 with a pond six by six and two deep eight blocks east of the spawn: the
    gym's shore trial, in the model."
