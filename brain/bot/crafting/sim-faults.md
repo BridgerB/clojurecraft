@@ -11,7 +11,7 @@ sourceRefs:
   - src/clojurecraft/sim.clj#Fault knobs are inputs, not hidden state
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :container-close]
   - src/clojurecraft/sim.clj#defn init
-  - src/clojurecraft/sim.clj#:sim/lag-ticks in sim0 delays every server→client packet by that many ticks,
+  - "src/clojurecraft/sim.clj#:sim/lag-ticks in sim delays every server->client packet by that many ticks"
   - test/clojurecraft/sim_test.clj#no-blind-take-under-lag-or-a-dropped-click
   - src/clojurecraft/sim.clj#(update :sim/violations conj [:place-into-player dest])
   - test/clojurecraft/sim_test.clj#a-lost-click-is-a-stale-window-never-a-blind-take

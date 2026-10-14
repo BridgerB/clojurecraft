@@ -16,6 +16,12 @@ sourceRefs:
   - src/clojurecraft/failure.clj#defn mark
   - test/clojurecraft/simrace_test.clj#a-failure-the-server-caused-is-marked-not-the-bots
   - src/clojurecraft/simrace.clj#defn shard
+  - "src/clojurecraft/simrace.clj#A failed run's moment as a value to keep"
+  - "src/clojurecraft/simrace.clj#A snapshot played on for budget-ms of simulated time"
+  - src/clojurecraft/sim.clj#defn play-on
+  - bb/clojurecraft/issue_check.clj#defn fetch!
+  - test/clojurecraft/issues_test.clj#no-issues-failing-moment-fails-the-same-way-again
+  - test/clojurecraft/simrace_test.clj#a-failed-runs-moment-round-trips-and-plays-on-to-the-same-stop
   - src/clojurecraft/simrace.clj#defn jobs
   - bb/clojurecraft/failures.clj#defn report!
   - .github/workflows/simrace.yml#bb failures report
@@ -56,6 +62,9 @@ Every failed run is marked (`failure/mark`): `:run/signature` (`failure/signatur
 - the issues are read again right before one is opened, so two reports finishing together do not open the same one twice;
 - each report adds one section to the issue's body (how many runs, sim or real, the last intents, how many landings, up to five reproductions: the sim race's `--world f --seed s --seeds 1` at the commit, or the real bot's recording), and labels it `sim`, `real` or both: a failure only the model produces may be the model's, not the bot's;
 - at most ten new issues a report.
+
+## The issue check: a validation over a recorded moment
+A fix's one check (issue #77) never runs from spawn. The moment a sim run failed is a value: when a run fails, `simrace/play!` writes a **snapshot** beside its runs (`<out>/snapshots/<set>-<n>-<seed>.edn.gz`, `simrace/snapshot`): the bot's world and the model's state one tick before the stop (`sim/run+`'s `:before`, the plan still running), the captured world's file and the chunk keys held (chunks and columns are reattached from the file, never copied: 40 KB for a 13-minute run), the facts as `d/serializable`, the seed, the target, the commit and the signature. `simrace.yml` uploads them; `bb failures` names each sim reproduction's snapshot and artifact in the issue; `bb issue-check fetch <n>` brings an issue's snapshots into `test/issues/<n>/`, which the fix's pull request commits, as `test/recordings` holds recordings. `issues_test` plays every snapshot on (`simrace/play-snapshot`: `sim/play-on` for two simulated minutes until the plan is done or failed) and fails when the signature recurs (`simrace/recurs?`), naming the issue; still running at the budget, or failed otherwise, both pass: the run got past this moment. `issue.yml` on a `fix/<n>` pull request restores the captured worlds and runs that test alone, seconds of play; `test.yml` runs it on main too, so a fixed issue's snapshot stays and a bug that comes back fails it (Simulant's rule: write the validation, run it against past results, never re-run the system). `clojure -M:simrace --snapshot f` plays one by hand (one SNAPSHOT line). Before this, `issue.yml` replayed ten reproductions from spawn to the Nether: 11 minutes, nearly all of it history the sim race had already run.
 
 ## First result
 The local 49-column world, two runs to the Nether, 16 s wall: both reached wood, kit, pickaxe, cobblestone, stone pickaxe and furnace in about 15 simulated minutes, then failed `[:ingots :no-pickaxe]`, the reason five of runner 13's bots stopped with in race 38340947798.
