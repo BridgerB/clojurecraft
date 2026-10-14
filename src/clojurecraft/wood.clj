@@ -8,6 +8,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
+            [clojurecraft.scoop :as scoop]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
@@ -144,11 +145,38 @@
             [nil #{}]
             (range far-candidates)))))
 
+(defn hunt
+  "Under the open sky with trunks remembered and no route to any: a walk toward the trees, the
+   way a water hunt goes out (scoop/hunt-targets: the ground hunt-distance out along eight
+   bearings, never nearer the landing than the feet are now), to the ground nearest the nearest
+   remembered log, the first of the three such a route reaches (scoop/first-walk), tagged
+   :intent/for :log-hunt. The chunks it loads are remembered as they arrive, so the next pass
+   finds the way round. nil with no log remembered, underground, or with no ground a route
+   reaches. Race 38477665442 bots Clj_r14 and Clj_r20 landed on a lake's shore with the forest
+   across the water: every trunk was in the near band and no route reached one, and each waited
+   :no-log until the plan failed (issue #57). Bot Clj_r15 came up out of its mine for the wood
+   of a spare pickaxe with the trees a hundred blocks off, past the pathfinder's budget, and
+   waited the same way (issue #87)."
+  [world]
+  (let [logs (memory/nearest-first (game/eye world)
+                                   far-radius
+                                   (memory/positions-now world blocks/log-states))]
+    (when (and (seq logs) (terrain/under-sky? world (intent/feet world)))
+      (scoop/first-walk world
+                        :log-hunt
+                        (sort-by #(physics/horizontal-distance % (first logs))
+                                 (scoop/hunt-targets world))))))
+
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
    trunk a route reaches (near-walk). Any goal that needs a log uses this. With none in the near
-   band a route reaches, climb out to the trees instead of waiting :no-log."
+   band a route reaches, climb out to the trees, or walk toward them (hunt), instead of waiting
+   :no-log."
   [world]
-  (or (continue-gather world) (near-walk world) (climb-out world) {:plan/wait :no-log}))
+  (or (continue-gather world)
+      (near-walk world)
+      (climb-out world)
+      (hunt world)
+      {:plan/wait :no-log}))
 
 

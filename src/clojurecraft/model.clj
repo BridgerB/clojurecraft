@@ -171,7 +171,7 @@
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
    [:intent/target "block position it acts on or walks to" "most intents"]
    [:intent/for
-    "what the intent serves (:log, a mining row's id), so chains continue only their own"
+    "what the intent serves (:log, :log-hunt, a mining row's id), so chains continue only their own"
     "gather-chain intents"]
    [:intent/pickup?
     "a walk toward a block to mine from beside: it ends where the dug block's drop lands in the pickup box"

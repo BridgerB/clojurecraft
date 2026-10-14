@@ -687,3 +687,40 @@
         "a collect that failed there still is")
     (is (= 1 (:plan/attempts (failed {:intent/kind :redig :intent/target [1 64 0]})))
         "the attempt counts")))
+
+(def shore
+  "Chunks cx -3..3, cz -2..2 of bare floor, the bot's own among them, with a trunk at [40 64 8]
+   on an island in a moat of water four wide: in the near band, standing on ground, and no
+   route reaches it."
+  (into {}
+        (for [cx (range -3 4)
+              cz (range -2 3)]
+          [[cx cz]
+           (world/column (if (= [2 0] [cx cz])
+                           (merge (into {}
+                                        (for [x (range 4 13)
+                                              z (range 4 13)
+                                              :when (not= [8 8] [x z])]
+                                          [[x 63 z] blocks/water-base]))
+                                  {[8 64 8] 136 [8 65 8] 136})
+                           {}))])))
+
+(deftest with-no-route-to-any-trunk-the-bot-walks-toward-the-trees
+  ;; race 38477665442 bots Clj_r14 and Clj_r20 (issue #57) landed on a lake's shore with the
+  ;; forest across the water: no route reached a trunk, and each waited :no-log until the plan
+  ;; failed. Under the open sky the gather now hunts toward the nearest log, as a water hunt
+  ;; goes out, so the chunks on the way are remembered and a route round is found
+  (let [w (-> (remembered {} [8.5 64.0 8.5])
+              (assoc :world/chunks shore)
+              (memory/remember-column [2 0] (shore [2 0])))
+        i (wood/gather-next w)]
+    (is (= [40 64 8]
+           (memory/nearest-log w (game/eye w) wood/search-radius #{} wood/standing-trunk?)))
+    (is (not (intent/routable? w (wood/log-walk w [40 64 8]))) "sealed in stone")
+    (is (nil? (wood/near-walk w)))
+    (is (nil? (wood/climb-out w)) "under the open sky: nothing to climb")
+    (is (= {:intent/kind :walk :intent/target [48 64 8] :intent/for :log-hunt} i)
+        "forty blocks east, toward the trunk")
+    (is (= {:plan/wait :no-log}
+           (wood/gather-next (assoc (remembered {} [8.5 64.0 8.5]) :world/chunks shore)))
+        "with no log remembered there is nowhere to hunt toward")))
