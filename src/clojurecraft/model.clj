@@ -141,7 +141,11 @@
     "a run that plays every step up to its target (--chain true): reached steps stay reached"
     "a chained :go"]
    [:plan/reached "the targets a chained run has reached; choose skips them (plan/reach)"
-    "a chained plan"] [:plan/go-at "the landing a fixture named" "from a :go with :go/at"]
+    "a chained plan"]
+   [:plan/reached-after
+    "each reached target: ms from the plan going active to reaching it (plan/reach)"
+    "a chained plan, once a target is reached"]
+   [:plan/go-at "the landing a fixture named" "from a :go with :go/at"]
    [:plan/since "ms the status last changed" "from the :go event"]
    [:plan/blacklist
     "targets that failed, skipped when choosing; never the cell a :place or a :redig chose"

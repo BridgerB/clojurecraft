@@ -231,6 +231,8 @@ jobs:
           { echo '### the wall: failures by the stage the bot was on, furthest first'; echo '```'; cat wall.txt; echo '```';
             echo '### failures'; echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - name: The results page (gh-pages, issue #116)
+        env:
+          GH_TOKEN: ${{ github.token }}   # the run's start, the issues the round's signatures are filed as
         run: |
           bb page round runs real "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(git show -s --format=%cI "$GITHUB_SHA")" > round.edn
           cat round.edn

@@ -147,17 +147,19 @@
    :plan/reached and stays there for the run, the escapes excepted. A run from spawn spends what
    an earlier step made (the pickaxe takes the kit's sticks, the water bucket the bucket): the
    step was reached, so it is not done again; a tool that breaks is made again by the needs of
-   the step that uses it. A gym stage, one target, keeps re-deriving."
+   the step that uses it. A gym stage, one target, keeps re-deriving. Each milestone's time is
+   kept beside it, ms since the plan began (:plan/reached-after): how fast a stage goes."
   [world table]
   (if (:plan/chain? world)
-    (update world
-            :plan/reached
-            (fnil into #{})
-            (comp (remove :goal/always?)
-                  (remove #(contains? (:plan/reached world #{}) (:goal/id %))) ; reached is reached: never asked again
-                  (filter #(done-by world %))
-                  (map :goal/id))
-            (in-play world table))
+    (let [new (into []
+                    (comp (remove :goal/always?)
+                          (remove #(contains? (:plan/reached world #{}) (:goal/id %))) ; reached is reached: never asked again
+                          (filter #(done-by world %))
+                          (map :goal/id))
+                    (in-play world table))
+          after (- (:time/now world 0) (:plan/since world (:time/now world 0)))]
+      (cond-> (update world :plan/reached (fnil into #{}) new)
+        (seq new) (update :plan/reached-after (fnil into {}) (map (fn [g] [g after])) new)))
     world))
 
 (defn begin
