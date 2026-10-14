@@ -131,7 +131,7 @@
   :problem/done
   "The server's inventory read shows a stone_pickaxe after a run that started with a wooden pickaxe, two sticks and a crafting table."
   :problem/last-failure
-  "clojurecraft has never attempted this; #9 stopped at three cobblestone and left the craft to this stage."
+  "clojurecraft has never attempted this; #9 stopped at three cobblestone and left the craft to this stage. Race 38477665442 (issues #56, #58, #54): the stone mine dug the bot two deep beside a cliff, into a notch under an overhang by a pond, onto a ledge of its own quarry and onto a lakeshore under a cliff; the sticks for the pickaxe sent it for a log, every trunk was up a wall no jump climbs, twelve walks failed :no-path, and with the open sky over its feet it cut nothing. Fixed: a pit is not out of the ground (stairs/out?), so stairs up are cut from it (plan-test a-pit-under-the-sky-is-climbed-out-of)."
   :problem/sources ["docs/issues/07-furnace-iron-bucket-flint-and-steel.md"
                     "brain/bot/crafting/make-goals.md" "brain/bot/plan/hardness-and-tools.md"]}
  {:problem/stage :iron-kit

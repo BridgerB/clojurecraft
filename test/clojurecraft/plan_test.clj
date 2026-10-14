@@ -10,6 +10,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.spec]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.swim]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.wood :as wood]
@@ -153,6 +154,24 @@
     (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
            (wood/gather-next w))
         "climbed for, never walked at")))
+
+(deftest a-pit-under-the-sky-is-climbed-out-of
+  ;; race 38477665442 (issues #56, #58, #54): the stone mine dug the bot two deep beside a cliff
+  ;; (Clj_r20), into a notch under an overhang by a pond (Clj_r09), onto a ledge of its own
+  ;; quarry (Clj_r01) and onto a lakeshore under a cliff (Clj_r12). Every trunk was up a wall
+  ;; no jump climbs, twelve walks failed :no-path in a few seconds, and with the open sky over
+  ;; the feet nothing was cut. A pit is not out of the ground: stairs up are cut from it
+  (let [pit (remembered {[8 62 8] blocks/air [8 63 8] blocks/air [12 64 8] 136} [8.5 62.0 8.5])
+        feet (intent/feet pit)]
+    (is (terrain/under-sky? pit feet) "the sky is over the pit")
+    (is (not (stairs/out? pit feet)) "but no level step leads onto open ground")
+    (is (not (intent/routable? pit (wood/log-walk pit [12 64 8]))) "two deep: no jump climbs it")
+    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+           (wood/gather-next pit))))
+  (let [ground (remembered {[12 64 8] 136 [14 64 8] 1 [14 65 8] 1 [14 66 8] 1} [8.5 64.0 8.5])]
+    (is (stairs/out? ground (intent/feet ground)))
+    (is (= :walk (:intent/kind (wood/gather-next ground)))
+        "on open ground the trunk is walked to")))
 
 (deftest a-near-trunk-a-route-reaches-is-walked-to
   ;; the plain case, unchanged: on the surface with a trunk in reach the gather walks to it

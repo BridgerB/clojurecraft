@@ -8,6 +8,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -89,13 +90,18 @@
 
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest
-   one a route reaches (intent/routable?), under the open sky or not. Underground, with none of
-   those a route reaches: walk up the air already dug (intent/opening) and cut stairs only when
-   that mouth cannot be walked to (stairs/out? ends them; terrain/top-y is the top of the world).
-   nil when no trunk is remembered yet. Full run 29ef069 cut a stair at spawn before any tree
-   was remembered, failed :stair-not-taken, and the plan then waited :no-log. Full run 4528031
-   remembered the trees, found no route through the mine, and cut a new stair; the only pickaxe
-   broke."
+   one a route reaches (intent/routable?), under the open sky or not. Not out of the ground
+   (stairs/out?: the open sky over the feet and a level step onto open ground beside them), with
+   none of those a route reaches: walk up the air already dug (intent/opening) and cut stairs
+   only when that mouth cannot be walked to (stairs/out? ends them; terrain/top-y is the top of
+   the world). A pit under the open sky is not out: race 38477665442's stone mines dug the bot
+   two deep beside a cliff (Clj_r20), into a notch under an overhang by a pond (Clj_r09), onto
+   a ledge of its own quarry (Clj_r01) and onto a lakeshore under a cliff (Clj_r12); every trunk
+   was up the wall no jump climbs, twelve walks failed :no-path, and the sky over the feet said
+   there was nothing to cut. nil when no trunk is remembered yet. Full run 29ef069 cut a stair
+   at spawn before any tree was remembered, failed :stair-not-taken, and the plan then waited
+   :no-log. Full run 4528031 remembered the trees, found no route through the mine, and cut a
+   new stair; the only pickaxe broke."
   [world]
   (let [feet (intent/feet world)
         trunks (->> (memory/positions-now world blocks/log-states)
@@ -106,7 +112,7 @@
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
-          (when-not (terrain/under-sky? world feet)
+          (when-not (stairs/out? world feet)
             (or (intent/opening world)
                 {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}))))))
 

@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, wood, intents]
 aliases: [gather-next, continue-gather, intent/for :log, max-clears, log chain, wood chain]
 status: verified
-lastUpdated: 2026-10-12
+lastUpdated: 2026-10-14
 verifiedAgainst: 5be14e7
 sourceRefs:
   - src/clojurecraft/wood.clj#defn continue-gather
@@ -13,6 +13,8 @@ sourceRefs:
   - src/clojurecraft/wood.clj#defn near-walk
   - test/clojurecraft/plan_test.clj#a-near-trunk-with-no-route-is-climbed-for-too
   - src/clojurecraft/wood.clj#defn climb-out
+  - test/clojurecraft/plan_test.clj#a-pit-under-the-sky-is-climbed-out-of
+  - src/clojurecraft/stairs.clj#defn out?
   - src/clojurecraft/wood.clj#def max-clears 6
   - test/clojurecraft/sim_test.clj#a-low-canopy-is-cleared-to-reach-the-drop
   - test/clojurecraft/plan_test.clj#underground-with-no-log-the-bot-waits
@@ -32,7 +34,7 @@ related:
 Getting a log is a chain of three intents, each started by the planner after the previous one finished: walk to the trunk, dig the log, collect the drop. `wood.clj` owns it and any goal that needs logs reuses it (`:wood` directly, `:kit` through the recipe graph's `:gather`).
 
 ## Key files
-- `wood.clj`, `gather-next` - continue the chain if one is in flight, else start toward the nearest remembered trunk bottom a route reaches (`near-walk`: `memory/nearest-log`, radius 48, no more than 12 above or below the eye, of the three nearest the first `intent/routable?` accepts) at the log nearest feet height (`trunk-target`). A trunk no route reaches is passed over, never walked at: sim race 38395033917 (world R3/24, 108 runs, issue #75) stood at the bottom of two staircases that met, the second having dug out the first's riser, with no way up; each walk to a trunk in the band failed `:no-path` the tick it started and blacklisted one trunk, twelve a second, until the plan failed. With none in that band a route reaches, and a trunk remembered further off, `climb-out`: walk to the nearest within 256 that `intent/routable?` accepts, under the open sky or not. Underground, with none of those a route reaches, walk up the air already dug (`intent/opening`), and cut stairs only when that mouth cannot be walked to. With no trunk remembered, `{:plan/wait :no-log}`.
+- `wood.clj`, `gather-next` - continue the chain if one is in flight, else start toward the nearest remembered trunk bottom a route reaches (`near-walk`: `memory/nearest-log`, radius 48, no more than 12 above or below the eye, of the three nearest the first `intent/routable?` accepts) at the log nearest feet height (`trunk-target`). A trunk no route reaches is passed over, never walked at: sim race 38395033917 (world R3/24, 108 runs, issue #75) stood at the bottom of two staircases that met, the second having dug out the first's riser, with no way up; each walk to a trunk in the band failed `:no-path` the tick it started and blacklisted one trunk, twelve a second, until the plan failed. With none in that band a route reaches, and a trunk remembered further off, `climb-out`: walk to the nearest within 256 that `intent/routable?` accepts, under the open sky or not. Not out of the ground (`stairs/out?`: the open sky over the feet and a level step onto open ground beside them; a pit under the sky is not out), with none of those a route reaches, walk up the air already dug (`intent/opening`), and cut stairs only when that mouth cannot be walked to. Race 38477665442 (issues #56, #58, #54): the stone mine dug the bot two deep beside a cliff, onto a ledge of its quarry, onto a lakeshore under a cliff; every trunk was up a wall no jump climbs, twelve walks failed `:no-path`, and the sky over the feet said there was nothing to cut (`a-pit-under-the-sky-is-climbed-out-of`). With no trunk remembered, `{:plan/wait :no-log}`.
 - `wood.clj`, `continue-gather` - reads `:plan/last` (the intent that just finished); only intents tagged `:intent/for :log` continue. The plain links (walk → dig → collect) are `intent/chain-next`, the same chain a mining row's `continue-mine` follows ([[mine-act]]); wood adds the leaf clears and their resume.
 - `wood.clj`, `max-clears` - at most 6 leaf digs per drop.
 
