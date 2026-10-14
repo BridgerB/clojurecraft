@@ -33,3 +33,9 @@
    the reason is not the bot's play. A passing RESULT is unchanged."
   [r]
   (cond-> r (not (:ok r)) (assoc :run/signature (signature r) :run/infra? (infra? r))))
+
+(defn cut
+  "A marked RESULT of a run the churn's job ended while it still played (issue #127): it says
+   nothing about the bot's play, so it is :run/cut? and, like a server's disconnect, never filed."
+  [r]
+  (assoc r :run/cut? true :run/infra? true))
