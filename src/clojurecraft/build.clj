@@ -22,6 +22,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
@@ -832,15 +833,25 @@
   [world]
   (or (lava-walk world) (uncap world) (toward-lava world)))
 
+(defn held-first
+  "What the needs planner does for the tools the row holds (:goal/holds, a pickaxe for the way
+   down to lava and the mold's digs) before a build starts: an intent that makes one, a wait,
+   or nil when they are held. Sim race 38477665389 (issue #70, 150 runs at one landing) dug for
+   its stance with no pickaxe left and failed :needs-tool three times."
+  [world goal table]
+  (when-let [holds (:goal/holds goal)] (make/decide world (assoc goal :goal/provides holds) table)))
+
 (defmethod plan/next-intent :build
-  ;; build the row's plan (:goal/build) at the site remembered, else at one chosen now (the
-  ;; :build intent remembers it); with none, hunt for lava (lava-hunt), else wait :no-site
-  [world {:goal/keys [build]} _]
+  ;; the tools the row holds first (held-first); then build the row's plan (:goal/build) at the
+  ;; site remembered, else at one chosen now (the :build intent remembers it); with none, hunt
+  ;; for lava (lava-hunt), else wait :no-site
+  [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]} (memory/site world)
         [origin facing] (if origin [origin facing] (choose-site world))]
-    (cond origin
-          {:intent/kind :build :intent/build build :intent/origin origin :intent/facing facing}
-          :else (or (lava-hunt world) {:plan/wait :no-site}))))
+    (or (held-first world goal table)
+        (cond origin
+              {:intent/kind :build :intent/build build :intent/origin origin :intent/facing facing}
+              :else (or (lava-hunt world) {:plan/wait :no-site})))))
 
 (defmethod plan/done-by :built?
   [world {:goal/keys [build]}]

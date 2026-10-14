@@ -1152,14 +1152,15 @@
 
 (def kit
   "What the gym gives a cast: buckets of lava and water, an empty one, cobblestone, flint and
-   steel."
+   steel, and the stone pickaxe the rows hold."
   {[:hotbar 0] {:item (recipe/item-id :lava_bucket) :count 1}
    [:hotbar 1] {:item (recipe/item-id :water_bucket) :count 1}
    [:hotbar 2] {:item (recipe/item-id :bucket) :count 1}
    [:hotbar 3] {:item (recipe/item-id :cobblestone) :count 64}
    [:hotbar 4] {:item (recipe/item-id :flint_and_steel) :count 1}
    [:hotbar 5] {:item (recipe/item-id :cobblestone) :count 64}
-   [:hotbar 6] {:item (recipe/item-id :cobblestone) :count 64}})
+   [:hotbar 6] {:item (recipe/item-id :cobblestone) :count 64}
+   [:hotbar 8] {:item (recipe/item-id :stone_pickaxe) :count 1}})
 
 (defn build-run
   "Run a :build of kind from build-origin facing south over blocks, from spawn with inv, until it

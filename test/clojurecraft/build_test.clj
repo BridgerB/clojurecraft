@@ -10,6 +10,8 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.path :as path]
+            [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.world :as world]))
 
 (def origin [100 64 200])
@@ -242,3 +244,19 @@
     (is (nil? (build/choose-site (standing-at (open-ground (merge roofed sealed)) feet-pos)))
         "lava under stone: no station")
     (is (some? (site-at {})) "lava in the floor, open: a station")))
+
+(def cast-one-row (first (filter #(= :cast-one (:goal/id %)) plan/goals)))
+
+(deftest a-build-row-holds-a-pickaxe-before-it-starts
+  ;; sim race 38477665389 (issue #70, 150 runs at one landing): the cast dug for its stance with
+  ;; no pickaxe left and failed :needs-tool three times. The rows hold one, and the needs
+  ;; planner makes it first
+  (let [w (standing-at (open-ground trench) feet-pos)
+        pickaxe {0 {:item (recipe/item-id :stone_pickaxe) :count 1}}]
+    (is (= {:plan/wait :no-log} (plan/next-intent w cast-one-row plan/goals))
+        "nothing held and no tree known: the pickaxe waits for a log")
+    (is (= :build
+           (:intent/kind
+            (plan/next-intent (assoc w :player/inventory pickaxe) cast-one-row plan/goals)))
+        "a pickaxe held: the build")))
+
