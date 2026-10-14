@@ -24,7 +24,6 @@ sourceRefs:
   - test/clojurecraft/sim_test.clj#gravel-over-a-broken-block-falls-into-it
   - "test/clojurecraft/sim_test.clj#main's-own-loop-against-the-model-through-channels"
   - src/clojurecraft/sim.clj#def dig-ms
-  - src/clojurecraft/sim.clj#observed live on 26.1.2: the breaker gets the block update, then the ack
   - src/clojurecraft/sim.clj#defn finish-dig
   - test/clojurecraft/sim_test.clj#collects-one-log-against-the-model
   - test/clojurecraft/sim_test.clj#the-wood-goal-holds-in-generated-forests

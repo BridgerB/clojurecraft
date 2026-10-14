@@ -119,6 +119,21 @@
                  :player/inventory {0 {:item (blocks/items :wooden_pickaxe) :count 1}})]
     (is (nil? (place/niche w)) "iron ore all round, and only a wooden pickaxe")))
 
+(deftest no-niche-under-gravel
+  ;; race 38477665442 bot Clj_r14, at y 16 for the ingots: the gravel over each side niche fell
+  ;; into it as soon as it was dug, seven digs in turn, then the table went in as the gravel
+  ;; came down and was refused three times
+  (let [gravel (blocks/default-state :gravel)
+        rock (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 2 9) y [64 65]] [[x y 8] 0]))
+                    {[8 65 9] gravel [8 65 7] gravel})
+        at (fn [rock]
+             (place/niche (assoc (standing [8.5 64.0 8.5])
+                                 :world/chunks {[0 0] (world/column rock)}
+                                 :plan/go-at [2.5 64.0 8.0])))]
+    (is (= [9 64 8] (at rock)) "gravel over both side walls: only the wall ahead is left")
+    (is (= [8 64 9] (at (assoc rock [8 65 9] 1))) "stone over one side: that side")))
+
 (deftest a-block-is-never-placed-on-a-table
   ;; gym batch iron-a5 run 4: the only spot was on its crafting table, and a right-click on a
   ;; table opens it, so the gravel was never placed and the intent failed :rejected three times

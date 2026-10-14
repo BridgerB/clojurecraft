@@ -160,9 +160,11 @@
 
 (defn niche
   "A cell beside the feet at their level that, dug out, is a spot no way runs through: solid,
-   with solid under and over it, no fluid beside it (the dig would refuse it), not a block the
-   held tools cannot drop (batch iron-a3 run 5 failed placing its furnace :needs-tool three
-   times on one), neither a block
+   with solid under and over it, nothing over it that falls (gravel or sand fill the niche
+   again as soon as it is dug: race 38477665442 bot Clj_r14 dug two such niches seven times in
+   turn and was refused), no fluid beside it (the dig would refuse it), not a block the held
+   tools cannot drop (batch iron-a3 run 5 failed placing its furnace :needs-tool three times
+   on one), neither a block
    that is never dug nor one the bot placed (a table in the last niche); nil when none. Where a
    staircase has no spot, the wall gives one: the side nearest the landing (:plan/go-at), never
    the wall ahead, where the way goes on (batch iron-a2 run 1 put its table there, and its
@@ -179,6 +181,7 @@
                  :when (and (solid-at? world c)
                             (solid-at? world (update c 1 dec))
                             (solid-at? world (update c 1 inc))
+                            (not (blocks/falls? (terrain/block-at world (update c 1 inc))))
                             (not (intent/exposes-fluid? world c))
                             (not= :needs-tool (intent/choose-tool world (terrain/block-at world c)))
                             (not (contains? (into intent/never-dug memory/placed-kinds)
