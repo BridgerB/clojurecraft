@@ -22,6 +22,7 @@ on:
 
 permissions:
   contents: write                       # the results page's branch, gh-pages (bb page publish)
+  actions: write                        # each publish dispatches pages.yml, the page's deployment
   issues: write
 
 concurrency:
@@ -30,7 +31,7 @@ concurrency:
 
 jobs:
   plan:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       runners: ${{ steps.read.outputs.runners }}
       count: ${{ steps.read.outputs.count }}
@@ -60,7 +61,7 @@ jobs:
     # the captured worlds are made once by simworld.yml (dispatch it when a set's key changes) and
     # only restored here: a miss fails the job at once
     needs: plan
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 355              # GitHub kills a job at 360; a runner plays :simrace/budget-minutes (330)
     strategy:
       fail-fast: false
@@ -173,7 +174,7 @@ jobs:
     # the next round on main as it is now, queued as the group's pending run (see race.yml)
     needs: sim
     if: ${{ !cancelled() && vars.RACE_CONTINUOUS != 'false' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       actions: write
