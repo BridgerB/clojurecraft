@@ -140,5 +140,6 @@ Vanilla **26.1.2 = protocol 775**, offline mode, Java 25, compression threshold 
 
 ## Rules
 
+- **Nothing over 3 minutes on the MacBook.** A test suite, a sim or model run, a gym trial, a race or a world build runs on GitHub Actions (`test.yml`, `unit.yml`, `gym.yml`, the races), never locally: push, watch the run in the background (`gh run watch`), and keep working on what does not depend on it. Locally only a single new test var that takes seconds, the static checks (`bb check`) and quick scripts. A local command running past 3 minutes is stopped and moved to the runners. A failure on the runners is read from its artifact (the recording, the snapshot), not re-run locally. A dispatch to another agent carries this rule.
 - Conventional-commit prefixes. **Never** add AI attribution (`Co-Authored-By`, "Generated with Claude", session links) anywhere; the commit-msg hook (`scripts/check-commit-msg`) refuses a message that has any. Never push or open a PR without explicit approval.
 - `resources/clojurecraft/*.edn` are generated; regenerate with `bb datagen`, don't hand-edit. Two are hand-written: `goals.edn` (the goal table) and `problems.edn` (a problem statement per stage, written before the stage's goal; `problems_test` holds it).
