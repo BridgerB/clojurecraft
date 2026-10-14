@@ -203,3 +203,26 @@
     (is (= {:intent/kind :walk :intent/target [7 63 8] :intent/for :build}
            (build/op-child w hill-intent op))
         "the sand cell, which a route reaches, is the stand")))
+(def trench
+  "Lava sources in the floor along z 15: a station for a site west of it, with the floor at z 14
+   to stand on."
+  (into {} (for [x (range 16)] [[x 62 15] blocks/lava-base])))
+
+(def feet-pos [10.5 63.0 10.5])
+
+(defn site-at
+  "The site chosen standing at feet-pos over the plain, with extra blocks laid over it."
+  [extra]
+  (build/choose-site (standing-at (open-ground (merge extra trench)) feet-pos)))
+
+(deftest a-station-is-near-in-three-dimensions-and-open-to-the-air
+  ;; race 38477665442 took the lava sea ninety blocks under the feet, within sixteen on the plane,
+  ;; for a station, and walked at it; and a scoop at a roofed source fails :target-gone (#91)
+  (let [deep (into {} (for [x (range 16)] [[x 20 x] blocks/lava-base]))
+        roofed (into {} (for [x (range 16)] [[x 61 15] blocks/lava-base]))
+        sealed (into {} (for [x (range 16)] [[x 62 15] 1]))]
+    (is (nil? (build/choose-site (standing-at (open-ground deep) feet-pos)))
+        "lava forty under: no station")
+    (is (nil? (build/choose-site (standing-at (open-ground (merge roofed sealed)) feet-pos)))
+        "lava under stone: no station")
+    (is (some? (site-at {})) "lava in the floor, open: a station")))

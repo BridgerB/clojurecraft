@@ -418,21 +418,28 @@
        (map (fn [[x y z _]] [x y z]))
        (filter #(= blocks/lava-base (terrain/block-at world %)))))
 
+(defn stands-beside
+  "[stand src] for each cell the feet could stand in beside the cell over source src (the
+   source diagonally below the feet, never beside them)."
+  [world [x y z :as src]]
+  (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+        :let [stand [(+ x dx) (inc y) (+ z dz)]]
+        :when (path/standable? world stand)]
+    [stand src]))
+
 (defn station-among
   "[stand source] to refill lava from, of sources: a source outside the footprint within
-   station-radius of origin, and a cell to stand in beside the cell over it (the source diagonally
-   below the feet, never beside them), nearest the origin first; nil when none."
+   station-radius of origin in all three dimensions (on the plane alone, race 38477665442
+   took the lava sea ninety blocks under the feet for a station), open to the air over it
+   (scoop/scoopable?: a scoop at a roofed source fails :target-gone, issue #91), and a cell to
+   stand in beside the cell over it (stands-beside), nearest the origin first; nil when none."
   [world sources origin facing]
   (->> sources
-       (filter #(<= (physics/horizontal-distance (physics/centre %) (physics/centre origin))
-                    station-radius))
+       (filter #(<= (physics/distance (physics/centre %) (physics/centre origin)) station-radius))
        (remove (fn [[x _ z]] (footprint? origin facing [x z])))
+       (filter #(scoop/scoopable? world % :lava))
        (sort-by #(physics/distance (physics/centre %) (physics/centre origin)))
-       (mapcat (fn [[x y z :as src]]
-                 (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                       :let [stand [(+ x dx) (inc y) (+ z dz)]]
-                       :when (path/standable? world stand)]
-                   [stand src])))
+       (mapcat #(stands-beside world %))
        first))
 
 (defn station
