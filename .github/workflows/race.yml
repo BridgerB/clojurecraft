@@ -30,6 +30,7 @@ on:
 
 permissions:
   contents: write                       # the results page's branch, gh-pages (bb page publish)
+  actions: write                        # each publish dispatches pages.yml, the page's deployment
   issues: write                         # the failures' issues
 
 concurrency:
@@ -38,7 +39,7 @@ concurrency:
 
 jobs:
   plan:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       runners: ${{ steps.read.outputs.runners }}
       servers: ${{ steps.read.outputs.servers }}
@@ -66,7 +67,7 @@ jobs:
     # the landing sets' worlds are built once by world.yml (dispatch it when a set's key changes)
     # and only restored here: a miss fails the job at once
     needs: plan
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 355              # GitHub kills a job at 360; the slots stop starting bots near :race/run-minutes (330)
     strategy:
       fail-fast: false
@@ -219,7 +220,7 @@ jobs:
     # already next).
     needs: race
     if: ${{ !cancelled() && vars.RACE_CONTINUOUS != 'false' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       actions: write

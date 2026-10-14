@@ -1,0 +1,6 @@
+# ubuntu-26.04 is a GitHub-hosted runner, generally available since October 2026 (actions/runner-images
+# issue 14748); actionlint 1.7.12, the latest release, predates it and calls it unknown. Drop this
+# once an actionlint release knows the label.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

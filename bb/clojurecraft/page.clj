@@ -634,6 +634,17 @@
   [r]
   ((juxt :round/run :round/kind :round/runner :round/batch) r))
 
+(defn deploy!
+  "Ask GitHub to deploy gh-pages (pages.yml): the branch is the page's data, the deployment is
+   what the site serves. A failed request is printed, never thrown: the next publish asks again."
+  []
+  (let [r (p/shell {:continue true :out :string :err :string}
+                   "gh" "workflow"
+                   "run" "pages.yml"
+                   "--repo" (repo)
+                   "--ref" "main")]
+    (println (if (zero? (:exit r)) "deploy requested" (str "deploy request failed: " (:err r))))))
+
 (defn publish-round!
   "Append round (a value) to rounds.edn on the gh-pages branch (replacing an earlier entry with
    the same run, kind, runner and batch), rebuild index.html there, commit and push; a push another
@@ -673,7 +684,8 @@
                                             "origin" (str "HEAD:" branch))))]
           (cond pushed
                 (do (println "published round" (:round/run round) "to" branch)
-                    (p/shell {:continue true} "git" "worktree" "remove" "--force" dir))
+                    (p/shell {:continue true} "git" "worktree" "remove" "--force" dir)
+                    (deploy!))
                 (and (pos? (dec tries)) fetched)
                 (do (git! "." "fetch" "origin" branch) (recur (dec tries)))
                 :else (throw (ex-info "could not push the page" {:branch branch}))))))))

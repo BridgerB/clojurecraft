@@ -38,7 +38,7 @@ env:
 
 jobs:
   plan:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -87,7 +87,7 @@ jobs:
   trial:
     needs: [plan, world]
     name: ${{ matrix.goal }}-${{ matrix.run }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: ${{ matrix.minutes }}
     strategy:
       fail-fast: false
@@ -160,7 +160,7 @@ jobs:
   aggregate:
     needs: [plan, trial]
     if: ${{ !cancelled() && needs.plan.result == 'success' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
