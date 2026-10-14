@@ -400,7 +400,8 @@
   [world {:event/keys [now]}]
   (let [world (-> world
                   (assoc :time/now now)
-                  (update :time/tick inc))]
+                  (update :time/tick inc)
+                  (terrain/forget-stale now))]
     (if (and (physics-ready? world) (not (:player/dead? world)))
       (let [controls (:player/controls world)]
         (-> (physics/step (terrain/solid-fn world) (terrain/fluid-fn world) world controls)

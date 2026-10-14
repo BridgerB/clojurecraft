@@ -94,6 +94,9 @@
    ;; ---- the world as last seen, and as remembered
    [:world/chunks "{[cx cz] column}: chunks the server has sent and not forgotten" "always"]
    [:world/blocks "{[x y z] state}: block updates and own breaks over the chunks" "always"]
+   [:world/unconfirmed
+    "{[x y z] ms}: cells the bot's own dig emptied in the overlay before the server said so, and when; the server's block-update there (the break, or the block put back) takes each out, and one the server stays silent on for terrain/unconfirmed-ms is forgotten, the chunk's block back in view"
+    "after the first own break"]
    [:world/entities "{entity-id {:entity/type :entity/pos :entity/seen-at}}: tracked items"
     "always"]
    [:world/facts "memory: DataScript value of append-only observations, never retracted" "always"]

@@ -222,7 +222,9 @@
     (is (= [[:click-inventory-while-open 0]] (:sim/violations sim)))
     (is (= [] (:sim/out sim)) "vanilla ignores it: no answer")))
 
-(deftest an-early-finish-does-not-break-the-block
+(deftest an-early-finish-breaks-the-block-only-by-the-servers-clock
+  ;; ServerPlayerGameMode's delayed destroy: a FINISH before 70% of the block's time is acked
+  ;; alone, the block is kept, and the server breaks it when its own timer completes
   (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] 1}) :spawn [0.5 64.0 0.5]})
                     :sim/phase :play
                     :sim/now 1000)
@@ -241,9 +243,42 @@
                                         :face (packet/value :face :west)
                                         :sequence 2}}))]
     (is (empty? (:sim/broken sim)))
-    (is (= [:block-update :block-changed-ack] (mapv :packet/name (:sim/out sim)))
-        "the real server restores the client's view of the block, then acks")
-    (is (= 1 (:state (first (:sim/out sim)))) "restored to stone")))
+    (is (= [:block-changed-ack] (mapv :packet/name (:sim/out sim)))
+        "the real server acks and keeps breaking by its own clock")
+    (let [[sim _] (sim/drain sim)
+          later (sim/step sim {:sim/kind :tick :sim/now (+ 1000 (sim/full-ms sim 1 nil))})]
+      (is (= #{[1 64 0]} (:sim/broken later)) "broken once the block's whole time has passed")
+      (is (= :block-update (:packet/name (first (:sim/out later)))))
+      (is (= 0 (:state (first (:sim/out later))))))))
+
+(deftest a-niche-is-placed-into-only-once-the-slow-server-has-broken-it
+  ;; race 38477665442 bots Clj_r01 (runner 4) and Clj_r07 (runner 5): the niche's FINISH was
+  ;; acked at once and the stone broken two seconds later; the furnace went in a second after
+  ;; the ack, the server answered with the stone, three times, :rejected
+  (let [pit (merge (into {} (for [x (range 16) y (range 64 80) z (range 16)] [[x y z] 1]))
+                   {[8 72 8] 0 [8 73 8] 0})
+        table (conj plan/goals
+                    {:goal/id :furnace-near
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:block/furnace :near}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes pit)
+                                    :spawn [8.5 72.0 8.5]
+                                    :slow-breaks 2.0
+                                    :inventory
+                                    {[:hotbar 0] {:item (get blocks/items :furnace) :count 1}
+                                     [:hotbar 1] {:item (get blocks/items :wooden_pickaxe)
+                                                  :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         60000
+                         {:event/kind :go :go/goals [:furnace-near]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= [:furnace] (map blocks/name-of (vals (:sim/placed sim)))) "in the niche")
+    (is (zero? (:plan/attempts w)) "no placement refused")
+    (is (empty? (:sim/violations sim)))))
 
 ;; ---------------------------------------------------------------- digging with tools, on the model
 

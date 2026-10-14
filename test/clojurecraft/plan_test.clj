@@ -69,7 +69,10 @@
   (is (= 2 (intent/face-toward [3.5 65.0 -5.0] [3 64 0])) "eye north → north face"))
 
 (deftest dig-timeline-then-pickup
-  (let [[w fx] (run (world-state [0.5 64.0 0.5]) (cons go (ticks 50 8000)))
+  (let [[w fx] (run (world-state [0.5 64.0 0.5])
+                    (concat [go]
+                            (ticks 50 8000)
+                            [(packet {:packet/name :block-update :pos [3 64 0] :state 0})])) ; the server's word, as it always comes
         actions (filter #(= :player-action (:packet/name (second %))) (sent fx))
         [[t-start start] [t-finish finish]] actions
         swings (filter #(= :swing (:packet/name (second %))) (sent fx))]
@@ -592,7 +595,7 @@
   (let [[w fx] (run (digging 1
                              {3 {:item wooden-pickaxe :count 1}
                               0 {:item (blocks/items :stone) :count 2}})
-                    (ticks 50 4000)) ; slot 0 holds stone, not a log: :wood stays wanted
+                    (ticks 50 5000)) ; slot 0 holds stone, not a log: :wood stays wanted; 5 s outlasts confirm-ticks
         carried (filter #(= :set-carried-item (:packet/name (second %))) (sent fx))
         actions (filter #(= :player-action (:packet/name (second %))) (sent fx))
         [[t-start start] [t-finish finish]] actions]
@@ -609,9 +612,11 @@
 
 (deftest a-restored-block-after-finish-is-a-refused-break
   ;; the server breaks the block and sends its block update before the ack of FINISH: the cell
-  ;; open is the break, and the ack with the block still standing is the server's word that it
-  ;; did not break it (race 38477665442, runner 9: a lagging server dropped early FINISHes
-  ;; queued behind one another, the ack alone, and the stairs walked into rock, issue #59)
+  ;; open is the break. A loaded server acks first and breaks seconds later by its own clock
+  ;; (delayed destroy, issue #64), so the ack is waited on; the block still standing when
+  ;; confirm-ticks run out is the server's word that it did not break it (race 38477665442,
+  ;; runner 9: a lagging server dropped early FINISHes queued behind one another, the ack
+  ;; alone, and the stairs walked into rock, issue #59)
   (let [sent-by (long (+ 400 (intent/finish-delay 1150))) ; settled, START, then FINISH
         [w _] (run (digging 1 {3 {:item wooden-pickaxe :count 1}}) (ticks 50 sent-by))
         i (:plan/intent w)
@@ -625,19 +630,24 @@
                        {:event/kind :tick :event/now (+ sent-by 50) :event/rand 0.5}])]
       (is (= :done (:intent/status (:plan/last w2))) "the block update is the break")
       (is (= 0 (terrain/block-at w2 [3 64 0]))))
-    (let [[w3 _] (run w
-                      [(packet {:packet/name :block-update :pos [3 64 0] :state 1})
-                       (packet {:packet/name :block-changed-ack :sequence (:intent/sequence i)})
-                       {:event/kind :tick :event/now (+ sent-by 50) :event/rand 0.5}])]
-      (is (= 1 (:plan/attempts w3)) "the block put back, then the ack: the dig failed")
-      (is (= :rejected (failed-for w3))))
-    (let [[w4 _] (run w
-                      [(packet {:packet/name :block-changed-ack :sequence (:intent/sequence i)})
-                       {:event/kind :tick :event/now (+ sent-by 50) :event/rand 0.5}])]
-      (is (= 1 (:plan/attempts w4))
-          "the ack alone, the block standing: the server did not break it")
-      (is (= :rejected (failed-for w4)))
-      (is (= 1 (terrain/block-at w4 [3 64 0])) "and it is still there"))
+    (let [acked [(packet {:packet/name :block-changed-ack :sequence (:intent/sequence i)})
+                 {:event/kind :tick :event/now (+ sent-by 50) :event/rand 0.5}]
+          waited (ticks (+ sent-by 100) (+ sent-by 100 (* 50 (inc intent/confirm-ticks))))
+          [w3 _] (run w (cons (packet {:packet/name :block-update :pos [3 64 0] :state 1}) acked))
+          [w4 _] (run w acked)
+          [w4b _] (run w4
+                       [(packet {:packet/name :block-update :pos [3 64 0] :state 0})
+                        {:event/kind :tick :event/now (+ sent-by 100) :event/rand 0.5}])
+          [w4c _] (run w4 waited)]
+      (is (= :confirm (:intent/stage (:plan/intent w3)))
+          "the block put back, then the ack: the server may yet break it by its own clock")
+      (is (= :confirm (:intent/stage (:plan/intent w4)))
+          "the ack alone, the block standing: waited on")
+      (is (= :done (:intent/status (:plan/last w4b))) "the late break is the break")
+      (is (= 1 (:plan/attempts w4c))
+          "the ack and no break in confirm-ticks: the server did not break it")
+      (is (= :rejected (failed-for w4c)))
+      (is (= 1 (terrain/block-at w4c [3 64 0])) "and it is still there"))
     (let [[w5 _] (run w (ticks (+ sent-by 50) (+ sent-by 50 (* 50 (inc intent/confirm-ticks)))))]
       (is (= :done (:intent/status (:plan/last w5)))
           "no word in confirm-ticks: the overlay is trusted")

@@ -67,8 +67,9 @@
 (defn spot
   "[target support] for placing a block near the player: target replaceable (air or a grass
    the server lets a block take the place of, blocks/replaceable?: a flower is not, race
-   38477665442 bot Clj_r23 was refused three times on wildflowers), no passage, support
-   solid and not a block a click opens (a table, a furnace:
+   38477665442 bot Clj_r23 was refused three times on wildflowers) and one the server has
+   confirmed (terrain/confirmed?: not a cell the bot's own dig emptied before the server said
+   so), no passage, support solid and not a block a click opens (a table, a furnace:
    right-clicked, it opens instead of taking the block; gym batch iron-a5 run 4 clicked its
    table three times to place a gravel and failed :rejected), not inside the player, within
    reach. A passage is allowed when passage-ok? (a block placed only to be dug again at once,
@@ -90,6 +91,7 @@
                   :when (and t
                              s
                              (blocks/replaceable? t)
+                             (terrain/confirmed? world target)
                              (blocks/solid? s)
                              (not (contains? memory/placed-kinds (blocks/name-of s)))
                              (or passage-ok? (not (passage? world target)))
@@ -233,26 +235,42 @@
           :else (intent/fail world :no-spot))))
 
 (defn dig-niche
-  "One tick of digging the niche (the child :dig); done, equip again (the dig chose its own held
-   slot) and look for the spot; failed, fail with its reason."
+  "One tick of digging the niche (the child :dig); done and the cell confirmed by the server
+   (terrain/confirmed?), or the server silent for answer-ms since the dig's FINISH, equip again
+   (the dig chose its own held slot) and look for the spot; failed, fail with its reason. A
+   loaded server acks the FINISH at once and breaks the block seconds later, by its own clock
+   (vanilla's delayed destroy): race 38477665442 bots Clj_r01 and Clj_r07 placed into the
+   niche a second after the ack, the server answered with the stone still there, and three
+   such placements failed the plan :rejected."
   [world {:intent/keys [child]} event]
-  (cond (intent/done? child)
+  (cond (and (intent/done? child)
+             (or (terrain/confirmed? world (:intent/target child))
+                 (> (- (now world) (:intent/since child)) answer-ms)))
         (-> world
             (intent/assoc-intent :intent/stage :equip)
             (intent/dissoc-intent :intent/child))
+        (intent/done? child) world
         (intent/failed? child) (intent/fail world (:intent/reason child))
         :else (intent/run-child world event)))
 
 (defmethod place-stage :settle
-  [world {:intent/keys [target against click-face since still] :or {click-face :up}}]
+  ;; a chosen target the server filled meanwhile (gravel that fell into the niche, the block it
+  ;; put back) is given up for another spot before anything is sent; a given cell (a build's)
+  ;; is sent and judged by the server
+  [world
+   {:intent/keys [target against click-face since still] at :intent/cell :or {click-face :up}}]
   (let [look (physics/look-at (game/eye world) (physics/centre target))
         still (if (intent/still? world) (inc still) 0)
         world (assoc world :player/controls {:control/look look})]
-    (if (and (>= still 3) (> (- (now world) since) settle-ms))
-      (-> world
-          (use-item-on against (packet/value :face click-face) (face-cursors click-face))
-          (intent/assoc-intent :intent/stage :sent))
-      (intent/assoc-intent world :intent/still still))))
+    (cond (and (nil? at) (not (blocks/replaceable? (terrain/block-at world target))))
+          (-> world
+              (intent/assoc-intent :intent/stage :spot)
+              (intent/dissoc-intent :intent/target :intent/against :intent/click-face))
+          (and (>= still 3) (> (- (now world) since) settle-ms))
+          (-> world
+              (use-item-on against (packet/value :face click-face) (face-cursors click-face))
+              (intent/assoc-intent :intent/stage :sent))
+          :else (intent/assoc-intent world :intent/still still))))
 
 (defmethod place-stage :sent
   [world {:intent/keys [item target sequence sent-at]}]

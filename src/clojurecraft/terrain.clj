@@ -63,11 +63,46 @@
   (= key [(bit-shift-right bx 4) (bit-shift-right bz 4)]))
 
 (defn set-block
-  "A block is known to be id now: overlay the chunk and keep the sighting."
+  "A block is known to be id now, on the server's word (a block update): overlay the chunk,
+   keep the sighting, and confirm the cell if the bot's own dig had guessed it (predict)."
   [world pos id]
   (-> world
       (assoc-in [:world/blocks pos] id)
+      (cond-> (contains? (:world/unconfirmed world) pos) (update :world/unconfirmed dissoc pos))
       (memory/observe pos id)))
+
+(def unconfirmed-ms 3000)            ; a guess the server has not answered for this long is dropped
+
+(defn predict
+  "The bot's own guess that pos is id now (its dig's FINISH, before the server answers):
+   the overlay and the sighting as set-block, and the cell in :world/unconfirmed, with the
+   time, until the server's block-update there. A loaded server breaks the block after its
+   own clock, seconds after it acks the FINISH (vanilla's delayed destroy); what is built on
+   the guess meanwhile is refused."
+  [world pos id]
+  (-> world
+      (set-block pos id)
+      (assoc-in [:world/unconfirmed pos] (:time/now world))))
+
+(defn forget-stale
+  "Drop every guess (predict) the server has not answered for unconfirmed-ms by now: the
+   overlay entry goes, so the chunk's block is in view again. Race 38477665442 bot Clj_r19
+   dug the stone under its next stair, the server acked and never broke it, the bot's
+   physics fell through the guessed air while the server put it back on the stone every
+   tick, and its next dig waited to be still for the rest of the run."
+  [world now]
+  (let [stale (for [[pos at] (:world/unconfirmed world) :when (> (- now at) unconfirmed-ms)] pos)]
+    (cond (empty? stale) world
+          :else
+          (-> world
+              (update :world/blocks #(apply dissoc % stale))
+              (update :world/unconfirmed #(apply dissoc % stale))))))
+
+(defn confirmed?
+  "Has the server said what is at pos: not a cell the bot's own dig emptied and the server has
+   not answered for (predict)?"
+  [world pos]
+  (not (contains? (:world/unconfirmed world) pos)))
 
 (defn section-update
   "Apply a section-blocks-update: unpack the section coords and each packed (state, local
@@ -101,5 +136,7 @@
   (-> world
       (assoc-in [:world/chunks key] column)
       (update :world/blocks superseded key)
+      (cond-> (seq (:world/unconfirmed world))
+              (update :world/unconfirmed #(into {} (remove (fn [[pos _]] (in-chunk? key pos))) %)))
       (memory/remember-column key column)
       (memory/remember-pools key column)))

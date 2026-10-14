@@ -11,6 +11,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -167,3 +168,24 @@
         (is (= 1
                (max (abs (- (ffirst (place/spot w)) 8))
                     (abs (- (last (first (place/spot w))) 8)))))))))
+
+(deftest a-guess-the-server-never-answers-is-forgotten
+  ;; race 38477665442 bot Clj_r19: the stone under its next stair, dug and acked, was never
+  ;; broken by the server; the bot's physics fell through its guessed air while the server
+  ;; put it back on the stone, and the next dig waited to be still until the run timed out
+  (let [w (-> (standing [8.5 64.0 8.5])
+              (assoc :time/now 1000)
+              (terrain/predict [9 63 8] blocks/air))]
+    (is (= blocks/air (terrain/block-at w [9 63 8])) "the guess is in view")
+    (is (not (terrain/confirmed? w [9 63 8])))
+    (testing "the server's word confirms it"
+      (let [w (terrain/set-block w [9 63 8] blocks/air)]
+        (is (terrain/confirmed? w [9 63 8]))
+        (is (= blocks/air (terrain/block-at w [9 63 8])))))
+    (testing "silence past unconfirmed-ms drops it"
+      (let [w (terrain/forget-stale w (+ 1000 terrain/unconfirmed-ms 1))]
+        (is (terrain/confirmed? w [9 63 8]))
+        (is (= 1 (terrain/block-at w [9 63 8])) "the chunk's stone is back in view")))
+    (testing "a guess within the time stays"
+      (let [w (terrain/forget-stale w (+ 1000 terrain/unconfirmed-ms))]
+        (is (not (terrain/confirmed? w [9 63 8])))))))

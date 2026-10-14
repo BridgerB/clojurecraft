@@ -11,7 +11,8 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn finish-delay
   - test/clojurecraft/props_test.clj#a-dig-never-finishes-before-its-deadline
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :player-action]
-  - test/clojurecraft/sim_test.clj#an-early-finish-does-not-break-the-block
+  - test/clojurecraft/sim_test.clj#an-early-finish-breaks-the-block-only-by-the-servers-clock
+  - src/clojurecraft/sim.clj#defn tick-delayed
 related:
   - "[[bot/gotchas/_moc|Gotchas]]"
   - "[[dig-timeline]]"
@@ -26,7 +27,7 @@ Symptom: START and swings go out, no error comes back, the log is still there, a
 The server runs its own break timer from START. A FINISH (status 2) that arrives before that timer completes is treated as an abort; a late FINISH is accepted. Our local timer and the server's disagree by latency and tick alignment, so FINISH must be late on purpose. ruststeve established the rule ([[sib-dig-stop-timing]]); we verified it live three times and modelled it in the sim.
 
 ## Fix
-`finish-delay` is the block's own break time with the held tool times 1.15, plus 100 ms ([[dig-timeline]]). The server (26.1.2 `ServerPlayerGameMode`, STOP_DESTROY) takes FINISH once the progress counted in its own ticks since START reaches 70%, so 1.15 holds while the server keeps above about 12 ticks a second. It was 1.35 and 200 ms, with 500 ms of settling before each START: a block of stone took about 1.75 s, and gym batch solid-b1 run 4 timed out tunnelling for its last iron. The sim ignores an early FINISH exactly like the server, and the property in `props_test` asserts FINISH is never earlier than that, for any block and any tool.
+`finish-delay` is the block's own break time with the held tool times 1.15, plus 100 ms ([[dig-timeline]]). The server (26.1.2 `ServerPlayerGameMode`, STOP_DESTROY) takes FINISH once the progress counted in its own ticks since START reaches 70%, so 1.15 holds while the server keeps above about 12 ticks a second. It was 1.35 and 200 ms, with 500 ms of settling before each START: a block of stone took about 1.75 s, and gym batch solid-b1 run 4 timed out tunnelling for its last iron. An early FINISH for the block being broken is not an abort either: the server acks it and keeps breaking by its own clock (`ServerPlayerGameMode`'s delayed destroy), so the block update comes seconds after the ack on a loaded server; the sim models that (`finish-dig`, `tick-delayed`, slowed by `:slow-breaks`), and the property in `props_test` asserts FINISH is never earlier than that, for any block and any tool.
 
 ## See also
 - [[dig-timeline]]
