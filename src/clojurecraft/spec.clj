@@ -642,6 +642,10 @@
   :args
   (s/cat :world (requires :player/pos :world/chunks)
          :passage-ok? (s/? boolean?)))
+(s/fdef place/ashore
+  :args
+  (s/cat :world (requires :player/in-water?)
+         :intent map?))
 (s/fdef path/plan
   :args
   (s/cat :world (requires :world/chunks)
@@ -662,6 +666,6 @@
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
-   `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `window/view `path/plan
-   `path/classify])
+   `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
+   `window/view `path/plan `path/classify])
 (s/def :stats/deaths pos-int?)

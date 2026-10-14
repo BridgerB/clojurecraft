@@ -18,7 +18,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
-            [clojurecraft.place]
+            [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
@@ -266,8 +266,8 @@
 ;; ---------------------------------------------------------------- dig a held block again
 
 (defmethod plan/act :redig
-  [_ {:goal/keys [item] :as row}]
-  {:intent/kind :redig :intent/item item :intent/drops (drops-of-row row)})
+  [world {:goal/keys [item] :as row}]
+  (place/ashore world {:intent/kind :redig :intent/item item :intent/drops (drops-of-row row)}))
 
 (defn link
   "One tick of the link a :redig is in: start the child intent first when there is none, run it,

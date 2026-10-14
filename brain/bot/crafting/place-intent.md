@@ -5,8 +5,8 @@ type: reference
 tags: [bot, crafting, intents, placement]
 aliases: [:place, place.clj, spot, place a crafting table, rejected placement, no-spot]
 status: verified
-lastUpdated: 2026-10-09
-verifiedAgainst: 85e133d
+lastUpdated: 2026-10-14
+verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/place.clj#defmethod intent/run :place
   - src/clojurecraft/place.clj#defmethod place-stage :equip
@@ -30,6 +30,10 @@ sourceRefs:
   - test/clojurecraft/place_test.clj#a-rejected-placement-fails-instead-of-believing
   - test/clojurecraft/place_test.clj#a-spot-is-never-a-flower
   - test/clojurecraft/sim_test.clj#a-table-is-never-placed-into-a-flower
+  - src/clojurecraft/place.clj#defn ashore
+  - src/clojurecraft/make.clj#defmethod plan/act :place
+  - src/clojurecraft/stone.clj#defmethod plan/act :redig
+  - test/clojurecraft/sim_test.clj#a-redig-afloat-at-a-ponds-edge-gets-ashore-before-it-places
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[placement-judged-by-server]]"
@@ -62,6 +66,7 @@ related:
 - **Never into a guess.** A loaded server acks a dig's FINISH at once and breaks the block seconds later by its own clock (vanilla's delayed destroy, [[early-finish-aborts]]); a placement into the niche before its block update is answered with the stone and refused. Race 38477665442 bots Clj_r01 (runner 4) and Clj_r07 (runner 5) placed a second after the ack, three times, `:rejected`. `spot` skips unconfirmed cells and `dig-niche` waits for the server's word (`a-niche-is-placed-into-only-once-the-slow-server-has-broken-it`, with the sim's `:slow-breaks`).
 - **Never into a flower.** The server places only into a block its replaceable tag lists (air, grass, ferns, a dead bush, vines); a flower bed such as wildflowers stays and the placement is refused with a `block-update` of the flower. Race 38477665442 bot Clj_r23's nearest cell held wildflowers and its table was refused three times, `:rejected` (`a-spot-is-never-a-flower`, `a-table-is-never-placed-into-a-flower`).
 - **Never on a table.** A right-click on a crafting table or a furnace opens it instead of placing against it, so `spot` never takes one as support: gym batch iron-a5 run 4's only spot was on its table, and the gravel it meant to dig again for flint was never placed (`:rejected` three times, `a-block-is-never-placed-on-a-table`).
+- **Ashore first.** A spot is sought round the feet, and afloat at a pond's edge every cell round them is water and the bank above the impulse's reach, so the place fails `:no-spot` the tick it starts, three times in half a second, before the trap can preempt it. Sim race 38515210080 world R4/41 (issue #95, 15 runs; four real bots of race 38515209959): the bucket filled, the bot was afloat in the column its source had left, two under the bank, and the gravel to dig again for flint found no spot. `place/ashore` wraps the `:place` and `:redig` acts: with `:player/in-water?` the act is a `:swim-out` for `:retreat` first (done on dry land, [[water-escape]]), and the place is asked for again from the bank (`a-redig-afloat-at-a-ponds-edge-gets-ashore-before-it-places`).
 - The local world is never written by the intent; only the server's `block-update` makes the table appear, and then memory records it (`memory/watched?` includes tables and furnaces, `memory/placed-kinds`), and `make/near` finds either within 24 blocks.
 - A swap click's answer changes slot state ids exactly like a craft click; the intent waits for it.
 

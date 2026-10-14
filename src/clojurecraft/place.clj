@@ -99,6 +99,17 @@
                              (<= (physics/distance eye (physics/centre target)) place-reach))]
               [target support])))))
 
+(defn ashore
+  "intent, or, with the body in water, a :swim-out for :retreat first (done on dry land, swim):
+   a spot is sought round the feet, and afloat at a pond's edge every cell round them is water
+   and the bank is above the impulse's reach, so the place fails :no-spot the tick it starts,
+   three times in half a second, before the trap can preempt it. Sim race 38515210080 world
+   R4/41 (issue #95, 15 runs; four real bots of race 38515209959): the bucket filled, the bot
+   was afloat in the column its source left, two under the bank, and the gravel to dig again
+   for flint found no spot."
+  [world intent]
+  (if (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat} intent))
+
 (defn use-item-on
   "Right-click face of the block at pos with the held item: emit use-item-on with a fresh
    :bot/sequence and a swing, and record the sequence and send time on the intent so the

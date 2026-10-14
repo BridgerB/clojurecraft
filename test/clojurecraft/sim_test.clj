@@ -1744,6 +1744,50 @@
     (is (empty? (:sim/violations sim)))
     (is (= (:time/now w) (:time/now (first (flint-run seed)))) "the same seed, the same run")))
 
+(def pond-edge
+  "A pond's edge the tick after a scoop (sim race 38515210080, world R4/41, issue #95): a bank
+   whose top is y 64 west of x 8 (its feet level 65), the pond three deep (y 62-64) from x 9
+   east and along the rest of column x 8, and the cell the bucket was filled from, [8 64 8],
+   air over the two of water left under it. A body there floats with its feet at 62, two under
+   the bank's feet level: no bank in the impulse's band, every cell round the feet water."
+  (merge (into {} (for [x (range 8) z (range 16)] [[x 64 z] 1]))
+         (into {} (for [x (range 8 16) y [62 63 64] z (range 16)] [[x y z] blocks/water-base]))
+         {[8 64 8] blocks/air}))
+
+(deftest a-redig-afloat-at-a-ponds-edge-gets-ashore-before-it-places
+  ;; issue #95 (15 sim runs of R4/41, four real bots): the bucket filled, the bot was afloat in
+  ;; the column its source left and the gravel to dig again for flint found no spot, three
+  ;; times in half a second, before the trap could preempt; the act now gets ashore first
+  (let [sim0 (sim/init {:column (world/column-bytes pond-edge) :spawn [8.5 62.0 8.5]})
+        lucky (first (filter #(< (second (sim/roll (assoc sim0 :sim/rng %))) 0.1) (range 100)))
+        [w sim] (sim/run (game/compose game/step
+                                       (partial plan/step-over
+                                                (conj plan/goals
+                                                      {:goal/id :flint-test
+                                                       :goal/priority 7
+                                                       :goal/target? true
+                                                       :goal/provides {:item/flint 1}
+                                                       :goal/done? :provided?})))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes pond-edge)
+                                    :spawn [8.5 62.0 8.5]
+                                    :inventory {[:hotbar 0] {:item (item :gravel) :count 1}
+                                                [:hotbar 1] {:item (item :stone_pickaxe) :count 1}}
+                                    :seed lucky})
+                         #(or (plan/done? %) (plan/failed? %))
+                         180000
+                         {:event/kind :go :go/goals [:flint-test]})
+        started (map :intention/kind
+                     (filter #(= :started (:intention/event %)) (memory/intentions w)))]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (= :swim-out (first started)) (pr-str started))
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w))
+        (pr-str (filter #(= :failed (:intention/event %)) (memory/intentions w))))
+    (is (= 1 (get (held w) :flint 0)) "the gravel became flint")
+    (is (not (:player/in-water? w)) "ashore")
+    (is (zero? (:stats/deaths w 0)))
+    (is (empty? (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- gravel and sand fall
 
 (deftest gravel-over-a-broken-block-falls-into-it
