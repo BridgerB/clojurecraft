@@ -212,6 +212,42 @@
     (is (nil? (stairs/pit-rim ground feet)) "open ground is no pit")
     (is (stairs/out? ground feet))))
 
+(def crevice
+  "A crevice two deep in the stone under the canopy of a chopped tree, like the sim race's in world
+   R2/45 at [2256 68 4598]: the floor at y 62 under [8 8] and [8 9], a notch one up at [8 63 7]
+   that the leaves at y 65 cap, so no jump leaves it, and a trunk on the ground six blocks north."
+  {[8 62 8] blocks/air
+   [8 63 8] blocks/air
+   [8 62 9] blocks/air
+   [8 63 9] blocks/air
+   [8 63 7] blocks/air
+   [8 65 7] 252
+   [8 65 8] 252
+   [8 64 2] 136
+   [8 65 2] 136
+   [8 66 2] 136
+   [8 67 2] 252})
+
+(deftest a-crevice-under-the-canopy-is-climbed-out-of
+  ;; sim race 38515210080, world R2/45 (issue #104, 19 runs; race 38515209959, 4 real bots): the
+  ;; first log came down into a crevice of the forest floor two deep under its own canopy, and
+  ;; the kit's sticks sent the bot for a second with the trunk two blocks off. A level step ran
+  ;; along the crevice's floor and the leaves over it are not cover, so stairs/out? said out;
+  ;; the one notch up ended under the leaves, no route reached a trunk or a hunt's ground, and
+  ;; the bot waited :no-log. The crevice is a pit (stairs/pit-rim): stairs are cut up out of it
+  (let [w (remembered crevice [8.5 62.0 8.5])
+        feet (intent/feet w)]
+    (is (terrain/under-sky? w feet) "leaves are not cover: the sky is over the crevice")
+    (is (stairs/open-step? w (stairs/level-cells feet [0 1])) "a level step south, along it")
+    (is (= 64 (stairs/pit-rim w feet)) "a wall every way past the notch: the rim is the ground")
+    (is (not (stairs/out? w feet)) "a crevice is not out of the ground")
+    (is (not (intent/routable? w (wood/log-walk w [8 64 2]))) "the notch ends under the leaves")
+    (is (nil? (wood/hunt w)) "no ground a hunt could walk to")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y (stairs/climb-to w terrain/top-y)
+            :intent/for :surface}
+           (wood/gather-next w)))))
+
 (def canopy-pocket
   "A pocket one deep under an oak canopy, like race 38477665442 runner 10 Clj_r16's at
    [2256 69 4597]: walls two high round the feet at [8 64 8], the one step north open at body

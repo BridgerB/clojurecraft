@@ -41,7 +41,7 @@
   :problem/done
   "The server's inventory read shows a crafting_table and four sticks; the grid and cursor are empty."
   :problem/last-failure
-  "Verified live on 26.1.2: after the put-back click the bot still believed a stack was on the cursor, clicked an empty slot to drop it, got no answer and failed :stale-window (fixed by dropping the cursor on every click, as the 775 server does)."
+  "Verified live on 26.1.2: after the put-back click the bot still believed a stack was on the cursor, clicked an empty slot to drop it, got no answer and failed :stale-window (fixed by dropping the cursor on every click, as the 775 server does). Sim race 38515210080 (issue #104, 19 runs, world R2/45) and race 38515209959 (4 real bots, the table in hand and the last intent its craft): the first log came down into a crevice of the forest floor two deep under its own canopy, and the sticks sent the bot for a second with the trunk two blocks off; a level step ran along the crevice's floor and the leaves over it are not cover, so stairs/out? said out, the one notch up ended under the leaves, no route reached a trunk or a hunt's ground, and it waited :no-log. The same false out as #102's quarry, fixed with it (stairs/pit-rim); plan-test a-crevice-under-the-canopy-is-climbed-out-of holds the crevice, and the snapshots of R2/45 under test/issues/104 the check."
   :problem/sources ["docs/issues/01-crafting-as-data.md"
                     "brain/bot/crafting/phantom-cursor-stale-window.md"
                     "brain/bot/crafting/junk-crafts.md" "brain/bot/crafting/sim-faults.md"]}
