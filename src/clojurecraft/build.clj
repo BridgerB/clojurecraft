@@ -367,7 +367,6 @@
 (def settle-ms 300)                   ; standing still this long, looking at the aim, before using the item
 (def answer-ms 3000)                  ; ms an action waits for the world to show it worked
 (def await-ms 10000)                  ; ms an :await holds before it fails
-(def station-radius 16)               ; blocks from the origin a lava station may be
 
 (defn- now [world] (:time/now world))
 
@@ -494,36 +493,48 @@
                      (dry? world (remove #{src} (touching over))))]
       [stand src])))
 
-(defn relative
-  "Cell as [dx dy dz] from origin facing: the inverse of cell."
-  [origin facing c]
-  (let [[dx dy dz] (mapv - c origin)
-        back {:south :south :north :north :east :west :west :east}
-        [x z] (turn (back facing) [dx dz])]
-    [x dy z]))
+(def station-depth 9)                  ; how far in front of the frame a lava stand may be
+
+(defn reach-sources
+  "The lava sources of sources a bot standing at stand reaches with a bucket, under its feet's
+   level and within intent/reach of its eye, nearest first."
+  [sources [x y z]]
+  (let [eye [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)]]
+    (->> sources
+         (filter (fn [[_ sy _ :as src]]
+                   (and (< sy y) (<= (physics/distance eye (physics/centre src)) intent/reach))))
+         (sort-by #(physics/distance eye (physics/centre %))))))
 
 (defn station-among
-  "{:stand :source :h} to refill lava from for a frame at origin facing, of sources: a cell beside
-   the cell over a source (stands-beside), in front of the room (dz 4 or more), between one and
-   max-access over the room's floor (h: water spilled on the floor never runs up to it), outside
-   the footprint and within station-radius of the origin; nearest the origin first, or nil."
-  [world sources origin facing]
-  (->> sources
-       (filter #(<= (physics/distance (physics/centre %) (physics/centre origin)) station-radius))
-       (sort-by #(physics/distance (physics/centre %) (physics/centre origin)))
-       (mapcat #(stands-beside world %))
-       (keep (fn [[stand src]]
-               (let [[_ h dz] (relative origin facing stand)]
-                 (when (and (<= 1 h max-access)
-                            (>= dz 4)
-                            (not (contains? (footprint origin facing h) stand)))
-                   {:stand stand :source src :h h}))))
-       first))
+  "{:stand :sources :h} to refill lava from for a frame at origin facing: the nearest cell
+   straight out in front of the landing at a height h over the room's floor (its x, dz 4 to
+   station-depth: the way dug to it runs away from the frame and never along the stair), h between
+   one and max-access (water spilled on the floor never runs up to it), the h given first, that
+   the feet can stand in once opened (firm under it, it and the head openable, no fluid touching
+   them, outside the footprint) and from which lava sources are in reach (reach-sources). The
+   stand stays while the pool lasts: a scooped source leaves the next one in reach. nil when none."
+  ([world sources origin facing] (station-among world sources origin facing nil))
+  ([world sources origin facing prefer]
+   (first (for [h (distinct (cons (or prefer 1) (range 1 (inc max-access))))
+                :when (<= 1 h max-access)
+                :let [[lx _ _] (landing h)]
+                dz (range 4 (inc station-depth))
+                :let [stand (cell origin facing [lx h dz])
+                      head (update stand 1 inc)]
+                :when (and (holds? world [:firm (update stand 1 dec)])
+                           (openable? world stand)
+                           (openable? world head)
+                           (dry? world (mapcat touching [stand head]))
+                           (not (contains? (footprint origin facing h) stand)))
+                :let [srcs (reach-sources sources stand)]
+                :when (seq srcs)]
+            {:stand stand :sources srcs :h h}))))
 
 (defn station
-  "The station for the build at origin facing (station-among the lava sources loaded), or nil."
-  [world origin facing]
-  (station-among world (lava-sources world) origin facing))
+  "The station for the build at origin facing (station-among the lava sources loaded), the height
+   prefer first, or nil."
+  ([world origin facing] (station world origin facing nil))
+  ([world origin facing prefer] (station-among world (lava-sources world) origin facing prefer)))
 
 (def plan-for
   "[build origin facing h] → the plan: :cast-one, :portal (lit) or :nether (stepped through), with
@@ -679,27 +690,60 @@
           (or (clear-stand world stand build origin facing) walk)
           :else (or (to-height world (second stand)) walk))))
 
+(defn sight-block
+  "The first block on the eyes' line to the surface of lava source src (scoop/aim-point) that the
+   bucket's ray would stop at (not air, not a fluid): the rock between the stand and a pool sealed
+   in it, the cell over the source last. nil when the line is clear."
+  [world src]
+  (let [eye (game/eye world)
+        aim (scoop/aim-point src)
+        d (physics/distance eye aim)
+        dir (mapv #(/ (- %2 %1) d) eye aim)]
+    (->> (physics/cells-along eye dir d scoop/ray-step)
+         (take-while #(not= src %))
+         (filter #(when-let [id (terrain/block-at world %)]
+                    (not (or (blocks/air? id) (terrain/fluid-at world %)))))
+         first)))
+
 (defn refill
   "The child that refills lava, or the reason it cannot (:no-station, :no-bucket): the feet to the
-   station's stand (toward, from the room's landing at the lava's height when no route reaches
-   it), the cell over a sealed source dug open, then a scoop of the source."
-  [world {:intent/keys [origin facing build]}]
-  (let [{:keys [stand source h]} (station world origin facing)
-        [x y z] source
-        over [x (inc y) z]
-        at-landing (cell origin facing (landing h))]
+   station's stand (toward-stand, from the room's landing at the lava's height when no route
+   reaches it); there, a scoop of the nearest source in reach the eyes see, else the first block
+   on the line to it dug (sight-block: the rock between the stand and a sealed pool, then the
+   cell over the source)."
+  [world {:intent/keys [origin facing build access]}]
+  (let [{:keys [stand sources h]} (station world origin facing access)
+        src (first sources)
+        block (when src (sight-block world src))]
     (cond (nil? stand) :no-station
           (not (held? world :bucket)) :no-bucket
           (intent/centred? world stand)
-          (if (holds? world [:solid over])
-            (assoc (intent/child-dig over) :intent/exposes-ok? true :intent/for :lava)
-            {:intent/kind :scoop :intent/target source :intent/fluid :lava})
+          (cond (nil? src) :no-station
+                (and (nil? block) (scoop/scoopable? world src :lava))
+                {:intent/kind :scoop :intent/target src :intent/fluid :lava}
+                (and block
+                     (not (contains? intent/never-dug
+                                     (blocks/name-of (terrain/block-at world block)))))
+                (assoc (intent/child-dig block) :intent/exposes-ok? true :intent/for :lava)
+                :else :no-station)
           (or (intent/routable? world {:intent/kind :walk :intent/target stand :intent/for :build})
               (= (long (physics/y-of (intent/feet world))) (second stand)))
           (toward-stand world stand build origin facing)
           :else
-          (or (toward-stand world at-landing build origin facing)
+          (or (toward-stand world (cell origin facing (landing h)) build origin facing)
               {:intent/kind :walk :intent/target stand :intent/for :build}))))
+
+(defn room-stand
+  "A cell of the room (room-cells for the build's access h) the feet can stand in, that reaches
+   pos and that a route reaches, nearest pos: a stair step for a cell high in the rows, which
+   reachable-stand, looking near pos's own height, does not see. nil when none."
+  [world {:intent/keys [origin facing access]} pos]
+  (->> (room-cells (or access 0))
+       (map #(cell origin facing %))
+       (filter #(and (path/standable? world %) (reaches-from? world % pos)))
+       (sort-by #(physics/distance (physics/centre %) (physics/centre pos)))
+       (filter #(intent/routable? world {:intent/kind :walk :intent/target % :intent/for :build}))
+       first))
 
 (defn approach-stand
   "The child that gets the feet where op is worked from, or nil when they are there: a room cell
@@ -713,7 +757,8 @@
     (cond (and (= :dig op) (= stand pos))
           (cond (within-reach? world pos) nil
                 :else
-                (let [alt (reachable-stand world pos pos)]
+                (let [alt (or (reachable-stand world pos pos)
+                              (when build (room-stand world i pos)))]
                   (cond (nil? alt) :no-stand
                         :else {:intent/kind :walk :intent/target alt :intent/for :build})))
           (intent/centred? world stand) nil
@@ -760,7 +805,7 @@
                :intent/aim aim
                :intent/target into
                :intent/expect done}
-              :scoop {:intent/kind :scoop :intent/target pos}
+              :scoop (cond-> {:intent/kind :scoop :intent/target pos} aim (assoc :intent/aim aim))
               :use-on
               {:intent/kind :use-on
                :intent/item item
@@ -815,9 +860,10 @@
 
 (def site-blocks 8)                   ; blocks a site's cast may place at most: a handful
 (def station-spots
-  "[dx h] where a site's lava stand may be from its origin, seven in front of the frame (dz 7): a
-   level way from the landing at h reaches it along the row the landing is in, then straight out."
-  [[-1 1] [-1 3] [5 3] [-1 6] [2 6] [5 6]])
+  "[dx h] where a site's lava stand may be from its origin, seven in front of the frame (dz 7):
+   straight out from the landing at h (station-among), so the level way to it runs away from the
+   frame."
+  (vec (for [h [1 3 6]] [(first (landing h)) h])))
 (def station-reach 7)                 ; how far in front of the frame a site puts the lava's stand
 (def max-sources 3)                   ; the nearest lava sources a site is looked for beside
 
@@ -996,7 +1042,7 @@
         chosen (when-not origin (choose-site world))
         origin (or origin (:origin chosen))
         facing (or facing (:facing chosen))
-        h (when origin (or (:h chosen) (:h (station world origin facing)) 0))]
+        h (when origin (or (:h chosen) (:h (station world origin facing)) 1))]
     (or (held-first world goal table (when origin (plan-for build origin facing h)))
         (cond origin
               {:intent/kind :build
