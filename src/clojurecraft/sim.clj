@@ -1051,8 +1051,10 @@
 
 (defn place
   "use-item-on that is not on a container: place the held block item at pos + face when the
-   destination is empty, the clicked block is solid and the block would not overlap the
-   player; else tell the client the destination's real state. Either way, then the ack."
+   destination is replaceable (air or a grass, blocks/replaceable?: a flower refuses it, as
+   the server's replaceable tag says), the clicked block is solid and the block would not
+   overlap the player; else tell the client the destination's real state. Either way, then
+   the ack."
   [sim pos face ack]
   (let [dest (mapv + pos (faces face))
         slot (held-slot sim)
@@ -1065,8 +1067,7 @@
                         blocks/default-state) ; the held item is a block: it is placed
         ok? (and placing
                  d
-                 (not (blocks/solid? d))
-                 (not= :liquid (blocks/type-of d))
+                 (blocks/replaceable? d)
                  (blocks/solid? (or (block-at sim pos) blocks/air))
                  (not overlap?))
         sim (cond-> sim overlap? (update :sim/violations conj [:place-into-player dest]))]

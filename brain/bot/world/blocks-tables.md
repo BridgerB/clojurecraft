@@ -11,6 +11,8 @@ sourceRefs:
   - src/clojurecraft/blocks.clj#def passable-types
   - src/clojurecraft/blocks.clj#def falling-types
   - src/clojurecraft/blocks.clj#defn solid?
+  - src/clojurecraft/blocks.clj#defn replaceable?
+  - src/clojurecraft/blocks.clj#def replaceable-names
   - src/clojurecraft/blocks.clj#defn states-where
   - src/clojurecraft/blocks.clj#defn log-name?
   - src/clojurecraft/blocks.clj#def log-items
@@ -30,6 +32,7 @@ related:
 ## Key files
 - `blocks.clj`, `table` / `items` / `entity-types` - `blocks.edn` rows `[name type min-state max-state]`, `items.edn` `{name id}`, `entity-types.edn` `{name id}`.
 - `blocks.clj`, `row`, `name-of`, `type-of` - `rows`, a map from state id to its row.
+- `blocks.clj`, `replaceable?` - `replaceable-states`: every state of the blocks in `replaceable-names`, air and the grasses, ferns, dead bush, seagrass, vines, roots and lichen the game's replaceable tag lists; a flower, a flower bed (wildflowers, leaf litter), a bush or a sapling is not one. A placement goes only into these ([[place-intent]], [[sim-placement]]).
 - `blocks.clj`, `solid?` - `solid-states`: every state whose definition type is not in `passable-types`; an id the table does not know is not solid.
 - `blocks.clj`, `passable-types` - about 100 definition types with no full-cube collision: air, liquids, plants, crops, torches, rails, buttons, pressure plates, carpets, signs, ladders, snow layers, fire, lily pads and similar.
 - `blocks.clj`, `falling-types` - the definition types that fall when the cell under them is free: the 26.1.2 jar's `FallingBlock` subclasses (sand and red sand, gravel, concrete powder, anvils, the dragon egg) and `BrushableBlock` (suspicious sand and gravel). The server model makes them fall ([[server-model]]).

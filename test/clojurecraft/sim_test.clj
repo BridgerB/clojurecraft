@@ -993,6 +993,58 @@
     (is (zero? (get (held w) :furnace 0)) "and it left the hand")
     (is (empty? (:sim/violations sim)))))
 
+
+(deftest a-table-is-never-placed-into-a-flower
+  ;; race 38477665442 bot Clj_r23: every spot the bot tried held wildflowers, which the server
+  ;; keeps (a flower bed is not replaceable), and the table was refused three times
+  (let [flowers (into {}
+                      (for [dx [-1 0 1]
+                            dz [-1 0 1]
+                            :when (not= [dx dz] [0 0])]
+                        [[(+ 8 dx) 64 (+ 8 dz)] (blocks/default-state :wildflowers)]))
+        table (conj plan/goals
+                    {:goal/id :table-near
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:block/crafting_table :near}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes flowers)
+                                    :spawn [8.5 64.0 8.5]
+                                    :inventory {[:hotbar 0] {:item (get blocks/items
+                                                                        :crafting_table)
+                                                             :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         30000
+                         {:event/kind :go :go/goals [:table-near]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= [:crafting_table] (map blocks/name-of (vals (:sim/placed sim)))))
+    (is (not-any? flowers (keys (:sim/placed sim))) "beyond the flowers, never into one")
+    (is (zero? (:plan/attempts w)) "no placement refused")
+    (testing "the model refuses a placement into a flower, as the server does"
+      (let [sim (-> (sim/init {:column (world/column-bytes flowers)
+                               :spawn [8.5 64.0 8.5]
+                               :inventory {[:hotbar 0] {:item (get blocks/items :crafting_table)
+                                                        :count 1}}})
+                    (assoc :sim/phase :play :sim/player-pos [8.5 64.0 8.5])
+                    (sim/step {:sim/kind :packet
+                               :sim/packet {:packet/name :use-item-on
+                                            :hand 0
+                                            :pos [9 63 8]
+                                            :face (packet/value :face :up)
+                                            :cursor-x 0.5
+                                            :cursor-y 1.0
+                                            :cursor-z 0.5
+                                            :inside-block false
+                                            :world-border-hit false
+                                            :sequence 1}}))]
+        (is (empty? (:sim/placed sim)))
+        (is
+         (= [{:packet/name :block-update :pos [9 64 8] :state (blocks/default-state :wildflowers)}
+             {:packet/name :block-changed-ack :sequence 1}]
+            (:sim/out sim)))))))
+
 ;; ---------------------------------------------------------------- the furnace, on the model
 
 (def furnace-pos [2 64 0])

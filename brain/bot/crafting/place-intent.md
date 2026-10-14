@@ -22,6 +22,8 @@ sourceRefs:
   - test/clojurecraft/place_test.clj#a-block-dug-again-at-once-may-go-in-a-passage
   - src/clojurecraft/place.clj#defn use-item-on
   - test/clojurecraft/place_test.clj#a-rejected-placement-fails-instead-of-believing
+  - test/clojurecraft/place_test.clj#a-spot-is-never-a-flower
+  - test/clojurecraft/sim_test.clj#a-table-is-never-placed-into-a-flower
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[placement-judged-by-server]]"
@@ -44,13 +46,14 @@ related:
 `{:intent/kind :equip :intent/item :stone_pickaxe}` is `equip` alone: the item into the held slot (a hotbar select, or a window-0 swap from the main inventory), done once it is there. Staircases and the mine act start one when the tool a dig needs is only in the main inventory ([[dig-timeline]]).
 
 ## Key files
-- `place.clj`, `spot` - pure: the first cell of `around` (rings 1-3, feet level then one down then one up) whose target is loaded, not solid and not liquid, whose support below is solid, which does not intersect the player (`inside-player?`), and whose centre is within `place-reach` (4.0) of the eye ([[spot-two-blocks-away]]).
+- `place.clj`, `spot` - pure: the first cell of `around` (rings 1-3, feet level then one down then one up) whose target is loaded and replaceable (`blocks/replaceable?`: air or a grass, never a flower), whose support below is solid, which does not intersect the player (`inside-player?`), and whose centre is within `place-reach` (4.0) of the eye ([[spot-two-blocks-away]]).
 - `place.clj`, `use-item-on` - the packet, sequence and timestamp.
 - `place_test.clj` - a property (300 cases) that a spot always exists on flat ground, never overlaps the player, sits on its support, and is in reach; and that a rejection (block-update with air, then the ack) fails `:rejected` while a confirming block-update is done and remembered.
 
 ## Gotchas
 - **A passage is fine for a table.** The `:place-table` row says `:goal/passage-ok? true`: the table is taken along when the bot goes on (`make/take-table`), so the way is free again. A plain spot is tried first, then a niche, then the passage. Gym batch solid-b1 run 6 broke its pickaxe in a stairwell one wide, where the only spot was the stair and no niche could be cut without a pickaxe, and failed `:no-spot` three times (`a-table-may-go-in-the-passage-a-furnace-not`).
 - **A passage is fine for a block dug again at once.** The redig's place says `:intent/passage-ok?`: its gravel is dug again straight away and leaves the way open. Gym batch iron-a6 run 1, at the foot of its stairs between its table and furnace, had no spot for the gravel but the stair behind it and failed `:no-spot` (`a-block-dug-again-at-once-may-go-in-a-passage`).
+- **Never into a flower.** The server places only into a block its replaceable tag lists (air, grass, ferns, a dead bush, vines); a flower bed such as wildflowers stays and the placement is refused with a `block-update` of the flower. Race 38477665442 bot Clj_r23's nearest cell held wildflowers and its table was refused three times, `:rejected` (`a-spot-is-never-a-flower`, `a-table-is-never-placed-into-a-flower`).
 - **Never on a table.** A right-click on a crafting table or a furnace opens it instead of placing against it, so `spot` never takes one as support: gym batch iron-a5 run 4's only spot was on its table, and the gravel it meant to dig again for flint was never placed (`:rejected` three times, `a-block-is-never-placed-on-a-table`).
 - The local world is never written by the intent; only the server's `block-update` makes the table appear, and then memory records it (`memory/watched?` includes tables and furnaces, `memory/placed-kinds`), and `make/near` finds either within 24 blocks.
 - A swap click's answer changes slot state ids exactly like a craft click; the intent waits for it.

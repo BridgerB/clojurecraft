@@ -148,3 +148,22 @@
   (let [row (fn [id] (first (filter #(= id (:goal/id %)) plan/goals)))]
     (is (:intent/passage-ok? (plan/act {} (row :place-table))))
     (is (not (:intent/passage-ok? (plan/act {} (row :place-furnace)))))))
+
+(deftest a-spot-is-never-a-flower
+  ;; race 38477665442 bot Clj_r23: the nearest cell held wildflowers, which the server's
+  ;; replaceable tag does not list, and the table was refused three times, :rejected
+  (let [flowers (into {}
+                      (for [dx [-1 0 1]
+                            dz [-1 0 1]
+                            :when (not= [dx dz] [0 0])]
+                        [[(+ 8 dx) 64 (+ 8 dz)] (blocks/default-state :wildflowers)]))
+        w (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column flowers)})
+        [target] (place/spot w)]
+    (is (= 2 (max (abs (- (first target) 8)) (abs (- (last target) 8)))) "the second ring")
+    (is (= 64 (second target)))
+    (testing "short grass is replaceable: a spot"
+      (let [grass (update-vals flowers (constantly (blocks/default-state :short_grass)))
+            w (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column grass)})]
+        (is (= 1
+               (max (abs (- (ffirst (place/spot w)) 8))
+                    (abs (- (last (first (place/spot w))) 8)))))))))

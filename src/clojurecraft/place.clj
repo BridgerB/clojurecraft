@@ -65,8 +65,10 @@
        (<= 2 (count (filter (fn [[dx dz]] (solid-at? world [(+ x dx) y (+ z dz)])) sides)))))
 
 (defn spot
-  "[target support] for placing a block near the player: target empty (air or a plant, not
-   liquid) and no passage, support solid and not a block a click opens (a table, a furnace:
+  "[target support] for placing a block near the player: target replaceable (air or a grass
+   the server lets a block take the place of, blocks/replaceable?: a flower is not, race
+   38477665442 bot Clj_r23 was refused three times on wildflowers), no passage, support
+   solid and not a block a click opens (a table, a furnace:
    right-clicked, it opens instead of taking the block; gym batch iron-a5 run 4 clicked its
    table three times to place a gravel and failed :rejected), not inside the player, within
    reach. A passage is allowed when passage-ok? (a block placed only to be dug again at once,
@@ -87,8 +89,7 @@
                         s (terrain/block-at world support)]
                   :when (and t
                              s
-                             (not (blocks/solid? t))
-                             (not= :liquid (blocks/type-of t))
+                             (blocks/replaceable? t)
                              (blocks/solid? s)
                              (not (contains? memory/placed-kinds (blocks/name-of s)))
                              (or passage-ok? (not (passage? world target)))

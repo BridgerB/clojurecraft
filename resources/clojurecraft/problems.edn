@@ -60,7 +60,7 @@
   :problem/done
   "The server's inventory read shows a wooden_pickaxe and an execute if block at the table's position finds a crafting_table."
   :problem/last-failure
-  "Recorded in CI: a pickaxe run on an uneven forest floor failed :no-spot because none of the twelve cells two blocks away was usable (fixed by searching rings 1 to 3, one up and one down, with an explicit body test). Recorded live 2026-10-10 and replayed: a table remembered 23 blocks away could not be walked to; three stuck walks failed the plan while the bot held planks for a new one (fixed: a blacklisted table no longer counts as near)."
+  "Recorded in CI: a pickaxe run on an uneven forest floor failed :no-spot because none of the twelve cells two blocks away was usable (fixed by searching rings 1 to 3, one up and one down, with an explicit body test). Recorded live 2026-10-10 and replayed: a table remembered 23 blocks away could not be walked to; three stuck walks failed the plan while the bot held planks for a new one (fixed: a blacklisted table no longer counts as near). Race 38477665442 bot Clj_r23 (issue #84, six real bots): the nearest cell held wildflowers, which the server's replaceable tag does not list, so the table was refused three times, :rejected; a spot is now air or a grass only, never a flower, and the model refuses the same."
   :problem/sources ["docs/issues/02-place-block-and-3x3-crafting.md"
                     "brain/bot/decisions/spot-two-blocks-away.md"
                     "brain/bot/decisions/placement-judged-by-server.md"]}
