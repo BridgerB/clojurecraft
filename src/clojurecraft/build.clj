@@ -667,7 +667,7 @@
           (< fy y) {:intent/kind :stairs-up :intent/to-y y :intent/for :build}
           :else nil)))
 
-(defn toward
+(defn toward-stand
   "The child that brings the feet to stand, a cell of the build's way (a landing, the lava's
    stand): a walk when a route reaches it, else at its height the first block in the way dug
    (clear-stand), else the way to its height (to-height); nil when the feet are there."
@@ -696,9 +696,9 @@
             {:intent/kind :scoop :intent/target source :intent/fluid :lava})
           (or (intent/routable? world {:intent/kind :walk :intent/target stand :intent/for :build})
               (= (long (physics/y-of (intent/feet world))) (second stand)))
-          (toward world stand build origin facing)
+          (toward-stand world stand build origin facing)
           :else
-          (or (toward world at-landing build origin facing)
+          (or (toward-stand world at-landing build origin facing)
               {:intent/kind :walk :intent/target stand :intent/for :build}))))
 
 (defn approach-stand
@@ -721,7 +721,7 @@
           (let [blocked (when build (clear-stand world stand build origin facing))]
             (cond blocked blocked
                   (or (path/standable? world stand) (not (#{:place :dig} op)))
-                  (or (when build (toward world stand build origin facing))
+                  (or (when build (toward-stand world stand build origin facing))
                       {:intent/kind :walk :intent/target stand :intent/for :build})
                   :else
                   (let [work (cond (= :place op) (or (foundation world pos) pos)
