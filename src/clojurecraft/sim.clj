@@ -30,6 +30,7 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.fluid :as fluid]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memo :as memo]
             [clojurecraft.packet :as packet]
@@ -70,7 +71,7 @@
         (let [k (column-key pos)]
           (when-let [column (column-of sim k)] (chunk/block-at {k column} pos)))))
 
-(declare disturb full sync-window stream-from)
+(declare disturb full sync-window stream-from set-cell)
 
 (defn held-slot
   "The window-0 slot of the hotbar place the client last selected (set-carried-item), the
@@ -187,6 +188,7 @@
      :sim/furnaces {}
      :sim/falls {}
      :sim/falling {}
+     :sim/fluids {}
      :sim/next-window 1
      :sim/clicks 0
      :sim/drop-clicks (or drop-clicks #{})
@@ -1193,28 +1195,43 @@
           nil
           (ray-cells sim look)))
 
-(def quench-sides
-  "The cells round a lava block water turns it to stone from: above and the four sides, never
-   below (LiquidBlock.shouldSpreadLiquid over POSSIBLE_FLOW_DIRECTIONS, each one's opposite)."
-  [[0 1 0] [0 0 -1] [0 0 1] [1 0 0] [-1 0 0]])
+(def neighbours
+  "The six cells round a cell, as offsets."
+  [[0 1 0] [0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]])
+
+(defn around "The cell and the six round it." [pos] (cons pos (map #(mapv + pos %) neighbours)))
+
+(defn ultrawarm?
+  "Is the player's dimension the Nether, where lava runs faster and further?"
+  [sim]
+  (= dimension/nether (:sim/dimension sim)))
+
+(defn wake-fluids
+  "Every fluid cell at or round pos ticks its kind's delay from now (the server schedules a liquid's
+   tick on its own placement and on a neighbour's change); an earlier tick already due stays."
+  [sim pos]
+  (let [at #(block-at sim %)]
+    (reduce (fn [sim c]
+              (if-let [ms (fluid/delay-ms at c (ultrawarm? sim))]
+                (update-in sim [:sim/fluids c] #(min (or % Long/MAX_VALUE) (+ (:sim/now sim) ms)))
+                sim))
+            sim
+            (around pos))))
 
 (defn quench
-  "The model after water meets lava at or round pos: each lava block there with water above it or
-   beside it becomes obsidian when a source, cobblestone when flowing, and the client is told."
+  "The model after water and lava meet at or round pos: each lava cell there that water touches
+   turns to obsidian or cobblestone at once (fluid/mix), the client told and the cells round it
+   woken."
   [sim pos]
   (reduce (fn [sim cell]
-            (let [id (block-at sim cell)
-                  water? (some #(contains? blocks/water-states (block-at sim (mapv + cell %)))
-                               quench-sides)]
-              (cond (not (and (contains? blocks/lava-states id) water?)) sim
-                    :else
-                    (let [stone (blocks/default-state
-                                 (if (= id blocks/lava-base) :obsidian :cobblestone))]
-                      (-> sim
-                          (assoc-in [:sim/placed cell] stone)
-                          (send {:packet/name :block-update :pos cell :state stone}))))))
+            (if-let [stone (fluid/mix #(block-at sim %) cell)]
+              (-> sim
+                  (assoc-in [:sim/placed cell] stone)
+                  (send {:packet/name :block-update :pos cell :state stone})
+                  (wake-fluids cell))
+              sim))
           sim
-          (cons pos (map #(mapv + pos %) [[0 1 0] [0 -1 0] [1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]))))
+          (around pos)))
 
 (defn swap-held
   "The model with the one held item in the held slot exchanged for item (a bucket filled or
@@ -1256,9 +1273,7 @@
                 (send ack)))
           into
           (-> sim
-              (assoc-in [:sim/placed into] fluid)
-              (send {:packet/name :block-update :pos into :state fluid})
-              (quench into)
+              (set-cell into fluid)
               (swap-held (get blocks/items :bucket))
               (send ack))
           :else (send sim ack))))
@@ -1276,13 +1291,51 @@
   (boolean (and id (not (blocks/solid? id)))))
 
 (defn disturb
-  "The block at pos changed: a falling block over it looks under itself fall-delay-ms from now,
-   as vanilla schedules its tick on the neighbour update."
-  [sim [x y z]]
+  "The block at pos changed, and the neighbour updates the server sends follow: a falling block
+   over it looks under itself fall-delay-ms from now; lava that water now touches turns to stone
+   at once (quench); every fluid at or round it ticks its delay from now (wake-fluids)."
+  [sim [x y z :as pos]]
   (let [above [x (inc y) z]]
-    (if (blocks/falls? (block-at sim above))
-      (assoc-in sim [:sim/falls above] (+ (:sim/now sim) fall-delay-ms))
-      sim)))
+    (-> (if (blocks/falls? (block-at sim above))
+            (assoc-in sim [:sim/falls above] (+ (:sim/now sim) fall-delay-ms))
+            sim)
+        (quench pos)
+        (wake-fluids pos))))
+
+(defn set-cell
+  "The model with the block at pos set to state: the client told, and its neighbours updated
+   (disturb)."
+  [sim pos state]
+  (-> sim
+      (assoc-in [:sim/placed pos] state)
+      (send {:packet/name :block-update :pos pos :state state})
+      (disturb pos)))
+
+;; ---------------------------------------------------------------- fluids
+
+(defn fluid-tick
+  "One fluid cell's tick: it becomes what the rules say its neighbours feed it (fluid/next-state,
+   air when nothing), then writes what it spreads into the cells round it (fluid/spread); each
+   change is set-cell's, so the cells round it are woken in turn."
+  [sim pos]
+  (let [at #(block-at sim %)
+        id (at pos)
+        nxt (fluid/next-state at pos (ultrawarm? sim))
+        now-id (cond (nil? (fluid/state-of id)) id
+                     (nil? nxt) blocks/air
+                     :else (fluid/block-state nxt))
+        sim (if (= now-id id) sim (set-cell sim pos now-id))]
+    (reduce (fn [sim [c state]] (if (= state (block-at sim c)) sim (set-cell sim c state)))
+            sim
+            (fluid/spread #(block-at sim %) pos (ultrawarm? sim)))))
+
+(defn tick-fluids
+  "One game tick of fluids: every cell whose tick is due, in position order so a run replays,
+   ticks (fluid-tick)."
+  [sim]
+  (let [now (:sim/now sim)
+        due (sort (keep (fn [[p at]] (when (<= at now) p)) (:sim/fluids sim)))]
+    (reduce (fn [sim p] (fluid-tick (update sim :sim/fluids dissoc p) p)) sim due)))
 
 (defn rest-y
   "The lowest height a block falling in column x z, its bottom in cell y, can come down to: the
@@ -1383,12 +1436,14 @@
 
 (defn tick
   "Advance the server clock to now, one game tick: send a keep-alive when one is due, breathe
-   or drown, cook in every furnace, let gravel and sand fall, carry a player through a portal,
+   or drown, cook in every furnace, let gravel and sand fall, let water and lava flow, carry a
+   player through a portal,
    and hand over every item whose pickup delay has passed and
    that the player stands within reach of."
   [sim now]
-  (let [sim (through-portal (tick-falls (tick-furnaces (tick-delayed
-                                                        (drown (kill (assoc sim :sim/now now))))))
+  (let [sim (through-portal (tick-fluids (tick-falls (tick-furnaces
+                                                      (tick-delayed
+                                                       (drown (kill (assoc sim :sim/now now)))))))
                             now)
         sim (if (>= now (:sim/next-keep-alive sim))
               (-> sim

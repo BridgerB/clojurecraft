@@ -14,6 +14,13 @@ sourceRefs:
   - src/clojurecraft/sim.clj#defn loot
   - src/clojurecraft/sim.clj#defn poured
   - src/clojurecraft/sim.clj#defn quench
+  - src/clojurecraft/sim.clj#defn wake-fluids
+  - src/clojurecraft/sim.clj#defn tick-fluids
+  - src/clojurecraft/fluid.clj#defn new-liquid
+  - src/clojurecraft/fluid.clj#defn spread
+  - src/clojurecraft/fluid.clj#defn mix
+  - test/clojurecraft/fluid_test.clj#water-spreads-seven-blocks-on-a-floor
+  - test/clojurecraft/fluid_test.clj#water-directly-above-a-lava-source-makes-obsidian
   - src/clojurecraft/sim.clj#defn light
   - src/clojurecraft/sim.clj#defn through-portal
   - test/clojurecraft/sim_test.clj#standing-in-the-portal-four-seconds-goes-to-the-nether
@@ -45,6 +52,9 @@ related:
 ## Falling blocks
 A block of one of `blocks/falling-types` looks under itself `fall-delay-ms` (two game ticks) after the block under it changed (`disturb`, called by a break, a placement, a scoop and a fall), as the game's `FallingBlock` schedules its tick on the neighbour update. If the cell under it is then free (air, a liquid, anything passable: `FallingBlock.isFree`), its cell becomes air for the client and it is in the air in `:sim/falling`. Each game tick `fall-tick` moves it as `FallingBlockEntity.tick` does (it gains 0.04 blocks a tick of speed, moves, keeps 98% of it) and lands it on whatever is under it at that moment, so a second gravel lands on the first rather than in the cell the first was still falling into: one block down takes seven ticks. Read in the 26.1.2 jar with `javap`. Not modelled: a block landing in a cell no longer free (the game drops it as an item), and harm to a player under it.
 
+## Water and lava
+The model moves fluids as the server does (issue #125). The rules are `fluid.clj`, data and pure functions over a cell lookup, from vanilla's `FlowingFluid`, `WaterFluid`, `LavaFluid` and `LiquidBlock`: a fluid state is a map (`:fluid/kind :fluid/amount :fluid/source? :fluid/falling?`, the block's level is its legacy encoding, `state-of`, `block-state`); `kinds` holds each kind's drop-off, slope search, tick delay and whether two sources make a third, for the Overworld and the Nether. A cell's tick makes it what its neighbours feed it (`new-liquid`, `next-state`: a source stays, a flow is falling under its kind, else the most beside it less the drop-off, nothing at none, so a flow recedes block by block when its source is scooped) and then spreads (`spread`: down first into a cell holding no solid and no fluid; on the level only when it cannot go down, toward the open sides nearest a way down, `side-spread`, `slope-distance`; lava falling into water makes stone). Lava touched by water above or beside turns at once to obsidian when a source and cobblestone when a flow (`mix`). The model only schedules: every change goes through `set-cell`, whose `disturb` quenches at once and wakes every fluid at or round the cell to tick its kind's delay later (`wake-fluids`, `:sim/fluids` {cell due-ms}); `tick-fluids` ticks the due cells in position order, so a run replays. Not modelled: waterlogged blocks as flows, lava's random slow-down, fire.
+
 ## Key files
 - `sim.clj`, `init` - takes `{:column bytes :spawn [x y z] :keep-alive-every ms :drop-clicks #{n} :drop-breaks #{n} :inventory {slot item} :respawn [x y z]}` (`:drop-breaks`: the FINISHes, by ordinal, the model answers with the ack alone and the block left standing, as a lagging server does with an early FINISH queued behind another; `finish-dig`); an `:inventory` slot is a named place (`[:hotbar 0]`, `[:main 3]`, read by `inventory/slot`) or a window-0 slot number, so a test says where an item is rather than which wire slot that is.
 - `sim.clj`, `run` - drives a bot reducer against the model 50 ms per tick, sends `:go` once loaded, stops on a predicate.
@@ -52,7 +62,7 @@ A block of one of `blocks/falling-types` looks under itself `fall-delay-ms` (two
 - `sim_test.clj` - end-to-end tests: one log held (`:wood`), a low canopy cleared, a table and four sticks (`:kit`), a placed table and a wooden pickaxe (`:pickaxe`), recovery from a lost click, and the iron kit (`the-iron-kit-from-a-stone-pickaxe-and-its-recording-replays`): from a stone pickaxe, a table, eight cobblestone and four logs on one column with coal, iron, gravel and a pond, to flint and steel and a filled water bucket in 92 simulated seconds, in the kit's order (an ore and a coal, the furnace, one ingot, gravel dug again four times to flint with seed 4, the flint and steel, the pickaxe put back in hand, three more ores, three ingots, the bucket, filled from the bank). The run is recorded through `record/tap!` (each event, then only the effects it added: `sim/run` clears effects once a tick) and `record/verify` replays it with every sent packet the same.
 
 ## Gotchas
-- The model knows window 0, the crafting table and the furnace, fills an empty bucket with water, and drops gravel and sand: no other containers, no pouring, no lava, no dimensions yet; every roadmap issue extends it first.
+- The model knows window 0, the crafting table and the furnace, fills and pours buckets of water and lava, moves them as the server does, and drops gravel and sand: no other containers; every roadmap issue extends it first.
 - The sim uses `recipe/match` for slot 0, so bot and model agree on recipes by construction; only a live run checks the matcher against vanilla.
 - A pickup gives the item the broken block's loot table dropped, which the model stores with the item entity.
 
