@@ -583,6 +583,7 @@
           (and (> d 0.4) (ledge-ahead? world goal))
           (-> world
               (assoc :player/controls {})
-              (fail :ledge))
+              (game/say (str "collect: a ledge ahead, the drop at " (mapv long goal) " is left"))
+              done)
           (> d 0.4) (assoc world :player/controls (toward world goal 0.0))
           :else (assoc world :player/controls {}))))

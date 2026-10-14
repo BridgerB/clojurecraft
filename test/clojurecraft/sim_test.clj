@@ -1766,7 +1766,9 @@
 
 (deftest a-collect-stops-at-a-ledge
   ;; gym batch iron-a9 run 3 dug gravel for flint at a ravine's edge at y -7: the collect walked
-  ;; after the drop and the bot fell from a high place
+  ;; after the drop and the bot fell from a high place. It stops, and the drop is left: it ends
+  ;; done with nothing, not failed, since three such drops in a row failed the plan :ledge (sim
+  ;; race 38477665389, issue #93, 45 runs at one landing)
   (let [ravine (into {} (for [y (range 50 64) z (range 16)] [[10 y z] blocks/air]))
         [w sim] (intent-run {:intent/kind :collect
                              :intent/target [10 63 8]
@@ -1775,8 +1777,9 @@
                             64
                             (get blocks/items :stone_pickaxe)
                             20000)]
-    (is (= [:failed :ledge] [(:intent/status (:plan/intent w)) (:intent/reason (:plan/intent w))]))
+    (is (= :done (:intent/status (:plan/intent w))) (pr-str (:plan/intent w)))
     (is (<= 64.0 (second (:player/pos w))) "still on the ground beside the ravine")
+    (is (zero? (get (held w) :gravel 0)) "nothing picked up: the drop is left")
     (is (empty? (:sim/violations sim)))))
 
 (deftest a-tunnel-with-no-pickaxe-stops-for-one
