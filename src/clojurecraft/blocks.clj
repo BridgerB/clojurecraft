@@ -143,6 +143,14 @@
   [id]
   (contains? replaceable-states id))
 
+(defn placeable-into?
+  "Does the server let a block take the place of state id: replaceable? (air, a grass), or a
+   fluid? The game's replaceable tag lists water and lava beside the plants: a block placed
+   into a source or a flow replaces it (the portal's pad is cast into the pond's edge). The bot
+   chooses its own spots among replaceable? cells; this is the server's wider rule, the model's."
+  [id]
+  (or (replaceable? id) (= :liquid (type-of id))))
+
 (defn log-name?
   "Does a block or item name end in _log (every species, stripped ones too)?"
   [n]
