@@ -1932,6 +1932,59 @@
     (is (not-any? #(<= 9 (first %)) (:sim/broken sim)) "nothing dug east, under the lake")
     (is (empty? (:sim/violations sim)))))
 
+(def aquifer-over-the-pocket
+  "The pocket under an aquifer: stone over the head to y 68, water at y 69 and 70 from x 0 to
+   x 9 across the hill, and stone from y 71 to the hilltop over the water, so the top of every
+   column is dry ground. East of x 9 the rock is dry."
+  (merge pocket (into {} (for [x (range 10) y [69 70] z (range 16)] [[x y z] blocks/water-base]))))
+
+(deftest stairs-up-under-an-aquifer-step-out-from-under-it
+  ;; issue #61 (R3 world 6, 104 sim runs a round): a climb for water from y 37 stood under an
+  ;; aquifer whose floor was two blocks over its head; every stair up was refused :unsafe for
+  ;; the water over the cell it opened, and the level steps, the top of every column dry, went
+  ;; north under the aquifer until :boxed. The sheet ended three columns south. Here it ends two
+  ;; columns east, and north, south and west it runs to the edge of the loaded world
+  (let [[w sim] (staircase-run :stairs-up aquifer-over-the-pocket
+                               66 (get blocks/items :stone_pickaxe)
+                               70 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/level-steps])))
+    (is (<= 70.0 (second (:player/pos w))))
+    (is (every? (fn [[x _ z]] (and (<= 8 x) (= 8 z))) (:sim/broken sim))
+        "nothing dug north, south or west, under the aquifer")
+    (is (not-any? #(= :water
+                      (some-> (sim/block-at sim %)
+                              blocks/fluid
+                              :fluid/kind))
+                  (for [x (range 16) y (range 64 69) z (range 16)] [x y z]))
+        "no water came down")
+    (is (empty? (:sim/violations sim)))))
+
+(def cave-under-the-roof
+  "deep-stone with a cave two high at y 66 and 67 across the hill: the bot stands on its floor
+   at y 65, and no stair up from it has its step."
+  (merge deep-stone (into {} (for [x (range 16) y [66 67] z (range 16)] [[x y z] blocks/air]))))
+
+(deftest stairs-up-lay-their-step-across-a-cave
+  ;; issue #61: the same climb walked thirty level steps along its own mine, a floor laid under
+  ;; each, since every stair up from the mine had no step under its new feet, and was :boxed at
+  ;; the level-step limit. A stair up lays its step as a stair down lays its floor
+  (let [pickaxe {:item (get blocks/items :stone_pickaxe) :count 1}
+        cobblestone {:item (get blocks/items :cobblestone) :count 16}
+        [w sim] (intent-run-holding {:intent/kind :stairs-up :intent/to-y 72}
+                                    cave-under-the-roof
+                                    66
+                                    {[:hotbar 0] pickaxe [:hotbar 1] cobblestone}
+                                    120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/level-steps])))
+    (is (<= 72.0 (second (:player/pos w))))
+    (is (<= 2 (count (:sim/placed sim))) "the steps across the cave were laid")
+    (is (< (:intent/level-steps (:plan/intent w) 0) 4) "climbed, not walked")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest the-table-is-taken-along-when-the-bot-goes-out
   ;; gym batch iron-a7 run 1 crafted three tables on its way down, a log each, and ran out of wood
   ;; for a pickaxe; a table left behind is a log spent on the next one
