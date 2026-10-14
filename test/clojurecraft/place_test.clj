@@ -60,25 +60,40 @@
       (is (= [[5 65 5] [5 64 5]] (place/spot w))))))
 
 (deftest a-rejected-placement-fails-instead-of-believing
-  (let [w (-> (standing [5.5 64.0 5.5])
-              (assoc :plan/status :active
-                     :plan/goals #{:pickaxe}
-                     :bot/sequence 7
-                     :plan/intent
-                     {:intent/kind :place
-                      :intent/item :crafting_table
-                      :intent/status :active
-                      :intent/stage :sent
-                      :intent/target [7 64 5]
-                      :intent/sequence 7
-                      :intent/sent-at 0}))
-        [w _] (fx/fold intent-step
-                       w
-                       [(packet {:packet/name :block-update :pos [7 64 5] :state 0})
-                        (packet {:packet/name :block-changed-ack :sequence 7})
-                        {:event/kind :tick :event/now 600 :event/rand 0.5}])]
-    (is (intent/failed? (:plan/intent w)))
-    (is (= :rejected (:intent/reason (:plan/intent w))))
+  ;; a placement the server answers with the cell still empty is a body standing in it (issue
+  ;; #106, PR #114): the spot is given up for another, up to place/max-refusals; refused with a
+  ;; block in the cell, or once the refusals are spent, it fails :rejected
+  (let [sent (fn [refused]
+               (-> (standing [5.5 64.0 5.5])
+                   (assoc :plan/status :active
+                          :plan/goals #{:pickaxe}
+                          :bot/sequence 7
+                          :plan/intent
+                          (cond-> {:intent/kind :place
+                                   :intent/item :crafting_table
+                                   :intent/status :active
+                                   :intent/stage :sent
+                                   :intent/target [7 64 5]
+                                   :intent/sequence 7
+                                   :intent/sent-at 0}
+                            (seq refused) (assoc :intent/refused refused)))))
+        answer (fn [w state]
+                 (first (fx/fold intent-step
+                                 w
+                                 [(packet {:packet/name :block-update :pos [7 64 5] :state state})
+                                  (packet {:packet/name :block-changed-ack :sequence 7})
+                                  {:event/kind :tick :event/now 600 :event/rand 0.5}])))
+        empty-once (:plan/intent (answer (sent #{}) 0))
+        spent (set (for [x (range place/max-refusals)] [x 70 0]))
+        empty-spent (:plan/intent (answer (sent spent) 0))
+        stone (:plan/intent (answer (sent #{}) 1))]
+    (is (not (intent/failed? empty-once)) "an empty answer is not believed a placement")
+    (is (contains? (:intent/refused empty-once) [7 64 5]) "the cell is refused")
+    (is (not= :sent (:intent/stage empty-once)) "and another spot is sought")
+    (is (intent/failed? empty-spent))
+    (is (= :rejected (:intent/reason empty-spent)) "the refusals spent, it fails")
+    (is (intent/failed? stone))
+    (is (= :rejected (:intent/reason stone)) "a block put back fails at once")
     (testing "a placement the server confirms is done"
       (let [w (-> (standing [5.5 64.0 5.5])
                   (assoc :plan/intent
