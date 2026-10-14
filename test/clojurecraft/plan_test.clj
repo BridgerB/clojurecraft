@@ -178,6 +178,34 @@
     (is (= :walk (:intent/kind (wood/gather-next ground)))
         "on open ground the trunk is walked to")))
 
+(def canopy-pocket
+  "A pocket one deep under an oak canopy, like race 38477665442 runner 10 Clj_r16's at
+   [2256 69 4597]: walls two high round the feet at [8 64 8], the one step north open at body
+   height but leaves at head height over it and over the feet, so no jump climbs it; a trunk on
+   open ground six blocks north."
+  (merge
+   (into
+    {}
+    (for [dx [-1 0 1] dz [-1 0 1] y [64 65] :when (not= [dx dz] [0 0])] [[(+ 8 dx) y (+ 8 dz)] 1]))
+   {[8 65 7] blocks/air}
+   (into {} (for [[x z] [[8 7] [8 8] [7 7] [9 7] [7 8] [9 8] [8 6]]] [[x 66 z] 252]))
+   {[8 64 2] 136 [8 65 2] 136 [8 66 2] 136 [8 67 2] 136 [8 68 2] 252}))
+
+(deftest a-pocket-under-a-canopy-is-climbed-out-of
+  ;; race 38477665442 runner 10 bot Clj_r16 (issue #63): after the first log the bot stood in a
+  ;; hole under an oak canopy, every exit a jump whose headroom the leaves filled (leaves are
+  ;; solid to a route), and twelve walks to trunks failed :no-path. A trunk no route reaches is
+  ;; passed over (#75) and the pocket, not out of the ground, has stairs cut up out of it (#56)
+  (let [w (remembered canopy-pocket [8.5 64.0 8.5])
+        feet (intent/feet w)]
+    (is (terrain/under-sky? w feet) "leaves are not cover: the sky is over the pocket")
+    (is (not (stairs/out? w feet)) "but no level step leads onto open ground")
+    (is (not (intent/routable? w (wood/log-walk w [8 64 2]))) "every jump out meets leaves")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y (stairs/climb-to w terrain/top-y)
+            :intent/for :surface}
+           (wood/gather-next w)))))
+
 (deftest a-near-trunk-a-route-reaches-is-walked-to
   ;; the plain case, unchanged: on the surface with a trunk in reach the gather walks to it
   (is (= {:intent/kind :walk :intent/target [3 64 0] :intent/for :log :intent/trunk [3 64 0]}

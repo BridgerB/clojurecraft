@@ -576,6 +576,35 @@
     (is (= 1 (inventory/logs-held w)))
     (is (some (:sim/broken sim) (keys ceiling)) "it broke a leaf over the ledge")))
 
+(def canopy-pocket
+  "A pocket one deep under an oak canopy (race 38477665442 runner 10 Clj_r16, issue #63): walls
+   two high round the feet at [8 64 8], the step north open at body height but leaves at head
+   height over it and over the feet, and a trunk on open ground six blocks north."
+  (merge
+   (into
+    {}
+    (for [dx [-1 0 1] dz [-1 0 1] y [64 65] :when (not= [dx dz] [0 0])] [[(+ 8 dx) y (+ 8 dz)] 1]))
+   {[8 65 7] blocks/air}
+   (into {} (for [[x z] [[8 7] [8 8] [7 7] [9 7] [7 8] [9 8] [8 6]]] [[x 66 z] 252]))
+   {[8 64 2] 136 [8 65 2] 136 [8 66 2] 136 [8 67 2] 136 [8 68 2] 252}))
+
+(deftest a-log-is-gathered-from-a-pocket-under-a-canopy
+  ;; issue #63: in the pocket every jump out meets leaves, so no route reaches the trunk; the
+  ;; bot cuts stairs up through the leaves and the wall, then walks to the trunk, with no walk
+  ;; failed :no-path on the way
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes canopy-pocket)
+                                    :spawn [8.5 64.0 8.5]})
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         {:event/kind :go :go/goals [:wood]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (inventory/logs-held w)))
+    (is (zero? (:plan/unwalkable w)) "no walk failed :no-path")
+    (is (zero? (:plan/attempts w)) "no failed attempts")
+    (is (some (:sim/broken sim) [[8 66 8] [8 66 7]]) "it cut up through the leaves")))
+
 (def bank
   "A trunk on a stone bank four blocks high (x 2), the pit beside it walled in (z 2; the chunk's
    unloaded neighbours wall x -1 and z -1)."
