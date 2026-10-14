@@ -67,6 +67,11 @@
    "A win is a release (race.yml, issue #116): release <dir> <run> <sha> tags the commit and attaches the winners' recordings"
    :requires ([clojurecraft.win :as win])
    :task (apply win/-main *command-line-args*)}
+  churn
+  {:doc
+   "The churn's reports while it plays (issue #127): batch <real|sim> <data-dir> <artifact> <run> <sha> <code-at> <runner>"
+   :requires ([clojurecraft.churn :as churn])
+   :task (apply churn/-main *command-line-args*)}
   failures
   {:doc "Failed runs become issues, one per signature (simrace.yml, race.yml): report <dir> <title>"
    :requires ([clojurecraft.failures :as failures])

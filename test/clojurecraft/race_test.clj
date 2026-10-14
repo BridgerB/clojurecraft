@@ -137,3 +137,18 @@
     (is (= 1 (:race/ok s)))
     (is (= {:goal 1 :no-site 2} (:race/reasons s)))
     (is (= ["a" "b" "c"] (map :name (:race/runs s))))))
+
+(deftest a-race-plays-for-its-deadline-else-its-minutes
+  (is (= 600000 (race/run-ms {:race/deadline-ms 600000 :race/run-minutes 330}))
+      "the capacity ramp's one deadline")
+  (is (= 19800000 (race/run-ms {:race/run-minutes 330 :race/timeout-ms 5})) "the churn's job")
+  (is (= 5 (race/run-ms {:race/timeout-ms 5}))))
+
+(deftest a-bot-the-job-ends-is-cut-never-filed
+  (let [r {:ok false :until "nether" :reason :timeout :plan {:plan/reached #{:wood}}}
+        m (race/marked r)]
+    (is (:run/cut? m))
+    (is (:run/infra? m) "bb failures files no infrastructure stop")
+    (is (:run/signature m) "the stage it was on is still kept")
+    (is (not (:run/cut? (race/marked (assoc r :reason :no-site)))) "a bot's own stop is a failure")
+    (is (= {:ok true :reason :goal} (race/marked {:ok true :reason :goal})) "a pass is unchanged")))

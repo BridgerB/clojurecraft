@@ -5,9 +5,12 @@ name: race
 # carrying ci/race.edn's bots from landings of their own to the target (clojure -M:race). A push
 # to main (a merge) cancels the race running and starts the new code's: the races always run
 # what is merged, and there is no second branch to keep in step.
-# The board (BOARD lines in the Race step's log) shows every bot each minute while it runs. The
-# round's facts (how many reached each milestone, the failures by signature) go to the results
-# page on gh-pages (bb page, issue #116) when the report job ends.
+# Each server stays full the whole job (issue #127): a bot that ends is replaced at once by a
+# fresh one, no bot waits for another, and a bot still playing when the job ends is cut, never
+# filed. The board (BOARD lines in the Race step's log) shows the bots playing each minute. Every
+# 20 minutes, staggered by runner, the runner reports the bots that ended since its last report
+# (bb churn batch): their failures to the issues, their facts to the results page on gh-pages as
+# a batch of this run (bb page), a win as a release. Nothing waits for the slowest runner.
 
 # The rounds never stop (the churn): one runs at a time on the latest main, back to back. A push
 # to main cancels the running round and starts the new code's. Any other start (the next job
@@ -59,21 +62,12 @@ jobs:
                    (println (str "bot-heap=" (:race/bot-heap-mb r))))' >> "$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
-  worlds:
-    # each of the race's landing sets (ci/gym.edn R1-R4), built once and cached (world.yml); a
-    # race that finds its set cached spends a restore here, never a build
-    needs: plan
-    strategy:
-      matrix:
-        set: ${{ fromJSON(needs.plan.outputs.sets) }}
-    uses: ./.github/workflows/world.yml
-    with:
-      set: ${{ matrix.set }}
-
   race:
-    needs: [plan, worlds]
+    # the landing sets' worlds are built once by world.yml (dispatch it when a set's key changes)
+    # and only restored here: a miss fails the job at once
+    needs: plan
     runs-on: ubuntu-24.04
-    timeout-minutes: 355              # GitHub kills a job at 360; the bots stop at :race/timeout-ms (320)
+    timeout-minutes: 355              # GitHub kills a job at 360; the slots stop starting bots near :race/run-minutes (330)
     strategy:
       fail-fast: false
       max-parallel: 20
@@ -148,7 +142,8 @@ jobs:
           done
       - name: Race
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}   # the churn's reports: issues, the page, releases
+          RUNNER_N: ${{ matrix.runner }}
         run: |
           races=""
           for k in $(seq 1 "$SERVERS"); do mkdir -p "data/race/s$k"; touch "data/race/s$k/race.log"; done
@@ -166,10 +161,27 @@ jobs:
               > "$dir/race.log" 2>&1 &
             races="$races $!"
           done
+          code_at=$(git show -s --format=%cI "$GITHUB_SHA")
+          report() {
+            bb churn batch real data/race "race-$GITHUB_SHA-$RUNNER_N" "$GITHUB_RUN_ID" "$GITHUB_SHA" "$code_at" "$RUNNER_N" \
+              || echo "churn: the batch's report failed; its lines wait for the next"
+          }
+          playing() { for p in $races; do kill -0 "$p" 2>/dev/null && return 0; done; return 1; }
+          # every 20 minutes while the races play, runner r's first 2.5 min x (r-1) later than runner 1's
+          (
+            next=$(( $(date +%s) + 1200 + (RUNNER_N - 1) * 150 ))
+            while playing; do
+              if [ "$(date +%s)" -ge "$next" ]; then report; next=$(( $(date +%s) + 1200 )); fi
+              sleep 60
+            done
+          ) &
+          churn=$!
           # shellcheck disable=SC2086 # one pid per word
           wait $races || true   # the races alone: the tail above never ends on its own. Bots
-                                # failing is what the report's issues are for; the step is red
-                                # only when the race itself could not run
+                                # failing is what the issues are for; the step is red only when
+                                # the race itself could not run
+          wait "$churn" || true
+          report                # the bots that ended since the last report, the cut ones among them
       - name: Summary
         if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
         env:
@@ -180,7 +192,7 @@ jobs:
             {
               echo "### runner ${{ matrix.runner }}, server $k, landing set ${{ steps.set.outputs.set }}"
               echo '```'
-              grep -E '^(RACE|RESULT) ' "$log" | cut -c1-400 || true
+              grep -E '^RACE ' "$log" | cut -c1-2000 || true
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
           done
@@ -200,53 +212,12 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
           path: data/race/
-      - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}   # the race logs alone, for the failures report
-        with:
-          name: racelog-${{ github.sha }}-${{ matrix.runner }}
-          retention-days: 7
-          if-no-files-found: ignore
-          path: data/race/s*/race.log
-
-  report:
-    needs: race
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: racelog-${{ github.sha }}-*
-          path: runs
-      - name: Failures become issues
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
-          sudo bash /tmp/bb.sh --version 1.13.225
-          # the newest reporter on the branch, not this run's: a rule change reaches runs already going
-          git fetch --depth=1 origin "$GITHUB_REF_NAME" && git checkout FETCH_HEAD -- bb bb.edn
-          bb failures report runs "Race ${{ github.run_id }} at ${GITHUB_SHA::7}" "$(git show -s --format=%cI "$GITHUB_SHA")" | tee failures.txt
-          bb page wall runs | tee wall.txt
-          { echo '### the wall: failures by the stage the bot was on, furthest first'; echo '```'; cat wall.txt; echo '```';
-            echo '### failures'; echo '```'; cat failures.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-      - name: The results page (gh-pages, issue #116)
-        env:
-          GH_TOKEN: ${{ github.token }}   # the run's start, the issues the round's signatures are filed as
-        run: |
-          bb page round runs real "$GITHUB_RUN_ID" "$GITHUB_SHA" "$(git show -s --format=%cI "$GITHUB_SHA")" > round.edn
-          cat round.edn
-          bb page publish round.edn
-      - name: A win is a release (issue #116)
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: bb win release runs "$GITHUB_RUN_ID" "$GITHUB_SHA"
 
   next:
     # the next round on main as it is now, queued as the group's pending run: it starts when this
-    # one ends. Even when the report failed; never when this round was cancelled (a push's round
-    # is already next).
-    needs: report
+    # one ends. Even when a runner failed; never when this round was cancelled (a push's round is
+    # already next).
+    needs: race
     if: ${{ !cancelled() && vars.RACE_CONTINUOUS != 'false' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
