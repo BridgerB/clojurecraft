@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  issues: read                          # the labels of the issues the request says it fixes
 
 concurrency:
   group: issue-${{ github.head_ref }}
@@ -30,14 +31,32 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - name: Which issue
+      - name: Which issues, and a moment for each
         env:
           HEAD_REF: ${{ github.head_ref }}
+          BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           n=$(echo "$HEAD_REF" | sed -E 's|^fix/([0-9]+).*|\1|')
           case "$n" in ''|*[!0-9]*) echo "::error::branch $HEAD_REF names no issue number"; exit 1;; esac
           echo "issue $n"
-          if [ ! -d "test/issues/$n" ]; then echo "::warning::test/issues/$n holds no snapshots: bb issue-check fetch $n"; fi
+          # the check is only as good as its moments (issue #116): every issue the request says it
+          # fixes and that has a sim reproduction (label sim) must carry a snapshot under
+          # test/issues/<n>/, else the check would pass with nothing to play; a real-only issue
+          # has no sim moment to carry and is only warned about
+          red=0
+          for m in $(printf '%s\n' "$BODY" | grep -oiE '(fixes|closes|resolves) #[0-9]+' | grep -oE '[0-9]+' | sort -un); do
+            labels=$(gh api "repos/$GITHUB_REPOSITORY/issues/$m" --jq '[.labels[].name] | join(",")' 2>/dev/null || echo '')
+            if ls "test/issues/$m"/*.edn.gz >/dev/null 2>&1; then
+              echo "issue $m: $(ls test/issues/$m/*.edn.gz | wc -l | tr -d ' ') snapshots"
+            elif echo ",$labels," | grep -q ',sim,'; then
+              echo "::error::issue $m is reproduced in the sim (label sim) but test/issues/$m holds no snapshot: bb issue-check fetch $m, or do not say Fixes"
+              red=1
+            else
+              echo "::warning::issue $m has no sim reproduction and no snapshot: it closes on the real recordings' word alone"
+            fi
+          done
+          [ "$red" = 0 ]
       # the race's captured worlds (simworld.yml), the key simrace.yml restores
       - name: R1's captured worlds
         uses: actions/cache/restore@v6
