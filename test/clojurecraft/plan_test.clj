@@ -664,3 +664,26 @@
       (is (= :tool-broke
              (:intention/reason (last (filter #(= :failed (:intention/event %))
                                               (memory/intentions w2)))))))))
+
+(deftest a-cell-a-place-or-a-redig-chose-is-never-blacklisted
+  ;; race 38477665442 bot Clj_r04 (issue #43): a redig failed :not-picked-up at the cell before
+  ;; its feet, the table for a spare pickaxe went into that cell, make/near skipped it as
+  ;; blacklisted, and the bot went for the wood of a new table with its last pickaxe
+  (let [w (assoc (world-state [0.5 64.0 0.5])
+                 :plan/status :active
+                 :plan/blacklist #{}
+                 :plan/attempts 0)
+        failed (fn [i]
+                 (plan/fail-intent w
+                                   (assoc i :intent/status :failed :intent/reason :not-picked-up)))]
+    (is (= #{}
+           (:plan/blacklist (failed
+                             {:intent/kind :redig :intent/target [1 64 0] :intent/item :gravel})))
+        "the redig's cell is where it put the gravel, not a place it could not reach")
+    (is (= #{}
+           (:plan/blacklist
+            (failed {:intent/kind :place :intent/target [1 64 0] :intent/item :crafting_table}))))
+    (is (= #{[1 64 0]} (:plan/blacklist (failed {:intent/kind :collect :intent/target [1 64 0]})))
+        "a collect that failed there still is")
+    (is (= 1 (:plan/attempts (failed {:intent/kind :redig :intent/target [1 64 0]})))
+        "the attempt counts")))

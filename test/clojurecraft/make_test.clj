@@ -423,3 +423,16 @@
     (is (= :mine-iron (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 4}))) "four held: the iron")
     (is (= :mine-iron (row (with-furnace (world-holding {:stone_pickaxe 2 :coal 1} false))))
         "no tree to walk to: no trip for the sticks")))
+
+(deftest a-table-placed-where-a-redig-failed-is-near
+  ;; issue #43: the planner's view of race 38477665442 bot Clj_r04 after its redig failed at
+  ;; [2098 39 2037] and the table was placed there; with the cell blacklisted, the table was not
+  ;; near and the spare pickaxe's row was :place-table again with no table to place
+  (let [kit (first (filter #(= :portal-kit (:goal/id %)) plan/goals))
+        held {:stone_pickaxe 1 :stick 2 :cobblestone 488 :coal 9 :flint_and_steel 1 :water_bucket 1}
+        w (world-holding held true)]
+    (is (= [7 64 5] (make/near w :crafting_table)))
+    (is (= :craft/stone_pickaxe (:goal/id (make/next-row w kit plan/goals)))
+        "the spare, from the table")
+    (is (nil? (make/near (assoc w :plan/blacklist #{[7 64 5]}) :crafting_table))
+        "a table the plan blacklisted (a walk to it failed) is not near: it is replaced")))

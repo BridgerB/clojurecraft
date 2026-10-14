@@ -1863,6 +1863,23 @@
     (is (= :gravel (blocks/name-of (sim/block-at sim [8 69 8]))) "the gravel never fell")
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-climb-steps-out-from-under-a-bed-of-gravel-not-along-it
+  ;; race 38477665442 bot Clj_r04 (issue #43): under a bed of gravel at y 42 every stair up was
+  ;; refused from each cell in turn, and the climb stepped thirty cells along the bed, two
+  ;; blocks dug a step, until its last pickaxe broke. A bed over the pocket east and west: the
+  ;; first level step goes north or south, where the next cell is not under gravel, and climbs
+  (let [blocks (merge pocket (into {} (for [x (range 16)] [[x 69 8] gravel-state])))
+        [w sim] (staircase-run :stairs-up blocks 66 (get blocks/items :wooden_pickaxe) 70 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/level-steps])))
+    (is (<= 70.0 (second (:player/pos w))))
+    (is (<= (:intent/level-steps (:plan/intent w) 0) 2)
+        "out from under the bed in a step, not along it")
+    (is (not-any? (fn [[x _ z]] (and (= 8 z) (not= 8 x))) (:sim/broken sim))
+        "no cell along the bed was opened")
+    (is (empty? (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- a bucket of water
 
 (def bank-pond

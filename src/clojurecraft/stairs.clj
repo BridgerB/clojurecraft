@@ -278,6 +278,13 @@
     (cond-> max-level-steps
       (and home (= :stairs-up kind)) (+ (long (physics/horizontal-distance feet home))))))
 
+(defn under-falling?
+  "Would a climb from feet cell [x y z] be refused for gravel or sand over the cell above the
+   head (up-safe?): does the block three up fall (blocks/falls?)?"
+  [world [x y z]]
+  (boolean (some-> (terrain/block-at world [x (+ y 3) z])
+                   blocks/falls?)))
+
 (defn step-aside
   "Every stair refused: a level step, the turns counted afresh, or :boxed when none is allowed
    or max-level-steps are spent. The step keeps the last one's way (:intent/level-dir) while it
@@ -288,7 +295,11 @@
    (shore-distance), since what refuses a climb is most often a lake or the sea overhead, and
    with no shore in sight toward the landing (:plan/go-at), which is land: gym batch iron-a7
    run 1, under a lake at y 44, stepped 32 east under it and failed :boxed; batch iron-a8 run 2,
-   under the sea with no shore in sight, :boxed three times."
+   under the sea with no shore in sight, :boxed three times. Going up, a way whose next cell is
+   not under gravel or sand (under-falling?) comes before any that is, whatever the last step's
+   way: under a bed of gravel every stair is refused again from the next cell, and race
+   38477665442 bot Clj_r04 stepped thirty cells along one at y 42, two blocks dug a step, until
+   its last pickaxe broke (issue #43)."
   [world {:intent/keys [kind dir level-steps level-dir] :or {level-steps 0}}]
   (let [[fx _ fz :as feet] (intent/feet world)
         back (when level-dir (mapv - level-dir))
@@ -302,6 +313,9 @@
                        (if home (physics/horizontal-distance [(+ fx dx) 0 (+ fz dz)] home) 0)])
                     round)
                    :else round)
+        ways (cond->> ways
+               (= :stairs-up kind)
+               (sort-by #(if (under-falling? world (last (level-cells feet %))) 1 0)))
         laid (fn [d]
                (let [cells (level-cells feet d)]
                  (and (level-clear? world cells) (lay world feet cells))))

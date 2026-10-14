@@ -206,9 +206,16 @@
       (assoc :plan/last i :plan/attempts 0 :plan/unwalkable 0)
       (dissoc :plan/intent)))
 
+(def placing-kinds #{:place :redig})  ; intents whose target is a cell they chose to put a block in, not a place they failed to reach
+
 (defn fail-intent
   "An intent failed: stop moving, blacklist its target (and count a failure against its trunk's
    column, for a log: digging the base moves the bottom up, the column stays), count the attempt.
+   A :place or a :redig (placing-kinds) blacklists nothing: its target is the cell it chose, and
+   the table placed there next would not count as near (make/near skips the blacklist): race
+   38477665442 bot Clj_r04 failed a redig :not-picked-up at the cell before its feet, placed
+   the table for a spare pickaxe in that cell, could not see it, and went for the wood of a new
+   one with its last pickaxe (issue #43).
    max-attempts failures in a row fail the plan with the intent's reason. A walk that failed
    :no-path counts apart, in :plan/unwalkable: its route was accepted and then could not be
    walked, so the target is given up and the next candidate is tried (three such walks, each a
@@ -223,7 +230,8 @@
     (-> world
         (memory/remember-intention i :failed)
         (assoc :player/controls {})
-        (cond-> (:intent/target i) (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
+        (cond-> (and (:intent/target i) (not (contains? placing-kinds (:intent/kind i))))
+                (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (cond-> (and (= :stairs-down (:intent/kind i)) (= :boxed (:intent/reason i)))
                 (update :plan/boxed-at (fnil conj #{}) (intent/feet world)))
         (cond-> (:intent/trunk i)

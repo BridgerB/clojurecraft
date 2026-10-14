@@ -140,7 +140,9 @@
    [:plan/reached "the targets a chained run has reached; choose skips them (plan/reach)"
     "a chained plan"] [:plan/go-at "the landing a fixture named" "from a :go with :go/at"]
    [:plan/since "ms the status last changed" "from the :go event"]
-   [:plan/blacklist "targets that failed, skipped when choosing" "from the :go event"]
+   [:plan/blacklist
+    "targets that failed, skipped when choosing; never the cell a :place or a :redig chose"
+    "from the :go event"]
    [:plan/trunk-failures
     "failed gather intents per trunk column [x z]; a column that failed twice is skipped when choosing a log"
     "from the :go event"]
