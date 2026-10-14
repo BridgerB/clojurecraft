@@ -2320,6 +2320,55 @@
         "nine lava scooped, as without the death: no cell cast twice")
     (is (empty? (:sim/violations sim)))))
 
+(def lava-sea
+  "Stone from the surface at y 64 down, and under it a lava sea at y 40 from z 10 to 15, roofed
+   by the stone over it: the lava of a 1.18+ world, which lies under y -54 under a ceiling of
+   deepslate and never on the surface (here at y 40, for a run short enough to test)."
+  (into {} (for [x (range 16) z (range 10 16)] [[x 40 z] blocks/lava-base])))
+
+(def hunt-kit
+  "The portal kit as a run from spawn holds it: the water bucket, an empty bucket, cobblestone,
+   flint and steel, and two stone pickaxes for the way down."
+  {[:hotbar 0] {:item (recipe/item-id :stone_pickaxe) :count 1}
+   [:hotbar 1] {:item (recipe/item-id :stone_pickaxe) :count 1}
+   [:hotbar 2] {:item (recipe/item-id :bucket) :count 1}
+   [:hotbar 3] {:item (recipe/item-id :water_bucket) :count 1}
+   [:hotbar 4] {:item (recipe/item-id :cobblestone) :count 64}
+   [:hotbar 5] {:item (recipe/item-id :flint_and_steel) :count 1}
+   [:hotbar 6] {:item (recipe/item-id :cobblestone) :count 64}})
+
+(deftest with-no-lava-near-the-bot-goes-down-to-the-sea-and-casts-beside-it
+  ;; issue #41, the wall before the Nether: race 38477665442's 47 real bots and 950 sim runs
+  ;; stood at the surface with the kit, no lava within sixteen of any origin, and waited
+  ;; :no-site out. With no site the planner hunts: stairs down toward the nearest lava loaded,
+  ;; a tunnel toward it, the roof over it dug, and the site chosen beside it
+  (let [column (world/column-bytes lava-sea)
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:columns (into {}
+                                                   (for [cx [-1 0 1] cz [-1 0 1]] [[cx cz] column]))
+                                    :spawn [8.5 64.0 2.5]
+                                    :inventory hunt-kit})
+                         #(or (plan/done? %) (plan/failed? %))
+                         900000
+                         {:event/kind :go :go/goals [:cast-one]})
+        kinds (set (map :intention/kind (memory/intentions w)))]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (contains? kinds :stairs-down) "it went down")
+    (is (contains? kinds :tunnel) "and tunnelled toward the sea")
+    (is (some #(and (= :dig (:intention/kind %)) (= 41 (second (:intention/target %))))
+              (memory/intentions w))
+        "the roof over a source was dug")
+    (let [{:site/keys [origin]} (memory/site w)]
+      (is (some? origin) "a site was chosen")
+      (is (= 41 (second origin)) "a block over the sea's level")
+      (is (= :obsidian
+             (blocks/name-of
+              (sim/block-at sim (build/cell origin (:site/facing (memory/site w)) [1 0 0]))))
+          "the first cell, obsidian"))
+    (is (empty? (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- the fortress (issue #11)
 
 (def netherrack (blocks/default-state :netherrack))
