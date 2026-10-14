@@ -212,6 +212,7 @@
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :plan/chain? boolean?)
 (s/def :plan/reached (s/coll-of keyword? :kind set?))
+(s/def :plan/reached-after (s/map-of keyword? int?))
 (s/def :intent/recipe keyword?)
 (s/def :intent/window #{:inventory :table})
 (s/def :intent/smelt keyword?)
