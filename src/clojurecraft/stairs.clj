@@ -1,7 +1,11 @@
 (ns clojurecraft.stairs
   "Going down safely: the :stairs-down intent, which cuts a staircase one stair at a time in the
    direction it faces until the feet are at or below a height, and never digs the block under
-   the feet (a blind drop is how the siblings' bots died).
+   the feet (a blind drop is how the siblings' bots died). Where a stair has no floor under its
+   new feet (the staircase broke into a cave) and a block to lay one from is carried, the floor
+   is laid first, from cobblestone, against the block under the feet or against a holder laid
+   under that, and the stair is then cut and taken like any other: a staircase cast through a
+   cave.
 
      {:intent/kind :stairs-down :intent/to-y 60 :intent/dir [1 0]}
 
@@ -32,14 +36,15 @@
    executor itself (intents composing intents: no second rule for breaking blocks), and the
    descent is judged by the feet having actually gone down, never by a packet having been
    sent, since a dig the server refused leaves the bot where it stood."
-  (:require [clojurecraft.blocks :as blocks]
+  (:require [clojure.math :as math]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
-            [clojurecraft.place]
+            [clojurecraft.place :as place]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]))
 
@@ -48,6 +53,7 @@
 (def max-turns 4)                     ; refusals before a level step, or :boxed (one full turn)
 (def max-level-steps 32)              ; level steps around what refuses every stair before :boxed
 (def step-timeout-ticks 200)          ; ticks a walk down one stair may take (10 s)
+(def creep-speed 0.06)                ; blocks a tick: the walk onto a stair with nothing beyond it to stop the body pushes only under this
 (def directions [[1 0] [0 1] [-1 0] [0 -1]]) ; the four headings, each a quarter turn from the last
 (def shore-reach 48)                  ; columns along a heading a climb looks for dry ground over
 
@@ -85,18 +91,64 @@
                       [[fx (dec fy) fz]]
                       (for [[x y z] cells [ddx ddz] directions] [(+ x ddx) y (+ z ddz)])))))
 
-(defn safe?
-  "May a stair (or a level step) be cut: none of the cells it opens is water, lava or unloaded,
-   no lava is beside or under them, and a floor lies under the new feet, the last cell (the
-   step is one block, not a drop). A new feet cell in :plan/boxed-at is refused: a staircase
-   died :boxed standing there, and stepping back onto it digs the same pocket again."
+(defn clear-way?
+  "May a stair's (or a level step's) cells be opened, the floor aside: none of them is water,
+   lava or unloaded, and no lava is beside or under them. A new feet cell (the last) in
+   :plan/boxed-at is refused: a staircase died :boxed standing there, and stepping back onto it
+   digs the same pocket again."
   [world cells]
-  (let [[fx fy fz] (last cells)
-        kind #(path/classify world %)]
-    (and (not (contains? (:plan/boxed-at world #{}) [fx fy fz]))
+  (let [kind #(path/classify world %)]
+    (and (not (contains? (:plan/boxed-at world #{}) (last cells)))
          (every? #(not (#{:water :lava :unknown} (kind %))) cells)
-         (every? #(not= :lava (kind %)) (exposed cells))
-         (= :solid (kind [fx (dec fy) fz])))))
+         (every? #(not= :lava (kind %)) (exposed cells)))))
+
+(defn safe?
+  "May a stair (or a level step) be cut: its cells may be opened (clear-way?) and a floor lies
+   under the new feet, the last cell (the step is one block, not a drop)."
+  [world cells]
+  (let [[fx fy fz] (last cells)]
+    (and (clear-way? world cells) (= :solid (path/classify world [fx (dec fy) fz])))))
+
+(def fillers
+  "The items a floor is laid from, what a mine carries most of first: cobblestone, the stones
+   that drop themselves, then dirt. Never gravel or sand, which fall out of a floor."
+  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt])
+
+(defn filler
+  "The first of fillers the inventory holds n or more of, or nil."
+  [world n]
+  (let [held (recipe/counts (:player/inventory world))]
+    (first (filter #(>= (get held % 0) n) fillers))))
+
+(defn floor-laying
+  "The cells to lay, in order, so that a floor lies under the new feet of a stair (or a level
+   step) from feet whose floor is missing: the floor cell alone when a solid block borders it to
+   place against (place/support); else first a holder, the cell under the block under the feet,
+   placed against that block's underside, and then the floor against the holder, the way a
+   staircase is cast through a cave from a ceiling one block thick. [] when the floor is solid
+   already; nil when it is water, lava or unloaded, or nothing can hold it."
+  [world [x _ z] cells]
+  (let [[nx ny nz] (last cells)
+        floor [nx (dec ny) nz]
+        holder [x (dec ny) z]
+        kind #(path/classify world %)]
+    (cond (= :solid (kind floor)) []
+          (not= :clear (kind floor)) nil
+          (place/support world floor) [floor]
+          (and (= :clear (kind holder)) (place/support world holder)) [holder floor]
+          :else nil)))
+
+(defn lay
+  "The cells to lay, in order, before a stair (or a level step) from feet whose cells may be
+   opened (clear-way?) can be cut: the floor and what holds it (floor-laying), when enough of a
+   filler is carried; nil when the stair needs none (safe?) or none can be laid. Race
+   38477665442: five of the eight bots on runner 8 that stopped :boxed stood on the lip of a
+   cave their staircase had broken into, 7 to 284 cobblestone in hand, every stair refused for
+   the drop under it and nothing else to cut from the lip (issue #37)."
+  [world feet cells]
+  (when (clear-way? world cells)
+    (when-let [cells (seq (floor-laying world feet cells))]
+      (when (filler world (count cells)) (vec cells)))))
 
 (defn up-safe?
   "May a stair up be cut: what any stair needs (safe?), and no gravel or sand over the cell above
@@ -109,8 +161,10 @@
 
 (def shapes
   "How each kind of staircase is cut: the cells a stair opens (top first, the new feet last), the
-   rule that lets it be cut, and which way the feet go when it is taken."
-  {:stairs-down {:cells stair-cells :safe? safe? :rise -1}
+   rule that lets it be cut, which way the feet go when it is taken, and for stairs down what to
+   lay where the floor is missing (lay; a stair up lays nothing, its floor would be the cell the
+   bot stands in)."
+  {:stairs-down {:cells stair-cells :safe? safe? :rise -1 :lay lay}
    :stairs-up {:cells up-cells :safe? up-safe? :rise 1}})
 
 (defn tool-missing
@@ -142,14 +196,20 @@
                   (not-any? (fn [[_ {:keys [item]}]] (dig/harvest? id item))
                             (:player/inventory world))))))
 
-(defn level-safe?
-  "May a level step (or a stair whose cells are given) be cut: what a stair needs (safe?), and no
-   cell it opens borders water or lava (intent/exposes-fluid?) or is too hard for the held tools
-   (too-hard?), which the child dig would refuse to open. Gym batch iron-a9 run 4's tunnel at y 2
-   met ore its stone pickaxe could not drop and failed :needs-tool three times in a moment."
+(defn level-clear?
+  "May a level step's cells be opened, the floor aside: clear-way?, and no cell it opens borders
+   water or lava (intent/exposes-fluid?) or is too hard for the held tools (too-hard?), which
+   the child dig would refuse to open. Gym batch iron-a9 run 4's tunnel at y 2 met ore its stone
+   pickaxe could not drop and failed :needs-tool three times in a moment."
   [world cells]
-  (and (safe? world cells)
+  (and (clear-way? world cells)
        (not-any? #(or (intent/exposes-fluid? world %) (too-hard? world %)) cells)))
+
+(defn level-safe?
+  "May a level step (or a stair whose cells are given) be cut: its cells may be opened
+   (level-clear?) and a floor lies under its feet cell (safe?)."
+  [world cells]
+  (and (level-clear? world cells) (safe? world cells)))
 
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
@@ -229,8 +289,13 @@
                        (if home (physics/horizontal-distance [(+ fx dx) 0 (+ fz dz)] home) 0)])
                     round)
                    :else round)
+        laid (fn [d]
+               (let [cells (level-cells feet d)]
+                 (and (level-clear? world cells) (lay world feet cells))))
         d (when (< level-steps (level-step-limit world kind feet))
-            (first (filter #(level-safe? world (level-cells feet %)) ways)))]
+            (or (first (filter #(level-safe? world (level-cells feet %)) ways))
+                (first (filter laid ways))))
+        to-lay (when (and d (not (level-safe? world (level-cells feet d)))) (laid d))]
     (if d
       (-> world
           (intent/assoc-intent :intent/dir d
@@ -238,10 +303,13 @@
                                :intent/turns 0
                                :intent/level-steps (inc level-steps)
                                :intent/level-cells (level-cells feet d)
-                               :intent/stage :level
+                               :intent/stage (if to-lay :lay :level)
                                :intent/started-tick (:time/tick world))
-          (intent/dissoc-intent :intent/child :intent/cells)
-          (game/say (str "stairs: every stair refused, a level step toward " d)))
+          (intent/dissoc-intent :intent/child :intent/cells :intent/lay)
+          (cond-> to-lay (intent/assoc-intent :intent/lay to-lay))
+          (game/say (str "stairs: every stair refused, a level step toward "
+                         d
+                         (when to-lay (str ", its floor laid at " to-lay)))))
       (box world))))
 
 (def refusals #{:needs-tool :unsafe})  ; a child dig failing for these turns the stairs
@@ -256,8 +324,10 @@
 (defmethod stairs-stage :plan
   [world {:intent/keys [kind dir turns] :or {turns 0} :as i} _]
   (let [dir (or dir (first directions))
-        {:keys [safe?] cells-of :cells} (shapes kind)
-        cells (cells-of (intent/feet world) dir)]
+        {:keys [safe? lay] cells-of :cells} (shapes kind)
+        feet (intent/feet world)
+        cells (cells-of feet dir)
+        to-lay (when (and lay (not (safe? world cells))) (lay world feet cells))]
     (cond (safe? world cells)
           (intent/assoc-intent world
                                :intent/dir dir
@@ -265,8 +335,57 @@
                                :intent/stage :open
                                :intent/started-y (physics/y-of (:player/pos world))
                                :intent/started-tick (:time/tick world))
+          to-lay
+          (-> world
+              (intent/assoc-intent :intent/dir dir
+                                   :intent/cells cells
+                                   :intent/lay to-lay
+                                   :intent/stage :lay
+                                   :intent/started-y (physics/y-of (:player/pos world))
+                                   :intent/started-tick (:time/tick world))
+              (game/say (str "stairs: no floor toward " dir ", laying one at " to-lay)))
           (boxed? turns) (step-aside world (assoc i :intent/dir dir))
           :else (turned world dir turns (str "stairs: refused toward " dir ", turning")))))
+
+(defn refuse
+  "Turn the staircase from a stair (or a level step) a child would not cut or lay, saying why;
+   boxed in, a level step instead (step-aside)."
+  [world {:intent/keys [dir turns] :or {turns 0} :as i} why]
+  (if (boxed? turns)
+    (step-aside world i)
+    (-> world
+        (turned dir turns why)
+        (intent/assoc-intent :intent/stage :plan)
+        (intent/dissoc-intent :intent/child :intent/cells :intent/lay :intent/level-cells))))
+
+(defmethod stairs-stage :lay
+  ;; lay the floor's cells (:intent/lay), the first not yet solid at a time, each a child :place
+  ;; of a filler; then open the stair (:intent/cells) or walk the level step
+  ;; (:intent/level-cells). A placement the server refused, or no filler left, refuses the
+  ;; stair like any cell that cannot be cut: turn
+  [world {:intent/keys [child lay level-cells] :as i} event]
+  (let [next (first (remove #(= :solid (path/classify world %)) lay))
+        item (filler world 1)]
+    (cond (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
+          (and child (intent/failed? child))
+          (refuse
+           world
+           i
+           (str "stairs: laying " (:intent/cell child) " " (:intent/reason child) ", turning"))
+          child (intent/run-child world event)
+          (and next item)
+          (intent/run-child
+           (intent/assoc-intent
+            world
+            :intent/child
+            {:intent/kind :place :intent/item item :intent/cell next :intent/status :active})
+           event)
+          next (refuse world i "stairs: nothing left to lay a floor from, turning")
+          :else
+          (-> world
+              (intent/assoc-intent :intent/stage (if level-cells :level :open)
+                                   :intent/started-tick (:time/tick world))
+              (intent/dissoc-intent :intent/lay)))))
 
 (defn fell?
   "Did a child dig find its cell already open (:target-gone)? Gravel or sand above fell out of it
@@ -293,22 +412,16 @@
       (intent/run-child (intent/assoc-intent world :intent/child child) event))))
 
 (defmethod stairs-stage :open
-  [world {:intent/keys [dir turns child cells] :or {turns 0} :as i} event]
+  [world {:intent/keys [child cells] :as i} event]
   (cond
     (and child (or (intent/done? child) (fell? child))) (intent/dissoc-intent world :intent/child)
     ;; a cell the child will not dig refuses this way, like lava: turn. :needs-tool is ore the
     ;; pickaxe cannot drop; :unsafe a cell beside water or lava, which the dig would let in (a
     ;; live descent through an aquifer at y 36 failed three times on it before this)
     (and child (contains? refusals (:intent/reason child)))
-    (if (boxed? turns)
-      (step-aside world i)
-      (-> world
-          (turned
-           dir
-           turns
-           (str "stairs: " (:intent/target child) " refused " (:intent/reason child) ", turning"))
-          (intent/assoc-intent :intent/stage :plan)
-          (intent/dissoc-intent :intent/child :intent/cells)))
+    (refuse world
+            i
+            (str "stairs: " (:intent/target child) " refused " (:intent/reason child) ", turning"))
     (and child (intent/failed? child))
     (-> world
         (assoc :player/controls {})
@@ -319,17 +432,41 @@
 
 (defn taken?
   "Has the stair been taken: the feet half a block past where it began, the way the staircase
-   goes (rise -1 down, 1 up), the only proof the server broke what the bot asked for; going up,
-   also on the ground again, since halfway up a jump the step is not yet stood on."
-  [world rise started-y]
+   goes (rise -1 down, 1 up), the only proof the server broke what the bot asked for, and the
+   feet centred in the stair's new feet cell (intent/centred?); going up, also on the ground
+   again, since halfway up a jump the step is not yet stood on. Centred, because a body that
+   lands past the cell's middle stands on the edge of its floor with its feet in the next
+   column, and the next stair is planned from there: race 38477665442 bot Clj_r18 cut its
+   stairs that way, each one digging the floor the body stood on, so a staircase meant to go
+   down a block a stair went straight down a shaft one block wide, and nothing led back up."
+  [world rise started-y cell]
   (and (>= (* rise (- (physics/y-of (:player/pos world)) started-y)) 0.5)
+       (intent/centred? world cell)
        (or (neg? rise) (boolean (:player/on-ground? world)))))
 
+(defn onto
+  "Controls that walk onto the stair's new feet cell (intent/toward its middle). Going down
+   where nothing beyond the cell stops the body (the cell past it, along dir, is not solid: a
+   cave, where a floor laid over it is all there is to land on), the walk creeps, pushing only
+   under creep-speed and never in the air, so the body leaves the edge slowly and lands on the
+   cell: pushed all the way, the model left the lip at 0.11 blocks a tick, 0.19 in the air, and
+   landed at the far edge of the cell, then fell off it. Into rock, and going up, forward all the
+   way: the wall ahead stops the body, and the jump needs the push to carry it onto the step."
+  [world rise cell [dx dz]]
+  (let [[fx fy fz] cell
+        [vx _ vz] (:player/vel world [0.0 0.0 0.0])
+        open? (not= :solid (path/classify world [(+ fx dx) fy (+ fz dz)]))
+        creep? (and (neg? rise) open?)]
+    (assoc (intent/toward world [(+ fx 0.5) (double fy) (+ fz 0.5)] 0.0)
+           :control/forward?
+           (boolean (or (not creep?)
+                        (and (:player/on-ground? world) (< (math/hypot vx vz) creep-speed)))))))
+
 (defmethod stairs-stage :step
-  [world {:intent/keys [kind cells started-y started-tick]} _]
-  (let [[fx fy fz] (last cells)
-        target [(+ fx 0.5) (double fy) (+ fz 0.5)]]
-    (cond (taken? world (:rise (shapes kind)) started-y)
+  [world {:intent/keys [kind dir cells started-y started-tick]} _]
+  (let [cell (last cells)
+        rise (:rise (shapes kind))]
+    (cond (taken? world rise started-y cell)
           (-> world
               (assoc :player/controls {})
               (intent/assoc-intent :intent/stage :plan)
@@ -342,7 +479,7 @@
           (-> world
               (assoc :player/controls {})
               (intent/fail :stair-not-taken))
-          :else (assoc world :player/controls (intent/toward world target 0.0)))))
+          :else (assoc world :player/controls (onto world rise cell dir)))))
 
 (defmethod stairs-stage :level
   ;; dig the level step's cells, one child at a time, then walk onto its feet cell; then plan

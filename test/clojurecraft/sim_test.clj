@@ -635,10 +635,11 @@
 
 ;; ---------------------------------------------------------------- stairs down, on the model
 
-(defn intent-run
+(defn intent-run-holding
   "Run intent it alone against the model from a spawn at [8.5 spawn-y 8.5] over column blocks,
-   with the item in hotbar slot 0, until it ends or max-ms. Returns [world sim]."
-  [it blocks spawn-y item max-ms]
+   holding inventory ({[:hotbar n] {:item id :count n}}), until it ends or max-ms. Returns
+   [world sim]."
+  [it blocks spawn-y inventory max-ms]
   (let [column (world/column-bytes blocks)
         step
         (fn [w e]
@@ -648,14 +649,17 @@
                   (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
                   (intent/run w i e)
                   :else w)))
-        sim0 (sim/init {:column column
-                        :spawn [8.5 (double spawn-y) 8.5]
-                        :inventory (if item {[:hotbar 0] {:item item :count 1}} {})})]
+        sim0 (sim/init {:column column :spawn [8.5 (double spawn-y) 8.5] :inventory inventory})]
     (sim/run step
              (game/init fx/opts)
              sim0
              #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
              max-ms)))
+
+(defn intent-run
+  "intent-run-holding with one item in hotbar slot 0, or nothing."
+  [it blocks spawn-y item max-ms]
+  (intent-run-holding it blocks spawn-y (if item {[:hotbar 0] {:item item :count 1}} {}) max-ms))
 
 (defn staircase-run
   "Run a staircase intent of kind (:stairs-down, :stairs-up) toward to-y (intent-run)."
@@ -679,6 +683,51 @@
     (is (<= (second (:player/pos w)) 71.5) "the feet are five stairs down")
     (is (every? #(not= [8 75 8] %) (:sim/broken sim)) "the block under the start was never dug")
     (is (empty? (:sim/violations sim)))))
+
+(def cave-lip
+  "One block of stone at [8 75 8] over a cave whose floor is at y 65, nothing else above the
+   floor: what a staircase finds when it breaks through a cave's ceiling and stands on the
+   ceiling's last block."
+  (into {}
+        (for [x (range 16)
+              y (range 64 76)
+              z (range 16)
+              :when (or (< y 66) (= [x y z] [8 75 8]))]
+          [[x y z] 1])))
+
+(deftest a-cave-under-the-stairs-is-cast-through-from-carried-cobblestone
+  ;; race 38477665442 runner 8: Clj_r18, Clj_r04, Clj_r23, Clj_r03 and Clj_r02 each stood on
+  ;; the lip of a cave their staircase had broken into, 7 to 284 cobblestone in hand, every stair
+  ;; refused for the drop under it, and nothing else could be cut from the lip: the plan waited
+  ;; :boxed out (issue #37). A missing floor is laid first, and the stair is then cut as any other
+  (let [pickaxe {:item (get blocks/items :wooden_pickaxe) :count 1}
+        cobblestone {:item (get blocks/items :cobblestone) :count 16}
+        [w sim] (intent-run-holding {:intent/kind :stairs-down :intent/to-y 71}
+                                    cave-lip
+                                    76
+                                    {[:hotbar 0] pickaxe [:hotbar 1] cobblestone}
+                                    120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (= 71 (second (intent/feet w))) "the feet are five stairs down, and no further")
+    (is (= 10 (count (:sim/placed sim))) "a holder and a floor laid a stair, five stairs")
+    (is (empty? (:sim/broken sim)) "nothing dug: the cave is open")
+    (is (= 10
+           (- 16
+              (:count (some #(when (= (:item cobblestone) (:item %)) %)
+                            (vals (:player/inventory w))))))
+        "from the cobblestone carried")
+    (is (every? #(not= [8 75 8] %) (:sim/broken sim)) "the lip was never dug")
+    (is (empty? (:sim/violations sim)))
+    (testing "with nothing to lay a floor from, the lip is a box as before"
+      (let [[w _] (intent-run-holding {:intent/kind :stairs-down :intent/to-y 71}
+                                      cave-lip
+                                      76
+                                      {[:hotbar 0] pickaxe}
+                                      120000)]
+        (is (= [:failed :boxed]
+               [(:intent/status (:plan/intent w)) (:intent/reason (:plan/intent w))]))))))
 
 (deftest lava-ahead-turns-the-stairs
   ;; lava in the floor two cells along +x: the first heading is refused, the next taken
