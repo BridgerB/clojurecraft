@@ -114,8 +114,8 @@
   :goal/target? true
   :goal/until "portal-kit"
   :goal/doc
-  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from a pool to the mold, and three stacks of cobblestone for the mold (its plan places at most 190); the gym's portal rows give these, a run from spawn makes them"
-  :goal/provides {:item/bucket 1 :item/cobblestone 192}
+  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from a pool to the mold, beside the filled water bucket, and three stacks of cobblestone for the mold (its plan places at most 190); the gym's portal rows give these, a run from spawn makes them. The water bucket is counted here too: a chained run reaches a step once and never asks for it again, and race 38477665442 reached this one holding its only bucket still empty, then filled it, and the cast found no bucket for the lava (issue #49)"
+  :goal/provides {:item/water_bucket 1 :item/bucket 1 :item/cobblestone 192}
   :goal/done? :provided?}
  {:goal/id :cast-one
   :goal/priority 14

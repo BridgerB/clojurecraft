@@ -5,7 +5,7 @@ type: decision
 tags: [bot, decision, plan]
 aliases: [go/goals, plan/goals, --until, goals-for, goal/until, which goals run]
 status: verified
-lastUpdated: 2026-10-12
+lastUpdated: 2026-10-14
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/plan.clj#defn choose
@@ -17,6 +17,8 @@ sourceRefs:
   - test/clojurecraft/plan_test.clj#the-current-stage-is-the-furthest-target
   - src/clojurecraft/plan.clj#defn reach
   - test/clojurecraft/plan_test.clj#a-chained-run-does-not-go-back-for-a-step-it-reached
+  - resources/clojurecraft/goals.edn#{:goal/id :portal-kit
+  - test/clojurecraft/make_test.clj#the-portal-kit-is-reached-only-beside-the-water-bucket
 related:
   - "[[bot/decisions/_moc|Decisions]]"
   - "[[goals-and-intents]]"
@@ -36,7 +38,7 @@ Each target row in `goals.edn` names the `--until` value that selects it (`:goal
 ## What would change the answer
 Nothing for the mechanism. A fresh run sends the chain `plan/through` names: every live target up to the current stage, the shore trial left out (it is the gym's water aside). Escapes stay in play on any `:go`, because `choose` always considers `:goal/always?`. A gym trial ([[gym-on-runners]]) still sends the one id `goals-for` returns, so a portal row does not start by chopping wood.
 
-A fresh run's `:go` also says `:go/chain? true`, and its steps are milestones (`plan/reach`): a target in play that holds joins `:plan/reached` and `choose` skips it for the rest of the run. Without that, a later step that spends what an earlier one made sends the planner back: the first chained run crafted the pickaxe, which spent the kit's sticks, so `:kit` was undone and preempted it, and the bot opened the table, crafted and crafted a stick twice a second for five minutes (`a-chained-run-does-not-go-back-for-a-step-it-reached`). A tool that breaks is still made again, by the needs of the step that uses it. A gym stage is not chained and keeps re-deriving every step. The chain also holds `:portal-kit`, what the cast spends that the iron kit does not hold (an empty bucket for lava, 192 cobblestone): the gym's portal rows give these, a run from spawn has to make them.
+A fresh run's `:go` also says `:go/chain? true`, and its steps are milestones (`plan/reach`): a target in play that holds joins `:plan/reached` and `choose` skips it for the rest of the run. Without that, a later step that spends what an earlier one made sends the planner back: the first chained run crafted the pickaxe, which spent the kit's sticks, so `:kit` was undone and preempted it, and the bot opened the table, crafted and crafted a stick twice a second for five minutes (`a-chained-run-does-not-go-back-for-a-step-it-reached`). A tool that breaks is still made again, by the needs of the step that uses it. A gym stage is not chained and keeps re-deriving every step. The chain also holds `:portal-kit`, what the cast spends that the iron kit does not hold (an empty bucket for lava, 192 cobblestone): the gym's portal rows give these, a run from spawn has to make them. Because a reached step is never asked again, the row counts the filled water bucket beside the empty one: race 38477665442 (issue #49, 28 real bots) reached `:portal-kit` with its only bucket still empty and the cobblestone in hand, filled that bucket at the pond, and the cast then found no empty bucket for the lava (`the-portal-kit-is-reached-only-beside-the-water-bucket`).
 
 ## See also
 - [[randomness-on-the-tick]] - the same rule for another input.

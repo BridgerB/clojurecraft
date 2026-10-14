@@ -119,6 +119,18 @@
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
 
+(def portal-kit (first (filter #(= :portal-kit (:goal/id %)) plan/goals)))
+
+(deftest the-portal-kit-is-reached-only-beside-the-water-bucket
+  ;; race 38477665442 (issue #49): a chained run reached :portal-kit holding its only bucket
+  ;; still empty and 192 cobblestone, filled that bucket at the pond, and the cast then found
+  ;; no empty bucket for the lava. The kit counts the water bucket beside the empty one
+  (is (not (plan/done-by (world-holding {:bucket 1 :cobblestone 192} false) portal-kit))
+      "one bucket, still empty: the water would spend it")
+  (is (not (plan/done-by (world-holding {:water_bucket 1 :cobblestone 192} false) portal-kit))
+      "the water bucket alone: nothing to carry lava in")
+  (is (plan/done-by (world-holding {:water_bucket 1 :bucket 1 :cobblestone 192} false) portal-kit)))
+
 (defn intent-for
   [held goal]
   (let [i (decide (world-holding
