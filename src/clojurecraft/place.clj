@@ -27,6 +27,7 @@
 (def open-reach 4.5)                  ; eye → container centre for opening it; the server allows about 4.5
 (def settle-ms 300)                   ; standing still this long before using an item on a block
 (def answer-ms 3000)                  ; ms to wait for the server to answer a placement or an open
+(def max-refusals 3)                  ; spots the server refused with nothing in them before a placement fails :rejected
 
 (defn- now [world] (:time/now world))
 
@@ -74,10 +75,12 @@
    table three times to place a gravel and failed :rejected), not inside the player, within
    reach. A passage is allowed when passage-ok? (a block placed only to be dug again at once,
    which leaves the way open: gym batch iron-a6 run 1, at the foot of its stairs between its
-   table and furnace, found no spot for a gravel but the stair behind it). Pure; nil when there
-   is none."
+   table and furnace, found no spot for a gravel but the stair behind it). A cell in refused is
+   passed over: the server answered a placement there with the cell still empty, a body
+   standing in it (give-up). Pure; nil when there is none."
   ([world] (spot world false))
-  ([world passage-ok?]
+  ([world passage-ok?] (spot world passage-ok? #{}))
+  ([world passage-ok? refused]
    (let [[px py pz] (:player/pos world)
          fx (long (math/floor px))
          fy (long (math/floor py))
@@ -90,6 +93,7 @@
                         s (terrain/block-at world support)]
                   :when (and t
                              s
+                             (not (contains? refused target))
                              (blocks/replaceable? t)
                              (terrain/confirmed? world target)
                              (blocks/solid? s)
@@ -251,12 +255,13 @@
   ;; a given cell (:intent/cell, a build's) against a solid neighbour; else a plain spot, else a
   ;; niche cut in the wall, else (passage-ok?) a spot in the passage: a table or a gravel to dig
   ;; again leaves the way open when the bot goes on
-  [world {:intent/keys [passage-ok?] at :intent/cell}]
+  [world {:intent/keys [passage-ok? refused] at :intent/cell :or {refused #{}}}]
   (let [[against face :as given] (when at (support world at))
-        found (when-not at (spot world))
+        found (when-not at (spot world false refused))
         n (when-not (or at found) (niche world))
         [_ stowed-item :as stowed] (when n (intent/stowed-tool world (terrain/block-at world n)))
-        [target from] (or found (when (and (nil? at) (nil? n) passage-ok?) (spot world true)))]
+        [target from] (or found
+                          (when (and (nil? at) (nil? n) passage-ok?) (spot world true refused)))]
     (cond given (settle-at world at against face)
           at (intent/fail world :no-support)
           target (settle-at world target from :up)
@@ -315,12 +320,33 @@
               (intent/assoc-intent :intent/stage :sent))
           :else (intent/assoc-intent world :intent/still still))))
 
+(defn give-up
+  "Back to :spot with target among the cells refused (:intent/refused), so the next spot is
+   another one: the server answered the placement with the cell still empty, which is a body
+   standing in it, not a block (the game refuses a block into any player, its own included).
+   Race 38515209959 runner 9 bot Clj_r17 (issue #106): bot Clj_r24, landed at the same cell,
+   walked through the furnace's spot collecting the same drops, and the same spot was sent
+   three times in two seconds, :rejected. A placement refused with a block in the cell (the
+   stone of a niche put back) is still :rejected at once."
+  [world target refused]
+  (-> world
+      (intent/assoc-intent :intent/stage :spot :intent/refused (conj refused target))
+      (intent/dissoc-intent :intent/target
+                            :intent/against :intent/click-face
+                            :intent/sequence :intent/sent-at)
+      (game/say (str "place: " target " refused with nothing in it, another spot"))))
+
 (defmethod place-stage :sent
-  [world {:intent/keys [item target sequence sent-at]}]
-  (let [placed (terrain/block-at world target)]
+  ;; a chosen cell the server refused with nothing in it is given up for another (give-up), up
+  ;; to max-refusals; a given cell (a build's) is judged by the server alone
+  [world {:intent/keys [item target sequence sent-at refused] at :intent/cell :or {refused #{}}}]
+  (let [placed (terrain/block-at world target)
+        answered? (and (>= (or (:stats/last-ack world) -1) sequence)
+                       (> (- (now world) sent-at) 500))]
     (cond (= item (blocks/name-of placed)) (intent/done world) ; any state of the block: a furnace faces as the server chose
-          (and (>= (or (:stats/last-ack world) -1) sequence) (> (- (now world) sent-at) 500))
-          (intent/fail world :rejected)
+          (and answered? (nil? at) (blocks/replaceable? placed) (< (count refused) max-refusals))
+          (give-up world target refused)
+          answered? (intent/fail world :rejected)
           (> (- (now world) sent-at) answer-ms) (intent/fail world :no-answer)
           :else world)))
 

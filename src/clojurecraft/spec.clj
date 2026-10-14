@@ -445,6 +445,7 @@
 (s/def :intent/awaiting-window int?)
 (s/def :intent/sent-at int?)
 (s/def :intent/against ::block-pos)
+(s/def :intent/refused (s/coll-of ::block-pos :kind set?))
 (s/def :intent/sequence int?)
 (s/def :chunk/column map?)
 (s/def :chunk/min-y #{-64 0})
@@ -641,7 +642,8 @@
 (s/fdef place/spot
   :args
   (s/cat :world (requires :player/pos :world/chunks)
-         :passage-ok? (s/? boolean?)))
+         :passage-ok? (s/? boolean?)
+         :refused (s/? :intent/refused)))
 (s/fdef place/ashore
   :args
   (s/cat :world (requires :player/in-water?)

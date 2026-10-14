@@ -97,6 +97,49 @@
         (is (intent/done? (:plan/intent w)))
         (is (= memory/crafting-table (memory/remembered w [7 64 5])) "remembered")))))
 
+(deftest a-cell-refused-with-nothing-in-it-is-given-up-for-another
+  ;; race 38515209959 runner 9 bot Clj_r17 (issue #106): bot Clj_r24, landed at the same cell,
+  ;; walked through the furnace's spot; the server refuses a block into a body and answers with
+  ;; the cell still air, and the same spot was sent three times in two seconds, :rejected
+  (let [sent (fn [refused]
+               (-> (standing [5.5 64.0 5.5])
+                   (assoc :bot/sequence 7
+                          :plan/intent
+                          (cond-> {:intent/kind :place
+                                   :intent/item :furnace
+                                   :intent/status :active
+                                   :intent/stage :sent
+                                   :intent/target [7 64 5]
+                                   :intent/against [7 63 5]
+                                   :intent/sequence 7
+                                   :intent/sent-at 0}
+                            refused (assoc :intent/refused refused)))))
+        answer [(packet {:packet/name :block-update :pos [7 64 5] :state 0})
+                (packet {:packet/name :block-changed-ack :sequence 7})
+                {:event/kind :tick :event/now 600 :event/rand 0.5}]
+        [w _] (fx/fold intent-step (sent nil) answer)
+        i (:plan/intent w)]
+    (is (= :spot (:intent/stage i)) "the spot is sought again")
+    (is (= #{[7 64 5]} (:intent/refused i)) "without that cell")
+    (let [[w _] (fx/fold intent-step w [{:event/kind :tick :event/now 650 :event/rand 0.5}])
+          i (:plan/intent w)]
+      (is (= :settle (:intent/stage i)))
+      (is (not= [7 64 5] (:intent/target i)) "another spot"))
+    (let [[first-spot _] (place/spot (standing [5.5 64.0 5.5]))]
+      (is (not= first-spot (first (place/spot (standing [5.5 64.0 5.5]) false #{first-spot})))
+          "spot passes a refused cell over"))
+    (testing "after max-refusals such spots the placement fails: something stands at every one"
+      (let [[w _] (fx/fold intent-step (sent #{[6 64 5] [7 64 6] [6 64 6]}) answer)]
+        (is (intent/failed? (:plan/intent w)))
+        (is (= :rejected (:intent/reason (:plan/intent w))))))
+    (testing "a block in the cell, the niche's stone put back, is still :rejected at once"
+      (let [[w _] (fx/fold intent-step
+                           (sent nil)
+                           [(packet {:packet/name :block-update :pos [7 64 5] :state 1})
+                            (packet {:packet/name :block-changed-ack :sequence 7})
+                            {:event/kind :tick :event/now 600 :event/rand 0.5}])]
+        (is (= :rejected (:intent/reason (:plan/intent w))))))))
+
 (deftest a-niche-is-cut-in-the-side-wall-not-ahead
   ;; batch iron-a2 run 1: at the end of a tunnel east of its landing the bot dug its niche in the
   ;; wall ahead, put the table there, and the tunnel went on through it

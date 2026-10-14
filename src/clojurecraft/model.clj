@@ -291,6 +291,9 @@
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
    [:intent/item "item to place" "place, redig"]
    [:intent/against "block the placement is against" "place"]
+   [:intent/refused
+    "cells the server refused a placement into with nothing in them (a body stood there); the next spot is another, place/max-refusals of them fail :rejected"
+    "place, after such a refusal"]
    [:intent/sequence "sequence number of the placement, or of the bucket's use"
     "place and scoop, after sending"]
    [:intent/tries "scoops sent at this source; the last of scoop/max-tries fails :no-scoop"
