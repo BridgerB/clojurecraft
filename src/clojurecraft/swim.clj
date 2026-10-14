@@ -113,11 +113,16 @@
    one over the water's top), within notch-radius of feet on the plane and a dig's reach of
    the afloat eye; the lower cell while it is solid, then the upper. nil with no wall in reach
    (issue #73: an aquifer's rock walls rise straight from the water, so no cell within sixteen
-   was standable and the escape rose until it timed out)."
+   was standable and the escape rose until it timed out), and nil under a roof on the water
+   (the surface cell solid): a capped well is left through its cap, which the escape digs once
+   it has risen to it, and a notch cut there from the floor opened the well's own wall under the
+   cap and drowned the bot (sim-test a-capped-well-is-dug-out-through-its-cap-with-the-pickaxe,
+   red since #113, issue #116)."
   [world [fx _ fz :as feet] surface]
   (let [top (float-top world feet surface)
-        eye [(+ fx 0.5) (+ top physics/eye-height) (+ fz 0.5)]]
-    (->> (for [dx (range (- notch-radius) (inc notch-radius))
+        eye [(+ fx 0.5) (+ top physics/eye-height) (+ fz 0.5)]
+        roofed? (solid-cell? world [fx surface fz])]
+    (->> (for [dx (if roofed? [] (range (- notch-radius) (inc notch-radius)))
                dz (range (- notch-radius) (inc notch-radius))
                :let [lower [(+ fx dx) (inc top) (+ fz dz)]
                      upper [(+ fx dx) (+ top 2) (+ fz dz)]]
