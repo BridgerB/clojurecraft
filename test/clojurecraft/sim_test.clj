@@ -1085,6 +1085,45 @@
              {:packet/name :block-changed-ack :sequence 1}]
             (:sim/out sim)))))))
 
+(deftest a-block-placed-into-water-takes-the-waters-place
+  ;; sim race 38515210080 (issue #44, 198 runs; the #74 moments at R1/34 reach it): the first
+  ;; op of the portal's pad placed cobblestone into a water cell at the pond's edge from the
+  ;; shore. The game's replaceable tag lists water and lava beside the grasses, so a real
+  ;; server takes the block and the water is gone; the model refused it three times
+  (let [water (first blocks/water-states)
+        pond (-> (into {} (for [x (range 16) z (range 16)] [[x 63 z] 1]))
+                 (assoc [9 64 8] water)) ; the pond floor at y 63 is stone, clicked through the water
+        use-on (fn [pos face]
+                 {:packet/name :use-item-on
+                  :hand 0
+                  :pos pos
+                  :face (packet/value :face face)
+                  :cursor-x 0.5
+                  :cursor-y 1.0
+                  :cursor-z 0.5
+                  :inside-block false
+                  :world-border-hit false
+                  :sequence 1})
+        standing (fn [blocks]
+                   (-> (sim/init {:column (world/column-bytes blocks)
+                                  :spawn [8.5 64.0 8.5]
+                                  :inventory {[:hotbar 0] {:item (get blocks/items :cobblestone)
+                                                           :count 2}}})
+                       (assoc :sim/phase :play :sim/player-pos [7.5 64.0 8.5])))
+        ;; the shore's top face, east of the feet: the destination [9 64 8] is the pond's edge
+        into-water (sim/step (standing pond) {:sim/kind :packet :sim/packet (use-on [9 63 8] :up)})
+        ;; a flower on the shore instead: refused as before
+        into-flower (sim/step (standing (assoc pond [9 64 8] (blocks/default-state :wildflowers)))
+                              {:sim/kind :packet :sim/packet (use-on [9 63 8] :up)})]
+    (is (blocks/placeable-into? water))
+    (is (not (blocks/placeable-into? (blocks/default-state :wildflowers))))
+    (is (= {[9 64 8] (blocks/default-state :cobblestone)} (:sim/placed into-water))
+        "the cobblestone took the water's place")
+    (is (= {:packet/name :block-update :pos [9 64 8] :state (blocks/default-state :cobblestone)}
+           (first (:sim/out into-water))))
+    (is (= 1 (get-in into-water [:sim/inv (sim/held-slot into-water) :count])) "one taken")
+    (is (empty? (:sim/placed into-flower)))))
+
 ;; ---------------------------------------------------------------- the furnace, on the model
 
 (def furnace-pos [2 64 0])
