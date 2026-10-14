@@ -200,8 +200,9 @@
  {:goal/id :dig-gravel
   :goal/priority 10
   :goal/doc
-  "dig the nearest exposed gravel, by hand or with a shovel; a pickaxe is held for the stairs down when none is in sight"
+  "dig the nearest exposed gravel, by hand or with a shovel; a pickaxe is held for the stairs down when none is in sight, and a spare kept as the coal row keeps one: the gravel is tunnelled for at y 40 after the water, and race 38477665442 bot Clj_r19 wore both its pickaxes out in those tunnels with two sticks and 245 cobblestone in hand, its table left at the furnace, and the run stopped :no-pickaxe (issue #67)"
   :goal/holds {:tag/pickaxes 1}
+  :goal/spares {:tag/pickaxes 1}
   :goal/provides {:item/gravel 1}
   :goal/act :mine
   :goal/blocks [:gravel]

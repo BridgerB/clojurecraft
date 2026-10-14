@@ -336,3 +336,37 @@
     (is (not (terrain/under-sky? w (intent/feet w))))
     (is (= :opening (:intent/for (wood/gather-next w))))
     (is (= :mine-iron (:goal/id (make/next-row w goal plan/goals))))))
+
+(deftest a-pickaxe-for-the-gravel-is-made-from-what-is-carried
+  ;; issue #67: race 38477665442 bot Clj_r19 tunnelled for gravel at y 40 after the water, with
+  ;; one pickaxe, two sticks and 245 cobblestone, its table left at the furnace, until both
+  ;; pickaxes broke. The gravel row keeps a spare, as the coal row does.
+  (let [kit (first (filter #(= :flint-and-steel (:goal/id %)) plan/goals))
+        row (fn [held table?]
+              (:goal/id (make/next-row (world-holding held table?) kit plan/goals)))]
+    (is (= :dig-gravel (row {:stone_pickaxe 2 :iron_ingot 1} false))
+        "a pickaxe and its spare held: the gravel is dug")
+    (is (= :dig-gravel (row {:stone_pickaxe 1 :iron_ingot 1} false))
+        "one pickaxe and no wood: no spare is worth a trip for wood")
+    (is (= :place-table
+           (row {:stone_pickaxe 1 :iron_ingot 1 :stick 2 :cobblestone 3 :crafting_table 1} false))
+        "the table carried goes down for the spare")
+    (is (= :craft/stone_pickaxe (row {:stone_pickaxe 1 :iron_ingot 1 :stick 2 :cobblestone 3} true))
+        "with the table near, the spare is made before the gravel")))
+
+(deftest the-table-goes-along-to-the-water
+  ;; race 38477665442 bots Clj_r19, Clj_r23 and Clj_r06 crafted the bucket at the furnace, left
+  ;; the table there and climbed out for the water: the pickaxe the climb wore out could not be
+  ;; made again from the sticks and cobblestone they carried (issues #39 and #67)
+  (let [kit (first (filter #(= :water-bucket (:goal/id %)) plan/goals))
+        w (world-holding {:stone_pickaxe 2 :bucket 1} true)]
+    (is (= :fill-bucket (:goal/id (make/next-row w kit plan/goals))))
+    (is (= {:intent/kind :dig :intent/target [7 64 5] :intent/for :take-table}
+           (make/decide w kit plan/goals))
+        "the table within reach is dug up before the scoop goes out")
+    (is (not= :dig
+              (:intent/kind (make/decide
+                             (world-holding {:stone_pickaxe 2 :bucket 1 :crafting_table 1} true)
+                             kit
+                             plan/goals)))
+        "a table already held is not dug for")))

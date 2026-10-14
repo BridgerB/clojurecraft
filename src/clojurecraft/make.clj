@@ -34,7 +34,7 @@
 (def table-search 24)                 ; how far a remembered crafting table counts as :near
 (def block-window {:crafting_table :table :furnace :furnace}) ; the window a placed block opens
 (def max-depth 12)                    ; item needs the needs planner may chain before it is :stuck
-(def fetching-acts #{:gather :mine})  ; acts that go out for what is not held: never done for a spare
+(def fetching-acts #{:gather :mine :scoop}) ; acts that go out for what is not held: never done for a spare
 
 ;; ---------------------------------------------------------------- needs as data
 
@@ -148,7 +148,9 @@
           (:goal/holds row)))
 
 (defn fetch?
-  "Would action send the bot out for something: :stuck, or a row whose act gathers or mines?"
+  "Would action send the bot out for something: :stuck, or a row whose act gathers, mines or
+   scoops? A scoop goes out as far as a mine does: the bucket is crafted at the furnace down the
+   mine and the water is up at the surface."
   [action]
   (or (= :stuck action) (contains? fetching-acts (:goal/act action))))
 
@@ -352,7 +354,10 @@
   "A dig of the bot's placed crafting table, to carry it on, when row goes out for something
    (fetch?), no table is held and the remembered one is within reach; nil otherwise. A table
    left behind is a log spent on the next: gym batch iron-a7 run 1 crafted three on its way
-   down the mine and had no wood left for a pickaxe."
+   down the mine and had no wood left for a pickaxe. Race 38477665442 bots Clj_r19, Clj_r23 and
+   Clj_r06 crafted the bucket at the furnace, climbed out for the water and left the table
+   there; with sticks and cobblestone in hand and no table, none could make the pickaxe the
+   climb or the gravel tunnels wore out (issues #39 and #67)."
   [world row]
   (let [pos (near world :crafting_table)]
     (when (and pos

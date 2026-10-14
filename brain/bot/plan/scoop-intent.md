@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, water, bucket, intents]
 aliases: [:scoop, scoop.clj, fill-bucket, water bucket, use-item, no-scoop, no-water, aim-point]
 status: verified
-lastUpdated: 2026-10-12
+lastUpdated: 2026-10-14
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/scoop.clj#defn scoop-next
@@ -40,7 +40,7 @@ related:
 
 # Scoop intent
 
-The `:fill-bucket` row needs an empty bucket, holds a pickaxe and keeps a spare (`:goal/holds {:tag/pickaxes 1}`, `:goal/spares {:tag/pickaxes 1}`, for the stairs up out of a mine: a stone pickaxe lasts 131 blocks and a climb of fifty stairs digs about 150; gym batch iron-a6 runs 2 and 5 broke theirs climbing out with no table near and no wood left, and failed `:no-log` and `:no-path`; when it held two, gym batch iron-a7 runs 1-3 broke one deep in the mine with no wood left and waited `:no-log` for another with a working one in hand, so the spare is made only from what is held and near, [[make-goals]]) and provides a water bucket; its act is `:scoop`. Without the hold, a pickaxe broken on the way down was never made again: gym batch iron-a3 run 2 failed its stairs up `:no-pickaxe` three times.
+The `:fill-bucket` row needs an empty bucket, holds a pickaxe and keeps a spare (`:goal/holds {:tag/pickaxes 1}`, `:goal/spares {:tag/pickaxes 1}`, for the stairs up out of a mine: a stone pickaxe lasts 131 blocks and a climb of fifty stairs digs about 150; gym batch iron-a6 runs 2 and 5 broke theirs climbing out with no table near and no wood left, and failed `:no-log` and `:no-path`; when it held two, gym batch iron-a7 runs 1-3 broke one deep in the mine with no wood left and waited `:no-log` for another with a working one in hand, so the spare is made only from what is held and near, [[make-goals]]) and provides a water bucket; its act is `:scoop`, which goes out like a mine, so the placed table within reach is taken along first (`make/take-table`, [[make-goals]]; race 38477665442 bots Clj_r19, Clj_r23 and Clj_r06 left theirs at the furnace and could not make the pickaxe the climb wore out). Without the hold, a pickaxe broken on the way down was never made again: gym batch iron-a3 run 2 failed its stairs up `:no-pickaxe` three times.
 
 ## Where the water is (`scoop-next`)
 1. `sources`: the plain water sources (`blocks/water-base`: not a waterlogged block) open to the air above it (`surface-source?`) in the loaded terrain, within 24 of the eye, surface water (`surface-water?`: no more than `memory/surface-water-below` (5) under the eye, or deeper but under the open sky, `terrain/under-sky?`; gym batch solid-b1 run 9 stood on a hill at y 70 over ponds at y 62, the depth rule alone refused every one and it waited `:no-water`, `a-pond-below-a-hill-is-surface-water`), not blacklisted, nearest first. The nearest in reach (4 blocks, eye to centre) and in sight (`sees?`: no solid or unloaded cell on the ray from the eye to its surface before it): `{:intent/kind :scoop :intent/target src}`; else a walk to the bank of the first of the three nearest that a route reaches (`first-walk`, `intent/routable?`). A scoop walk ends beside the source, the feet level with the cell over it or a block lower (`intent/arrived?` and `walk-goal`, path's `:pickup` goal at that cell, `scoop-range` 1), where nothing stands between the eyes and its surface. Live run 10 came up its stairs into a pit two below a pond's surface: the water was in reach but behind the pit wall, in reach meant no walk, and it waited `:no-water` (`from-a-pit-below-the-water-the-bot-climbs-to-the-bank`).
