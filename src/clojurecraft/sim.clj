@@ -395,8 +395,8 @@
         id (block-at sim pos)
         held (held-item sim)
         slot (held-slot sim)
-        n (:sim/breaks sim)
-        sim (update sim :sim/breaks inc)
+        n (:sim/breaks sim 0) ; a snapshot's model from before the counter (issue #77's, saved at 7239df5) counts from zero
+        sim (update sim :sim/breaks (fnil inc 0))
         ack {:packet/name :block-changed-ack :sequence sequence}]
     (cond (contains? (:sim/drop-breaks sim) n)
           (-> sim

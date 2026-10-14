@@ -787,6 +787,21 @@
     (is (contains? (:sim/broken sim) [9 75 8]) "the first stair cut from the hilltop")
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-model-from-before-the-breaks-counter-counts-from-zero
+  ;; the issue check plays snapshots on whose model was saved before :sim/breaks existed
+  ;; (sim race 38515210080 at 7239df5, test/issues/37 and 74): the counter is accretion, so
+  ;; such a model counts its FINISHes from zero instead of throwing on nil
+  (let [sim (-> (dig-on-model 1 wooden-pickaxe 2000)
+                (dissoc :sim/breaks))
+        sim (sim/step sim
+                      {:sim/kind :packet
+                       :sim/packet {:packet/name :player-action
+                                    :status (packet/value :dig :stop-destroy)
+                                    :pos [1 64 0]
+                                    :face (packet/value :face :west)
+                                    :sequence 3}})]
+    (is (= 1 (:sim/breaks sim)))))
+
 (deftest a-stair-the-server-did-not-cut-is-dug-again
   ;; race 38477665442, runner 9 (issues #59, #66): with 25 bots on one server, an early FINISH
   ;; was queued behind another and dropped, its ack coming with the block still standing; the
