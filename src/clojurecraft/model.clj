@@ -222,6 +222,9 @@
    [:intent/level-cells
     "the two cells a level step opens, head then feet, when every stair down was refused"
     "stairs-down, during a level step"]
+   [:intent/lay
+    "the cells a floor is laid in, in order (a holder under the block under the feet, then the floor under the new feet), before a stair or level step whose floor is missing is cut"
+    "stairs-down, while a floor is laid"]
    [:intent/level-steps
     "level steps this staircase (past stairs/max-level-steps it fails :boxed) or tunnel (done at its length) has taken"
     "stairs-down and tunnel, after a level step"]

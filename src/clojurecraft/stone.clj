@@ -196,14 +196,18 @@
   "Stairs stair-depth below the feet when no tunnel can be cut here, the row's depth notwithstanding
    (ore lies below it too), when a stair from here can be cut at all and the bottom of the world is
    not near; else nil. Cut means dug too: no cell of the stair borders water or lava
-   (stairs/level-safe?), which the dig refuses. Gym batch iron-a6 run 3 was sent down stairs that
-   could not be cut and failed :boxed three times in a second; batch iron-a8 run 3 down stairs
-   whose every cell bordered water, and failed :boxed twice in a second."
+   (stairs/level-safe?), which the dig refuses; or cast, its floor laid from what is carried
+   (stairs/lay). Gym batch iron-a6 run 3 was sent down stairs that could not be cut and failed
+   :boxed three times in a second; batch iron-a8 run 3 down stairs whose every cell bordered
+   water, and failed :boxed twice in a second."
   [world]
   (let [feet (intent/feet world)
-        to (- (physics/y-of feet) stair-depth)]
-    (when (and (> to (+ chunk/min-y floor-margin))
-               (some #(stairs/level-safe? world (stairs/stair-cells feet %)) stairs/directions))
+        to (- (physics/y-of feet) stair-depth)
+        cuttable? (fn [d]
+                    (let [cells (stairs/stair-cells feet d)]
+                      (or (stairs/level-safe? world cells)
+                          (and (stairs/level-clear? world cells) (stairs/lay world feet cells)))))]
+    (when (and (> to (+ chunk/min-y floor-margin)) (some cuttable? stairs/directions))
       {:intent/kind :stairs-down :intent/to-y to})))
 
 (defn retreat

@@ -394,6 +394,7 @@
 (s/def :intent/turns nat-int?)
 (s/def :intent/cells (s/coll-of ::block-pos :kind vector? :count 3))
 (s/def :intent/level-cells (s/coll-of ::block-pos :kind vector? :count 2))
+(s/def :intent/lay (s/coll-of ::block-pos :kind vector? :min-count 1 :max-count 2))
 (s/def :intent/level-steps pos-int?)
 (s/def :intent/length pos-int?)
 (s/def :intent/side (s/tuple int? int?))
