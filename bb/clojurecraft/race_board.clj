@@ -1,7 +1,7 @@
 (ns clojurecraft.race-board
-  "The race's one comment on its pull request (race.yml), edited in place as bots reach milestones.
+  "The race's one comment on the race-board issue (race.yml), edited in place as bots reach milestones.
 
-     bb race-board create <title>              print the new comment's id (GH_TOKEN, GITHUB_REPOSITORY)
+     bb race-board create <title>              a new comment on the race-board issue; print its id
      ... | bb race-board follow <comment-id>   publish each MILESTONE or RACE line read from stdin
 
    The comment is a set of facts, one EDN map per line in its edn block: a milestone
@@ -174,6 +174,29 @@
   [id]
   (:body (gh! (str "repos/" (repo) "/issues/comments/" id))))
 
+(def board-label "race-board")           ; the one issue every race's comment goes on
+
+(defn board-issue!
+  "The number of the open issue labelled race-board, the standing place the races' comments go
+   (one comment a race); opened when there is none. The races run on main, so there is no pull
+   request to comment on."
+  []
+  (or
+   (:number (first (gh!
+                    (str "repos/" (repo) "/issues?state=open&labels=" board-label "&per_page=1"))))
+   (do
+     (gh! "-X"
+          "POST" (str "repos/" (repo) "/labels")
+          "-f" (str "name=" board-label)
+          "-f" "color=0075ca")
+     (:number
+      (gh!
+       (str "repos/" (repo) "/issues")
+       "-f" "title=Race board"
+       "-f"
+       "body=Every race on main posts one comment here (bb race-board): the Nether arrivals, the first bot to each milestone, each server's furthest. Closing it opens a fresh one at the next race."
+       "-f" (str "labels[]=" board-label))))))
+
 (defn publish!
   "Add new facts to comment id: read, merge (compact), write, read again; start over until the
    comment covers them or tries run out. Returns whether it does."
@@ -219,12 +242,7 @@
   [& [cmd a b]]
   (case cmd
     "create"
-    (when-let [pr (:number (first (gh! (str "repos/"
-                                            (repo)
-                                            "/pulls?head="
-                                            (first (str/split (repo) #"/"))
-                                            ":race&state=open"))))]
-      (println (:id (gh! (str "repos/" (repo) "/issues/" pr "/comments")
-                         "-f"
-                         (str "body=" (render a #{}))))))
+    (println (:id (gh! (str "repos/" (repo) "/issues/" (board-issue!) "/comments")
+                       "-f"
+                       (str "body=" (render a #{})))))
     "follow" (follow! a (parse-long b))))
