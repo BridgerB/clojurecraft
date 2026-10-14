@@ -9,13 +9,17 @@
    What is not filed: a run that stopped for a reason that is not the bot's play
    (:run/infra?: the server closed the socket or disconnected it), counted in the report's
    output only; and a signature fewer than min-runs runs hit, a one-off, listed but not filed.
-   A closed issue whose signature comes back is reopened and its section says regressed. Each
+   A closed issue whose signature comes back in runs of code newer than its closing is reopened
+   and its section says regressed; runs of older code (a round that started before the fix merged)
+   add their section and leave it closed, since they never ran the fix. Each
    issue is labelled sim, real or both by where its runs came from: a failure only the model
    produces may be the model's, not the bot's. Before an issue is opened the open and closed
    issues are read again, so two reports finishing together do not open the same one twice. At
    most max-new issues are opened a report, the most frequent signatures first.
 
-     bb failures report <dir> <title>   every run under dir; title heads this report's sections"
+     bb failures report <dir> <title> [code-at]   every run under dir; title heads this report's
+                                                  sections; code-at, an ISO instant, is when the
+                                                  code that ran was committed"
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [cheshire.core :as json]
@@ -132,6 +136,14 @@
              (map repro (take examples runs))
              [""])))
 
+(defn regressed?
+  "Did a closed issue come back: the runs' code was committed (code-at, an ISO instant) after the
+   issue was closed? A round whose code predates the fix never ran it, so its failures say
+   nothing about the fix; with no code-at every closed issue counts as come back."
+  [issue code-at]
+  (and (= "closed" (:state issue))
+       (or (nil? code-at) (nil? (:closed_at issue)) (pos? (compare code-at (:closed_at issue))))))
+
 (defn opening
   "A new issue's body before its first section."
   [sig]
@@ -177,7 +189,7 @@
 (defn repo "The repository the workflow runs in." [] (System/getenv "GITHUB_REPOSITORY"))
 
 (defn issues
-  "Every issue labelled label, open and closed: [{:number :body :state}]."
+  "Every issue labelled label, open and closed: [{:number :body :state :closed_at}]."
   []
   (into []
         cat
@@ -193,17 +205,20 @@
                   (filter #(str/includes? (str (:body %)) (marker sig)) all))))
 
 (defn file!
-  "One signature's section: added to its issue (reopened when closed), or a new issue. Returns
-   :added, :reopened or :opened."
-  [report-title sig runs]
+  "One signature's section: added to its issue (reopened when closed and the runs' code is newer
+   than its closing, regressed?), or a new issue. Returns :added, :reopened or :opened."
+  [report-title sig runs code-at]
   (let [existing (issue-for (issues) sig) ; read again now: another report may have just opened it
-        closed? (= "closed" (:state existing))
+        closed? (regressed? existing code-at)
         text (section report-title runs closed?)]
     (cond existing
-          (do (gh! "-X"
-                   "PATCH" (str "repos/" (repo) "/issues/" (:number existing))
-                   "-f" (str "body=" (:body existing) "\n" text)
-                   "-f" (str "state=" "open"))
+          (do (apply gh!
+                     "-X"
+                     "PATCH"
+                     (str "repos/" (repo) "/issues/" (:number existing))
+                     "-f"
+                     (str "body=" (:body existing) "\n" text)
+                     (when closed? ["-f" "state=open"]))
               (doseq [l (labels runs)]
                 (gh! "-X"
                      "POST" (str "repos/" (repo) "/issues/" (:number existing) "/labels")
@@ -224,7 +239,7 @@
 (defn report!
   "File every signature hit at least min-runs times, the most frequent first, opening at most
    max-new issues; print what was filed and what was not."
-  [dir report-title]
+  [dir report-title code-at]
   (doseq [[l color] [[label "d93f0b"] ["sim" "1d76db"] ["real" "0e8a16"]]]
     (gh! "-X"
          "POST" (str "repos/" (repo) "/labels")
@@ -241,13 +256,13 @@
                         (and (>= opened max-new) (nil? (issue-for (issues) sig)))) ; no room for a new issue
                     opened
                     :else
-                    (let [what (file! report-title sig rs)]
+                    (let [what (file! report-title sig rs code-at)]
                       (println (count rs) (pr-str sig) (name what))
                       (if (= :opened what) (inc opened) opened))))
             0
             groups)))
 
 (defn -main
-  "report <dir> <title>: file the failures under dir as issues."
-  [& [cmd dir report-title]]
-  (case cmd "report" (report! dir report-title)))
+  "report <dir> <title> [code-at]: file the failures under dir as issues."
+  [& [cmd dir report-title code-at]]
+  (case cmd "report" (report! dir report-title code-at)))
