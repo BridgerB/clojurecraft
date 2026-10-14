@@ -4,6 +4,12 @@ name: simworld
 # -M:capture): a real server on the set's pregenerated world (world.yml's cache, never built
 # here), a client toured round each landing, the server's own chunk columns saved one world file
 # a landing. simrace.yml restores them; the model plays thousands of runs in them a runner.
+#
+# A cache is read by its own branch, main and a pull request's base, and is evicted after seven
+# idle days (the daily races keep it warm). A dispatch with export: true also uploads the set as
+# an artifact (three days), so a Mac replays the very bytes the runners play: a capture taken
+# locally was not theirs (issue #74's run did not reproduce in one), and a sim run is a function
+# of world, seed and code. gh run download <run> -n simworld-R3 -D cache/sim-worlds/R3
 
 on:
   workflow_call:
@@ -15,6 +21,10 @@ on:
     inputs:
       set:
         default: R1
+      export:
+        description: Also upload the set as an artifact, for a replay on a Mac of the very bytes the runners play
+        type: boolean
+        default: false
 
 jobs:
   capture:
@@ -83,6 +93,22 @@ jobs:
         with:
           path: cache/sim-worlds/${{ env.SET }}
           key: simworld-${{ env.SET }}-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+      # the lookup above restored nothing, so a found set is restored once more for the export
+      - name: The set, for the export
+        if: inputs.export == true && steps.have.outputs.cache-hit == 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/${{ env.SET }}
+          key: simworld-${{ env.SET }}-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
+      - name: Export
+        if: inputs.export == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: simworld-${{ env.SET }}
+          path: cache/sim-worlds/${{ env.SET }}
+          compression-level: 0            # the files are gzip already
+          retention-days: 3
       - name: Summary
         run: |
-          echo "### sim worlds $SET: found in the cache: ${{ steps.have.outputs.cache-hit || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "### sim worlds $SET: found in the cache: ${{ steps.have.outputs.cache-hit || 'false' }}; exported: ${{ inputs.export || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
