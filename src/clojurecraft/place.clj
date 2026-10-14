@@ -159,7 +159,10 @@
 (defmethod place-stage :equip [world {:intent/keys [item]}] (equip world item :spot))
 
 (defn niche
-  "A cell beside the feet at their level that, dug out, is a spot no way runs through: solid,
+  "A cell beside the feet at their level, or beside the head when none is there (the block
+   goes into the wall at head height, still in reach to open: race 38477665442 bot Clj_r12 at
+   the end of its tunnel had water beside both side walls and its table in the third, and
+   found no spot for the furnace, :no-spot), that, dug out, is a spot no way runs through: solid,
    with solid under and over it, nothing over it that falls (gravel or sand fill the niche
    again as soon as it is dug: race 38477665442 bot Clj_r14 dug two such niches seven times in
    turn and was refused), no fluid beside it (the dig would refuse it), not a block the held
@@ -172,12 +175,13 @@
   [world]
   (let [[fx fy fz] (intent/feet world)
         home (:plan/go-at world)]
-    (first (for [[dx dz] (cond->> sides
+    (first (for [dy [0 1]
+                 [dx dz] (cond->> sides
                            home
                            (sort-by (fn [[dx dz]]
                                       (physics/horizontal-distance [(+ fx dx 0.5) 0 (+ fz dz 0.5)]
                                                                    home))))
-                 :let [c [(+ fx dx) fy (+ fz dz)]]
+                 :let [c [(+ fx dx) (+ fy dy) (+ fz dz)]]
                  :when (and (solid-at? world c)
                             (solid-at? world (update c 1 dec))
                             (solid-at? world (update c 1 inc))

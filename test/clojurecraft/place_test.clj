@@ -134,6 +134,21 @@
     (is (= [9 64 8] (at rock)) "gravel over both side walls: only the wall ahead is left")
     (is (= [8 64 9] (at (assoc rock [8 65 9] 1))) "stone over one side: that side")))
 
+(deftest a-niche-beside-the-head-when-the-side-walls-border-water
+  ;; race 38477665442 bot Clj_r12, at the end of its tunnel at y 26 for the ingots: water
+  ;; behind both side walls at the feet's height, the table in the third wall, the furnace
+  ;; found no spot, :no-spot three times. The walls at head height are dry.
+  (let [water (blocks/default-state :water)
+        rock (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 2 9) y [64 65]] [[x y 8] 0]))
+                    (into {} (for [x (range 7 10)] [[x 64 10] water]))
+                    (into {} (for [x (range 7 10)] [[x 64 6] water]))
+                    {[9 64 8] (blocks/default-state :crafting_table)})
+        w (assoc (standing [8.5 64.0 8.5])
+                 :world/chunks {[0 0] (world/column rock)}
+                 :plan/go-at [2.5 64.0 8.0])]
+    (is (#{[8 65 9] [8 65 7]} (place/niche w)) "a side wall at head height")))
+
 (deftest a-block-is-never-placed-on-a-table
   ;; gym batch iron-a5 run 4: the only spot was on its crafting table, and a right-click on a
   ;; table opens it, so the gravel was never placed and the intent failed :rejected three times
