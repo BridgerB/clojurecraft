@@ -30,10 +30,11 @@
 (def pickup-rise 2)                   ; a drop resting more than 2 blocks above the feet is above
                                       ; the pickup box (1.8 tall, grown 0.5 up)
 (def settle-ms 150)                   ; let the server catch up before START: three still ticks
+(def settle-deadline 2000)            ; not still by then, START anyway: the server does not ask for stillness
 (def dig-ms 3000)                     ; a log by hand: hardness 2 → 60 ticks (dig/ms derives it now)
 (def finish-margin 1.15)              ; FINISH is sent this late: the server takes it at 70% of its own ticks, aborts it before
 (def finish-slack 100)                ; ms added to the margin
-(def confirm-ticks 10)                ; after FINISH, ticks to wait for the server's ack or its refusal
+(def confirm-ticks 60)                ; after FINISH, ticks to wait for the server's block update: then the ack alone is a refusal, and silence trusts the overlay
 
 (defn penalties
   "The dig penalties in force for the player: off the ground, the eyes in water; each divides
@@ -395,7 +396,7 @@
           (or (contains? never-dug (blocks/name-of at-target))
               (and (not exposes-ok?) (exposes-fluid? world target)))
           (fail world :unsafe)
-          (and (>= still 3) (> (- now since) settle-ms))
+          (or (and (>= still 3) (> (- now since) settle-ms)) (> (- now since) settle-deadline))
           (let [seq (inc (:bot/sequence world))
                 face (face-toward eye target)
                 [slot tool] (choose-tool world at-target)
@@ -447,7 +448,6 @@
                             :pos target
                             :face face
                             :sequence seq})
-                (terrain/set-block target blocks/air) ; the server echoes a block-update and an ack; the overlay makes the bot independent of their timing
                 (assoc-intent :intent/stage :confirm
                               :intent/since now
                               :intent/sequence seq
@@ -459,11 +459,24 @@
           :else world)))
 
 (defmethod dig-stage :confirm
+  ;; the server breaks the block and sends its block update before the ack of FINISH (observed
+  ;; live on 26.1.2, and the vanilla client's own prediction relies on it): the cell open is the
+  ;; break. A loaded server acks first and breaks seconds later, by its own clock (vanilla's
+  ;; delayed destroy; issue #64), so the ack with the block still standing is waited on; the
+  ;; block still standing when confirm-ticks run out after it is the server's word that it did
+  ;; not break it: a FINISH it found early and queued behind another one still pending, which
+  ;; it then dropped, or a refusal it answered with the block put back. Race 38477665442,
+  ;; runner 9 (issues #59, #66): with 25 bots on one server the acks came 200-300 ms late and
+  ;; the breaks later still; the ack alone had the stairs believe their cells open, walk into
+  ;; rock the server still had there, and be put back by it ten times a second until the step
+  ;; timed out, :stair-not-taken three times
   [world {:intent/keys [target state sequence confirm-left]}]
-  (let [at-target (terrain/block-at world target)]
-    (cond (and at-target (= at-target state)) (fail world :rejected) ; the server put the block back: the break was refused
-          ;; the server acknowledged, or no word either way in time: trust the overlay
-          (or (>= (:stats/last-ack world -1) sequence) (zero? confirm-left)) (done world)
+  (let [at-target (terrain/block-at world target)
+        acked (>= (:stats/last-ack world -1) sequence)]
+    (cond (and at-target (not= at-target state)) (done world) ; the server's block update: open, or what fell into it
+          (and (zero? confirm-left) acked) (fail world :rejected)
+          ;; no word either way in confirm-ticks: trust the overlay
+          (zero? confirm-left) (done (terrain/predict world target blocks/air)) ; a guess, unconfirmed until the server speaks
           :else (assoc-intent world :intent/confirm-left (dec confirm-left)))))
 
 (defmethod run :dig
@@ -570,6 +583,7 @@
           (and (> d 0.4) (ledge-ahead? world goal))
           (-> world
               (assoc :player/controls {})
-              (fail :ledge))
+              (game/say (str "collect: a ledge ahead, the drop at " (mapv long goal) " is left"))
+              done)
           (> d 0.4) (assoc world :player/controls (toward world goal 0.0))
           :else (assoc world :player/controls {}))))

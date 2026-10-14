@@ -56,6 +56,17 @@
 (def creep-speed 0.06)                ; blocks a tick: the walk onto a stair with nothing beyond it to stop the body pushes only under this
 (def directions [[1 0] [0 1] [-1 0] [0 -1]]) ; the four headings, each a quarter turn from the last
 (def shore-reach 48)                  ; columns along a heading a climb looks for dry ground over
+(def climb-stairs 8)                  ; stairs a climb cuts before the planner looks again, as a descent cuts stone/stair-depth
+
+(defn climb-to
+  "The height a climb from the feet aims at next: to-y, or climb-stairs up when that is nearer.
+   A climb is cut in lengths like a descent, so the planner looks again between them: a spare
+   pickaxe is made while one still digs, and the table is taken along. Race 38477665442 bots
+   Clj_r23 and Clj_r06 climbed 26 and 53 stairs out of the mine in one intent, the climb that a
+   stone pickaxe's 131 digs do not cover, and wore both pickaxes out on the way with sticks and
+   cobblestone in hand (issue #39). stairs/out? still ends any length under the open sky."
+  [world to-y]
+  (min to-y (+ (physics/y-of (intent/feet world)) climb-stairs)))
 
 (defn turn
   "The heading a quarter turn from dir."
@@ -168,31 +179,33 @@
    :stairs-up {:cells up-cells :safe? up-safe? :rise 1}})
 
 (defn tool-missing
-  "The reason to stop when the block at cell would be dug by hand for nothing (no-<tool>, as
-   :no-pickaxe): it drops only to a tool and no tool of its kind is held at all, which
-   happens when the pickaxe breaks on the way. Stone by hand takes 7500 ms a block; batch iron-a2
-   runs went on that way, a stair at a time, until a step timed out. A tool of the kind too weak
-   for the block is the child dig's :needs-tool instead, which turns the stairs. nil when it can
-   be dug."
+  "The reason to stop, :no-pickaxe, when the block at cell is rock that would be dug by hand for
+   nothing: it drops only to a pickaxe and none is held at all, which happens when the pickaxe
+   breaks on the way. Stone by hand takes 7500 ms a block; batch iron-a2 runs went on that way,
+   a stair at a time, until a step timed out. A pickaxe too weak for the block is the child
+   dig's :needs-tool instead, which turns the stairs. Only the pickaxe counts: the staircase
+   cuts rock and what drops is not its concern, so a block that drops only to another tool is
+   dug by hand, in the time its hardness gives (snow, 200 ms). Race 38477665442: every bot
+   landed in snow (runners 2, 6 and 10, eight landings) failed :no-shovel on its first stair,
+   a snow block among the cells, a wooden pickaxe in hand (issues #42 and #72). nil when it
+   can be dug."
   [world cell]
-  (let [id (terrain/block-at world cell)
-        kind (some-> id
-                     blocks/tool-of)]
+  (let [id (terrain/block-at world cell)]
     (when (and id
+               (= :pickaxe (blocks/tool-of id))
                (blocks/drops-need-tool? id)
-               (not-any? (fn [[_ {:keys [item]}]] (= kind (:kind (blocks/tool item))))
+               (not-any? (fn [[_ {:keys [item]}]] (= :pickaxe (:kind (blocks/tool item))))
                          (:player/inventory world)))
-      (keyword (str "no-" (name (or kind :tool)))))))
+      :no-pickaxe)))
 
 (defn too-hard?
-  "Is the block at cell one no held item drops, though a tool of its kind is held (ore above the
-   pickaxe's tier)? Dug, it breaks for nothing, so the dig refuses it :needs-tool. With no tool
-   of the kind at all it is tool-missing's instead: the stairs stop for one."
+  "Is the block at cell one that needs a tool tier (blocks/needs-tier) no held item reaches (ore
+   above the pickaxe's tier)? Dug, it breaks for nothing, so the dig refuses it :needs-tool. Rock
+   with no pickaxe at all is tool-missing's instead: the stairs stop for one."
   [world cell]
   (let [id (terrain/block-at world cell)]
     (boolean (and id
-                  (blocks/drops-need-tool? id)
-                  (nil? (tool-missing world cell))
+                  (blocks/needs-tier id)
                   (not-any? (fn [[_ {:keys [item]}]] (dig/harvest? id item))
                             (:player/inventory world))))))
 
@@ -265,6 +278,13 @@
     (cond-> max-level-steps
       (and home (= :stairs-up kind)) (+ (long (physics/horizontal-distance feet home))))))
 
+(defn under-falling?
+  "Would a climb from feet cell [x y z] be refused for gravel or sand over the cell above the
+   head (up-safe?): does the block three up fall (blocks/falls?)?"
+  [world [x y z]]
+  (boolean (some-> (terrain/block-at world [x (+ y 3) z])
+                   blocks/falls?)))
+
 (defn step-aside
   "Every stair refused: a level step, the turns counted afresh, or :boxed when none is allowed
    or max-level-steps are spent. The step keeps the last one's way (:intent/level-dir) while it
@@ -275,7 +295,11 @@
    (shore-distance), since what refuses a climb is most often a lake or the sea overhead, and
    with no shore in sight toward the landing (:plan/go-at), which is land: gym batch iron-a7
    run 1, under a lake at y 44, stepped 32 east under it and failed :boxed; batch iron-a8 run 2,
-   under the sea with no shore in sight, :boxed three times."
+   under the sea with no shore in sight, :boxed three times. Going up, a way whose next cell is
+   not under gravel or sand (under-falling?) comes before any that is, whatever the last step's
+   way: under a bed of gravel every stair is refused again from the next cell, and race
+   38477665442 bot Clj_r04 stepped thirty cells along one at y 42, two blocks dug a step, until
+   its last pickaxe broke (issue #43)."
   [world {:intent/keys [kind dir level-steps level-dir] :or {level-steps 0}}]
   (let [[fx _ fz :as feet] (intent/feet world)
         back (when level-dir (mapv - level-dir))
@@ -289,6 +313,9 @@
                        (if home (physics/horizontal-distance [(+ fx dx) 0 (+ fz dz)] home) 0)])
                     round)
                    :else round)
+        ways (cond->> ways
+               (= :stairs-up kind)
+               (sort-by #(if (under-falling? world (last (level-cells feet %))) 1 0)))
         laid (fn [d]
                (let [cells (level-cells feet d)]
                  (and (level-clear? world cells) (lay world feet cells))))
@@ -313,6 +340,34 @@
       (box world))))
 
 (def refusals #{:needs-tool :unsafe})  ; a child dig failing for these turns the stairs
+(def max-rejections 3)                 ; digs of one stair the server would not do before the staircase fails :rejected
+
+(defn rejected
+  "A child dig the server did not do (:rejected: its ack came with the block still standing):
+   the cell is still to open, so the stair digs it again, up to max-rejections a stair; past
+   that the staircase fails :rejected. Race 38477665442, runner 9 (issues #59, #66): a lagging
+   server with 25 bots queued early FINISHes behind one another and dropped them, and the
+   staircase, believing the ack, walked into rock the server still had there."
+  [world {:intent/keys [rejections child] :or {rejections 0}}]
+  (if (>= (inc rejections) max-rejections)
+    (-> world
+        (assoc :player/controls {})
+        (intent/fail :rejected))
+    (-> world
+        (intent/dissoc-intent :intent/child)
+        (intent/assoc-intent :intent/rejections (inc rejections))
+        (game/say
+         (str "stairs: the server did not cut " (:intent/target child) ", digging again")))))
+
+(defn airborne?
+  "Is the body in the air, neither on the ground nor in a liquid? A stair is planned from feet
+   that stand: round falling feet every cell is air, so every heading is refused for the drop
+   and the staircase is :boxed before the body lands. Race 38477665442, landing 2361,111,2361
+   (issue #65, three real bots and 89 sim runs a round): a walk to stone stepped off a cliff,
+   the dig failed :out-of-reach on the way down, and the staircase the mine then started was
+   planned, refused four ways and failed :boxed three times in the four seconds of the fall."
+  [world]
+  (not (or (:player/on-ground? world) (:player/in-water? world) (:player/in-lava? world))))
 
 (defmulti stairs-stage
   "Advance a staircase (:stairs-down, :stairs-up, or a :tunnel's level step) one tick in its
@@ -328,7 +383,8 @@
         feet (intent/feet world)
         cells (cells-of feet dir)
         to-lay (when (and lay (not (safe? world cells))) (lay world feet cells))]
-    (cond (safe? world cells)
+    (cond (airborne? world) (assoc world :player/controls {}) ; land first
+          (safe? world cells)
           (intent/assoc-intent world
                                :intent/dir dir
                                :intent/cells cells
@@ -393,14 +449,23 @@
   [child]
   (and (intent/failed? child) (= :target-gone (:intent/reason child))))
 
+(defn by-hand?
+  "Is staircase i cut by hand where no tool of a block's kind is held at all? A stair up is:
+   the way out of the ground is worth 7500 ms a block of stone, since the tool is made up there.
+   Race 38477665442 Clj_r21's pickaxe broke at y 60 in the iron mine; its stairs up stopped
+   :no-pickaxe, the sticks for another were in the trees up top, and twelve walks to them failed
+   :no-path (issue #40). A stair down and a tunnel stop for the tool instead (tool-missing)."
+  [i]
+  (= :stairs-up (:intent/kind i)))
+
 (defn dig-next
   "Start a child for cell, the next of a stair's to open: a :dig, or first an :equip of the tool
    when it is only in the main inventory (intent/stowed-tool); or fail with tool-missing's
-   reason, so the planner makes the tool again."
+   reason, so the planner makes the tool again, unless the staircase is cut by hand (by-hand?)."
   [world cell event]
   (let [[_ stowed-item :as stowed] (some->> (terrain/block-at world cell)
                                             (intent/stowed-tool world))
-        missing (tool-missing world cell)
+        missing (when-not (by-hand? (:plan/intent world)) (tool-missing world cell))
         child
         (if stowed
           {:intent/kind :equip :intent/item (recipe/item-name stowed-item) :intent/status :active}
@@ -415,6 +480,7 @@
   [world {:intent/keys [child cells] :as i} event]
   (cond
     (and child (or (intent/done? child) (fell? child))) (intent/dissoc-intent world :intent/child)
+    (and child (intent/failed? child) (= :rejected (:intent/reason child))) (rejected world i)
     ;; a cell the child will not dig refuses this way, like lava: turn. :needs-tool is ore the
     ;; pickaxe cannot drop; :unsafe a cell beside water or lava, which the dig would let in (a
     ;; live descent through an aquifer at y 36 failed three times on it before this)
@@ -470,7 +536,7 @@
           (-> world
               (assoc :player/controls {})
               (intent/assoc-intent :intent/stage :plan)
-              (intent/dissoc-intent :intent/child :intent/cells))
+              (intent/dissoc-intent :intent/child :intent/cells :intent/rejections))
           (next-to-open world cells) ; gravel or sand fell into the stair: dig it again
           (-> world
               (assoc :player/controls {})
@@ -484,12 +550,13 @@
 (defmethod stairs-stage :level
   ;; dig the level step's cells, one child at a time, then walk onto its feet cell; then plan
   ;; the stairs again from there. The step's time is the walk's: it starts again after each dig
-  [world {:intent/keys [child level-cells started-tick]} event]
+  [world {:intent/keys [child level-cells started-tick] :as i} event]
   (let [[fx fy fz] (last level-cells)]
     (cond (and child (or (intent/done? child) (fell? child)))
           (-> world
               (intent/dissoc-intent :intent/child)
               (intent/assoc-intent :intent/started-tick (:time/tick world)))
+          (and child (intent/failed? child) (= :rejected (:intent/reason child))) (rejected world i)
           (and child (intent/failed? child))
           (-> world
               (assoc :player/controls {})
@@ -500,7 +567,7 @@
           (-> world
               (assoc :player/controls {})
               (intent/assoc-intent :intent/stage :plan)
-              (intent/dissoc-intent :intent/level-cells))
+              (intent/dissoc-intent :intent/level-cells :intent/rejections))
           (> (- (:time/tick world) started-tick) step-timeout-ticks)
           (-> world
               (assoc :player/controls {})
@@ -568,10 +635,12 @@
                       directions))))
 
 (defmethod intent/run :stairs-up
-  ;; done standing at to-y, or out of the ground (out?), whichever comes first
-  [world {:intent/keys [to-y] :as i} event]
+  ;; done standing at to-y, or out of the ground (out?), whichever comes first; one that is
+  ;; :intent/to-height? ends at to-y alone: the open sky over a pit's floor is not out
+  [world {:intent/keys [to-y to-height?] :as i} event]
   (if (and (:player/on-ground? world)
-           (or (>= (physics/y-of (intent/feet world)) to-y) (out? world (intent/feet world))))
+           (or (>= (physics/y-of (intent/feet world)) to-y)
+               (and (not to-height?) (out? world (intent/feet world)))))
     (-> world
         (assoc :player/controls {})
         intent/done)

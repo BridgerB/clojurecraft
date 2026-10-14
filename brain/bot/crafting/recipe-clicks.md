@@ -1,6 +1,6 @@
 ---
 title: Recipe clicks
-description: How recipe/clicks turns one craft into window-0 clicks from the inventory value: one source stack per ingredient, a right-click per cell, the remainder put back; nil when it cannot.
+description: How recipe/clicks turns one craft into window-0 clicks from the inventory value: one source stack per ingredient when one covers it, else several in turn, a right-click per cell, the remainder put back; nil when it cannot.
 type: reference
 tags: [bot, crafting, clicks]
 aliases: [clicks, click plan, laying a recipe, placement, player->window-slot]
@@ -10,6 +10,8 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/inventory.clj#def click-modes
   - src/clojurecraft/recipe.clj#defn clicks
+  - src/clojurecraft/recipe.clj#defn sources
+  - src/clojurecraft/recipe.clj#defn lay-from
   - src/clojurecraft/recipe.clj#defn placement
   - src/clojurecraft/inventory.clj#defn player->window-slot
   - test/clojurecraft/recipe_test.clj#clicks-lay-one-craft
@@ -33,7 +35,7 @@ related:
 
 ## How it works
 For each ingredient group (cells sharing one set):
-1. Source: the lowest-numbered inventory slot whose item is in the set and whose count, minus what earlier groups already took from it, covers every cell in the group.
+1. Sources (`sources`): the lowest-numbered inventory slot whose item is in the set and whose count, minus what earlier groups already took from it, covers every cell in the group; when none does, the lowest such slots in turn until the group is covered (7 + 1 cobblestone make a furnace), each laid by `lay-from`; nil when they do not hold enough together.
 2. Left-click the source (`inventory/left-click`: button 0, mode 0): the whole stack goes to the cursor.
 3. Right-click each cell in slot order (`inventory/right-click`: button 1, mode 0): one item per cell. The clicks are named in `inventory.clj` (`click-modes`, `left-click`, `right-click`, `shift-click`, `swap-click`), so no code writes a button or a mode as a number.
 4. If anything is left on the cursor, left-click the source again to put it back.
@@ -41,7 +43,7 @@ For each ingredient group (cells sharing one set):
 Sticks from 8 oak planks in hotbar slot 0: `36 b0`, `1 b1`, `3 b1`, `36 b0`. A stack used up exactly needs no put-back (crafting table from 4 planks is 5 clicks).
 
 ## Gotchas
-- One stack per ingredient: 1 oak + 4 birch planks skips the short oak stack and takes birch; 3 planks total returns nil even if spread over stacks. See [[one-stack-per-ingredient]].
+- One stack per ingredient when one covers it: 1 oak + 4 birch planks skips the short oak stack and takes birch; 3 planks total returns nil however they are spread. Only a group no stack covers is drawn from several. See [[one-stack-per-ingredient]].
 - The click plan is computed once, in `:settle`, from the inventory as it was then; the plan assumes nothing else moves while it runs.
 - The round-trip property (`clicks-then-match-round-trip`, 300 cases over every 2x2-fitting recipe) proves the right-clicked cells are exactly `placement`'s cells and that `match` on them gives the recipe's result.
 

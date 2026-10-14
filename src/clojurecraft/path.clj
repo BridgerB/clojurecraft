@@ -24,7 +24,7 @@
 
 (set! *warn-on-reflection* true)
 
-(def flat-shape 0.125)                ; a shape no taller is walked over like the floor (a carpet, a layer of snow)
+(def flat-shape 0.125)                ; a shape no taller is walked over like the floor (a carpet; one layer of snow has none, see one-layer-snow)
 (def max-fall 3)                      ; blocks a drop may fall; vanilla damage starts above 3
 (def default-max-nodes 6000)          ; expansions one plan may spend
 (def sky-weight 4.0)                  ; a block of height in the :sky heuristic, more than a jump costs
@@ -55,13 +55,26 @@
     :weathering_copper_grate :bamboo_stalk :chorus_plant :chorus_flower :mangrove_roots :heavy_core
     :vault :trial_spawner :spawner :conduit :beacon :shelf})
 
+(def one-layer-snow
+  "The state of a snow layer one layer deep, the block's default state: the game gives it no
+   collision shape at all (SnowLayerBlock's shape for one layer is empty), the physics passes
+   through it (blocks/passable-types), so a route walks through it like air, the feet in its
+   cell on the block under it. Deeper layers collide as the game says, (layers - 1) / 8, which
+   the physics cannot simulate: they stay :awkward with their type. Race 38477665442 landed 39
+   bots on snowy ground, every cell round them under this one layer; the feet cell was not
+   standable, start-cell found nothing beside it, every plan was :none and twelve walks failed
+   :no-path in a second (issue #38)."
+  (blocks/default-state :snow))
+
 (defn classify-id
   "What a block state means to a route: :water, :lava, :awkward (a shape the physics cannot
-   simulate), :solid (a full cube), or :clear (passable, not a liquid). nil → :unknown."
+   simulate), :solid (a full cube), or :clear (passable, not a liquid; one layer of snow is).
+   nil → :unknown."
   [id]
   (cond (nil? id) :unknown
         (contains? blocks/water-states id) :water
         (contains? blocks/lava-states id) :lava
+        (= id one-layer-snow) :clear
         (or (contains? awkward-types (blocks/type-of id))
             (> (get blocks/partial-shapes (blocks/name-of id) 0.0) flat-shape))
         :awkward

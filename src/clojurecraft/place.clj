@@ -65,8 +65,11 @@
        (<= 2 (count (filter (fn [[dx dz]] (solid-at? world [(+ x dx) y (+ z dz)])) sides)))))
 
 (defn spot
-  "[target support] for placing a block near the player: target empty (air or a plant, not
-   liquid) and no passage, support solid and not a block a click opens (a table, a furnace:
+  "[target support] for placing a block near the player: target replaceable (air or a grass
+   the server lets a block take the place of, blocks/replaceable?: a flower is not, race
+   38477665442 bot Clj_r23 was refused three times on wildflowers) and one the server has
+   confirmed (terrain/confirmed?: not a cell the bot's own dig emptied before the server said
+   so), no passage, support solid and not a block a click opens (a table, a furnace:
    right-clicked, it opens instead of taking the block; gym batch iron-a5 run 4 clicked its
    table three times to place a gravel and failed :rejected), not inside the player, within
    reach. A passage is allowed when passage-ok? (a block placed only to be dug again at once,
@@ -87,8 +90,8 @@
                         s (terrain/block-at world support)]
                   :when (and t
                              s
-                             (not (blocks/solid? t))
-                             (not= :liquid (blocks/type-of t))
+                             (blocks/replaceable? t)
+                             (terrain/confirmed? world target)
                              (blocks/solid? s)
                              (not (contains? memory/placed-kinds (blocks/name-of s)))
                              (or passage-ok? (not (passage? world target)))
@@ -156,10 +159,15 @@
 (defmethod place-stage :equip [world {:intent/keys [item]}] (equip world item :spot))
 
 (defn niche
-  "A cell beside the feet at their level that, dug out, is a spot no way runs through: solid,
-   with solid under and over it, no fluid beside it (the dig would refuse it), not a block the
-   held tools cannot drop (batch iron-a3 run 5 failed placing its furnace :needs-tool three
-   times on one), neither a block
+  "A cell beside the feet at their level, or beside the head when none is there (the block
+   goes into the wall at head height, still in reach to open: race 38477665442 bot Clj_r12 at
+   the end of its tunnel had water beside both side walls and its table in the third, and
+   found no spot for the furnace, :no-spot), that, dug out, is a spot no way runs through: solid,
+   with solid under and over it, nothing over it that falls (gravel or sand fill the niche
+   again as soon as it is dug: race 38477665442 bot Clj_r14 dug two such niches seven times in
+   turn and was refused), no fluid beside it (the dig would refuse it), not a block the held
+   tools cannot drop (batch iron-a3 run 5 failed placing its furnace :needs-tool three times
+   on one), neither a block
    that is never dug nor one the bot placed (a table in the last niche); nil when none. Where a
    staircase has no spot, the wall gives one: the side nearest the landing (:plan/go-at), never
    the wall ahead, where the way goes on (batch iron-a2 run 1 put its table there, and its
@@ -167,15 +175,17 @@
   [world]
   (let [[fx fy fz] (intent/feet world)
         home (:plan/go-at world)]
-    (first (for [[dx dz] (cond->> sides
+    (first (for [dy [0 1]
+                 [dx dz] (cond->> sides
                            home
                            (sort-by (fn [[dx dz]]
                                       (physics/horizontal-distance [(+ fx dx 0.5) 0 (+ fz dz 0.5)]
                                                                    home))))
-                 :let [c [(+ fx dx) fy (+ fz dz)]]
+                 :let [c [(+ fx dx) (+ fy dy) (+ fz dz)]]
                  :when (and (solid-at? world c)
                             (solid-at? world (update c 1 dec))
                             (solid-at? world (update c 1 inc))
+                            (not (blocks/falls? (terrain/block-at world (update c 1 inc))))
                             (not (intent/exposes-fluid? world c))
                             (not= :needs-tool (intent/choose-tool world (terrain/block-at world c)))
                             (not (contains? (into intent/never-dug memory/placed-kinds)
@@ -232,26 +242,42 @@
           :else (intent/fail world :no-spot))))
 
 (defn dig-niche
-  "One tick of digging the niche (the child :dig); done, equip again (the dig chose its own held
-   slot) and look for the spot; failed, fail with its reason."
+  "One tick of digging the niche (the child :dig); done and the cell confirmed by the server
+   (terrain/confirmed?), or the server silent for answer-ms since the dig's FINISH, equip again
+   (the dig chose its own held slot) and look for the spot; failed, fail with its reason. A
+   loaded server acks the FINISH at once and breaks the block seconds later, by its own clock
+   (vanilla's delayed destroy): race 38477665442 bots Clj_r01 and Clj_r07 placed into the
+   niche a second after the ack, the server answered with the stone still there, and three
+   such placements failed the plan :rejected."
   [world {:intent/keys [child]} event]
-  (cond (intent/done? child)
+  (cond (and (intent/done? child)
+             (or (terrain/confirmed? world (:intent/target child))
+                 (> (- (now world) (:intent/since child)) answer-ms)))
         (-> world
             (intent/assoc-intent :intent/stage :equip)
             (intent/dissoc-intent :intent/child))
+        (intent/done? child) world
         (intent/failed? child) (intent/fail world (:intent/reason child))
         :else (intent/run-child world event)))
 
 (defmethod place-stage :settle
-  [world {:intent/keys [target against click-face since still] :or {click-face :up}}]
+  ;; a chosen target the server filled meanwhile (gravel that fell into the niche, the block it
+  ;; put back) is given up for another spot before anything is sent; a given cell (a build's)
+  ;; is sent and judged by the server
+  [world
+   {:intent/keys [target against click-face since still] at :intent/cell :or {click-face :up}}]
   (let [look (physics/look-at (game/eye world) (physics/centre target))
         still (if (intent/still? world) (inc still) 0)
         world (assoc world :player/controls {:control/look look})]
-    (if (and (>= still 3) (> (- (now world) since) settle-ms))
-      (-> world
-          (use-item-on against (packet/value :face click-face) (face-cursors click-face))
-          (intent/assoc-intent :intent/stage :sent))
-      (intent/assoc-intent world :intent/still still))))
+    (cond (and (nil? at) (not (blocks/replaceable? (terrain/block-at world target))))
+          (-> world
+              (intent/assoc-intent :intent/stage :spot)
+              (intent/dissoc-intent :intent/target :intent/against :intent/click-face))
+          (and (>= still 3) (> (- (now world) since) settle-ms))
+          (-> world
+              (use-item-on against (packet/value :face click-face) (face-cursors click-face))
+              (intent/assoc-intent :intent/stage :sent))
+          :else (intent/assoc-intent world :intent/still still))))
 
 (defmethod place-stage :sent
   [world {:intent/keys [item target sequence sent-at]}]

@@ -25,7 +25,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.record :as record]
-            [clojurecraft.scoop]
+            [clojurecraft.scoop :as scoop]
             [clojurecraft.sim :as sim]
             [clojurecraft.stairs]
             [clojurecraft.stone]
@@ -222,7 +222,9 @@
     (is (= [[:click-inventory-while-open 0]] (:sim/violations sim)))
     (is (= [] (:sim/out sim)) "vanilla ignores it: no answer")))
 
-(deftest an-early-finish-does-not-break-the-block
+(deftest an-early-finish-breaks-the-block-only-by-the-servers-clock
+  ;; ServerPlayerGameMode's delayed destroy: a FINISH before 70% of the block's time is acked
+  ;; alone, the block is kept, and the server breaks it when its own timer completes
   (let [sim0 (assoc (sim/init {:column (world/column-bytes {[1 64 0] 1}) :spawn [0.5 64.0 0.5]})
                     :sim/phase :play
                     :sim/now 1000)
@@ -241,9 +243,42 @@
                                         :face (packet/value :face :west)
                                         :sequence 2}}))]
     (is (empty? (:sim/broken sim)))
-    (is (= [:block-update :block-changed-ack] (mapv :packet/name (:sim/out sim)))
-        "the real server restores the client's view of the block, then acks")
-    (is (= 1 (:state (first (:sim/out sim)))) "restored to stone")))
+    (is (= [:block-changed-ack] (mapv :packet/name (:sim/out sim)))
+        "the real server acks and keeps breaking by its own clock")
+    (let [[sim _] (sim/drain sim)
+          later (sim/step sim {:sim/kind :tick :sim/now (+ 1000 (sim/full-ms sim 1 nil))})]
+      (is (= #{[1 64 0]} (:sim/broken later)) "broken once the block's whole time has passed")
+      (is (= :block-update (:packet/name (first (:sim/out later)))))
+      (is (= 0 (:state (first (:sim/out later))))))))
+
+(deftest a-niche-is-placed-into-only-once-the-slow-server-has-broken-it
+  ;; race 38477665442 bots Clj_r01 (runner 4) and Clj_r07 (runner 5): the niche's FINISH was
+  ;; acked at once and the stone broken two seconds later; the furnace went in a second after
+  ;; the ack, the server answered with the stone, three times, :rejected
+  (let [pit (merge (into {} (for [x (range 16) y (range 64 80) z (range 16)] [[x y z] 1]))
+                   {[8 72 8] 0 [8 73 8] 0})
+        table (conj plan/goals
+                    {:goal/id :furnace-near
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:block/furnace :near}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes pit)
+                                    :spawn [8.5 72.0 8.5]
+                                    :slow-breaks 2.0
+                                    :inventory
+                                    {[:hotbar 0] {:item (get blocks/items :furnace) :count 1}
+                                     [:hotbar 1] {:item (get blocks/items :wooden_pickaxe)
+                                                  :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         60000
+                         {:event/kind :go :go/goals [:furnace-near]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= [:furnace] (map blocks/name-of (vals (:sim/placed sim)))) "in the niche")
+    (is (zero? (:plan/attempts w)) "no placement refused")
+    (is (empty? (:sim/violations sim)))))
 
 ;; ---------------------------------------------------------------- digging with tools, on the model
 
@@ -642,24 +677,29 @@
 
 (defn intent-run-holding
   "Run intent it alone against the model from a spawn at [8.5 spawn-y 8.5] over column blocks,
-   holding inventory ({[:hotbar n] {:item id :count n}}), until it ends or max-ms. Returns
-   [world sim]."
-  [it blocks spawn-y inventory max-ms]
-  (let [column (world/column-bytes blocks)
-        step
-        (fn [w e]
-          (let [w (game/step w e)
-                i (:plan/intent w)]
-            (cond (= :go (:event/kind e)) (assoc w :plan/intent (assoc it :intent/status :active))
-                  (and (= :tick (:event/kind e)) (= :active (:intent/status i)) (:player/loaded? w))
-                  (intent/run w i e)
-                  :else w)))
-        sim0 (sim/init {:column column :spawn [8.5 (double spawn-y) 8.5] :inventory inventory})]
-    (sim/run step
-             (game/init fx/opts)
-             sim0
-             #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
-             max-ms)))
+   holding inventory ({[:hotbar n] {:item id :count n}}), until it ends or max-ms, with the
+   model's other options (sim/init's fault knobs) when given. Returns [world sim]."
+  ([it blocks spawn-y inventory max-ms] (intent-run-holding it blocks spawn-y inventory max-ms {}))
+  ([it blocks spawn-y inventory max-ms sim-opts]
+   (let [column (world/column-bytes blocks)
+         step (fn [w e]
+                (let [w (game/step w e)
+                      i (:plan/intent w)]
+                  (cond (= :go (:event/kind e))
+                        (assoc w :plan/intent (assoc it :intent/status :active))
+                        (and (= :tick (:event/kind e))
+                             (= :active (:intent/status i))
+                             (:player/loaded? w))
+                        (intent/run w i e)
+                        :else w)))
+         sim0 (sim/init (merge
+                         {:column column :spawn [8.5 (double spawn-y) 8.5] :inventory inventory}
+                         sim-opts))]
+     (sim/run step
+              (game/init fx/opts)
+              sim0
+              #(contains? #{:done :failed} (:intent/status (:plan/intent %)))
+              max-ms))))
 
 (defn intent-run
   "intent-run-holding with one item in hotbar slot 0, or nothing."
@@ -734,6 +774,39 @@
         (is (= [:failed :boxed]
                [(:intent/status (:plan/intent w)) (:intent/reason (:plan/intent w))]))))))
 
+(deftest a-staircase-started-in-the-air-waits-for-the-ground
+  ;; race 38477665442, landing 2361,111,2361 (issue #65): a walk to stone stepped off a cliff,
+  ;; and the staircase the mine started on the way down was planned from the air, refused four
+  ;; ways and failed :boxed three times before the body landed. Ten blocks over the hill
+  (let [[w sim] (stairs-run deep-stone 86 (get blocks/items :wooden_pickaxe) 71 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (= [1 0] (:intent/dir (:plan/intent w))) "never refused: planned once on the ground")
+    (is (<= (second (:player/pos w)) 71.5) "the feet are five stairs down")
+    (is (contains? (:sim/broken sim) [9 75 8]) "the first stair cut from the hilltop")
+    (is (empty? (:sim/violations sim)))))
+
+(deftest a-stair-the-server-did-not-cut-is-dug-again
+  ;; race 38477665442, runner 9 (issues #59, #66): with 25 bots on one server, an early FINISH
+  ;; was queued behind another and dropped, its ack coming with the block still standing; the
+  ;; staircase believed the ack, walked into rock the server still had, and was put back by it
+  ;; ten times a second until the step timed out, :stair-not-taken three times. The model
+  ;; drops the second break (the second stair's head cell; the first stair has one cell of
+  ;; rock, under the hilltop): the ack alone, the block left standing
+  (let [[w sim]
+        (intent-run-holding {:intent/kind :stairs-down :intent/to-y 71}
+                            deep-stone
+                            76 {[:hotbar 0] {:item (get blocks/items :wooden_pickaxe) :count 1}}
+                            120000 {:drop-breaks #{1}})]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (<= (second (:player/pos w)) 71.5) "the feet are five stairs down")
+    (is (= 13 (:sim/breaks sim)) "twelve cells of rock, one of them asked for twice")
+    (is (contains? (:sim/broken sim) [10 75 8]) "the dropped cell was dug again")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest lava-ahead-turns-the-stairs
   ;; lava in the floor two cells along +x: the first heading is refused, the next taken
   (let [lava (first (blocks/states-where (fn [[n]] (= n :lava))))
@@ -765,6 +838,20 @@
                              [:intent/status :intent/reason :intent/stage :intent/turns])))
     (is (not= [1 0] (:intent/dir (:plan/intent w))) "it turned away from the ore")
     (is (not (contains? (:sim/broken sim) [9 75 8])) "the ore was never dug")))
+
+(deftest snow-in-the-stair-is-cleared-by-hand
+  ;; race 38477665442, runners 2, 6 and 10: every bot landed in snow failed :no-shovel on its
+  ;; first stair, a wooden pickaxe in hand, a snow block among the stair's cells (issues #42
+  ;; and #72). Snow drops only to a shovel, but the staircase wants the cell open, not the drop
+  (let [snow (blocks/default-state :snow_block)
+        blocks (assoc deep-stone [9 75 8] snow [9 74 8] snow) ; the first +x stair's new feet, and the next stair's head
+        [w sim] (stairs-run blocks 76 (get blocks/items :wooden_pickaxe) 74 60000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (= [1 0] (:intent/dir (:plan/intent w))) "straight on through the snow, no turn")
+    (is (contains? (:sim/broken sim) [9 75 8]) "the snow dug, by hand")
+    (is (empty? (:sim/violations sim)))))
 
 (deftest water-beside-a-stair-cell-turns-the-stairs
   ;; live iron-kit trial (local landing 2360,2360, 2026-10-11): at y 36 an aquifer lay beside the
@@ -946,6 +1033,58 @@
     (is (zero? (get (held w) :furnace 0)) "and it left the hand")
     (is (empty? (:sim/violations sim)))))
 
+
+(deftest a-table-is-never-placed-into-a-flower
+  ;; race 38477665442 bot Clj_r23: every spot the bot tried held wildflowers, which the server
+  ;; keeps (a flower bed is not replaceable), and the table was refused three times
+  (let [flowers (into {}
+                      (for [dx [-1 0 1]
+                            dz [-1 0 1]
+                            :when (not= [dx dz] [0 0])]
+                        [[(+ 8 dx) 64 (+ 8 dz)] (blocks/default-state :wildflowers)]))
+        table (conj plan/goals
+                    {:goal/id :table-near
+                     :goal/priority 7
+                     :goal/target? true
+                     :goal/provides {:block/crafting_table :near}
+                     :goal/done? :provided?})
+        [w sim] (sim/run (game/compose game/step (partial plan/step-over table))
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes flowers)
+                                    :spawn [8.5 64.0 8.5]
+                                    :inventory {[:hotbar 0] {:item (get blocks/items
+                                                                        :crafting_table)
+                                                             :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         30000
+                         {:event/kind :go :go/goals [:table-near]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= [:crafting_table] (map blocks/name-of (vals (:sim/placed sim)))))
+    (is (not-any? flowers (keys (:sim/placed sim))) "beyond the flowers, never into one")
+    (is (zero? (:plan/attempts w)) "no placement refused")
+    (testing "the model refuses a placement into a flower, as the server does"
+      (let [sim (-> (sim/init {:column (world/column-bytes flowers)
+                               :spawn [8.5 64.0 8.5]
+                               :inventory {[:hotbar 0] {:item (get blocks/items :crafting_table)
+                                                        :count 1}}})
+                    (assoc :sim/phase :play :sim/player-pos [8.5 64.0 8.5])
+                    (sim/step {:sim/kind :packet
+                               :sim/packet {:packet/name :use-item-on
+                                            :hand 0
+                                            :pos [9 63 8]
+                                            :face (packet/value :face :up)
+                                            :cursor-x 0.5
+                                            :cursor-y 1.0
+                                            :cursor-z 0.5
+                                            :inside-block false
+                                            :world-border-hit false
+                                            :sequence 1}}))]
+        (is (empty? (:sim/placed sim)))
+        (is
+         (= [{:packet/name :block-update :pos [9 64 8] :state (blocks/default-state :wildflowers)}
+             {:packet/name :block-changed-ack :sequence 1}]
+            (:sim/out sim)))))))
+
 ;; ---------------------------------------------------------------- the furnace, on the model
 
 (def furnace-pos [2 64 0])
@@ -1018,14 +1157,15 @@
 
 (def kit
   "What the gym gives a cast: buckets of lava and water, an empty one, cobblestone, flint and
-   steel."
+   steel, and the stone pickaxe the rows hold."
   {[:hotbar 0] {:item (recipe/item-id :lava_bucket) :count 1}
    [:hotbar 1] {:item (recipe/item-id :water_bucket) :count 1}
    [:hotbar 2] {:item (recipe/item-id :bucket) :count 1}
    [:hotbar 3] {:item (recipe/item-id :cobblestone) :count 64}
    [:hotbar 4] {:item (recipe/item-id :flint_and_steel) :count 1}
    [:hotbar 5] {:item (recipe/item-id :cobblestone) :count 64}
-   [:hotbar 6] {:item (recipe/item-id :cobblestone) :count 64}})
+   [:hotbar 6] {:item (recipe/item-id :cobblestone) :count 64}
+   [:hotbar 8] {:item (recipe/item-id :stone_pickaxe) :count 1}})
 
 (defn build-run
   "Run a :build of kind from build-origin facing south over blocks, from spawn with inv, until it
@@ -1632,7 +1772,9 @@
 
 (deftest a-collect-stops-at-a-ledge
   ;; gym batch iron-a9 run 3 dug gravel for flint at a ravine's edge at y -7: the collect walked
-  ;; after the drop and the bot fell from a high place
+  ;; after the drop and the bot fell from a high place. It stops, and the drop is left: it ends
+  ;; done with nothing, not failed, since three such drops in a row failed the plan :ledge (sim
+  ;; race 38477665389, issue #93, 45 runs at one landing)
   (let [ravine (into {} (for [y (range 50 64) z (range 16)] [[10 y z] blocks/air]))
         [w sim] (intent-run {:intent/kind :collect
                              :intent/target [10 63 8]
@@ -1641,8 +1783,9 @@
                             64
                             (get blocks/items :stone_pickaxe)
                             20000)]
-    (is (= [:failed :ledge] [(:intent/status (:plan/intent w)) (:intent/reason (:plan/intent w))]))
+    (is (= :done (:intent/status (:plan/intent w))) (pr-str (:plan/intent w)))
     (is (<= 64.0 (second (:player/pos w))) "still on the ground beside the ravine")
+    (is (zero? (get (held w) :gravel 0)) "nothing picked up: the drop is left")
     (is (empty? (:sim/violations sim)))))
 
 (deftest a-tunnel-with-no-pickaxe-stops-for-one
@@ -1654,6 +1797,18 @@
     (is (= :no-pickaxe (:intent/reason (:plan/intent w))))
     (is (empty? (:sim/broken sim)) "nothing dug by hand")
     (is (< (:time/now w) 2000))))
+
+(deftest stairs-up-with-no-pickaxe-are-cut-by-hand
+  ;; race 38477665442 Clj_r21 (issue #40): the pickaxe broke at y 60 in the iron mine, the stairs
+  ;; up stopped :no-pickaxe, the sticks for another were in the trees up top, and twelve walks
+  ;; to them failed :no-path. The way out is cut by hand, 7500 ms a block of stone
+  (let [[w sim] (staircase-run :stairs-up pocket 66 nil 72 600000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/turns])))
+    (is (<= 72.0 (second (:player/pos w))) "six stairs up, by hand")
+    (is (seq (:sim/broken sim)) "stone dug by hand")
+    (is (empty? (:sim/violations sim)))))
 
 (deftest stairs-up-walk-out-from-under-water
   ;; live run 9 cut stairs up from y 22 to y 51 and met water over every stair; its level steps went
@@ -1762,6 +1917,32 @@
     (is (<= 75.0 (second (:player/pos w))) "up to the hilltop, out of the shaft")
     (is (empty? (:sim/violations sim)))))
 
+(def open-pit
+  "A plateau at y 70 with a pit three wide down to y 64 at its middle, open to the sky: the
+   stairs up count its floor as out of the ground."
+  (into {}
+        (for [x (range 16)
+              y (range 64 70)
+              z (range 16)
+              :when (not (and (<= 7 x 9) (<= 7 z 9)))]
+          [[x y z] 1])))
+
+(deftest a-climb-from-a-pit-ends-at-its-height-not-at-the-open-sky
+  ;; issue #60: the floor of a ravine under the sky is out? the tick the stairs start
+  (let [pickaxe (get blocks/items :wooden_pickaxe)
+        [plain _] (staircase-run :stairs-up open-pit 64 pickaxe 70 120000)
+        [w sim] (intent-run {:intent/kind :stairs-up :intent/to-y 70 :intent/to-height? true}
+                            open-pit
+                            64
+                            pickaxe
+                            120000)]
+    (is (= :done (:intent/status (:plan/intent plain))))
+    (is (= 64 (second (intent/feet plain))) "a plain climb is out at once: the sky is open")
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage])))
+    (is (<= 70 (second (intent/feet w))) "to the plateau")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest a-tunnel-never-cuts-under-gravel-under-water
   ;; gym batch iron-a4 run 1 tunnelled under a riverbed: the gravel over a cell it cut fell into
   ;; it and the river followed. Gravel with water on it over the first cell ahead: refused
@@ -1804,11 +1985,43 @@
     (is (= :gravel (blocks/name-of (sim/block-at sim [8 69 8]))) "the gravel never fell")
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-climb-steps-out-from-under-a-bed-of-gravel-not-along-it
+  ;; race 38477665442 bot Clj_r04 (issue #43): under a bed of gravel at y 42 every stair up was
+  ;; refused from each cell in turn, and the climb stepped thirty cells along the bed, two
+  ;; blocks dug a step, until its last pickaxe broke. A bed over the pocket east and west: the
+  ;; first level step goes north or south, where the next cell is not under gravel, and climbs
+  (let [blocks (merge pocket (into {} (for [x (range 16)] [[x 69 8] gravel-state])))
+        [w sim] (staircase-run :stairs-up blocks 66 (get blocks/items :wooden_pickaxe) 70 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/level-steps])))
+    (is (<= 70.0 (second (:player/pos w))))
+    (is (<= (:intent/level-steps (:plan/intent w) 0) 2)
+        "out from under the bed in a step, not along it")
+    (is (not-any? (fn [[x _ z]] (and (= 8 z) (not= 8 x))) (:sim/broken sim))
+        "no cell along the bed was opened")
+    (is (empty? (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- a bucket of water
 
 (def bank-pond
   "A pond of nine water sources sunk in the floor at x 11-13, z 7-9; the spawn is on the bank."
   (into {} (for [x (range 11 14) z (range 7 10)] [[x 63 z] blocks/water-base])))
+
+(deftest the-models-bucket-ray-stops-at-a-plant
+  ;; ClipContext.Block.OUTLINE: the game's ray for a bucket stops at the first block with an
+  ;; outline, sugar cane on the bank as much as stone (issue #83)
+  (let [cane (blocks/default-state :sugar_cane)
+        pos [9.5 64.0 8.5]
+        eye [9.5 65.62 8.5]
+        look (physics/look-at eye (scoop/aim-point [11 63 8]))
+        model
+        (fn [blocks]
+          (assoc (sim/init {:column (world/column-bytes blocks) :spawn pos}) :sim/player-pos pos))]
+    (is (= [11 63 8] (sim/scooped (model bank-pond) look)) "the near source, from the bank")
+    (is (nil? (sim/scooped (model (assoc bank-pond [10 64 8] cane)) look)) "through cane: nothing")
+    (is (nil? (sim/scooped (model (assoc bank-pond [11 64 8] cane)) look))
+        "cane over it: nothing")))
 
 (deftest an-empty-bucket-is-filled-at-a-pond-from-its-bank
   (let [[w sim] (sim/run (game/compose game/step
@@ -2155,6 +2368,55 @@
     (is (= "minecraft:the_nether" (:player/dimension w)))
     (is (= 3 (count (filter #(= blocks/lava-base (sim/block-at sim %)) (keys lava-pit))))
         "nine lava scooped, as without the death: no cell cast twice")
+    (is (empty? (:sim/violations sim)))))
+
+(def lava-sea
+  "Stone from the surface at y 64 down, and under it a lava sea at y 40 from z 10 to 15, roofed
+   by the stone over it: the lava of a 1.18+ world, which lies under y -54 under a ceiling of
+   deepslate and never on the surface (here at y 40, for a run short enough to test)."
+  (into {} (for [x (range 16) z (range 10 16)] [[x 40 z] blocks/lava-base])))
+
+(def hunt-kit
+  "The portal kit as a run from spawn holds it: the water bucket, an empty bucket, cobblestone,
+   flint and steel, and two stone pickaxes for the way down."
+  {[:hotbar 0] {:item (recipe/item-id :stone_pickaxe) :count 1}
+   [:hotbar 1] {:item (recipe/item-id :stone_pickaxe) :count 1}
+   [:hotbar 2] {:item (recipe/item-id :bucket) :count 1}
+   [:hotbar 3] {:item (recipe/item-id :water_bucket) :count 1}
+   [:hotbar 4] {:item (recipe/item-id :cobblestone) :count 64}
+   [:hotbar 5] {:item (recipe/item-id :flint_and_steel) :count 1}
+   [:hotbar 6] {:item (recipe/item-id :cobblestone) :count 64}})
+
+(deftest with-no-lava-near-the-bot-goes-down-to-the-sea-and-casts-beside-it
+  ;; issue #41, the wall before the Nether: race 38477665442's 47 real bots and 950 sim runs
+  ;; stood at the surface with the kit, no lava within sixteen of any origin, and waited
+  ;; :no-site out. With no site the planner hunts: stairs down toward the nearest lava loaded,
+  ;; a tunnel toward it, the roof over it dug, and the site chosen beside it
+  (let [column (world/column-bytes lava-sea)
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:columns (into {}
+                                                   (for [cx [-1 0 1] cz [-1 0 1]] [[cx cz] column]))
+                                    :spawn [8.5 64.0 2.5]
+                                    :inventory hunt-kit})
+                         #(or (plan/done? %) (plan/failed? %))
+                         900000
+                         {:event/kind :go :go/goals [:cast-one]})
+        kinds (set (map :intention/kind (memory/intentions w)))]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (contains? kinds :stairs-down) "it went down")
+    (is (contains? kinds :tunnel) "and tunnelled toward the sea")
+    (is (some #(and (= :dig (:intention/kind %)) (= 41 (second (:intention/target %))))
+              (memory/intentions w))
+        "the roof over a source was dug")
+    (let [{:site/keys [origin]} (memory/site w)]
+      (is (some? origin) "a site was chosen")
+      (is (= 41 (second origin)) "a block over the sea's level")
+      (is (= :obsidian
+             (blocks/name-of
+              (sim/block-at sim (build/cell origin (:site/facing (memory/site w)) [1 0 0]))))
+          "the first cell, obsidian"))
     (is (empty? (:sim/violations sim)))))
 
 ;; ---------------------------------------------------------------- the fortress (issue #11)

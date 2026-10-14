@@ -10,6 +10,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.spec]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.swim]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.wood :as wood]
@@ -68,7 +69,10 @@
   (is (= 2 (intent/face-toward [3.5 65.0 -5.0] [3 64 0])) "eye north → north face"))
 
 (deftest dig-timeline-then-pickup
-  (let [[w fx] (run (world-state [0.5 64.0 0.5]) (cons go (ticks 50 8000)))
+  (let [[w fx] (run (world-state [0.5 64.0 0.5])
+                    (concat [go]
+                            (ticks 50 8000)
+                            [(packet {:packet/name :block-update :pos [3 64 0] :state 0})])) ; the server's word, as it always comes
         actions (filter #(= :player-action (:packet/name (second %))) (sent fx))
         [[t-start start] [t-finish finish]] actions
         swings (filter #(= :swing (:packet/name (second %))) (sent fx))]
@@ -134,7 +138,7 @@
   (let [w (remembered
            {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [8 69 8] 1 [8 70 8] 136}
            [8.5 50.0 8.5])]
-    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+    (is (= {:intent/kind :stairs-up :intent/to-y (+ 50 stairs/climb-stairs) :intent/for :surface}
            (wood/gather-next w)))))
 
 (deftest a-near-trunk-with-no-route-is-climbed-for-too
@@ -150,9 +154,29 @@
         "the trunk is in the near band: within 12 of the eye, on stone")
     (is (not (intent/routable? w (wood/log-walk w [12 60 8]))) "sealed in stone: no route")
     (is (nil? (wood/near-walk w)))
-    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+    (is (= {:intent/kind :stairs-up :intent/to-y (+ 50 stairs/climb-stairs) :intent/for :surface}
            (wood/gather-next w))
         "climbed for, never walked at")))
+
+(deftest a-pit-under-the-sky-is-climbed-out-of
+  ;; race 38477665442 (issues #56, #58, #54): the stone mine dug the bot two deep beside a cliff
+  ;; (Clj_r20), into a notch under an overhang by a pond (Clj_r09), onto a ledge of its own
+  ;; quarry (Clj_r01) and onto a lakeshore under a cliff (Clj_r12). Every trunk was up a wall
+  ;; no jump climbs, twelve walks failed :no-path in a few seconds, and with the open sky over
+  ;; the feet nothing was cut. A pit is not out of the ground: stairs up are cut from it
+  (let [pit (remembered {[8 62 8] blocks/air [8 63 8] blocks/air [12 64 8] 136} [8.5 62.0 8.5])
+        feet (intent/feet pit)]
+    (is (terrain/under-sky? pit feet) "the sky is over the pit")
+    (is (not (stairs/out? pit feet)) "but no level step leads onto open ground")
+    (is (not (intent/routable? pit (wood/log-walk pit [12 64 8]))) "two deep: no jump climbs it")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y (stairs/climb-to pit terrain/top-y)
+            :intent/for :surface}
+           (wood/gather-next pit))))
+  (let [ground (remembered {[12 64 8] 136 [14 64 8] 1 [14 65 8] 1 [14 66 8] 1} [8.5 64.0 8.5])]
+    (is (stairs/out? ground (intent/feet ground)))
+    (is (= :walk (:intent/kind (wood/gather-next ground)))
+        "on open ground the trunk is walked to")))
 
 (deftest a-near-trunk-a-route-reaches-is-walked-to
   ;; the plain case, unchanged: on the surface with a trunk in reach the gather walks to it
@@ -571,7 +595,7 @@
   (let [[w fx] (run (digging 1
                              {3 {:item wooden-pickaxe :count 1}
                               0 {:item (blocks/items :stone) :count 2}})
-                    (ticks 50 4000)) ; slot 0 holds stone, not a log: :wood stays wanted
+                    (ticks 50 5000)) ; slot 0 holds stone, not a log: :wood stays wanted; 5 s outlasts confirm-ticks
         carried (filter #(= :set-carried-item (:packet/name (second %))) (sent fx))
         actions (filter #(= :player-action (:packet/name (second %))) (sent fx))
         [[t-start start] [t-finish finish]] actions]
@@ -587,22 +611,47 @@
            ((juxt :intent/slot :intent/tool :intent/dig-ms) (:plan/last w))))))
 
 (deftest a-restored-block-after-finish-is-a-refused-break
-  (let [sent-by (long (+ 400 (intent/finish-delay 1150))) ; settled, START, then FINISH; the confirm lasts 500 ms
+  ;; the server breaks the block and sends its block update before the ack of FINISH: the cell
+  ;; open is the break. A loaded server acks first and breaks seconds later by its own clock
+  ;; (delayed destroy, issue #64), so the ack is waited on; the block still standing when
+  ;; confirm-ticks run out is the server's word that it did not break it (race 38477665442,
+  ;; runner 9: a lagging server dropped early FINISHes queued behind one another, the ack
+  ;; alone, and the stairs walked into rock, issue #59)
+  (let [sent-by (long (+ 400 (intent/finish-delay 1150))) ; settled, START, then FINISH
         [w _] (run (digging 1 {3 {:item wooden-pickaxe :count 1}}) (ticks 50 sent-by))
-        i (:plan/intent w)]
+        i (:plan/intent w)
+        failed-for (fn [w]
+                     (:intention/reason (last (filter #(= :failed (:intention/event %))
+                                                      (memory/intentions w)))))]
     (is (= :confirm (:intent/stage i)) "FINISH sent, waiting for the server")
-    (is (= 0 (terrain/block-at w [3 64 0])) "air locally meanwhile")
+    (is (= 1 (terrain/block-at w [3 64 0])) "still stone locally until the server says")
     (let [[w2 _] (run w
-                      [(packet {:packet/name :block-update :pos [3 64 0] :state 1})
+                      [(packet {:packet/name :block-update :pos [3 64 0] :state 0})
                        {:event/kind :tick :event/now (+ sent-by 50) :event/rand 0.5}])]
-      (is (= 1 (:plan/attempts w2)) "the dig failed")
-      (is (= :rejected
-             (:intention/reason (last (filter #(= :failed (:intention/event %))
-                                              (memory/intentions w2)))))))
-    (let [[w3 _] (run w
-                      [(packet {:packet/name :block-changed-ack :sequence (:intent/sequence i)})
-                       {:event/kind :tick :event/now 2550 :event/rand 0.5}])]
-      (is (= :done (:intent/status (:plan/last w3))) "the ack confirms it"))))
+      (is (= :done (:intent/status (:plan/last w2))) "the block update is the break")
+      (is (= 0 (terrain/block-at w2 [3 64 0]))))
+    (let [acked [(packet {:packet/name :block-changed-ack :sequence (:intent/sequence i)})
+                 {:event/kind :tick :event/now (+ sent-by 50) :event/rand 0.5}]
+          waited (ticks (+ sent-by 100) (+ sent-by 100 (* 50 (inc intent/confirm-ticks))))
+          [w3 _] (run w (cons (packet {:packet/name :block-update :pos [3 64 0] :state 1}) acked))
+          [w4 _] (run w acked)
+          [w4b _] (run w4
+                       [(packet {:packet/name :block-update :pos [3 64 0] :state 0})
+                        {:event/kind :tick :event/now (+ sent-by 100) :event/rand 0.5}])
+          [w4c _] (run w4 waited)]
+      (is (= :confirm (:intent/stage (:plan/intent w3)))
+          "the block put back, then the ack: the server may yet break it by its own clock")
+      (is (= :confirm (:intent/stage (:plan/intent w4)))
+          "the ack alone, the block standing: waited on")
+      (is (= :done (:intent/status (:plan/last w4b))) "the late break is the break")
+      (is (= 1 (:plan/attempts w4c))
+          "the ack and no break in confirm-ticks: the server did not break it")
+      (is (= :rejected (failed-for w4c)))
+      (is (= 1 (terrain/block-at w4c [3 64 0])) "and it is still there"))
+    (let [[w5 _] (run w (ticks (+ sent-by 50) (+ sent-by 50 (* 50 (inc intent/confirm-ticks)))))]
+      (is (= :done (:intent/status (:plan/last w5)))
+          "no word in confirm-ticks: the overlay is trusted")
+      (is (= 0 (terrain/block-at w5 [3 64 0]))))))
 
 (deftest a-tiered-block-with-no-reaching-tool-is-refused-before-start
   (let [[w fx] (run (digging iron-ore {3 {:item wooden-pickaxe :count 1}}) (ticks 50 1000))]
@@ -625,3 +674,82 @@
       (is (= :tool-broke
              (:intention/reason (last (filter #(= :failed (:intention/event %))
                                               (memory/intentions w2)))))))))
+
+(deftest a-cell-a-place-or-a-redig-chose-is-never-blacklisted
+  ;; race 38477665442 bot Clj_r04 (issue #43): a redig failed :not-picked-up at the cell before
+  ;; its feet, the table for a spare pickaxe went into that cell, make/near skipped it as
+  ;; blacklisted, and the bot went for the wood of a new table with its last pickaxe
+  (let [w (assoc (world-state [0.5 64.0 0.5])
+                 :plan/status :active
+                 :plan/blacklist #{}
+                 :plan/attempts 0)
+        failed (fn [i]
+                 (plan/fail-intent w
+                                   (assoc i :intent/status :failed :intent/reason :not-picked-up)))]
+    (is (= #{}
+           (:plan/blacklist (failed
+                             {:intent/kind :redig :intent/target [1 64 0] :intent/item :gravel})))
+        "the redig's cell is where it put the gravel, not a place it could not reach")
+    (is (= #{}
+           (:plan/blacklist
+            (failed {:intent/kind :place :intent/target [1 64 0] :intent/item :crafting_table}))))
+    (is (= #{[1 64 0]} (:plan/blacklist (failed {:intent/kind :collect :intent/target [1 64 0]})))
+        "a collect that failed there still is")
+    (is (= 1 (:plan/attempts (failed {:intent/kind :redig :intent/target [1 64 0]})))
+        "the attempt counts")))
+
+(def shore
+  "Chunks cx -3..3, cz -2..2 of bare floor, the bot's own among them, with a trunk at [40 64 8]
+   on an island in a moat of water four wide: in the near band, standing on ground, and no
+   route reaches it."
+  (into {}
+        (for [cx (range -3 4)
+              cz (range -2 3)]
+          [[cx cz]
+           (world/column (if (= [2 0] [cx cz])
+                           (merge (into {}
+                                        (for [x (range 4 13)
+                                              z (range 4 13)
+                                              :when (not= [8 8] [x z])]
+                                          [[x 63 z] blocks/water-base]))
+                                  {[8 64 8] 136 [8 65 8] 136})
+                           {}))])))
+
+(deftest with-no-route-to-any-trunk-the-bot-walks-toward-the-trees
+  ;; race 38477665442 bots Clj_r14 and Clj_r20 (issue #57) landed on a lake's shore with the
+  ;; forest across the water: no route reached a trunk, and each waited :no-log until the plan
+  ;; failed. Under the open sky the gather now hunts toward the nearest log, as a water hunt
+  ;; goes out, so the chunks on the way are remembered and a route round is found
+  (let [w (-> (remembered {} [8.5 64.0 8.5])
+              (assoc :world/chunks shore)
+              (memory/remember-column [2 0] (shore [2 0])))
+        i (wood/gather-next w)]
+    (is (= [40 64 8]
+           (memory/nearest-log w (game/eye w) wood/search-radius #{} wood/standing-trunk?)))
+    (is (not (intent/routable? w (wood/log-walk w [40 64 8]))) "sealed in stone")
+    (is (nil? (wood/near-walk w)))
+    (is (nil? (wood/climb-out w)) "under the open sky: nothing to climb")
+    (is (= {:intent/kind :walk :intent/target [48 64 8] :intent/for :log-hunt} i)
+        "forty blocks east, toward the trunk")
+    (is (= {:plan/wait :no-log}
+           (wood/gather-next (assoc (remembered {} [8.5 64.0 8.5]) :world/chunks shore)))
+        "with no log remembered there is nowhere to hunt toward")))
+(deftest a-dig-that-never-settles-starts-by-the-deadline
+  ;; race 38477665442 bots Clj_r12 (runner 5, on a moss carpet the physics does not know, the
+  ;; server putting it back on the carpet every tick) and Clj_r19 (runner 3, fallen through a
+  ;; guessed air the server kept as stone): never three still ticks, and the dig's settle
+  ;; waited for them for the rest of the run
+  (let [never-still (fn [w e]
+                      (let [w (assoc (game/step w e) :player/on-ground? false)]
+                        (if (and (= :tick (:event/kind e)) (:plan/intent w))
+                          (intent/run w (:plan/intent w) e)
+                          w)))
+        w (assoc (world-state [2.5 64.0 0.5])
+                 :plan/intent
+                 {:intent/kind :dig :intent/target [3 64 0] :intent/status :active})
+        started (fn [fx] (some (fn [[t p]] (when (= :player-action (:packet/name p)) t)) (sent fx)))
+        [_ early] (fold never-still w (ticks 10 (- intent/settle-deadline 100)))
+        [w late] (fold never-still w (ticks 30 (+ intent/settle-deadline 400)))]
+    (is (nil? (started early)) "within the deadline it waits to be still")
+    (is (> (started late) intent/settle-deadline) "past it, START anyway")
+    (is (= :digging (get-in w [:plan/intent :intent/stage])))))

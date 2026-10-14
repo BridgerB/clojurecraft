@@ -10,6 +10,8 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.path :as path]
+            [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.world :as world]))
 
 (def origin [100 64 200])
@@ -180,3 +182,81 @@
             boxed-op (assoc op :build/pos [8 62 8] :build/stand [8 63 9])]
         (is (= :no-stand (build/op-child boxed hill-intent boxed-op))
             "with no ground in reach the plan says so, and does not walk onto the water")))))
+
+(deftest a-stand-up-a-bank-is-passed-over-for-one-a-route-reaches
+  ;; race 38477665442 Clj_r25 (issue #45): the water was scooped from a sand cell at the lake's
+  ;; edge under a bank; the cell nearest the pad's stand was the bank's top, a step up that only
+  ;; cells over the water led to, and three builds failed :no-path walking at it, though the
+  ;; sand cell itself reached the pad
+  (let [pos [6.8 63.0 8.5] ; the feet over the water's edge, the box on the sand cell east
+        water (concat (for [x (range 4 7)] [x 62 8]) (for [x (range 3 9) z (range 9 13)] [x 62 z]))
+        bank (merge (into {} (for [x (range 4 7)] [[x 63 7] 1])) ; a step up north, over the water
+                    (into {} (for [[x z] [[7 7] [8 7] [8 8]] y [63 64]] [[x y z] 1]))) ; two high beside the sand
+        w (standing-at (open-ground (merge (into {} (map (fn [c] [c blocks/water-base]) water))
+                                           bank))
+                       pos)
+        op (assoc pond-op :build/pos [4 62 9] :build/stand [4 63 10] :build/done [:solid [4 62 9]])
+        from (path/feet-cell pos)]
+    (is (not (path/standable? w from)) "the feet floor over the water")
+    (is (= [7 63 8] (path/start-cell w from)) "the box rests on the sand")
+    (is (= :none (:path/status (path/plan w from {:goal/kind :block :goal/pos [5 64 7]})))
+        "the bank's top is nearest the stand, and no route climbs to it")
+    (is (build/reaches-from? w [7 63 8] [4 62 9]) "the sand cell reaches the pad")
+    (is (= {:intent/kind :walk :intent/target [7 63 8] :intent/for :build}
+           (build/op-child w hill-intent op))
+        "the sand cell, which a route reaches, is the stand")))
+(def trench
+  "Lava sources in the floor along z 15: a station for a site west of it, with the floor at z 14
+   to stand on."
+  (into {} (for [x (range 16)] [[x 62 15] blocks/lava-base])))
+
+(defn dug
+  "The column with every cell of x 0..15, z 0..13 at the heights ys replaced by block, but the
+   column [10 10] the bot stands in."
+  [ys block]
+  (into {} (for [x (range 16) z (range 14) y ys :when (not= [x z] [10 10])] [[x y z] block])))
+
+(def feet-pos [10.5 63.0 10.5])
+
+(defn site-at
+  "The site chosen standing at feet-pos over the plain, with extra blocks laid over it."
+  [extra]
+  (build/choose-site (standing-at (open-ground (merge extra trench)) feet-pos)))
+
+(deftest a-site-needs-ground-under-its-pad-and-no-water-in-its-footprint
+  ;; issue #74: a pad cell over a cave or a deep pond had no cell to place it from (the
+  ;; foundation reaches four down) and the build failed :no-stand. The site refuses them
+  (is (some? (site-at {})) "a plain beside lava: a site")
+  (is (nil? (site-at (dug (range 54 63) blocks/air)))
+      "a pit nine deep round the feet: no foundation reaches its floor")
+  (is (nil? (site-at (dug [61 62] blocks/water-base)))
+      "a pond round the feet: the pad is not built under water")
+  (is (some? (site-at (dug [61 62] blocks/air))) "a pit two deep: built up from its floor"))
+
+(deftest a-station-is-near-in-three-dimensions-and-open-to-the-air
+  ;; race 38477665442 took the lava sea ninety blocks under the feet, within sixteen on the plane,
+  ;; for a station, and walked at it; and a scoop at a roofed source fails :target-gone (#91)
+  (let [deep (into {} (for [x (range 16)] [[x 20 x] blocks/lava-base]))
+        roofed (into {} (for [x (range 16)] [[x 61 15] blocks/lava-base]))
+        sealed (into {} (for [x (range 16)] [[x 62 15] 1]))]
+    (is (nil? (build/choose-site (standing-at (open-ground deep) feet-pos)))
+        "lava forty under: no station")
+    (is (nil? (build/choose-site (standing-at (open-ground (merge roofed sealed)) feet-pos)))
+        "lava under stone: no station")
+    (is (some? (site-at {})) "lava in the floor, open: a station")))
+
+(def cast-one-row (first (filter #(= :cast-one (:goal/id %)) plan/goals)))
+
+(deftest a-build-row-holds-a-pickaxe-before-it-starts
+  ;; sim race 38477665389 (issue #70, 150 runs at one landing): the cast dug for its stance with
+  ;; no pickaxe left and failed :needs-tool three times. The rows hold one, and the needs
+  ;; planner makes it first
+  (let [w (standing-at (open-ground trench) feet-pos)
+        pickaxe {0 {:item (recipe/item-id :stone_pickaxe) :count 1}}]
+    (is (= {:plan/wait :no-log} (plan/next-intent w cast-one-row plan/goals))
+        "nothing held and no tree known: the pickaxe waits for a log")
+    (is (= :build
+           (:intent/kind
+            (plan/next-intent (assoc w :player/inventory pickaxe) cast-one-row plan/goals)))
+        "a pickaxe held: the build")))
+

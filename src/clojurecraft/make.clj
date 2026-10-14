@@ -34,7 +34,7 @@
 (def table-search 24)                 ; how far a remembered crafting table counts as :near
 (def block-window {:crafting_table :table :furnace :furnace}) ; the window a placed block opens
 (def max-depth 12)                    ; item needs the needs planner may chain before it is :stuck
-(def fetching-acts #{:gather :mine})  ; acts that go out for what is not held: never done for a spare
+(def fetching-acts #{:gather :mine :scoop}) ; acts that go out for what is not held: never done for a spare
 
 ;; ---------------------------------------------------------------- needs as data
 
@@ -148,7 +148,9 @@
           (:goal/holds row)))
 
 (defn fetch?
-  "Would action send the bot out for something: :stuck, or a row whose act gathers or mines?"
+  "Would action send the bot out for something: :stuck, or a row whose act gathers, mines or
+   scoops? A scoop goes out as far as a mine does: the bucket is crafted at the furnace down the
+   mine and the water is up at the surface."
   [action]
   (or (= :stuck action) (contains? fetching-acts (:goal/act action))))
 
@@ -169,13 +171,45 @@
         (let [n (wood/gather-next world)] (and (:intent/kind n) (not= :opening (:intent/for n))))
         :else true))
 
+(def spare-uses 40)                   ; digs a tool must have left to count as a spare: a tunnel's twelve level steps dig about thirty
+
+(defn uses-left
+  "How many digs a slot's tool has left: its tier's durability (blocks/materials) less the
+   :damage component the server sends on a worn tool (packet/read-slot); nil for an item that
+   is no tool."
+  [{:keys [item components]}]
+  (when-let [{:keys [tier]} (blocks/tool item)]
+    (- (:durability (blocks/materials tier)) (get components :damage 0))))
+
+(defn worn?
+  "Is a slot's tool too worn to be a spare: fewer than spare-uses digs left?"
+  [slot]
+  (boolean (some-> (uses-left slot)
+                   (< spare-uses))))
+
+(defn without-worn
+  "counts less the tools in the inventory that are worn (worn?): what a spare is counted from.
+   Race 38477665442 bot Clj_r22 tunnelled for coal at y 16 with a stone pickaxe and, for its
+   spare, the wooden one that had dug the first cobblestone; both broke in one tunnel, two
+   sticks, a table and 173 cobblestone in hand (issue #39)."
+  [world counts]
+  (reduce (fn [c [n k]] (update c n (fnil #(max 0 (- % k)) 0)))
+          counts
+          (recipe/counts (into {} (filter (comp worn? val)) (:player/inventory world)))))
+
 (defn resolve-spares
   "[counts action] for the tools a row keeps one more of than it holds (:goal/spares, beside
    :goal/holds): planned when spare-worth? says the producer can be done. A mine is never one.
-   A gather is one only when a log can be started now."
+   A gather is one only when a log can be started now. A worn tool is no spare (without-worn):
+   it breaks in the next tunnel, and a new one is made while the table and sticks are at hand."
   [world table counts row path]
   (reduce (fn [[c _] [k n]]
-            (let [[_ a] (resolve-need world table c k (+ n (get (:goal/holds row) k 0)) path)]
+            (let [[_ a] (resolve-need world
+                                      table
+                                      (without-worn world c)
+                                      k
+                                      (+ n (get (:goal/holds row) k 0))
+                                      path)]
               (if (and a (spare-worth? world a)) (reduced [c a]) [c nil])))
           [counts nil]
           (:goal/spares row)))
@@ -352,7 +386,10 @@
   "A dig of the bot's placed crafting table, to carry it on, when row goes out for something
    (fetch?), no table is held and the remembered one is within reach; nil otherwise. A table
    left behind is a log spent on the next: gym batch iron-a7 run 1 crafted three on its way
-   down the mine and had no wood left for a pickaxe."
+   down the mine and had no wood left for a pickaxe. Race 38477665442 bots Clj_r19, Clj_r23 and
+   Clj_r06 crafted the bucket at the furnace, climbed out for the water and left the table
+   there; with sticks and cobblestone in hand and no table, none could make the pickaxe the
+   climb or the gravel tunnels wore out (issues #39 and #67)."
   [world row]
   (let [pos (near world :crafting_table)]
     (when (and pos

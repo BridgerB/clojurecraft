@@ -11,6 +11,8 @@ sourceRefs:
   - src/clojurecraft/sim.clj#Fault knobs are inputs, not hidden state
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :container-close]
   - src/clojurecraft/sim.clj#defn init
+  - src/clojurecraft/sim.clj#defn full-ms
+  - test/clojurecraft/sim_test.clj#a-niche-is-placed-into-only-once-the-slow-server-has-broken-it
   - "src/clojurecraft/sim.clj#:sim/lag-ticks in sim delays every server->client packet by that many ticks"
   - test/clojurecraft/sim_test.clj#no-blind-take-under-lag-or-a-dropped-click
   - src/clojurecraft/sim.clj#(update :sim/violations conj [:place-into-player dest])
@@ -26,7 +28,7 @@ related:
 Faults are inputs to `sim/init`, never hidden randomness (`:kill-at ms` kills the player then, once: a death mid-task, #8), so a faulty run is as reproducible as a clean one. Luck is too: the loot table's chances roll from `:sim/rng`, seeded by the `:seed` input ([[server-model]]).
 
 ## Key files
-- `sim.clj`, `init` - accepts `:lag-ticks` (server→client delay, applied in order by `run`), `:drop-clicks` (a set of 0-based click ordinals the server silently loses) and `:inventory` (a starting window-0 map, its keys named places such as `[:hotbar 0]` or slot numbers); starts `:sim/violations []`, `:sim/clicks 0`, `:sim/state-id 1`.
+- `sim.clj`, `init` - accepts `:lag-ticks` (server→client delay, applied in order by `run`), `:drop-clicks` (a set of 0-based click ordinals the server silently loses), `:slow-breaks` (a factor on every block's break time by the server's clock: a loaded server, which acks a FINISH and breaks the block later, `tick-delayed`) and `:inventory` (a starting window-0 map, its keys named places such as `[:hotbar 0]` or slot numbers); starts `:sim/violations []`, `:sim/clicks 0`, `:sim/state-id 1`.
 - `sim.clj`, `on-packet [:play :container-click]` - increments `:sim/clicks` before checking the drop set, so ordinal n is the n-th click the bot ever sent, in any window.
 
 ## Violations recorded

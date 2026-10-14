@@ -132,6 +132,7 @@
 ;; world
 (s/def :world/chunks (s/map-of (s/coll-of int? :count 2) map?))
 (s/def :world/blocks (s/map-of ::block-pos int?))
+(s/def :world/unconfirmed (s/map-of ::block-pos int?))
 (s/def :world/facts #(instance? datascript.db.DB %))
 (s/def :block/state int?)
 (s/def :block/seen-at int?)
@@ -258,9 +259,10 @@
           [:bot/name :bot/sequence :bot/closed :bot/disconnected :player/pos :player/vel
            :player/look :player/on-ground? :player/horizontal-collision? :player/jump-ticks
            :player/loaded? :player/dimension :player/entity-id :player/inventory :player/controls
-           :world/chunks :world/blocks :world/facts :world/entities :window/state-id :window/grid
-           :window/cursor :window/open :player/held-slot :plan/intent :plan/status :plan/blacklist
-           :plan/trunk-failures :plan/chain? :plan/reached :plan/boxed-at :plan/unwalkable]))
+           :world/chunks :world/blocks :world/unconfirmed :world/facts :world/entities
+           :window/state-id :window/grid :window/cursor :window/open :player/held-slot :plan/intent
+           :plan/status :plan/blacklist :plan/trunk-failures :plan/chain? :plan/reached
+           :plan/boxed-at :plan/unwalkable]))
 
 (s/fdef game/step
   :args
@@ -390,8 +392,10 @@
 (s/def :intent/state int?)
 (s/def :intent/confirm-left nat-int?)
 (s/def :intent/to-y int?)
+(s/def :intent/to-height? boolean?)
 (s/def :intent/dir (s/tuple int? int?))
 (s/def :intent/turns nat-int?)
+(s/def :intent/rejections pos-int?)
 (s/def :intent/cells (s/coll-of ::block-pos :kind vector? :count 3))
 (s/def :intent/level-cells (s/coll-of ::block-pos :kind vector? :count 2))
 (s/def :intent/lay (s/coll-of ::block-pos :kind vector? :min-count 1 :max-count 2))
@@ -544,6 +548,8 @@
 (s/def :sim/next-window int?)
 (s/def :sim/clicks nat-int?)
 (s/def :sim/drop-clicks set?)
+(s/def :sim/breaks nat-int?)
+(s/def :sim/drop-breaks set?)
 (s/def :sim/violations vector?)
 (s/def :sim/keep-alive-every pos-int?)
 (s/def :sim/lag-ticks nat-int?)

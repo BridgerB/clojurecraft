@@ -14,6 +14,7 @@ sourceRefs:
   - src/clojurecraft/sim.clj#defn open-window
   - src/clojurecraft/sim.clj#defn block-at
   - test/clojurecraft/sim_test.clj#places-a-table-and-crafts-a-wooden-pickaxe
+  - test/clojurecraft/sim_test.clj#a-table-is-never-placed-into-a-flower
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[server-model]]"
@@ -27,7 +28,7 @@ related:
 `on-packet [:play :use-item-on]` with `{:pos :face :sequence}`, by the name of the clicked block (`sim/block-at`):
 1. **A crafting table**: send the ack, then `open-window` `:table`: window id `:sim/next-window` (then increment) with an empty grid and state id 1, `open-screen` (menu type 12) and a full `container-set-content` with the real cursor. An open container is closed first, as vanilla's `openMenu` does.
 2. **A furnace**: the ack, then `open-furnace`: the same for window kind `:furnace` (menu type 14), then its four properties ([[sim-furnace]]).
-3. **Otherwise it is a placement** (`place`) at `pos + face`. It succeeds only if the held hotbar slot (`36 + :sim/held`, set by `set-carried-item`) holds a block item (`blocks/default-state` of its name: a table, a furnace, gravel), the destination is not solid and not liquid, the clicked block is solid, and the destination does not overlap the player's 0.6 × 1.8 box. Success: record it in `:sim/placed`, take one from the held stack, send `block-update` with that state, sync window 0, then the ack.
+3. **Otherwise it is a placement** (`place`) at `pos + face`. It succeeds only if the held hotbar slot (`36 + :sim/held`, set by `set-carried-item`) holds a block item (`blocks/default-state` of its name: a table, a furnace, gravel), the destination is replaceable (`blocks/replaceable?`: air or a grass; a flower refuses it, as the server's replaceable tag does), the clicked block is solid, and the destination does not overlap the player's 0.6 × 1.8 box. Success: record it in `:sim/placed`, take one from the held stack, send `block-update` with that state, sync window 0, then the ack.
 4. **Rejection**: send `block-update` with the destination's current state, then the ack. An overlap also records `[:place-into-player dest]`.
 
 `sim/block-at` answers placed blocks first, then broken positions (air), then the fixture column.

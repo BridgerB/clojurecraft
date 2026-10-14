@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, mining, goals]
 aliases: [:mine, stone.clj, mine-next, :goal/blocks, :goal/depth, mine-stone, mine-coal, mine-iron, dig-gravel, none-in-sight, intent/pickup?, step-down?, :redig, flint-from-gravel, flint]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-14
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/stone.clj#defn mine-next
@@ -54,7 +54,7 @@ A mining row is data: `:goal/act :mine`, the blocks it digs (`:goal/blocks`) and
 | `:mine-stone` | stone | a wooden pickaxe | cobblestone | none |
 | `:mine-coal` | coal ore, deepslate coal ore | any pickaxe (`:tag/pickaxes`) | coal | 40 |
 | `:mine-iron` | iron ore, deepslate iron ore | a stone pickaxe | raw iron | 16 |
-| `:dig-gravel` | gravel | any pickaxe, for the stairs down | gravel | 40 |
+| `:dig-gravel` | gravel | any pickaxe, for the stairs down, and a spare (race 38477665442 bot Clj_r19 wore both out tunnelling for gravel, issue #67) | gravel | 40 |
 
 ## How it works (`mine-next`)
 1. A chain in flight continues: walk → dig → collect via `intent/chain-next`, tagged `:intent/for` the row's id, so another row's chain (a coal walk when iron is now wanted) is never continued as this one's dig.

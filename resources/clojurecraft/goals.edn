@@ -114,15 +114,16 @@
   :goal/target? true
   :goal/until "portal-kit"
   :goal/doc
-  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from a pool to the mold, and three stacks of cobblestone for the mold (its plan places at most 190); the gym's portal rows give these, a run from spawn makes them"
-  :goal/provides {:item/bucket 1 :item/cobblestone 192}
+  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from a pool to the mold, beside the filled water bucket, and three stacks of cobblestone for the mold (its plan places at most 190); the gym's portal rows give these, a run from spawn makes them. The water bucket is counted here too: a chained run reaches a step once and never asks for it again, and race 38477665442 reached this one holding its only bucket still empty, then filled it, and the cast found no bucket for the lava (issue #49)"
+  :goal/provides {:item/water_bucket 1 :item/bucket 1 :item/cobblestone 192}
   :goal/done? :provided?}
  {:goal/id :cast-one
   :goal/priority 14
   :goal/target? true
   :goal/until "cast-one"
   :goal/doc
-  "one obsidian cast in the first cell of a portal mold: lava poured into a cup, water into the bowl over it, the water scooped back (the gym's cast-one stage)"
+  "one obsidian cast in the first cell of a portal mold: lava poured into a cup, water into the bowl over it, the water scooped back (the gym's cast-one stage); a pickaxe is held for the way down to lava and the mold's digs, made before the build starts (sim race 38477665389 dug for its stance with none and failed :needs-tool, issue #70)"
+  :goal/holds {:tag/pickaxes 1}
   :goal/plan :build
   :goal/build :cast-one
   :goal/done? :built?}
@@ -131,7 +132,8 @@
   :goal/target? true
   :goal/until "portal"
   :goal/doc
-  "a nether portal cast from lava and water in ruststeve's template mold, never mined, and lit with flint and steel"
+  "a nether portal cast from lava and water in ruststeve's template mold, never mined, and lit with flint and steel; a pickaxe is held, as for cast-one"
+  :goal/holds {:tag/pickaxes 1}
   :goal/plan :build
   :goal/build :portal
   :goal/done? :built?}
@@ -139,7 +141,9 @@
   :goal/priority 16
   :goal/target? true
   :goal/until "nether"
-  :goal/doc "the portal cast and lit, then stood in until the dimension is the Nether"
+  :goal/doc
+  "the portal cast and lit, then stood in until the dimension is the Nether; a pickaxe is held, as for cast-one"
+  :goal/holds {:tag/pickaxes 1}
   :goal/plan :build
   :goal/build :nether
   :goal/done? :built?}
@@ -189,9 +193,9 @@
  {:goal/id :mine-iron
   :goal/priority 10
   :goal/doc
-  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest. A spare pickaxe is made before more ore is dug, gathering the wood when a walk to a trunk or stairs up to one can be started, so the last one is not worn out at the bottom. A walk back up the dug shaft is not that: it reaches the sky, not a tree"
+  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest. A spare pickaxe is made before more ore is dug, gathering the wood when a walk to a trunk or stairs up to one can be started, so the last one is not worn out at the bottom. A walk back up the dug shaft is not that: it reaches the sky, not a tree. Four sticks are kept too, two more pickaxes' handles, gathered up at the trees before the descent: the stairs down, the tunnels and the climb out for the water dig some 390 blocks, three stone pickaxes' worth, and race 38477665442 bots Clj_r23 and Clj_r06 left the forest with three logs, made three pickaxes and broke the last on the climb (issue #39)"
   :goal/holds {:item/stone_pickaxe 1}
-  :goal/spares {:item/stone_pickaxe 1}
+  :goal/spares {:item/stone_pickaxe 1 :item/stick 4}
   :goal/provides {:item/raw_iron 1}
   :goal/act :mine
   :goal/blocks [:iron_ore :deepslate_iron_ore]
@@ -200,8 +204,9 @@
  {:goal/id :dig-gravel
   :goal/priority 10
   :goal/doc
-  "dig the nearest exposed gravel, by hand or with a shovel; a pickaxe is held for the stairs down when none is in sight"
+  "dig the nearest exposed gravel, by hand or with a shovel; a pickaxe is held for the stairs down when none is in sight, and a spare kept as the coal row keeps one: the gravel is tunnelled for at y 40 after the water, and race 38477665442 bot Clj_r19 wore both its pickaxes out in those tunnels with two sticks and 245 cobblestone in hand, its table left at the furnace, and the run stopped :no-pickaxe (issue #67)"
   :goal/holds {:tag/pickaxes 1}
+  :goal/spares {:tag/pickaxes 1}
   :goal/provides {:item/gravel 1}
   :goal/act :mine
   :goal/blocks [:gravel]

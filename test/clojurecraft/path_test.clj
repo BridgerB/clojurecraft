@@ -72,6 +72,10 @@
   (is (= :clear (path/classify-id (blocks/default-state :moss_carpet)))
       "a carpet is walked over like the floor")
   (is (= :clear (path/classify-id short-grass)) "a plant is walked through")
+  (is (= :clear (path/classify-id path/one-layer-snow))
+      "one layer of snow has no collision shape: walked through, the feet in its cell")
+  (is (= :awkward (path/classify-id (inc path/one-layer-snow)))
+      "two layers collide a quarter block high, which the physics cannot simulate")
   (is (= :clear (path/classify-id 0)) "air")
   (is (= :unknown (path/classify-id nil)) "an unloaded chunk")
   (let [w (world-of {} [0.5 64.0 0.5])]
@@ -372,3 +376,29 @@
     (is (nil? (path/start-cell w [5 64 5])))
     (is (= {:path/waypoints [] :path/cost 0.0 :path/status :none}
            (path/plan w [5 64 5] {:goal/kind :block :goal/pos [2 70 5]})))))
+
+(deftest a-snowfield-is-crossed-through-its-one-layer-snow
+  ;; race 38477665442 (issue #38): 39 bots landed on snowy ground, one layer of snow on every
+  ;; block round them. The feet stood in the snow's cell, which was :awkward, so neither it
+  ;; nor any cell beside it was standable, every plan was :none and twelve walks failed
+  ;; :no-path in a second, at the landing
+  (let [snow (fill path/one-layer-snow (range 0 16) [64] (range 0 16)) ; a layer over the stone
+        w (world-of snow [2.5 64.0 2.5]) ; the feet in the snow, on the stone under it
+        from (path/feet-cell [2.5 64.0 2.5])
+        r (path/plan w from {:goal/kind :near :goal/pos [13 64 13] :goal/range 1})]
+    (is (path/standable? w from) "a floor under the snow, the body in it and the head clear")
+    (is (= :found (:path/status r)))
+    (is (sound-route? w from r)))
+  (let [deep (fill (inc path/one-layer-snow) (range 0 16) [64] (range 0 16)) ; two layers everywhere
+        w (world-of deep [2.5 64.0 2.5])]
+    (is (nil? (path/start-cell w [2 64 2])) "deeper snow collides: nothing near can be stood on"))
+  (let [bank (merge (fill path/one-layer-snow (range 0 16) [64] (range 0 16))
+                    (fill stone (range 0 16) [64] (range 0 2))) ; a step up at z 0-1, the snow on it
+        w (world-of bank [5.5 65.0 2.0]) ; feet on the step's edge, flooring over the snow beside it
+        from (path/feet-cell [5.5 65.0 2.0])]
+    (is (= [5 65 2] from))
+    (is (not (path/standable? w from)) "nothing solid under: the snow's cell is below")
+    (is (= [5 65 1] (path/start-cell w from)) "the search starts on the step the box rests on")
+    (let [r (path/plan w from {:goal/kind :near :goal/pos [12 64 12] :goal/range 1})]
+      (is (= :found (:path/status r)) "and drops into the snowfield")
+      (is (sound-route? w [5 65 1] r)))))

@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, intents, pickup]
 aliases: [:collect, pickup intent, not-picked-up, nearest-item, blocked-by, blocker]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-14
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/intent.clj#defn ledge-ahead?
@@ -40,7 +40,7 @@ related:
 5. Otherwise walk toward the goal until within 0.4 horizontally, then stand.
 
 ## Gotchas
-- **Never off a ledge.** The collect walks straight at its drop, not along a route, so before each step it looks `ledge-look` (0.6) ahead: an open cell with no floor within `path/max-fall` under it (`ledge-ahead?`, `path/landing`) fails it `:ledge`. Gym batch iron-a9 run 3 dug gravel for flint at a ravine's edge at y -7, walked after a drop and fell from a high place (`a-collect-stops-at-a-ledge`).
+- **Never off a ledge.** The collect walks straight at its drop, not along a route, so before each step it looks `ledge-look` (0.6) ahead: an open cell with no floor within `path/max-fall` under it (`ledge-ahead?`, `path/landing`) ends it, done with nothing: the drop is left. Gym batch iron-a9 run 3 dug gravel for flint at a ravine's edge at y -7, walked after a drop and fell from a high place (`a-collect-stops-at-a-ledge`). It failed `:ledge` at first, which counted an attempt and blacklisted the block: sim race 38477665389 (issue #93, 45 runs at one landing) dug gravel at a ledge three times in a row and the plan failed with it; a drop over a ledge is lost, not a failure, and the row digs on.
 - A blocked collect is reported as done, not failed, so it never counts an attempt or blacklists the trunk.
 - The 10 s timeout counts from the first collect; a resumed collect is a new intent with a fresh clock.
 

@@ -94,6 +94,9 @@
    ;; ---- the world as last seen, and as remembered
    [:world/chunks "{[cx cz] column}: chunks the server has sent and not forgotten" "always"]
    [:world/blocks "{[x y z] state}: block updates and own breaks over the chunks" "always"]
+   [:world/unconfirmed
+    "{[x y z] ms}: cells the bot's own dig emptied in the overlay before the server said so, and when; the server's block-update there (the break, or the block put back) takes each out, and one the server stays silent on for terrain/unconfirmed-ms is forgotten, the chunk's block back in view"
+    "after the first own break"]
    [:world/entities "{entity-id {:entity/type :entity/pos :entity/seen-at}}: tracked items"
     "always"]
    [:world/facts "memory: DataScript value of append-only observations, never retracted" "always"]
@@ -140,7 +143,9 @@
    [:plan/reached "the targets a chained run has reached; choose skips them (plan/reach)"
     "a chained plan"] [:plan/go-at "the landing a fixture named" "from a :go with :go/at"]
    [:plan/since "ms the status last changed" "from the :go event"]
-   [:plan/blacklist "targets that failed, skipped when choosing" "from the :go event"]
+   [:plan/blacklist
+    "targets that failed, skipped when choosing; never the cell a :place or a :redig chose"
+    "from the :go event"]
    [:plan/trunk-failures
     "failed gather intents per trunk column [x z]; a column that failed twice is skipped when choosing a log"
     "from the :go event"]
@@ -169,7 +174,7 @@
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
    [:intent/target "block position it acts on or walks to" "most intents"]
    [:intent/for
-    "what the intent serves (:log, a mining row's id), so chains continue only their own"
+    "what the intent serves (:log, :log-hunt, a mining row's id), so chains continue only their own"
     "gather-chain intents"]
    [:intent/pickup?
     "a walk toward a block to mine from beside: it ends where the dug block's drop lands in the pickup box"
@@ -209,14 +214,20 @@
    [:intent/tool "item id of the tool the dig holds, nil for the hand" "dig, from START"]
    [:intent/dig-ms "ms the server needs to break the target with that tool" "dig, from START"]
    [:intent/state
-    "the target's state id at START; the same state after FINISH means the server refused"
+    "the target's state id at START; the cell still in it when the ack of FINISH comes means the server did not break it"
     "dig, from START"]
-   [:intent/confirm-left "ticks left to wait for the server's ack after FINISH"
+   [:intent/confirm-left "ticks left to wait for the server's word after FINISH"
     "dig, :confirm stage"]
    [:intent/to-y "feet height at or below which the staircase is done" "stairs-down"]
+   [:intent/to-height?
+    "a :stairs-up that ends only at :intent/to-y: the open sky over a pit's floor is not out"
+    "a climb out of a pit under the sky"]
    [:intent/dir "[dx dz] heading the next stair is cut toward" "stairs-down, once planned"]
    [:intent/turns "quarter turns taken after refused stairs; four fail :boxed"
     "stairs-down, after a refusal"]
+   [:intent/rejections
+    "digs of the current stair (or level step) the server did not do, each dug again; stairs/max-rejections fail :rejected"
+    "stairs-down, after a child dig rejected"]
    [:intent/cells "the three cells the current stair opens, top first"
     "stairs-down, while a stair is cut"]
    [:intent/level-cells

@@ -119,6 +119,18 @@
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
 
+(def portal-kit (first (filter #(= :portal-kit (:goal/id %)) plan/goals)))
+
+(deftest the-portal-kit-is-reached-only-beside-the-water-bucket
+  ;; race 38477665442 (issue #49): a chained run reached :portal-kit holding its only bucket
+  ;; still empty and 192 cobblestone, filled that bucket at the pond, and the cast then found
+  ;; no empty bucket for the lava. The kit counts the water bucket beside the empty one
+  (is (not (plan/done-by (world-holding {:bucket 1 :cobblestone 192} false) portal-kit))
+      "one bucket, still empty: the water would spend it")
+  (is (not (plan/done-by (world-holding {:water_bucket 1 :cobblestone 192} false) portal-kit))
+      "the water bucket alone: nothing to carry lava in")
+  (is (plan/done-by (world-holding {:water_bucket 1 :bucket 1 :cobblestone 192} false) portal-kit)))
+
 (defn intent-for
   [held goal]
   (let [i (decide (world-holding
@@ -336,3 +348,103 @@
     (is (not (terrain/under-sky? w (intent/feet w))))
     (is (= :opening (:intent/for (wood/gather-next w))))
     (is (= :mine-iron (:goal/id (make/next-row w goal plan/goals))))))
+
+(deftest a-pickaxe-for-the-gravel-is-made-from-what-is-carried
+  ;; issue #67: race 38477665442 bot Clj_r19 tunnelled for gravel at y 40 after the water, with
+  ;; one pickaxe, two sticks and 245 cobblestone, its table left at the furnace, until both
+  ;; pickaxes broke. The gravel row keeps a spare, as the coal row does.
+  (let [kit (first (filter #(= :flint-and-steel (:goal/id %)) plan/goals))
+        row (fn [held table?]
+              (:goal/id (make/next-row (world-holding held table?) kit plan/goals)))]
+    (is (= :dig-gravel (row {:stone_pickaxe 2 :iron_ingot 1} false))
+        "a pickaxe and its spare held: the gravel is dug")
+    (is (= :dig-gravel (row {:stone_pickaxe 1 :iron_ingot 1} false))
+        "one pickaxe and no wood: no spare is worth a trip for wood")
+    (is (= :place-table
+           (row {:stone_pickaxe 1 :iron_ingot 1 :stick 2 :cobblestone 3 :crafting_table 1} false))
+        "the table carried goes down for the spare")
+    (is (= :craft/stone_pickaxe (row {:stone_pickaxe 1 :iron_ingot 1 :stick 2 :cobblestone 3} true))
+        "with the table near, the spare is made before the gravel")))
+
+(deftest the-table-goes-along-to-the-water
+  ;; race 38477665442 bots Clj_r19, Clj_r23 and Clj_r06 crafted the bucket at the furnace, left
+  ;; the table there and climbed out for the water: the pickaxe the climb wore out could not be
+  ;; made again from the sticks and cobblestone they carried (issues #39 and #67)
+  (let [kit (first (filter #(= :water-bucket (:goal/id %)) plan/goals))
+        w (world-holding {:stone_pickaxe 2 :bucket 1} true)]
+    (is (= :fill-bucket (:goal/id (make/next-row w kit plan/goals))))
+    (is (= {:intent/kind :dig :intent/target [7 64 5] :intent/for :take-table}
+           (make/decide w kit plan/goals))
+        "the table within reach is dug up before the scoop goes out")
+    (is (not= :dig
+              (:intent/kind (make/decide
+                             (world-holding {:stone_pickaxe 2 :bucket 1 :crafting_table 1} true)
+                             kit
+                             plan/goals)))
+        "a table already held is not dug for")))
+
+(defn worn
+  "w with its first tool of item name n carrying damage: the server's :damage component."
+  [w n damage]
+  (let [id (recipe/item-id n)
+        slot (some (fn [[s {:keys [item]}]] (when (= item id) s)) (:player/inventory w))]
+    (assoc-in w [:player/inventory slot :components] {:damage damage})))
+
+(deftest a-worn-pickaxe-is-no-spare
+  ;; issue #39: race 38477665442 bot Clj_r22 tunnelled for coal at y 16 holding a stone pickaxe
+  ;; and, as its spare, the wooden one that dug the first cobblestone, 33 digs left in it; both
+  ;; broke in one tunnel with two sticks, a table and 173 cobblestone in hand
+  (let [held {:raw_iron 4 :stone_pickaxe 1 :wooden_pickaxe 1 :stick 2 :cobblestone 64}
+        with-table #(memory/observe % [3 64 5] memory/crafting-table) ; the furnace is at [7 64 5]
+        w (with-table (with-furnace (world-holding held false)))]
+    (is (= 59 (make/uses-left {:item (recipe/item-id :wooden_pickaxe) :count 1})) "fresh")
+    (is (= 33
+           (make/uses-left
+            {:item (recipe/item-id :wooden_pickaxe) :count 1 :components {:damage 26}})))
+    (is (nil? (make/uses-left {:item (recipe/item-id :cobblestone) :count 3})) "no tool")
+    (is (= :mine-coal (:goal/id (make/next-row w (ingots 4) plan/goals)))
+        "a fresh wooden pickaxe beside the stone one is the spare: the coal is dug")
+    (is (= :craft/stone_pickaxe
+           (:goal/id (make/next-row (worn w :wooden_pickaxe 26) (ingots 4) plan/goals)))
+        "worn under spare-uses, it is no spare: a stone one is made from what is carried")
+    (is (= :mine-coal
+           (:goal/id (make/next-row (worn (with-table (with-furnace
+                                                       (world-holding (dissoc held :stick) false)))
+                                          :wooden_pickaxe
+                                          26)
+                                    (ingots 4)
+                                    plan/goals)))
+        "with nothing to make one from, the coal is dug all the same")))
+
+(deftest sticks-for-two-more-pickaxes-are-gathered-before-the-iron
+  ;; issue #39: bots Clj_r23 and Clj_r06 left the forest with three logs' worth, made three
+  ;; stone pickaxes between the stairs down, the tunnels and the climb out for the water, and
+  ;; broke the last on the climb. Four sticks go down with the spare pickaxe, gathered at the
+  ;; trees while a walk to one can be started
+  (let [col (world/column {[8 64 8] 136 [8 65 8] 136})
+        with-tree (fn [held]
+                    (-> (with-furnace (world-holding held false))
+                        (memory/observe [3 64 5] memory/crafting-table) ; the furnace is at [7 64 5]
+                        (assoc :world/chunks {[0 0] col})
+                        (memory/remember-column [0 0] col)))
+        row (fn [w] (:goal/id (make/next-row w (ingots 4) plan/goals)))]
+    (is (= :gather-log (row (with-tree {:stone_pickaxe 2 :coal 1})))
+        "a trunk in reach: the sticks' log, before the descent")
+    (is (= :craft/stick (row (with-tree {:stone_pickaxe 2 :coal 1 :oak_planks 2})))
+        "planks held: the sticks are made")
+    (is (= :mine-iron (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 4}))) "four held: the iron")
+    (is (= :mine-iron (row (with-furnace (world-holding {:stone_pickaxe 2 :coal 1} false))))
+        "no tree to walk to: no trip for the sticks")))
+
+(deftest a-table-placed-where-a-redig-failed-is-near
+  ;; issue #43: the planner's view of race 38477665442 bot Clj_r04 after its redig failed at
+  ;; [2098 39 2037] and the table was placed there; with the cell blacklisted, the table was not
+  ;; near and the spare pickaxe's row was :place-table again with no table to place
+  (let [kit (first (filter #(= :portal-kit (:goal/id %)) plan/goals))
+        held {:stone_pickaxe 1 :stick 2 :cobblestone 488 :coal 9 :flint_and_steel 1 :water_bucket 1}
+        w (world-holding held true)]
+    (is (= [7 64 5] (make/near w :crafting_table)))
+    (is (= :craft/stone_pickaxe (:goal/id (make/next-row w kit plan/goals)))
+        "the spare, from the table")
+    (is (nil? (make/near (assoc w :plan/blacklist #{[7 64 5]}) :crafting_table))
+        "a table the plan blacklisted (a walk to it failed) is not near: it is replaced")))

@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, path, intents]
 aliases: [path/plan, A*, route, waypoints, :awkward, lava rule, node budget, path.clj]
 status: verified
-lastUpdated: 2026-10-12
+lastUpdated: 2026-10-14
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/path.clj#defn plan
@@ -13,6 +13,7 @@ sourceRefs:
   - src/clojurecraft/path.clj#defn classify-id
   - src/clojurecraft/path.clj#defn cells
   - src/clojurecraft/path.clj#def awkward-types
+  - src/clojurecraft/path.clj#def one-layer-snow
   - src/clojurecraft/path.clj#def templates
   - src/clojurecraft/path.clj#defn landing
   - src/clojurecraft/path.clj#defn start-cell
@@ -23,6 +24,7 @@ sourceRefs:
   - src/clojurecraft/path.clj#defn trap-factor
   - test/clojurecraft/path_test.clj#a-cliff-is-descended-by-its-stair-never-by-the-six-block-drop
   - test/clojurecraft/path_test.clj#a-found-route-is-walked-by-the-physics-and-ends-in-the-goal
+  - test/clojurecraft/path_test.clj#a-snowfield-is-crossed-through-its-one-layer-snow
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[walk-intent]]"
@@ -36,7 +38,7 @@ related:
 `(path/plan world from goal opts)` returns `{:path/waypoints [[x y z] ...] :path/cost n :path/status :found|:partial|:none}`: a route for the feet over the block grid, as a pure function of the world value (issue #4). Nothing in it reads a clock or the atom; the budget is in node expansions, so a recording replays to the same route on any machine ([[sib-astar-budget]] is why not milliseconds).
 
 ## Key files
-- `path.clj`, `classify-id` / `classify` - what a block state is to a route: `:water`, `:lava`, `:awkward` (a block whose collision shape the game says is neither nothing nor a full cube and stands taller than `flat-shape`, 0.125, read from the game into `shapes.edn`, `blocks/partial-shapes`: a cocoa pod, a slab, a lantern, but not a carpet; or a definition type in `awkward-types`, the hand list kept for full cubes the physics cannot simulate, slime, ice, magma, cobwebs. Gym batch iron-a9 run 5 walked into a cocoa pod on a jungle log the hand list lacked and never moved again), `:solid` (a full cube), `:clear` (passable, not a liquid), `:unknown` (the chunk is not loaded).
+- `path.clj`, `classify-id` / `classify` - what a block state is to a route: `:water`, `:lava`, `:awkward` (a block whose collision shape the game says is neither nothing nor a full cube and stands taller than `flat-shape`, 0.125, read from the game into `shapes.edn`, `blocks/partial-shapes`: a cocoa pod, a slab, a lantern, but not a carpet; or a definition type in `awkward-types`, the hand list kept for full cubes the physics cannot simulate, slime, ice, magma, cobwebs. Gym batch iron-a9 run 5 walked into a cocoa pod on a jungle log the hand list lacked and never moved again), `:solid` (a full cube), `:clear` (passable, not a liquid; one layer of snow is, `one-layer-snow`: the game gives the block's default state no collision shape at all and the physics passes through it, so the feet stand in its cell on the block under it; deeper layers collide and stay `:awkward`), `:unknown` (the chunk is not loaded).
 - `path.clj`, `cells` / `cell-key` - one search's view of the cells: a function from a cell to its class that reads each cell through the terrain once and holds the answer under one long key. Every cell predicate below takes a world or its cells; the search and the stone scan make one and pass it down, so a cell asked a hundred times is read once ([[remembered-by-identity]]).
 - `path.clj`, `templates` / `moves` - four move templates along +x, rotated to the eight directions: `:walk` (cost 1), `:jump-up` (2), `:diagonal` (√2, both corner columns clear), `:drop` (1 + 0.5 per block fallen, at most `max-fall` 3). Each template lists what cells must be what; `neighbors` interprets them.
 - `path.clj`, `floor?` / `clear?` / `standable?` - a floor is `:solid`; a clear cell is `:clear` with no lava in its four horizontal neighbours or under it (`lava-near?`); a node is standable with a floor below and body and head clear.
@@ -63,6 +65,7 @@ related:
 - The lava rule is applied by `clear?`, so every move kind has it; ruststeve's diagonal lacked one and put a bot over lava ([[sib-pathfinder-movements]]).
 - No parkour, no digging through, no scaffolding: a one-wide gap with no ramp is `:none`, by design.
 - `:awkward` is conservative: a slab or stair is routed around, not stood on, until the physics can collide with its shape (a `shapes.edn` would be an accretion).
+- **A snowfield was unwalkable.** Race 38477665442 (issue #38): 39 bots landed on snowy ground never moved, twelve walks failing `:no-path` in a second. One layer of snow lay on every block round them, `snow_layer` was in `awkward-types` whatever its depth, so neither the feet cell nor any cell beside it was standable, `start-cell` found nothing and every plan was `:none` from nowhere. `one-layer-snow` is `:clear` now; the test `a-snowfield-is-crossed-through-its-one-layer-snow` holds it, with a two-layer field still refused.
 
 ## See also
 - [[walk-intent]] - the consumer: how the route is followed and when it is planned again.

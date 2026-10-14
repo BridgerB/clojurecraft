@@ -13,7 +13,9 @@
    lands where the game's gravity brings it.
 
    Fault knobs are inputs, not hidden state: :sim/drop-clicks is a set of click ordinals
-   (0-based) the server silently loses, and the loot table's chances (gravel's flint) roll from
+   (0-based) the server silently loses, :sim/drop-breaks a set of FINISH ordinals it answers
+   with the ack alone, the block left standing (a lagging server queues an early FINISH
+   behind another and drops it), and the loot table's chances (gravel's flint) roll from
    :sim/rng, a pure generator whose start is the :seed input, so a run's luck replays. :sim/violations records anything a real server would
    punish or a careful client must never do: a click on an empty result slot, a close with a
    loaded cursor.
@@ -82,13 +84,19 @@
   [sim]
   (get-in sim [:sim/inv (held-slot sim) :item]))
 
+(defn full-ms
+  "ms the server takes to break block id with the held item by its own clock: the formula the
+   client uses (dig/ms, no penalties: the model has no view of water or the ground, which errs
+   on the side of accepting a careful client), a log by hand for a block the tables do not
+   know, times :sim/slow-breaks (a server whose ticks fall behind; 1 when absent)."
+  [sim id held]
+  (* (:sim/slow-breaks sim 1) (or (dig/ms id held {}) dig-ms)))
+
 (defn break-ms
-  "ms the server requires between START and FINISH on block id with the held item: the same
-   formula the client uses (dig/ms, no penalties: the model has no view of water or the
-   ground, which errs on the side of accepting a careful client), at the 70% threshold the
-   real server applies; a log by hand for a block the tables do not know."
-  [id held]
-  (* break-threshold (or (dig/ms id held {}) dig-ms)))
+  "ms the server requires between START and FINISH on block id with the held item to break it
+   at the FINISH: the 70% threshold the real server applies to full-ms."
+  [sim id held]
+  (* break-threshold (full-ms sim id held)))
 
 (def ^:const roll-bits 53)             ; a double's mantissa: the bits of a roll kept from the generator's 64
 
@@ -154,8 +162,11 @@
    the client at login and stays, unless the
    optional :view-distance r streams the columns within r chunks as the player moves, as a
    server does. Then the optional
-   :keep-alive-every ms, :drop-clicks #{ordinal}, :inventory {slot item} (a slot is a named place,
-   [:hotbar 0] as inventory/slot reads it, or a window-0 slot number), :lag-ticks,
+   :keep-alive-every ms, :drop-clicks #{ordinal}, :drop-breaks #{ordinal}, :inventory {slot item}
+   (a slot is a named place, [:hotbar 0] as inventory/slot reads it, or a window-0 slot
+   number), :lag-ticks,
+   :slow-breaks f (blocks take f times their time to break by the server's clock, a loaded
+   server's: a FINISH at the client's time is acked but the break comes later, full-ms),
    :respawn [x y z] (where a new life begins; the spawn when absent, as a gym landing may differ
    from the world spawn), :seed (where the loot rolls start, 0 when absent), :tick-seed (where
    a run's tick randomness starts; 0.5 every tick when absent), :kill-at ms (the
@@ -163,8 +174,8 @@
    player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
    there) and :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
    and where the player arrives)."
-  [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks inventory
-           lag-ticks respawn seed tick-seed kill-at dimension nether]
+  [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
+           inventory lag-ticks slow-breaks respawn seed tick-seed kill-at dimension nether]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -179,6 +190,8 @@
      :sim/next-window 1
      :sim/clicks 0
      :sim/drop-clicks (or drop-clicks #{})
+     :sim/breaks 0
+     :sim/drop-breaks (or drop-breaks #{})
      :sim/rng (or seed 0)
      :sim/violations []
      :sim/keep-alive-every keep-alive-every
@@ -197,6 +210,7 @@
      :sim/next-keep-alive keep-alive-every
      :sim/keep-alives-pending #{}}
     decoded (assoc :sim/decoded decoded)
+    slow-breaks (assoc :sim/slow-breaks slow-breaks)
     tick-seed (assoc :sim/tick-seed tick-seed)
     view-distance (assoc :sim/view-distance view-distance)
     kill-at (assoc :sim/kill-at kill-at)
@@ -338,49 +352,84 @@
   [sim {:keys [id]}]
   (update sim :sim/keep-alives-pending disj id))
 
+(defn break-block
+  "Block id at pos is broken by the player holding held in slot: gone (placed or not), its
+   block update, its drop as an item entity, the tool worn, the neighbours disturbed."
+  [sim pos id held slot]
+  (let [eid (:sim/next-eid sim)
+        [x y z] pos
+        [ix iy iz :as item-pos] [(+ x 0.5) (+ y drop-rise) (+ z 0.5)]
+        [sim item] (loot sim id held)
+        drop (when item {:item item :count 1})
+        before (full (:sim/inv sim) (inventory/layouts :inventory))
+        sim (-> sim
+                (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
+                (update :sim/broken conj pos)
+                (send {:packet/name :block-update :pos pos :state blocks/air})
+                (update :sim/inv wear slot)
+                (disturb pos))
+        sim (sync-window sim :inventory before (:sim/cursor sim) false)]
+    (if drop
+      (-> sim
+          (assoc :sim/next-eid (inc eid))
+          (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
+          (send {:packet/name :add-entity
+                 :entity-id eid
+                 :uuid nil
+                 :type blocks/item-entity-type
+                 :x ix
+                 :y iy
+                 :z iz}))
+      sim)))
+
 (defn finish-dig
-  "The client says it finished breaking pos: broken, with its drop, when it started breaking that
-   block at least the block's break time ago (break-ms); else the real server keeps the block
-   and restores the client's view of it. Either way, the ack of sequence."
+  "The client says it finished breaking pos: broken, with its drop, when it started breaking
+   that block at least the block's break time ago (break-ms), the block update before the ack
+   (observed live on 26.1.2); else the real server keeps breaking it by its own clock
+   (ServerPlayerGameMode's delayed destroy: :sim/delayed, finished by tick-delayed) and only
+   acks now. A FINISH for another block than the one being broken is acked and nothing else.
+   A FINISH whose ordinal is in :sim/drop-breaks gets the ack alone, the block left standing
+   and nothing said: what a lagging server does with an early FINISH queued behind another one."
   [sim {:keys [pos sequence]}]
   (let [{:keys [at] dpos :pos} (:sim/dig sim)
         id (block-at sim pos)
         held (held-item sim)
-        slot (held-slot sim)]
-    (if (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms id held)))
-      (let [eid (:sim/next-eid sim)
-            [x y z] pos
-            [ix iy iz :as item-pos] [(+ x 0.5) (+ y drop-rise) (+ z 0.5)]
-            [sim item] (loot sim id held)
-            drop (when item {:item item :count 1})
-            before (full (:sim/inv sim) (inventory/layouts :inventory))
-            sim (-> sim
-                    (update :sim/placed dissoc pos) ; a placed block, broken, is gone too
-                    (update :sim/broken conj pos)
-                    (dissoc :sim/dig)
-                    ;; observed live on 26.1.2: the breaker gets the block update, then the ack
-                    (send {:packet/name :block-update :pos pos :state blocks/air})
-                    (send {:packet/name :block-changed-ack :sequence sequence})
-                    (update :sim/inv wear slot)
-                    (disturb pos))
-            sim (sync-window sim :inventory before (:sim/cursor sim) false)]
-        (if drop
+        slot (held-slot sim)
+        n (:sim/breaks sim)
+        sim (update sim :sim/breaks inc)
+        ack {:packet/name :block-changed-ack :sequence sequence}]
+    (cond (contains? (:sim/drop-breaks sim) n)
           (-> sim
-              (assoc :sim/next-eid (inc eid))
-              (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
-              (send {:packet/name :add-entity
-                     :entity-id eid
-                     :uuid nil
-                     :type blocks/item-entity-type
-                     :x ix
-                     :y iy
-                     :z iz}))
-          sim))
-      ;; too early: the real server keeps the block and restores the client's view of it
-      (-> sim
-          (dissoc :sim/dig)
-          (send {:packet/name :block-update :pos pos :state (or id blocks/air)})
-          (send {:packet/name :block-changed-ack :sequence sequence})))))
+              (dissoc :sim/dig)
+              (send ack))
+          (and (= dpos pos) id (pos? id) (>= (- (:sim/now sim) at) (break-ms sim id held)))
+          (-> sim
+              (dissoc :sim/dig)
+              (break-block pos id held slot)
+              (send ack))
+          (and (= dpos pos) id (pos? id))
+          (-> sim
+              (dissoc :sim/dig)
+              (assoc :sim/delayed {:pos pos :at at :held held :slot slot})
+              (send ack))
+          :else
+          (-> sim
+              (dissoc :sim/dig)
+              (send ack)))))
+
+(defn tick-delayed
+  "Finish a delayed destroy (finish-dig) once the block's whole break time has passed by the
+   server's clock: the block update, seconds after the ack on a slow server (:slow-breaks)."
+  [sim]
+  (let [{:keys [pos at held slot]} (:sim/delayed sim)
+        id (when pos (block-at sim pos))]
+    (cond (nil? pos) sim
+          (or (nil? id) (zero? id)) (dissoc sim :sim/delayed)
+          (>= (- (:sim/now sim) at) (full-ms sim id held))
+          (-> sim
+              (dissoc :sim/delayed)
+              (break-block pos id held slot))
+          :else sim)))
 
 (defmethod on-packet [:play :player-action]
   [sim {:keys [status pos] :as p}]
@@ -1037,8 +1086,10 @@
 
 (defn place
   "use-item-on that is not on a container: place the held block item at pos + face when the
-   destination is empty, the clicked block is solid and the block would not overlap the
-   player; else tell the client the destination's real state. Either way, then the ack."
+   destination is replaceable (air or a grass, blocks/replaceable?: a flower refuses it, as
+   the server's replaceable tag says), the clicked block is solid and the block would not
+   overlap the player; else tell the client the destination's real state. Either way, then
+   the ack."
   [sim pos face ack]
   (let [dest (mapv + pos (faces face))
         slot (held-slot sim)
@@ -1051,8 +1102,7 @@
                         blocks/default-state) ; the held item is a block: it is placed
         ok? (and placing
                  d
-                 (not (blocks/solid? d))
-                 (not= :liquid (blocks/type-of d))
+                 (blocks/replaceable? d)
                  (blocks/solid? (or (block-at sim pos) blocks/air))
                  (not overlap?))
         sim (cond-> sim overlap? (update :sim/violations conj [:place-into-player dest]))]
@@ -1111,14 +1161,19 @@
 
 (defn scooped
   "The fluid source an empty bucket used along look takes: the first water or lava source on the
-   ray (BucketItem with ClipContext.Fluid.SOURCE_ONLY), unless a solid block comes first (the eyes
-   do not see through it); nil when none."
+   ray (BucketItem with ClipContext.Fluid.SOURCE_ONLY), unless a block with an outline comes
+   first (ClipContext.Block.OUTLINE: anything but air and water or lava, a plant as much as
+   stone); nil when none."
   [sim look]
   (reduce (fn [_ cell]
             (let [id (block-at sim cell)]
               (cond (contains? filled-bucket id) (reduced cell)
-                    (and id (blocks/solid? id)) (reduced nil)
-                    :else nil)))
+                    (or (nil? id)
+                        (blocks/air? id)
+                        (contains? blocks/water-states id)
+                        (contains? blocks/lava-states id))
+                    nil
+                    :else (reduced nil))))
           nil
           (ray-cells sim look)))
 
@@ -1330,7 +1385,8 @@
    and hand over every item whose pickup delay has passed and
    that the player stands within reach of."
   [sim now]
-  (let [sim (through-portal (tick-falls (tick-furnaces (drown (kill (assoc sim :sim/now now)))))
+  (let [sim (through-portal (tick-falls (tick-furnaces (tick-delayed
+                                                        (drown (kill (assoc sim :sim/now now))))))
                             now)
         sim (if (>= now (:sim/next-keep-alive sim))
               (-> sim

@@ -70,9 +70,10 @@
 
 (def portal-kit
   "What a portal row gives: two buckets of lava, one of water, an empty one, three stacks of
-   cobblestone (the mold places about 150) and flint and steel."
+   cobblestone (the mold places about 150), flint and steel, and the stone pickaxe the rows
+   hold for the mold's digs."
   ["minecraft:lava_bucket 2" "minecraft:water_bucket 1" "minecraft:bucket 1"
-   "minecraft:cobblestone 192" "minecraft:flint_and_steel 1"])
+   "minecraft:cobblestone 192" "minecraft:flint_and_steel 1" "minecraft:stone_pickaxe 1"])
 
 (defn block-count
   "A truth that counts the blocks named block in the arena: a clone of the arena filtered to them,

@@ -22,6 +22,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
@@ -30,6 +31,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
@@ -196,13 +198,15 @@
 (defn cell-ops
   "Cast frame cell [dx dy] of layer cells: from its stance (dx, dy+1, +1) the cup's floor and
    walls (north, east, west; the south wall is the platform), the bowl's north wall and the bowl's
-   east and west where no cell of the same layer is, clear the cup and the bowl, pour lava into
-   the cup, water into the bowl, scoop the bowl back. Every op but the scoop is done once the cup
-   is obsidian."
+   east and west where no cell of the same layer is, clear the cup, the bowl and the lid over
+   the bowl (in rock the water's ray, shallow from the stance, clips the lid and the pour lands
+   on the bot's own head), pour lava into the cup, water into the bowl, scoop the bowl back.
+   Every op but the scoop is done once the cup is obsidian."
   [at origin facing cells [dx dy :as c]]
   (let [stand (at [dx (inc dy) 1])
         cup (at [dx dy 0])
         bowl (at [dx (inc dy) 0])
+        lid (at [dx (+ dy 2) 0])
         done (cast? at c)
         sibling? (set cells)
         walls (concat [[dx (dec dy) 0] [dx dy -1] [(inc dx) dy 0] [(dec dx) dy 0] [dx (inc dy) -1]]
@@ -210,6 +214,7 @@
                       (when-not (sibling? [(dec dx) dy]) [[(dec dx) (inc dy) 0]]))]
     (concat (for [w walls] (place-op (at w) stand done :wall))
             [(dig-op cup stand done :cup) (dig-op bowl stand done :bowl)
+             (dig-op lid stand done :lid)
              {:build/op :pour
               :build/item :lava_bucket
               :build/stand stand
@@ -394,17 +399,22 @@
           (> (- (now world) started) await-ms) (intent/fail world :not-yet)
           :else world)))
 
+(def worked-cells
+  "[origin facing] → the set of cells an op of the frame's plan places, digs or pours into.
+   Memoized: the plan is pure."
+  (memoize (fn [origin facing]
+             (into #{} (keep #(or (:build/pos %) (:build/into %))) (portal-plan origin facing)))))
+
 (def footprint
   "[origin facing] → the set of cells a frame there works in: the box round the mold (dx -2..6,
-   dy -1..1, dz -2..3) and every cell an op of its plan places, digs or pours into, since the
-   stair to the top layer runs east past the box. No lava may be in it, and no station's source
-   under it. Memoized: the plan is pure."
+   dy -1..1, dz -2..3) and every cell an op of its plan places, digs or pours into
+   (worked-cells), since the stair to the top layer runs east past the box. No lava may be in
+   it, and no station's source under it. Memoized: the plan is pure."
   (memoize
    (fn [origin facing]
      (into (set
             (for [dx (range -2 7) dy (range -1 2) dz (range -2 4)] (cell origin facing [dx dy dz])))
-           (keep #(or (:build/pos %) (:build/into %)))
-           (portal-plan origin facing)))))
+           (worked-cells origin facing)))))
 
 (defn footprint?
   "Is column [x z] under any cell of the footprint at origin facing, where a station must not be?"
@@ -418,21 +428,30 @@
        (map (fn [[x y z _]] [x y z]))
        (filter #(= blocks/lava-base (terrain/block-at world %)))))
 
+(defn stands-beside
+  "[stand src] for each cell the feet could stand in beside the cell over source src (the
+   source diagonally below the feet, never beside them)."
+  [world [x y z :as src]]
+  (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+        :let [stand [(+ x dx) (inc y) (+ z dz)]]
+        :when (path/standable? world stand)]
+    [stand src]))
+
 (defn station-among
   "[stand source] to refill lava from, of sources: a source outside the footprint within
-   station-radius of origin, and a cell to stand in beside the cell over it (the source diagonally
-   below the feet, never beside them), nearest the origin first; nil when none."
+   station-radius of origin in all three dimensions (on the plane alone, race 38477665442
+   took the lava sea ninety blocks under the feet for a station), open to the air over it
+   (scoop/scoopable?: a scoop at a roofed source fails :target-gone, issue #91), and a cell to
+   stand in beside the cell over it (stands-beside) that no op of the plan fills (the rim filled
+   the bot's own tunnel, its only stand beside the sea), nearest the origin first; nil when none."
   [world sources origin facing]
   (->> sources
-       (filter #(<= (physics/horizontal-distance (physics/centre %) (physics/centre origin))
-                    station-radius))
+       (filter #(<= (physics/distance (physics/centre %) (physics/centre origin)) station-radius))
        (remove (fn [[x _ z]] (footprint? origin facing [x z])))
+       (filter #(scoop/scoopable? world % :lava))
        (sort-by #(physics/distance (physics/centre %) (physics/centre origin)))
-       (mapcat (fn [[x y z :as src]]
-                 (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
-                       :let [stand [(+ x dx) (inc y) (+ z dz)]]
-                       :when (path/standable? world stand)]
-                   [stand src])))
+       (mapcat #(stands-beside world %))
+       (remove (fn [[stand _]] (contains? (worked-cells origin facing) stand)))
        first))
 
 (defn station
@@ -555,14 +574,21 @@
 
 (defn reachable-stand
   "A cell the feet can occupy from which pos is within reach. The feet, when they already
-   can; else the standable cell around pos nearest the designated stand. nil when none, and
-   never the cell being worked. Full run 61abf8c stood on the shore of a pond: the pad cell
-   was water and the stand was air over the next water cell, so a walk there was :partial
-   and six replans failed :no-path."
+   can; else the standable cell around pos nearest the designated stand that a route from the
+   feet reaches (intent/routable?). nil when none, and never the cell being worked. Full run
+   61abf8c stood on the shore of a pond: the pad cell was water and the stand was air over the
+   next water cell, so a walk there was :partial and six replans failed :no-path. Race
+   38477665442 Clj_r25 had scooped its water from a sand cell at the lake's edge under a bank
+   two high; the cell nearest the stand was the bank's top, a step up beside it that only cells
+   over the water led to, and three builds failed :no-path walking at it while the sand cell
+   itself reached the pad (issue #45)."
   [world stand pos]
   (let [feet (intent/feet world)
         ok? (fn [cell]
-              (and (not= cell pos) (path/standable? world cell) (reaches-from? world cell pos)))]
+              (and (not= cell pos) (path/standable? world cell) (reaches-from? world cell pos)))
+        routable? (fn [cell]
+                    (intent/routable? world
+                                      {:intent/kind :walk :intent/target cell :intent/for :build}))]
     (if (ok? feet)
       feet
       (->> (for [dy [0 -1 1]
@@ -572,6 +598,7 @@
                  :when (ok? c)]
              c)
            (sort-by #(physics/distance (physics/centre %) (physics/centre stand)))
+           (filter routable?)
            first))))
 
 (defn approach-stand
@@ -673,15 +700,30 @@
 
 (def site-radius 4)                   ; blocks from the feet a frame origin is looked for
 
+(def pad-cells
+  "The cells [dx dy dz] the pad floors (pad-ops), from the origin."
+  (vec (for [dz (range -1 3) dx (range -1 6)] [dx -1 dz])))
+
+(defn ground-under?
+  "Is there a solid cell at pos or within foundation-depth under it, so a pad block there has a
+   foundation to be built up from (foundation)? Issue #74: a pad cell over a cave or a deep
+   pond had no cell to place it from, and the build failed :no-stand."
+  [world [x y z]]
+  (boolean (some #(holds? world [:solid [x (- y %) z]]) (range (inc foundation-depth)))))
+
 (defn site-ok?
-  "Can a frame be cast at origin facing: every cell of the footprint loaded and no lava in it (a
-   block placed into lava destroys the source, and lava under the mold is no stance: ruststeve's
-   lava sea), the ground under the origin solid, and a station among sources?"
+  "Can a frame be cast at origin facing: every cell of the footprint loaded and no water or lava
+   in it (a block placed into lava destroys the source, lava under the mold is no stance:
+   ruststeve's lava sea; and a pad over water is built from its bottom, out of reach when the
+   water is deep), the ground under the origin solid and under every pad cell no deeper than a
+   foundation reaches (ground-under?), and a station among sources?"
   [world sources origin facing]
-  (let [cells (footprint origin facing)]
+  (let [cells (footprint origin facing)
+        at #(cell origin facing %)]
     (and (every? #(some? (terrain/block-at world %)) cells)
-         (not-any? #(contains? blocks/lava-states (terrain/block-at world %)) cells)
+         (not-any? #(terrain/fluid-at world %) cells)
          (holds? world [:solid (update origin 1 dec)])
+         (every? #(ground-under? world (at %)) pad-cells)
          (some? (station-among world sources origin facing)))))
 
 (defn choose-site
@@ -699,15 +741,117 @@
                  :when (site-ok? world sources origin facing)]
              [origin facing]))))
 
+;; ---------------------------------------------------------------- the lava hunt
+
+(def lava-depth -54)                  ; the feet a block over the lava sea: below y -54 the game fills its aquifers with lava (ruststeve cast at y -50, the sea's surface at -55)
+(def hunt-radius 48)                  ; blocks from the feet a lava source is walked, dug or tunnelled toward
+(def max-candidates 3)                ; the nearest sources a route is planned to
+
+(defn sources-near
+  "The lava sources loaded within hunt-radius of the feet, nearest first."
+  [world]
+  (let [feet (physics/centre (intent/feet world))]
+    (->> (lava-sources world)
+         (filter #(<= (physics/distance (physics/centre %) feet) hunt-radius))
+         (sort-by #(physics/distance (physics/centre %) feet)))))
+
+(defn lava-walk
+  "A walk to a cell beside an exposed source's air (stands-beside), from which a site has its
+   station: the first of the max-candidates nearest scoopable sources a route reaches; nil when
+   none, and never to a stand within site-radius of the feet, where the site was just looked
+   for."
+  [world]
+  (let [feet (physics/centre (intent/feet world))]
+    (->> (sources-near world)
+         (filter #(scoop/scoopable? world % :lava))
+         (take max-candidates)
+         (mapcat #(stands-beside world %))
+         (map (fn [[stand _]] {:intent/kind :walk :intent/target stand :intent/for :lava}))
+         (remove #(<= (physics/distance (physics/centre (:intent/target %)) feet) site-radius))
+         (filter #(intent/routable? world %))
+         first)))
+
+(defn uncap
+  "A dig of the roof over the nearest roofed lava source within reach of the eye that has a
+   cell to stand in beside the roof (stands-beside: the station the dig makes), so it can be
+   scooped: a solid the tools can take (never obsidian or bedrock), never the cell under the
+   feet. The deep sea lies under a ceiling of deepslate (ruststeve: 'roofed sources ... scooped
+   by digging the roof'); the dig is allowed to expose the lava under it, which flows no higher.
+   nil when none."
+  [world]
+  (let [under (update (intent/feet world) 1 dec)
+        roof-of (fn [[x y z :as src]]
+                  (let [roof [x (inc y) z]
+                        id (terrain/block-at world roof)]
+                    (when (and id
+                               (blocks/solid? id)
+                               (not (contains? #{:obsidian :bedrock} (blocks/name-of id)))
+                               (not= roof under)
+                               (within-reach? world roof)
+                               (seq (stands-beside world src)))
+                      roof)))]
+    (when-let [roof (first (keep roof-of (sources-near world)))]
+      (assoc (intent/child-dig roof) :intent/exposes-ok? true :intent/for :lava))))
+
+(defn heading-to
+  "The cardinal [dx dz] from feet toward pos, along the longer of the two plane distances."
+  [[fx _ fz] [x _ z]]
+  (let [dx (- x fx)
+        dz (- z fz)]
+    (if (>= (abs dx) (abs dz))
+      [(long (math/signum (double dx))) 0]
+      [0 (long (math/signum (double dz)))])))
+
+(defn toward-lava
+  "The way toward the nearest lava source loaded: stairs down (stone/stairs, stair-depth at a
+   time) while the feet are above the cell over it, else a tunnel of level steps toward it, as
+   many as the plane distance less one (the step onto the cell over the source is refused for
+   the lava under it, and the roof is then in reach: uncap). With no source loaded, stairs down
+   to lava-depth. nil when nothing can be cut from here."
+  [world]
+  (let [feet (intent/feet world)
+        [sx sy sz :as src] (first (sources-near world))
+        to (if src (inc sy) lava-depth)]
+    (cond (> (physics/y-of feet) to) (stone/stairs world {:goal/depth to})
+          (nil? src) nil
+          :else
+          (let [steps (dec (long (max (abs (- sx (first feet))) (abs (- sz (nth feet 2))))))]
+            (when (pos? steps)
+              {:intent/kind :tunnel
+               :intent/dir (heading-to feet src)
+               :intent/length (min stone/tunnel-length steps)
+               :intent/for :lava})))))
+
+(defn lava-hunt
+  "The next step toward lava a site can refill from, when no site is at hand: a walk to a stand
+   beside an exposed source (lava-walk), the roof over a source in reach dug (uncap), stairs or
+   a tunnel toward the nearest source loaded, or toward the depth lava lies at (toward-lava);
+   nil when none can be taken. Issue #41, the wall before the Nether: race 38477665442's 47
+   real bots and 950 of the sim race's runs stood at the surface with the kit, no lava within
+   sixteen of any origin, and waited :no-site out. Lava is not on the surface of a 1.18+ world:
+   it is the sea under y -54, roofed, and cave springs."
+  [world]
+  (or (lava-walk world) (uncap world) (toward-lava world)))
+
+(defn held-first
+  "What the needs planner does for the tools the row holds (:goal/holds, a pickaxe for the way
+   down to lava and the mold's digs) before a build starts: an intent that makes one, a wait,
+   or nil when they are held. Sim race 38477665389 (issue #70, 150 runs at one landing) dug for
+   its stance with no pickaxe left and failed :needs-tool three times."
+  [world goal table]
+  (when-let [holds (:goal/holds goal)] (make/decide world (assoc goal :goal/provides holds) table)))
+
 (defmethod plan/next-intent :build
-  ;; build the row's plan (:goal/build) at the site remembered, else at one chosen now (the
-  ;; :build intent remembers it); with none, wait :no-site
-  [world {:goal/keys [build]} _]
+  ;; the tools the row holds first (held-first); then build the row's plan (:goal/build) at the
+  ;; site remembered, else at one chosen now (the :build intent remembers it); with none, hunt
+  ;; for lava (lava-hunt), else wait :no-site
+  [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]} (memory/site world)
         [origin facing] (if origin [origin facing] (choose-site world))]
-    (if origin
-      {:intent/kind :build :intent/build build :intent/origin origin :intent/facing facing}
-      {:plan/wait :no-site})))
+    (or (held-first world goal table)
+        (cond origin
+              {:intent/kind :build :intent/build build :intent/origin origin :intent/facing facing}
+              :else (or (lava-hunt world) {:plan/wait :no-site})))))
 
 (defmethod plan/done-by :built?
   [world {:goal/keys [build]}]

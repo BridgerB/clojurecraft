@@ -62,7 +62,21 @@
            (:click/slot (first (recipe/clicks (inv 0 :oak_planks 1 12 :birch_planks 4)
                                               (recipe/by-id :crafting_table)
                                               2))))))
+  (testing "a group no single stack covers is drawn from several, lowest first"
+    ;; race 38477665442 bot Clj_r02: seven cobblestone in one stack and one in another, and
+    ;; the furnace failed :no-ingredient three times though eight were held
+    (let [cs (recipe/clicks (inv 0 :cobblestone 7 5 :cobblestone 1)
+                            (recipe/by-id :furnace)
+                            3
+                            #(inventory/player->window-slot (inventory/layouts :table) %))]
+      (is (= 10 (count cs)) "pick up seven, seven cells, pick up one, one cell: no put-back")
+      (is (= [(inventory/slot-in :table [:hotbar 0]) (inventory/slot-in :table [:hotbar 5])]
+             (keep #(when (= 0 (:click/button %)) (:click/slot %)) cs)))
+      (is (= 8 (count (filter #(= 1 (:click/button %)) cs))))))
   (is (nil? (recipe/clicks (inv 0 :oak_planks 3) (recipe/by-id :crafting_table) 2)))
+  (is (nil?
+       (recipe/clicks (inv 0 :oak_planks 2 9 :birch_planks 1) (recipe/by-id :crafting_table) 2))
+      "three over two stacks: still short")
   (is (nil? (recipe/clicks {} (recipe/by-id :oak_planks) 2))))
 
 (def two-by-two (filter #(recipe/fits? % 2) recipe/recipes))

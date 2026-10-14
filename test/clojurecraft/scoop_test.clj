@@ -9,6 +9,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
@@ -103,7 +104,16 @@
     (let [w (wide [8.5 8.5] #{[-2 0]} [-31.5 64.0 8.5])
           [x _ _] (first (scoop/hunt-targets w))]
       (is (<= 8 x) "the low ground to the west is behind the bot: the hunt never goes back west")))
-  (is (empty? (scoop/hunt-targets (standing {} [8.5 8.5]))) "nothing loaded out there: no hunt"))
+  (is (empty? (scoop/hunt-targets (standing {} [8.5 8.5]))) "nothing loaded out there: no hunt")
+  (testing
+    "never into a cave: race 38477665442 bot Clj_r15 hunted into a floor under a roof, climbed out to the pit it came from, and went between the two for an hour"
+    (let [roofed (merge low-ground (into {} (for [x (range 16) z (range 16)] [[x 70 z] 1])))
+          w (assoc-in (wide [8.5 8.5] #{[3 0]} [8.5 64.0 8.5])
+             [:world/chunks [3 0]]
+             (world/column roofed))]
+      (is (every? #(terrain/under-sky? w %) (scoop/hunt-targets w)))
+      (is (not= 3 (bit-shift-right (ffirst (scoop/hunt-targets w)) 4))
+          "not the roofed low ground"))))
 
 (deftest water-the-eyes-cannot-reach-is-no-target
   ;; live iron-kit run 3 (local landing 2360,2360): three scoops at aquifer sources with stone
@@ -117,6 +127,23 @@
   (is (= {:intent/kind :scoop :intent/target [10 63 8]}
          (scoop/scoop-next (standing {[10 63 8] water} [8.5 8.5])))
       "the same source with the wall gone"))
+
+(deftest a-plant-on-the-ray-is-a-wall
+  ;; race 38477665442 (issue #83): seven bots at beaches sent three scoops each at sources the
+  ;; server acked and never filled, all at y 63 by the sea, where sugar cane grows on the sand.
+  ;; The game's ray for a bucket stops at any block with an outline: the cane over a source, or
+  ;; a grass tuft on the bank between the eyes and the water
+  (let [cane (blocks/default-state :sugar_cane)
+        grass (blocks/default-state :short_grass)]
+    (is (= {:plan/wait :no-water}
+           (scoop/scoop-next (standing {[10 63 8] water [10 64 8] cane} [8.5 8.5])))
+        "cane over the source: no surface to look into")
+    (is (= {:intent/kind :walk :intent/target [10 63 8] :intent/for :scoop}
+           (scoop/scoop-next (standing {[10 63 8] water [9 64 8] grass} [8.5 8.5])))
+        "a grass tuft on the bank between: round it")
+    (is (= {:intent/kind :scoop :intent/target [10 63 8]}
+           (scoop/scoop-next (standing {[10 63 8] water [9 64 8] grass} [10.5 9.5])))
+        "from the other bank the ray is clear")))
 
 (deftest a-remembered-pool-under-stone-is-no-walk
   ;; gym batch water-a3 run 5: the pool memory kept was a source under stone, in reach; the walk
@@ -151,9 +178,9 @@
                     {[8 70 8] blocks/air [8 71 8] blocks/air})
         w (assoc (standing hill [8.5 8.5]) :player/pos [8.5 70.0 8.5] :plan/go-at [8.5 70.0 8.5])]
     (is (nil? (scoop/climb w)) "not under the landing")
-    (is (= {:intent/kind :stairs-up :intent/to-y terrain/top-y :intent/for :surface}
+    (is (= {:intent/kind :stairs-up :intent/to-y (+ 70 stairs/climb-stairs) :intent/for :surface}
            (scoop/scoop-next w))
-        "stairs up until out of the ground")))
+        "stairs up until out of the ground, a length at a time")))
 
 (deftest the-way-home-runs-out-of-loaded-terrain
   ;; gym batch solid-b1 run 1 climbed under the sea 146 blocks from its landing, where the chunks
@@ -177,13 +204,33 @@
             :intent/for :water-hunt}
            (scoop/scoop-next w)))))
 
+(deftest deep-in-a-pit-under-the-sky-the-bot-climbs-to-the-landings-height
+  ;; race 38477665442 (issue #60): four bots stood at y 6 at the bottom of one ravine, sixty
+  ;; under their landing, the sky open over them; the climb out applies only under the ground,
+  ;; no hunt had a route, nothing lay to tunnel toward, and they waited :no-water out
+  (let [shaft (merge (into {} (for [x (range 16) y (range 64 71) z (range 16)] [[x y z] 1]))
+                     (into {} (for [y (range 64 71)] [[8 y 8] blocks/air])))
+        w (assoc (standing shaft [8.5 8.5]) :plan/go-at [8.5 80.0 8.5])]
+    (is (nil? (scoop/climb w)) "under the sky: not the climb out of the ground")
+    (is
+     (= {:intent/kind :stairs-up
+         :intent/to-y (stairs/climb-to w 80)
+         :intent/for :surface
+         :intent/to-height? true}
+        (scoop/scoop-next w))
+     "stairs up toward the landing's height, a length at a time, the open sky over the pit notwithstanding")
+    (is (= :tunnel (:intent/kind (scoop/scoop-next (assoc w :plan/go-at [8.5 70.0 8.5]))))
+        "six under the landing is not deep: the tunnel out, as before")))
+
 (deftest with-no-way-back-up-the-bot-cuts-stairs-up
   ;; batch iron-a2 run 2 mined an iron ore out of the floor under one of its stairs, run 5 dug a
   ;; niche under one: the staircase down was no way back up
   (let [broken (assoc mine [10 69 8] blocks/air) ; the floor under the stair at [10 70 8]
         w
         (assoc (standing broken [14.5 8.5]) :player/pos [14.5 66.0 8.5] :plan/go-at [4.5 76.0 8.5])]
-    (is (= {:intent/kind :stairs-up :intent/to-y 76 :intent/for :surface} (scoop/scoop-next w))))
+    (is (= {:intent/kind :stairs-up :intent/to-y (+ 66 stairs/climb-stairs) :intent/for :surface}
+           (scoop/scoop-next w))
+        "toward the landing at 76, a length at a time"))
   (testing "under the open sky the bot is out, however low: it hunts instead"
     (let [w (assoc (standing {} [8.5 8.5]) :plan/go-at [8.5 80.0 8.5])]
       (is (nil? (scoop/climb w))))))

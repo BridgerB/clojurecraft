@@ -109,10 +109,39 @@
   [id]
   (contains? solid-states id))
 
+(def air-names
+  "The block names that are air: plain, in a cave, in the void."
+  #{:air :cave_air :void_air})
+
+(defn air?
+  "Is block state id air of any kind (air-names): a cell the eyes' ray passes with nothing to stop
+   at? A plant is not: the game clips a bucket's ray against block outlines (ClipContext.Block
+   OUTLINE), and short grass, sugar cane, kelp and seagrass all have one."
+  [id]
+  (contains? air-names (name-of id)))
+
 (defn falls?
   "Is block state id of a type that falls when the cell under it is free (falling-types)?"
   [id]
   (contains? falling-types (type-of id)))
+
+(def replaceable-names
+  "The blocks a placement may go into, by name: air and the few plants the game's replaceable
+   tag lists (grass, ferns, a dead bush, seagrass, vines, roots, lichen). A flower, a flower
+   bed (wildflowers, leaf litter), a bush or a sapling is not one: the server keeps it and
+   refuses the block (race 38477665442 bot Clj_r23 placed its table into wildflowers three
+   times, :rejected)."
+  #{:air :cave_air :void_air :short_grass :fern :tall_grass :large_fern :dead_bush :seagrass
+    :tall_seagrass :vine :hanging_roots :glow_lichen :short_dry_grass :tall_dry_grass})
+
+(def replaceable-states
+  "Every state of every replaceable block."
+  (states-where (fn [[n]] (contains? replaceable-names n))))
+
+(defn replaceable?
+  "May a block be placed into the cell holding state id: is it air or a replaceable plant?"
+  [id]
+  (contains? replaceable-states id))
 
 (defn log-name?
   "Does a block or item name end in _log (every species, stripped ones too)?"

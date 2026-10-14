@@ -11,6 +11,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -118,6 +119,36 @@
                  :player/inventory {0 {:item (blocks/items :wooden_pickaxe) :count 1}})]
     (is (nil? (place/niche w)) "iron ore all round, and only a wooden pickaxe")))
 
+(deftest no-niche-under-gravel
+  ;; race 38477665442 bot Clj_r14, at y 16 for the ingots: the gravel over each side niche fell
+  ;; into it as soon as it was dug, seven digs in turn, then the table went in as the gravel
+  ;; came down and was refused three times
+  (let [gravel (blocks/default-state :gravel)
+        rock (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 2 9) y [64 65]] [[x y 8] 0]))
+                    {[8 65 9] gravel [8 65 7] gravel})
+        at (fn [rock]
+             (place/niche (assoc (standing [8.5 64.0 8.5])
+                                 :world/chunks {[0 0] (world/column rock)}
+                                 :plan/go-at [2.5 64.0 8.0])))]
+    (is (= [9 64 8] (at rock)) "gravel over both side walls: only the wall ahead is left")
+    (is (= [8 64 9] (at (assoc rock [8 65 9] 1))) "stone over one side: that side")))
+
+(deftest a-niche-beside-the-head-when-the-side-walls-border-water
+  ;; race 38477665442 bot Clj_r12, at the end of its tunnel at y 26 for the ingots: water
+  ;; behind both side walls at the feet's height, the table in the third wall, the furnace
+  ;; found no spot, :no-spot three times. The walls at head height are dry.
+  (let [water (blocks/default-state :water)
+        rock (merge (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 2 9) y [64 65]] [[x y 8] 0]))
+                    (into {} (for [x (range 7 10)] [[x 64 10] water]))
+                    (into {} (for [x (range 7 10)] [[x 64 6] water]))
+                    {[9 64 8] (blocks/default-state :crafting_table)})
+        w (assoc (standing [8.5 64.0 8.5])
+                 :world/chunks {[0 0] (world/column rock)}
+                 :plan/go-at [2.5 64.0 8.0])]
+    (is (#{[8 65 9] [8 65 7]} (place/niche w)) "a side wall at head height")))
+
 (deftest a-block-is-never-placed-on-a-table
   ;; gym batch iron-a5 run 4: the only spot was on its crafting table, and a right-click on a
   ;; table opens it, so the gravel was never placed and the intent failed :rejected three times
@@ -148,3 +179,43 @@
   (let [row (fn [id] (first (filter #(= id (:goal/id %)) plan/goals)))]
     (is (:intent/passage-ok? (plan/act {} (row :place-table))))
     (is (not (:intent/passage-ok? (plan/act {} (row :place-furnace)))))))
+
+(deftest a-spot-is-never-a-flower
+  ;; race 38477665442 bot Clj_r23: the nearest cell held wildflowers, which the server's
+  ;; replaceable tag does not list, and the table was refused three times, :rejected
+  (let [flowers (into {}
+                      (for [dx [-1 0 1]
+                            dz [-1 0 1]
+                            :when (not= [dx dz] [0 0])]
+                        [[(+ 8 dx) 64 (+ 8 dz)] (blocks/default-state :wildflowers)]))
+        w (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column flowers)})
+        [target] (place/spot w)]
+    (is (= 2 (max (abs (- (first target) 8)) (abs (- (last target) 8)))) "the second ring")
+    (is (= 64 (second target)))
+    (testing "short grass is replaceable: a spot"
+      (let [grass (update-vals flowers (constantly (blocks/default-state :short_grass)))
+            w (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column grass)})]
+        (is (= 1
+               (max (abs (- (ffirst (place/spot w)) 8))
+                    (abs (- (last (first (place/spot w))) 8)))))))))
+
+(deftest a-guess-the-server-never-answers-is-forgotten
+  ;; race 38477665442 bot Clj_r19: the stone under its next stair, dug and acked, was never
+  ;; broken by the server; the bot's physics fell through its guessed air while the server
+  ;; put it back on the stone, and the next dig waited to be still until the run timed out
+  (let [w (-> (standing [8.5 64.0 8.5])
+              (assoc :time/now 1000)
+              (terrain/predict [9 63 8] blocks/air))]
+    (is (= blocks/air (terrain/block-at w [9 63 8])) "the guess is in view")
+    (is (not (terrain/confirmed? w [9 63 8])))
+    (testing "the server's word confirms it"
+      (let [w (terrain/set-block w [9 63 8] blocks/air)]
+        (is (terrain/confirmed? w [9 63 8]))
+        (is (= blocks/air (terrain/block-at w [9 63 8])))))
+    (testing "silence past unconfirmed-ms drops it"
+      (let [w (terrain/forget-stale w (+ 1000 terrain/unconfirmed-ms 1))]
+        (is (terrain/confirmed? w [9 63 8]))
+        (is (= 1 (terrain/block-at w [9 63 8])) "the chunk's stone is back in view")))
+    (testing "a guess within the time stays"
+      (let [w (terrain/forget-stale w (+ 1000 terrain/unconfirmed-ms))]
+        (is (not (terrain/confirmed? w [9 63 8])))))))
