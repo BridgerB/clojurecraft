@@ -618,20 +618,28 @@
   ;; drop came to rest on the bank, above a 1.8-tall player's pickup box. Reach is not enough: a
   ;; log walk arrives only where the drop will land within pickup height. Since #75 a trunk no
   ;; route reaches is never walked at (wood/near-walk): it is passed over, with no failure to
-  ;; count, and with no other trunk the bot waits :no-log.
+  ;; count. Since #56 (PR #101) and #102 (PR #114) a pit under the sky is not out of the ground:
+  ;; with no trunk a route reaches the bot cuts stairs up out of it first, and only from there,
+  ;; where a route may reach the trunk, walks at it.
   (let [[w sim] (sim/run step
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes bank) :spawn [1.5 64.0 0.5]})
                          #(or (plan/done? %) (plan/failed? %) (= :no-log (:plan/waiting %)))
                          60000
-                         {:event/kind :go :go/goals [:wood]})]
-    (is (not-any? (:sim/broken sim) [[2 68 0] [2 69 0]]) "no log dug whose drop it could not take")
-    (is (not-any? (fn [i]
+                         {:event/kind :go :go/goals [:wood]})
+        intentions (memory/intentions w)
+        at-trunk? (fn [i]
                     (and (= :walk (:intention/kind i))
                          (= [2 0] (let [[x _ z] (:intention/target i)] [x z]))))
-                  (memory/intentions w))
-        "the trunk no route reaches is never walked at")
-    (is (= :no-log (:plan/waiting w)) (pr-str (plan/summary w)))))
+        climbed (some #(when (and (= :stairs-up (:intention/kind %)) (= :done (:intention/event %)))
+                         (:intention/at %))
+                      intentions)]
+    (is (not-any? (:sim/broken sim) [[2 68 0] [2 69 0]]) "no log dug whose drop it could not take")
+    (is (= :stairs-up (:intention/kind (first intentions))) "out of the pit first")
+    (is (some? climbed) "the climb out is done")
+    (is (every? #(>= (:intention/at %) climbed) (filter at-trunk? intentions))
+        "the trunk is walked at only from above the pit, never from it")
+    (is (or (plan/done? w) (= :no-log (:plan/waiting w))) (pr-str (plan/summary w)))))
 
 (deftest a-trunk-on-a-bank-is-taken-from-the-bank
   (let [platform (into {} (for [y (range 64 68) x [0 1] z [0 1]] [[x y z] 1]))
