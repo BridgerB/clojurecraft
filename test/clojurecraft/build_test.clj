@@ -307,3 +307,23 @@
     (is (not (build/refused-for-the-body?
               w
               {:intent/kind :place :intent/reason :rejected :intent/cell [8 63 5]})))))
+
+(deftest a-room-cell-behind-a-wall-is-cut-toward
+  ;; sim race 38660819204 (issue #74): the bot stood outside its own room, every cell that
+  ;; reached the next room cell inside it, no route to any, and failed :no-stand three times.
+  ;; The room: walls two high at x 10 and 15, z 1 and 9; the cell to dig, [14 63 5], more than
+  ;; reach from every cell outside them
+  (let [ring (into {}
+                   (for [x (range 10 16)
+                         z (range 1 10)
+                         y [63 64]
+                         :when (or (#{10 15} x) (#{1 9} z))]
+                     [[x y z] 1]))
+        w (standing-at (open-ground (assoc ring [14 63 5] 1)) [5.5 63.0 5.5])
+        i {:intent/kind :build
+           :intent/build :cast-one
+           :intent/origin [100 64 200]
+           :intent/facing :south}]
+    (is (nil? (build/reachable-stand w [14 63 5] [14 63 5])) "walled in: no route reaches a stand")
+    (is (= [13 63 5] (build/nearest-stand-cell w i [14 63 5]))
+        "the stand nearest the cell, at the feet's height, the wall in the way to dig")))

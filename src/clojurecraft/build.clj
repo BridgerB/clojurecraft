@@ -690,6 +690,15 @@
               [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)])]
     (<= (physics/distance eye (physics/centre pos)) intent/reach)))
 
+(defn stand-cell?
+  "Could the feet stand in cell to work pos: not pos, the head not in pos, standable, and pos
+   within reach from it (reaches-from?)."
+  [world cell pos]
+  (and (not= cell pos)
+       (not= (update cell 1 inc) pos)
+       (path/standable? world cell)
+       (reaches-from? world cell pos)))
+
 (defn reachable-stand
   "A cell the feet can occupy from which pos is within reach. The feet, when they already
    can; else the standable cell around pos nearest the designated stand that a route from the
@@ -699,22 +708,20 @@
    38477665442 Clj_r25 had scooped its water from a sand cell at the lake's edge under a bank
    two high; the cell nearest the stand was the bank's top, a step up beside it that only cells
    over the water led to, and three builds failed :no-path walking at it while the sand cell
-   itself reached the pad (issue #45). Never a cell whose body, feet or head, is pos: a block is
+   itself reached the pad (issue #45). The feet may stand a block under pos too, the head level
+   with it: sim race 38660819204 (issue #74) had a room cell still in the rock with open cells
+   beside it whose floor was a block lower, and failed :no-stand three times. Never a cell whose body, feet or head, is pos: a block is
    not placed into the player. Sim race 38665691522 (issue #44): the cast laid a floor in the
    cell over the feet, the bot's head in it, and the server refused it three times, :rejected."
   [world stand pos]
   (let [feet (intent/feet world)
-        ok? (fn [cell]
-              (and (not= cell pos)
-                   (not= (update cell 1 inc) pos)
-                   (path/standable? world cell)
-                   (reaches-from? world cell pos)))
+        ok? #(stand-cell? world % pos)
         routable? (fn [cell]
                     (intent/routable? world
                                       {:intent/kind :walk :intent/target cell :intent/for :build}))]
     (if (ok? feet)
       feet
-      (->> (for [dy [0 -1 1]
+      (->> (for [dy [0 -1 1 -2]
                  dx (range -4 5)
                  dz (range -4 5)
                  :let [c (mapv + pos [dx (inc dy) dz])]
@@ -805,6 +812,24 @@
        (filter #(intent/routable? world {:intent/kind :walk :intent/target % :intent/for :build}))
        first))
 
+(defn nearest-stand-cell
+  "Of the cells a stand for pos could be (stand-cell?: the feet can be there and reach pos, the
+   body clear of it) at the feet's height, the one nearest pos with a block in the straight way
+   to it that may be dug (stance-block: never the frame's rock); nil when none. Where no route
+   reaches any (the room dug while the bot was elsewhere, a wall of rock between it and the feet),
+   the build cuts its way to this one (toward-stand). Sim race 38660819204 (issue #74): the bot
+   stood outside its own room, every cell that reached the next room cell inside it, and failed
+   :no-stand three times. Only the feet's height: a stand chosen at another height flips with the
+   feet as the stairs to it are cut (the same round's R2/11, with the frame's rock between, went up
+   and down two cells for minutes)."
+  [world {:intent/keys [build origin facing]} pos]
+  (let [[_ fy _] (intent/feet world)]
+    (->> (for [dx (range -4 5) dz (range -4 5)] (mapv + pos [dx (- fy (second pos)) dz]))
+         (filter #(stand-cell? world % pos))
+         (filter #(some? (stance-block world % build origin facing)))
+         (sort-by #(physics/distance (physics/centre %) (physics/centre pos)))
+         first)))
+
 (defn approach-stand
   "The child that gets the feet where op is worked from, or nil when they are there: the room's
    landing is gone to at its height (toward-stand: stairs to it first, then a level way dug); a
@@ -819,10 +844,12 @@
           (and (= :dig op) (= stand pos))
           (cond (within-reach? world pos) nil
                 :else
-                (let [alt (or (reachable-stand world pos pos)
-                              (when build (room-stand world i pos)))]
-                  (cond (nil? alt) :no-stand
-                        :else {:intent/kind :walk :intent/target alt :intent/for :build})))
+                (let [alt (or (reachable-stand world pos pos) (when build (room-stand world i pos)))
+                      cut (when (and (nil? alt) build) (nearest-stand-cell world i pos))]
+                  (cond alt {:intent/kind :walk :intent/target alt :intent/for :build}
+                        ;; no route into the room: cut the way to the stand nearest the feet
+                        cut (toward-stand world cut build origin facing)
+                        :else :no-stand)))
           (intent/centred? world stand) nil
           :else
           (let [blocked (when build (clear-stand world stand build origin facing))]
@@ -891,9 +918,18 @@
   [world {:intent/keys [kind reason cell]}]
   (boolean (and (= :place kind) (= :rejected reason) cell (place/inside-player? world cell))))
 
+(defn found-open?
+  "Did child, a dig, find its cell already open (:target-gone, intent/open?)? The cell is open,
+   which is what the dig was for: the op looks again from there. Sim race 38665691522 world R3/43
+   (issue #91): the way to the cast's landing at y 24 dug an awkward block over the feet the
+   dig took for open, and the build failed :target-gone."
+  [{:intent/keys [kind reason]}]
+  (and (= :dig kind) (= :target-gone reason)))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
-   the child of the old one (the world moved on), a child that failed fails i, one that is done
+   the child of the old one (the world moved on), a child that failed fails i (a dig that found
+   its cell open, found-open?, makes way for the next as one done would), one that is done
    makes way for the next. Shared by every intent that works a plan of ops."
   [world {:intent/keys [child op] :as i} next event]
   (cond (not= next op)
@@ -905,6 +941,8 @@
             (assoc :player/controls {})
             (intent/dissoc-intent :intent/child)
             (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
+        (and child (intent/failed? child) (found-open? child))
+        (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
         (and child (intent/failed? child))
         (-> world
             (assoc :player/controls {})
