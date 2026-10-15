@@ -699,11 +699,16 @@
    38477665442 Clj_r25 had scooped its water from a sand cell at the lake's edge under a bank
    two high; the cell nearest the stand was the bank's top, a step up beside it that only cells
    over the water led to, and three builds failed :no-path walking at it while the sand cell
-   itself reached the pad (issue #45)."
+   itself reached the pad (issue #45). Never a cell whose body, feet or head, is pos: a block is
+   not placed into the player. Sim race 38665691522 (issue #44): the cast laid a floor in the
+   cell over the feet, the bot's head in it, and the server refused it three times, :rejected."
   [world stand pos]
   (let [feet (intent/feet world)
         ok? (fn [cell]
-              (and (not= cell pos) (path/standable? world cell) (reaches-from? world cell pos)))
+              (and (not= cell pos)
+                   (not= (update cell 1 inc) pos)
+                   (path/standable? world cell)
+                   (reaches-from? world cell pos)))
         routable? (fn [cell]
                     (intent/routable? world
                                       {:intent/kind :walk :intent/target cell :intent/for :build}))]
@@ -878,6 +883,14 @@
   [world plan]
   (when-not (satisfied? world (peek plan)) (first (remove #(satisfied? world %) plan))))
 
+(defn refused-for-the-body?
+  "Did child, a placement, fail :rejected with its cell inside the player (place/inside-player?)?
+   The game refuses a block into any player, its own included: the stand it was sent from was
+   wrong, not the op. Sim race 38665691522 (issue #44): the cast laid a floor from a stand whose
+   head was in the floor's cell, and the server refused it three times, :rejected."
+  [world {:intent/keys [kind reason cell]}]
+  (boolean (and (= :place kind) (= :rejected reason) cell (place/inside-player? world cell))))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i, one that is done
@@ -886,6 +899,12 @@
   (cond (not= next op)
         (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child)
         (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
+        (and child (refused-for-the-body? world child))
+        ;; the server refused a block into the bot's own body: the stand was wrong, not the op
+        (-> world
+            (assoc :player/controls {})
+            (intent/dissoc-intent :intent/child)
+            (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
         (and child (intent/failed? child))
         (-> world
             (assoc :player/controls {})
