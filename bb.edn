@@ -76,6 +76,15 @@
   {:doc "Failed runs become issues, one per signature (simrace.yml, race.yml): report <dir> <title>"
    :requires ([clojurecraft.failures :as failures])
    :task (apply failures/-main *command-line-args*)}
+  board {:doc
+         "The bot-failure board (AGENTS.md section 4): todo | heal | move <n> <todo|progress|done>"
+         :requires ([clojurecraft.board :as board])
+         :task (apply board/-main *command-line-args*)}
+  probe
+  {:doc
+   "A code question on a runner (probe.yml): run <label> <command> [worlds] for the pushed branch | log <id>"
+   :requires ([clojurecraft.probe-run :as probe-run])
+   :task (apply probe-run/-main *command-line-args*)}
   issue-check
   {:doc
    "A fix's fixtures (issue.yml, issues-test): fetch <n> brings the issue's snapshots into test/issues/<n>/"

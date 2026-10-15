@@ -39,7 +39,7 @@
        "\n\nEach recording attached replays with the code that made it: `bb replay <file>` "
        "(a worktree at "
        (subs (str sha) 0 7)
-       ", every event and effect of the run; docs/CHURN.md).\n"))
+       ", every event and effect of the run).\n"))
 
 ;;;; I/O: the artifacts, gh ;;;;
 
