@@ -159,8 +159,12 @@
    finds the way round. With no log remembered within far-radius the hunt sets out all the same,
    the targets in the water hunt's order: race 38665691517 runner 1 (issue #57) landed slots
    Clj_r08, Clj_r14 and Clj_r15 where no standing trunk was in reach, routes led out on three
-   bearings, and each waited :no-log at its landing round after round. nil underground, or
-   with no ground a route reaches. Race 38477665442 bots Clj_r14 and Clj_r20 landed on a lake's shore with the forest
+   bearings, and each waited :no-log at its landing round after round. With logs remembered the
+   hunt may also walk a hop back toward the landing, ranked only by how near the trees it lands:
+   race 38680745815 runner 5 (issue #57) bot Clj_r10 hunted a hop away from its landing before
+   any trunk was remembered, and with the valley's trunks then known below it, every bearing
+   back toward them was refused as nearer the landing and the one bearing left had no route.
+   nil underground, or with no ground a route reaches. Race 38477665442 bots Clj_r14 and Clj_r20 landed on a lake's shore with the forest
    across the water: every trunk was in the near band and no route reached one, and each waited
    :no-log until the plan failed (issue #57). Bot Clj_r15 came up out of its mine for the wood
    of a spare pickaxe with the trees a hundred blocks off, past the pathfinder's budget, and
@@ -170,10 +174,12 @@
                                    far-radius
                                    (memory/positions-now world blocks/log-states))]
     (when (terrain/under-sky? world (intent/feet world))
-      (scoop/first-walk world
-                        :log-hunt
-                        (cond->> (scoop/hunt-targets world)
-                          (seq logs) (sort-by #(physics/horizontal-distance % (first logs))))))))
+      (if (seq logs)
+        (scoop/first-walk world
+                          :log-hunt
+                          (sort-by #(physics/horizontal-distance % (first logs))
+                                   (scoop/hunt-targets world true)))
+        (scoop/first-walk world :log-hunt (scoop/hunt-targets world))))))
 
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered

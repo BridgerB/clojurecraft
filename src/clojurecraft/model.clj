@@ -174,6 +174,8 @@
    [:plan/reason "why the plan failed" "after it failed"]
    [:plan/waiting "why the planner is waiting" "after the first wait"]
    [:plan/waiting-since "ms the current wait began" "while waiting"]
+   [:plan/waiting-ticks "planner ticks the current wait has lasted; past plan/wait-ticks it fails"
+    "while waiting"]
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind

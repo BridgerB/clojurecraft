@@ -86,7 +86,7 @@
 
 (def max-attempts 3)                  ; consecutive failed intents before the plan fails
 (def max-unwalkable 12)               ; consecutive walks that failed :no-path before the plan fails
-(def wait-timeout 20000)              ; a goal that has nothing to do for this long has failed
+(def wait-ticks 400)                  ; a goal that has nothing to do for this many planner ticks has failed: 20 s at 20 ticks a second
 
 (defmulti done-by
   "Is the goal satisfied in this world? A registry keyed by the row's :goal/done? (a predicate
@@ -177,7 +177,7 @@
       (cond-> goals (assoc :plan/goals (set (map #(current-id table %) goals))))
       (cond-> at (assoc :plan/go-at at))
       (cond-> chain? (assoc :plan/chain? true :plan/reached #{}))
-      (dissoc :plan/intent :plan/last :plan/waiting-since)))
+      (dissoc :plan/intent :plan/last :plan/waiting-since :plan/waiting-ticks)))
 
 (defn landed?
   "Is the bot at the landing the fixture named, standing in a loaded chunk?"
@@ -269,7 +269,7 @@
     (-> world
         (assoc :plan/intents n :plan/intent i)
         (memory/remember-intention i :started)
-        (dissoc :plan/waiting-since)
+        (dissoc :plan/waiting-since :plan/waiting-ticks)
         (game/say (str "intent " (:intent/kind i)
                        " " (or (:intent/target i) (:intent/recipe i)))))))
 
@@ -295,12 +295,19 @@
   (nil? (:window/cursor world)))
 
 (defn wait
-  "Nothing to do yet for reason; waiting longer than wait-timeout fails the plan with it."
+  "Nothing to do yet for reason; waiting longer than wait-ticks (400 planner ticks, 20 s at
+   20 ticks a second) fails the plan with it. The deadline is counted in planner ticks, not
+   wall ms: a runner keeping 25 bots and two servers to a machine starved this bot's loop to
+   9 ticks in 21 s (race 38680745815 runner 5, issue #57's Clj_r05 and Clj_r10), and the wall
+   clock ran the wait out before tick-counted logic — the water trap's 20 ticks, the hunt's
+   next routable hop — had the ticks to act. The bot stood in a lake and on a peak waiting
+   :no-log and failed while its recovery was a tick or two away."
   [world reason]
-  (let [since (or (:plan/waiting-since world) (:time/now world))]
-    (if (> (- (:time/now world) since) wait-timeout)
+  (let [since (or (:plan/waiting-since world) (:time/now world))
+        ticks (inc (:plan/waiting-ticks world 0))]
+    (if (> ticks wait-ticks)
       (assoc world :plan/status :failed :plan/reason reason)
-      (assoc world :plan/waiting-since since :plan/waiting reason))))
+      (assoc world :plan/waiting-since since :plan/waiting-ticks ticks :plan/waiting reason))))
 
 (defn plan-tick
   "One planning tick while :active. The goals are re-derived from the world every tick, even

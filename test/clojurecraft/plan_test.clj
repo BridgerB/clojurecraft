@@ -877,6 +877,33 @@
     (is (= :walk (:intent/kind i)))
     (is (= :log-hunt (:intent/for i)) "out along a bearing, where the next chunks load")))
 
+(deftest the-wait-fails-in-ticks-not-wall-ms
+  ;; race 38680745815 runner 5 (issue #57): with 25 bots and two servers to a runner the
+  ;; bot's loop got 9 ticks in 21 s, and the wait's wall clock failed the plan :no-log while
+  ;; the water trap's 20 ticks and the hunt's next routable hop were still owed theirs
+  (let [w (assoc (world-state [0.5 64.0 0.5]) :world/facts (memory/empty-facts))
+        [w0 _] (run w [go])
+        at (fn [n] (first (run w0 (repeat n {:event/kind :tick :event/now 1000 :event/rand 0.5}))))]
+    (is (= :active (:plan/status (at plan/wait-ticks))) "the wait-tick-th tick still waits")
+    (is (plan/failed? (at (inc plan/wait-ticks))) "one tick past it, the plan fails")
+    (is (= :no-log (:plan/reason (at (inc plan/wait-ticks)))))))
+
+(deftest a-hunt-that-knows-its-trees-walks-back-toward-the-landing
+  ;; race 38680745815 runner 5 (issue #57) bot Clj_r10: its first hunt hop left the landing
+  ;; with no trunk remembered; once the valley's trunks were known behind it, every bearing
+  ;; back toward them was refused as nearer the landing, the one bearing left had no route,
+  ;; and the plan waited :no-log out its clock
+  (let [w (-> (game/init fx/opts)
+              (assoc :bot/phase :play
+                     :player/pos [40.5 64.0 8.5]
+                     :player/loaded? true
+                     :player/on-ground? true
+                     :plan/go-at [8.5 64.0 8.5]
+                     :world/chunks {[0 0] (world/column {}) [2 0] (world/column {[0 64 8] 136})})
+              (memory/remember-column [2 0] (world/column {[0 64 8] 136})))
+        i (wood/hunt w)]
+    (is (= [0 64 8] (:intent/target i)) "toward the trunk at [32 64 8], back toward the landing")))
+
 (deftest a-slow-server-stretches-the-dig
   ;; race 38665691517 (issues #88, #144): the server ran at 130 ms a tick, counted the digs'
   ;; progress in its ticks, and left blocks standing that the bot had finished by its own clock

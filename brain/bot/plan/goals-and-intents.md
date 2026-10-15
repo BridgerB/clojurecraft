@@ -14,6 +14,8 @@ sourceRefs:
   - src/clojurecraft/plan.clj#defmulti act
   - src/clojurecraft/plan.clj#defmulti next-intent
   - src/clojurecraft/plan.clj#defn run-intent
+  - src/clojurecraft/plan.clj#def wait-ticks
+  - test/clojurecraft/plan_test.clj#the-wait-fails-in-ticks-not-wall-ms
   - src/clojurecraft/plan.clj#defn fail-intent
   - src/clojurecraft/plan.clj#def placing-kinds
   - test/clojurecraft/plan_test.clj#a-cell-a-place-or-a-redig-chose-is-never-blacklisted
@@ -48,7 +50,7 @@ The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id
 
 ## How it works
 1. Each tick: choose first. With nothing left, the plan is done; if the running intent serves another target, it is preempted. Otherwise run it; if it ended, plan again in the same tick (finish or fail, then choose).
-2. With no intent: `choose` takes the highest-priority target in play (`:plan/goals` from the `:go` event, or every target, plus every row marked `:goal/always?`: the two escapes) whose `done-by` is false, and `next-intent` turns it into an intent, `{:plan/wait reason}`, or nil. A wait longer than `wait-timeout` (20 s) fails the plan. Before choosing, `trap/trapped-tick` re-derives `:plan/trap` ([[water-escape]]).
+2. With no intent: `choose` takes the highest-priority target in play (`:plan/goals` from the `:go` event, or every target, plus every row marked `:goal/always?`: the two escapes) whose `done-by` is false, and `next-intent` turns it into an intent, `{:plan/wait reason}`, or nil. A wait longer than `wait-ticks` (400 planner ticks, 20 s at 20 ticks a second) fails the plan. The deadline is counted in planner ticks, not wall ms: race 38680745815 runner 5 (issue #57) starved the bot's loop to 9 ticks in 21 s under a runner keeping 25 bots and two servers, and the wall clock failed the plan while the water trap's 20 ticks and the hunt's next routable hop were still owed theirs (`the-wait-fails-in-ticks-not-wall-ms`). Before choosing, `trap/trapped-tick` re-derives `:plan/trap` ([[water-escape]]).
 3. A failed intent blacklists its target (when it has one, and it is not a `:place` or a `:redig`, `placing-kinds`: their target is the cell they chose to put a block in, and a table placed there next must still count as near; race 38477665442 bot Clj_r04 lost its table that way and went for wood with its last pickaxe, issue #43, `a-cell-a-place-or-a-redig-chose-is-never-blacklisted`) and counts an attempt; a success resets the count, so `max-attempts` (3) means three failures in a row. A walk that fails `:no-path` blacklists its target and counts apart, in `:plan/unwalkable`: the route was accepted and then could not be walked, and the next candidate is tried (three such walks used to end a run that still had somewhere else to go), but `max-unwalkable` (12) in a row fail the plan, so a search whose places keep changing cannot run for hours (`walks-that-never-arrive-still-end-the-plan`).
 4. No target left means `:plan/status :done`.
 
