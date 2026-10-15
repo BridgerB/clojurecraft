@@ -356,11 +356,23 @@
       (game/say why)))
 
 (defn box
-  "Fail the staircase :boxed: every heading was refused."
+  "Every heading was refused: fail the staircase :boxed. A climb out to the surface (:intent/for
+   :surface, the water hunt's and the gather's) ends instead, its feet cell put in
+   :plan/boxed-at: where a way out cannot be cut is a fact about the place, and the act that cut
+   it chooses again from it (scoop/seen-source, scoop/from-below), never the same climb. Sim race
+   38662908438 (issue #61, 115 runs): climbs for water under a lake or the sea were :boxed three
+   times with the water they needed in reach or over the head."
   [world]
-  (-> world
-      (assoc :player/controls {})
-      (intent/fail :boxed)))
+  (let [{:intent/keys [kind for]} (:plan/intent world)]
+    (if (and (= :stairs-up kind) (= :surface for))
+      (-> world
+          (assoc :player/controls {})
+          (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+          intent/done
+          (game/say "stairs: boxed in, no way out from here"))
+      (-> world
+          (assoc :player/controls {})
+          (intent/fail :boxed)))))
 
 (def lake-ice #{:ice :frosted_ice})    ; what freezes over a lake's water: no shore
 

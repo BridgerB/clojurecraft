@@ -234,3 +234,33 @@
   (testing "under the open sky the bot is out, however low: it hunts instead"
     (let [w (assoc (standing {} [8.5 8.5]) :plan/go-at [8.5 80.0 8.5])]
       (is (nil? (scoop/climb w))))))
+
+(defn deep-in
+  "Standing at [5.5 40 5.5], 24 under the landing, in a pocket two high cut in the stone, over
+   blocks."
+  [blocks]
+  (assoc (standing (merge {[5 40 5] blocks/air [5 41 5] blocks/air} blocks) [5.5 5.5])
+         :player/pos [5.5 40.0 5.5]
+         :plan/go-at [5.5 64.0 5.5]))
+
+(deftest deep-under-water-the-bucket-is-filled-from-below
+  ;; sim race 38662908438 (issue #61): climbs for water under a lake or the sea were :boxed
+  ;; three times with the water they needed in reach or over the head
+  (testing "a source beside the pocket, stone over it: scooped from the side"
+    (is (= {:intent/kind :scoop :intent/target [6 41 5] :intent/aim [6.5 41.5 5.5]}
+           (scoop/scoop-next (deep-in {[6 41 5] water})))))
+  (testing "a lake two blocks of rock over the head: dug up through its bed, bottom first"
+    (let [i (scoop/scoop-next (deep-in {[5 44 5] water}))]
+      (is (= [:dig [5 42 5] true] [(:intent/kind i) (:intent/target i) (:intent/exposes-ok? i)]))))
+  (testing "the bed dug: the source over the head is in sight, scooped from below"
+    (is (= {:intent/kind :scoop :intent/target [5 44 5] :intent/aim [5.5 44.5 5.5]}
+           (scoop/scoop-next (deep-in {[5 42 5] blocks/air [5 43 5] blocks/air [5 44 5] water})))))
+  (testing
+    "a climb out to the surface that is boxed ends, its cell remembered, and is not cut again"
+    (let [w (-> (deep-in {})
+                (assoc :plan/intent
+                       {:intent/kind :stairs-up :intent/for :surface :intent/status :active})
+                stairs/box)]
+      (is (= :done (get-in w [:plan/intent :intent/status])))
+      (is (contains? (:plan/boxed-at w) [5 40 5]))
+      (is (nil? (scoop/climb w))))))
