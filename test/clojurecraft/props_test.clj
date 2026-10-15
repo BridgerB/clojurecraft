@@ -13,6 +13,7 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.spec]
@@ -159,7 +160,7 @@
           actions (for [[t p] (fx/sent fx) :when (= :player-action (:packet/name p))] [t p])
           [[t0 start] [t1 finish]] actions
           unreachable? (and (blocks/needs-tier id) (nil? tool) (not (dig/harvest? id nil)))]
-      (cond (not (blocks/solid? id))
+      (cond (intent/open? id)
             (and (empty? actions) (= :target-gone (:intent/reason (:plan/intent w))))
             unreachable? (and (empty? actions) (= :needs-tool (:intent/reason (:plan/intent w))))
             :else
@@ -168,6 +169,22 @@
                  (= 2 (:status finish))
                  (>= (- t1 t0) (intent/finish-delay ms))
                  (= (:sequence finish) (inc (:sequence start)))))))))
+
+(deftest an-awkward-block-is-dug-not-taken-for-open
+  ;; sim race 38665691522 world R3/43 (issue #91): the cast's way to its landing dug an awkward
+  ;; block over the feet, and the dig failed :target-gone; anything but air or a fluid is broken
+  ;; like rock
+  (let [awkward (filter #(and (not (blocks/solid? %))
+                              (= :awkward (path/classify-id %))
+                              (not (and (blocks/needs-tier %) (not (dig/harvest? % nil))))
+                              (not (contains? intent/never-dug (blocks/name-of %))))
+                        breakable-states)]
+    (is (seq awkward) "there are such blocks")
+    (doseq [id (take 20 awkward)]
+      (let [[w fx] (fx/fold dig-step (standing-by id) (uneven-ticks [] 2000))]
+        (is (not= :target-gone (:intent/reason (:plan/intent w))) (blocks/name-of id))
+        (is (some #(= :player-action (:packet/name (second %))) (fx/sent fx))
+            (str (blocks/name-of id) " START sent"))))))
 
 (deftest step-is-total-after-a-death
   ;; issue #5: a set-health of 0 followed by any packets never throws, and the intent that was

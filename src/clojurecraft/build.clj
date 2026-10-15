@@ -939,9 +939,18 @@
   [world cell]
   (or (> (intent/dig-time (terrain/block-at world cell)) hand-dig-limit) (pickaxe-at-hand? world)))
 
+(defn found-open?
+  "Did child, a dig, find its cell already open (:target-gone, intent/open?)? The cell is open,
+   which is what the dig was for: the op looks again from there. Sim race 38665691522 world R3/43
+   (issue #91): the way to the cast's landing at y 24 dug an awkward block over the feet the
+   dig took for open, and the build failed :target-gone."
+  [{:intent/keys [kind reason]}]
+  (and (= :dig kind) (= :target-gone reason)))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
-   the child of the old one (the world moved on), a child that failed fails i, one that is done
+   the child of the old one (the world moved on), a child that failed fails i (a dig that found
+   its cell open, found-open?, makes way for the next as one done would), one that is done
    makes way for the next. Shared by every intent that works a plan of ops. A dig of rock with no
    pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand when one can be
    made without going out for anything (pickaxe-at-hand?), so the build's row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
@@ -957,6 +966,8 @@
             (assoc :player/controls {})
             (intent/dissoc-intent :intent/child)
             (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
+        (and child (intent/failed? child) (found-open? child))
+        (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
         (and child (intent/failed? child))
         (-> world
             (assoc :player/controls {})
