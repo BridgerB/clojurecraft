@@ -272,6 +272,25 @@
     (is (= :niche (:intent/stage (spot (assoc w :player/pos [12.5 64.0 8.5]) {})))
         "where the rock is dry a niche is cut")))
 
+(deftest sealed-in-sand-with-nowhere-it-climbs
+  ;; sim race 38659291345 world R1/1 (issue #148): sand had fallen round the bot at y 59 under
+  ;; a desert, every cell beside it sand or sandstone under sand, no route anywhere, and the
+  ;; place failed :no-spot three times
+  (let [sand (blocks/default-state :sand)
+        rock (merge (into {} (for [x (range 16) y (range 64 74) z (range 16)] [[x y z] sand]))
+                    {[8 64 8] 0 [8 65 8] 0})
+        w (assoc (standing [8.5 64.0 8.5])
+                 :world/chunks {[0 0] (world/column rock)}
+                 :player/inventory {0 {:item (blocks/items :furnace) :count 1}})
+        i {:intent/kind :place :intent/item :furnace :intent/status :active :intent/stage :spot}
+        placed (:plan/intent (intent/run (assoc w :plan/intent i)
+                                         i
+                                         {:event/kind :tick :event/now 0 :event/rand 0.5}))]
+    (is (= :retreat (:intent/stage placed)))
+    (is (= {:intent/kind :stairs-up :intent/to-y (+ 64 place/fresh-rock-climb) :intent/for :retreat}
+           (select-keys (:intent/child placed) [:intent/kind :intent/to-y :intent/for]))
+        "no route away: stairs up out of the sand")))
+
 (deftest a-spot-is-never-a-flower
   ;; race 38477665442 bot Clj_r23: the nearest cell held wildflowers, which the server's
   ;; replaceable tag does not list, and the table was refused three times, :rejected
