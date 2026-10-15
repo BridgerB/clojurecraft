@@ -122,9 +122,8 @@
   :goal/target? true
   :goal/until "cast-one"
   :goal/doc
-  "one obsidian cast in the first cell of the frame, cut into the rock beside a lava pool (issue #124): the hole dug, lava poured into it, water poured into the cell straight over it and scooped back (the gym's cast-one stage); a pickaxe is held for the way to the lava and the digs, made before the build starts (sim race 38477665389 dug for its stance with none and failed :needs-tool, issue #70), and a spare with it: the lava hunt goes down to the lava sea, and sim race 38669750355 (issue #135) broke its last pickaxe at y -20 and spent the rest of its ninety minutes climbing out by hand through deepslate, fifteen seconds a block"
+  "one obsidian cast in the first cell of the frame, cut into the rock beside a lava pool (issue #124): the hole dug, lava poured into it, water poured into the cell straight over it and scooped back (the gym's cast-one stage); a pickaxe is held for the way to the lava and the digs, made before the build starts (sim race 38477665389 dug for its stance with none and failed :needs-tool, issue #70)"
   :goal/holds {:tag/pickaxes 1}
-  :goal/spares {:tag/pickaxes 1}
   :goal/plan :build
   :goal/build :cast-one
   :goal/done? :built?}
@@ -135,7 +134,6 @@
   :goal/doc
   "a nether portal cast from lava and water into holes cut in the rock beside a lava pool, a block placed only where the rock is missing, never mined, and lit with flint and steel (issue #124); a pickaxe is held, as for cast-one"
   :goal/holds {:tag/pickaxes 1}
-  :goal/spares {:tag/pickaxes 1}
   :goal/plan :build
   :goal/build :portal
   :goal/done? :built?}
