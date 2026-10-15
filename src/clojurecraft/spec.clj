@@ -407,6 +407,8 @@
 (s/def :intent/length pos-int?)
 (s/def :intent/side (s/tuple int? int?))
 (s/def :intent/level-dir (s/tuple int? int?))
+(s/def :intent/rise #{-1 1})
+(s/def :intent/visited (s/coll-of ::block-pos :kind set?))
 (s/def :intent/child (s/keys :req [:intent/kind]))
 (s/def :intent/started-y number?)
 (s/def :intent/started-tick int?)
