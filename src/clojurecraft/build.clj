@@ -545,6 +545,39 @@
                 :when (seq srcs)]
             {:stand stand :sources srcs :h h}))))
 
+(def pool-radius
+  "How far from a frame's origin a source its lava stands reach can lie: the stands' farthest
+   cell and the bucket's reach."
+  (+ station-depth station-span max-access intent/reach 2))
+
+(defn near
+  "The sources of sources within r of cell."
+  [sources cell r]
+  (filter #(<= (physics/distance % cell) r) sources))
+
+(defn pool
+  "The lava sources of sources that some lava stand of the frame at origin facing could scoop
+   (reach-sources from any cell station-among looks at, every height up to max-access): the pool
+   the frame is cast from."
+  [sources origin facing]
+  (let [near (near sources origin pool-radius)]
+    (set (for [h (range 1 (inc max-access))
+               :let [[lx _ _] (landing h)]
+               dz (range 4 (inc station-depth))
+               dx (range (- lx station-span) (inc (+ lx station-span)))
+               src (reach-sources near (cell origin facing [dx h dz]))]
+           src))))
+
+(defn spent?
+  "Does the pool of the frame at origin facing (pool) hold fewer lava sources than the frame has
+   cells still to cast? Each cell takes one source. Sim race 38664661309 (issue #142, 89 runs in
+   18 rounds): five worlds chose a site beside a lone lava source, cast one cell from it and
+   failed :no-station with nine to go, the nearest other lava twenty to forty blocks off."
+  [world sources origin facing]
+  (let [at #(cell origin facing %)
+        left (count (remove #(holds? world (cast? at %)) frame-cells))]
+    (< (count (pool sources origin facing)) left)))
+
 (defn station
   "The station for the build at origin facing (station-among the lava sources loaded), the height
    prefer first, or nil."
@@ -860,7 +893,14 @@
         child (intent/run-child world event)
         :else
         (let [c (op-child world i next)]
-          (cond (keyword? c) (intent/fail world c)
+          (cond (and (= :no-station c)
+                     (spent? world (lava-sources world) (:intent/origin i) (:intent/facing i)))
+                ;; the pool is spent, not the build: the planner chooses a site with lava enough
+                (-> world
+                    (assoc :player/controls {})
+                    intent/done
+                    (game/say "build: the pool at the site is spent, a new site"))
+                (keyword? c) (intent/fail world c)
                 :else
                 (intent/run-child
                  (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
@@ -920,13 +960,23 @@
 (defn site-ok?
   "Can a frame be cut at origin facing with its lava stand h over the room's floor: every cell of
    the footprint loaded, no fluid in it or touching it (lava in the rock beside a hole runs into
-   it; water in the room spills onto a source), and a station?"
+   it; water in the room spills onto a source), a station, and lava enough for every cell (not
+   spent?)?"
   [world sources origin facing h]
   (let [cells (footprint origin facing h)]
     (and (every? #(some? (terrain/block-at world %)) cells)
          (dry? world cells)
          (dry? world (remove cells (mapcat touching cells)))
-         (some? (station-among world sources origin facing)))))
+         (some? (station-among world sources origin facing))
+         (not (spent? world sources origin facing)))))
+
+(defn build-near
+  "The sources of sources a site beside src could use: within pool-radius of any origin a site
+   beside it may take (station-reach and the frame's width further). Asked once per source, so a
+   site's checks look at a handful, never every lava source loaded (thirty thousand near the
+   lava sea, forty seconds a choice)."
+  [sources src]
+  (near sources src (+ pool-radius station-reach 6)))
 
 (defn choose-site
   "{:origin :facing :h} for a new frame (issue #124: the rock is the mould): beside a lava source
@@ -938,12 +988,13 @@
         sources (lava-sources world)
         near (take max-sources (sort-by #(physics/distance (physics/centre %) feet) sources))]
     (->> (for [src near
+               :let [local (doall (build-near sources src))]
                [stand _] (stands-beside world src)
                facing [:south :west :north :east]
                [dx h] station-spots
                :let [[tx tz] (turn facing [dx station-reach])
                      origin (mapv - stand [tx h tz])]
-               :when (site-ok? world sources origin facing h)
+               :when (site-ok? world local origin facing h)
                :let [n (blocks-needed world (plan-for :nether origin facing h))]
                :when (<= n site-blocks)]
            {:origin origin
@@ -1059,10 +1110,13 @@
 
 (defmethod plan/next-intent :build
   ;; what the row holds first (held-first); then build the row's plan (:goal/build) at the site
-  ;; remembered, else at one chosen now (the :build intent remembers it), its access steps up to
-  ;; the lava's height (station); with none, hunt for lava (lava-hunt), else wait :no-site
+  ;; remembered while its pool can finish it (spent?), else at one chosen now (the :build intent
+  ;; remembers it), its access steps up to the lava's height (station); with none, hunt for lava
+  ;; (lava-hunt), else wait :no-site
   [world {:goal/keys [build] :as goal} table]
-  (let [{:site/keys [origin facing]} (memory/site world)
+  (let [{:site/keys [origin facing]}
+        (let [{:site/keys [origin facing] :as site} (memory/site world)]
+          (when-not (and origin (spent? world (lava-sources world) origin facing)) site))
         chosen (when-not origin (choose-site world))
         origin (or origin (:origin chosen))
         facing (or facing (:facing chosen))

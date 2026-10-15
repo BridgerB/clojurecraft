@@ -281,3 +281,13 @@
   (let [kit (first (filter #(= :portal-kit (:goal/id %)) plan/goals))]
     (is (= {:item/water_bucket 1 :item/bucket 1} (:goal/provides kit)))))
 
+
+(deftest a-lone-lava-source-is-no-site
+  ;; sim race 38664661309 (issue #142): sites beside a lone source cast one cell and failed
+  ;; :no-station with nine to go; a site needs a source for every cell its stands can reach
+  (let [lone {[12 40 4] blocks/lava-base}
+        nine (into {} (for [x [11 12 13] z [2 3 4]] [[x 40 z] blocks/lava-base]))
+        ten (assoc nine [11 40 5] blocks/lava-base)]
+    (is (nil? (site-at lone)) "one source: no site")
+    (is (nil? (site-at nine)) "nine: one short of the frame")
+    (is (some? (site-at ten)) "ten: a site")))
