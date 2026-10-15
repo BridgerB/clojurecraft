@@ -25,6 +25,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.smelt :as smelt]
+            [clojurecraft.stone :as stone]
             [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
@@ -425,10 +426,12 @@
 (defmethod plan/act :gather [world _] (wood/gather-next world))
 
 (defmethod plan/act :place
+  ;; nowhere to put it here (place/nowhere?): to fresh rock first (stone/retreat), as a mine
+  ;; does where nothing can be cut (issue #94)
   [world row]
-  (place/ashore world
-                (cond-> {:intent/kind :place :intent/item (:goal/item row)}
-                  (:goal/passage-ok? row) (assoc :intent/passage-ok? true))))
+  (let [i (cond-> {:intent/kind :place :intent/item (:goal/item row)}
+            (:goal/passage-ok? row) (assoc :intent/passage-ok? true))]
+    (or (when (place/nowhere? world i) (stone/retreat world)) (place/ashore world i))))
 
 (defn at-container
   "The intent i once the window of the placed block (a table, a furnace) is open; before that,

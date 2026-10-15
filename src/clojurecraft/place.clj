@@ -217,6 +217,19 @@
                                             (blocks/name-of (terrain/block-at world c)))))]
              c))))
 
+(defn nowhere?
+  "Would a :place intent i find nowhere to put its block from here: dry, with no spot, no niche,
+   and no spot in the passage or none allowed (passage-ok?)? Sim races 38660819204, 38662908438
+   and 38665691522 (issue #94, worlds R1/44, R1/13, R1/37): the furnace was to go down at the
+   dead end of an iron tunnel at y 9-17 by an aquifer, every wall beside the feet touched water
+   or had the passage over it, and the furnace failed :no-spot three times there."
+  [world {:intent/keys [passage-ok? refused] :or {refused #{}}}]
+  (and (:player/pos world)
+       (not (:player/in-water? world))
+       (nil? (spot world false refused))
+       (nil? (niche world))
+       (or (not passage-ok?) (nil? (spot world true refused)))))
+
 (def face-cursors
   "Where on each face of the clicked block a placement clicks: its middle."
   {:up [0.5 1.0 0.5]
