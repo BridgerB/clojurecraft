@@ -216,6 +216,12 @@
     (boolean
      (and home (< (physics/y-of (intent/feet world)) (- (physics/y-of home) underground-depth))))))
 
+(defn boxed-here?
+  "Did a climb out die :boxed standing where the feet are (:plan/boxed-at, stairs/box)? A climb
+   from there is cut no more."
+  [world]
+  (contains? (:plan/boxed-at world #{}) (intent/feet world)))
+
 (defn way-up
   "The way back up to the landing (:plan/go-at): a walk to it when a route reaches it, else a
    walk up the air already dug (intent/opening), else stairs cut up to its height, which with
@@ -238,7 +244,9 @@
    dug a niche under one, and waited :no-water at y 18 and 24 with no route out. The siblings
    climbed out first too."
   [world]
-  (when (and (deep? world) (not (terrain/under-sky? world (intent/feet world))))
+  (when (and (deep? world)
+             (not (terrain/under-sky? world (intent/feet world)))
+             (not (boxed-here? world)))
     (way-up world false)))
 
 (defn pit-climb
@@ -248,13 +256,82 @@
    the bottom of one ravine, sixty under their landing, the sky open over them, no hunt with a
    route and nothing to tunnel toward, and waited :no-water out. nil when not deep."
   [world]
-  (when (deep? world) (way-up world true)))
+  (when (and (deep? world) (not (boxed-here? world))) (way-up world true)))
 
 (defn heading-to
   "Of the four headings (stairs/directions), the one from the feet most toward cell [x _ z]."
   [world [x _ z]]
   (let [[fx _ fz] (intent/feet world)]
     (apply max-key (fn [[dx dz]] (+ (* dx (- x fx)) (* dz (- z fz)))) stairs/directions)))
+
+(defn sees-centre?
+  "Would the eyes reach the centre of the source at src: every cell on the ray from the eye to it
+   before src loaded, and air or water?"
+  [world src]
+  (let [eye (game/eye world)
+        aim (physics/centre src)
+        d (physics/distance eye aim)
+        dir (mapv #(/ (- %2 %1) d) eye aim)]
+    (every? #(when-let [id (terrain/block-at world %)]
+               (or (blocks/air? id) (contains? blocks/water-states id)))
+            (take-while #(not= src %) (physics/cells-along eye dir d ray-step)))))
+
+(defn seen-source
+  "A scoop of the nearest water source in reach whose centre the eyes see (sees-centre?), what
+   is over it notwithstanding, aimed at its centre (:intent/aim, as the cast scoops its water from
+   the side): deep under the landing, where no surface water is, the water of a flooded pocket or
+   a cave beside the feet. nil when none."
+  [world]
+  (when (deep? world)
+    (let [eye (game/eye world)]
+      (->> (chunk/find-blocks (stone/near-chunks (:world/chunks world) (stone/feet-chunk world))
+                              #{blocks/water-base})
+           (map (fn [[x y z _]] [x y z]))
+           (filter #(and (in-reach? world %) (source? world % :water)))
+           (sort-by #(physics/distance eye (physics/centre %)))
+           (filter #(sees-centre? world %))
+           (map (fn [src]
+                  {:intent/kind :scoop :intent/target src :intent/aim (physics/centre src)}))
+           first))))
+
+(def bed-depth 2)                      ; rock over the head a scoop from below digs through at most
+
+(defn overhead
+  "The water source over the feet's column, under at most bed-depth blocks of rock over the head
+   and within the eyes' reach, flowing water between the rock and it passed: {:source :rock},
+   the rock bottom first. nil when there is none."
+  [world]
+  (let [[x y z] (intent/feet world)
+        cells (map (fn [dy] [x (+ y dy) z]) (range 2 8))
+        [rock more] (split-with #(= :solid (path/classify world %)) cells)
+        src (first (drop-while #(and (= :water (path/classify world %))
+                                     (not (source? world % :water)))
+                               more))]
+    (when (and src
+               (source? world src :water)
+               (<= (count rock) bed-depth)
+               (in-reach? world src)
+               (not-any? #(contains? intent/never-dug (blocks/name-of (terrain/block-at world %)))
+                         rock))
+      {:source src :rock (vec rock)})))
+
+(defn from-below
+  "Deep under the landing with a lake or an aquifer over the head (overhead): dig up through its
+   bed, the rock under the water bottom first (a dig that may let the water in, exposes-ok?),
+   then scoop the source from below, aimed at the underside of its cell (:intent/aim): the
+   bucket's ray passes the water falling in and takes the first source. nil when there is no
+   water over the head. Sim race 38662908438 (issue #61, 115 runs): climbs for water from under
+   a lake or the sea, no shore within 48 columns, stepped and dug until :boxed, a room of 150
+   cells at y 43 dug under a lake bed two blocks thick, the water it needed over its head."
+  [world]
+  (when (deep? world)
+    (when-let [{:keys [source rock]} (overhead world)]
+      (if-let [r (first rock)]
+        (assoc (intent/child-dig r) :intent/exposes-ok? true :intent/for :water-from-below)
+        (let [[sx sy sz] source]
+          {:intent/kind :scoop
+           :intent/target source
+           :intent/aim [(+ sx 0.5) (+ sy 0.05) (+ sz 0.5)]})))))
 
 (defn to-bank
   "Stairs cut toward the bank of the nearest water seen that no route reaches (a surface source
@@ -296,7 +373,7 @@
    was inside a hill, found no route to a pond 22 blocks off nor to any hunt, and waited
    :no-water. Full run 4528031 cut that stair from y 17 with the only pickaxe and it broke."
   [world]
-  (when-not (terrain/under-sky? world (intent/feet world))
+  (when-not (or (terrain/under-sky? world (intent/feet world)) (boxed-here? world))
     (or (intent/opening world)
         {:intent/kind :stairs-up
          :intent/to-y (stairs/climb-to world terrain/top-y)
@@ -326,6 +403,8 @@
           :else
           (or (first-walk world :scoop srcs)
               (first-walk world :scoop (pools-near world))
+              (seen-source world)
+              (from-below world)
               (climb world)
               (first-walk world :water-hunt (hunt-targets world))
               (pit-climb world)

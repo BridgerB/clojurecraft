@@ -119,7 +119,7 @@
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
-          (when-not (stairs/out? world feet)
+          (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
             (or (intent/opening world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
