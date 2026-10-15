@@ -100,6 +100,7 @@
 (s/def :intent/wet? boolean?)
 (s/def :intent/exposes-ok? boolean?)
 (s/def :intent/passage-ok? boolean?)
+(s/def :intent/retreated? boolean?)
 (s/def :player/dead? boolean?)
 (s/def :player/in-lava? boolean?)
 (s/def :player/eye-in-water? boolean?)

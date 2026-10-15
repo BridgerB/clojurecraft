@@ -185,12 +185,13 @@
   ;; the hunt's targets stop sixteen over the eye and never come nearer the landing, and the
   ;; climb would not cut because out? said out. The plan waited :no-log. Out is not at the
   ;; trees: stairs up toward the trunk, to-height only
-  (let [w (remembered {[12 66 8] 1 [12 67 8] 136} [8.5 64.0 8.5])]
+  (let [w (remembered {[12 69 8] 1 [12 70 8] 136} [8.5 64.0 8.5])]
     (is (stairs/out? w (intent/feet w)) "on open ground under the sky")
     (is (memory/nearest-log w (game/eye w) wood/search-radius #{} wood/standing-trunk?)
         "the trunk on its ledge is remembered")
-    (is (nil? (wood/near-walk w)) "the trunk is three up a wall: no walk reaches it")
-    (is (= {:intent/kind :stairs-up :intent/to-y 67 :intent/to-height? true :intent/for :surface}
+    (is (nil? (wood/near-walk w))
+        "six up, past the walk's range and the dig's reach: no walk reaches it")
+    (is (= {:intent/kind :stairs-up :intent/to-y 70 :intent/to-height? true :intent/for :surface}
            (wood/trees-climb
             w
             [(memory/nearest-log w (game/eye w) wood/far-radius #{} wood/standing-trunk?)]))
