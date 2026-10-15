@@ -17,11 +17,25 @@
     (println s)
     (spit "out/probe.log" (str s "\n") :append true)))
 (def step (game/compose game/step plan/step))
-(def tree {:x 13 :z 3 :h 3 :id 137 :mound 2 :canopy? false :branch nil})
-(def blocks
-  (merge (into {} (for [mx [12 13] mz [2 3] y [64 65]] [[mx y mz] 1]))
-         (into {} (for [y [66 67 68]] [[13 y 3] 137]))
-         {[13 69 3] 252}))
+(def tree {:x 11 :z 7 :h 5 :id 137 :mound 2 :canopy? true :branch [1 0]})
+(def leaf-id 252)
+(defn tree-blocks
+  "{[lx y lz] id} for one tree, as sim_test's generator lays it out."
+  [{:keys [x z h id mound canopy? branch]}]
+  (let [base (+ 64 mound)
+        [bx bz] (when branch [(+ x (first branch)) (+ z (second branch))])]
+    (merge (into {} (for [mx [(dec x) x] mz [(dec z) z] y (range 64 base)] [[mx y mz] 1]))
+           (when canopy?
+             (into {}
+                   (for [dx (range -2 3)
+                         dz (range -2 3)
+                         :let [d (+ (abs dx) (abs dz))]
+                         :when (and (<= 1 d 2))]
+                     [[(+ x dx) (inc base) (+ z dz)] leaf-id])))
+           (into {} (for [y (range base (+ base h))] [[x y z] id]))
+           (when branch {[bx (+ base h -2) bz] id})
+           {[x (+ base h) z] leaf-id})))
+(def blocks (tree-blocks tree))
 (doseq [[label sx sz] [["spawn-0-0" 0 0] ["spawn-1-1" 1 1]]]
   (let [sim0 (sim/init {:column (world/column-bytes blocks) :spawn [(+ sx 0.5) 64.0 (+ sz 0.5)]})
         [w sim] (sim/run step
@@ -30,7 +44,7 @@
                          #(or (plan/done? %) (plan/failed? %))
                          (:gym/timeout-ms (gym/gym "wood"))
                          {:event/kind :go :go/goals [:wood]})]
-    (out "==" label "tree at [13 3] on a 2-high bank")
+    (out "==" label "canopy tree on a 2-high bank at [11 7]")
     (out " done?" (plan/done? w)
          "failed?" (plan/failed? w)
          "reason" (:plan/reason w)
