@@ -272,3 +272,20 @@
       (is (= :open (:intent/stage (:plan/intent w))))
       (is (= [[5 66 5] [6 66 5] [6 65 5]] (:intent/cells (:plan/intent w)))
           "the stair from the landed feet, its new feet on the wall's lower block"))))
+
+(deftest a-floor-is-never-laid-over-water
+  ;; sim race 38657453715 world R4/1 (issue #62): a staircase's level steps laid a floor against
+  ;; the last one, twenty-six blocks out over a lake, until the cobblestone was spent; every
+  ;; stair from the causeway was :boxed and the run walked it to the end of its time
+  (let [pond (into {} (for [x (range 6 16) z (range 16)] [[x 63 z] 0]))
+        on (fn [below]
+             (assoc (standing 64 :cobblestone)
+                    :world/chunks
+                    {[0 0] (world/column (merge pond below))}))
+        cells (stairs/level-cells [5 64 5] [1 0])]
+    (is (= [[6 63 5]] (stairs/floor-laying (on {}) [5 64 5] cells)) "over stone: a trench's floor")
+    (is (nil? (stairs/floor-laying
+               (on (into {} (for [x (range 6 16) z (range 16)] [[x 62 z] blocks/water-base])))
+               [5 64 5]
+               cells))
+        "the air over a pond: a bridge, never laid")))
