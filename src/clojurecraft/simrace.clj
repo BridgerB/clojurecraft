@@ -60,20 +60,26 @@
    against the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT
    (main/result) with :run/world (its set and landing), :run/seed, :run/ms (simulated time),
    :run/violations (what a real server would have punished) and :run/before, the world and
-   model one tick before the stop (a snapshot's moment; dropped from the lines written)."
+   model one tick before the stop (a snapshot's moment; dropped from the lines written). Its
+   :go names the landing (:go/at), as race/land-bot! does for a real bot: the plan's
+   landing-relative choices (the climb home from deep, a climb's level steps toward the landing,
+   how far they may go) are the real race's. Without it, sim race 38659291345 world R4/38 (issue
+   #37) climbed under a lake with 32 level steps where a real bot has 32 and the way home, and
+   was :boxed five columns short of the shore."
   [w seed until max-ms]
   (let [opts {:host "sim" :port 0 :name "Clj_sim"}
         {:keys [world sim before]}
-        (sim/run+ step
-                  (game/init opts)
-                  (sim/init {:columns (:capture/columns w)
-                             :decoded (:capture/decoded w)
-                             :spawn (spawn-of w)
-                             :seed seed
-                             :tick-seed seed})
-                  #(or (plan/done? %) (plan/failed? %))
-                  max-ms
-                  {:event/kind :go :go/goals (plan/through until) :go/chain? true})
+        (sim/run+
+         step
+         (game/init opts)
+         (sim/init {:columns (:capture/columns w)
+                    :decoded (:capture/decoded w)
+                    :spawn (spawn-of w)
+                    :seed seed
+                    :tick-seed seed})
+         #(or (plan/done? %) (plan/failed? %))
+         max-ms
+         {:event/kind :go :go/goals (plan/through until) :go/chain? true :go/at (spawn-of w)})
         ok (main/ok? world until)]
     (assoc (main/result world until ok)
            :run/world (select-keys w [:capture/set :capture/landing])
@@ -120,11 +126,14 @@
 (defn moment
   "The world and model a snapshot holds, ready to play on: the captured world's chunks the bot
    held reattached (decoded once, prepared), the model's columns too, the facts a DataScript
-   value again. w is the captured world the snapshot names, prepared."
+   value again. w is the captured world the snapshot names, prepared. A plan with no landing
+   (a snapshot written before run named one, issue #37) gets the captured world's, the one its
+   run has now."
   [{:snapshot/keys [chunks world sim]} w]
   [(-> world
        (assoc :world/chunks (select-keys (:capture/decoded w) chunks))
-       (update :world/facts d/from-serializable))
+       (update :world/facts d/from-serializable)
+       (cond-> (nil? (:plan/go-at world)) (assoc :plan/go-at (spawn-of w))))
    (assoc sim :sim/columns (:capture/columns w) :sim/decoded (:capture/decoded w))])
 
 (defn play-snapshot
