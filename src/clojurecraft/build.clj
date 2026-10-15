@@ -883,6 +883,14 @@
   [world plan]
   (when-not (satisfied? world (peek plan)) (first (remove #(satisfied? world %) plan))))
 
+(defn refused-for-the-body?
+  "Did child, a placement, fail :rejected with its cell inside the player (place/inside-player?)?
+   The game refuses a block into any player, its own included: the stand it was sent from was
+   wrong, not the op. Sim race 38665691522 (issue #44): the cast laid a floor from a stand whose
+   head was in the floor's cell, and the server refused it three times, :rejected."
+  [world {:intent/keys [kind reason cell]}]
+  (boolean (and (= :place kind) (= :rejected reason) cell (place/inside-player? world cell))))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i, one that is done
@@ -891,6 +899,12 @@
   (cond (not= next op)
         (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child)
         (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
+        (and child (refused-for-the-body? world child))
+        ;; the server refused a block into the bot's own body: the stand was wrong, not the op
+        (-> world
+            (assoc :player/controls {})
+            (intent/dissoc-intent :intent/child)
+            (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
         (and child (intent/failed? child))
         (-> world
             (assoc :player/controls {})
