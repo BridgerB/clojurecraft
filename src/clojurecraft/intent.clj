@@ -386,13 +386,14 @@
           :else [0 nil])))
 
 (defn open?
-  "Is block state id nothing a dig breaks: not solid and not awkward (path/classify-id), so the
-   cell is already open? An awkward block (a wall, a slab, pointed dripstone) is in a route's way
-   and a clear digs it (build/diggable?), so it is broken like rock. Sim race 38665691522 world
-   R3/43 (issue #91): the cast's way to its landing at y 24 dug the awkward block over the feet,
-   and the dig, taking it for open, failed :target-gone and failed the build."
+  "Is block state id nothing a dig breaks, the cell already open: air, water or lava
+   (path/classify-id)? Anything else is broken, solid or not: an awkward block (a wall, a slab,
+   pointed dripstone) is in a route's way and a clear digs it (build/diggable?), a plant stops a
+   bucket's ray (build/sight-block). Sim race 38665691522 world R3/43 (issue #91): the cast's way
+   to its landing at y 24 dug the awkward block over the feet, and the dig, taking anything not
+   solid for open, failed :target-gone and failed the build."
   [id]
-  (and (not (blocks/solid? id)) (not= :awkward (path/classify-id id))))
+  (or (blocks/air? id) (contains? #{:water :lava} (path/classify-id id))))
 
 (defmulti dig-stage
   "Advance a :dig intent one tick in its :intent/stage (:settle :digging :confirm), the stage and

@@ -172,8 +172,8 @@
 
 (deftest an-awkward-block-is-dug-not-taken-for-open
   ;; sim race 38665691522 world R3/43 (issue #91): the cast's way to its landing dug an awkward
-  ;; block over the feet, and the dig failed :target-gone; one that is neither solid nor clear
-  ;; is broken like rock
+  ;; block over the feet, and the dig failed :target-gone; anything but air or a fluid is broken
+  ;; like rock
   (let [awkward (filter #(and (not (blocks/solid? %))
                               (= :awkward (path/classify-id %))
                               (not (and (blocks/needs-tier %) (not (dig/harvest? % nil))))
