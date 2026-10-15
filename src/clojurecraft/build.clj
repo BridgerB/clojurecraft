@@ -699,11 +699,16 @@
    38477665442 Clj_r25 had scooped its water from a sand cell at the lake's edge under a bank
    two high; the cell nearest the stand was the bank's top, a step up beside it that only cells
    over the water led to, and three builds failed :no-path walking at it while the sand cell
-   itself reached the pad (issue #45)."
+   itself reached the pad (issue #45). Never a cell whose body, feet or head, is pos: a block is
+   not placed into the player. Sim race 38665691522 (issue #44): the cast laid a floor in the
+   cell over the feet, the bot's head in it, and the server refused it three times, :rejected."
   [world stand pos]
   (let [feet (intent/feet world)
         ok? (fn [cell]
-              (and (not= cell pos) (path/standable? world cell) (reaches-from? world cell pos)))
+              (and (not= cell pos)
+                   (not= (update cell 1 inc) pos)
+                   (path/standable? world cell)
+                   (reaches-from? world cell pos)))
         routable? (fn [cell]
                     (intent/routable? world
                                       {:intent/kind :walk :intent/target cell :intent/for :build}))]
