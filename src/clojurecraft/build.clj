@@ -841,7 +841,8 @@
    keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
   [world i {:build/keys [op stand pos step]}]
   (let [{:intent/keys [build origin facing]} i]
-    (cond (and (= :landing step) build) (toward-stand world stand build origin facing)
+    (cond (and (= :landing step) build)
+          (toward-stand world (or (reachable-stand world stand stand) stand) build origin facing)
           (and (= :dig op) (= stand pos))
           (cond (within-reach? world pos) nil
                 :else

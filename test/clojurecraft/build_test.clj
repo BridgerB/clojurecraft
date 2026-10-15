@@ -200,7 +200,11 @@
         w (standing-at (open-ground (merge (into {} (map (fn [c] [c blocks/water-base]) water))
                                            bank))
                        pos)
-        op (assoc pond-op :build/pos [4 62 9] :build/stand [4 63 10] :build/done [:solid [4 62 9]])
+        op (assoc pond-op
+                  :build/pos [4 62 9]
+                  :build/stand [4 63 10]
+                  :build/step :landing
+                  :build/done [:solid [4 62 9]])
         from (path/feet-cell pos)]
     (is (not (path/standable? w from)) "the feet floor over the water")
     (is (= [7 63 8] (path/start-cell w from)) "the box rests on the sand")
