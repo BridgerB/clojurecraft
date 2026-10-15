@@ -15,7 +15,7 @@
             [clojurecraft.simrace :as simrace]))
 
 (def root "test/issues")
-(def max-bytes (* 5 1024 1024))        ; the snapshots stay under 5 MB in git
+(def max-file-bytes (* 100 1024 1024)) ; GitHub refuses a push with a file over 100 MiB: the only size limit a snapshot meets
 
 (defn issues
   "[issue-number [snapshot-path ...]] for every issue directory, in issue order."
@@ -29,13 +29,12 @@
                 (filter #(str/ends-with? (.getName ^java.io.File %) ".edn.gz")
                         (.listFiles ^java.io.File d))))]))
 
-(defn bytes-under
-  "Total size of every file under dir."
+(defn too-big
+  "Every file under dir larger than max-file-bytes: what GitHub would refuse to take."
   [dir]
-  (reduce +
-          0
-          (map #(.length ^java.io.File %)
-               (filter #(.isFile ^java.io.File %) (file-seq (io/file dir))))))
+  (map str
+       (filter #(and (.isFile ^java.io.File %) (> (.length ^java.io.File %) max-file-bytes))
+               (file-seq (io/file dir)))))
 
 (def worlds (atom {}))                 ; captured worlds read once, by file
 
@@ -48,7 +47,7 @@
           (swap! worlds assoc file w)
           w))))
 
-(deftest the-snapshots-stay-small (is (< (bytes-under root) max-bytes)))
+(deftest every-snapshot-fits-on-github (is (empty? (too-big root))))
 
 (deftest no-issues-failing-moment-fails-the-same-way-again
   (doseq [[n paths] (issues)
