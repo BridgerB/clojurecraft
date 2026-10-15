@@ -1138,7 +1138,10 @@
   ;; what the row holds first (held-first); then build the row's plan (:goal/build) at the site
   ;; remembered while its pool can finish it (spent?), else at one chosen now (the :build intent
   ;; remembers it), its access steps up to the lava's height (station); with none, hunt for lava
-  ;; (lava-hunt), else wait :no-site
+  ;; (lava-hunt), the placed table taken along first (make/take-table-along: the hunt goes down to
+  ;; the lava sea, and a pickaxe broken there is made again only from sticks, cobblestone and a
+  ;; table; sim race 38669750355, issue #135, had the sticks and the cobblestone and no table at
+  ;; y -21), else wait :no-site
   [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]}
         (let [{:site/keys [origin facing] :as site} (memory/site world)]
@@ -1154,7 +1157,11 @@
                :intent/origin origin
                :intent/facing facing
                :intent/access h}
-              :else (or (lava-hunt world) {:plan/wait :no-site})))))
+              :else
+              (or (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+                  (make/take-table-along world)
+                  (lava-hunt world)
+                  {:plan/wait :no-site})))))
 
 (defmethod plan/done-by :built?
   [world {:goal/keys [build]}]
