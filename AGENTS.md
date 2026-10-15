@@ -463,7 +463,7 @@ A failure that will not reproduce is almost always a context difference, not fla
 
 Patterns, not recipes.
 
-1. **`stale-window` at ingots and portal-kit (#131, #132): a loaded server answers late.** Crafts, equips and pours failed on the first click left unanswered for 3 s; smelting already recovered (resync, restart, fail at the third loss). Moved into `window/lost` and `window/resync` for every window intent. Proven with the sim's `:lag-ticks` 65 (3.25 s).
+1. **`stale-window` at ingots and portal-kit (#131, #132): a loaded server answers late.** Crafts, equips and pours failed on the first click left unanswered for 3 s; smelting already recovered (resync, restart, fail at the third loss). Moved into `window/lost` and `window/resync` for every window intent. Proven with the sim's `:lag-ticks` 65 (3.25 s). They came back with `not-cooked` (#199, #200): a server far behind cooked past the smelt's deadline, the failed smelt left the furnace open, and the server ignored every window-0 swap after it. `smelt/cooking?` waits past the deadline while the furnace cooks; `place/equip` closes an open container before a swap.
 2. **`no-water` at water-bucket (#60): water seen with no route.** `scoop/to-bank` cuts stairs or a tunnel toward the nearest water's bank.
 3. **`boxed` at ingots (#37): a climb under water.** `stairs/duck` (one stair down toward the soonest dry head, the pocket recorded in `:plan/boxed-at`), `:intent/visited` (revisited level steps last), `stairs/dry-top?` (ice is the lake's top).
 4. **`no-station` at portal (#142):** below.
@@ -615,7 +615,7 @@ Order: (1) `continue-mine` (`chain-next` tagged with the row id, drops `drops-of
 ### 19.9 Place, equip, open-container (`place.clj`)
 
 Success only when the server shows the block. Given `:intent/cell` (build, stairs) is used; else a spot is found.
-1. `:equip`: held → on; hotbar → `set-carried-item`; main → window-0 swap click; none → `:not-held`.
+1. `:equip`: held → on; hotbar → `set-carried-item`; main → window-0 swap click (an open container closed first: the server ignores window-0 clicks while one is open); none → `:not-held`.
 2. `:spot`: given cell with a `support` neighbour, else `:no-support`. Else `spot`, else `niche` (dug first, stowed tool equipped), else with `:intent/passage-ok?` a passage spot, else once `fresh-rock` (walk `fresh-rock-distance` 12 away via an `:away` route, or with no route `fresh-rock-climb` 4 stairs up; never in water; `:intent/retreated?`; #94, #148), else `:no-spot`.
 3. `:settle`: target no longer replaceable → back to `:spot`; 3 still ticks + 300 ms → `use-item-on`.
 4. `:sent`: block name at target → done. Acked (500 ms passed) with cell still replaceable and < `max-refusals` 3 → `give-up` (another spot; #106). Acked otherwise → `:rejected`. 3000 ms no answer → `:no-answer`.
@@ -746,7 +746,7 @@ Every attribute, its meaning and lifetime is in `src/clojurecraft/model.clj` (`m
 - `recipe/recipes` 1030 recipes, tags resolved; `datagen/shrink` trims padding. `recipe/clicks` lays one craft; nil when not coverable.
 - `:craft`: `:settle` (`:unknown-recipe`; close any container for `:inventory`; 5 s for a state id `:no-window`; cursor down `:inventory-full`; shift-click grid empty; plan `:no-ingredient`) → `:click` (one per round trip) → `:verify` (slot 0 exactly expected else `:wrong-result`; 5 s `:no-result`) → `:take` (5 s `:not-taken`; table craft then closes). Junk crafts (two planks → pressure plate, one → button) are why the grid is emptied and slot 0 verified.
 - Table: `make/craft-row` adds `{:block/crafting_table :near}` to recipes over 2×2; `make/at-container` uses an open table, opens one in reach (4.5), or walks; menu type must be 12 else `:no-table-window`.
-- Smelting: `make/smelt-row` needs input, `{:fuel/ticks t}`, `{:block/furnace :near}`. `smelt/burn-order` coal/charcoal then planks; never logs, never sticks (#36); charcoal never made. `fuel-clicks` loads `ceil(ticks/burn)` from one stack. `:smelt`: `:settle` → `:load` (fuel then input) → `:cook` (`loaded?` 5 s `:not-loaded`; `cook-by` = now + n × cook ticks × 50 + 5 s; next fuel stack or `:out-of-fuel`; past it `:not-cooked`) → `:take` (5 s) → `:close`. 200 ticks/item; plank burns 300. An abandoned mid-cook smelt leaves input in the furnace, invisible to the planner.
+- Smelting: `make/smelt-row` needs input, `{:fuel/ticks t}`, `{:block/furnace :near}`. `smelt/burn-order` coal/charcoal then planks; never logs, never sticks (#36); charcoal never made. `fuel-clicks` loads `ceil(ticks/burn)` from one stack. `:smelt`: `:settle` → `:load` (fuel then input) → `:cook` (`loaded?` 5 s `:not-loaded`; `cook-by` = now + n × cook ticks × 50 + 5 s; next fuel stack or `:out-of-fuel`; past it `:not-cooked` once the furnace stops cooking, `cooking?`) → `:take` (5 s) → `:close`. 200 ticks/item; plank burns 300. An abandoned mid-cook smelt leaves input in the furnace, invisible to the planner.
 
 ### 20.8 Vanilla 26.1.2 mechanics
 

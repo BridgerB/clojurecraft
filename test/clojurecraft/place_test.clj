@@ -7,10 +7,12 @@
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.world :as world]))
 
@@ -330,3 +332,29 @@
     (testing "a guess within the time stays"
       (let [w (terrain/forget-stale w (+ 1000 terrain/unconfirmed-ms))]
         (is (not (terrain/confirmed? w [9 63 8])))))))
+
+(deftest a-swap-into-the-hand-closes-an-open-furnace-first
+  ;; race 38805920624 runner 5 (issues #131, #132): 20 bots whose smelt failed :not-cooked left
+  ;; the furnace open; the server ignores a window-0 click while a container is its open menu,
+  ;; and every swap into the hand after it failed :stale-window until the plan did
+  (let [w (-> (standing [5.5 64.0 5.5])
+              (assoc :window/state-id 5
+                     :player/held-slot 0
+                     :player/inventory {9 {:item (recipe/item-id :stone_pickaxe) :count 1}}
+                     :window/open
+                     {:window/id 11
+                      :window/menu-type (:menu-type (inventory/layouts :furnace))
+                      :window/state-id 3
+                      :window/slots {}}
+                     :plan/intent
+                     {:intent/kind :equip :intent/item :stone_pickaxe :intent/status :active}))
+        windowed (fn [fx]
+                   (vec (for [p (fx/packets fx)
+                              :when (#{:container-close :container-click} (:packet/name p))]
+                          [(:packet/name p) (:window-id p)])))
+        [w fx] (fx/fold intent-step w [{:event/kind :tick :event/now 50 :event/rand 0.5}])]
+    (is (= [[:container-close 11]] (windowed fx)) "the furnace is closed first, nothing clicked")
+    (is (nil? (:window/open w)))
+    (let [[w fx] (fx/fold intent-step w [{:event/kind :tick :event/now 100 :event/rand 0.5}])]
+      (is (= [[:container-click 0]] (windowed fx)) "then the swap goes to window 0")
+      (is (= :active (:intent/status (:plan/intent w)))))))

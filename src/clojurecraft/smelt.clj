@@ -9,8 +9,9 @@
               the inventory, then plan the loading clicks: the fuel first (only as much as
               the batch burns, coal before wood), then the input
      :load    one click per round trip: send it, then wait until the window's state id moves
-     :cook    wait for the output to hold the batch, by an absolute deadline; when the fire goes
-              out with input left, load more fuel and go on
+     :cook    wait for the output to hold the batch, by an absolute deadline, and past it for as
+              long as the furnace still cooks; when the fire goes out with input left, load more
+              fuel and go on
      :take    shift-click the output until the inventory shows the result
      :close   with nothing on the cursor and nothing left in the furnace, close it: done
 
@@ -200,6 +201,24 @@
                           recipe/item-name))
        (or (some? (get grid fuel-slot)) (pos? (lit world)))))
 
+(defn cooking?
+  "Is the open furnace cooking recipe r now: a fire going (lit) and r's input in its input slot.
+   The batch's deadline (:intent/cook-by) is the bot's clock, the cook the server's ticks, and a
+   loaded server's ticks are longer: race 38805920624 runner 5 (issues #199, #200) ran both
+   servers behind (over 200 \"Can't keep up\" each), bot Clj_r17's at about 11 ticks a second,
+   three raw iron took 53 s against a 35 s deadline, and the bot failed :not-cooked 1.2 s
+   before the second ingot came out; 20 more of the round's bots failed :not-cooked and then
+   :stale-window (issues #131, #132), since the failure left the furnace open (place/equip).
+   Past the deadline the cook waits while this holds: a furnace that cooks gives an item within
+   its cook total of the server's ticks, and one that stops (the input gone, the fire out with
+   no fuel) fails."
+  [world {:view/keys [grid]} r]
+  (and (pos? (lit world))
+       (contains? (:smelt/input r)
+                  (some-> (get grid input-slot)
+                          :item
+                          recipe/item-name))))
+
 (defmethod stage :cook
   [world {:intent/keys [smelt makes since cook-by]} {:view/keys [grid] :as v}]
   (let [r (recipe/smelt-by-id smelt)
@@ -221,7 +240,7 @@
                                        (recipe/item-name (:item input)))]
             (intent/assoc-intent world :intent/stage :load :intent/clicks clicks)
             (intent/fail world :out-of-fuel))
-          (> (now world) cook-by) (intent/fail world :not-cooked)
+          (and (> (now world) cook-by) (not (cooking? world v r))) (intent/fail world :not-cooked)
           :else world)))
 
 (defmethod stage :take
