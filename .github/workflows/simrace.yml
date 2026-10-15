@@ -3,22 +3,23 @@ name: simrace
 # The sim race (clojure -M:simrace, ci/simrace.edn): runners that play the whole bot, from empty
 # hands at every landing of the race's captured worlds to the target, against the server model,
 # on every core, seed after seed until their budget is spent: a core that ends a run starts the
-# next at once (issue #127). The real-server race (race.yml) has the other runners; a push to main
-# restarts both with the merged code. Every failed run carries its signature. Every 20 minutes,
+# next at once (issue #127). The real-server race (race.yml) has the other lanes; a code merge
+# has the fleet restart both with the merged code. Every failed run carries its signature. Every 20 minutes,
 # staggered by runner, the runner reports the runs that ended since its last report (bb churn
 # batch): failures to the issues, one per signature, facts to the results page as a batch.
 
-# The rounds never stop (the churn), as race.yml: one at a time on the latest main, back to back; a
-# push to main preempts, anything else (the next job, the schedule backstop, a dispatch) waits as the
-# group's one pending run. RACE_CONTINUOUS=false (a repository variable) stops the chain.
+# Lanes, as race.yml: each run is one lane (the runner k of the old matrix, a share of the worlds),
+# dispatched, given back and replaced by the fleet (fleet.yml, ci/fleet.edn).
 
 on:
-  push:
-    branches: [main]
-    paths-ignore: ['brain/**', 'docs/**', '**.md']   # a note does not restart a round
-  workflow_dispatch:
-  schedule:
-    - cron: '53 */2 * * *'              # a backstop: should the next job not start a round, this queues one
+  workflow_dispatch:                    # by the fleet (fleet.yml), one lane a run
+    inputs:
+      lane:
+        description: the lane, 1..8 (the runner of the old matrix)
+        required: true
+        default: '1'
+
+run-name: simrace lane ${{ inputs.lane }}
 
 permissions:
   contents: write                       # the results page's branch, gh-pages (bb page publish)
@@ -26,8 +27,8 @@ permissions:
   issues: write
 
 concurrency:
-  group: simrace-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}   # new code preempts; anything else waits its turn
+  group: simrace-lane-${{ inputs.lane }}  # one run a lane; a second waits for the first to end
+  cancel-in-progress: false
 
 jobs:
   plan:
@@ -48,7 +49,7 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
           sudo bash /tmp/bb.sh --version 1.13.225
           bb -e '(let [r (clojure.edn/read-string (slurp "ci/simrace.edn"))]
-                   (println (str "runners=" (cheshire.core/generate-string (vec (range 1 (inc (:simrace/runners r)))))))
+                   (println (str "runners=" (cheshire.core/generate-string [(parse-long "${{ inputs.lane }}")])))
                    (println (str "count=" (:simrace/runners r)))
                    (println (str "sets=" (cheshire.core/generate-string (:simrace/sets r))))
                    (println (str "until=" (:simrace/until r)))
@@ -175,16 +176,3 @@ jobs:
             data/simrace/runs.edn
             data/simrace/simrace.log
             data/simrace/snapshots/
-
-  next:
-    # the next round on main as it is now, queued as the group's pending run (see race.yml)
-    needs: sim
-    if: ${{ !cancelled() && vars.RACE_CONTINUOUS != 'false' }}
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    permissions:
-      actions: write
-    steps:
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run simrace.yml --repo "$GITHUB_REPOSITORY" --ref main

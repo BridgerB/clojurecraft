@@ -1,0 +1,15 @@
+;; The fleet (fleet.yml, bb fleet): one small job that keeps the account's runners full of race
+;; and sim-race lanes and gives a runner back the moment any other job waits for one. GitHub has no
+;; job priority or preemption: a job queued behind running ones waits until one ends. So the
+;; fleet does it: every :fleet/every-s seconds it counts the jobs running and queued across the
+;; repository; while another workflow's job is queued and no runner is free, it cancels the newest
+;; lane (a lane's cancel still runs its last report and uploads); while nothing waits and runners
+;; are free, it dispatches lanes, the kind with fewer first. Lanes on code older than main are
+;; cancelled and replaced (a merge restarts the rounds).
+{:fleet/cap 20                 ; GitHub Free's concurrent jobs on standard hosted runners
+ :fleet/floor {:real 2 :sim 2} ; lanes never given back: the rounds always make progress
+ :fleet/max {:real 8 :sim 8}   ; lanes 1..8 a kind: ci/race.edn's runners and ci/simrace.edn's shares
+ :fleet/every-s 60             ; seconds between looks: about four API calls each, inside GITHUB_TOKEN's 1,000 an hour
+ :fleet/minutes 340            ; then the job hands over to the next fleet run (GitHub's 6 h job cap)
+ :fleet/patience-s 90 ; a job queued less than this is not yet a reason to give a lane back (pages deploys, bursts)
+ :fleet/dispatch-grace-s 180}     ; a dispatched lane not yet listed still counts this long

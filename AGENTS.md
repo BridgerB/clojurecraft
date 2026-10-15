@@ -55,9 +55,9 @@ Absolute. The reason is not an invitation to argue an exception.
 
 ### 2.2 The rounds
 
-- `race.yml`, the real race: eight runners, each with 26.1.2 servers on a pregenerated landing set (R1 to R4), 25 bot slots a server, a slot refilled the moment its bot ends. Servers lag under that load (15.4, 17.1).
-- `simrace.yml`, the sim race: eight runners playing the bot against the model in captured worlds (`cache/sim-worlds/R1..R4/<n>.edn.gz`), seed after seed.
-- Every merge to `main` cancels the running rounds and starts new ones on the new code, except docs-only merges (`brain/`, `docs/`, `*.md`).
+- `race.yml`, the real race: up to eight lanes (a lane is one run, one runner), each with 26.1.2 servers on a pregenerated landing set (R1 to R4), 25 bot slots a server, a slot refilled the moment its bot ends. Servers lag under that load (15.4, 17.1).
+- `simrace.yml`, the sim race: up to eight lanes playing the bot against the model in captured worlds (`cache/sim-worlds/R1..R4/<n>.edn.gz`), seed after seed.
+- The fleet (`fleet.yml`, `ci/fleet.edn`) keeps the runners full of lanes and gives one back the moment any other job has waited 90 s for a runner (GitHub has no preemption of its own), never fewer than two lanes a kind; a merge that touches code cancels and replaces every lane, docs-only merges (`brain/`, `docs/`, `*.md`) do not. So a check, a probe or a gym waits about two minutes at most, never hours.
 - Every 20 minutes per runner (`bb churn batch`, then `bb failures report`), the runs that ended since the last report are filed: one issue per signature (infrastructure stops such as a closed socket are counted, not filed; a signature with fewer than 3 runs in a report is a one-off, not filed). Labels: `bot-failure` plus `sim`, `real` or both. The body holds a hidden marker with the signature and a tally (rounds, runs, first and last seen). Each report adds one comment: run count, last intents, landings, up to five reproductions, the run link.
 - A closed issue whose signature comes back in runs of code committed after it closed is reopened, its comment saying "(regressed: this issue was closed)". Runs of older code only comment.
 - Results also go to https://bridgerb.github.io/clojurecraft/.
@@ -446,7 +446,7 @@ A failure that will not reproduce is almost always a context difference, not fla
 
 ## 16. Catches
 
-1. **The rounds never stop.** A merge cancels the running round within a minute or two and starts one on the new code; `gh run list` lags behind. Docs-only merges do not restart them. Never cancel one by hand.
+1. **The lanes never stop.** A code merge has the fleet cancel and replace every lane within a minute or two; `gh run list` lags behind. Docs-only merges do not restart them. A probe or check that waits gets a runner from the fleet. Never cancel a lane by hand.
 2. **Labels.** `sim` means the model produced the signature and the fix needs snapshots. `real` alone cannot be judged by the check and closes on the next race's word. A stale `sim` label blocks the check: ask the owner to drop it.
 3. **One-offs and tallies.** Fewer than 3 runs in a report is not filed. A tally from one round after a merge may be that merge's regression.
 4. **The snapshot is late** (9.2). When the cause is far earlier and the moment hopeless, the evidence is a full run from spawn (8.6).
@@ -890,8 +890,9 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 
 | Workflow | Trigger | Does | Artifacts |
 |---|---|---|---|
-| `race.yml` | push to `main` (code), schedule, hand | 8 runners × 2 servers × 25 slots on pregenerated landings, refilled, 330 min; `bb churn batch` every 20 min | `race-<sha>-<runner>`: `s1/`,`s2/` with `race.log`, `server.log`, `samples.edn.zst`, `milestones.edn.zst`, a recording per slot |
-| `simrace.yml` | same | 8 runners, bot against the model in captured worlds, every core | `simrace-<sha>-<runner>`: `runs.edn`, `simrace.log`, `snapshots/` |
+| `fleet.yml` | always on (hands over every 340 min), hourly backstop | keeps lanes in every free runner, cancels the newest when another job waits 90 s (floor 2+2), replaces lanes on replaced code | log lines `FLEET ...` |
+| `race.yml` | dispatched by the fleet, one lane a run (`race lane k`) | up to 8 lanes × 2 servers × 25 slots on pregenerated landings, refilled, 330 min; `bb churn batch` every 20 min | `race-<sha>-<runner>`: `s1/`,`s2/` with `race.log`, `server.log`, `samples.edn.zst`, `milestones.edn.zst`, a recording per slot |
+| `simrace.yml` | same (`simrace lane k`) | up to 8 lanes, bot against the model in captured worlds, every core | `simrace-<sha>-<runner>`: `runs.edn`, `simrace.log`, `snapshots/` |
 | `test.yml` | every push, any branch | `unit` (via `unit.yml`), one forest shard of 250 (dispatch: 8), actionlint | none |
 | `unit.yml` | called by `test.yml`, `issue.yml` | every test but the forest property (`bb test`), then `bb check` | none |
 | `issue.yml` | PR from `fix/*` | `check`: every `Fixes #n` labelled `sim` must have snapshots, `issues_test` judges them (60 min); plus `unit / unit` | none |
@@ -905,7 +906,7 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 - A code merge to `main` cancels and restarts the rounds (they keep artifacts and run a last report).
 - Artifacts last 7 days; job logs are readable only when the job ends.
 - Required on `main`: `unit / unit` and `check`; `check` "skipping" on a non-`fix/*` PR counts as passing. A PR with merge conflicts runs no checks.
-- 20 runners: the rounds hold 16; checks, probes and gyms share 4 and queue. Queued is not failed.
+- 20 runners: the fleet holds one, the lanes up to 16, three stay free; anything more waits 90 s, then the newest lane is given back. Queued is not failed.
 
 ---
 
