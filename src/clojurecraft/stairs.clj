@@ -131,20 +131,36 @@
   (let [held (recipe/counts (:player/inventory world))]
     (first (filter #(>= (get held % 0) n) fillers))))
 
+(def bridge-depth 16)                 ; blocks under a floor to be laid looked down through for a fluid
+
+(defn over-fluid?
+  "Is the first block under cell [x y z] that is not air (within bridge-depth) water or lava: a
+   floor laid there would be a bridge over it?"
+  [world [x y z]]
+  (boolean (#{:water :lava}
+            (first (remove #{:clear}
+                           (map #(path/classify world [x % z])
+                                (range (dec y) (- y bridge-depth) -1)))))))
+
 (defn floor-laying
   "The cells to lay, in order, so that a floor lies under the new feet of a stair (or a level
    step) from feet whose floor is missing: the floor cell alone when a solid block borders it to
    place against (place/support); else first a holder, the cell under the block under the feet,
    placed against that block's underside, and then the floor against the holder, the way a
    staircase is cast through a cave from a ceiling one block thick. [] when the floor is solid
-   already; nil when it is water, lava or unloaded, or nothing can hold it."
+   already; nil when it is water, lava or unloaded, or nothing can hold it, or when it is over
+   water or lava (over-fluid?): a floor over a fluid is a bridge, not a cave's floor. Sim race 38657453715
+   world R4/1 (issue #62) cut stairs down a mountain onto a lake, and the staircase's level steps
+   laid a floor against the last one, twenty-six blocks out over the water, until its
+   cobblestone was spent; every stair from the causeway was then :boxed, and it walked back and
+   forth along it for 75 minutes until the run's time ran out."
   [world [x _ z] cells]
   (let [[nx ny nz] (last cells)
         floor [nx (dec ny) nz]
         holder [x (dec ny) z]
         kind #(path/classify world %)]
     (cond (= :solid (kind floor)) []
-          (not= :clear (kind floor)) nil
+          (or (not= :clear (kind floor)) (over-fluid? world floor)) nil
           (place/support world floor) [floor]
           (and (= :clear (kind holder)) (place/support world holder)) [holder floor]
           :else nil)))
