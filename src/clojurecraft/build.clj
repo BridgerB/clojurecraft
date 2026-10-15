@@ -814,18 +814,23 @@
 
 (defn nearest-stand-cell
   "Of the cells a stand for pos could be (stand-cell?: the feet can be there and reach pos, the
-   body clear of it), the one nearest the feet, at their height first; nil when none. Where no
-   route reaches any (the room dug while the bot was elsewhere, a wall of rock between it and the
-   feet), the build cuts its way to this one (toward-stand). Sim race 38660819204 (issue #74):
-   twice the bot stood outside its own room, every cell that reached the next room cell inside
-   it, and failed :no-stand three times."
-  [world pos]
-  (let [[_ fy _ :as feet] (intent/feet world)]
+   body clear of it), the one nearest the feet, at their height first, that a way can be cut to:
+   another height (to-height cuts stairs) or, at the feet's height, a block in the way that may be
+   dug (stance-block: never the frame's rock); nil when none. Where no route reaches any (the
+   room dug while the bot was elsewhere, rock between it and the feet), the build cuts its way to
+   this one (toward-stand). Sim race 38660819204 (issue #74): twice the bot stood outside its own
+   room, every cell that reached the next room cell inside it, and failed :no-stand three times;
+   once the frame's rock stood between."
+  [world {:intent/keys [build origin facing]} pos]
+  (let [[_ fy _ :as feet] (intent/feet world)
+        cuttable? (fn [[_ y _ :as c]]
+                    (or (not= y fy) (some? (stance-block world c build origin facing))))]
     (->> (for [dy [0 -1 1 -2] dx (range -4 5) dz (range -4 5)] (mapv + pos [dx (inc dy) dz]))
          (filter #(stand-cell? world % pos))
          (sort-by (fn [[_ y _ :as c]] [(abs (- y fy))
                                        (physics/distance (physics/centre c)
                                                          (physics/centre feet))]))
+         (filter cuttable?)
          first)))
 
 (defn approach-stand
@@ -843,7 +848,7 @@
           (cond (within-reach? world pos) nil
                 :else
                 (let [alt (or (reachable-stand world pos pos) (when build (room-stand world i pos)))
-                      cut (when (and (nil? alt) build) (nearest-stand-cell world pos))]
+                      cut (when (and (nil? alt) build) (nearest-stand-cell world i pos))]
                   (cond alt {:intent/kind :walk :intent/target alt :intent/for :build}
                         ;; no route into the room: cut the way to the stand nearest the feet
                         cut (toward-stand world cut build origin facing)
