@@ -1,5 +1,5 @@
 (ns clojurecraft.watch
-  "Observers of the world atom. docs/hickey.md: \"Telemetry becomes a watcher that diffs
+  "Observers of the world atom. docs/RICH-HICKEY.md: \"Telemetry becomes a watcher that diffs
    successive values and writes facts. Neither can slow the loop or see a torn state, and
    neither is mentioned in the game code at all.\" A watch sees two whole values (old and new),
    never a half-written one. The diff is a pure function; the watch only offers it to a bounded

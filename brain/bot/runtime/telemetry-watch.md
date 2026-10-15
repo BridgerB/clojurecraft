@@ -13,7 +13,7 @@ sourceRefs:
   - src/clojurecraft/watch.clj#def ignored
   - src/clojurecraft/main.clj#watcher (some->> telemetry (watch/telemetry! world*))
   - test/clojurecraft/watch_test.clj#telemetry-watches-a-whole-run-without-touching-it
-  - docs/hickey.md#Telemetry becomes a watcher that diffs successive values and writes facts.
+  - docs/RICH-HICKEY.md#Telemetry becomes a watcher that diffs successive values and writes facts.
 related:
   - "[[bot/runtime/_moc|Runtime]]"
   - "[[main-loop]]"

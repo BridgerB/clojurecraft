@@ -23,4 +23,4 @@ Read, do not dump. Traverse the graph; pull only the notes a question needs. A w
 
 ## What lives here versus elsewhere
 - Here: how the bot works, why it is shaped this way, what was tried and rejected, durable gotchas, vanilla facts the code relies on.
-- Elsewhere: `docs/hickey.md` (the design essay), `docs/issues/` and the GitHub issues (the roadmap), `CLAUDE.md` (commands), code comments (the line you are on).
+- Elsewhere: `docs/RICH-HICKEY.md` (the design essay), `docs/issues/` and the GitHub issues (the roadmap), `CLAUDE.md` (commands), code comments (the line you are on).

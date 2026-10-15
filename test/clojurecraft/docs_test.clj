@@ -1,5 +1,5 @@
 (ns clojurecraft.docs-test
-  "hickey.md: docstrings on every public function, stating the invariant."
+  "RICH-HICKEY.md: docstrings on every public function, stating the invariant."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]))
