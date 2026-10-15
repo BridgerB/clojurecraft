@@ -568,11 +568,12 @@
 
 (defn click-kind
   "Which vanilla rule a click in a window with layout falls under: :result (the result slot of a
-   window that crafts), :swap (with a hotbar slot), :shift (a quick move), :left (the left
-   button) or :right."
+   window that crafts), :swap (with a hotbar slot), :shift (a quick move), :throw (out of the
+   window), :left (the left button) or :right."
   [layout {:keys [slot button mode]}]
   (cond (and (inventory/crafting? layout) (= slot inventory/result-slot)) :result
         (= mode (inventory/click-modes :swap)) :swap
+        (= mode (inventory/click-modes :throw)) :throw
         (= mode (inventory/click-modes :quick-move)) :shift
         (= button inventory/left-button) :left
         :else :right))
@@ -621,6 +622,17 @@
       (let [[view' left] (insert (dissoc view slot) (inventory/store-slots layout) at)]
         {:view (cond-> view' left (assoc slot left)) :cursor cursor})
       {:view view :cursor cursor})))
+
+(defmethod click-view :throw
+  ;; with nothing on the cursor, the stack (or one item of it) leaves the window onto the ground;
+  ;; with a loaded cursor nothing happens (vanilla's doClick). The model makes no item entity of
+  ;; it, so nothing picks it up again
+  [_layout view cursor {:keys [slot button]}]
+  (let [at (get view slot)]
+    (cond (or cursor (nil? at)) {:view view :cursor cursor}
+          (or (= button inventory/whole-stack) (= 1 (:count at)))
+          {:view (dissoc view slot) :cursor cursor}
+          :else {:view (assoc view slot (update at :count dec)) :cursor cursor})))
 
 (defmethod click-view :left
   ;; pick up, put down, merge up to a full stack (the rest stays on the cursor), or swap; a slot

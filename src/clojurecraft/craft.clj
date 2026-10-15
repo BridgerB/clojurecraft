@@ -5,7 +5,8 @@
      {:intent/kind :craft :intent/recipe :stick :intent/window :inventory}   ; or :table
 
    Stages, each advanced one tick at a time against the world value:
-     :settle  put a loaded cursor down, shift-click every item left in the grid back into the
+     :settle  put a loaded cursor down, throw a junk stack out when no slot is free for the
+              result (window/tossable), shift-click every item left in the grid back into the
               inventory, then plan the clicks from the inventory (window 0 also closes any
               open container first; :table requires the table window to be open)
      :click   one click per round trip: send it, then wait until the window's state id moves
@@ -54,6 +55,7 @@
           (if-let [s (window/free-slot world v)]
             (window/click world v (inventory/left-click s))
             (intent/fail world :inventory-full))
+          (window/tossable world v) (window/toss world v (window/tossable world v))
           (dirty-grid-slot v) (window/click world v (inventory/shift-click (dirty-grid-slot v)))
           :else
           (if-let [cs (recipe/clicks (:player/inventory world) r (:view/size v) (:view/slot-of v))]

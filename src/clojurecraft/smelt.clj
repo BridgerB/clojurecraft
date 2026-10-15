@@ -4,7 +4,8 @@
      {:intent/kind :smelt :intent/smelt :iron_ingot_from_smelting_raw_iron :intent/count 4}
 
    Stages, each advanced one tick at a time against the furnace window's view:
-     :settle  put a loaded cursor down and shift-click anything left in the furnace back into
+     :settle  put a loaded cursor down, throw a junk stack out when no slot is free for the
+              output (window/tossable), and shift-click anything left in the furnace back into
               the inventory, then plan the loading clicks: the fuel first (only as much as
               the batch burns, coal before wood), then the input
      :load    one click per round trip: send it, then wait until the window's state id moves
@@ -164,6 +165,7 @@
           (nil? (:view/state-id v))
           (if (> (- (now world) since) stage-timeout) (intent/fail world :no-window) world)
           (:window/cursor world) (put-down world v)
+          (window/tossable world v) (window/toss world v (window/tossable world v))
           (own-slot-holding v) (window/click world v (inventory/shift-click (own-slot-holding v)))
           :else
           (if-let [{:keys [clicks] n :count} (load-plan world v r count)]
