@@ -902,6 +902,16 @@
   (let [row (make/next-row world {:goal/id :pickaxe :goal/provides {:tag/pickaxes 1}} plan/goals)]
     (boolean (and (map? row) (not (make/fetch? row))))))
 
+(def hand-dig-limit 10000)            ; ms by hand past which a block is never dug by hand: deepslate's 15 s, not stone's 7.5
+
+(defn hand-dig-refused?
+  "Is a dig of rock at cell, with no pickaxe held, refused for the hand: a pickaxe can be made
+   without going out (pickaxe-at-hand?), or the block takes longer than hand-dig-limit by hand
+   (deepslate, the lava's depth), which a trip out for a pickaxe beats. Stone by hand is left to
+   the hand when a pickaxe needs a trip: a cast's last few blocks are best dug."
+  [world cell]
+  (or (pickaxe-at-hand? world) (> (intent/dig-time (terrain/block-at world cell)) hand-dig-limit)))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i, one that is done
@@ -927,7 +937,8 @@
         child (intent/run-child world event)
         :else
         (let [c (op-child world i next)
-              c (or (when (and (= :dig (:intent/kind c)) (pickaxe-at-hand? world))
+              c (or (when (and (= :dig (:intent/kind c))
+                               (hand-dig-refused? world (:intent/target c)))
                       (stairs/tool-missing world (:intent/target c)))
                     c)]
           (cond (and (= :no-station c)
