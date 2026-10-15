@@ -85,5 +85,6 @@
  [:play :s2c :set-health] [[:health :f32] [:food :varint] [:saturation :f32]]
  [:play :s2c :set-held-slot] [[:slot :varint]]
  [:play :s2c :set-player-inventory] [[:slot :varint] [:item :slot]]
+ [:play :s2c :set-time] []
  [:play :s2c :start-configuration] []
  [:play :s2c :take-item-entity] [[:collected :varint] [:collector :varint] [:count :varint]]}

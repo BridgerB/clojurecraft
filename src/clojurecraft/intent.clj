@@ -72,11 +72,18 @@
   ([id] (dig-time id nil {}))
   ([id held pen] (or (dig/ms id held pen) dig-ms)))
 
+(defn slowdown
+  "How much longer than at 20 ticks a second the server's ticks take now (:server/tick-ms over
+   game/server-tick-ms, at least 1): what it counts in ticks, a dig's progress, takes that much
+   longer by the clock."
+  [world]
+  (max 1.0 (/ (:server/tick-ms world game/server-tick-ms) game/server-tick-ms)))
+
 (defn finish-delay
-  "ms from START to FINISH when a dig takes ms: with margin, since an early FINISH aborts the
-   break and a late one is accepted."
-  [ms]
-  (+ (* ms finish-margin) finish-slack))
+  "ms from START to FINISH when a dig takes ms (at the server's slowdown s, 1 by default): with
+   margin, since an early FINISH aborts the break and a late one is accepted."
+  ([ms] (finish-delay ms 1.0))
+  ([ms s] (+ (* ms finish-margin s) finish-slack)))
 (def swing-every 350)                 ; ms between arm swings while digging
 (def collect-timeout 10000)           ; ms a collect may take before it fails
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
@@ -419,7 +426,7 @@
                               :intent/dig-ms ms
                               :intent/state at-target
                               :intent/next-swing (+ now swing-every)
-                              :intent/finish-at (+ now (finish-delay ms)))
+                              :intent/finish-at (+ now (finish-delay ms (slowdown world))))
                 (game/say (str "digging "
                                target
                                " face "
@@ -451,7 +458,8 @@
                 (assoc-intent :intent/stage :confirm
                               :intent/since now
                               :intent/sequence seq
-                              :intent/confirm-left confirm-ticks)))
+                              :intent/confirm-left
+                              (long (math/ceil (* confirm-ticks (slowdown world)))))))
           (>= now next-swing)
           (-> world
               (game/emit {:packet/name :swing :hand (packet/value :hand :main-hand)})
