@@ -235,19 +235,30 @@
                  :intent/for :surface}
           to-height? (assoc :intent/to-height? true)))))
 
+(defn buried?
+  "Is the rock over the feet thicker than underground-depth: the highest solid block of the feet's
+   column more than underground-depth over them, a tree's leaves and logs not counted? A stair cut into a hillside on the way down to a
+   pond has a block or three over it; a mine has the hill."
+  [world]
+  (let [[x y z] (intent/feet world)]
+    (boolean (some #(when-let [id (terrain/block-at world [x % z])]
+                      (and (blocks/solid? id) (not (blocks/leaves? id)) (not (blocks/log? id))))
+                   (range (+ y underground-depth 1) (inc terrain/top-y))))))
+
 (defn climb
-  "Out of the ground when the feet are deep under the landing (deep?) and the sky is not open
-   over them: the way-up; nil when not underground. A bot that needs water deep in its mine
+  "Out of the ground when the feet are deep under the landing (deep?) and buried there (buried?:
+   more than underground-depth of rock over them, so the sky is not open either): the way-up; nil
+   when not underground. Deep under a landing on a hill is not underground: sim race 38669750355
+   (issue #69) landed at y 100 and y 73, cut stairs down to a pond's bank (to-bank), and each
+   stair, one block into the hillside, sent the bot back up its opening, sixteen hundred times in
+   ninety minutes. A bot that needs water deep in its mine
    sees none and its hunt looks for ground near its own height, underground: gym batch iron-a1
    runs 3 and 5 got the bucket down there and failed :no-water. The way it came down is often
    no way back up: batch iron-a2 runs 2 and 5 had mined an ore out of the floor of a stair, or
    dug a niche under one, and waited :no-water at y 18 and 24 with no route out. The siblings
    climbed out first too."
   [world]
-  (when (and (deep? world)
-             (not (terrain/under-sky? world (intent/feet world)))
-             (not (boxed-here? world)))
-    (way-up world false)))
+  (when (and (deep? world) (buried? world) (not (boxed-here? world))) (way-up world false)))
 
 (defn pit-climb
   "Out of a pit under the open sky when the feet are deep under the landing (deep?) and no
