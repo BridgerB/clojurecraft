@@ -15,7 +15,7 @@
             [clojurecraft.simrace :as simrace]))
 
 (def root "test/issues")
-(def max-bytes (* 5 1024 1024))        ; the snapshots stay under 5 MB in git
+(def max-bytes (* 25 1024 1024))       ; the snapshots stay under 25 MB in git: one of 40-200 KB stays a fixed issue for good, a regression guard; 5 MB was full at #142
 
 (defn issues
   "[issue-number [snapshot-path ...]] for every issue directory, in issue order."
