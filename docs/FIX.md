@@ -396,14 +396,16 @@ Anything that needs the bot's code run goes to the `probe` workflow, on a runner
 gh workflow run probe.yml --ref <branch> \
   -f run='clojure -M:dev probe/p<n>.clj probe/<n>/R4-35-2.edn.gz' \
   -f worlds=R1,R4 \
-  -f label=p<n>
+  -f label=<n>-<word>
 sleep 8
-ID=$(gh run list --workflow probe.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+ID=$(gh run list --workflow probe.yml --limit 20 --json databaseId,displayTitle \
+  --jq '.[] | select(.displayTitle == "probe <n>-<word>") | .databaseId' | head -n 1)
 gh run watch "$ID" --interval 30 > /dev/null 2>&1 &         # in the background
 gh run view "$ID" --log | grep -E '<what you print>'          # when it is done
 gh run download "$ID" -n probe-"$ID" -D /tmp/probe-"$ID"      # anything written under out/
 ```
 
+- `label` names the run: its title is `probe <label>`. Make it unique, the issue number and a word (`142-pool`, `142-after`), and find the run by it as above. Several agents dispatch probes at once, so the newest probe run (`--limit 1`) may be someone else's.
 - `run` is one shell command, run from the checkout root with Java, the Clojure CLI and Babashka installed.
 - `worlds` restores the captured sim worlds a snapshot or a simrace run needs (`R1,R2,R3,R4`; none by default). A snapshot names its world file (`cache/sim-worlds/R4/35.edn.gz`); restore that set.
 - The script and any inputs (snapshots, recordings) must be committed and pushed on the branch before you dispatch: the runner checks out the branch, nothing else.
@@ -494,7 +496,7 @@ To see what the bot does between the moment and the stop, step it a quarter seco
 A recording replays exactly only with the code that made it. On a runner, check out that commit's source before running your script from a branch based on `main` (which has `probe.yml`):
 
 ```sh
-gh workflow run probe.yml --ref probe/<n> -f label=p<n> \
+gh workflow run probe.yml --ref probe/<n> -f label=<n>-<word> \
   -f run='git fetch -q --depth 1 origin <sha> && git checkout FETCH_HEAD -- src resources deps.edn && clojure -M:dev probe/p<n>.clj probe/<n>/Clj_r08.edn.gz'
 ```
 
@@ -851,8 +853,8 @@ grep -h '^RESULT' /tmp/ev/race/s*/race.log | grep -o ':reason :[a-z-]*' | sort |
 zstd -dc /tmp/ev/race/s1/Clj_r08.edn.zst | grep -o '"[^"]\{3,200\}"' | awk '!seen[$0]++' | tail -40
 
 # code questions (section 8)
-gh workflow run probe.yml --ref probe/<n> -f run='clojure -M:dev probe/p<n>.clj probe/<n>/<snapshot>.edn.gz' -f worlds=R4 -f label=p<n>
-gh run list --workflow probe.yml --limit 1 --json databaseId --jq '.[0].databaseId'
+gh workflow run probe.yml --ref probe/<n> -f run='clojure -M:dev probe/p<n>.clj probe/<n>/<snapshot>.edn.gz' -f worlds=R4 -f label=<n>-<word>
+gh run list --workflow probe.yml --limit 20 --json databaseId,displayTitle --jq '.[] | select(.displayTitle == "probe <n>-<word>") | .databaseId' | head -n 1
 gh run watch <id> > /dev/null 2>&1 &
 gh run view <id> --log
 
