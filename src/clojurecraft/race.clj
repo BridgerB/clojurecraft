@@ -53,6 +53,8 @@
 (def sample-every-ms 15000)            ; how often the sampler records the race as one fact
 (def milestones-buffer 256)           ; milestone facts waiting for the writer; a bot reaches at most a chain's worth
 (def min-play-ms 300000)              ; a slot starts no bot with less of the job left than this: it would only be cut
+(def quick-ms 30000)                  ; a bot that crashed or was cut off sooner than this never played: the server is gone or failing
+(def backoff-max-ms 60000)            ; the longest a slot waits before its next bot after quick ends
 
 (defn bot-name
   "The name of racer k (from 1) with prefix: a server name, sixteen characters at most."
@@ -92,6 +94,17 @@
     (cond (or (nil? ramp) (< i start)) (* i stagger-ms)
           :else
           (+ (* every-ms (inc (quot (- i start) step))) (* stagger-ms (rem (- i start) step))))))
+
+(defn backoff-ms
+  "How long a slot waits before its next bot: none after a bot that played; after one that
+   crashed or was cut off (failure/infra-reasons) within quick-ms, double the last wait (1 s the
+   first time), at most backoff-max-ms. A server that stopped or fails would otherwise have every
+   slot start bot after bot at once, each with its threads, until the machine can fork no more
+   (issue #145)."
+  [wait life-ms {:keys [reason]}]
+  (cond (and (< life-ms quick-ms) (or (= :crashed reason) (contains? failure/infra-reasons reason)))
+        (min backoff-max-ms (max 1000 (* 2 wait)))
+        :else 0))
 
 (defn run-ms
   "How long a race plays, ms: :race/deadline-ms (the capacity ramp's one deadline), else
@@ -402,15 +415,21 @@
 
 (defn slot!
   "One bot slot, on a thread of its own: it joins at its place in the schedule (start-at), then
-   plays bot after bot (play-one!), the next the moment the last ends, until less than
-   min-play-ms is left of the job. Returns a channel of its results."
+   plays bot after bot (play-one!), the next the moment the last ends, or after backoff-ms when
+   the last never got to play, until less than min-play-ms is left of the job. Returns a channel
+   of its results."
   [{:keys [config t0 deadline] :as ctx} i]
-  (async/thread (Thread/sleep (long
-                               (max 0 (- (+ t0 (start-at config i)) (System/currentTimeMillis)))))
-                (loop [results []]
-                  (if (< (- deadline (System/currentTimeMillis)) min-play-ms)
-                    results
-                    (recur (conj results (play-one! ctx)))))))
+  (async/thread
+   (Thread/sleep (long (max 0 (- (+ t0 (start-at config i)) (System/currentTimeMillis)))))
+   (loop [results []
+          wait 0]
+     (cond (< (- deadline (System/currentTimeMillis)) min-play-ms) results
+           :else
+           (let [_ (Thread/sleep (long wait))
+                 t (System/currentTimeMillis)
+                 r (play-one! ctx)]
+             (recur (conj results r)
+                    (backoff-ms wait (- (System/currentTimeMillis) t) (:result r))))))))
 
 (defn -main
   "Run the race ci/race.edn (or --config) describes on the server at --port, its RCON at
