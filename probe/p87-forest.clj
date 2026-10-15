@@ -17,7 +17,7 @@
     (println s)
     (spit "out/probe.log" (str s "\n") :append true)))
 (def step (game/compose game/step plan/step))
-(def tree {:x 11 :z 7 :h 5 :id 137 :mound 2 :canopy? true :branch [1 0]})
+(def tree {:x 3 :z 3 :h 3 :id 137 :mound 2 :canopy? false :branch nil})
 (def leaf-id 252)
 (defn tree-blocks
   "{[lx y lz] id} for one tree, as sim_test's generator lays it out."
@@ -44,7 +44,7 @@
                          #(or (plan/done? %) (plan/failed? %))
                          (:gym/timeout-ms (gym/gym "wood"))
                          {:event/kind :go :go/goals [:wood]})]
-    (out "==" label "canopy tree on a 2-high bank at [11 7]")
+    (out "==" label "the shrunk smallest: edge world, tree at [3 3] on a 2-high bank")
     (out " done?" (plan/done? w)
          "failed?" (plan/failed? w)
          "reason" (:plan/reason w)
