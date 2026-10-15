@@ -385,6 +385,15 @@
           (and (blocks/needs-tier id) (not (dig/harvest? id nil))) :needs-tool
           :else [0 nil])))
 
+(defn open?
+  "Is block state id nothing a dig breaks: not solid and not awkward (path/classify-id), so the
+   cell is already open? An awkward block (a wall, a slab, pointed dripstone) is in a route's way
+   and a clear digs it (build/diggable?), so it is broken like rock. Sim race 38665691522 world
+   R3/43 (issue #91): the cast's way to its landing at y 24 dug the awkward block over the feet,
+   and the dig, taking it for open, failed :target-gone and failed the build."
+  [id]
+  (and (not (blocks/solid? id)) (not= :awkward (path/classify-id id))))
+
 (defmulti dig-stage
   "Advance a :dig intent one tick in its :intent/stage (:settle :digging :confirm), the stage and
    its start already on the intent."
@@ -396,7 +405,7 @@
   (let [now (:time/now world)
         eye (game/eye world)
         at-target (terrain/block-at world target)]
-    (cond (and at-target (not (blocks/solid? at-target))) (fail world :target-gone)
+    (cond (and at-target (open? at-target)) (fail world :target-gone)
           (> (physics/distance eye (physics/centre target)) (+ reach 0.5))
           (fail world :out-of-reach)
           (= :needs-tool (choose-tool world at-target)) (fail world :needs-tool)
