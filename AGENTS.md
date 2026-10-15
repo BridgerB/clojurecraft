@@ -400,13 +400,14 @@ Section 11 for the commit. Push every commit to your claim branch (`fix/<n>`). D
 ```sh
 ID=$(gh run list --workflow test.yml --branch fix/<n> --limit 1 --json databaseId,headSha \
   --jq '.[] | select(.headSha == "'"$(git rev-parse HEAD)"'") | .databaseId')
-gh run watch "$ID" --exit-status > /tmp/test-<n>.txt 2>&1 &
+gh run view "$ID" --json status,conclusion                      # poll this between other work
+gh run watch "$ID" --exit-status --interval 30                   # only when nothing else is left: one command, however long
 gh run view "$ID" --log-failed | grep -E 'FAIL|ERROR|expected|actual|::error|Exception' | head -40   # when red
 ```
 
-(If the list is empty, the run has not been created yet; ask again a few seconds later.) Keep working (the next issue's reading, a probe) while it runs. A red run: read its log, fix, push another commit to the same branch, repeat until green (12.3). Never rerun anything locally "to confirm".
+(If the list is empty, the run has not been created yet; ask again a few seconds later.) Keep working (the next issue's reading, a probe) while it runs, and look at its status between steps. A red run: read its log, fix, push another commit to the same branch, repeat until green (12.3). Never rerun anything locally "to confirm".
 
-If your tool cannot run a process in the background, poll instead: between other work, every three to five minutes, run `gh run view <id> --json status,conclusion` and carry on until it reports a result. Never sit in a loop of `sleep` doing nothing; never let a turn end only because a run has not finished.
+Many agent tools kill a process left running in the background (`... &`) when the shell command returns, so do not rely on one; polling works everywhere. Never sit in a loop of `sleep` doing nothing; never let a turn end only because a run has not finished.
 
 ### Step 10. Code questions go to `probe.yml`
 
@@ -421,6 +422,26 @@ Green, and the PR body carries the before/after evidence: merge normally (13.1).
 ### Step 12. Next
 
 Back to step 2.
+
+### When something is unclear: the decisions already made
+
+These are the forks where an agent tends to stop and reconsider. Each has one answer; take it and move on. When a fork is not here and you have changed your mind twice, write the hypotheses down with the evidence for and against each (a scratch file under /tmp), and settle it with one probe rather than more thought.
+
+| Situation | Decision |
+|---|---|
+| The `fix/<n>` push is rejected, or `fix/<n>` exists with an open PR | Another agent has it. Choose another issue; do not investigate theirs. |
+| A branch with a slug exists (`fix/<n>-<words>`), from before the fixed-name rule | History. Ignore it; the lock is `fix/<n>` alone. |
+| A probe branch name you want exists | Not yours. Pick another word; never touch it (8.1). |
+| An earlier PR fixed part of this issue (`Refs #n`, merged) | Read that PR first. Your job is what it left: the reproductions that still fail on current `main`. |
+| A snapshot or reproduction comes from a round older than the issue's last merged PR | Judge it on current `main` with a probe before anything else. If it no longer recurs there, it proves nothing about your fix: use reproductions from newer rounds. If none fail on `main` any more, the fix may already be in: say so in a PR with `Refs #n`, or leave the issue for the next round's word, and move on. |
+| `bb issue-check fetch` brought more than two snapshots | Keep two, from the newest round, from two different landings (12.2). |
+| The issue is labelled `sim` but only old rounds reproduced it in the sim | Do not weaken the check and do not add unrelated snapshots. Ask the owner to drop the label, or use `Refs #n`. |
+| A commit hook failed | The commit did not happen and nothing was pushed. Fix what the hook printed, commit again. |
+| The sim and a real run disagree | For a real-only signature, the real run is the evidence. For a sim-only one, check the model's limits first (15.9, 15.10). |
+| A probe is still running | Do other reading or the next step meanwhile. Never dispatch the same probe twice. |
+| Another Todo issue looks like the same cause | Group it before you claim (step 4). After the claim, finish yours first; mention the other in your PR body. |
+| The cause is in tooling (workflows, `bb/`, the issue check) | Not yours: stop and tell the owner (section 18). |
+| Your tool cannot run background processes | Poll; foreground `gh run watch` only when nothing else is left (step 9). |
 
 ---
 
@@ -533,16 +554,18 @@ gh run download "$ID" -n probe-"$ID" -D /tmp/probe-"$ID"      # anything written
 
 ### 8.1 Where to put probe files
 
-Never on the fix branch: a probe script is not part of the fix. Make a throwaway branch from the fix branch (to probe the fix) or from `main` (to probe the failure), put the script under `probe/` and the inputs under `probe/<n>/`, commit (through the hooks: they lint the script too, see 15.13) and push:
+Never on the fix branch: a probe script is not part of the fix. Make a new throwaway branch for each probe question, named `probe/<n>-<word>` with the same word as its label (`probe/57-hunt`, `probe/57-after`), from the fix branch (to probe the fix) or from `main` (to probe the failure). Put the script under `probe/` and the inputs under `probe/<n>/`, commit (through the hooks: they lint the script too, see 15.13) and push:
 
 ```sh
-git switch -c probe/<n> origin/fix/<n>       # or origin/main
+B=probe/<n>-<word>
+git ls-remote --exit-code --heads origin "$B" >/dev/null && echo "taken: pick another word"
+git switch -c "$B" origin/fix/<n>       # or origin/main
 mkdir -p probe/<n> && cp /tmp/ev/<n>/r4/snapshots/R4-35-2.edn.gz probe/<n>/
 $EDITOR probe/p<n>.clj
-git add probe && git commit -m "probe: issue <n>" && git push -u origin probe/<n>
+git add probe && git commit -m "probe: issue <n>" && git push -u origin "$B"
 ```
 
-Delete probe branches when you are done (`git push origin --delete probe/<n>`).
+A probe branch that already exists belongs to whoever pushed it, possibly another agent or an earlier session: never push to it, merge it, rebase onto it or delete it; pick another word. Delete your own probe branches when you are done (`git push origin --delete probe/<n>-<word>`).
 
 ### 8.2 A probe script's skeleton
 
@@ -616,7 +639,7 @@ To see what the bot does between the moment and the stop, step it a quarter seco
 A recording replays exactly only with the code that made it. On a runner, check out that commit's source before running your script from a branch based on `main` (which has `probe.yml`):
 
 ```sh
-gh workflow run probe.yml --ref probe/<n> -f label=<n>-<word> \
+gh workflow run probe.yml --ref probe/<n>-<word> -f label=<n>-<word> \
   -f run='git fetch -q --depth 1 origin <sha> && git checkout FETCH_HEAD -- src resources deps.edn && clojure -M:dev probe/p<n>.clj probe/<n>/Clj_r08.edn.gz'
 ```
 
@@ -937,7 +960,7 @@ Downloading artifacts, `zstd -dc`, `grep`, `awk` over logs and run maps are read
 
 ### 15.16 Watching without waiting
 
-Start watches in the background (`gh run watch <id> > /dev/null 2>&1 &`, `gh pr checks <pr> --watch > file &`) and keep working. Never stop work to wait on a run. When a watcher ends, read its file.
+Poll a run's status (`gh run view <id> --json status,conclusion`, `gh pr checks <pr>`) between other work. When there is truly nothing else to do, one foreground `gh run watch <id> --exit-status --interval 30` is one command however long the run takes. A background watcher (`... &`) works only in tools that keep background processes alive; do not count on it. Never stop work to wait on a run.
 
 ### 15.17 Give the owner exact numbers
 
@@ -975,7 +998,7 @@ grep -h '^RESULT' /tmp/ev/race/s*/race.log | grep -o ':reason :[a-z-]*' | sort |
 zstd -dc /tmp/ev/race/s1/Clj_r08.edn.zst | grep -o '"[^"]\{3,200\}"' | awk '!seen[$0]++' | tail -40
 
 # code questions (section 8)
-gh workflow run probe.yml --ref probe/<n> -f run='clojure -M:dev probe/p<n>.clj probe/<n>/<snapshot>.edn.gz' -f worlds=R4 -f label=<n>-<word>
+gh workflow run probe.yml --ref probe/<n>-<word> -f run='clojure -M:dev probe/p<n>.clj probe/<n>/<snapshot>.edn.gz' -f worlds=R4 -f label=<n>-<word>
 gh run list --workflow probe.yml --limit 20 --json databaseId,displayTitle --jq '.[] | select(.displayTitle == "probe <n>-<word>") | .databaseId' | head -n 1
 gh run watch <id> > /dev/null 2>&1 &
 gh run view <id> --log
