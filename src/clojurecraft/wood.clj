@@ -104,7 +104,7 @@
       (when-let [above (first (filter #(< (physics/y-of (game/eye world)) (nth % 1)) trunks))]
         (let [[fx _ fz] feet
               [tx _ tz] above
-              dir (if (> (abs (- tx fx)) (abs (- tz fz)))
+              dir (if (>= (abs (- tx fx)) (abs (- tz fz)))
                     [(if (< fx tx) 1 -1) 0]
                     [0 (if (< fz tz) 1 -1)])]
           {:intent/kind :stairs-up
