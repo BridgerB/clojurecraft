@@ -8,7 +8,7 @@ clojurecraft: a from-scratch Minecraft Java Edition bot in Clojure whose purpose
 
 ## Style (the point of the project)
 
-Read `docs/hickey.md` first; it is the design brief. In short:
+Read `docs/RICH-HICKEY.md` first; it is the design brief. In short:
 
 - **The world is one value in one atom**, written only by the loop in `main`. It is a flat map of namespaced attributes (`:player/pos`, `:world/chunks`, `:plan/intent`, `:bot/phase` ...), open and sparse: what the bot does not know is absent, never nil-filled.
 - **The protocol is a pure reducer** `(step world event) → world'` in `game`; the planner `plan/step` has the same signature and is composed after it. Events are maps: `{:event/kind :start}`, `{:event/kind :packet :event/packet p}`, `{:event/kind :tick :event/now ms :event/rand r}`, `{:event/kind :go}`, `{:event/kind :closed}`. The clock and randomness are inputs; nothing inside a reducer reads a clock or calls `rand`.

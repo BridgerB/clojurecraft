@@ -51,7 +51,7 @@ Skipped on purpose: SQLite batches, D1 telemetry, bandit params, arms, jlink. Ou
 
 **Concurrency.** One bot per server per runner by default; a `bots` input may share a server up to 6 (ruststeve's cap, steve's measured 8 on a 4-vCPU runner). Job-level `concurrency: {group: gym-${label}}` and the plan job refuses when `gh run list --status in_progress` already holds 20 jobs.
 
-**Recordings as regression inputs.** `record_test.clj:7-22` already asserts a replay equals the direct fold. A failed run's `run.edn.zst` + `result.edn` is promoted by hand into `test/recordings/` (size-capped: `data/runs/four.edn` is 8.0 MB / 4320 events, 1.1 MB after `zstd -19`), and `recordings_test.clj` folds each: replay must not throw, every intermediate world must satisfy `::spec/world`, and the final `RESULT` must equal the stored one. That is the accretion guarantee from `docs/hickey.md` ("a recorded race from last month still replays"). A recording cannot prove a *fix* (replay is open-loop: the server's replies were to the old bot's actions); a fix is proven by a sim scenario built from the recording's chunk packets (`world/column-bytes`) and then by the next gym batch on the same landing set.
+**Recordings as regression inputs.** `record_test.clj:7-22` already asserts a replay equals the direct fold. A failed run's `run.edn.zst` + `result.edn` is promoted by hand into `test/recordings/` (size-capped: `data/runs/four.edn` is 8.0 MB / 4320 events, 1.1 MB after `zstd -19`), and `recordings_test.clj` folds each: replay must not throw, every intermediate world must satisfy `::spec/world`, and the final `RESULT` must equal the stored one. That is the accretion guarantee from `docs/RICH-HICKEY.md` ("a recorded race from last month still replays"). A recording cannot prove a *fix* (replay is open-loop: the server's replies were to the old bot's actions); a fix is proven by a sim scenario built from the recording's chunk packets (`world/column-bytes`) and then by the next gym batch on the same landing set.
 
 ## Steps
 
@@ -76,7 +76,7 @@ Skipped on purpose: SQLite batches, D1 telemetry, bandit params, arms, jlink. Ou
 
 ## References
 
-- Ours: `.github/workflows/wood.yml`, `scripts/server.sh:35-63`, `src/clojurecraft/main.clj:62-111`, `harness.clj:24-61`, `record.clj:17-33`, `plan.clj:12-27,89-93`, `sim.clj:111-128`, `rcon.clj:48-74`, `test/clojurecraft/record_test.clj`, `docs/hickey.md`.
+- Ours: `.github/workflows/wood.yml`, `scripts/server.sh:35-63`, `src/clojurecraft/main.clj:62-111`, `harness.clj:24-61`, `record.clj:17-33`, `plan.clj:12-27,89-93`, `sim.clj:111-128`, `rcon.clj:48-74`, `test/clojurecraft/record_test.clj`, `docs/RICH-HICKEY.md`.
 - steve (`/Users/bridger/Developer/mc/upstream/steve`): `.github/workflows/{prepare-env,gym,fleet}.yml`, `scripts/ci/{server.sh,plan.ts,prepare-world.ts,aggregate.ts,shard-summary.ts}`, `scripts/ml/landings.ts`, `src/lib/steve/gym/{registry,run}.ts`, `gym-batch.ts`, `gym-cli.ts`, `src/lib/steve/step-tests/registry.ts`, `src/lib/steve/step-test.ts`, `ci/{env,capacity}.json`, `data/gym/NOTES.md`, `LOOP.md:136-155`.
 - ruststeve: `gym.sh`, `scripts/gym-from-snapshot.sh`, `LOOP.md:9,162-192`. Memory notes: `steve-github-runners`, `mc-box-gym-concurrency`.
 

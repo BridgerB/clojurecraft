@@ -1,5 +1,5 @@
 (ns clojurecraft.style-test
-  "hickey.md style rules that a test can hold."
+  "RICH-HICKEY.md style rules that a test can hold."
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]

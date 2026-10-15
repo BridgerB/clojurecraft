@@ -61,7 +61,7 @@ Three walls capped every steve race on this stretch. They are documented, not fo
 
 ## References
 
-- `src/clojurecraft/game.clj:213-219` (window-0-only inventory), `memory.clj:13` (`watched?` is logs only), `plan.clj:12-13`, `packet.clj:56-58`, `sim.clj`, `docs/hickey.md:59-64` (needs/provides goal shape).
+- `src/clojurecraft/game.clj:213-219` (window-0-only inventory), `memory.clj:13` (`watched?` is logs only), `plan.clj:12-13`, `packet.clj:56-58`, `sim.clj`, `docs/RICH-HICKEY.md:59-64` (needs/provides goal shape).
 - `resources/clojurecraft/packets.edn`: c2s `container-click 18`, `container-close 19`, `use-item-on 66`, `use-item 67`; s2c `open-screen 59`, `container-set-data 19`, `container-close 17`.
 - steve: `src/lib/steve/steps.ts:19-28, 116-139, 260-299, 337-357, 383-410, 431-439`; `tasks/smelt/main.ts:70-73, 175-229, 252-264`; `tasks/bucket/main.ts:102-137, 192-201, 217-288, 459-466`; `tasks/craft/gather-flint.ts:1-14`; `lib/bot-utils.ts:1280-1340, 1377-1410`; `src/lib/typecraft/bot/containers.ts:105-137`, `bot/inventory.ts:417-443`; `LOOP.md:161-212`.
 - ruststeve: `src/tasks/smelt.rs:94-133, 164-197`; `src/tasks/bucket.rs:12-19, 74-93`; `src/tasks/mining.rs:711-765`; `src/bot/inventory.rs:319-340`; `src/bot/mod.rs:1853-1872`; `LOOP.md:37, 90`; `CHANGES.md:133`.

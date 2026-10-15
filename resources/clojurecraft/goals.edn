@@ -1,4 +1,4 @@
-;; The goal table. Hand-written data, not generated (docs/hickey.md: goals are data; planning is
+;; The goal table. Hand-written data, not generated (docs/RICH-HICKEY.md: goals are data; planning is
 ;; a function; executing is open). A row says what it needs, what it provides, which registered
 ;; predicate decides it is done, and which registered act satisfies it once its needs are met.
 ;; Need and provide keys: :item/<name> n, :tag/<item-tag> n, :block/<name> :near. A row's :goal/holds
