@@ -6,6 +6,7 @@ The short version: the rounds on GitHub's runners play the bot without end and f
 
 ## Contents
 
+0. Start here: the tree, the philosophy, the brain, the code
 1. Hard rules
 2. Orientation: what to read first
 3. How failures become issues
@@ -24,6 +25,73 @@ The short version: the rounds on GitHub's runners play the bot without end and f
 16. Quick reference
 17. A worked example: issue #142, start to finish
 18. When you are stuck
+
+---
+
+## 0. Start here: the tree, the philosophy, the brain, the code
+
+Do this before anything else, before the board and before any issue. It is the most important part of this file: a fix written without it is a fix in the wrong style, and the wrong style is a wrong fix here even when the tests pass. Doing it well takes a long read (about 75,000 words of notes and 5,000 lines of code); take the time. An agent that has done all of section 0 in its current session may skip to section 1 for its next issue; a new session does it again.
+
+### 0.1 See the tree
+
+The very first command:
+
+```sh
+tree -a --dirsfirst -I '.git|.cpcache|.clj-kondo|.lsp|.nix|.direnv|node_modules|cache|data|out|target|issues|recordings|churn-batches'
+```
+
+About 360 lines: every source, test, note, workflow and tool in the repository. Without `tree` installed: `nix shell nixpkgs#tree -c tree ...` with the same arguments, or `find . -path ./.git -prune -o -type f -print | sort`. Read it all; you will refer back to it. The parts that matter most to a fix: `src/clojurecraft/` (the bot, one namespace per subject), `test/clojurecraft/` (a test namespace per source namespace), `brain/` (the notes), `resources/clojurecraft/` (the goal table, the problem statements, the generated tables), `bb/clojurecraft/` (the tooling: not yours to change), `.github/workflows/` (the CI: not yours to change).
+
+### 0.2 Read `docs/hickey.md`, in full
+
+This is the design brief, and the single most important document in the repository. Read every word before any other file. It sets out how Rich Hickey would build this bot (simple meaning not braided, values over state, information as open maps of namespaced keys, design as taking things apart, processes speaking data over bounded queues, growing without breaking), holds the TypeScript bot and the early Clojure code up against it, and describes the design the bot follows now. Every review of a fix asks one question first: does it follow this?
+
+What it means for a fix, in practice:
+
+- The world is one value. A fix reads the world and returns a new value or an intent; it never mutates, never keeps a hidden atom, never reads a clock or calls `rand` inside a reducer (time and randomness come in on the tick event).
+- Facts are data with names: a new thing the bot knows is a namespaced key on the world (with its row in `model.clj` and its spec in `spec.clj`) or a fact in memory, never a positional tuple or an unnamed flag.
+- Dispatch is open: a new behaviour is a `defmethod` or a row in a table (`goals.edn`, a registry), not an edit to a `case`.
+- Rules, not conditionals piled up: one small function per rule, a docstring stating it and the run that taught it, `cond` over nested `if`, `reduce` over `loop`.
+- Accretion: never change the meaning of a key, never rename one; add beside it. A wrong goal is superseded, not rewritten, so old recordings still replay.
+- I/O lives below a `;;;; I/O ;;;;` fence in the few namespaces that have it. A bot fix almost never needs I/O.
+
+If a fix you are about to write needs an exception to any of this, the fix is probably wrong; look for the shape that does not need it.
+
+### 0.3 Read `CLAUDE.md`
+
+At the repository root. Despite its file name it is the repository's guide for every agent and person: the style rules restated, the layout (one line per namespace), the commands, the CI workflows and the words the project uses. Read it whole.
+
+### 0.4 Read the brain
+
+`brain/` is the project's verified knowledge base: about 150 notes, one subject each, each pinned to the source by `sourceRefs` (`path#symbol` anchors the brain checker keeps resolving). The notes say why the code is the way it is, which run taught each rule and what was tried and failed. Read as much of it as you can, and in a first session read all of it but `siblings/`. In this order:
+
+1. `brain/_index.md`, then `brain/rules.md`, `brain/conventions.md`, `brain/operating-manual.md`, `brain/glossary.md` and `brain/questions.md`.
+2. `brain/bot/_moc.md` (the bot's map of contents), then every note under `brain/bot/` in this order of folders: `concepts/` (the ideas: the world value, intents, facts), `decisions/` (why the design is what it is), `plan/` (the planner, every intent and act: walk, dig, collect, stairs-down, scoop, build, fortress; the largest and most important for fixes), `world/` (terrain, memory, paths), `protocol/` (packets and the reducer), `runtime/` (the loop, recording, telemetry), `crafting/` (windows, recipes, smelting), `gotchas/` (traps already fallen into), `how-to/`, and `tooling/` (the races, the sim race, the issue check, the gym: how the evidence you will read is made).
+3. `brain/game/_moc.md` and every note under `brain/game/` (`mechanics/`, `server/`, `windows/`): how vanilla 26.1.2 actually behaves, read from the server's own code.
+4. `brain/siblings/` when a fix touches what the two sibling bots (TypeScript and Rust) learned first: drafts, not verified, but often the first record of a mechanic.
+
+To list them: `find brain -name '*.md' | sort`. Before touching any namespace later, reread its note (`grep -rl '<namespace-or-function>' brain/`).
+
+### 0.5 Read ten source files, in full
+
+These are the namespaces the most other files depend on, plus the two that show the project's own patterns at their clearest. Read each top to bottom: the data at the top, then the helpers, then the entry points, each function with its docstring. Notice the shape: small pure functions over the world value, a docstring that states the rule and often the run that taught it, constants as `def`s with a comment, `cond` and `reduce`, namespaced keys everywhere.
+
+1. `src/clojurecraft/game.clj`: the protocol reducer, `game/step`; every packet's handler (`on-packet`, a multimethod); effects as data. The centre of the bot.
+2. `src/clojurecraft/plan.clj`: the planner; the goal table loaded from `goals.edn`; the open registries `done-by`, `act`, `next-intent`; waits, attempts and how a plan fails.
+3. `src/clojurecraft/intent.clj`: intents as values run a tick at a time; `intent/run` as a multimethod; walk, dig, collect; child intents.
+4. `src/clojurecraft/model.clj`: the information model, every attribute with its meaning and lifetime. Every key a fix adds goes here.
+5. `src/clojurecraft/memory.clj`: facts with time in DataScript, never retracted; the Datalog queries the acts ask.
+6. `src/clojurecraft/terrain.clj`: the blocks round the bot as values: columns, the overlay, `block-at`, `solid-fn`.
+7. `src/clojurecraft/physics.clj`: vanilla movement as a pure function of the player, the controls and a solidity oracle.
+8. `src/clojurecraft/blocks.clj`: the generated block, item and entity tables and the questions asked of them (`solid?`, `log?`, `name-of`).
+9. `src/clojurecraft/stairs.clj`: an executor made of child digs (stairs up and down, the boxed and duck rules): the kind of namespace most fixes change.
+10. `src/clojurecraft/build.clj`: a build plan as data, every op with a done-predicate read from the world, so a cast resumes after a death: "builds are data" in `hickey.md`, in code.
+
+When a fix touches the server model, read `src/clojurecraft/sim.clj` as well (the largest namespace).
+
+### 0.6 Then this file
+
+Sections 1 to 18. Then take an issue (section 5).
 
 ---
 
@@ -53,7 +121,7 @@ Why: GitHub's runners have the compute and the captured worlds; the laptop must 
 
 ### 1.4 Never touch the shared game box
 
-Never connect to, SSH into, or send RCON to `144.24.32.76`, and never use the ports 25565-25570 or 25575-25580. Do not start Minecraft servers locally either.
+Never connect to, SSH into, or send RCON to `144.24.32.76`. Never start a Minecraft server on the local machine. The runners start their own servers (on 25565 and up, on the runner, in the race and gym workflows); that is theirs, not a port rule for you.
 
 Why: that box is shared with other projects; an accidental world reset or server restart destroys their work. The runners bring up their own servers.
 
@@ -77,14 +145,10 @@ Commit through the hooks every time. If a hook fails, fix what it says (section 
 
 ## 2. Orientation: what to read first
 
-Read these before your first fix, in this order. Skim the second time.
+Section 0 is the reading: the tree, `docs/hickey.md`, `CLAUDE.md`, the brain and ten source files. Where `CLAUDE.md` and this file disagree on process, this file is newer for the fix loop. Two more, once:
 
-1. This file.
-2. `docs/hickey.md`: the style the code follows. The bot is a pure reducer over a world value; facts are data; nothing is predicted; time is an input. A fix that fights this style will be wrong in ways the tests do not catch.
-3. `CLAUDE.md` at the repo root: the repository map, the commands, the CI, the rules. Despite its file name it applies to every agent and person. Where it and this file disagree on process, this file is newer for the fix loop.
-4. `docs/CHURN.md`: the older description of finding and fixing failures on the runners. Its "run locally" advice is superseded by rule 1.3.
-5. `brain/`: the notes, one per subject, each pinned to the source by `sourceRefs`. Before touching a namespace, read its note (`grep -rl '<ns-or-fn-name>' brain/`). The notes record why things are the way they are, with the run that taught it.
-6. `resources/clojurecraft/problems.edn`: one row per stage (wood, kit, pickaxe, ..., portal, nether, fortress) with the statement, needs, risks, what done means and `:problem/last-failure`, a running record of what failed last at that stage and what was done about it. Every fix appends a sentence there (section 10.5).
+1. `docs/CHURN.md`: the older description of finding and fixing failures on the runners. Its "run locally" advice is superseded by rule 1.3.
+2. `resources/clojurecraft/problems.edn`: one row per stage (wood, kit, pickaxe, ..., portal, nether, fortress) with the statement, needs, risks, what done means and `:problem/last-failure`, a running record of what failed last at that stage and what was done about it. Every fix appends a sentence there (section 10.5).
 
 ### 2.1 The bot in one page
 
@@ -201,7 +265,7 @@ gh issue view <n> --json labels,state,title --jq '[.state, .title, ([.labels[].n
 
 - Only items with Status `Todo`.
 - Only issues labelled `bot-failure` (with `sim`, `real` or both).
-- Never an item `In Progress`: another agent owns it, even if it looks stale (see 15.11).
+- Never an item `In Progress`: another agent owns it, unless it is stale by all three tests of 4.6.
 - Never issue #10 (the roadmap, on hold) and never anything without `bot-failure` (tooling issues belong to whoever owns the tooling).
 
 ### 4.4 Moving an item
@@ -215,7 +279,40 @@ gh project item-edit --id <item-id> --project-id "$PROJECT_ID" \
 
 Re-read the board after every move to confirm it held (another agent may have moved it at the same moment).
 
----
+### 4.5 Heal the board
+
+The rounds file and reopen issues on their own, and the board may not follow. Every time you open the board, make it true:
+
+```sh
+gh issue list --label bot-failure --state open --limit 500 --json number,url > /tmp/open.json
+# 1. an open bot-failure issue that is not on the board: add it, then set it to Todo
+for url in $(jq -r --slurpfile b /tmp/board.json '.[] | select(.number as $n | ($b[0].items | map(.content.number) | index($n)) | not) | .url' /tmp/open.json); do
+  item=$(gh project item-add 10 --owner BridgerB --url "$url" --format json --jq '.id')
+  gh project item-edit --id "$item" --project-id "$PROJECT_ID" --field-id "$STATUS_FIELD" --single-select-option-id "$TODO"
+done
+```
+
+2. An item whose issue is open but whose status is `Done` or empty: the issue was reopened (or never sorted). Set it to `Todo`.
+3. An item whose issue is closed but whose status is `Todo` or `In Progress`: set it to `Done`.
+
+Re-read the board after healing. Healing moves items between `Todo` and `Done` only, never into or out of `In Progress` except as 4.6 says.
+
+### 4.6 Stale claims
+
+An agent can stop mid-claim (its session ended, its machine slept). Its items would stay `In Progress` forever. An item is stale when all three hold:
+
+- its status was set to `In Progress` more than six hours ago (the status value's `updatedAt`, below);
+- its claim branch (`fix/<n>` or `fix/<n>-rK`) has no commit newer than six hours that is not on `main` (`git log -1 --format=%cI origin/fix/<n>` against `git merge-base`), or does not exist;
+- no open PR from that branch was updated in the last six hours (`gh pr list --head fix/<n> --json updatedAt`).
+
+```sh
+gh api graphql -f query='query { user(login: "BridgerB") { projectV2(number: 10) { items(first: 100) { nodes {
+  id content { ... on Issue { number } }
+  fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name updatedAt } } } } } } }' \
+  --jq '.data.user.projectV2.items.nodes[] | select(.fieldValueByName.name == "In Progress") | [.content.number, .id, .fieldValueByName.updatedAt] | @tsv'
+```
+
+A stale item may be returned, by any agent, without asking: keep the abandoned work by pushing its branch to `stale/fix/<n>-<YYYYMMDD>`, delete `fix/<n>` (`git push origin --delete fix/<n>`), close its PR if it has one (`gh pr close <pr>`, no comment), and set the item back to `Todo`. Then it is an ordinary Todo item, for you or anyone. Never return an item that is not stale by all three tests; an agent thinking for a long time still pushes and updates its PR.
 
 ## 5. The loop, step by step
 
@@ -223,11 +320,11 @@ This is the spine of the work. Do it the same way every time.
 
 ### Step 1. Read
 
-Read this file, `docs/hickey.md` and `CLAUDE.md` (section 2). After the first time, reread section 15 (catches) at the start of each session.
+Section 0, if not done in this session: the tree, `docs/hickey.md`, `CLAUDE.md`, the brain, the ten files. Then this file. At the start of each session, reread section 15 (catches) as well.
 
 ### Step 2. Open the board
 
-Look up the ids and list the items (section 4).
+Look up the ids and list the items (section 4). Then heal the board (4.5): add any open bot-failure issue that is missing, put reopened issues back in `Todo`, put closed ones in `Done`, and return stale claims (4.6). Do this every time; nothing else keeps the board true.
 
 ### Step 3. Filter
 
@@ -250,18 +347,24 @@ In this order, and stop at the first sign that someone else got there first.
 
 a. Re-read the board and confirm each chosen item is still `Todo`.
 
-b. Check no branch exists for it, then create the branch from the latest `origin/main` and push it at once. The push is the lock.
+b. Push the claim branch. Its name is fixed by the issue, never chosen: `fix/<n>`, where `<n>` is the lowest issue number in your group. Two agents that chose the same issue compute the same name, and git lets only one of them create it: the push is the lock.
 
 ```sh
 git fetch origin
-git ls-remote --heads origin 'fix/<n>-*'          # must print nothing
-git switch -c fix/<n>-<slug> origin/main
-git push -u origin fix/<n>-<slug>
+B=fix/<n>
+git ls-remote --exit-code --heads origin "$B" >/dev/null && echo "taken"   # prints "taken" when it exists
+git switch -c "$B" origin/main
+git push -u origin "$B"            # rejected when another agent created it first: that agent has it
 ```
 
-The slug is a few words of the cause or the signature (`fix/142-no-station`, `fix/88-rejected`). If `ls-remote` prints a branch, or the push is rejected because it exists, another agent has it: pick something else.
+When `fix/<n>` already exists, look at its pull request: `gh pr list --head "$B" --state all --json number,state`.
 
-c. Move each chosen item to `In Progress` (4.4), then re-read to confirm the move held.
+- An open PR, or no PR at all: another agent has the issue. Pick something else.
+- Only a merged or closed PR (the issue was fixed once and has come back, "regressed"): the name is spent. Claim `fix/<n>-r2` the same way, then `fix/<n>-r3`, the first that does not exist. Every agent counts the same way, so the lock still holds.
+
+Never a slug in the name (`fix/<n>-<words>`): two agents with two slugs would both succeed, and the lock would be gone. Older branches in this repository have slugs; they are from before this rule.
+
+c. Move each chosen item to `In Progress` (4.4), then re-read to confirm the move held. If any item turns out not to be `Todo` any more, delete your branch (`git push origin --delete "$B"`) and choose again.
 
 No comment, no assignee, no label, no name: the board status and the branch are the whole claim (rule 1.2).
 
@@ -289,6 +392,8 @@ gh pr checks <pr> --watch --interval 30 > /tmp/checks-<pr>.txt 2>&1 &
 ```
 
 Keep working (the next issue's reading, a probe) while it runs. A red check: read its log, fix, push another commit to the same branch, repeat until green (12.3). Never rerun anything locally "to confirm".
+
+If your tool cannot run a process in the background, poll instead: between other work, every three to five minutes, run `gh pr checks <pr>` (or `gh run view <id> --json status,conclusion` for a probe) and carry on until it reports a result. Never sit in a loop of `sleep` doing nothing; never let a turn end only because a run has not finished.
 
 ### Step 10. Code questions go to `probe.yml`
 
@@ -416,7 +521,7 @@ gh run download "$ID" -n probe-"$ID" -D /tmp/probe-"$ID"      # anything written
 Never on the fix branch: a probe script is not part of the fix. Make a throwaway branch from the fix branch (to probe the fix) or from `main` (to probe the failure), put the script under `probe/` and the inputs under `probe/<n>/`, commit (through the hooks: they lint the script too, see 15.13) and push:
 
 ```sh
-git switch -c probe/<n> origin/fix/<n>-<slug>       # or origin/main
+git switch -c probe/<n> origin/fix/<n>       # or origin/main
 mkdir -p probe/<n> && cp /tmp/ev/<n>/r4/snapshots/R4-35-2.edn.gz probe/<n>/
 $EDITOR probe/p<n>.clj
 git add probe && git commit -m "probe: issue <n>" && git push -u origin probe/<n>
@@ -609,7 +714,7 @@ lefthook runs: `tidy-ns` (clojure-lsp clean-ns), `format` (zprint), `lint` (clj-
 ### 11.3 Branch hygiene
 
 - Start from a fresh `origin/main` (`git fetch origin` first). Agents merge all day.
-- One root cause, one branch, one PR.
+- One root cause, one branch, one PR. The branch is the claim: `fix/<n>` for the lowest issue in the group (step 5).
 - Never rebase or force-push a branch after others may have pulled it; merge `origin/main` into it instead (13.1).
 
 ---
@@ -620,7 +725,7 @@ lefthook runs: `tidy-ns` (clojure-lsp clean-ns), `format` (zprint), `lint` (clj-
 
 ```sh
 git push
-gh pr create --base main --head fix/<n>-<slug> --title "<the commit subject>" --body-file /tmp/pr.md
+gh pr create --base main --head fix/<n> --title "<the commit subject>" --body-file /tmp/pr.md
 # not ready yet: add --draft, and mark it ready with gh pr ready <pr> when the evidence is in
 ```
 
@@ -699,7 +804,7 @@ Never `--admin`, never squash a branch whose history others refer to (the repo m
 
 ### 13.2 The board
 
-Move each closed issue's item to `Done` (4.4) if the board's automation did not.
+Move each closed issue's item to `Done` (4.4) yourself; do not count on the board's automation. The next agent's healing (4.5) catches what you miss, but move it anyway.
 
 ### 13.3 After the merge
 
@@ -795,7 +900,7 @@ Real rounds keep 25 bots on each server; the server falls to 7 or 8 ticks a seco
 
 ### 15.11 Items stuck In Progress
 
-An item `In Progress` whose branch has had no pushes and whose PR (if any) no activity for a long time (more than a day): do not take it and do not move it. Tell the owner.
+An item `In Progress` is another agent's. Only when it is stale by all three tests of 4.6 (six hours with no status change, no new commit and no PR activity) may you archive its branch and return it to `Todo`.
 
 ### 15.12 Conflicts in `problems.edn`
 
@@ -838,10 +943,10 @@ gh project item-list 10 --owner BridgerB --format json --limit 500 \
   | jq -r '.items[] | select(.status == "Todo" and .content.type == "Issue") | [.content.number, .id, .content.title] | @tsv' | sort -n
 gh issue view <n> --json labels,state --jq '[.state, ([.labels[].name] | join(","))] | @tsv'
 
-# claim (section 5, step 5)
+# claim (section 5, step 5): the branch name is fixed by the issue
 git fetch origin
-git ls-remote --heads origin 'fix/<n>-*'
-git switch -c fix/<n>-<slug> origin/main && git push -u origin fix/<n>-<slug>
+git ls-remote --exit-code --heads origin fix/<n> >/dev/null && echo taken
+git switch -c fix/<n> origin/main && git push -u origin fix/<n>
 gh project item-edit --id <item> --project-id "$PROJECT_ID" --field-id "$STATUS_FIELD" --single-select-option-id "$(opt 'In Progress')"
 
 # evidence (section 7)
@@ -861,7 +966,7 @@ gh run view <id> --log
 # local checks, commit, PR (sections 7, 11, 12)
 bb fmt && bb check
 git add -A src test brain resources && git commit -F /tmp/msg.txt
-git push && gh pr create --base main --head fix/<n>-<slug> --title "<subject>" --body-file /tmp/pr.md
+git push && gh pr create --base main --head fix/<n> --title "<subject>" --body-file /tmp/pr.md
 gh pr checks <pr> --watch --interval 30 > /tmp/checks-<pr>.txt 2>&1 &
 gh run view <run> --log-failed
 
