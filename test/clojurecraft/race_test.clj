@@ -152,3 +152,14 @@
     (is (:run/signature m) "the stage it was on is still kept")
     (is (not (:run/cut? (race/marked (assoc r :reason :no-site)))) "a bot's own stop is a failure")
     (is (= {:ok true :reason :goal} (race/marked {:ok true :reason :goal})) "a pass is unchanged")))
+
+(deftest a-slot-backs-off-while-its-bots-never-play
+  (let [quick (dec race/quick-ms)]
+    (is (= 1000 (race/backoff-ms 0 quick {:reason :crashed})) "the server refused: wait a second")
+    (is (= 4000 (race/backoff-ms 2000 quick {:reason :closed})) "still gone: twice as long")
+    (is (= race/backoff-max-ms (race/backoff-ms 50000 quick {:reason :disconnected}))
+        "at most a minute")
+    (is (zero? (race/backoff-ms 8000 race/quick-ms {:reason :crashed}))
+        "a bot that played long enough")
+    (is (zero? (race/backoff-ms 8000 quick {:reason :no-site}))
+        "a bot's own stop is play, not a dead server")))

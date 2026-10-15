@@ -177,6 +177,8 @@ jobs:
             done
           ) &
           churn=$!
+          # shellcheck disable=SC2086 # one pid per word
+          printf '%s\n' $races > work/races.pids   # for Stop the races, on a cancel too
           # the machine's load every 5 minutes (issue #140): processes, threads, the cgroup's pid
           # limit, memory and the biggest thread holders, so a runner that runs out of threads is seen
           load() {
@@ -192,6 +194,15 @@ jobs:
                                 # failing is what the issues are for; the step is red only when
                                 # the race itself could not run
           wait "$churn" || true
+      - name: Stop the races
+        # before the servers stop: a cancel leaves the race processes running, and with their server
+        # gone every slot would start bot after bot until the runner can fork no more (issue #145).
+        # Shell builtins only, so it runs on a loaded machine
+        if: always()
+        run: |
+          if [ -f work/races.pids ]; then
+            while read -r p; do kill "$p" 2>/dev/null || true; done < work/races.pids
+          fi
       - name: Last report
         # the bots that ended since the last batch, the cut ones among them; a cancel (a merge's push)
         # runs it too, so nothing a round played is lost to the next round
