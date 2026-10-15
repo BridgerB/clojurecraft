@@ -127,7 +127,7 @@ The machine you run on is the owner's laptop. Locally you may only: edit files, 
 
 Never locally: any test (not even one test var), any snapshot judged or played on, any replay of a recording, any probe or scratch script that loads the bot's code (`clojure -M:dev`, `-M:test`, `-M:simrace`, `-M:replay`, `-M:run`, `bb test`, `bb ci`, `bb replay`, `bb gym`), any sim, gym or race of any length, and never a local Minecraft server.
 
-Why: GitHub's runners have the compute and the captured worlds; the laptop must stay usable, and a "quick" local run is how hours of heat and battery went before this rule. Everything that runs code goes through a pull request's checks or `probe.yml` (section 8). This is not a guideline to weigh against convenience.
+Why: GitHub's runners have the compute and the captured worlds; the laptop must stay usable, and a "quick" local run is how hours of heat and battery went before this rule. Everything that runs code goes through the branch's `test.yml` run on each push, the pull request's checks, or `probe.yml` (section 8). This is not a guideline to weigh against convenience.
 
 ### 1.4 Never touch the shared game box
 
@@ -391,25 +391,30 @@ bb check        # format check, lint (clj-kondo), idioms (Splint), ns forms, unu
 
 Nothing else locally (rule 1.3).
 
-### Step 8. Commit, push, open the PR at once
+### Step 8. Commit and push to the claim branch
 
-Section 11 for the commit, section 12 for the PR. Open the PR as soon as the first commit is pushed (as a draft if the evidence is not in yet): its checks are your test run.
+Section 11 for the commit. Push every commit to your claim branch (`fix/<n>`). Do not open a pull request yet: the board status and the branch are the claim, and a PR is opened only when the change is ready (step 11). Every push to any branch runs `test.yml`: the whole unit suite (including `issues_test`, which judges every snapshot under `test/issues/`, yours too), one forest shard of the sim property, and the workflow lint. That run is your test run.
 
-### Step 9. Watch the checks without blocking
+### Step 9. Watch the branch's test run without blocking
 
 ```sh
-gh pr checks <pr> --watch --interval 30 > /tmp/checks-<pr>.txt 2>&1 &
+ID=$(gh run list --workflow test.yml --branch fix/<n> --limit 1 --json databaseId,headSha \
+  --jq '.[] | select(.headSha == "'"$(git rev-parse HEAD)"'") | .databaseId')
+gh run watch "$ID" --exit-status > /tmp/test-<n>.txt 2>&1 &
+gh run view "$ID" --log-failed | grep -E 'FAIL|ERROR|expected|actual|::error|Exception' | head -40   # when red
 ```
 
-Keep working (the next issue's reading, a probe) while it runs. A red check: read its log, fix, push another commit to the same branch, repeat until green (12.3). Never rerun anything locally "to confirm".
+(If the list is empty, the run has not been created yet; ask again a few seconds later.) Keep working (the next issue's reading, a probe) while it runs. A red run: read its log, fix, push another commit to the same branch, repeat until green (12.3). Never rerun anything locally "to confirm".
 
-If your tool cannot run a process in the background, poll instead: between other work, every three to five minutes, run `gh pr checks <pr>` (or `gh run view <id> --json status,conclusion` for a probe) and carry on until it reports a result. Never sit in a loop of `sleep` doing nothing; never let a turn end only because a run has not finished.
+If your tool cannot run a process in the background, poll instead: between other work, every three to five minutes, run `gh run view <id> --json status,conclusion` and carry on until it reports a result. Never sit in a loop of `sleep` doing nothing; never let a turn end only because a run has not finished.
 
 ### Step 10. Code questions go to `probe.yml`
 
 Section 8.
 
-### Step 11. Merge
+### Step 11. Open the PR when the change is ready, then merge
+
+Ready means: the fix and its test are pushed, the branch's `test.yml` run is green, the snapshots the issue check needs are under `test/issues/<n>/`, and you have the before/after evidence (from probes, section 8). Only then open the pull request (12.1), never as a draft. Its checks add the issue check (`check`: a `sim`-labelled issue it fixes must carry snapshots) to `unit / unit`. A red check: commit and push to the same branch; the PR's checks run again.
 
 Green, and the PR body carries the before/after evidence: merge normally (13.1). The `Fixes #n` lines close the issues. Move their board items to `Done` if the board does not do it on its own.
 
@@ -731,12 +736,14 @@ lefthook runs: `tidy-ns` (clojure-lsp clean-ns), `format` (zprint), `lint` (clj-
 
 ## 12. The pull request and its checks
 
-### 12.1 Open it right away
+### 12.1 Open it when the change is ready
+
+Not before (step 11): the work in progress lives on the claim branch, tested by `test.yml` on every push, and the PR list holds only changes that are ready to judge. Never open a draft.
 
 ```sh
 git push
 gh pr create --base main --head fix/<n> --title "<the commit subject>" --body-file /tmp/pr.md
-# not ready yet: add --draft, and mark it ready with gh pr ready <pr> when the evidence is in
+gh pr checks <pr> --watch --interval 30 > /tmp/checks-<pr>.txt 2>&1 &
 ```
 
 The body, one paragraph per line (no hard wraps):
@@ -973,12 +980,16 @@ gh run list --workflow probe.yml --limit 20 --json databaseId,displayTitle --jq 
 gh run watch <id> > /dev/null 2>&1 &
 gh run view <id> --log
 
-# local checks, commit, PR (sections 7, 11, 12)
+# local checks, commit, push: test.yml runs on every push (sections 5, 11)
 bb fmt && bb check
 git add -A src test brain resources && git commit -F /tmp/msg.txt
-git push && gh pr create --base main --head fix/<n> --title "<subject>" --body-file /tmp/pr.md
-gh pr checks <pr> --watch --interval 30 > /tmp/checks-<pr>.txt 2>&1 &
+git push
+gh run list --workflow test.yml --branch fix/<n> --limit 1 --json databaseId,status,conclusion
 gh run view <run> --log-failed
+
+# the PR, only when the change is ready (step 11, section 12)
+gh pr create --base main --head fix/<n> --title "<subject>" --body-file /tmp/pr.md
+gh pr checks <pr> --watch --interval 30 > /tmp/checks-<pr>.txt 2>&1 &
 
 # merge (section 13)
 gh pr view <pr> --json mergeStateStatus --jq .mergeStateStatus
