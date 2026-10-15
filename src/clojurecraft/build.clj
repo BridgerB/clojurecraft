@@ -699,7 +699,9 @@
    38477665442 Clj_r25 had scooped its water from a sand cell at the lake's edge under a bank
    two high; the cell nearest the stand was the bank's top, a step up beside it that only cells
    over the water led to, and three builds failed :no-path walking at it while the sand cell
-   itself reached the pad (issue #45). Never a cell whose body, feet or head, is pos: a block is
+   itself reached the pad (issue #45). The feet may stand a block under pos too, the head level
+   with it: sim race 38660819204 (issue #74) had a room cell still in the rock with open cells
+   beside it whose floor was a block lower, and failed :no-stand three times. Never a cell whose body, feet or head, is pos: a block is
    not placed into the player. Sim race 38665691522 (issue #44): the cast laid a floor in the
    cell over the feet, the bot's head in it, and the server refused it three times, :rejected."
   [world stand pos]
@@ -714,7 +716,7 @@
                                       {:intent/kind :walk :intent/target cell :intent/for :build}))]
     (if (ok? feet)
       feet
-      (->> (for [dy [0 -1 1]
+      (->> (for [dy [0 -1 1 -2]
                  dx (range -4 5)
                  dz (range -4 5)
                  :let [c (mapv + pos [dx (inc dy) dz])]
