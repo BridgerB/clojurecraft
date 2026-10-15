@@ -21,7 +21,7 @@ related:
 Implement protocol 775 ourselves: about fifty packet specs as a data table, one interpreter, JDK-only sockets and zlib. The only dependency is core.async.
 
 ## What was rejected
-- MCProtocolLib (GeyserMC) via Java interop: class-per-packet, mutable session objects, and 26.1.2 support could not be confirmed from its repository page on 2026-10-09. It would have made every packet an object and every handler a listener, the opposite of the design in `docs/hickey.md`.
+- MCProtocolLib (GeyserMC) via Java interop: class-per-packet, mutable session objects, and 26.1.2 support could not be confirmed from its repository page on 2026-10-09. It would have made every packet an object and every handler a listener, the opposite of the design in `docs/RICH-HICKEY.md`.
 - Clojurecraft (2011, Steve Losh) and witchcraft (Bukkit server-side): abandoned or server-side; not clients.
 
 ## What would change the answer

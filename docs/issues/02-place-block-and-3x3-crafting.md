@@ -87,7 +87,7 @@ Both siblings spent most of their race time inside placement and crafting bugs, 
 
 ## References
 
-- `upstream/clojurecraft/src/clojurecraft/{game,plan,intent,memory,packet,sim,spec}.clj`; `docs/hickey.md` ("Goals are data; planning is a function; executing is open")
+- `upstream/clojurecraft/src/clojurecraft/{game,plan,intent,memory,packet,sim,spec}.clj`; `docs/RICH-HICKEY.md` ("Goals are data; planning is a function; executing is open")
 - `steve/src/lib/typecraft/protocol/packet-defs.ts:2326-2362, 2772-2784, 998-1003`; `typecraft/bot/placing.ts`; `typecraft/bot/crafting.ts`; `typecraft/bot/craft-window.test.ts`; `typecraft/window/windows.ts:60`
 - `steve/src/lib/steve/steps.ts:138-170`; `lib/run-loop.ts:143-144, 365-372`; `lib/bot-utils.ts:1564-1680, 1780-1950, 2006-2220`; `tasks/portal/cast.ts:88-151`
 - `ruststeve/src/bot/mod.rs:1853-1905`; `src/bot/inventory.rs:40-70`; `src/bot/crafting.rs`; `src/bot_utils.rs:824-935`; `CHANGES.md:124, 964, 1092, 1119-1121, 1213`

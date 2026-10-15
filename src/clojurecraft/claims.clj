@@ -1,5 +1,5 @@
 (ns clojurecraft.claims
-  "The one thing racing bots share (issue #17, docs/hickey.md \"Conveyance, bounded\"): which
+  "The one thing racing bots share (issue #17, docs/RICH-HICKEY.md \"Conveyance, bounded\"): which
    landing cells are taken. Claims are values and the claims are a value; `claim` is a pure
    reducer, first come first served, so no cell is ever granted twice. A cell is a square of the
    world cell-size blocks wide, [cx cz], counted from the race's centre; the spiral orders them
