@@ -893,21 +893,21 @@
   (boolean (and (= :place kind) (= :rejected reason) cell (place/inside-player? world cell))))
 
 (defn pickaxe-at-hand?
-  "Could a stone pickaxe be made where the bot stands: two sticks, three cobblestone and a
-   crafting table held or placed near? A pickaxe that breaks with none of that at hand leaves the
-   rest of a build to the hand: a cast's last few blocks dug slowly beat a climb for wood."
+  "Could a pickaxe be made without going out for anything: the needs planner's next step toward
+   one (make/next-row over plan/goals) a craft or a table placed, not a gather, a mine or a scoop
+   (make/fetch?)? A pickaxe that breaks with nothing at hand leaves the rest of a build to the
+   hand: the sealed-pool cast's last few blocks, dug slowly, beat a climb for wood that is not
+   there."
   [world]
-  (let [held (make/counts world)]
-    (boolean (and (>= (get held :stick 0) 2)
-                  (>= (get held :cobblestone 0) 3)
-                  (or (pos? (get held :crafting_table 0)) (make/near world :crafting_table))))))
+  (let [row (make/next-row world {:goal/id :pickaxe :goal/provides {:tag/pickaxes 1}} plan/goals)]
+    (boolean (and (map? row) (not (make/fetch? row))))))
 
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i, one that is done
    makes way for the next. Shared by every intent that works a plan of ops. A dig of rock with no
    pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand when one can be
-   made where the bot stands (pickaxe-at-hand?), so the build's row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
+   made without going out for anything (pickaxe-at-hand?), so the build's row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
    in the cast's room at y -20 and dug deepslate by hand, fifteen seconds a block, for the last
    half hour of its ninety minutes."
   [world {:intent/keys [child op] :as i} next event]
