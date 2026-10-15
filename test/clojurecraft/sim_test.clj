@@ -461,7 +461,7 @@
   (apply merge (map tree-blocks trees)))
 
 (deftest the-wood-goal-holds-in-generated-forests
-  ;; the bot against the model in 2,000 worlds test.check builds (docs/hickey.md: "thousands of
+  ;; the bot against the model in 2,000 worlds test.check builds (docs/RICH-HICKEY.md: "thousands of
   ;; generated worlds in the time one real run takes"): 1-3 trees of mixed species and heights
   ;; anywhere in the column, on mounds or flat ground, under low leaves or open sky, from a
   ;; varied spawn. Where any tree stands on a bank it can climb (0 or 1 high) it ends holding a
@@ -685,7 +685,7 @@
 ;; ---------------------------------------------------------------- through a channel pair
 
 (deftest main's-own-loop-against-the-model-through-channels
-  ;; docs/hickey.md: "Bot and server model composed through a channel pair are a complete
+  ;; docs/RICH-HICKEY.md: "Bot and server model composed through a channel pair are a complete
   ;; simulation with no Java process." The loop here is main's: wall-clock ticks, effects
   ;; drained onto :out, packets read from :in, :go put on the events channel once loaded.
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})

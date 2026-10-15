@@ -11,7 +11,7 @@ Testing is offloaded; coding is not. The people and agents writing code stay on 
 
 Everything in the fix half was done by hand on 2026-10-11 to take the iron kit from 0 of 5 runs passing to 10 of 15; the worked examples below are from that session.
 
-Read `CLAUDE.md` and `docs/hickey.md` first: the fix must follow the project's style (one change per commit, the brain note updated in the same commit, data over code).
+Read `CLAUDE.md` and `docs/RICH-HICKEY.md` first: the fix must follow the project's style (one change per commit, the brain note updated in the same commit, data over code).
 
 ## Ground rules
 

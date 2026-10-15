@@ -1,6 +1,6 @@
 (ns clojurecraft.model
   "The information model, in writing: every attribute the bot knows, with a one-line meaning and
-   when it exists. docs/hickey.md starts here (\"Write the attribute list with namespaced names
+   when it exists. docs/RICH-HICKEY.md starts here (\"Write the attribute list with namespaced names
    and one-line meanings. Everything after this is a function over that model.\"). It is data, so
    model_test can hold it in step with the code: every key a running bot writes is listed, and
    every world attribute listed has a spec. An attribute never changes meaning; a new meaning is
@@ -74,6 +74,11 @@
    [:player/entity-id "the bot's entity id" "from the play login packet"]
    [:player/teleport-id "id of the last teleport accepted" "from the first teleport"]
    [:player/synced-at "ms of the last teleport" "from the first teleport"]
+   [:server/time-at "ms the last set-time packet came (one every 20 server ticks)"
+    "after the first set-time"]
+   [:server/tick-ms
+    "how long the server's ticks take now, from the set-time packets' spacing; digs stretch by it (intent/slowdown)"
+    "after the second set-time"]
    [:player/health "health from set_health" "after the first set_health"]
    [:control/forward? "walk forward" "inside :player/controls"]
    [:control/jump? "jump when allowed" "inside :player/controls"]

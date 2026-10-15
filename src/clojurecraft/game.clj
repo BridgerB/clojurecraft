@@ -255,6 +255,25 @@
       (emit {:packet/name :keep-alive :id (:id p)})
       (update :stats/keep-alives inc)))
 (defmethod on-packet [:play :ping] [w p] (emit w {:packet/name :pong :id (:id p)}))
+
+(def server-tick-ms 50)               ; a server tick at the target rate, 20 a second
+
+(defn clocked
+  "The world after a set-time packet: the server sends one every 20 of its ticks, so the time
+   since the last one, over 20, is how long its ticks take now (:server/tick-ms, never under
+   server-tick-ms, halfway to each new reading). A loaded server's ticks are longer, and what it
+   counts in ticks (a dig's progress) takes longer by the clock: race 38665691517 (issues #88,
+   #144) ran its server at 130 ms a tick, and digs finished by the bot's clock were left
+   standing."
+  [w]
+  (let [now (:time/now w)
+        last-at (:server/time-at w)
+        reading (when (and last-at (> now last-at)) (max server-tick-ms (/ (- now last-at) 20.0)))
+        old (:server/tick-ms w)]
+    (cond-> (assoc w :server/time-at now)
+      reading (assoc :server/tick-ms (if old (/ (+ old reading) 2.0) reading)))))
+
+(defmethod on-packet [:play :set-time] [w _] (clocked w))
 (defmethod on-packet [:play :player-position] [w p] (apply-teleport w p))
 (defmethod on-packet [:play :chunk-batch-finished]
   [w _]

@@ -304,7 +304,7 @@
 
 (defn plan-tick
   "One planning tick while :active. The goals are re-derived from the world every tick, even
-   while an intent runs (docs/hickey.md: \"the planner runs every tick against the current
+   while an intent runs (docs/RICH-HICKEY.md: \"the planner runs every tick against the current
    value, so done is re-derived, regressions re-plan automatically\"): no target left means
    :done, whatever is running; a running intent that serves another target than the one chosen
    now is preempted; either waits while the cursor holds an item. Otherwise the intent runs, or
@@ -338,7 +338,7 @@
           :else (start-intent world (assoc next :intent/goal (:goal/id goal))))))
 
 (defn step-over
-  "The planner over a goal table (docs/hickey.md: \"(plan world goals) → intent\"), as a reducer
+  "The planner over a goal table (docs/RICH-HICKEY.md: \"(plan world goals) → intent\"), as a reducer
    composed after game/step: :go begins a plan, :tick advances it. Nothing here reads a table
    from anywhere but its argument."
   [table world {:event/keys [kind] :as event}]

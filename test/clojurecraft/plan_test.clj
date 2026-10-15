@@ -875,3 +875,22 @@
     (is (empty? (memory/positions-now w blocks/log-states)) "no log anywhere")
     (is (= :walk (:intent/kind i)))
     (is (= :log-hunt (:intent/for i)) "out along a bearing, where the next chunks load")))
+
+(deftest a-slow-server-stretches-the-dig
+  ;; race 38665691517 (issues #88, #144): the server ran at 130 ms a tick, counted the digs'
+  ;; progress in its ticks, and left blocks standing that the bot had finished by its own clock
+  (testing "set-time comes every 20 server ticks: two 2.6 s apart are ticks of 130 ms"
+    (let [[w _] (run (world-state [0.5 64.0 0.5])
+                     (concat (ticks 50 150)
+                             [(packet {:packet/name :set-time})]
+                             (ticks 150 2750)
+                             [(packet {:packet/name :set-time})]))]
+      (is (= 130.0 (:server/tick-ms w)))
+      (is (= 2.6 (intent/slowdown w)))))
+  (testing "FINISH and the wait for the break stretch by the slowdown"
+    (let [[_ fx] (run (assoc (world-state [0.5 64.0 0.5]) :server/tick-ms 130.0)
+                      (concat [go] (ticks 50 12000)))
+          [[t-start _] [t-finish _]] (filter #(= :player-action (:packet/name (second %)))
+                                             (sent fx))]
+      (is (>= (- t-finish t-start) (intent/finish-delay 3000 2.6)))
+      (is (> (intent/finish-delay 3000 2.6) (* 2 (intent/finish-delay 3000)))))))

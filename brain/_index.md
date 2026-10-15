@@ -16,5 +16,5 @@ Read this first, pick a pillar, follow the links. New here? See [[operating-manu
 - [[siblings/_moc|Siblings]] - what steve (TypeScript) and ruststeve (Rust) learned the hard way, grouped by roadmap step. Pinned to their commits.
 
 ## Elsewhere
-- `docs/hickey.md` - the design essay the code follows.
+- `docs/RICH-HICKEY.md` - the design essay the code follows.
 - `docs/issues/` and GitHub issues #2-#11 - the roadmap, one research-backed issue per step; [[roadmap-issues]] maps numbers to drafts.

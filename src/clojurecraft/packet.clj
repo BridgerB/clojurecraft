@@ -78,6 +78,9 @@
     [:death-screen? :bool] [:limited-crafting? :bool] [:dimension-type :varint] [:dimension :string]
     [:seed :i64] [:game-type :u8] [:previous-game-type :i8] [:debug? :bool] [:flat? :bool]]
    [:play :s2c :keep-alive] [[:id :i64]]
+   ;; the clock, sent every 20 server ticks (MinecraftServer.tickChildren's synchronizeTime): its
+   ;; arrival is what is read (game's :server/tick-ms), its fields are left undecoded
+   [:play :s2c :set-time] []
    [:play :s2c :ping] [[:id :i32]]
    [:play :s2c :player-position] [[:teleport-id :varint] [:x :f64] [:y :f64] [:z :f64] [:dx :f64]
                                   [:dy :f64] [:dz :f64] [:yaw :f32] [:pitch :f32] [:flags :u32]]
