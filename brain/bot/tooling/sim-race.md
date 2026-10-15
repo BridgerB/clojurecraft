@@ -27,7 +27,7 @@ sourceRefs:
   - bb/clojurecraft/churn.clj#defn counted
   - bb/clojurecraft/failures.clj#defn with-tally
   - bb/clojurecraft/win.clj#defn winners
-  - .github/workflows/simrace.yml#bb churn batch sim
+  - .github/workflows/simrace.yml#name: Last report
   - src/clojurecraft/simrace.clj#defn prepared
   - "src/clojurecraft/sim.clj#The model as a server keeps a player's chunks"
   - src/clojurecraft/sim.clj#defn column-of

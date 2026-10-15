@@ -182,9 +182,17 @@ jobs:
                                 # failing is what the issues are for; the step is red only when
                                 # the race itself could not run
           wait "$churn" || true
-          report                # the bots that ended since the last report, the cut ones among them
+      - name: Last report
+        # the bots that ended since the last batch, the cut ones among them; a cancel (a merge's push)
+        # runs it too, so nothing a round played is lost to the next round
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          bb churn batch real data/race "race-$GITHUB_SHA-${{ matrix.runner }}" "$GITHUB_RUN_ID" "$GITHUB_SHA" \
+            "$(git show -s --format=%cI "$GITHUB_SHA")" "${{ matrix.runner }}" || echo "churn: the last report failed"
       - name: Summary
-        if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
+        if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -202,12 +210,12 @@ jobs:
         run: |
           for k in $(seq 1 "$SERVERS"); do WORLD="$PWD/work/world-$k" bb server stop || true; done
       - name: Pack
-        if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
+        if: always()              # a cancelled round's recordings too: the issues its batches filed name them
         run: |
           for f in data/race/s*/*.edn; do [ -f "$f" ] && [ "$(basename "$f")" != summary.edn ] && zstd -q -3 -T0 --rm "$f"; done
           for k in $(seq 1 "$SERVERS"); do cp "work/world-$k/server.log" "data/race/s$k/server.log" 2>/dev/null || true; done
       - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}   # a race a push cancelled is superseded: no summary, no pack, no wait
+        if: always()              # a cancelled round's artifact too: the issues its batches filed name it
         with:
           name: race-${{ github.sha }}-${{ matrix.runner }}
           retention-days: 7
