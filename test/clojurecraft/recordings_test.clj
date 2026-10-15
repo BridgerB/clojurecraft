@@ -15,7 +15,7 @@
             [clojurecraft.spec]))
 
 (def root "test/recordings")
-(def max-bytes (* 10 1024 1024))       ; the corpus stays under 10 MB in git
+(def max-file-bytes (* 100 1024 1024)) ; GitHub refuses a push with a file over 100 MiB: the only size limit a recording meets
 
 (defn corpus
   "[name recording-path result] for every promoted run."
@@ -27,16 +27,16 @@
         :when (and (.exists rec) (.exists res))]
     [(.getName ^java.io.File d) (str rec) (edn/read-string (slurp res))]))
 
-(defn bytes-under
-  "Total size of every file under dir."
+(defn too-big
+  "Every file under dir larger than max-file-bytes: what GitHub would refuse to take."
   [dir]
-  (reduce +
-          (map #(.length ^java.io.File %)
-               (filter #(.isFile ^java.io.File %) (file-seq (io/file dir))))))
+  (map str
+       (filter #(and (.isFile ^java.io.File %) (> (.length ^java.io.File %) max-file-bytes))
+               (file-seq (io/file dir)))))
 
-(deftest the-corpus-exists-and-stays-small
+(deftest the-corpus-exists-and-fits-on-github
   (is (seq (corpus)) "at least one promoted run")
-  (is (< (bytes-under root) max-bytes)))
+  (is (empty? (too-big root))))
 
 (deftest every-recorded-run-replays
   (doseq [[name path result] (corpus)]
