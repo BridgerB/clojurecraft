@@ -232,7 +232,7 @@
         stage (stage-of snap)
         until (:snapshot/until snap)
         stop? #(or (plan/done? %) (plan/failed? %) (contains? (:plan/reached %) stage))
-        {world' :world} (sim/play-from step m stop? (window-of snap) (go-of w until) false)]
+        {world' :world} (sim/play-from step m stop? (window-of snap) (go-of w until) nil)]
     (assoc (failure/mark (main/result world' until (main/ok? world' until)))
            :run/ms (:time/now world')
            :run/from (:time/now world)

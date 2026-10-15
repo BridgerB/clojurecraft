@@ -113,27 +113,31 @@
 
 (deftest a-moment-plays-on-exactly-as-the-run-did
   ;; a kept moment carries what the next tick depends on (pending packets, the tick seed, go
-  ;; sent, packets in flight), so playing it on is the run itself, not a run like it
-  (with-redefs [sim/moment-every-ms 1000]
-    (let [opts {:host "sim" :port 0 :name "Clj_sim"}
-          s (sim/init {:columns (:capture/columns two-columns)
-                       :decoded (:capture/decoded two-columns)
-                       :spawn (simrace/spawn-of two-columns)
-                       :seed 1
-                       :tick-seed 1})
-          stop? #(or (plan/done? %) (plan/failed? %))
-          full
-          (sim/run+ simrace/step (game/init opts) s stop? 120000 (simrace/go-of two-columns "wood"))
-          moments (:moments full)
-          mid (nth moments (quot (count moments) 2))
-          again (sim/play-from simrace/step mid stop? 120000 nil false)]
-      (is (< 2 (count moments)) "moments kept along the run")
-      (is (< 0 (:t mid) (:time/now (:world full))) "a moment from the middle of the run")
-      (is (= :done (:plan/status (:world full))))
-      (is (= (dissoc (:world full) :world/facts) (dissoc (:world again) :world/facts))
-          "played on from the middle, the same world at the same tick")
-      (is (= (memory/intentions (:world full)) (memory/intentions (:world again))))
-      (is (= (:sim full) (:sim again)) "and the same model"))))
+  ;; sent, packets in flight), so playing it on is the run itself, not a run like it; a moment
+  ;; every simulated second here (the races keep one every half minute)
+  (let [opts {:host "sim" :port 0 :name "Clj_sim"}
+        s (sim/init {:columns (:capture/columns two-columns)
+                     :decoded (:capture/decoded two-columns)
+                     :spawn (simrace/spawn-of two-columns)
+                     :seed 1
+                     :tick-seed 1})
+        stop? #(or (plan/done? %) (plan/failed? %))
+        full (sim/play-from simrace/step
+                            (sim/start-moment simrace/step (game/init opts) s)
+                            stop?
+                            120000
+                            (simrace/go-of two-columns "wood")
+                            1000)
+        moments (:moments full)
+        mid (nth moments (quot (count moments) 2))
+        again (sim/play-from simrace/step mid stop? 120000 nil nil)]
+    (is (< 2 (count moments)) "moments kept along the run")
+    (is (< 0 (:t mid) (:time/now (:world full))) "a moment from the middle of the run")
+    (is (= :done (:plan/status (:world full))))
+    (is (= (dissoc (:world full) :world/facts) (dissoc (:world again) :world/facts))
+        "played on from the middle, the same world at the same tick")
+    (is (= (memory/intentions (:world full)) (memory/intentions (:world again))))
+    (is (= (:sim full) (:sim again)) "and the same model")))
 
 (deftest the-moment-is-kept-from-before-the-decision
   ;; a failure is kept from at least decision-lead-ms before the choice that failed, not from
