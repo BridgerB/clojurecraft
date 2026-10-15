@@ -15,7 +15,8 @@ sourceRefs:
   - src/clojurecraft/smelt.clj#defn lay
   - src/clojurecraft/smelt.clj#defmethod stage :cook
   - src/clojurecraft/smelt.clj#defn lost
-  - src/clojurecraft/smelt.clj#defn resync
+  - "src/clojurecraft/window.clj#Learn the server's cursor after a lost click"
+  - src/clojurecraft/window.clj#defn lost
   - src/clojurecraft/window.clj#defn resync-click
   - src/clojurecraft/make.clj#defmethod plan/act :smelt
   - test/clojurecraft/sim_test.clj#four-raw-iron-and-a-coal-become-four-ingots-in-a-placed-furnace
@@ -50,9 +51,9 @@ The needs planner's generated smelt rows (one per `smelting.edn` recipe: the inp
 5. **`:close`**: put a loaded cursor down, shift-click anything left out, then `container-close`: done.
 
 ## A lost click
-A furnace's own ticks move the window's state id, and what a failed smelt leaves on the cursor or in the furnace is not in the inventory the planner plans from, so a planner retry could not find it. So an unanswered click (`window/waiting` overdue) is recovered inside the intent (`lost`): the next click is a resync, then a lost take or close carries on and a lost settle or load click starts over at `:settle`. The third loss fails `:stale-window`.
+A furnace's own ticks move the window's state id, and what a failed smelt leaves on the cursor or in the furnace is not in the inventory the planner plans from, so a planner retry could not find it. So an unanswered click (`window/waiting` overdue) is recovered inside the intent (`lost`, which calls `window/lost`): the next click is a resync, then a lost take or close carries on and a lost settle or load click starts over at `:settle`. The third loss fails `:stale-window`.
 
-The resync (`resync`, `window/resync-click`) puts the cursor down into a free slot with state id -1. 26.1.2's `handleContainerClick` applies any click and, when its state id is not the menu's, answers with `broadcastFullState`: the whole window and the real cursor, under a fresh state id ([[mc-state-ids-prediction]]). So the bot learns the cursor whether the click moved anything or not; `window/click` had forgotten it as it sent. Without the resync, losing the click that lays the coal left the coal on the server's cursor, unseen, and the plan failed `:no-fuel`.
+The resync (`window/resync`, `window/resync-click`) puts the cursor down into a free slot with state id -1. 26.1.2's `handleContainerClick` applies any click and, when its state id is not the menu's, answers with `broadcastFullState`: the whole window and the real cursor, under a fresh state id ([[mc-state-ids-prediction]]). So the bot learns the cursor whether the click moved anything or not; `window/click` had forgotten it as it sent. Without the resync, losing the click that lays the coal left the coal on the server's cursor, unseen, and the plan failed `:no-fuel`.
 
 `every-lost-smelt-click-is-recovered-from-the-servers-slots` loses each of the smelt's clicks in turn and requires four ingots and no violation every time. `the-smelt-never-closes-with-a-loaded-cursor-or-clicks-outside-the-window` (200 cases) feeds the intent any furnace packets in any order and holds that it closes only with an empty cursor and clicks only the furnace window's own slots ([[property-tests]]).
 

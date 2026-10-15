@@ -36,6 +36,7 @@
            :view/grid slots
            :view/slot-of #(inventory/player->window-slot layout %)})))))
 
+(def max-lost 3)                      ; clicks the server may leave unanswered in one intent before it fails :stale-window
 (def stale-state-id -1)               ; a state id no window ever has
 
 (defn send-click
@@ -85,8 +86,40 @@
   (when (and awaiting (= awaiting (state-id-of world awaiting-window)))
     (if (> (- (:time/now world) sent-at) answer-timeout) :overdue :waiting)))
 
+(defn lost
+  "A click went unanswered past answer-timeout: the intent picks up from the server's slots,
+   which are the truth. First a resync (resync, the cursor the world shows may not be the
+   server's), then the intent goes on at stage restart, a stage that sends no blind next click
+   (a craft or a smelt settles again: cursor down, grid or furnace emptied, then laid again; a
+   swap into the hand is asked again). The max-lost-th loss fails :stale-window. A loaded server
+   answers late rather than never: the race that refilled each server's 25 slots the moment a
+   bot ended (issues #131, #132, 34 bots in one round) failed crafts and equips :stale-window on
+   the first click left over three seconds, while the smelt, which took this way, went on."
+  [world {:intent/keys [lost] :or {lost 0}} restart]
+  (if (>= (inc lost) max-lost)
+    (intent/fail world :stale-window)
+    (-> world
+        (intent/dissoc-intent :intent/awaiting :intent/awaiting-window
+                              :intent/sent-at :intent/clicks)
+        (intent/assoc-intent :intent/lost (inc lost)
+                             :intent/resync true
+                             :intent/stage restart
+                             :intent/since (:time/now world)))))
+
 (defn free-slot
   "A player-inventory slot with nothing in it, as a slot of this view."
   [world {:view/keys [slot-of]}]
   (some (fn [p] (when-not (get-in world [:player/inventory p]) (slot-of p)))
         inventory/main-then-hotbar))
+
+(defn resync
+  "Learn the server's cursor after a lost click: put it down into a free slot of view v with a
+   click the server answers in full (resync-click). A loaded cursor is put down, an empty one
+   leaves everything as it was, and either way the whole window and the real cursor come back.
+   Fails :inventory-full when no slot is free."
+  [world v]
+  (if-let [s (free-slot world v)]
+    (-> world
+        (resync-click v (inventory/left-click s))
+        (intent/dissoc-intent :intent/resync))
+    (intent/fail world :inventory-full)))

@@ -289,10 +289,10 @@
    [:intent/before "result items held before crafting, smelting or scooping" "craft, smelt, scoop"]
    [:intent/smelt "furnace recipe id to cook (smelting.edn)" "smelt"]
    [:intent/count "how many of the input the batch cooks" "smelt"]
-   [:intent/lost "clicks the server lost in this smelt; the intent resumed from its slots"
-    "smelt, after a lost click"]
+   [:intent/lost "clicks the server lost in this intent; the intent resumed from its slots"
+    "craft, smelt, place, equip, scoop, pour, after a lost click"]
    [:intent/resync "the next click is a resync: the cursor after a lost click is unknown"
-    "smelt, from a lost click until the resync is sent"]
+    "craft, smelt, place, equip, scoop, pour, from a lost click until the resync is sent"]
    [:intent/cook-by "ms by which the batch must be cooked; the cook stage fails after it"
     "smelt, :cook stage, once the furnace is loaded"]
    [:intent/awaiting "state id a click waits on" "after a click"]

@@ -123,7 +123,7 @@
                :violations (:sim/violations sim)})]
     (is (empty? bad) (pr-str (vec bad)))))
 
-(deftest a-lost-click-is-a-stale-window-never-a-blind-take
+(deftest a-lost-craft-click-is-resynced-never-a-blind-take
   (let [column (world/column-bytes {[6 64 0] 136 [6 65 0] 136 [6 66 0] 136 [6 67 0] 252})
         [w sim] (sim/run step
                          (game/init fx/opts)
@@ -131,7 +131,7 @@
                          #(or (plan/done? %) (plan/failed? %))
                          120000
                          {:event/kind :go :go/goals [:kit]})]
-    (is (plan/done? w) "it recovers: the failed craft reclaims the grid and tries again")
+    (is (plan/done? w) "it recovers: the craft resyncs, reclaims the grid and lays it again")
     (is (= [] (:sim/violations sim)))
     (is (= 4 (:stick (held w))))))
 
