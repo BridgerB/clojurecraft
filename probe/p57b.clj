@@ -1,63 +1,3 @@
-<<<<<<< HEAD
-(require '[clojurecraft.record :as record]
-         '[clojurecraft.main :as main]
-         '[clojurecraft.game :as game]
-         '[clojurecraft.wood :as wood]
-         '[clojurecraft.scoop :as scoop]
-         '[clojurecraft.intent :as intent]
-         '[clojurecraft.terrain :as terrain]
-         '[clojurecraft.memory :as memory]
-         '[clojurecraft.blocks :as blocks]
-         '[clojurecraft.physics :as physics]
-         '[clojure.java.io :as io]
-         '[clojure.math :as math])
-(.mkdirs (io/file "out"))
-(defn out
-  [& xs]
-  (let [s (clojure.string/join " " xs)]
-    (println s)
-    (spit "out/probe.log" (str s "\n") :append true)))
-(doseq [p *command-line-args*]
-  (let [world0 (game/init {:host "replay" :port 0 :name "Clj_replay"})
-        w (record/replay main/step world0 p)
-        [px _ pz] (:player/pos w)
-        ey (physics/y-of (game/eye w))]
-    (out "==" p
-         "status" (:plan/status w)
-         "reason" (:plan/reason w)
-         "feet" (intent/feet w)
-         "go-at" (:plan/go-at w)
-         "chunks" (count (:world/chunks w)))
-    (out " logs remembered" (count (memory/positions-now w blocks/log-states)))
-    (out " near-walk" (wood/near-walk w) "climb-out" (wood/climb-out w) "hunt" (wood/hunt w))
-    (out " hunt-targets" (vec (scoop/hunt-targets w)))
-    (out " under-sky? feet" (terrain/under-sky? w (intent/feet w))
-         "over head"
-         (mapv #(blocks/name-of (terrain/block-at w (update (intent/feet w) 1 + %))) (range 2 8)))
-    (out " nearest logs"
-         (take 5
-               (memory/nearest-first (game/eye w)
-                                     wood/far-radius
-                                     (memory/positions-now w blocks/log-states))))
-    (out
-     " nearest standing trunk"
-     (memory/nearest-log w (game/eye w) wood/far-radius (constantly false) wood/standing-trunk?))
-    (out " first-walk" (scoop/first-walk w :log-hunt (scoop/hunt-targets w)))
-    (doseq [[dx dz] scoop/bearings]
-      (let [x (long (math/floor (+ px (* dx scoop/hunt-distance))))
-            z (long (math/floor (+ pz (* dz scoop/hunt-distance))))
-            g (scoop/ground w [x z] ey)]
-        (out "  bearing" [x z]
-             "loaded?" (terrain/chunk-loaded? w [x 0 z])
-             "ground" g
-             "under-sky?" (when g (terrain/under-sky? w g))
-             "routable?"
-             (when g
-               (intent/routable? w
-                                 {:intent/kind :walk :intent/target g :intent/for :log-hunt})))))))
-||||||| parent of 8c1ff88 (probe: issue 57)
-=======
-;; probe: issue #57, wood :no-log at the landing with no intent ever started.
 ;; Fold each recording to its final world and ask the gather chain's parts what they see.
 (require '[clojure.string :as str]
          '[clojurecraft.game :as game]
@@ -135,5 +75,3 @@
     (out " mem-48-band"
          (pr-str (count (filter (fn [[_ y _]] (<= (abs (- y (physics/y-of eye))) 12)) near))))))
 
->>>>>>> 8c1ff88 (probe: issue 57)
-(shutdown-agents)
