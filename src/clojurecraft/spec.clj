@@ -366,6 +366,7 @@
 (s/def :plan/reason some?)
 (s/def :plan/waiting some?)
 (s/def :plan/waiting-since int?)
+(s/def :plan/waiting-ticks int?)
 (s/def :plan/wait some?)
 (s/def :intent/reason some?)
 (s/def :intent/for keyword?)
