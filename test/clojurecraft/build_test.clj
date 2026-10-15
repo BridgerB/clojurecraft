@@ -295,9 +295,9 @@
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
   ;; server refusing it three times, :rejected
-  (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])
+  (let [w (standing-at (open-ground {[6 63 5] 1}) [5.5 63.0 5.5]) ; a step up beside the bot
         head [5 64 5]]
-    (is (some? (build/reachable-stand w [5 65 5] head)) "another cell reaches the cell")
+    (is (= [6 64 5] (build/reachable-stand w [5 65 5] head)) "the step beside reaches the cell")
     (is (not= [5 63 5] (build/reachable-stand w [5 65 5] head))
         "never the feet under it: the head would be in the block")
     (is (build/refused-for-the-body?
