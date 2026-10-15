@@ -1490,11 +1490,11 @@
 (def moment-keep 12)              ; moments kept: the last six simulated minutes
 
 (defn kept
-  "The moments with m added when keep? and at least moment-every-ms have passed since the last
+  "The moments with m added when every (simulated ms, nil to keep none) have passed since the last
    kept, the oldest dropped past moment-keep."
-  [moments m keep?]
+  [moments m every]
   (let [last-t (:t (peek moments))]
-    (cond (or (not keep?) (and last-t (< (- (:t m) last-t) moment-every-ms))) moments
+    (cond (or (nil? every) (and last-t (< (- (:t m) last-t) every))) moments
           :else (let [v (conj moments m)] (if (> (count v) moment-keep) (subvec v 1) v)))))
 
 (defn play-from
@@ -1504,19 +1504,19 @@
    the bot has sent and the model not yet taken (pending), the tick's time, the tick seed's state
    (rand), whether go was sent, and the packets still in flight under :sim/lag-ticks. So playing
    on from a moment is the run itself, packet for packet. Returns {:world :sim :before :last
-   :moments}: :last the moment of the stopping tick, :before its world and model, and, when
-   keep?, :moments, the run's moments every moment-every-ms, the last moment-keep of them, for a
+   :moments}: :last the moment of the stopping tick, :before its world and model, and, with
+   every (simulated ms; nil keeps none), :moments, the run's moments that far apart, the last moment-keep of them, for a
    failure to be kept from before the choice that led to it (simrace/snapshot). go is sent once
    the bot is loaded, or never when nil. :sim/lag-ticks in sim delays every server->client
    packet by that many ticks, in order. Each tick's :event/rand is 0.5, or, with a rand state,
    the next of a pure generator (tick-rand), so runs of one world with different seeds are
    different runs, each the same every time."
-  [bot-step m stop? max-ms go keep?]
+  [bot-step m stop? max-ms go every]
   (let [lag (* physics/tick-ms (:sim/lag-ticks (:sim m) 0))
         t0 (:t m)]
     (loop [{:keys [world sim pending t went? inflight] r :rand :as m} m
            moments []]
-      (let [moments (kept moments m keep?)
+      (let [moments (kept moments m every)
             sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim pending)
             sim (step sim {:sim/kind :tick :sim/now t})
             [sim fresh] (drain sim)
@@ -1563,26 +1563,32 @@
              stop?
              max-ms
              go
-             false))
+             nil))
+
+(defn start-moment
+  "The moment a run from a fresh handshake starts from: the bot's world after :start, the model,
+   the start packets pending, time 0, the tick seed at :sim/tick-seed, go not yet sent."
+  [bot-step world0 sim0]
+  (let [w (bot-step world0 {:event/kind :start})]
+    {:world (assoc w :bot/effects [])
+     :sim sim0
+     :pending (sends w)
+     :t 0
+     :rand (:sim/tick-seed sim0)
+     :went? false
+     :inflight []}))
 
 (defn run+
-  "Run a bot reducer against the model from a fresh handshake until (stop? world) or max-ms,
-   sending go (default {:event/kind :go}) once the bot is loaded, keeping its moments:
-   play-from's answer, {:world :sim :before :last :moments}."
+  "Run a bot reducer against the model from a fresh handshake (start-moment) until (stop? world)
+   or max-ms, sending go (default {:event/kind :go}) once the bot is loaded, keeping a moment every
+   moment-every-ms: play-from's answer, {:world :sim :before :last :moments}."
   [bot-step world0 sim0 stop? max-ms & [go]]
-  (let [w (bot-step world0 {:event/kind :start})]
-    (play-from bot-step
-               {:world (assoc w :bot/effects [])
-                :sim sim0
-                :pending (sends w)
-                :t 0
-                :rand (:sim/tick-seed sim0)
-                :went? false
-                :inflight []}
-               stop?
-               max-ms
-               (or go {:event/kind :go})
-               true)))
+  (play-from bot-step
+             (start-moment bot-step world0 sim0)
+             stop?
+             max-ms
+             (or go {:event/kind :go})
+             moment-every-ms))
 
 (defn run
   "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a
