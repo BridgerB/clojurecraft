@@ -893,16 +893,10 @@
   ;; with no trunk remembered; once the valley's trunks were known behind it, every bearing
   ;; back toward them was refused as nearer the landing, the one bearing left had no route,
   ;; and the plan waited :no-log out its clock
-  (let [w (-> (game/init fx/opts)
-              (assoc :bot/phase :play
-                     :player/pos [40.5 64.0 8.5]
-                     :player/loaded? true
-                     :player/on-ground? true
-                     :plan/go-at [8.5 64.0 8.5]
-                     :world/chunks {[0 0] (world/column {}) [2 0] (world/column {[0 64 8] 136})})
-              (memory/remember-column [2 0] (world/column {[0 64 8] 136})))
+  (let [w (-> (assoc (remembered {} [8.5 64.0 8.5]) :world/chunks shore :plan/go-at [48.5 64.0 8.5])
+              (memory/remember-column [2 0] (shore [2 0])))
         i (wood/hunt w)]
-    (is (= [0 64 8] (:intent/target i)) "toward the trunk at [32 64 8], back toward the landing")))
+    (is (= [48 64 8] (:intent/target i)) "toward the trunk, back toward the landing")))
 
 (deftest a-slow-server-stretches-the-dig
   ;; race 38665691517 (issues #88, #144): the server ran at 130 ms a tick, counted the digs'
