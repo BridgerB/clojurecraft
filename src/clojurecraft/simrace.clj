@@ -161,6 +161,28 @@
   [snap played]
   (= (:snapshot/signature snap) (:run/signature played)))
 
+(defn timeout-signature?
+  "Is a snapshot's signature a :timeout: the run used up its simulated time? Its moment is the
+   tick before the limit, long after what slowed it, so playing on from there only times out
+   again."
+  [snap]
+  (= :timeout (second (:snapshot/signature snap))))
+
+(defn replay
+  "A snapshot's run again from its landing (run): the same captured world w, seed and target, to
+   max-ms of simulated time. The RESULT, marked (failure/mark), without the moment before its
+   stop."
+  [snap w max-ms]
+  (dissoc (failure/mark (run w (:snapshot/seed snap) (:snapshot/until snap) max-ms)) :run/before))
+
+(defn judged
+  "A snapshot played the way its signature can be judged: a :timeout replayed from its landing
+   to the sim race's limit (default-max-minutes), any other played on from its moment for
+   snapshot-budget-ms (play-snapshot). recurs? reads the RESULT either way."
+  [snap w]
+  (cond (timeout-signature? snap) (replay snap w (* 60000 default-max-minutes))
+        :else (play-snapshot snap w snapshot-budget-ms)))
+
 (defn tally
   "The runs as a value: how many, how many reached the target, and the failures counted by
    signature, most first."
@@ -233,14 +255,14 @@
     r))
 
 (defn play-snapshot!
-  "Play the snapshot at path on (play-snapshot), its captured world read and prepared, and print
-   whether its signature recurs; returns the RESULT."
-  [path budget-ms]
+  "Play the snapshot at path as the issue check does (judged), its captured world read and
+   prepared, and print whether its signature recurs; returns the RESULT."
+  [path]
   (let [snap (capture/read-world path)
         w (assoc (prepared (capture/read-world (:snapshot/file snap)))
                  :capture/file
                  (:snapshot/file snap))
-        r (play-snapshot snap w budget-ms)]
+        r (judged snap w)]
     (println "SNAPSHOT"
              (pr-str {:snapshot/signature (:snapshot/signature snap)
                       :run/signature (:run/signature r)
@@ -304,12 +326,11 @@
    from --seed (1) up, round the worlds, until --budget-minutes of wall time have passed (or
    --seeds each when no budget is given). --world f plays one file. --runs f plays exactly the
    runs an EDN file lists, [[world-file seed] ...] (an issue's reproductions). --snapshot f
-   plays the failing moment a snapshot holds on for two simulated minutes (play-snapshot!) and
+   plays the failing moment a snapshot holds as the issue check does (play-snapshot!, judged: a timeout replayed from its landing) and
    prints one SNAPSHOT line: whether its signature recurs. Prints a SIMRUN line per run and
    the SIMRACE tally; keeps every run in <out>/runs.edn and each failed run's snapshot in
    <out>/snapshots."
   [& args]
   (let [o (cli/options args)]
-    (cond (get o :snapshot)
-          (do (play-snapshot! (get o :snapshot) snapshot-budget-ms) (shutdown-agents))
+    (cond (get o :snapshot) (do (play-snapshot! (get o :snapshot)) (shutdown-agents))
           :else (race! o))))
