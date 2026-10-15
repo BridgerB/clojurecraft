@@ -25,6 +25,7 @@
             [clojurecraft.failure :as failure]
             [clojurecraft.game :as game]
             [clojurecraft.main :as main]
+            [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.sim :as sim]
             [datascript.core :as d]))
@@ -55,12 +56,19 @@
   [{[x z y] :capture/landing}]
   [(+ x 0.5) (double y) (+ z 0.5)])
 
+(defn go-of
+  "The :go a run of w to until is given once its bot is loaded: the chain to until and the
+   landing (:go/at)."
+  [w until]
+  {:event/kind :go :go/goals (plan/through until) :go/chain? true :go/at (spawn-of w)})
+
 (defn run
   "One run: the bot from empty hands on world w's landing, playing every step up to until,
    against the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT
    (main/result) with :run/world (its set and landing), :run/seed, :run/ms (simulated time),
-   :run/violations (what a real server would have punished) and :run/before, the world and
-   model one tick before the stop (a snapshot's moment; dropped from the lines written). Its
+   :run/violations (what a real server would have punished), :run/last (the moment of the
+   stopping tick) and :run/moments (the moments sim/play-from kept, every half minute, the
+   last six minutes), from which a failure's snapshot is chosen (dropped from the lines written). Its
    :go names the landing (:go/at), as race/land-bot! does for a real bot: the plan's
    landing-relative choices (the climb home from deep, a climb's level steps toward the landing,
    how far they may go) are the real race's. Without it, sim race 38659291345 world R4/38 (issue
@@ -68,43 +76,89 @@
    was :boxed five columns short of the shore."
   [w seed until max-ms]
   (let [opts {:host "sim" :port 0 :name "Clj_sim"}
-        {:keys [world sim before]}
-        (sim/run+
-         step
-         (game/init opts)
-         (sim/init {:columns (:capture/columns w)
-                    :decoded (:capture/decoded w)
-                    :spawn (spawn-of w)
-                    :seed seed
-                    :tick-seed seed})
-         #(or (plan/done? %) (plan/failed? %))
-         max-ms
-         {:event/kind :go :go/goals (plan/through until) :go/chain? true :go/at (spawn-of w)})
+        {:keys [world sim last moments]} (sim/run+ step
+                                                   (game/init opts)
+                                                   (sim/init {:columns (:capture/columns w)
+                                                              :decoded (:capture/decoded w)
+                                                              :spawn (spawn-of w)
+                                                              :seed seed
+                                                              :tick-seed seed})
+                                                   #(or (plan/done? %) (plan/failed? %))
+                                                   max-ms
+                                                   (go-of w until))
         ok (main/ok? world until)]
     (assoc (main/result world until ok)
            :run/world (select-keys w [:capture/set :capture/landing])
            :run/seed seed
            :run/ms (:time/now world)
            :run/violations (:sim/violations sim)
-           :run/before before)))
+           :run/last last
+           :run/moments moments)))
 
 ;; ---------------------------------------------------------------- a failing moment, as a value
 
-(def snapshot-budget-ms 120000)       ; simulated ms a snapshot is played on for: two minutes
+(def snapshot-budget-ms 120000)       ; simulated ms an old snapshot (no :snapshot/moment) is played on for
+(def decision-lead-ms 30000)          ; a snapshot's moment comes at least this long before the choice that failed
+(def stall-window-ms 300000)          ; a :timeout is judged over this window: five simulated minutes with no new stage
+(def window-tail-ms 60000)            ; a failure's window runs this long past the stop it led to
+
+(defn decision
+  "When and why a failed run went wrong, from the world at its stop and its signature:
+   {:why :t}. A :timeout is a stall: no new stage for the run's last stall-window-ms. A wait
+   that ran out (the plan failed with the reason it was waiting on) went wrong when the wait
+   began, :plan/waiting-since. Anything else is an intent that failed max-attempts times in a
+   row: the first of those failures started when its intention's :started fact says (memory
+   intentions), so the choice that failed is caught, not the tick before the stop."
+  [world signature]
+  (let [now (:time/now world)
+        facts (memory/intentions world)
+        streak (->> facts
+                    (remove #(= :started (:intention/event %)))
+                    reverse
+                    (take-while #(= :failed (:intention/event %))))
+        first-id (:intention/id (last streak))
+        started (some #(when (and (= first-id (:intention/id %)) (= :started (:intention/event %)))
+                         (:intention/at %))
+                      facts)]
+    (cond (= :timeout (second signature)) {:why :stall :t (- now stall-window-ms)}
+          (and (:plan/waiting-since world) (= (:plan/reason world) (:plan/waiting world)))
+          {:why :wait :t (:plan/waiting-since world)}
+          :else {:why :intent-failed :t (or started now)})))
+
+(defn chosen-moment
+  "The moment a failure is kept from: the newest of the run's moments at least decision-lead-ms
+   before its decision, else the oldest kept (the ring holds six minutes), else the stopping
+   tick's. With :moment, {:why :t :decision-t :stop-t :window-ms}: the window it is judged over,
+   from the moment to window-tail-ms past the stop, or stall-window-ms for a stall."
+  [moments stopping {:keys [why t]} stop-t]
+  (let [m (or (last (filter #(<= (:t %) (- t decision-lead-ms)) moments)) (first moments) stopping)]
+    (assoc m
+           :moment
+           {:why why
+            :t (:t m)
+            :decision-t t
+            :stop-t stop-t
+            :window-ms (cond (= :stall why) stall-window-ms
+                             :else (+ (- stop-t (:t m)) window-tail-ms))})))
 
 (defn snapshot
-  "A failed run's moment as a value to keep (issue #77): the bot's world and the model's state
-   one tick before the stop (run+'s :before), the captured world's file (its chunks and columns
-   are not copied: the keys the bot held are, to reattach them, load-snapshot), the seed, the
-   target, the code and the signature the run stopped with. The facts are d/serializable, since a DataScript
+  "A failed run's moment as a value to keep (issue #77): a moment the run kept (chosen-moment:
+   before the choice that failed, not the tick before the stop), whole: the bot's world, the
+   model's state and what the next tick depends on (:snapshot/next: pending packets, time, tick
+   seed state, go sent, packets in flight), so playing it on is the run itself. Also the captured
+   world's file (its chunks and columns are not copied: the keys the bot held are, to reattach
+   them, moment-of), the seed, the target, the code, the signature and :snapshot/moment, when
+   and why and the window it is judged over. The facts are d/serializable, since a DataScript
    value does not print as EDN. Everything else prints as the recordings print (byte arrays as
    #clojurecraft/bytes)."
-  [w seed until commit signature [world sim]]
+  [w seed until commit signature {:keys [world sim moment] :as m}]
   {:snapshot/file (:capture/file w)
    :snapshot/seed seed
    :snapshot/until until
    :snapshot/commit commit
    :snapshot/signature signature
+   :snapshot/moment moment
+   :snapshot/next (select-keys m [:pending :t :rand :went? :inflight])
    :snapshot/chunks (set (keys (:world/chunks world)))
    :snapshot/world (-> world
                        (dissoc :world/chunks)
@@ -123,50 +177,81 @@
                      seed
                      ".edn.gz"))))
 
+(defn moment-of
+  "The moment a snapshot holds, ready to play on (sim/play-from): the captured world's chunks the
+   bot held reattached (decoded once, prepared), the model's columns too, the facts a DataScript
+   value again, and what the next tick depends on. w is the captured world the snapshot names,
+   prepared. A snapshot from before :snapshot/next plays on from its world's time with nothing
+   pending and the tick seed restarted; a plan with no landing (a snapshot written before run
+   named one, issue #37) gets the captured world's."
+  [{:snapshot/keys [chunks world sim next]} w]
+  (merge {:pending [] :t (:time/now world) :rand (:sim/tick-seed sim) :went? true :inflight []}
+         next
+         {:world (-> world
+                     (assoc :world/chunks (select-keys (:capture/decoded w) chunks))
+                     (update :world/facts d/from-serializable)
+                     (cond-> (nil? (:plan/go-at world)) (assoc :plan/go-at (spawn-of w))))
+          :sim (assoc sim :sim/columns (:capture/columns w) :sim/decoded (:capture/decoded w))}))
+
 (defn moment
-  "The world and model a snapshot holds, ready to play on: the captured world's chunks the bot
-   held reattached (decoded once, prepared), the model's columns too, the facts a DataScript
-   value again. w is the captured world the snapshot names, prepared. A plan with no landing
-   (a snapshot written before run named one, issue #37) gets the captured world's, the one its
-   run has now."
-  [{:snapshot/keys [chunks world sim]} w]
-  [(-> world
-       (assoc :world/chunks (select-keys (:capture/decoded w) chunks))
-       (update :world/facts d/from-serializable)
-       (cond-> (nil? (:plan/go-at world)) (assoc :plan/go-at (spawn-of w))))
-   (assoc sim :sim/columns (:capture/columns w) :sim/decoded (:capture/decoded w))])
+  "The world and model a snapshot holds, [world sim] (moment-of)."
+  [snap w]
+  ((juxt :world :sim) (moment-of snap w)))
 
-(defn play-snapshot
-  "A snapshot played on for budget-ms of simulated time, from the moment it holds, until the plan
-   is done or failed: the RESULT, with :run/signature when it failed (failure/mark) and
-   :run/ms the time it ended at."
-  [snap w budget-ms]
-  (let [[world sim] (moment snap w)
+(defn stage-of
+  "The stage a snapshot's signature names: the target its run had not reached."
+  [snap]
+  (first (:snapshot/signature snap)))
+
+(defn window-of
+  "The simulated ms a snapshot is judged over: its moment's window, or snapshot-budget-ms for a
+   snapshot from before moments were kept."
+  [snap]
+  (get-in snap [:snapshot/moment :window-ms] snapshot-budget-ms))
+
+(defn story
+  "What the bot did from a moment on, from the facts of the world it ended in: each intention
+   fact at or after t, [ms event kind target reason], oldest first."
+  [world t]
+  (for [f (memory/intentions world)
+        :when (>= (:intention/at f 0) t)]
+    [(:intention/at f) (:intention/event f) (:intention/kind f) (:intention/target f)
+     (:intention/reason f)]))
+
+(defn judged
+  "A snapshot played on from its moment over its window (window-of) and never longer, never from
+   the landing (docs/RICH-HICKEY.md: write the validation, run it against past results, never
+   re-run the system from spawn): until the plan is done or failed, or reaches the stage the
+   signature names, or the window ends. A moment from before the bot loaded still gets its :go
+   (go-of), as the run did. The RESULT, marked (failure/mark), with :run/ms the time
+   it ended at, :run/from the moment's time and :run/story what the bot did between (story)."
+  [snap w]
+  (let [{:keys [world] :as m} (moment-of snap w)
+        stage (stage-of snap)
         until (:snapshot/until snap)
-        {world' :world} (sim/play-on step
-                                     world
-                                     sim
-                                     #(or (plan/done? %) (plan/failed? %))
-                                     budget-ms
-                                     (:time/now world)
-                                     []
-                                     nil)]
+        stop? #(or (plan/done? %) (plan/failed? %) (contains? (:plan/reached %) stage))
+        {world' :world} (sim/play-from step m stop? (window-of snap) (go-of w until) false)]
     (assoc (failure/mark (main/result world' until (main/ok? world' until)))
-           :run/ms
-           (:time/now world'))))
-
-(defn recurs?
-  "Does a snapshot's signature recur when it is played on: the plan failed with it again? A
-   plan still running at the budget, or failed otherwise, got past this moment."
-  [snap played]
-  (= (:snapshot/signature snap) (:run/signature played)))
+           :run/ms (:time/now world')
+           :run/from (:time/now world)
+           :run/story (vec (story world' (:time/now world))))))
 
 (defn timeout-signature?
-  "Is a snapshot's signature a :timeout: the run used up its simulated time? Its moment is the
-   tick before the limit, long after what slowed it, so playing on from there only times out
-   again."
+  "Is a snapshot's signature a :timeout: the run used up its simulated time, a stall?"
   [snap]
   (= :timeout (second (:snapshot/signature snap))))
+
+(defn recurs?
+  "Does a snapshot's failure come back when it is judged (judged)? A stall recurs when the window
+   ends with its stage still not reached and the plan not done; any other failure when the plan
+   fails again with the same signature. A plan still running at the end of a failure's window,
+   or failed otherwise, got past this moment."
+  [snap played]
+  (cond (timeout-signature? snap)
+        (not (or (:ok played)
+                 (= :done (get-in played [:plan :plan/status]))
+                 (contains? (set (get-in played [:plan :plan/reached])) (stage-of snap))))
+        :else (= (:snapshot/signature snap) (:run/signature played))))
 
 (defn stage-until
   "The --until name of a signature's stage: the live target row whose :goal/id it is (:kit is
@@ -177,22 +262,12 @@
 (defn replay
   "A snapshot's run again from its landing (run): the same captured world w and seed, to the
    stage its signature stopped on (stage-until; the snapshot's own target when that names none),
-   at most max-ms of simulated time. Reaching the stage ends the run ok, so a fix that holds costs
-   only the time to get there, not the rest of a 90-minute run: issue.yml's check replaying #62's
-   and #69's timeouts to the end ran past its 30 minutes (PR #173). The RESULT, marked
-   (failure/mark), without the moment before its stop."
+   at most max-ms of simulated time. For a probe that wants the whole road to a failure; never
+   the issue check, which judges the moment alone (judged). The RESULT, marked, without its
+   moments."
   [snap w max-ms]
   (let [until (or (stage-until (first (:snapshot/signature snap))) (:snapshot/until snap))]
-    (dissoc (failure/mark (run w (:snapshot/seed snap) until max-ms)) :run/before)))
-
-(defn judged
-  "A snapshot played the way its signature can be judged: a :timeout replayed from its landing
-   until it gets past its stage or the sim race's limit (default-max-minutes) runs out (replay),
-   any other played on from its moment for snapshot-budget-ms (play-snapshot). recurs? reads the
-   RESULT either way."
-  [snap w]
-  (cond (timeout-signature? snap) (replay snap w (* 60000 default-max-minutes))
-        :else (play-snapshot snap w snapshot-budget-ms)))
+    (dissoc (failure/mark (run w (:snapshot/seed snap) until max-ms)) :run/last :run/moments)))
 
 (defn tally
   "The runs as a value: how many, how many reached the target, and the failures counted by
@@ -240,8 +315,9 @@
 (defn play!
   "One run, never throwing (a run that throws is a :crashed RESULT), its RESULT printed as a
    SIMRUN line and appended to out as it ends, with what reproduces it (:run/file, :run/seed,
-   :run/commit) and, when it failed, what bb failures reads (failure/mark) and its moment kept
-   as a snapshot beside out (:run/snapshot, issue #77); returns it."
+   :run/commit) and, when it failed, what bb failures reads (failure/mark) and a moment from
+   before the choice that failed kept as a snapshot beside out (:run/snapshot, chosen-moment,
+   issue #77); returns it."
   [w seed until max-ms commit out]
   (let [r (try (run w seed until max-ms)
                (catch Exception e
@@ -252,39 +328,69 @@
                   :run/world (select-keys w [:capture/set :capture/landing])
                   :run/seed seed}))
         r (failure/mark (assoc r :run/commit commit :run/file (:capture/file w)))
-        path
-        (when (and (:run/signature r) (:run/before r))
-          (let [p (snapshot-name (io/file (.getParent (io/file (str out))) "snapshots") w seed)]
-            (capture/write-world! p
-                                  (snapshot w seed until commit (:run/signature r) (:run/before r)))
-            p))
-        r (cond-> (dissoc r :run/before) path (assoc :run/snapshot path))]
+        sig (:run/signature r)
+        m (when (and sig (:run/last r))
+            (chosen-moment (:run/moments r)
+                           (:run/last r)
+                           (decision (:world (:run/last r)) sig)
+                           (:run/ms r)))
+        path (when m
+               (let [p
+                     (snapshot-name (io/file (.getParent (io/file (str out))) "snapshots") w seed)]
+                 (capture/write-world! p (snapshot w seed until commit sig m))
+                 p))
+        r (cond-> (dissoc r :run/last :run/moments)
+            path (assoc :run/snapshot path :run/moment (:moment m)))]
     (locking out
       (println "SIMRUN" (pr-str (dissoc r :plan :stats)))
       (spit out (str (pr-str r) "\n") :append true)
       (flush))
     r))
 
-(defn play-snapshot!
-  "Play the snapshot at path as the issue check does (judged), its captured world read and
-   prepared, and print whether its signature recurs; returns the RESULT."
+(defn judge!
+  "Judge the snapshot at path as the issue check does (judged), its captured world read and
+   prepared: print one JUDGE line (the signature, why and when its moment was kept, the window,
+   whether it recurs, how it ended, simulated and wall ms) and the STORY of what the bot did over
+   the window, one line an intention fact. Returns {:path :recurs? :played}."
+  [path]
+  (let [t0 (System/currentTimeMillis)
+        snap (capture/read-world path)
+        w (assoc (prepared (capture/read-world (:snapshot/file snap)))
+                 :capture/file
+                 (:snapshot/file snap))
+        r (judged snap w)
+        recurs (recurs? snap r)]
+    (println "JUDGE"
+             (pr-str {:path path
+                      :signature (:snapshot/signature snap)
+                      :moment (:snapshot/moment snap)
+                      :window-ms (window-of snap)
+                      :recurs? recurs
+                      :run/signature (:run/signature r)
+                      :plan/status (get-in r [:plan :plan/status])
+                      :sim-ms (- (:run/ms r) (:run/from r))
+                      :wall-ms (- (System/currentTimeMillis) t0)}))
+    (doseq [line (:run/story r)] (println "STORY" path (pr-str line)))
+    {:path path :recurs? recurs :played r}))
+
+(defn from-landing!
+  "A probe's look at the whole road to a snapshot's failure: its run again from the landing to the
+   stage its signature names (replay), never the check's judgement. Prints one REPLAY line."
   [path]
   (let [snap (capture/read-world path)
         w (assoc (prepared (capture/read-world (:snapshot/file snap)))
                  :capture/file
                  (:snapshot/file snap))
-        r (judged snap w)]
-    (println "SNAPSHOT"
-             (pr-str {:snapshot/signature (:snapshot/signature snap)
+        r (replay snap w (* 60000 default-max-minutes))]
+    (println "REPLAY"
+             (pr-str {:path path
+                      :signature (:snapshot/signature snap)
                       :run/signature (:run/signature r)
-                      :recurs? (recurs? snap r)
-                      :reason (:reason r)
-                      :plan/status (get-in r [:plan :plan/status])
-                      :run/ms (:run/ms r)}))
-    r))
+                      :plan/reached-after (get-in r [:plan :plan/reached-after])
+                      :run/ms (:run/ms r)}))))
 
 (defn race!
-  "The sim race -main runs for its options o (cli/options), every option but --snapshot."
+  "The sim race -main runs for its options o (cli/options), every option but --judge."
   [o]
   (let [{:keys [worlds seed seeds until threads out runner runners commit]
          minutes :max-minutes
@@ -336,12 +442,25 @@
    --runner k --runners n) on --threads threads (the cores when absent): each world with seeds
    from --seed (1) up, round the worlds, until --budget-minutes of wall time have passed (or
    --seeds each when no budget is given). --world f plays one file. --runs f plays exactly the
-   runs an EDN file lists, [[world-file seed] ...] (an issue's reproductions). --snapshot f
-   plays the failing moment a snapshot holds as the issue check does (play-snapshot!, judged: a timeout replayed from its landing) and
-   prints one SNAPSHOT line: whether its signature recurs. Prints a SIMRUN line per run and
-   the SIMRACE tally; keeps every run in <out>/runs.edn and each failed run's snapshot in
-   <out>/snapshots."
+   runs an EDN file lists, [[world-file seed] ...] (an issue's reproductions). Prints a SIMRUN
+   line per run and the SIMRACE tally; keeps every run in <out>/runs.edn and each failed run's
+   snapshot in <out>/snapshots.
+   --judge f1,f2 judges snapshots as the issue check does (judge!), uninstrumented: a judge, not
+   a spec test. With --expect recur, it exits 1 unless every one recurs (the base code: the
+   moment must reproduce the failure); with --expect pass, unless none does (the fix).
+   --from-landing f replays a snapshot's run from its landing to its stage (from-landing!): a
+   probe's tool for the whole road, up to 90 simulated minutes, never the check's."
   [& args]
   (let [o (cli/options args)]
-    (cond (get o :snapshot) (do (play-snapshot! (get o :snapshot)) (shutdown-agents))
+    (cond (get o :judge)
+          (let [results (mapv judge! (str/split (get o :judge) #","))
+                expect (get o :expect)
+                bad (case expect
+                      "recur" (remove :recurs? results)
+                      "pass" (filter :recurs? results)
+                      [])]
+            (doseq [{:keys [path]} bad] (println "UNEXPECTED" path "expected" expect))
+            (shutdown-agents)
+            (System/exit (if (seq bad) 1 0)))
+          (get o :from-landing) (do (from-landing! (get o :from-landing)) (shutdown-agents))
           :else (race! o))))

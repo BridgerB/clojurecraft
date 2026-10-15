@@ -6,6 +6,7 @@
             [clojurecraft.failure :as failure]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as simrace]
@@ -87,41 +88,124 @@
         r (simrace/run w 1 "wood" 2000)]
     (is (= (simrace/spawn-of w) (get-in r [:plan :plan/go-at])))))
 
-(deftest a-failed-runs-moment-round-trips-and-plays-on-to-the-same-stop
-  ;; issue #77: the snapshot of a failed run is a value that prints, reads back and, played on
-  ;; with the same code, fails with the same signature; the moment before the stop still has the
-  ;; plan running, so a fix has its say
-  (let [w (assoc (simrace/prepared {:capture/set "test"
-                                    :capture/landing [8 8 64]
-                                    :capture/radius 0
-                                    :capture/columns {[0 0] (world/column-bytes {})}}) ; bare stone, no tree
-                 :capture/file
-                 "bare.edn.gz")
-        r (simrace/run w 3 "nether" 300000)
+(def bare
+  "One column of bare stone with no tree: a run for wood waits :no-log and fails."
+  (assoc (simrace/prepared {:capture/set "test"
+                            :capture/landing [8 8 64]
+                            :capture/radius 0
+                            :capture/columns {[0 0] (world/column-bytes {})}})
+         :capture/file
+         "bare.edn.gz"))
+
+(defn kept-snapshot
+  "The snapshot the sim race keeps of run r of world w (simrace/play!'s choice)."
+  [w r]
+  (let [sig (failure/signature r)]
+    (simrace/snapshot w
+                      3
+                      "nether"
+                      "abc"
+                      sig
+                      (simrace/chosen-moment (:run/moments r)
+                                             (:run/last r)
+                                             (simrace/decision (:world (:run/last r)) sig)
+                                             (:run/ms r)))))
+
+(deftest a-moment-plays-on-exactly-as-the-run-did
+  ;; a kept moment carries what the next tick depends on (pending packets, the tick seed, go
+  ;; sent, packets in flight), so playing it on is the run itself, not a run like it
+  (with-redefs [sim/moment-every-ms 1000]
+    (let [opts {:host "sim" :port 0 :name "Clj_sim"}
+          s (sim/init {:columns (:capture/columns two-columns)
+                       :decoded (:capture/decoded two-columns)
+                       :spawn (simrace/spawn-of two-columns)
+                       :seed 1
+                       :tick-seed 1})
+          stop? #(or (plan/done? %) (plan/failed? %))
+          full
+          (sim/run+ simrace/step (game/init opts) s stop? 120000 (simrace/go-of two-columns "wood"))
+          moments (:moments full)
+          mid (nth moments (quot (count moments) 2))
+          again (sim/play-from simrace/step mid stop? 120000 nil false)]
+      (is (< 2 (count moments)) "moments kept along the run")
+      (is (< 0 (:t mid) (:time/now (:world full))) "a moment from the middle of the run")
+      (is (= :done (:plan/status (:world full))))
+      (is (= (dissoc (:world full) :world/facts) (dissoc (:world again) :world/facts))
+          "played on from the middle, the same world at the same tick")
+      (is (= (memory/intentions (:world full)) (memory/intentions (:world again))))
+      (is (= (:sim full) (:sim again)) "and the same model"))))
+
+(deftest the-moment-is-kept-from-before-the-decision
+  ;; a failure is kept from at least decision-lead-ms before the choice that failed, not from
+  ;; the tick before the stop: judging needs only the window from there
+  (let [moments (mapv (fn [t] {:t t}) [0 30000 60000 90000 120000])
+        stopping {:t 150000}]
+    (is (= 60000
+           (:t (simrace/chosen-moment moments stopping {:why :intent-failed :t 100000} 150000))))
+    (is (= {:why :intent-failed :t 60000 :decision-t 100000 :stop-t 150000 :window-ms 150000}
+           (:moment
+            (simrace/chosen-moment moments stopping {:why :intent-failed :t 100000} 150000)))
+        "judged from the moment to a minute past the stop")
+    (is (= 0 (:t (simrace/chosen-moment moments stopping {:why :wait :t 10000} 150000)))
+        "a decision older than every moment: the oldest kept")
+    (is (= 300000
+           (get-in (simrace/chosen-moment moments stopping {:why :stall :t 0} 150000)
+                   [:moment :window-ms]))
+        "a stall is judged over its stall window"))
+  (let [facts (memory/empty-facts)
+        w {:time/now 500000 :world/facts facts}]
+    (is (= {:why :stall :t 200000} (simrace/decision w [:ingots :timeout])))
+    (is (= {:why :wait :t 480000}
+           (simrace/decision
+            (assoc w :plan/waiting-since 480000 :plan/waiting :no-log :plan/reason :no-log)
+            [:wood :no-log])))
+    (let [failed (reduce (fn [w [t id event]]
+                           (memory/remember-intention
+                            (assoc w :time/now t)
+                            {:intent/id id :intent/kind :dig :intent/reason :rejected}
+                            event))
+                         w
+                         [[100 1 :started] [200 1 :done] [300 2 :started] [400 2 :failed]
+                          [500 3 :started] [600 3 :failed] [700 4 :started] [800 4 :failed]])]
+      (is (= {:why :intent-failed :t 300}
+             (simrace/decision (assoc failed :time/now 800 :plan/reason :rejected)
+                               [:cobblestone :rejected]))
+          "the first of the failures in a row started at 300"))))
+
+(deftest a-failed-runs-moment-round-trips-and-is-judged-in-its-window
+  ;; issue #77: the snapshot of a failed run is a value that prints, reads back and, judged with
+  ;; the same code, fails with the same signature, inside its window and never from the landing
+  (let [r (simrace/run bare 3 "nether" 300000)
         _ (is (= [:wood :no-log] (failure/signature r)) (pr-str (:reason r)))
-        snap (simrace/snapshot w 3 "nether" "abc" (failure/signature r) (:run/before r))
+        snap (kept-snapshot bare r)
         path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-snapshot-test.edn.gz")
         _ (capture/write-world! path snap)
         back (capture/read-world path)
-        played (simrace/play-snapshot back w simrace/snapshot-budget-ms)]
+        played (simrace/judged back bare)]
     (is (= (dissoc snap :snapshot/world :snapshot/sim) (dissoc back :snapshot/world :snapshot/sim)))
-    (is (= (first (simrace/moment snap w)) (first (simrace/moment back w)))
+    (is (= (first (simrace/moment snap bare)) (first (simrace/moment back bare)))
         "the world reads back whole, facts too")
-    (is (= :active (get-in snap [:snapshot/world :plan/status])) "the moment before the stop")
+    (is (= :wait (get-in snap [:snapshot/moment :why])) "a wait for a log that never comes")
+    (is (<= (get-in snap [:snapshot/moment :t]) (get-in snap [:snapshot/moment :decision-t])))
     (is (simrace/recurs? back played) (pr-str (:run/signature played)))
-    (is (<= (:run/ms played) (+ (get-in snap [:snapshot/world :time/now]) 1000))
-        "it fails again at once, not after the budget")))
+    (is (<= (- (:run/ms played) (:run/from played)) (simrace/window-of back)) "inside its window")
+    (is (seq (:run/story played)) "what the bot did over the window, from its facts")))
 
-(deftest a-timeout-is-judged-by-its-whole-run
-  ;; a :timeout snapshot's moment is the tick before the limit, long after what slowed it: the
-  ;; issue check replays its run from the landing instead of playing on (simrace/judged)
-  (is (simrace/timeout-signature? {:snapshot/signature [:ingots :timeout]}))
-  (is (not (simrace/timeout-signature? {:snapshot/signature [:ingots :boxed]})))
-  (is (not (simrace/timeout-signature? {}))))
+(deftest a-stall-recurs-until-its-stage-is-reached
+  ;; a :timeout is judged as a stall over its window: it recurs when the stage is still not
+  ;; reached and the plan not done, never by replaying the run from its landing
+  (let [snap {:snapshot/signature [:ingots :timeout]}]
+    (is (simrace/timeout-signature? snap))
+    (is (simrace/recurs? snap {:ok false :plan {:plan/status :active :plan/reached #{:wood :kit}}}))
+    (is (not (simrace/recurs? snap
+                              {:ok false
+                               :plan {:plan/status :active :plan/reached #{:wood :ingots}}}))
+        "the stage reached in the window: past the stall")
+    (is (not (simrace/recurs? snap {:ok true :plan {:plan/status :done}})))
+    (is (not (simrace/timeout-signature? {:snapshot/signature [:ingots :boxed]})))))
 
-(deftest a-timeout-replay-stops-at-its-stage
-  ;; a :timeout snapshot is replayed only until the run gets past the stage it timed out on
-  ;; (simrace/replay): PR #173's issue check replayed whole 90-minute runs and ran out of time
+(deftest a-stage-names-its-until
+  ;; simrace/replay (a probe's whole road to a failure) runs to the stage the signature names
   (is (= "ingots" (simrace/stage-until :ingots)))
   (is (= "table" (simrace/stage-until :kit)) "a target's --until name, not its id")
   (is (nil? (simrace/stage-until :no-such-stage))))
