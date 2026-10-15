@@ -937,7 +937,7 @@
    (deepslate, the lava's depth), which a trip out for a pickaxe beats. Stone by hand is left to
    the hand when a pickaxe needs a trip: a cast's last few blocks are best dug."
   [world cell]
-  (or (pickaxe-at-hand? world) (> (intent/dig-time (terrain/block-at world cell)) hand-dig-limit)))
+  (or (> (intent/dig-time (terrain/block-at world cell)) hand-dig-limit) (pickaxe-at-hand? world)))
 
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
@@ -964,10 +964,10 @@
         child (intent/run-child world event)
         :else
         (let [c (op-child world i next)
-              c (or (when (and (= :dig (:intent/kind c))
-                               (hand-dig-refused? world (:intent/target c)))
-                      (stairs/tool-missing world (:intent/target c)))
-                    c)]
+              missing (when (= :dig (:intent/kind c))
+                        (stairs/tool-missing world (:intent/target c)))
+              ;; the needs planner is asked only when no pickaxe is held
+              c (or (when (and missing (hand-dig-refused? world (:intent/target c))) missing) c)]
           (cond (and (= :no-station c)
                      (spent? world (lava-sources world) (:intent/origin i) (:intent/facing i)))
                 ;; the pool is spent, not the build: the planner chooses a site with lava enough
