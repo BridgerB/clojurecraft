@@ -395,20 +395,25 @@
    or climb out of a pit under the sky when deep under the landing (pit-climb), or up or down
    to the bank of water seen that no route reaches (to-bank), or cut out
    of the ground (dig-out), or tunnel out of a pit (tunnel-out); else wait
-   :no-water."
+   :no-water. The climbs out (climb, pit-climb) are for water not seen: with water seen they
+   give way to the cut toward its bank, which they would undo a stair at a time. Sim race
+   38669750355 (issue #69) landed on hills at y 100 and y 73, cut a stair down toward a pond, was
+   then deep under the landing with rock over the head, climbed back up its opening, and did it
+   again, sixteen hundred times in ninety minutes."
   [world]
   (let [srcs (sources world)
-        src (first (filter #(and (in-reach? world %) (sees? world %)) srcs))]
+        src (first (filter #(and (in-reach? world %) (sees? world %)) srcs))
+        bank (delay (to-bank world))]
     (cond src {:intent/kind :scoop :intent/target src}
           :else
           (or (first-walk world :scoop srcs)
               (first-walk world :scoop (pools-near world))
               (seen-source world)
               (from-below world)
-              (climb world)
+              (when-not @bank (climb world))
               (first-walk world :water-hunt (hunt-targets world))
-              (pit-climb world)
-              (to-bank world)
+              (when-not @bank (pit-climb world))
+              @bank
               (dig-out world)
               (tunnel-out world)
               {:plan/wait :no-water}))))
