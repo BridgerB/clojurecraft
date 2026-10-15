@@ -339,6 +339,8 @@
 (s/def :conn/port int?)
 (s/def :player/teleport-id int?)
 (s/def :player/synced-at int?)
+(s/def :server/time-at int?)
+(s/def :server/tick-ms number?)
 (s/def :player/health number?)
 (s/def :entity/seen-at int?)
 (s/def :sight/pos ::block-pos)
