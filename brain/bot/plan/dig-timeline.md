@@ -15,6 +15,9 @@ sourceRefs:
   - src/clojurecraft/intent.clj#def confirm-ticks
   - src/clojurecraft/intent.clj#defn dig-time
   - src/clojurecraft/intent.clj#defn finish-delay
+  - src/clojurecraft/intent.clj#defn slowdown
+  - src/clojurecraft/game.clj#defn clocked
+  - test/clojurecraft/plan_test.clj#a-slow-server-stretches-the-dig
   - src/clojurecraft/intent.clj#defn choose-tool
   - src/clojurecraft/intent.clj#defn stowed-tool
   - test/clojurecraft/sim_test.clj#a-pickaxe-in-the-main-inventory-is-put-in-hand
@@ -44,7 +47,8 @@ The `:dig` intent has three stages. `:settle`: look at the block, refuse at once
 ## Key files
 - `intent.clj`, `dig-time` - `dig/ms` for the block, the held item and the penalties in force; 3000 (a log by hand) for a block the tables do not know ([[hardness-and-tools]]).
 - `intent.clj`, `penalties` - `{:off-ground? :eyes-in-water?}` from `:player/on-ground?` and `:player/eye-in-water?`; each divides the speed by five ([[hardness-and-tools]]).
-- `intent.clj`, `finish-delay` - `ms * 1.15 + 100`: 3550 for a log by hand, 1442 for stone with a wooden pickaxe ([[early-finish-aborts]]).
+- `intent.clj`, `finish-delay` - `ms * 1.15 * slowdown + 100`: 3550 for a log by hand, 1442 for stone with a wooden pickaxe, at 20 server ticks a second ([[early-finish-aborts]]).
+- `intent.clj`, `slowdown` - how much longer than 50 ms the server's ticks take now (`:server/tick-ms`, at least 1). The server counts a dig's progress in its own ticks, so a loaded server breaks the block later by the clock: FINISH and the `:confirm` window (`confirm-ticks` times it) stretch by it. `game/clocked` reads `:server/tick-ms` from the set-time packets' spacing (one every 20 server ticks, its fields undecoded), halfway to each new reading. Race 38665691517 (issues #88, #144, #64: 10 of runner 1's 33 bots) ran its server at 130 ms a tick; the bot finished digs by its own clock and the server left the blocks standing, the same cell three times, and the staircases failed `:rejected` (`a-slow-server-stretches-the-dig`).
 - `intent.clj`, `choose-tool` - `dig/best-tool` over the hotbar; `[0 nil]` for the hand; `:needs-tool` when the block needs a tier no held tool of its kind reaches.
 - `intent.clj`, `swing-every` 350 ms, `confirm-ticks` 60.
 - `intent.clj`, `still?` - horizontal-only stillness, on the ground or afloat in a liquid; see [[resting-vertical-velocity]].
