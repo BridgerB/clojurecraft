@@ -841,9 +841,10 @@
     (is (nil? (wood/climb-out w)) "under the open sky: nothing to climb")
     (is (= {:intent/kind :walk :intent/target [48 64 8] :intent/for :log-hunt} i)
         "forty blocks east, toward the trunk")
-    (is (= {:plan/wait :no-log}
-           (wood/gather-next (assoc (remembered {} [8.5 64.0 8.5]) :world/chunks shore)))
-        "with no log remembered there is nowhere to hunt toward")))
+    (is (= :log-hunt
+           (:intent/for (wood/gather-next
+                         (assoc (remembered {} [8.5 64.0 8.5]) :world/chunks shore))))
+        "with no log remembered the hunt goes out all the same (race 38665691517, issue #57)")))
 (deftest a-dig-that-never-settles-starts-by-the-deadline
   ;; race 38477665442 bots Clj_r12 (runner 5, on a moss carpet the physics does not know, the
   ;; server putting it back on the carpet every tick) and Clj_r19 (runner 3, fallen through a
@@ -863,6 +864,18 @@
     (is (nil? (started early)) "within the deadline it waits to be still")
     (is (> (started late) intent/settle-deadline) "past it, START anyway")
     (is (= :digging (get-in w [:plan/intent :intent/stage])))))
+
+(deftest with-no-tree-known-the-wood-hunt-sets-out
+  ;; race 38665691517 runner 1 (issue #57): slots Clj_r08, Clj_r14 and Clj_r15 landed where no
+  ;; standing trunk was in reach, with routes out on three bearings, and waited :no-log at the
+  ;; landing round after round: the hunt set out only toward a log already remembered
+  (let [w (assoc (remembered {} [8.5 64.0 8.5])
+                 :world/chunks
+                 (into {} (for [cx (range -3 4) cz (range -3 4)] [[cx cz] (world/column {})])))
+        i (wood/gather-next w)]
+    (is (empty? (memory/positions-now w blocks/log-states)) "no log anywhere")
+    (is (= :walk (:intent/kind i)))
+    (is (= :log-hunt (:intent/for i)) "out along a bearing, where the next chunks load")))
 
 (deftest a-slow-server-stretches-the-dig
   ;; race 38665691517 (issues #88, #144): the server ran at 130 ms a tick, counted the digs'
