@@ -31,6 +31,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
@@ -894,7 +895,11 @@
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i, one that is done
-   makes way for the next. Shared by every intent that works a plan of ops."
+   makes way for the next. Shared by every intent that works a plan of ops. A dig of rock with no
+   pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand, so the build's
+   row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
+   in the cast's room at y -20 and dug deepslate by hand, fifteen seconds a block, for the last
+   half hour of its ninety minutes."
   [world {:intent/keys [child op] :as i} next event]
   (cond (not= next op)
         (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child)
@@ -911,7 +916,9 @@
             (intent/fail (:intent/reason child)))
         child (intent/run-child world event)
         :else
-        (let [c (op-child world i next)]
+        (let [c (op-child world i next)
+              c (or (when (= :dig (:intent/kind c)) (stairs/tool-missing world (:intent/target c)))
+                    c)]
           (cond (and (= :no-station c)
                      (spent? world (lava-sources world) (:intent/origin i) (:intent/facing i)))
                 ;; the pool is spent, not the build: the planner chooses a site with lava enough
