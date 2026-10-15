@@ -1,4 +1,4 @@
-# FIX.md: keeping the bot-failure issues down
+# AGENTS.md: keeping the bot-failure issues down
 
 This is the working manual for fixing the bot's failures in this repository. It is written for any coding agent or person who picks the work up cold: you may not know Clojure well, this repo, or the tools that were used before you. Follow it in order. Everything here was done for real, many times, on 2026-10-14; the commands are the ones that worked, and the catches are the ones that cost time.
 
