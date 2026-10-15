@@ -307,3 +307,18 @@
     (is (not (build/refused-for-the-body?
               w
               {:intent/kind :place :intent/reason :rejected :intent/cell [8 63 5]})))))
+
+(deftest a-build-never-digs-rock-by-hand
+  ;; sim race 38669750355 (issue #135): the last pickaxe broke in the cast's room at y -20 and
+  ;; the build dug deepslate by hand, fifteen seconds a block, for the last half hour
+  (let [op {:build/op :dig :build/pos [5 62 6] :build/stand [5 63 5] :build/step :room}
+        i {:intent/kind :build
+           :intent/build :cast-one
+           :intent/origin [100 64 200]
+           :intent/facing :south
+           :intent/status :active
+           :intent/op op}
+        w (assoc (standing-at (open-ground {}) [5.5 63.0 5.5]) :plan/intent i :player/inventory {})
+        after (build/work-op w i op {:event/kind :tick :event/now 0 :event/rand 0.5})]
+    (is (= :no-pickaxe (get-in after [:plan/intent :intent/reason]))
+        "no pickaxe held: the row makes one before the stone is dug")))

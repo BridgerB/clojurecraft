@@ -29,7 +29,7 @@ sourceRefs:
   - test/clojurecraft/make_test.clj#the-table-goes-along-to-the-water
   - src/clojurecraft/make.clj#defn spare-worth?
   - test/clojurecraft/make_test.clj#a-shaft-to-the-sky-is-not-a-spare
-  - src/clojurecraft/make.clj#defn take-table
+  - "src/clojurecraft/make.clj#A dig of the bot's placed crafting table, to carry it on (take-table-along), when row goes out"
   - test/clojurecraft/sim_test.clj#the-table-is-taken-along-when-the-bot-goes-out
   - src/clojurecraft/make.clj#defn fetch?
   - src/clojurecraft/make.clj#defn wood-covers?
