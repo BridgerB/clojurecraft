@@ -4,6 +4,8 @@
          '[clojurecraft.plan :as plan]
          '[clojurecraft.intent :as intent]
          '[clojurecraft.recipe :as recipe]
+         '[clojurecraft.path :as path]
+         '[clojurecraft.build :as build]
          '[clojure.string :as str])
 (defn out [& xs] (println (str/join " " xs)))
 (defn brief
@@ -32,11 +34,32 @@
     (out " intent" (brief (:plan/intent world)))
     (out " child" (brief (:intent/child (:plan/intent world))))
     (out " last" (brief (:plan/last world)))
+    (let [op (:intent/op (:plan/intent world))
+          pos (:build/pos op)
+          [fx fy fz] (intent/feet world)]
+      (when pos
+        (out " op pos" pos
+             "reachable-stand" (build/reachable-stand world pos pos)
+             "room-stand" (build/room-stand world (:plan/intent world) pos))
+        (doseq [y (range (+ fy 3) (- fy 2) -1)]
+          (out " y" y)
+          (doseq [z (range (- fz 7) (+ fz 8))]
+            (out (str/join (for [x (range (- fx 7) (+ fx 8))]
+                             (cond (= [x y z] [fx fy fz]) "@"
+                                   (= [x y z] pos) "X"
+                                   :else
+                                   (case (path/classify world [x y z])
+                                     :solid "#"
+                                     :water "W"
+                                     :clear "."
+                                     :unknown "?"
+                                     :lava "L"
+                                     "~")))))))))
     (loop [world world
            sim sim
            k 0
            prev nil]
-      (when (and (< k 240) (not (plan/failed? world)) (not (plan/done? world)))
+      (if (and (< k 240) (not (plan/failed? world)) (not (plan/done? world)))
         (let [{world :world sim :sim}
               (sim/play-on simrace/step world sim (constantly false) 250 (:time/now world) [] nil)
               i (:plan/intent world)
@@ -50,5 +73,9 @@
                  (pr-str cur)
                  "attempts"
                  (:plan/attempts world)))
-          (recur world sim (inc k) cur))))))
+          (recur world sim (inc k) cur))
+        (out "  end"
+             (:plan/status world)
+             (:plan/reason world)
+             (pr-str (brief (:plan/last world))))))))
 (shutdown-agents)
