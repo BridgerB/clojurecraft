@@ -111,3 +111,10 @@
     (is (simrace/recurs? back played) (pr-str (:run/signature played)))
     (is (<= (:run/ms played) (+ (get-in snap [:snapshot/world :time/now]) 1000))
         "it fails again at once, not after the budget")))
+
+(deftest a-timeout-is-judged-by-its-whole-run
+  ;; a :timeout snapshot's moment is the tick before the limit, long after what slowed it: the
+  ;; issue check replays its run from the landing instead of playing on (simrace/judged)
+  (is (simrace/timeout-signature? {:snapshot/signature [:ingots :timeout]}))
+  (is (not (simrace/timeout-signature? {:snapshot/signature [:ingots :boxed]})))
+  (is (not (simrace/timeout-signature? {}))))
