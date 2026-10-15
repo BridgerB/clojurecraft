@@ -1,6 +1,6 @@
 (ns clojurecraft.model
   "The information model, in writing: every attribute the bot knows, with a one-line meaning and
-   when it exists. docs/hickey.md starts here (\"Write the attribute list with namespaced names
+   when it exists. docs/RICH-HICKEY.md starts here (\"Write the attribute list with namespaced names
    and one-line meanings. Everything after this is a function over that model.\"). It is data, so
    model_test can hold it in step with the code: every key a running bot writes is listed, and
    every world attribute listed has a spec. An attribute never changes meaning; a new meaning is

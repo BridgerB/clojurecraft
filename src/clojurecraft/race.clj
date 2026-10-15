@@ -18,7 +18,7 @@
    landing, and the server neither generates a fresh world round each bot nor runs a locate
    biome per bot in one of its ticks. Without it, the forest search and the claims below.
 
-   docs/hickey.md, Conveyance: each bot is its own atom and loop (main/run-bot!, the same life a
+   docs/RICH-HICKEY.md, Conveyance: each bot is its own atom and loop (main/run-bot!, the same life a
    lone bot lives), and bots share nothing but one bounded channel, the claims of landing cells,
    folded by the pure claims reducer. The fixture lands each bot on the cell it claimed for it,
    over RCON, and speaks to that bot only through the bot's own bounded event queue (its :go).

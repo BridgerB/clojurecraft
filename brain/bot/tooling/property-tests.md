@@ -27,7 +27,7 @@ related:
 
 # Property tests
 
-`props_test.clj` checks the reducer and the dig executor over generated inputs with test.check (200 cases each); `make_test.clj` checks the planner over every target (400 cases); `recipe_test.clj` adds one property over the recipe table (300 cases). Together they are the five properties `docs/hickey.md` names, plus the recipe round trip. Each was mutation-checked: an early FINISH or a need counted one short makes its property fail. The packet generator is derived from `packet/specs` itself, so a new s2c play spec is covered without editing the test.
+`props_test.clj` checks the reducer and the dig executor over generated inputs with test.check (200 cases each); `make_test.clj` checks the planner over every target (400 cases); `recipe_test.clj` adds one property over the recipe table (300 cases). Together they are the five properties `docs/RICH-HICKEY.md` names, plus the recipe round trip. Each was mutation-checked: an early FINISH or a need counted one short makes its property fail. The packet generator is derived from `packet/specs` itself, so a new s2c play spec is covered without editing the test.
 
 ## Key files
 - `props_test.clj`, `field-gen` - a generator per wire type: structs become `gen/hash-map`, `[:vec T]` 0-3 elements, numbers within their wire range, floats finite in ±1e6, slots nil or `{:item :count}`, `:uuid` always nil.

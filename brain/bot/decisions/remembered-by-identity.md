@@ -15,7 +15,7 @@ sourceRefs:
   - src/clojurecraft/path.clj#defn cells
   - src/clojurecraft/path.clj#defn cell-key
   - src/clojurecraft/terrain.clj#defn superseded
-  - "docs/hickey.md#type hints and primitive arrays only where a profiler pointed"
+  - "docs/RICH-HICKEY.md#type hints and primitive arrays only where a profiler pointed"
   - test/clojurecraft/memo_test.clj#a-remembered-function-answers-as-the-function-does
   - test/clojurecraft/memo_test.clj#the-overlay-keeps-its-identity-when-a-chunk-arrives-it-never-touched
   - test/clojurecraft/path_test.clj#the-cells-of-a-world-answer-as-classify-does
@@ -29,7 +29,7 @@ related:
 # Remembered by identity
 
 ## The problem
-How many bots a runner carries is set by CPU (the capacity ramp, [[race]]): the bots' JVM was at 185% of the runner's four cores with twenty racers, and a bot short of CPU falls below 20 ticks a second. The planner re-derives everything every tick (docs/hickey.md: nothing is remembered that the world can tell you), and a JFR profile of a ten-bot local race showed what that cost: `plan-tick` was 49% of all samples, of which the walk to remembered blocks (`make/near` → `memory/positions-now`, a Datalog query over every fact) was 19%, the exposed-ore scan (`stone/exposed-of-states`) 25% and the route search 15%. Each was asked again every tick about a world whose parts had not changed.
+How many bots a runner carries is set by CPU (the capacity ramp, [[race]]): the bots' JVM was at 185% of the runner's four cores with twenty racers, and a bot short of CPU falls below 20 ticks a second. The planner re-derives everything every tick (docs/RICH-HICKEY.md: nothing is remembered that the world can tell you), and a JFR profile of a ten-bot local race showed what that cost: `plan-tick` was 49% of all samples, of which the walk to remembered blocks (`make/near` → `memory/positions-now`, a Datalog query over every fact) was 19%, the exposed-ore scan (`stone/exposed-of-states`) 25% and the route search 15%. Each was asked again every tick about a world whose parts had not changed.
 
 ## The choice
 **Ask the parts, and remember by them.** A world's parts are values: the facts, the chunks, the block overlay. `memo/by` remembers a function's answers keyed by its arguments, a part by identity (`identical?`, one pointer compare) and a small argument (a cell, a goal, a set of states) by value. The costly questions are asked of their parts: `memory/positions-in [facts states dim]`, `stone/exposed-cells [chunks blocks feet-chunk states blacklist lo hi]`, `path/plan-on [chunks blocks traps from goal max-nodes]` (traps filtered to those in force first, so the clock is not an input). The cache is a fixed array of slots shared by the bots of a JVM; a race between threads replaces a whole slot, never mixes two.

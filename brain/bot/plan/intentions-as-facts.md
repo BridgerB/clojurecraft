@@ -15,7 +15,7 @@ sourceRefs:
   - src/clojurecraft/memory.clj#defn remember-answer
   - test/clojurecraft/sim_test.clj#the-servers-answers-are-facts
   - test/clojurecraft/sim_test.clj#what-the-bot-was-doing-is-a-query-as-of-any-moment
-  - docs/hickey.md#"What was I trying to do when I died" is a query *as of* the tick before death.
+  - docs/RICH-HICKEY.md#"What was I trying to do when I died" is a query *as of* the tick before death.
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[goals-and-intents]]"

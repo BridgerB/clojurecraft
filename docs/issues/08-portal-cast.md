@@ -89,4 +89,4 @@ Pours use `:build/aim`, not a face: the server raycasts from the eye along the y
 - Field order of `use-item-on` (`world-border-hit` position) and `respawn` on 775 must be checked against the vanilla report before trusting the specs; `login` could also yield the dimension but its layout is longer.
 - Sneaking: ruststeve's edge-guard bug (`mold-cast:13` item 1) means sneak physics needs its own test before the stance relies on it.
 - Lava refill between layers is the bucket issue's job; what does the `:build` intent do when `[:need :lava-bucket]` recurs more than N times at one cell: fail the site or wait?
-- Should `:memory/dimensions` be the first use of the Datalog store (`hickey.md` status), since "sightings as of the overworld" is exactly an as-of query?
+- Should `:memory/dimensions` be the first use of the Datalog store (`RICH-HICKEY.md` status), since "sightings as of the overworld" is exactly an as-of query?

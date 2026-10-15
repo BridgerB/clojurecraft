@@ -22,7 +22,7 @@ sourceRefs:
   - src/clojurecraft/plan.clj#defn landed?
   - src/clojurecraft/plan.clj#defn landing-tick
   - test/clojurecraft/plan_test.clj#a-go-with-a-landing-waits-until-the-bot-is-there
-  - docs/hickey.md#He would make the fixture its own process that speaks to the bot through a queue
+  - docs/RICH-HICKEY.md#He would make the fixture its own process that speaks to the bot through a queue
 related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[natural-tree-not-fixture]]"
@@ -32,7 +32,7 @@ related:
 
 # Harness landing
 
-The harness is the test fixture, and it is its own process (`clojure -M:harness`). It shares nothing with the bot but data: it reaches the server only over RCON and reaches the bot only through a queue, one EDN line on its stdout piped into the bot's stdin (`--events stdin`). This is what `docs/hickey.md` asks for; the earlier harness was a thread inside the bot that watched the world atom.
+The harness is the test fixture, and it is its own process (`clojure -M:harness`). It shares nothing with the bot but data: it reaches the server only over RCON and reaches the bot only through a queue, one EDN line on its stdout piped into the bot's stdin (`--events stdin`). This is what `docs/RICH-HICKEY.md` asks for; the earlier harness was a thread inside the bot that watched the world atom.
 
 ```bash
 clojure -M:harness --rcon-port 25581 --rcon-pass "$P" --name Clj_wood --until wood 2> harness.log \

@@ -1,5 +1,5 @@
 (ns clojurecraft.problems-test
-  "docs/hickey.md: before each stage, a written problem statement (what information it needs,
+  "docs/RICH-HICKEY.md: before each stage, a written problem statement (what information it needs,
    what can go wrong, what done means in world terms, what the last recorded failure showed),
    kept as a fact next to the goal table. These tests keep that true."
   (:require [clojure.edn :as edn]
