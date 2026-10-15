@@ -814,7 +814,8 @@
 
 (defn nearest-stand-cell
   "Of the cells a stand for pos could be (stand-cell?: the feet can be there and reach pos, the
-   body clear of it), the one nearest the feet, at their height first, that a way can be cut to:
+   body clear of it), the one nearest pos, then the feet (by where it is, not where the feet are,
+   so the choice holds while the way is cut and the feet move), that a way can be cut to:
    another height (to-height cuts stairs) or, at the feet's height, a block in the way that may be
    dug (stance-block: never the frame's rock); nil when none. Where no route reaches any (the
    room dug while the bot was elsewhere, rock between it and the feet), the build cuts its way to
@@ -827,9 +828,8 @@
                     (or (not= y fy) (some? (stance-block world c build origin facing))))]
     (->> (for [dy [0 -1 1 -2] dx (range -4 5) dz (range -4 5)] (mapv + pos [dx (inc dy) dz]))
          (filter #(stand-cell? world % pos))
-         (sort-by (fn [[_ y _ :as c]] [(abs (- y fy))
-                                       (physics/distance (physics/centre c)
-                                                         (physics/centre feet))]))
+         (sort-by (fn [c] [(physics/distance (physics/centre c) (physics/centre pos))
+                           (physics/distance (physics/centre c) (physics/centre feet))]))
          (filter cuttable?)
          first)))
 
