@@ -346,13 +346,18 @@
       (assoc :player/controls {})
       (intent/fail :boxed)))
 
+(def lake-ice #{:ice :frosted_ice})    ; what freezes over a lake's water: no shore
+
 (defn dry-top?
   "Is the top of column [x z] (its highest block that is solid or a fluid) solid: ground the open
-   sky is over, not a lake or the sea? false when the column is not loaded."
+   sky is over, not a lake or the sea? Ice is the lake's own top (lake-ice), not ground: sim race
+   38659291345 world R4/38 (issue #37) climbed under a lake half frozen over, took each patch of
+   ice for the shore, and stepped toward it every way in turn. false when the column is not
+   loaded."
   [world [x z]]
   (true? (first (keep (fn [y]
                         (when-let [id (terrain/block-at world [x y z])]
-                          (cond (blocks/fluid id) false
+                          (cond (or (blocks/fluid id) (lake-ice (blocks/name-of id))) false
                                 (blocks/solid? id) true
                                 :else nil)))
                       (range terrain/top-y (dec chunk/min-y) -1)))))
@@ -403,6 +408,35 @@
   (boolean (some-> (terrain/block-at world [x (+ y 3) z])
                    blocks/falls?)))
 
+(defn duck
+  "A climb's way out of a pocket every stair and level step of which is refused: a stair down
+   (stair-cells, :intent/rise -1 for the step) along the heading whose head is dry soonest
+   (dry-head-distance) of those whose stair is cut clear of water and lava (level-safe?), the
+   pocket's feet cell added to :plan/boxed-at so no stair or step climbs back into it; or nil.
+   Under the sheet over the pocket the level steps are allowed again, and the climb walks out
+   from under it. Sim race 38659291345 (issue #37) worlds R1/33 and R4/38: a climb for wood
+   stood in a pocket two cells long with an aquifer's sheet a block over the head, every stair
+   up and every level step bordered water, and it failed :boxed three times; the sheet ended
+   four columns off."
+  [world {:intent/keys [level-steps visited] :or {level-steps 0 visited #{}}}]
+  (let [feet (intent/feet world)
+        ways (sort-by #(or (dry-head-distance world feet %) Long/MAX_VALUE) directions)]
+    (when-let [d (first (filter #(level-safe? world (stair-cells feet %)) ways))]
+      (-> world
+          (update :plan/boxed-at (fnil conj #{}) feet)
+          (intent/assoc-intent :intent/dir d
+                               :intent/level-dir d
+                               :intent/turns 0
+                               :intent/level-steps (inc level-steps)
+                               :intent/cells (stair-cells feet d)
+                               :intent/visited (conj visited feet (last (stair-cells feet d)))
+                               :intent/rise -1
+                               :intent/stage :open
+                               :intent/started-y (physics/y-of (:player/pos world))
+                               :intent/started-tick (:time/tick world))
+          (intent/dissoc-intent :intent/child :intent/lay :intent/level-cells)
+          (game/say (str "stairs: boxed under water, a stair down toward " d))))))
+
 (defn step-aside
   "Every stair refused: a level step, the turns counted afresh, or :boxed when none is allowed
    or max-level-steps are spent. The step keeps the last one's way (:intent/level-dir) while it
@@ -417,8 +451,13 @@
    not under gravel or sand (under-falling?) comes before any that is, whatever the last step's
    way: under a bed of gravel every stair is refused again from the next cell, and race
    38477665442 bot Clj_r04 stepped thirty cells along one at y 42, two blocks dug a step, until
-   its last pickaxe broke (issue #43)."
-  [world {:intent/keys [kind dir level-steps level-dir] :or {level-steps 0}}]
+   its last pickaxe broke (issue #43). The cells the staircase has stepped onto are kept
+   (:intent/visited), and a step onto one comes after every other; a climb with no fresh level
+   step ducks under what refuses it (duck) first: sim race 38659291345 world R4/38 (issue #37),
+   under a lake, stepped round a patch of fifteen cells a hundred times, one fresh step always
+   allowed, until it was :boxed."
+  [world
+   {:intent/keys [kind dir level-steps level-dir visited] :or {level-steps 0 visited #{}} :as i}]
   (let [[fx _ fz :as feet] (intent/feet world)
         back (when level-dir (mapv - level-dir))
         round (take 4 (iterate turn (or dir (first directions))))
@@ -438,25 +477,31 @@
         laid (fn [d]
                (let [cells (level-cells feet d)]
                  (and (level-clear? world cells) (lay world feet cells))))
-        d (when (< level-steps (level-step-limit world kind feet))
-            (or (first (filter #(level-safe? world (level-cells feet %)) ways))
-                (first (filter laid ways))))
+        pick (fn [ws]
+               (or (first (filter #(level-safe? world (level-cells feet %)) ws))
+                   (first (filter laid ws))))
+        budget? (< level-steps (level-step-limit world kind feet))
+        fresh (when budget? (pick (remove #(contains? visited (last (level-cells feet %))) ways)))
+        ducked (when (and budget? (nil? fresh) (= :stairs-up kind)) (duck world i))
+        d (or fresh (when (and budget? (nil? ducked)) (pick ways)))
         to-lay (when (and d (not (level-safe? world (level-cells feet d)))) (laid d))]
-    (if d
-      (-> world
-          (intent/assoc-intent :intent/dir d
-                               :intent/level-dir d
-                               :intent/turns 0
-                               :intent/level-steps (inc level-steps)
-                               :intent/level-cells (level-cells feet d)
-                               :intent/stage (if to-lay :lay :level)
-                               :intent/started-tick (:time/tick world))
-          (intent/dissoc-intent :intent/child :intent/cells :intent/lay)
-          (cond-> to-lay (intent/assoc-intent :intent/lay to-lay))
-          (game/say (str "stairs: every stair refused, a level step toward "
-                         d
-                         (when to-lay (str ", its floor laid at " to-lay)))))
-      (box world))))
+    (cond ducked ducked
+          d
+          (-> world
+              (intent/assoc-intent :intent/dir d
+                                   :intent/level-dir d
+                                   :intent/turns 0
+                                   :intent/level-steps (inc level-steps)
+                                   :intent/level-cells (level-cells feet d)
+                                   :intent/visited (conj visited feet (last (level-cells feet d)))
+                                   :intent/stage (if to-lay :lay :level)
+                                   :intent/started-tick (:time/tick world))
+              (intent/dissoc-intent :intent/child :intent/cells :intent/lay)
+              (cond-> to-lay (intent/assoc-intent :intent/lay to-lay))
+              (game/say (str "stairs: every stair refused, a level step toward "
+                             d
+                             (when to-lay (str ", its floor laid at " to-lay)))))
+          :else (box world))))
 
 (def refusals #{:needs-tool :unsafe})  ; a child dig failing for these turns the stairs
 (def max-rejections 3)                 ; digs of one stair the server would not do before the staircase fails :rejected
@@ -496,12 +541,14 @@
   (fn [_world i _event] (:intent/stage i :plan)))
 
 (defmethod stairs-stage :plan
-  [world {:intent/keys [kind dir turns] :or {turns 0} :as i} _]
+  [world {:intent/keys [kind dir turns visited] :or {turns 0 visited #{}} :as i} _]
   (let [dir (or dir (first directions))
-        {:keys [safe? lay] cells-of :cells} (shapes kind)
+        {shape-safe? :safe? lay :lay cells-of :cells} (shapes kind)
+        fresh? (fn [cells] (not (contains? visited (last cells)))) ; no stair back onto a stepped cell
+        safe? (fn [world cells] (and (fresh? cells) (shape-safe? world cells)))
         feet (intent/feet world)
         cells (cells-of feet dir)
-        to-lay (when (and lay (not (safe? world cells))) (lay world feet cells))]
+        to-lay (when (and lay (fresh? cells) (not (safe? world cells))) (lay world feet cells))]
     (cond (airborne? world) (assoc world :player/controls {}) ; land first
           (safe? world cells)
           (intent/assoc-intent world
@@ -648,14 +695,14 @@
                         (and (:player/on-ground? world) (< (math/hypot vx vz) creep-speed)))))))
 
 (defmethod stairs-stage :step
-  [world {:intent/keys [kind dir cells started-y started-tick]} _]
+  [world {:intent/keys [kind dir cells started-y started-tick] :as i} _]
   (let [cell (last cells)
-        rise (:rise (shapes kind))]
+        rise (:intent/rise i (:rise (shapes kind)))]
     (cond (taken? world rise started-y cell)
           (-> world
               (assoc :player/controls {})
               (intent/assoc-intent :intent/stage :plan)
-              (intent/dissoc-intent :intent/child :intent/cells :intent/rejections))
+              (intent/dissoc-intent :intent/child :intent/cells :intent/rejections :intent/rise))
           (next-to-open world cells) ; gravel or sand fell into the stair: dig it again
           (-> world
               (assoc :player/controls {})

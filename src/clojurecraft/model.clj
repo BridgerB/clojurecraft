@@ -254,6 +254,12 @@
    [:intent/level-dir
     "the way the staircase's last level step went; the next keeps it while allowed"
     "stairs-down and stairs-up, after a level step"]
+   [:intent/visited
+    "the feet cells a staircase's level steps and ducks have stood on; a step or stair onto one comes after every other way (stairs/step-aside)"
+    "stairs-down and stairs-up, after a level step"]
+   [:intent/rise
+    "which way the feet go for the stair being cut when it is not the staircase's own: -1 for a climb's stair down under water (stairs/duck)"
+    "stairs-up, from a duck until its stair is taken"]
    [:intent/child
     "the child intent run in the intent's place by its own executor (stairs: the :dig cutting one cell; redig: the place, dig or collect it is on)"
     "stairs-down, while digging; redig; place, while digging a niche"]

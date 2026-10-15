@@ -77,6 +77,16 @@
     (is (= (:plan/status world) (:plan/status (:world again))) "played on, it ends the same")
     (is (= (:player/inventory world) (:player/inventory (:world again))))))
 
+(deftest a-sim-run-knows-its-landing-as-a-real-one-does
+  ;; issue #37: race/land-bot! puts :go/at on a real bot's :go; a sim run's plan has the same
+  ;; landing, so its landing-relative choices are the real race's
+  (let [w (simrace/prepared {:capture/set "test"
+                             :capture/landing [8 8 64]
+                             :capture/radius 0
+                             :capture/columns {[0 0] (world/column-bytes {})}})
+        r (simrace/run w 1 "wood" 2000)]
+    (is (= (simrace/spawn-of w) (get-in r [:plan :plan/go-at])))))
+
 (deftest a-failed-runs-moment-round-trips-and-plays-on-to-the-same-stop
   ;; issue #77: the snapshot of a failed run is a value that prints, reads back and, played on
   ;; with the same code, fails with the same signature; the moment before the stop still has the
