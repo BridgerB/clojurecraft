@@ -28,7 +28,8 @@
                     (memory/nearest-first eye wood/far-radius))]
     (out "==" p)
     (out " feet" feet "pos" (:player/pos w) "eye" eye)
-    (out " plan" (select-keys (:plan/reason w) [:plan/reason])
+    (out " plan"
+         "reason" (:plan/reason w)
          "waiting" (:plan/waiting w)
          "attempts" (:plan/attempts w)
          "boxed-at" (:plan/boxed-at w))
