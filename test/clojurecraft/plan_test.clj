@@ -178,6 +178,29 @@
     (is (= :walk (:intent/kind (wood/gather-next ground)))
         "on open ground the trunk is walked to")))
 
+(deftest a-trunk-up-the-cliff-is-climbed-toward-when-out
+  ;; race 38674091115 runner 4 (issue #87): the iron mine left the bot at the mouth of its
+  ;; shaft under the open sky at y 70 with 999 trunks remembered and the nearest thirty blocks
+  ;; above on the mountain; the near band stops twelve over the eye, no walk climbs the cliff,
+  ;; the hunt's targets stop sixteen over the eye and never come nearer the landing, and the
+  ;; climb would not cut because out? said out. The plan waited :no-log. Out is not at the
+  ;; trees: stairs up toward the trunk, to-height only
+  (let [w (remembered {[12 66 8] 1 [12 67 8] 136} [8.5 64.0 8.5])]
+    (is (stairs/out? w (intent/feet w)) "on open ground under the sky")
+    (is (memory/nearest-log w (game/eye w) wood/search-radius #{} wood/standing-trunk?)
+        "the trunk on its ledge is remembered")
+    (is (nil? (wood/near-walk w)) "the trunk is three up a wall: no walk reaches it")
+    (is (= {:intent/kind :stairs-up :intent/to-y 67 :intent/to-height? true :intent/for :surface}
+           (wood/trees-climb
+            w
+            [(memory/nearest-log w (game/eye w) wood/far-radius #{} wood/standing-trunk?)]))
+        "climbed toward, to-height only")
+    (is (= :stairs-up (:intent/kind (wood/gather-next w)))))
+  (let [level (remembered {[12 64 8] 136 [12 65 8] 136} [8.5 64.0 8.5])
+        bottoms [(memory/nearest-log level (game/eye level) 48 #{} wood/standing-trunk?)]]
+    (is (nil? (wood/trees-climb level bottoms))
+        "a trunk at the eye's height is hunted for, not climbed toward")))
+
 (def quarry
   "A quarry two wide and two deep in the stone, open to the sky, as the stone mine digs round its
    feet: the floor at y 62 under [8 8] and [9 8], and a trunk on the ground four blocks east."

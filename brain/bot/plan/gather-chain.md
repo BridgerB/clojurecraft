@@ -5,11 +5,12 @@ type: reference
 tags: [bot, plan, wood, intents]
 aliases: [gather-next, continue-gather, intent/for :log, max-clears, log chain, wood chain]
 status: verified
-lastUpdated: 2026-10-14
+lastUpdated: 2026-10-15
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/wood.clj#defn continue-gather
   - src/clojurecraft/wood.clj#defn gather-next
+  - src/clojurecraft/wood.clj#defn trees-climb
   - src/clojurecraft/stairs.clj#defn pit-rim
   - test/clojurecraft/plan_test.clj#a-quarry-with-a-level-step-across-its-floor-is-climbed-out-of
   - test/clojurecraft/sim_test.clj#a-log-is-gathered-out-of-a-quarry
@@ -17,6 +18,7 @@ sourceRefs:
   - test/clojurecraft/plan_test.clj#a-near-trunk-with-no-route-is-climbed-for-too
   - src/clojurecraft/wood.clj#defn climb-out
   - test/clojurecraft/plan_test.clj#a-pit-under-the-sky-is-climbed-out-of
+  - test/clojurecraft/plan_test.clj#a-trunk-up-the-cliff-is-climbed-toward-when-out
   - test/clojurecraft/plan_test.clj#a-pocket-under-a-canopy-is-climbed-out-of
   - test/clojurecraft/sim_test.clj#a-log-is-gathered-from-a-pocket-under-a-canopy
   - src/clojurecraft/stairs.clj#defn out?
@@ -59,6 +61,7 @@ Getting a log is a chain of three intents, each started by the planner after the
 - The chain lives entirely in `:plan/last` and the intent maps; nothing else remembers it. A failed intent clears `:plan/last`, so a failure restarts the chain from a fresh search with the target blacklisted.
 - The sim test drops a 2x2 oak canopy one block above the ground between bot and trunk; the bot breaks the leaf at `[3 65 0]` and finishes with no failed attempts.
 - The near band is 12 above and below the eye, so from a mine every surface tree is past it. Stairs are cut only once a trunk is remembered, no route reaches it, and the shaft already dug cannot be walked up. Full run 29ef069 cut one at spawn before any tree was remembered, failed `:stair-not-taken`, and the plan then waited `:no-log`. Full run 4528031 remembered the trees, found no route through the mine, cut a new stair from y 17, and the only pickaxe broke at y 49 (`a-shaft-to-the-sky-is-walked-not-cut`). `:mine-iron` keeps a spare stone pickaxe and gathers the wood for it while one still digs.
+- Being out of the ground is not being at the trees. Race 38674091115 runner 4 (issue #87): the iron mine left the bot at the mouth of its shaft under the open sky at y 70 with 999 trunks remembered and the nearest thirty blocks above on the mountain; the near band stops twelve over the eye, no walk climbs the cliff, the hunt's targets stop sixteen over the eye and never come nearer the landing, and the climb refused to cut because `stairs/out?` said out, so the plan waited `:no-log`. `trees-climb` cuts stairs up toward a trunk remembered above the eye no walk reaches — `:intent/to-height?` only, since the sky over the feet ends the plain climb on its first tick — and the boxed-cell guard still bounds it.
 
 ## See also
 - [[collect-intent]] - where a blocker is named.
