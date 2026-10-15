@@ -156,8 +156,11 @@
    bearings, never nearer the landing than the feet are now), to the ground nearest the nearest
    remembered log, the first of the three such a route reaches (scoop/first-walk), tagged
    :intent/for :log-hunt. The chunks it loads are remembered as they arrive, so the next pass
-   finds the way round. nil with no log remembered, underground, or with no ground a route
-   reaches. Race 38477665442 bots Clj_r14 and Clj_r20 landed on a lake's shore with the forest
+   finds the way round. With no log remembered within far-radius the hunt sets out all the same,
+   the targets in the water hunt's order: race 38665691517 runner 1 (issue #57) landed slots
+   Clj_r08, Clj_r14 and Clj_r15 where no standing trunk was in reach, routes led out on three
+   bearings, and each waited :no-log at its landing round after round. nil underground, or
+   with no ground a route reaches. Race 38477665442 bots Clj_r14 and Clj_r20 landed on a lake's shore with the forest
    across the water: every trunk was in the near band and no route reached one, and each waited
    :no-log until the plan failed (issue #57). Bot Clj_r15 came up out of its mine for the wood
    of a spare pickaxe with the trees a hundred blocks off, past the pathfinder's budget, and
@@ -166,11 +169,11 @@
   (let [logs (memory/nearest-first (game/eye world)
                                    far-radius
                                    (memory/positions-now world blocks/log-states))]
-    (when (and (seq logs) (terrain/under-sky? world (intent/feet world)))
+    (when (terrain/under-sky? world (intent/feet world))
       (scoop/first-walk world
                         :log-hunt
-                        (sort-by #(physics/horizontal-distance % (first logs))
-                                 (scoop/hunt-targets world))))))
+                        (cond->> (scoop/hunt-targets world)
+                          (seq logs) (sort-by #(physics/horizontal-distance % (first logs))))))))
 
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
