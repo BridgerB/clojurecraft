@@ -30,6 +30,18 @@
     (out " logs remembered" (count (memory/positions-now w blocks/log-states)))
     (out " near-walk" (wood/near-walk w) "climb-out" (wood/climb-out w) "hunt" (wood/hunt w))
     (out " hunt-targets" (vec (scoop/hunt-targets w)))
+    (out " under-sky? feet" (terrain/under-sky? w (intent/feet w))
+         "over head"
+         (mapv #(blocks/name-of (terrain/block-at w (update (intent/feet w) 1 + %))) (range 2 8)))
+    (out " nearest logs"
+         (take 5
+               (memory/nearest-first (game/eye w)
+                                     wood/far-radius
+                                     (memory/positions-now w blocks/log-states))))
+    (out
+     " nearest standing trunk"
+     (memory/nearest-log w (game/eye w) wood/far-radius (constantly false) wood/standing-trunk?))
+    (out " first-walk" (scoop/first-walk w :log-hunt (scoop/hunt-targets w)))
     (doseq [[dx dz] scoop/bearings]
       (let [x (long (math/floor (+ px (* dx scoop/hunt-distance))))
             z (long (math/floor (+ pz (* dz scoop/hunt-distance))))
