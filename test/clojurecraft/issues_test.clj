@@ -1,7 +1,9 @@
 (ns clojurecraft.issues-test
   "The issue check (issue #77): a bot-failure issue's failing moments, kept as snapshots under
-   test/issues/<n>/ (bb issue-check fetch), are played on against the model for two simulated
-   minutes; the fix holds when none fails again with the issue's signature. A snapshot stays
+   test/issues/<n>/ (bb issue-check fetch), are played against the model as their signature can
+   be judged (simrace/judged): played on from the moment for two simulated minutes, or, for a
+   :timeout, the run replayed from its landing to the sim race's limit; the fix holds when none
+   fails again with the issue's signature. A snapshot stays
    once its issue is fixed (docs/hickey.md: a goal that was wrong is retired, never rewritten),
    so a bug that comes back fails here, naming the issue. A snapshot whose captured world is
    not on this machine (cache/sim-worlds, the runners restore it) is skipped and said so, so
@@ -56,7 +58,7 @@
             w (world-of (:snapshot/file snap))]
         (cond (nil? w) (println "issues-test: skipped" path "- no" (:snapshot/file snap) "here")
               :else
-              (let [played (simrace/play-snapshot snap w simrace/snapshot-budget-ms)]
+              (let [played (simrace/judged snap w)]
                 (is (not (simrace/recurs? snap played))
                     (str "issue #" n
                          " recurs: " (pr-str (:run/signature played))
