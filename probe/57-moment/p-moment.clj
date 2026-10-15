@@ -5,15 +5,11 @@
 (require '[clojure.string :as str]
          '[clojurecraft.game :as game]
          '[clojurecraft.main :as main]
-         '[clojurecraft.memory :as memory]
          '[clojurecraft.wood :as wood]
          '[clojurecraft.scoop :as scoop]
-         '[clojurecraft.intent :as intent]
-         '[clojurecraft.terrain :as terrain]
-         '[clojurecraft.path :as path]
-         '[clojurecraft.blocks :as blocks]
          '[clojurecraft.record :as record]
-         '[clojurecraft.physics :as physics])
+         '[clojurecraft.path :as path]
+         '[clojurecraft.intent :as intent])
 
 (.mkdirs (java.io.File. "out"))
 
@@ -30,6 +26,16 @@
         r (path/plan world (path/feet-cell (:player/pos world)) (intent/goal-of i))]
     [(name (:path/status r)) (count (:path/waypoints r))]))
 
+(defn watch
+  "The facts to watch at one tick while the plan runs and no intent does, or nil."
+  [world]
+  (when (and (:player/pos world) (not= :failed (:plan/status world)) (not (:plan/intent world)))
+    (let [ts (scoop/hunt-targets world)
+          route (when (seq ts) (route-of world (first ts)))]
+      [(count ts) route
+       (some-> (wood/hunt world)
+               :intent/target)])))
+
 (doseq [p *command-line-args*]
   (out "==" p)
   (loop [w (game/init {:host "replay" :port 0 :name "Clj_replay"})
@@ -40,11 +46,7 @@
             i (:plan/intent w)
             cur [(:time/now w) (count (:world/chunks w)) (:plan/wet-ticks w) (:plan/trap w)
                  (:plan/status w) (:plan/waiting w) (when i [(:intent/kind i) (:intent/for i)])
-                 (when (and (not= :failed (:plan/status w)) (not i))
-                   (let [ts (scoop/hunt-targets w)]
-                     [(count ts) (when (seq ts) (route-of w (first ts)))
-                      (some-> (wood/hunt w)
-                              :intent/target)]))]]
+                 (watch w)]]
         (when (not= (rest cur) prev)
           (out (str/join " " (map (fn [v] (if (coll? v) (pr-str v) (str v))) cur))))
         (recur w (next es) (rest cur)))
