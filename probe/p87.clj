@@ -35,7 +35,7 @@
          "boxed-at" (:plan/boxed-at w))
     (out " under-sky?" (terrain/under-sky? w feet)
          "out?" (stairs/out? w feet)
-         "pit-rim" (stairs/pit-rim w))
+         "pit-rim" (stairs/pit-rim w feet))
     (out " logs-remembered" (count logs) "standing-trunks-within-256" (count trunks))
     (doseq [t (take 6 trunks)]
       (out "  trunk" t
