@@ -814,23 +814,20 @@
 
 (defn nearest-stand-cell
   "Of the cells a stand for pos could be (stand-cell?: the feet can be there and reach pos, the
-   body clear of it), the one nearest pos, then the feet (by where it is, not where the feet are,
-   so the choice holds while the way is cut and the feet move), that a way can be cut to:
-   another height (to-height cuts stairs) or, at the feet's height, a block in the way that may be
-   dug (stance-block: never the frame's rock); nil when none. Where no route reaches any (the
-   room dug while the bot was elsewhere, rock between it and the feet), the build cuts its way to
-   this one (toward-stand). Sim race 38660819204 (issue #74): twice the bot stood outside its own
-   room, every cell that reached the next room cell inside it, and failed :no-stand three times;
-   once the frame's rock stood between."
+   body clear of it) at the feet's height, the one nearest pos with a block in the straight way
+   to it that may be dug (stance-block: never the frame's rock); nil when none. Where no route
+   reaches any (the room dug while the bot was elsewhere, a wall of rock between it and the feet),
+   the build cuts its way to this one (toward-stand). Sim race 38660819204 (issue #74): the bot
+   stood outside its own room, every cell that reached the next room cell inside it, and failed
+   :no-stand three times. Only the feet's height: a stand chosen at another height flips with the
+   feet as the stairs to it are cut (the same round's R2/11, with the frame's rock between, went up
+   and down two cells for minutes)."
   [world {:intent/keys [build origin facing]} pos]
-  (let [[_ fy _ :as feet] (intent/feet world)
-        cuttable? (fn [[_ y _ :as c]]
-                    (or (not= y fy) (some? (stance-block world c build origin facing))))]
-    (->> (for [dy [0 -1 1 -2] dx (range -4 5) dz (range -4 5)] (mapv + pos [dx (inc dy) dz]))
+  (let [[_ fy _] (intent/feet world)]
+    (->> (for [dx (range -4 5) dz (range -4 5)] (mapv + pos [dx (- fy (second pos)) dz]))
          (filter #(stand-cell? world % pos))
-         (sort-by (fn [c] [(physics/distance (physics/centre c) (physics/centre pos))
-                           (physics/distance (physics/centre c) (physics/centre feet))]))
-         (filter cuttable?)
+         (filter #(some? (stance-block world % build origin facing)))
+         (sort-by #(physics/distance (physics/centre %) (physics/centre pos)))
          first)))
 
 (defn approach-stand
