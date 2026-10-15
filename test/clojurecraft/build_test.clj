@@ -13,6 +13,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.scoop :as scoop]
             [clojurecraft.world :as world]))
 
 (def origin [100 64 200])
@@ -358,3 +359,29 @@
     (is (nil? (build/reachable-stand w [14 63 5] [14 63 5])) "walled in: no route reaches a stand")
     (is (= [13 63 5] (build/nearest-stand-cell w i [14 63 5]))
         "the stand nearest the cell, at the feet's height, the wall in the way to dig")))
+
+(deftest refill-scoops-a-source-under-flowing-lava
+  ;; sim race 38715231137 (issue #142, regressed, 166 runs in 44 rounds): at the station the
+  ;; nearest source's cell over it held flowing lava (the source there scooped before), the line
+  ;; to it was clear, and the refill, asking for air over the source, failed :no-station three
+  ;; times in three ticks with the pool half full. The bucket's ray passes flowing lava
+  (let [feet [5.5 63.0 5.5]
+        refill (fn [blocks]
+                 (let [w (standing-at (open-ground blocks) feet)]
+                   (build/scoop-at-station w
+                                           (build/reach-sources (build/lava-sources w) [5 63 5]))))
+        flowing (inc blocks/lava-base)]
+    (is (= {:intent/kind :scoop
+            :intent/target [7 62 5]
+            :intent/fluid :lava
+            :intent/aim (scoop/aim-point [7 62 5])}
+           (refill {[7 62 5] blocks/lava-base [7 63 5] flowing}))
+        "flowing lava over the source: scooped along the line")
+    (is (= [2 62 5]
+           (:intent/target (refill {[7 62 5] blocks/lava-base
+                                    [7 63 5] (blocks/default-state :obsidian)
+                                    [2 62 5] blocks/lava-base})))
+        "obsidian on the line to the nearest, never dug: the next source is scooped")
+    (is (= :no-station
+           (refill {[7 62 5] blocks/lava-base [7 63 5] (blocks/default-state :obsidian)}))
+        "no source the eyes can be given a line to")))
