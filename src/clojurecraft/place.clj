@@ -28,6 +28,7 @@
 (def settle-ms 300)                   ; standing still this long before using an item on a block
 (def answer-ms 3000)                  ; ms to wait for the server to answer a placement or an open
 (def fresh-rock-distance 12)          ; blocks a place with nowhere to put its block walks off before it looks again
+(def fresh-rock-climb 4)              ; stairs up a place with nowhere and no route away cuts before it looks again
 (def max-refusals 3)                  ; spots the server refused with nothing in them before a placement fails :rejected
 
 (defn- now [world] (:time/now world))
@@ -254,20 +255,27 @@
 
 (defn fresh-rock
   "The child walk to the end of a route fresh-rock-distance away from the feet (path's :away
-   goal), where the walls are new, for a place that found nowhere here; nil when no route leads
-   away, or with the body in water (ashore is for that). Sim races 38660819204, 38662908438 and
-   38665691522 (issue #94, worlds R1/44, R1/13, R1/37): the furnace was to go down at the dead
-   end of an iron tunnel at y 9-17 by an aquifer, every wall beside the feet touched water or
-   had the passage over it, and the furnace failed :no-spot three times there."
+   goal), where the walls are new, for a place that found nowhere here; with no route away,
+   stairs up fresh-rock-climb (the stairs dig a way where none is walked); nil with the body in
+   water (ashore is for that). Sim races 38660819204, 38662908438 and 38665691522 (issue #94,
+   worlds R1/44, R1/13, R1/37): the furnace was to go down at the dead end of an iron tunnel at
+   y 9-17 by an aquifer, every wall beside the feet touched water or had the passage over it,
+   and the furnace failed :no-spot three times there. Sim race 38659291345 world R1/1 (issue
+   #148): sand had fallen round and onto the bot at y 59 under a desert, every cell beside it
+   sand or sandstone under sand, no route anywhere, and the place failed :no-spot."
   [world]
   (when-not (:player/in-water? world)
     (let [r (path/plan
              world
              (path/feet-cell (:player/pos world))
              {:goal/kind :away :goal/pos (intent/feet world) :goal/range fresh-rock-distance})]
-      (when (= :found (:path/status r))
+      (if (= :found (:path/status r))
         {:intent/kind :walk
          :intent/target (last (:path/waypoints r))
+         :intent/for :retreat
+         :intent/status :active}
+        {:intent/kind :stairs-up
+         :intent/to-y (+ (second (intent/feet world)) fresh-rock-climb)
          :intent/for :retreat
          :intent/status :active}))))
 

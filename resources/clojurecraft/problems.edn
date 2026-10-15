@@ -112,7 +112,7 @@
   :problem/done
   "From a shore landing the bot walks into water and back out: RESULT reports :escaped true, RCON confirms no water at the feet or head cell and OnGround 1b, with at least 9 of 10 CI trials passing and zero deaths."
   :problem/last-failure
-  "clojurecraft has never attempted this. steve: the bot dove into cave water found 23 blocks down and was hard water-trapped in a 1-wide flooded pocket, losing the run (race81/192). ruststeve: rust-race-003 drowned in a water column under solid stone, every escape move going up while air was one block west and one down."
+  "clojurecraft has never attempted this. steve: the bot dove into cave water found 23 blocks down and was hard water-trapped in a 1-wide flooded pocket, losing the run (race81/192). ruststeve: rust-race-003 drowned in a water column under solid stone, every escape move going up while air was one block west and one down. Sim race 38659291345 world R1/1 (issue #148): sand had fallen round the bot at y 59 under a desert while it placed a block for the bucket, every cell beside it sand or sandstone under sand and no route anywhere, and the place failed :no-spot; a place with no route away now climbs a few stairs and looks again (place/fresh-rock)."
   :problem/sources ["docs/issues/06-water-and-lava-survival.md" "brain/bot/plan/roadmap-issues.md"
                     "brain/siblings/sib-water-traps.md" "brain/siblings/sib-water-escape.md"
                     "brain/siblings/sib-lava-safety.md"]}
