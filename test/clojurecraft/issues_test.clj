@@ -49,17 +49,33 @@
 
 (deftest every-snapshot-fits-on-github (is (empty? (too-big root))))
 
+(defn judge
+  "One snapshot judged (simrace/judged) as a value: {:n :path :snap :played :ms}, or :skipped when
+   its captured world is not on this machine. Prints a line when done, with its wall time, so a
+   slow one is seen in the check's log."
+  [[n path]]
+  (let [t0 (System/currentTimeMillis)
+        snap (capture/read-world path)
+        w (world-of (:snapshot/file snap))
+        r (cond (nil? w) {:n n :path path :snap snap :skipped true}
+                :else {:n n :path path :snap snap :played (simrace/judged snap w)})
+        ms (- (System/currentTimeMillis) t0)]
+    (println "issues-test:"
+             (if (:skipped r) "skipped" "judged")
+             path
+             "in" (quot ms 1000)
+             "s" (if (:skipped r) (str "- no " (:snapshot/file snap) " here") ""))
+    (assoc r :ms ms)))
+
 (deftest no-issues-failing-moment-fails-the-same-way-again
-  (doseq [[n paths] (issues)
-          path paths]
+  ;; every snapshot judged at once, about one a core (pmap): 31 judged one after another, the
+  ;; :timeout ones replayed from their landings, took most of issue.yml's hour (PR #183)
+  (doseq [{:keys [n path snap played skipped]}
+          (doall (pmap judge (for [[n paths] (issues) path paths] [n path])))]
     (testing (str "issue #" n " " path)
-      (let [snap (capture/read-world path)
-            w (world-of (:snapshot/file snap))]
-        (cond (nil? w) (println "issues-test: skipped" path "- no" (:snapshot/file snap) "here")
-              :else
-              (let [played (simrace/judged snap w)]
-                (is (not (simrace/recurs? snap played))
-                    (str "issue #" n
-                         " recurs: " (pr-str (:run/signature played))
-                         " at " (:run/ms played)
-                         " ms from " path))))))))
+      (when-not skipped
+        (is (not (simrace/recurs? snap played))
+            (str "issue #" n
+                 " recurs: " (pr-str (:run/signature played))
+                 " at " (:run/ms played)
+                 " ms from " path))))))
