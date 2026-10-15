@@ -250,6 +250,43 @@
   [world]
   (when (deep? world) (way-up world true)))
 
+(defn heading-to
+  "Of the four headings (stairs/directions), the one from the feet most toward cell [x _ z]."
+  [world [x _ z]]
+  (let [[fx _ fz] (intent/feet world)]
+    (apply max-key (fn [[dx dz]] (+ (* dx (- x fx)) (* dz (- z fz)))) stairs/directions)))
+
+(defn to-bank
+  "Stairs cut toward the bank of the nearest water seen that no route reaches (a surface source
+   in sight or a remembered pool: sources, pools-near), the cell over it: up to its height when
+   it is higher than the feet (to-height?: the open sky on the way is not the bank), down toward
+   it when lower, along the heading most toward it, to its height, and at its height a tunnel
+   along that heading; each climb-stairs, stair-depth or tunnel-out-length at a time, so the
+   planner looks again between lengths. nil when no water is seen. Sim race 38657453715 (issue #60): bots stood in a trench of their
+   own digging two below a pond's surface, the water in reach but over the eyes; on ravine
+   floors at y 8 and y 32 under pools remembered at y 62; and on a mountain ledge at y 80 over
+   pools at y 62 with no route down; and at y 63, forty blocks from pools at y 62, under a
+   lip of rock. Every hunt and walk had no route, and each waited :no-water."
+  [world]
+  (let [fy (physics/y-of (intent/feet world))]
+    (when-let [[_ y _ :as w] (first (concat (sources world) (pools-near world)))]
+      (let [bank (inc y)]
+        (cond (> bank fy)
+              {:intent/kind :stairs-up
+               :intent/to-y (stairs/climb-to world bank)
+               :intent/to-height? true
+               :intent/for :bank}
+              (< bank fy)
+              {:intent/kind :stairs-down
+               :intent/to-y (max bank (- fy stone/stair-depth))
+               :intent/dir (heading-to world w)
+               :intent/for :bank}
+              :else
+              {:intent/kind :tunnel
+               :intent/dir (heading-to world w)
+               :intent/length tunnel-out-length
+               :intent/for :bank})))))
+
 (defn dig-out
   "Out of the ground when the sky is not open over the feet, whatever the height: walk up the
    air already dug (intent/opening), else stairs cut up until out (stairs/out? ends them first;
@@ -278,8 +315,10 @@
   "The next step toward a filled bucket: scoop the nearest surface source in reach and in sight,
    else walk to the bank of the nearest one a route reaches, or to such a remembered pool, or climb
    out (to the landing, or by stairs cut up) when deep under it, or hunt for one (hunt-targets),
-   or climb out of a pit under the sky when deep under the landing (pit-climb), or cut out
-   of the ground (dig-out), or tunnel out of a pit (tunnel-out); else wait :no-water."
+   or climb out of a pit under the sky when deep under the landing (pit-climb), or up or down
+   to the bank of water seen that no route reaches (to-bank), or cut out
+   of the ground (dig-out), or tunnel out of a pit (tunnel-out); else wait
+   :no-water."
   [world]
   (let [srcs (sources world)
         src (first (filter #(and (in-reach? world %) (sees? world %)) srcs))]
@@ -290,6 +329,7 @@
               (climb world)
               (first-walk world :water-hunt (hunt-targets world))
               (pit-climb world)
+              (to-bank world)
               (dig-out world)
               (tunnel-out world)
               {:plan/wait :no-water}))))
