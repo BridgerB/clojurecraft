@@ -382,21 +382,26 @@
 
 (def table-drops #{(recipe/item-id :crafting_table)}) ; what digging a placed table drops: the table
 
+(defn take-table-along
+  "A dig of the bot's placed crafting table, to carry it on, when no table is held and the
+   remembered one is within reach; nil otherwise."
+  [world]
+  (let [pos (near world :crafting_table)]
+    (when (and pos
+               (zero? (get (counts world) :crafting_table 0))
+               (<= (physics/distance (game/eye world) (physics/centre pos)) intent/reach))
+      {:intent/kind :dig :intent/target pos :intent/for :take-table})))
+
 (defn take-table
-  "A dig of the bot's placed crafting table, to carry it on, when row goes out for something
-   (fetch?), no table is held and the remembered one is within reach; nil otherwise. A table
+  "A dig of the bot's placed crafting table, to carry it on (take-table-along), when row goes out
+   for something (fetch?); nil otherwise. A table
    left behind is a log spent on the next: gym batch iron-a7 run 1 crafted three on its way
    down the mine and had no wood left for a pickaxe. Race 38477665442 bots Clj_r19, Clj_r23 and
    Clj_r06 crafted the bucket at the furnace, climbed out for the water and left the table
    there; with sticks and cobblestone in hand and no table, none could make the pickaxe the
    climb or the gravel tunnels wore out (issues #39 and #67)."
   [world row]
-  (let [pos (near world :crafting_table)]
-    (when (and pos
-               (fetch? row)
-               (zero? (get (counts world) :crafting_table 0))
-               (<= (physics/distance (game/eye world) (physics/centre pos)) intent/reach))
-      {:intent/kind :dig :intent/target pos :intent/for :take-table})))
+  (when (fetch? row) (take-table-along world)))
 
 (defn decide
   "The next intent toward goal: continue a log chain or a table pick-up in flight, else take the
