@@ -24,11 +24,21 @@
 ;; ---------------------------------------------------------------- the issue as values
 
 (defn snapshots
-  "The snapshots an issue body names, [[file artifact] ...], each once, in the order listed."
+  "The snapshots a text names, [[file artifact] ...], each once, in the order listed."
   [body]
   (into []
         (distinct)
         (for [[_ f a] (re-seq #"snapshot `([^`]+)` in artifact `([^`]+)`" (str body))] [f a])))
+
+(defn kept-snapshots
+  "The snapshots a text names whose line says their kept moment (bb failures writes
+   \"(moment m:ss before the stop, ...)\" after the artifact), [[file artifact] ...]: the only
+   ones the check can judge, found without downloading anything."
+  [body]
+  (into []
+        (distinct)
+        (for [[_ f a] (re-seq #"snapshot `([^`]+)` in artifact `([^`]+)` \(moment " (str body))]
+          [f a])))
 
 (defn world-of
   "The world a snapshot's file name names: R4-35-2.edn.gz is world R4-35 (its seed, 2, does not
@@ -58,17 +68,20 @@
   "Issue n's comments, newest first, then its body: where its reproductions are, freshest first."
   [n]
   (concat (reverse (map :body
-                        (json/parse-string
-                         (gh "api" "--paginate" (str "repos/" (repo) "/issues/" n "/comments"))
-                         true)))
+                        (apply concat
+                               (json/parse-string
+                                (gh "api" "--paginate"
+                                    "--slurp" (str "repos/" (repo) "/issues/" n "/comments"))
+                                true))))
           [(issue-body n)]))
 
 (defn kept-moment?
-  "Does the gzipped snapshot at path carry a kept moment (:snapshot/moment)? Older snapshots,
+  "Does the gzipped snapshot at path carry a kept moment (:snapshot/moment, printed inside the
+   snapshot namespace map as :moment {:why ...})? Older snapshots,
    one tick before the stop, do not, and are not taken."
   [path]
   (with-open [in (java.util.zip.GZIPInputStream. (io/input-stream (str path)))]
-    (str/includes? (slurp in) ":snapshot/moment")))
+    (boolean (re-find #"moment \{:why " (slurp in)))))
 
 (defn run-of-artifact
   "The id of the run that produced the artifact named, or nil: artifacts are searched by name
@@ -85,7 +98,7 @@
    kept moment, each artifact downloaded once into a temporary directory. Prints what it took and
    why it passed over the rest."
   [n]
-  (let [pairs (snapshots (str/join "\n" (issue-texts n)))
+  (let [pairs (kept-snapshots (str/join "\n" (issue-texts n)))
         dest (fs/path root (str n))
         downloaded (atom {})
         dir-of (fn [artifact]
@@ -101,7 +114,11 @@
                                   "-D" (str tmp)))
                        (swap! downloaded assoc artifact (when run tmp))
                        (when run tmp))))]
-    (when (empty? pairs) (println "issue" n "lists no snapshots in its comments or body"))
+    (when (empty? pairs)
+      (println
+       "issue"
+       n
+       "lists no snapshot with a kept moment yet: the lanes file one with its next failure"))
     (fs/create-dirs dest)
     (reduce (fn [taken [file artifact]]
               (let [world (world-of file)
