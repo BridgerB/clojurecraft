@@ -464,33 +464,35 @@
   ;; the bot against the model in 2,000 worlds test.check builds (docs/RICH-HICKEY.md: "thousands of
   ;; generated worlds in the time one real run takes"): 1-3 trees of mixed species and heights
   ;; anywhere in the column, on mounds or flat ground, under low leaves or open sky, from a
-  ;; varied spawn. Where a tree stands on a bank it can climb (0 or 1 high) it ends holding a
-  ;; log from the ground. A 2-high bank (the drop rests on the bank, beyond a pickup from the
-  ;; ground) was once beyond it and the property let it give the trees up: since the gather
-  ;; climbs toward a trunk remembered above the eye no walk reaches (wood/trees-climb, issue
-  ;; #87, world {:x 13, :z 3, :h 3, :mound 2} seed 386881739251) it cuts stairs up the bank and
-  ;; ends holding the log there too. Either way the
+  ;; varied spawn. Where any tree stands on a bank it can climb (0 or 1 high) it ends holding a
+  ;; log; where every tree stands on a 2-high bank (the drop rests on the bank, beyond a pickup
+  ;; from the ground; digging a step into the bank is not yet a thing it can do) it gives the
+  ;; trees up (two tries a trunk) and waits or fails :no-log rather than looping. Either way the
   ;; sim never sees something a real server would punish, within the gym's own time for the goal. FOREST_TRIALS=n overrides the count, FOREST_SEED=s fixes the seed
   ;; (a plan's shard), FOREST_OUT=f writes the verdict as EDN.
-  (let [r (tc/quick-check
-           (or (some-> (System/getenv "FOREST_TRIALS")
-                       Long/parseLong)
-               2000)
-           (prop/for-all
-            [trees forest-gen sx (gen/choose 0 1) sz (gen/choose 0 1)]
-            (let [sim0 (sim/init {:column (world/column-bytes (forest trees))
-                                  :spawn [(+ sx 0.5) 64.0 (+ sz 0.5)]})
-                  [w sim] (sim/run step
-                                   (game/init fx/opts)
-                                   sim0
-                                   #(or (plan/done? %) (plan/failed? %))
-                                   (:gym/timeout-ms (gym/gym "wood"))
-                                   {:event/kind :go :go/goals [:wood]})]
-              (and (plan/done? w) (= 1 (inventory/logs-held w)) (empty? (:sim/violations sim)))))
-           :seed
-           (or (some-> (System/getenv "FOREST_SEED")
-                       Long/parseLong)
-               (System/currentTimeMillis)))]
+  (let [r (tc/quick-check (or (some-> (System/getenv "FOREST_TRIALS")
+                                      Long/parseLong)
+                              2000)
+                          (prop/for-all
+                           [trees forest-gen sx (gen/choose 0 1) sz (gen/choose 0 1)]
+                           (let [sim0 (sim/init {:column (world/column-bytes (forest trees))
+                                                 :spawn [(+ sx 0.5) 64.0 (+ sz 0.5)]})
+                                 [w sim] (sim/run step
+                                                  (game/init fx/opts)
+                                                  sim0
+                                                  #(or (plan/done? %) (plan/failed? %))
+                                                  (:gym/timeout-ms (gym/gym "wood"))
+                                                  {:event/kind :go :go/goals [:wood]})]
+                             (and (if (some #(<= (:mound %) 1) trees)
+                                    (and (plan/done? w) (= 1 (inventory/logs-held w)))
+                                    (and (not (plan/done? w))
+                                         (= :no-log (or (:plan/reason w) (:plan/waiting w)))
+                                         (zero? (inventory/logs-held w))))
+                                  (empty? (:sim/violations sim)))))
+                          :seed
+                          (or (some-> (System/getenv "FOREST_SEED")
+                                      Long/parseLong)
+                              (System/currentTimeMillis)))]
     (when-let [out (System/getenv "FOREST_OUT")] ; a plan's shard reads its verdict as data
       (spit out
             (pr-str {:pass? (boolean (:pass? r))

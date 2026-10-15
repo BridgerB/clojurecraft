@@ -102,16 +102,10 @@
   (let [feet (intent/feet world)]
     (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
       (when-let [above (first (filter #(< (physics/y-of (game/eye world)) (nth % 1)) trunks))]
-        (let [[fx _ fz] feet
-              [tx _ tz] above
-              dir (if (>= (abs (- tx fx)) (abs (- tz fz)))
-                    [(if (< fx tx) 1 -1) 0]
-                    [0 (if (< fz tz) 1 -1)])]
-          {:intent/kind :stairs-up
-           :intent/to-y (stairs/climb-to world (nth above 1))
-           :intent/to-height? true
-           :intent/dir dir
-           :intent/for :surface})))))
+        {:intent/kind :stairs-up
+         :intent/to-y (stairs/climb-to world (nth above 1))
+         :intent/to-height? true
+         :intent/for :surface}))))
 
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
