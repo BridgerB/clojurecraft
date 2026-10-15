@@ -61,6 +61,9 @@
    [:intent/passage-ok?
     "a :place that may put its block in a passage, since it is dug again at once (a gravel for flint)"
     "on a redig's child place"]
+   [:intent/retreated?
+    "a :place that has walked off to fresh rock once (place/fresh-rock) and fails :no-spot next"
+    "on a :place after its walk to fresh rock"]
    [:player/air "breath left, 0-300 ticks: an estimate, down 1 under water, up 4 out"
     "after the first physics tick"]
    [:player/dead? "health reached zero; cleared by the server's respawn" "while dead"]
