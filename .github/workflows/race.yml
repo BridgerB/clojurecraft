@@ -2,9 +2,9 @@ name: race
 
 # The race (issue #17): every runner the repo has, each with ci/race.edn's servers on one of the
 # race's pregenerated landing sets (the same worlds and landings every commit), each server
-# carrying ci/race.edn's bots from landings of their own to the target (clojure -M:race). A push
-# to main (a merge) cancels the race running and starts the new code's: the races always run
-# what is merged, and there is no second branch to keep in step.
+# carrying ci/race.edn's bots from landings of their own to the target (clojure -M:race). A code
+# merge has the fleet cancel and replace the lanes: the races always run what is merged, and
+# there is no second branch to keep in step.
 # Each server stays full the whole job (issue #127): a bot that ends is replaced at once by a
 # fresh one, no bot waits for another, and a bot still playing when the job ends is cut, never
 # filed. The board (BOARD lines in the Race step's log) shows the bots playing each minute. Every
@@ -12,21 +12,21 @@ name: race
 # (bb churn batch): their failures to the issues, their facts to the results page on gh-pages as
 # a batch of this run (bb page), a win as a release. Nothing waits for the slowest runner.
 
-# The rounds never stop (the churn): one runs at a time on the latest main, back to back. A push
-# to main cancels the running round and starts the new code's. Any other start (the next job
-# below when a round ends, the schedule as a backstop, a dispatch by hand) waits as the group's one
-# pending run and starts the moment the running round ends. GitHub caps a job at 6 h and a run at
-# 35 days, so each round is one job's worth and the chain is many runs; a scheduled workflow in a
-# public repository is disabled after 60 days without activity, and every round's page commit is
-# activity. The repository variable RACE_CONTINUOUS=false stops the chain.
+# Lanes (fleet.yml, ci/fleet.edn): each run is one lane, the runner k of the old matrix, one job's
+# worth (GitHub caps a job at 6 h). The fleet dispatches lanes into free runners, cancels the newest
+# when another workflow's job waits for a runner (GitHub has no preemption of its own), and cancels
+# and replaces lanes whose code main has replaced. A cancelled lane still stops its races, reports
+# and uploads (the always() steps). The repository variable RACE_CONTINUOUS=false stops new lanes.
 
 on:
-  push:
-    branches: [main]
-    paths-ignore: ['brain/**', 'docs/**', '**.md']   # a note does not restart a round
-  workflow_dispatch:
-  schedule:
-    - cron: '23 */2 * * *'              # a backstop: should the next job not start a round, this queues one
+  workflow_dispatch:                    # by the fleet (fleet.yml), one lane a run
+    inputs:
+      lane:
+        description: the lane, 1..8 (the runner of the old matrix)
+        required: true
+        default: '1'
+
+run-name: race lane ${{ inputs.lane }}
 
 permissions:
   contents: write                       # the results page's branch, gh-pages (bb page publish)
@@ -34,8 +34,8 @@ permissions:
   issues: write                         # the failures' issues
 
 concurrency:
-  group: race-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}   # new code preempts; anything else waits its turn
+  group: race-lane-${{ inputs.lane }}  # one run a lane; a second waits for the first to end
+  cancel-in-progress: false
 
 jobs:
   plan:
@@ -55,7 +55,7 @@ jobs:
           curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
           sudo bash /tmp/bb.sh --version 1.13.225
           bb -e '(let [r (clojure.edn/read-string (slurp "ci/race.edn"))]
-                   (println (str "runners=" (cheshire.core/generate-string (vec (range 1 (inc (:race/runners r)))))))
+                   (println (str "runners=" (cheshire.core/generate-string [(parse-long "${{ inputs.lane }}")])))
                    (println (str "servers=" (:race/servers r 1)))
                    (println (str "sets=" (cheshire.core/generate-string (:race/landing-sets r))))
                    (println (str "bots=" (:race/bots r)))
@@ -242,18 +242,3 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
           path: data/race/
-
-  next:
-    # the next round on main as it is now, queued as the group's pending run: it starts when this
-    # one ends. Even when a runner failed; never when this round was cancelled (a push's round is
-    # already next).
-    needs: race
-    if: ${{ !cancelled() && vars.RACE_CONTINUOUS != 'false' }}
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    permissions:
-      actions: write
-    steps:
-      - env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh workflow run race.yml --repo "$GITHUB_REPOSITORY" --ref main
