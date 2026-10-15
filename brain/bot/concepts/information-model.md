@@ -11,7 +11,7 @@ sourceRefs:
   - src/clojurecraft/model.clj#def attributes
   - test/clojurecraft/model_test.clj#every-key-a-running-bot-writes-is-in-the-model
   - test/clojurecraft/model_test.clj#every-attribute-in-the-model-has-a-spec
-  - docs/hickey.md#Write the attribute list with namespaced names and one-line meanings.
+  - docs/RICH-HICKEY.md#Write the attribute list with namespaced names and one-line meanings.
 related:
   - "[[bot/concepts/_moc|Concepts]]"
   - "[[world-value]]"
@@ -20,7 +20,7 @@ related:
 
 # Information model
 
-`docs/hickey.md` begins the design with the information model in writing: every attribute, namespaced, with a one-line meaning. `model/attributes` is that list, as data: `[attribute meaning when]` rows, about 120 of them.
+`docs/RICH-HICKEY.md` begins the design with the information model in writing: every attribute, namespaced, with a one-line meaning. `model/attributes` is that list, as data: `[attribute meaning when]` rows, about 120 of them.
 
 ## How it is grouped
 The essay's own grouping of what a bot knows: the bot and its connection (`bot/*`, `conn/*`), time (`time/*`), facts about itself (`player/*`, `control/*`), its screen (`window/*`), the world as seen and as remembered (`world/*`, `entity/*`, `sight/*`), the server's answers to its actions and counts (`stats/*`, `net/*`), its own intentions (`plan/*`, `intent/*`), and the events, effects and packets that carry all of it.

@@ -1,4 +1,4 @@
-;; Every packet spec as it has ever been committed (docs/hickey.md: "a packet spec only ever gains fields").
+;; Every packet spec as it has ever been committed (docs/RICH-HICKEY.md: "a packet spec only ever gains fields").
 ;; packet_test holds it: each spec here must still exist with these fields as a prefix of its
 ;; current fields. Adding a field: append it to the spec, then add it here. Adding a packet: add it here.
 {[:configuration :c2s :finish-configuration] []

@@ -195,7 +195,7 @@
   (edn/read-string (slurp "test/clojurecraft/packet_specs_ever.edn")))
 
 (deftest packet-specs-only-grow
-  ;; docs/hickey.md, Accrete: "A packet spec only ever gains fields." The decoder reads a
+  ;; docs/RICH-HICKEY.md, Accrete: "A packet spec only ever gains fields." The decoder reads a
   ;; packet's fields in wire order, so growing means appending: what was there stays a prefix.
   (testing "every spec ever committed still exists, its fields an unchanged prefix of today's"
     (is (= []

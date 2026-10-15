@@ -1,5 +1,5 @@
 (ns clojurecraft.recordings-test
-  "Recorded gym runs as regression inputs (docs/hickey.md: \"a recorded race from last month still
+  "Recorded gym runs as regression inputs (docs/RICH-HICKEY.md: \"a recorded race from last month still
    replays\"). Each directory under test/recordings holds a run's recording (run.edn.gz) and the
    result the gym judged (result.edn). Folding the recording must never throw, every world along
    the way must satisfy the world spec, and the fold must reach exactly the RESULT the run printed.
