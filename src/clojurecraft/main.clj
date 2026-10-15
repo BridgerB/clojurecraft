@@ -151,7 +151,7 @@
    events put on events (a bounded channel: a fixture's :go) into its own world atom until the
    goal holds, a planned run fails, the deadline passes or the socket closes; record it when
    record names a file. Then (on-result result) while still connected, hold hold-ms for an
-   outside judge when ok, and close. world* is the bot's atom (one is made when none is given;
+   outside judge when ok, and close, whatever the run ends with (a throw too). world* is the bot's atom (one is made when none is given;
    a watcher may be on it already). With no events channel and a plan, the run starts where it
    stands as soon as it is loaded. Returns {:result r :world final}. Nothing is shared with
    another bot: a race runs many of these, each its own atom and loop."
@@ -177,16 +177,17 @@
                   {:event/kind :start :start/host host :start/port port :start/name name}
                   (:out c)
                   tap)
-    (let [final (run-loop! c queue world* stop? tap)
-          ok (ok? final until)
-          r (result final until ok)]
-      (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT
-      (on-result r)
-      (when (and ok (pos? hold-ms))
-        (cli/log "holding" hold-ms "ms for an outside judge")
-        (let [until (+ (now) hold-ms)] (run-loop! c queue world* (fn [_] (> (now) until)) nil)))
-      ((:close! c))
-      {:result r :world final})))
+    (try (let [final (run-loop! c queue world* stop? tap)
+               ok (ok? final until)
+               r (result final until ok)]
+           (when tap ((:result tap) r) ((:close tap))) ; the recording is the run: it ends at RESULT
+           (on-result r)
+           (when (and ok (pos? hold-ms))
+             (cli/log "holding" hold-ms "ms for an outside judge")
+             (let [until (+ (now) hold-ms)]
+               (run-loop! c queue world* (fn [_] (> (now) until)) nil)))
+           {:result r :world final})
+         (finally ((:close! c)))))) ; however the run ends: a race refills the slot, so a socket left open is a leak
 
 (defn -main
   "Connect, run until the goal, a failed plan, the deadline or a closed socket, print RESULT,

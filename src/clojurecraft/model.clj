@@ -352,7 +352,9 @@
     "a race sample"] [:sample/milestones "targets reached by every bot, in all" "a race sample"]
    [:sample/server-tick "the server's tick times, ms: avg, p50, p95, p99" "a race sample"]
    [:sample/bot-heap-mb "the bots' JVM heap in use" "a race sample"]
-   [:milestone/runner "the runner a milestone was reached on" "a milestone fact"]
+   [:sample/threads
+    "the bots' JVM live threads: a bot's socket threads end with it, so a count that only grows as slots refill is a leak"
+    "a race sample"] [:milestone/runner "the runner a milestone was reached on" "a milestone fact"]
    [:milestone/seed "that runner's world seed" "a milestone fact"]
    [:milestone/bot "the bot that reached it" "a milestone fact"]
    [:milestone/goal "the target it reached (joined :plan/reached)" "a milestone fact"]

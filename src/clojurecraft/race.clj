@@ -303,7 +303,7 @@
 (defn sampler!
   "The sampler, on a thread of its own: every sample-every-ms until done is delivered, the race
    as one fact (sample) from each playing bot's world as it is (live), the server's tick query and
-   this JVM's heap, printed as a SAMPLE line and appended to samples.edn in record-dir: the
+   this JVM's heap and live threads (:sample/threads), printed as a SAMPLE line and appended to samples.edn in record-dir: the
    measure the capacity experiment sizes a runner by."
   [{:keys [host rcon-port rcon-pass]} race live record-dir done]
   (async/thread
@@ -319,7 +319,9 @@
                heap (quot (.getUsed (.getHeapMemoryUsage
                                      (java.lang.management.ManagementFactory/getMemoryMXBean)))
                           (* 1024 1024))
-               fact (sample race worlds before (- now at) tick heap now)]
+               threads (.getThreadCount (java.lang.management.ManagementFactory/getThreadMXBean))
+               fact
+               (assoc (sample race worlds before (- now at) tick heap now) :sample/threads threads)]
            (println "SAMPLE" (pr-str fact))
            (flush)
            (.write w (str (pr-str fact) "\n"))
