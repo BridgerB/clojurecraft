@@ -318,7 +318,18 @@
            :intent/facing :south
            :intent/status :active
            :intent/op op}
-        w (assoc (standing-at (open-ground {}) [5.5 63.0 5.5]) :plan/intent i :player/inventory {})
-        after (build/work-op w i op {:event/kind :tick :event/now 0 :event/rand 0.5})]
-    (is (= :no-pickaxe (get-in after [:plan/intent :intent/reason]))
-        "no pickaxe held: the row makes one before the stone is dug")))
+        kit {0 {:item (recipe/item-id :stick) :count 2}
+             1 {:item (recipe/item-id :cobblestone) :count 3}
+             2 {:item (recipe/item-id :crafting_table) :count 1}}
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        run (fn [inv]
+              (build/work-op (assoc (standing-at (open-ground {}) [5.5 63.0 5.5])
+                                    :plan/intent i
+                                    :player/inventory inv)
+                             i
+                             op
+                             tick))]
+    (is (= :no-pickaxe (get-in (run kit) [:plan/intent :intent/reason]))
+        "no pickaxe held and one at hand: the row makes it before the stone is dug")
+    (is (= :dig (get-in (run {}) [:plan/intent :intent/child :intent/kind]))
+        "nothing to make one from: the hand digs on, as a cast's last blocks are best dug")))

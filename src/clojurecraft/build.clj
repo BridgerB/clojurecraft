@@ -892,12 +892,22 @@
   [world {:intent/keys [kind reason cell]}]
   (boolean (and (= :place kind) (= :rejected reason) cell (place/inside-player? world cell))))
 
+(defn pickaxe-at-hand?
+  "Could a stone pickaxe be made where the bot stands: two sticks, three cobblestone and a
+   crafting table held or placed near? A pickaxe that breaks with none of that at hand leaves the
+   rest of a build to the hand: a cast's last few blocks dug slowly beat a climb for wood."
+  [world]
+  (let [held (make/counts world)]
+    (boolean (and (>= (get held :stick 0) 2)
+                  (>= (get held :cobblestone 0) 3)
+                  (or (pos? (get held :crafting_table 0)) (make/near world :crafting_table))))))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i, one that is done
    makes way for the next. Shared by every intent that works a plan of ops. A dig of rock with no
-   pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand, so the build's
-   row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
+   pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand when one can be
+   made where the bot stands (pickaxe-at-hand?), so the build's row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
    in the cast's room at y -20 and dug deepslate by hand, fifteen seconds a block, for the last
    half hour of its ninety minutes."
   [world {:intent/keys [child op] :as i} next event]
@@ -917,7 +927,8 @@
         child (intent/run-child world event)
         :else
         (let [c (op-child world i next)
-              c (or (when (= :dig (:intent/kind c)) (stairs/tool-missing world (:intent/target c)))
+              c (or (when (and (= :dig (:intent/kind c)) (pickaxe-at-hand? world))
+                      (stairs/tool-missing world (:intent/target c)))
                     c)]
           (cond (and (= :no-station c)
                      (spent? world (lava-sources world) (:intent/origin i) (:intent/facing i)))
