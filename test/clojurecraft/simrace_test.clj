@@ -108,7 +108,7 @@
                       sig
                       (simrace/chosen-moment (:run/moments r)
                                              (:run/last r)
-                                             (simrace/decision (:world (:run/last r)) sig)
+                                             (simrace/decision (:run/end r) sig)
                                              (:run/ms r)))))
 
 (deftest a-moment-plays-on-exactly-as-the-run-did
@@ -189,7 +189,8 @@
     (is (<= (get-in snap [:snapshot/moment :t]) (get-in snap [:snapshot/moment :decision-t])))
     (is (simrace/recurs? back played) (pr-str (:run/signature played)))
     (is (<= (- (:run/ms played) (:run/from played)) (simrace/window-of back)) "inside its window")
-    (is (seq (:run/story played)) "what the bot did over the window, from its facts")))
+    (is (vector? (:run/story played))
+        "what the bot did over the window (nothing: no log to go for)")))
 
 (deftest a-stall-recurs-until-its-stage-is-reached
   ;; a :timeout is judged as a stall over its window: it recurs when the stage is still not

@@ -66,7 +66,8 @@
   "One run: the bot from empty hands on world w's landing, playing every step up to until,
    against the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT
    (main/result) with :run/world (its set and landing), :run/seed, :run/ms (simulated time),
-   :run/violations (what a real server would have punished), :run/last (the moment of the
+   :run/violations (what a real server would have punished), :run/end (the world it stopped
+   in), :run/last (the moment of the
    stopping tick) and :run/moments (the moments sim/play-from kept, every half minute, the
    last six minutes), from which a failure's snapshot is chosen (dropped from the lines written). Its
    :go names the landing (:go/at), as race/land-bot! does for a real bot: the plan's
@@ -92,6 +93,7 @@
            :run/seed seed
            :run/ms (:time/now world)
            :run/violations (:sim/violations sim)
+           :run/end world
            :run/last last
            :run/moments moments)))
 
@@ -267,7 +269,10 @@
    moments."
   [snap w max-ms]
   (let [until (or (stage-until (first (:snapshot/signature snap))) (:snapshot/until snap))]
-    (dissoc (failure/mark (run w (:snapshot/seed snap) until max-ms)) :run/last :run/moments)))
+    (dissoc (failure/mark (run w (:snapshot/seed snap) until max-ms))
+     :run/end
+     :run/last
+     :run/moments)))
 
 (defn tally
   "The runs as a value: how many, how many reached the target, and the failures counted by
@@ -330,16 +335,13 @@
         r (failure/mark (assoc r :run/commit commit :run/file (:capture/file w)))
         sig (:run/signature r)
         m (when (and sig (:run/last r))
-            (chosen-moment (:run/moments r)
-                           (:run/last r)
-                           (decision (:world (:run/last r)) sig)
-                           (:run/ms r)))
+            (chosen-moment (:run/moments r) (:run/last r) (decision (:run/end r) sig) (:run/ms r)))
         path (when m
                (let [p
                      (snapshot-name (io/file (.getParent (io/file (str out))) "snapshots") w seed)]
                  (capture/write-world! p (snapshot w seed until commit sig m))
                  p))
-        r (cond-> (dissoc r :run/last :run/moments)
+        r (cond-> (dissoc r :run/end :run/last :run/moments)
             path (assoc :run/snapshot path :run/moment (:moment m)))]
     (locking out
       (println "SIMRUN" (pr-str (dissoc r :plan :stats)))
