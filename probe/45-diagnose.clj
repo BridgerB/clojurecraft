@@ -28,6 +28,9 @@
                             :intent/op :intent/child]))
          (out "op" (select-keys op [:build/op :build/pos :build/stand :build/item :build/step]))
          (ask "reachable" #(build/reachable-stand world (:build/stand op) (:build/pos op)))
+         (ask "reachable-designated"
+              #(build/reachable-stand world (:build/stand op) (:build/stand op)))
+         (ask "nearest" #(build/nearest-stand-cell world i (:build/pos op)))
          (ask "approach" #(build/approach-stand world i op))
          (ask "routable"
               #(intent/routable?
