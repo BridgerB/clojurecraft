@@ -809,7 +809,9 @@
   "The child that gets the feet where op is worked from, or nil when they are there: the room's
    landing is gone to at its height (toward-stand: stairs to it first, then a level way dug); a
    room cell (its stand the cell itself) is dug from anywhere that reaches it, the nearest such cell a route
-   reaches (reachable-stand); any other op from its designated stand (toward), or, for a place or
+   reaches (reachable-stand), else the way to it cut as to a stand (toward-stand: sim race
+   38660819204, issue #74, stood four blocks from a room cell still in the rock, no cell round it
+   standable or reached, and failed :no-stand three times); any other op from its designated stand (toward), or, for a place or
    a dig whose stand cannot be occupied, a cell that already reaches the block. A keyword is why
    no such cell exists. Ground in the way is dug only for a :build, whose plan says which rock to
    keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
@@ -821,8 +823,10 @@
                 :else
                 (let [alt (or (reachable-stand world pos pos)
                               (when build (room-stand world i pos)))]
-                  (cond (nil? alt) :no-stand
-                        :else {:intent/kind :walk :intent/target alt :intent/for :build})))
+                  (cond alt {:intent/kind :walk :intent/target alt :intent/for :build}
+                        ;; the room is still rock: cut the way to the cell as to a stand
+                        build (toward-stand world pos build origin facing)
+                        :else :no-stand)))
           (intent/centred? world stand) nil
           :else
           (let [blocked (when build (clear-stand world stand build origin facing))]
