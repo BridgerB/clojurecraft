@@ -191,7 +191,11 @@
         "the trunk on its ledge is remembered")
     (is (nil? (wood/near-walk w))
         "six up, past the walk's range and the dig's reach: no walk reaches it")
-    (is (= {:intent/kind :stairs-up :intent/to-y 70 :intent/to-height? true :intent/for :surface}
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y 70
+            :intent/to-height? true
+            :intent/dir [1 0]
+            :intent/for :surface}
            (wood/trees-climb
             w
             [(memory/nearest-log w (game/eye w) wood/far-radius #{} wood/standing-trunk?)]))
