@@ -393,7 +393,7 @@ Nothing else locally (rule 1.3).
 
 ### Step 8. Commit and push to the claim branch
 
-Section 11 for the commit. Push every commit to your claim branch (`fix/<n>`). Do not open a pull request yet: the board status and the branch are the claim, and a PR is opened only when the change is ready (step 11). Every push to any branch runs `test.yml`: the whole unit suite (including `issues_test`, which judges every snapshot under `test/issues/`, yours too), one forest shard of the sim property, and the workflow lint. That run is your test run.
+Section 11 for the commit. Push every commit to your claim branch (`fix/<n>`). Do not open a pull request yet: the board status and the branch are the claim, and a PR is opened only when the change is ready (step 11). Every push to any branch runs `test.yml`: the whole unit suite, one forest shard of the sim property, and the workflow lint. That run is your test run. It does not judge the issue snapshots: `issues_test` skips a snapshot whose captured world is not on the runner, and only the PR's issue check restores them. Judge your snapshots before opening the PR with a probe: `gh workflow run probe.yml --ref fix/<n> -f run='clojure -M:test -v clojurecraft.issues-test/no-issues-failing-moment-fails-the-same-way-again' -f worlds=R1,R2,R3,R4 -f label=<n>-issues`.
 
 ### Step 9. Watch the branch's test run without blocking
 
@@ -897,7 +897,7 @@ See 9.2. Expect to need the "recover at the moment" half of a fix. When a fix tr
 
 ### 15.6 `:timeout` snapshots
 
-A `:timeout` snapshot is the tick before the 90-minute limit; played on for two minutes the plan is still running, which reads as the same `:timeout`. `simrace/judged` (used by the issue check and `--snapshot`) replays a `:timeout` snapshot's run from its landing (its world file, seed and target) to the sim race's limit instead. Expect that check to take several minutes.
+A `:timeout` snapshot is the tick before the 90-minute limit; played on for two minutes the plan is still running, which reads as the same `:timeout`. `simrace/judged` (used by the issue check and `--snapshot`) replays a `:timeout` snapshot's run from its landing (its world file and seed) until it gets past the stage it timed out on, or the 90 minutes run out. A fix that holds costs only the time to reach the stage.
 
 ### 15.7 Snapshots and the 100 MiB limit
 

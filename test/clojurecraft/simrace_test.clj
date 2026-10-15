@@ -118,3 +118,10 @@
   (is (simrace/timeout-signature? {:snapshot/signature [:ingots :timeout]}))
   (is (not (simrace/timeout-signature? {:snapshot/signature [:ingots :boxed]})))
   (is (not (simrace/timeout-signature? {}))))
+
+(deftest a-timeout-replay-stops-at-its-stage
+  ;; a :timeout snapshot is replayed only until the run gets past the stage it timed out on
+  ;; (simrace/replay): PR #173's issue check replayed whole 90-minute runs and ran out of time
+  (is (= "ingots" (simrace/stage-until :ingots)))
+  (is (= "table" (simrace/stage-until :kit)) "a target's --until name, not its id")
+  (is (nil? (simrace/stage-until :no-such-stage))))

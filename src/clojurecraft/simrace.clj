@@ -168,17 +168,28 @@
   [snap]
   (= :timeout (second (:snapshot/signature snap))))
 
+(defn stage-until
+  "The --until name of a signature's stage: the live target row whose :goal/id it is (:kit is
+   \"table\"); nil when no live target has that id."
+  [stage]
+  (some #(when (= stage (:goal/id %)) (:goal/until %)) plan/targets))
+
 (defn replay
-  "A snapshot's run again from its landing (run): the same captured world w, seed and target, to
-   max-ms of simulated time. The RESULT, marked (failure/mark), without the moment before its
-   stop."
+  "A snapshot's run again from its landing (run): the same captured world w and seed, to the
+   stage its signature stopped on (stage-until; the snapshot's own target when that names none),
+   at most max-ms of simulated time. Reaching the stage ends the run ok, so a fix that holds costs
+   only the time to get there, not the rest of a 90-minute run: issue.yml's check replaying #62's
+   and #69's timeouts to the end ran past its 30 minutes (PR #173). The RESULT, marked
+   (failure/mark), without the moment before its stop."
   [snap w max-ms]
-  (dissoc (failure/mark (run w (:snapshot/seed snap) (:snapshot/until snap) max-ms)) :run/before))
+  (let [until (or (stage-until (first (:snapshot/signature snap))) (:snapshot/until snap))]
+    (dissoc (failure/mark (run w (:snapshot/seed snap) until max-ms)) :run/before)))
 
 (defn judged
   "A snapshot played the way its signature can be judged: a :timeout replayed from its landing
-   to the sim race's limit (default-max-minutes), any other played on from its moment for
-   snapshot-budget-ms (play-snapshot). recurs? reads the RESULT either way."
+   until it gets past its stage or the sim race's limit (default-max-minutes) runs out (replay),
+   any other played on from its moment for snapshot-budget-ms (play-snapshot). recurs? reads the
+   RESULT either way."
   [snap w]
   (cond (timeout-signature? snap) (replay snap w (* 60000 default-max-minutes))
         :else (play-snapshot snap w snapshot-budget-ms)))

@@ -8,7 +8,7 @@ name: test
 
 on:
   push:
-    branches-ignore: [race-capacity, "fix/**", gh-pages]   # race-capacity is the capacity experiment (capacity.yml); a fix branch runs unit.yml through issue.yml; gh-pages is the results page's data
+    branches-ignore: [race-capacity, gh-pages]   # race-capacity is the capacity experiment (capacity.yml); gh-pages is the results page's data. A fix branch is tested on every push (AGENTS.md: no PR until the change is ready)
   workflow_dispatch:
 
 concurrency:
