@@ -465,9 +465,8 @@
   ;; generated worlds in the time one real run takes"): 1-3 trees of mixed species and heights
   ;; anywhere in the column, on mounds or flat ground, under low leaves or open sky, from a
   ;; varied spawn. Where any tree stands on a bank it can climb (0 or 1 high) it ends holding a
-  ;; log; where every tree stands on a 2-high bank (the drop rests on the bank, beyond a pickup
-  ;; from the ground; digging a step into the bank is not yet a thing it can do) it gives the
-  ;; trees up (two tries a trunk) and waits or fails :no-log rather than looping. Either way the
+  ;; log. A 2-high bank may still be given up with :no-log when no safe climb reaches it, or
+  ;; taken when the gather's climb toward a remembered trunk reaches the bank (issue #87). Either
   ;; sim never sees something a real server would punish, within the gym's own time for the goal. FOREST_TRIALS=n overrides the count, FOREST_SEED=s fixes the seed
   ;; (a plan's shard), FOREST_OUT=f writes the verdict as EDN.
   (let [r (tc/quick-check (or (some-> (System/getenv "FOREST_TRIALS")
@@ -485,9 +484,10 @@
                                                   {:event/kind :go :go/goals [:wood]})]
                              (and (if (some #(<= (:mound %) 1) trees)
                                     (and (plan/done? w) (= 1 (inventory/logs-held w)))
-                                    (and (not (plan/done? w))
-                                         (= :no-log (or (:plan/reason w) (:plan/waiting w)))
-                                         (zero? (inventory/logs-held w))))
+                                    (or (and (plan/done? w) (= 1 (inventory/logs-held w)))
+                                        (and (not (plan/done? w))
+                                             (= :no-log (or (:plan/reason w) (:plan/waiting w)))
+                                             (zero? (inventory/logs-held w)))))
                                   (empty? (:sim/violations sim)))))
                           :seed
                           (or (some-> (System/getenv "FOREST_SEED")
