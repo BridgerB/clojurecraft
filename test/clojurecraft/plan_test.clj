@@ -841,9 +841,10 @@
     (is (nil? (wood/climb-out w)) "under the open sky: nothing to climb")
     (is (= {:intent/kind :walk :intent/target [48 64 8] :intent/for :log-hunt} i)
         "forty blocks east, toward the trunk")
-    (is (= {:plan/wait :no-log}
-           (wood/gather-next (assoc (remembered {} [8.5 64.0 8.5]) :world/chunks shore)))
-        "with no log remembered there is nowhere to hunt toward")))
+    (is (= :log-hunt
+           (:intent/for (wood/gather-next
+                         (assoc (remembered {} [8.5 64.0 8.5]) :world/chunks shore))))
+        "with no log remembered the hunt goes out all the same (race 38665691517, issue #57)")))
 (deftest a-dig-that-never-settles-starts-by-the-deadline
   ;; race 38477665442 bots Clj_r12 (runner 5, on a moss carpet the physics does not know, the
   ;; server putting it back on the carpet every tick) and Clj_r19 (runner 3, fallen through a
