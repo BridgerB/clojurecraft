@@ -2,7 +2,7 @@
   "The issue check (issue #77): a bot-failure issue's failing moments, kept as snapshots under
    test/issues/<n>/ (bb issue-check fetch), are played against the model as their signature can
    be judged (simrace/judged): played on from the moment for two simulated minutes, or, for a
-   :timeout, the run replayed from its landing to the sim race's limit; the fix holds when none
+   :timeout, the run replayed from its landing until it gets past its stage; the fix holds when none
    fails again with the issue's signature. A snapshot stays
    once its issue is fixed (docs/RICH-HICKEY.md: a goal that was wrong is retired, never rewritten),
    so a bug that comes back fails here, naming the issue. A snapshot whose captured world is
