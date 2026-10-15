@@ -253,13 +253,23 @@
                  :player/inventory
                  {0 {:item (blocks/items :wooden_pickaxe) :count 1}
                   1 {:item (blocks/items :furnace) :count 1}})
-        row (first (filter #(= :place-furnace (:goal/id %)) plan/goals))
-        i (plan/act w row)]
-    (is (place/nowhere? w {:intent/kind :place :intent/item :furnace}))
-    (is (= {:intent/kind :walk :intent/for :retreat} (select-keys i [:intent/kind :intent/for]))
-        "back along the tunnel first")
-    (is (not (place/nowhere? (assoc w :player/pos [12.5 64.0 8.5])
-                             {:intent/kind :place :intent/item :furnace}))
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        spot (fn [w i]
+               (let [i (merge {:intent/kind :place
+                               :intent/item :furnace
+                               :intent/status :active
+                               :intent/stage :spot}
+                              i)]
+                 (:plan/intent (intent/run (assoc w :plan/intent i) i tick))))
+        first-time (spot w {})]
+    (is (= :retreat (:intent/stage first-time)))
+    (is (= {:intent/kind :walk :intent/for :retreat}
+           (select-keys (:intent/child first-time) [:intent/kind :intent/for]))
+        "back along the tunnel to fresh rock")
+    (is (>= (physics/distance (:intent/target (:intent/child first-time)) [1 64 8])
+            place/fresh-rock-distance))
+    (is (= :no-spot (:intent/reason (spot w {:intent/retreated? true}))) "once only")
+    (is (= :niche (:intent/stage (spot (assoc w :player/pos [12.5 64.0 8.5]) {})))
         "where the rock is dry a niche is cut")))
 
 (deftest a-spot-is-never-a-flower
