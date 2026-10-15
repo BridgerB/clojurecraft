@@ -1,0 +1,96 @@
+name: probe
+
+# One command on a runner, for a branch: whatever would otherwise run on the MacBook, a test var, a
+# snapshot judged, a probe script, a short sim. Nothing that costs CPU runs on the Mac (CLAUDE.md):
+#
+#   gh workflow run probe.yml --ref <branch> -f run='clojure -M:test -v clojurecraft.build-test/x' -f label=x
+#   gh run list --workflow probe.yml --limit 3      # its run id
+#   gh run watch <id> --exit-status; gh run view <id> --log
+#
+# The command runs from the checkout root with Java, the Clojure CLI and Babashka; its output is the
+# job's log and out/probe.log, and anything it writes under out/ is the artifact probe-<run id>.
+# worlds names the captured sim worlds to restore (R1,R2,R3,R4, the race's sets), which snapshots
+# and simrace runs need; none by default.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run:
+        description: the command, run from the checkout root
+        required: true
+      worlds:
+        description: captured worlds to restore, e.g. R1,R4 (none by default)
+        default: none
+      label:
+        description: a name for the run in the list
+        default: ''
+
+run-name: probe ${{ inputs.label || inputs.run }}
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - name: R1's captured worlds
+        if: contains(inputs.worlds, 'R1')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R1
+          key: simworld-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
+      - name: R2's captured worlds
+        if: contains(inputs.worlds, 'R2')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R2
+          key: simworld-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
+      - name: R3's captured worlds
+        if: contains(inputs.worlds, 'R3')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R3
+          key: simworld-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
+      - name: R4's captured worlds
+        if: contains(inputs.worlds, 'R4')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R4
+          key: simworld-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI and Babashka
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: clj-${{ hashFiles('deps.edn') }}
+      - name: Run
+        env:
+          RUN: ${{ inputs.run }}        # through the environment, never pasted into the script
+        run: |
+          mkdir -p out
+          set -o pipefail
+          bash -c "$RUN" 2>&1 | tee out/probe.log
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: probe-${{ github.run_id }}
+          retention-days: 7
+          path: out/
