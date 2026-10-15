@@ -27,6 +27,7 @@
 (def open-reach 4.5)                  ; eye → container centre for opening it; the server allows about 4.5
 (def settle-ms 300)                   ; standing still this long before using an item on a block
 (def answer-ms 3000)                  ; ms to wait for the server to answer a placement or an open
+(def fresh-rock-distance 12)          ; blocks a place with nowhere to put its block walks off before it looks again
 (def max-refusals 3)                  ; spots the server refused with nothing in them before a placement fails :rejected
 
 (defn- now [world] (:time/now world))
@@ -251,11 +252,30 @@
                        :intent/since (now world)
                        :intent/still 0))
 
+(defn fresh-rock
+  "The child walk to the end of a route fresh-rock-distance away from the feet (path's :away
+   goal), where the walls are new, for a place that found nowhere here; nil when no route leads
+   away, or with the body in water (ashore is for that). Sim races 38660819204, 38662908438 and
+   38665691522 (issue #94, worlds R1/44, R1/13, R1/37): the furnace was to go down at the dead
+   end of an iron tunnel at y 9-17 by an aquifer, every wall beside the feet touched water or
+   had the passage over it, and the furnace failed :no-spot three times there."
+  [world]
+  (when-not (:player/in-water? world)
+    (let [r (path/plan
+             world
+             (path/feet-cell (:player/pos world))
+             {:goal/kind :away :goal/pos (intent/feet world) :goal/range fresh-rock-distance})]
+      (when (= :found (:path/status r))
+        {:intent/kind :walk
+         :intent/target (last (:path/waypoints r))
+         :intent/for :retreat
+         :intent/status :active}))))
+
 (defmethod place-stage :spot
   ;; a given cell (:intent/cell, a build's) against a solid neighbour; else a plain spot, else a
   ;; niche cut in the wall, else (passage-ok?) a spot in the passage: a table or a gravel to dig
   ;; again leaves the way open when the bot goes on
-  [world {:intent/keys [passage-ok? refused] at :intent/cell :or {refused #{}}}]
+  [world {:intent/keys [passage-ok? refused retreated?] at :intent/cell :or {refused #{}}}]
   (let [[against face :as given] (when at (support world at))
         found (when-not at (spot world false refused))
         n (when-not (or at found) (niche world))
@@ -274,7 +294,25 @@
                                 :intent/item (recipe/item-name stowed-item)
                                 :intent/status :active})
           n (intent/assoc-intent world :intent/stage :niche :intent/child (intent/child-dig n))
-          :else (intent/fail world :no-spot))))
+          :else
+          (if-let [walk (when-not retreated? (fresh-rock world))]
+            (intent/assoc-intent world
+                                 :intent/stage :retreat
+                                 :intent/retreated? true
+                                 :intent/child walk)
+            (intent/fail world :no-spot)))))
+
+(defn walk-off
+  "One tick of the walk to fresh rock (the child :walk of fresh-rock): done, look for a spot
+   again from the equip; failed, fail :no-spot."
+  [world {:intent/keys [child]} event]
+  (cond (intent/done? child)
+        (-> world
+            (assoc :player/controls {})
+            (intent/assoc-intent :intent/stage :equip)
+            (intent/dissoc-intent :intent/child))
+        (intent/failed? child) (intent/fail (assoc world :player/controls {}) :no-spot)
+        :else (intent/run-child world event)))
 
 (defn dig-niche
   "One tick of digging the niche (the child :dig, or first the child :equip of its tool from the
@@ -354,14 +392,15 @@
   [world i event]
   (let [i (cond-> i (nil? (:intent/stage i)) (assoc :intent/stage :equip))
         world (assoc world :plan/intent i)]
-    (cond (= :niche (:intent/stage i)) (dig-niche world i event)
-          :else
-          (case (window/waiting world i)
-            :overdue (window/lost world i :equip)
-            :waiting world
-            (if (:intent/resync i)
-              (window/resync world (window/view world :inventory))
-              (place-stage world i))))))
+    (case (:intent/stage i)
+      :niche (dig-niche world i event)
+      :retreat (walk-off world i event)
+      (case (window/waiting world i)
+        :overdue (window/lost world i :equip)
+        :waiting world
+        (if (:intent/resync i)
+          (window/resync world (window/view world :inventory))
+          (place-stage world i))))))
 
 ;; ---------------------------------------------------------------- equip
 

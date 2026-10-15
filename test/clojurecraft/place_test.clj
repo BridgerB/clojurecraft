@@ -238,6 +238,40 @@
     (is (:intent/passage-ok? (plan/act {} (row :place-table))))
     (is (not (:intent/passage-ok? (plan/act {} (row :place-furnace)))))))
 
+(deftest with-nowhere-to-put-the-furnace-it-goes-back-to-fresh-rock
+  ;; sim races 38660819204, 38662908438 and 38665691522 (issue #94): at the dead end of an iron
+  ;; tunnel by an aquifer every wall beside the feet touched water, the passage was behind, and
+  ;; the furnace failed :no-spot three times there
+  (let [water (blocks/default-state :water)
+        table (blocks/default-state :crafting_table)
+        rock (merge (into {} (for [x (range 16) y (range 64 74) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 1 16) y [64 65]] [[x y 8] 0]))
+                    (into {} (for [x (range 0 3) y [64 65] z [6 10]] [[x y z] water]))
+                    {[0 64 8] table [0 66 8] water})
+        w (assoc (standing [1.5 64.0 8.5])
+                 :world/chunks {[0 0] (world/column rock)}
+                 :player/inventory
+                 {0 {:item (blocks/items :wooden_pickaxe) :count 1}
+                  1 {:item (blocks/items :furnace) :count 1}})
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        spot (fn [w i]
+               (let [i (merge {:intent/kind :place
+                               :intent/item :furnace
+                               :intent/status :active
+                               :intent/stage :spot}
+                              i)]
+                 (:plan/intent (intent/run (assoc w :plan/intent i) i tick))))
+        first-time (spot w {})]
+    (is (= :retreat (:intent/stage first-time)))
+    (is (= {:intent/kind :walk :intent/for :retreat}
+           (select-keys (:intent/child first-time) [:intent/kind :intent/for]))
+        "back along the tunnel to fresh rock")
+    (is (>= (physics/distance (:intent/target (:intent/child first-time)) [1 64 8])
+            place/fresh-rock-distance))
+    (is (= :no-spot (:intent/reason (spot w {:intent/retreated? true}))) "once only")
+    (is (= :niche (:intent/stage (spot (assoc w :player/pos [12.5 64.0 8.5]) {})))
+        "where the rock is dry a niche is cut")))
+
 (deftest a-spot-is-never-a-flower
   ;; race 38477665442 bot Clj_r23: the nearest cell held wildflowers, which the server's
   ;; replaceable tag does not list, and the table was refused three times, :rejected
