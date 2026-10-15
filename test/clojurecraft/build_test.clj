@@ -308,6 +308,37 @@
               w
               {:intent/kind :place :intent/reason :rejected :intent/cell [8 63 5]})))))
 
+(deftest a-build-never-digs-rock-by-hand
+  ;; sim race 38669750355 (issue #135): the last pickaxe broke in the cast's room at y -20 and
+  ;; the build dug deepslate by hand, fifteen seconds a block, for the last half hour
+  (let [op {:build/op :dig :build/pos [5 62 6] :build/stand [5 63 5] :build/step :room}
+        i {:intent/kind :build
+           :intent/build :cast-one
+           :intent/origin [100 64 200]
+           :intent/facing :south
+           :intent/status :active
+           :intent/op op}
+        kit {0 {:item (recipe/item-id :stick) :count 2}
+             1 {:item (recipe/item-id :cobblestone) :count 3}
+             2 {:item (recipe/item-id :crafting_table) :count 1}}
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        run (fn [inv & [blocks]]
+              (build/work-op (assoc (standing-at (open-ground (or blocks {})) [5.5 63.0 5.5])
+                                    :plan/intent i
+                                    :player/inventory inv)
+                             i
+                             op
+                             tick))]
+    (is (= :no-pickaxe (get-in (run kit) [:plan/intent :intent/reason]))
+        "no pickaxe held and one at hand: the row makes it before the stone is dug")
+    (is
+     (= :dig (get-in (run {}) [:plan/intent :intent/child :intent/kind]))
+     "stone and nothing to make one from: the hand digs on, as a cast's last blocks are best dug")
+    (is (= :no-pickaxe
+           (get-in (run {} {[5 62 6] (blocks/default-state :deepslate)})
+                   [:plan/intent :intent/reason]))
+        "deepslate, fifteen seconds a block by hand: a trip out for a pickaxe beats it")))
+
 (deftest a-room-cell-behind-a-wall-is-cut-toward
   ;; sim race 38660819204 (issue #74): the bot stood outside its own room, every cell that
   ;; reached the next room cell inside it, no route to any, and failed :no-stand three times.

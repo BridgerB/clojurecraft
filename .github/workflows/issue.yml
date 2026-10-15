@@ -1,16 +1,19 @@
 name: issue
 
-# A fix's one check (issue #77): a pull request from fix/<issue>-<what> carries the issue's failing
-# moments as snapshots under test/issues/<issue>/ (bb issue-check fetch), and issues-test plays
-# each on against the model for two simulated minutes; the check passes when none fails again
-# with the issue's signature. Seconds of test over the race's captured worlds, restored from the
-# cache; nothing is run from spawn. Beside it, unit.yml: every test but the forest property and
-# the static checks, so a fix that breaks an older assertion is seen here, not on main (#98).
-# test and gym skip fix branches: these two are the checks a fix gets.
+# A fix's check (issue #77): judge the failing moments of the issues the pull request names, and
+# only those. Each is a snapshot under test/issues/<n>/ (bb issue-check fetch): a moment the sim
+# race kept from before the choice that failed, with the window it is judged over. Each is judged
+# twice with clojure -M:simrace --judge, uninstrumented, in parallel: on the base commit, where
+# it must reproduce its failure (else it proves nothing: take another moment), and on the pull
+# request's code, where it must not. Seconds a snapshot, never a run from the landing; only the
+# captured worlds the snapshots name are restored. Older issues are not judged again here: the
+# races are the regression guard (the filer reopens an issue whose failure comes back). Beside
+# it, unit.yml: every test but the forest property and the static checks (#98). test and gym
+# skip fix branches: these two are the checks a fix gets.
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]   # edited: the body names the issues
 
 permissions:
   contents: read
@@ -28,10 +31,13 @@ jobs:
   check:
     if: startsWith(github.head_ref, 'fix/')
     runs-on: ubuntu-26.04
-    timeout-minutes: 60
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - name: Which issues, and a moment for each
+        with:
+          fetch-depth: 0                # the base commit, judged beside the head
+      - name: Which issues, and their moments
+        id: which
         env:
           HEAD_REF: ${{ github.head_ref }}
           BODY: ${{ github.event.pull_request.body }}
@@ -39,62 +45,117 @@ jobs:
         run: |
           n=$(echo "$HEAD_REF" | sed -E 's|^fix/([0-9]+).*|\1|')
           case "$n" in ''|*[!0-9]*) echo "::error::branch $HEAD_REF names no issue number"; exit 1;; esac
-          echo "issue $n"
-          # the check is only as good as its moments (issue #116): every issue the request says it
-          # fixes and that has a sim reproduction (label sim) must carry a snapshot under
-          # test/issues/<n>/, else the check would pass with nothing to play; a real-only issue
-          # has no sim moment to carry and is only warned about
+          named=$(printf '%s\n' "$BODY" | grep -oiE '(fixes|closes|resolves) #[0-9]+' | grep -oE '[0-9]+' || true)
+          files=""
           red=0
-          for m in $(printf '%s\n' "$BODY" | grep -oiE '(fixes|closes|resolves) #[0-9]+' | grep -oE '[0-9]+' | sort -un); do
-            labels=$(gh api "repos/$GITHUB_REPOSITORY/issues/$m" --jq '[.labels[].name] | join(",")' 2>/dev/null || echo '')
-            if ls "test/issues/$m"/*.edn.gz >/dev/null 2>&1; then
-              echo "issue $m: $(ls test/issues/$m/*.edn.gz | wc -l | tr -d ' ') snapshots"
-            elif echo ",$labels," | grep -q ',sim,'; then
-              echo "::error::issue $m is reproduced in the sim (label sim) but test/issues/$m holds no snapshot: bb issue-check fetch $m, or do not say Fixes"
-              red=1
-            else
-              echo "::warning::issue $m has no sim reproduction and no snapshot: it closes on the real recordings' word alone"
+          for m in $(printf '%s\n%s\n' "$n" "$named" | grep -E '^[0-9]+$' | sort -un); do
+            found=$(ls "test/issues/$m"/*.edn.gz 2>/dev/null || true)
+            if [ -n "$found" ]; then
+              echo "issue $m: $(echo "$found" | wc -l | tr -d ' ') snapshots"
+              files="$files $found"
+            elif printf '%s\n' "$named" | grep -qx "$m"; then
+              labels=$(gh api "repos/$GITHUB_REPOSITORY/issues/$m" --jq '[.labels[].name] | join(",")' 2>/dev/null || echo '')
+              if echo ",$labels," | grep -q ',sim,'; then
+                echo "::error::issue $m is reproduced in the sim (label sim) but test/issues/$m holds no snapshot: bb issue-check fetch $m, or do not say Fixes"
+                red=1
+              else
+                echo "::warning::issue $m has no sim reproduction and no snapshot: it closes on the real recordings' word alone"
+              fi
             fi
           done
-          [ "$red" = 0 ]
-      # the race's captured worlds (simworld.yml), the key simrace.yml restores
+          [ "$red" = 0 ] || exit 1
+          # shellcheck disable=SC2086 # one word a file, joined by commas
+          files=$(echo $files | tr ' ' ',')
+          sets=$(for f in $(echo "$files" | tr ',' ' '); do zcat "$f" | grep -oE 'cache/sim-worlds/R[0-9]+' | head -n 1; done | sort -u | sed 's|cache/sim-worlds/||' | tr '\n' ',')
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+          echo "sets=$sets" >> "$GITHUB_OUTPUT"
+          echo "files: ${files:-none}; worlds: ${sets:-none}"
+      # only the captured worlds the snapshots name (simworld.yml's key, as simrace.yml restores it)
       - name: R1's captured worlds
+        if: contains(steps.which.outputs.sets, 'R1,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R1
           key: simworld-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
       - name: R2's captured worlds
+        if: contains(steps.which.outputs.sets, 'R2,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R2
           key: simworld-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
       - name: R3's captured worlds
+        if: contains(steps.which.outputs.sets, 'R3,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R3
           key: simworld-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
       - name: R4's captured worlds
+        if: contains(steps.which.outputs.sets, 'R4,')
         uses: actions/cache/restore@v6
         with:
           path: cache/sim-worlds/R4
           key: simworld-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+          fail-on-cache-miss: true
       - uses: actions/setup-java@v6
+        if: steps.which.outputs.files != ''
         with:
           distribution: temurin
           java-version: '25'
       - name: Install the Clojure CLI
+        if: steps.which.outputs.files != ''
         run: |
           curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
           sudo bash /tmp/clj.sh
       - uses: actions/cache@v6
+        if: steps.which.outputs.files != ''
         with:
           path: |
             ~/.m2/repository
             ~/.gitlibs
             ~/.deps.clj
           key: clj-${{ hashFiles('deps.edn') }}
-      - name: Play the issue's moments on
+      - name: Judge on the base and on the fix
+        if: steps.which.outputs.files != ''
+        env:
+          FILES: ${{ steps.which.outputs.files }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          set -o pipefail
-          clojure -M:test -n clojurecraft.issues-test 2>&1 | tee issues.txt
-          { echo '### issue check'; echo '```'; grep -E 'issues-test|recurs|skipped|Ran|assertions' issues.txt || true; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          abs=$(for f in $(echo "$FILES" | tr ',' ' '); do echo "$PWD/$f"; done | paste -sd, -)
+          git worktree add -q ../base "$BASE_SHA"
+          ln -s "$PWD/cache" ../base/cache
+          base=skip
+          if grep -q 'defn judge!' ../base/src/clojurecraft/simrace.clj; then
+            (cd ../base && clojure -M:simrace --judge "$abs" --expect recur > "$OLDPWD/base.txt" 2>&1; echo $? > "$OLDPWD/base.code") &
+            base=run
+          else
+            echo "::notice::the base commit has no judge (this pull request brings it): only the fix is judged"
+          fi
+          clojure -M:simrace --judge "$abs" --expect pass > head.txt 2>&1; echo $? > head.code
+          wait
+          {
+            echo '### issue check'
+            echo
+            echo '**On the base commit** (each moment must reproduce its failure):'
+            echo '```'
+            if [ "$base" = run ]; then grep -E '^(JUDGE|STORY|UNEXPECTED)' base.txt || tail -n 40 base.txt; else echo skipped; fi
+            echo '```'
+            echo '**On this pull request** (none may):'
+            echo '```'
+            grep -E '^(JUDGE|STORY|UNEXPECTED)' head.txt || tail -n 40 head.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat head.txt
+          [ "$base" = skip ] || cat base.txt
+          red=0
+          if [ "$base" = run ] && [ "$(cat base.code)" != 0 ]; then
+            echo "::error::a moment does not reproduce its failure on the base commit: it proves nothing about the fix; take another (bb issue-check fetch, or the issue's newest comments)"
+            red=1
+          fi
+          if [ "$(cat head.code)" != 0 ]; then
+            echo "::error::a failure recurs on this pull request's code (UNEXPECTED lines above)"
+            red=1
+          fi
+          [ "$red" = 0 ]

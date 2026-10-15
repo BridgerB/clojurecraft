@@ -31,6 +31,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
@@ -918,6 +919,26 @@
   [world {:intent/keys [kind reason cell]}]
   (boolean (and (= :place kind) (= :rejected reason) cell (place/inside-player? world cell))))
 
+(defn pickaxe-at-hand?
+  "Could a pickaxe be made without going out for anything: the needs planner's next step toward
+   one (make/next-row over plan/goals) a craft or a table placed, not a gather, a mine or a scoop
+   (make/fetch?)? A pickaxe that breaks with nothing at hand leaves the rest of a build to the
+   hand: the sealed-pool cast's last few blocks, dug slowly, beat a climb for wood that is not
+   there."
+  [world]
+  (let [row (make/next-row world {:goal/id :pickaxe :goal/provides {:tag/pickaxes 1}} plan/goals)]
+    (boolean (and (map? row) (not (make/fetch? row))))))
+
+(def hand-dig-limit 10000)            ; ms by hand past which a block is never dug by hand: deepslate's 15 s, not stone's 7.5
+
+(defn hand-dig-refused?
+  "Is a dig of rock at cell, with no pickaxe held, refused for the hand: a pickaxe can be made
+   without going out (pickaxe-at-hand?), or the block takes longer than hand-dig-limit by hand
+   (deepslate, the lava's depth), which a trip out for a pickaxe beats. Stone by hand is left to
+   the hand when a pickaxe needs a trip: a cast's last few blocks are best dug."
+  [world cell]
+  (or (> (intent/dig-time (terrain/block-at world cell)) hand-dig-limit) (pickaxe-at-hand? world)))
+
 (defn found-open?
   "Did child, a dig, find its cell already open (:target-gone, intent/open?)? The cell is open,
    which is what the dig was for: the op looks again from there. Sim race 38665691522 world R3/43
@@ -930,7 +951,11 @@
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i (a dig that found
    its cell open, found-open?, makes way for the next as one done would), one that is done
-   makes way for the next. Shared by every intent that works a plan of ops."
+   makes way for the next. Shared by every intent that works a plan of ops. A dig of rock with no
+   pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand when one can be
+   made without going out for anything (pickaxe-at-hand?), so the build's row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
+   in the cast's room at y -20 and dug deepslate by hand, fifteen seconds a block, for the last
+   half hour of its ninety minutes."
   [world {:intent/keys [child op] :as i} next event]
   (cond (not= next op)
         (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child)
@@ -949,7 +974,11 @@
             (intent/fail (:intent/reason child)))
         child (intent/run-child world event)
         :else
-        (let [c (op-child world i next)]
+        (let [c (op-child world i next)
+              missing (when (= :dig (:intent/kind c))
+                        (stairs/tool-missing world (:intent/target c)))
+              ;; the needs planner is asked only when no pickaxe is held
+              c (or (when (and missing (hand-dig-refused? world (:intent/target c))) missing) c)]
           (cond (and (= :no-station c)
                      (spent? world (lava-sources world) (:intent/origin i) (:intent/facing i)))
                 ;; the pool is spent, not the build: the planner chooses a site with lava enough
@@ -1169,7 +1198,10 @@
   ;; what the row holds first (held-first); then build the row's plan (:goal/build) at the site
   ;; remembered while its pool can finish it (spent?), else at one chosen now (the :build intent
   ;; remembers it), its access steps up to the lava's height (station); with none, hunt for lava
-  ;; (lava-hunt), else wait :no-site
+  ;; (lava-hunt), the placed table taken along first (make/take-table-along: the hunt goes down to
+  ;; the lava sea, and a pickaxe broken there is made again only from sticks, cobblestone and a
+  ;; table; sim race 38669750355, issue #135, had the sticks and the cobblestone and no table at
+  ;; y -21), else wait :no-site
   [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]}
         (let [{:site/keys [origin facing] :as site} (memory/site world)]
@@ -1185,7 +1217,11 @@
                :intent/origin origin
                :intent/facing facing
                :intent/access h}
-              :else (or (lava-hunt world) {:plan/wait :no-site})))))
+              :else
+              (or (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+                  (make/take-table-along world)
+                  (lava-hunt world)
+                  {:plan/wait :no-site})))))
 
 (defmethod plan/done-by :built?
   [world {:goal/keys [build]}]

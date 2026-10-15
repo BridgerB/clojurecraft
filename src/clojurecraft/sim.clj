@@ -1486,28 +1486,38 @@
   [r]
   (let [[{r' :sim/rng} x] (roll {:sim/rng r})] [r' x]))
 
-(defn play-on
-  "Play a bot reducer against the model on from a moment: world and sim as they are, a tick
-   (physics/tick-ms) at a time from t0, until (stop? world) or max-ms of play. Returns
-   {:world :sim :before [world sim]}, :before the pair as it was one tick before the stop: the
-   moment a run that then failed can be played on from (a snapshot, simrace). pending is what the
-   bot has sent and the model not yet taken (the start packets, for a run from the handshake;
-   nothing, on from a snapshot). go is sent once the bot is loaded, or never when nil.
-   :sim/lag-ticks in sim delays every server->client packet by that many ticks, in order: a slow
-   network as an input. Each tick's :event/rand is 0.5, or, with :sim/tick-seed in sim, the
-   next of a pure generator started there (tick-rand), so runs of one world with different seeds
-   are different runs, each the same every time."
-  [bot-step world sim stop? max-ms t0 pending go]
-  (let [lag (* physics/tick-ms (:sim/lag-ticks sim 0))]
-    (loop [world (assoc world :bot/effects [])
-           sim sim
-           pending pending
-           t t0
-           went? (boolean (nil? go))
-           inflight []
-           r (:sim/tick-seed sim)
-           before [world sim]]
-      (let [sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim pending)
+(def moment-every-ms 30000)       ; simulated ms between the moments a run keeps (play-from)
+(def moment-keep 12)              ; moments kept: the last six simulated minutes
+
+(defn kept
+  "The moments with m added when keep? and at least moment-every-ms have passed since the last
+   kept, the oldest dropped past moment-keep."
+  [moments m keep?]
+  (let [last-t (:t (peek moments))]
+    (cond (or (not keep?) (and last-t (< (- (:t m) last-t) moment-every-ms))) moments
+          :else (let [v (conj moments m)] (if (> (count v) moment-keep) (subvec v 1) v)))))
+
+(defn play-from
+  "Play a bot reducer against the model on from a moment m, a tick (physics/tick-ms) at a time,
+   until (stop? world) or max-ms of play. A moment is everything the next tick depends on:
+   {:world :sim :pending :t :rand :went? :inflight}: the bot's world and the model's state, what
+   the bot has sent and the model not yet taken (pending), the tick's time, the tick seed's state
+   (rand), whether go was sent, and the packets still in flight under :sim/lag-ticks. So playing
+   on from a moment is the run itself, packet for packet. Returns {:world :sim :before :last
+   :moments}: :last the moment of the stopping tick, :before its world and model, and, when
+   keep?, :moments, the run's moments every moment-every-ms, the last moment-keep of them, for a
+   failure to be kept from before the choice that led to it (simrace/snapshot). go is sent once
+   the bot is loaded, or never when nil. :sim/lag-ticks in sim delays every server->client
+   packet by that many ticks, in order. Each tick's :event/rand is 0.5, or, with a rand state,
+   the next of a pure generator (tick-rand), so runs of one world with different seeds are
+   different runs, each the same every time."
+  [bot-step m stop? max-ms go keep?]
+  (let [lag (* physics/tick-ms (:sim/lag-ticks (:sim m) 0))
+        t0 (:t m)]
+    (loop [{:keys [world sim pending t went? inflight] r :rand :as m} m
+           moments []]
+      (let [moments (kept moments m keep?)
+            sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim pending)
             sim (step sim {:sim/kind :tick :sim/now t})
             [sim fresh] (drain sim)
             inflight (into inflight (map (fn [p] [(+ t lag) p]) fresh))
@@ -1523,23 +1533,56 @@
         (if (or (stop? world) (> t (+ t0 max-ms)))
           {:world world
            :sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out) ; deliver the last tick's packets
-           :before before}
-          (recur world
-                 sim
-                 out
-                 (+ t physics/tick-ms)
-                 (boolean (or went? go?))
-                 inflight
-                 r
-                 [world sim]))))))
+           :before [(:world m) (:sim m)]
+           :last m
+           :moments moments}
+          (recur {:world world
+                  :sim sim
+                  :pending out
+                  :t (+ t physics/tick-ms)
+                  :rand r
+                  :went? (boolean (or went? go?))
+                  :inflight inflight}
+                 moments))))))
+
+(defn play-on
+  "Play a bot reducer against the model on from world and sim as they are, from t0 with pending
+   not yet taken by the model (the start packets, for a run from the handshake), until (stop?
+   world) or max-ms of play: play-from from that moment, the tick seed started at :sim/tick-seed,
+   no moments kept. Returns {:world :sim :before [world sim] :last}, :before the pair one tick
+   before the stop."
+  [bot-step world sim stop? max-ms t0 pending go]
+  (play-from bot-step
+             {:world (assoc world :bot/effects [])
+              :sim sim
+              :pending pending
+              :t t0
+              :rand (:sim/tick-seed sim)
+              :went? (boolean (nil? go))
+              :inflight []}
+             stop?
+             max-ms
+             go
+             false))
 
 (defn run+
   "Run a bot reducer against the model from a fresh handshake until (stop? world) or max-ms,
-   sending go (default {:event/kind :go}) once the bot is loaded: play-on's answer,
-   {:world :sim :before}."
+   sending go (default {:event/kind :go}) once the bot is loaded, keeping its moments:
+   play-from's answer, {:world :sim :before :last :moments}."
   [bot-step world0 sim0 stop? max-ms & [go]]
   (let [w (bot-step world0 {:event/kind :start})]
-    (play-on bot-step w sim0 stop? max-ms 0 (sends w) (or go {:event/kind :go}))))
+    (play-from bot-step
+               {:world (assoc w :bot/effects [])
+                :sim sim0
+                :pending (sends w)
+                :t 0
+                :rand (:sim/tick-seed sim0)
+                :went? false
+                :inflight []}
+               stop?
+               max-ms
+               (or go {:event/kind :go})
+               true)))
 
 (defn run
   "Run a bot reducer against the model from a fresh handshake, a tick (physics/tick-ms) at a

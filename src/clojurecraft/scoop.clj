@@ -169,25 +169,32 @@
    for surface water from, and the climb out of it leads back to the pit the hunt left; race
    38477665442 bot Clj_r15 went between the two for an hour), lowest first (water lies low),
    leaving out any nearer the landing (:plan/go-at) than the bot is now, so a hunt goes out
-   and never doubles back."
-  [world]
-  (let [[px _ pz] (:player/pos world)
-        ey (physics/y-of (game/eye world))
-        home (:plan/go-at world)
-        out? (fn [[x _ z]]
-               (or (nil? home)
-                   (>= (physics/horizontal-distance [x 0 z] home)
-                       (physics/horizontal-distance [px 0 pz] home))))]
-    (->> bearings
-         (keep (fn [[dx dz]]
-                 (ground world
-                         [(long (math/floor (+ px (* dx hunt-distance))))
-                          (long (math/floor (+ pz (* dz hunt-distance))))]
-                         ey)))
-         (filter out?)
-         (filter #(terrain/under-sky? world %))
-         (remove (:plan/blacklist world #{}))
-         (sort-by second))))
+   and never doubles back.
+   With homeward? true the targets nearer the landing are kept after the outward ones, ranked
+   last: a hunt that knows what it is looking for (the wood hunt sorts its targets toward the
+   nearest remembered log) may walk back a hop it regretted — race 38680745815 runner 5 (issue
+   #57) bot Clj_r10's first hop left the landing with no log remembered, and once the valley's
+   trunks were remembered below it, every bearing back toward them was refused as nearer the
+   landing, the one bearing left had no route, and the plan waited :no-log out its clock."
+  ([world] (hunt-targets world false))
+  ([world homeward?]
+   (let [[px _ pz] (:player/pos world)
+         ey (physics/y-of (game/eye world))
+         home (:plan/go-at world)
+         out? (fn [[x _ z]]
+                (or (nil? home)
+                    (>= (physics/horizontal-distance [x 0 z] home)
+                        (physics/horizontal-distance [px 0 pz] home))))
+         found (->> bearings
+                    (keep (fn [[dx dz]]
+                            (ground world
+                                    [(long (math/floor (+ px (* dx hunt-distance))))
+                                     (long (math/floor (+ pz (* dz hunt-distance))))]
+                                    ey)))
+                    (filter #(terrain/under-sky? world %))
+                    (remove (:plan/blacklist world #{})))
+         {outward true inward false} (group-by out? found)]
+     (concat (sort-by second outward) (when homeward? (sort-by second inward))))))
 
 (def max-candidates 3)                ; the nearest of each kind a route is planned to
 (def underground-depth 8)             ; feet this far under the landing are underground: climb out before a hunt

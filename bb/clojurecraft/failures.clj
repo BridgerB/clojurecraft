@@ -93,10 +93,29 @@
   [runs]
   (into [label] (map name) (sort (distinct (map source runs)))))
 
+(defn clock
+  "Simulated ms as m:ss."
+  [ms]
+  (let [s (quot (long ms) 1000)] (format "%d:%02d" (quot s 60) (rem s 60))))
+
+(defn moment-note
+  "A kept moment in words: how long before the stop, why, and the window it is judged over
+   (simrace/chosen-moment's :moment); nil without one."
+  [{:keys [why t stop-t window-ms]}]
+  (when why
+    (str " (moment "
+         (clock (- stop-t t))
+         " before the stop, "
+         why
+         ", judged over "
+         (clock window-ms)
+         ")")))
+
 (defn repro
-  "One line that reproduces a run: for a sim run its snapshot (the failing moment, in the
-   runner's artifact: bb issue-check fetch brings it down) and the sim race's command that made
-   it; the recording's replay for a real one."
+  "One line that reproduces a run: for a sim run its snapshot (a moment kept from before the
+   choice that failed, in the runner's artifact: bb issue-check fetch brings it down, and the
+   fix's check judges it) and the sim race's command that made it; the recording's replay for a
+   real one."
   [r]
   (cond (:run/file r)
         (str "- "
@@ -105,7 +124,9 @@
                     (last (str/split (str (:run/snapshot r)) #"/"))
                     "` in artifact `"
                     (:run/artifact r)
-                    "`; or "))
+                    "`"
+                    (moment-note (:run/moment r))
+                    "; or "))
              "`clojure -M:simrace --world " (:run/file r)
              " --seed " (:run/seed r)
              " --seeds 1` at " (:run/commit r)

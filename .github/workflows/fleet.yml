@@ -1,0 +1,45 @@
+name: fleet
+
+# The fleet (ci/fleet.edn, bb fleet): one small job that keeps the runners full of race and
+# sim-race lanes and gives a runner back the moment another workflow's job waits for one. GitHub
+# has no job priority or preemption, so this job looks every minute: a queued job with no runner
+# free cancels the newest lane; free runners with nothing waiting get new lanes on main; lanes on
+# code main has replaced are cancelled and replaced. The job runs :fleet/minutes and then
+# dispatches the next fleet run, which waits as the group's one pending run and starts when this
+# one ends; the schedule is a backstop should that hand-over not happen. To stop the rounds, set
+# the repository variable RACE_CONTINUOUS=false: the fleet then dispatches no lanes and the
+# running ones finish their job.
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fleet.yml', 'bb/clojurecraft/fleet.clj', 'ci/fleet.edn']
+  workflow_dispatch:
+  schedule:
+    - cron: '41 * * * *'
+
+permissions:
+  contents: read
+  actions: write                        # cancel lanes, dispatch lanes and the next fleet run
+
+concurrency:
+  group: fleet
+  cancel-in-progress: false
+
+jobs:
+  fleet:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0                # git diff between a lane's commit and main
+      - name: Install Babashka
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+      - name: Fleet
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RACE_CONTINUOUS: ${{ vars.RACE_CONTINUOUS }}
+        run: bb fleet run
