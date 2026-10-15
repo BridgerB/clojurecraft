@@ -863,3 +863,15 @@
     (is (nil? (started early)) "within the deadline it waits to be still")
     (is (> (started late) intent/settle-deadline) "past it, START anyway")
     (is (= :digging (get-in w [:plan/intent :intent/stage])))))
+
+(deftest with-no-tree-known-the-wood-hunt-sets-out
+  ;; race 38665691517 runner 1 (issue #57): slots Clj_r08, Clj_r14 and Clj_r15 landed where no
+  ;; standing trunk was in reach, with routes out on three bearings, and waited :no-log at the
+  ;; landing round after round: the hunt set out only toward a log already remembered
+  (let [w (assoc (remembered {} [8.5 64.0 8.5])
+                 :world/chunks
+                 (into {} (for [cx (range -3 4) cz (range -3 4)] [[cx cz] (world/column {})])))
+        i (wood/gather-next w)]
+    (is (empty? (memory/positions-now w blocks/log-states)) "no log anywhere")
+    (is (= :walk (:intent/kind i)))
+    (is (= :log-hunt (:intent/for i)) "out along a bearing, where the next chunks load")))
