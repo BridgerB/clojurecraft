@@ -136,6 +136,30 @@
 
 ;; ---------------------------------------------------------------- the :tunnel-to intent
 
+(def step-keys
+  "The keys of a :tunnel-to step in progress."
+  [:intent/move :intent/from :intent/op :intent/child])
+
+(defn off-step?
+  "Has the step from from by move lost the feet: neither in the cell it started from, nor in the
+   one it steps into, nor a block over either (a jump on the way)? Knocked off by a blaze's
+   fireball, or moved by a fight or a cover walk between ticks of the step."
+  [feet from move]
+  (let [to (plus from move)] (not (contains? #{from to (plus from up) (plus to up)} feet))))
+
+(defn lost-way?
+  "Did the step's child, a walk back to the cell the step started from (the stand its digs and
+   floor are worked from), fail :no-path? The feet left that cell, and a step chosen again from
+   where they are needs no walk back. A walk into the cell stepped into is the step itself, and
+   its failure fails the tunnel as before. Gym
+   blaze-fortress-h (run 38905665758) run 1 failed its tunnel into the spawner's room :no-path
+   twice in a row, and the plan with it."
+  [{:intent/keys [child from]}]
+  (and (= :walk (:intent/kind child))
+       (= from (:intent/target child))
+       (intent/failed? child)
+       (= :no-path (:intent/reason child))))
+
 (defmethod intent/run :tunnel-to
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
@@ -151,6 +175,8 @@
           (-> world
               (assoc :player/controls {})
               intent/done)
+          (and move (or (off-step? feet from move) (lost-way? i)))
+          (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
           (nil? move)
           (if-let [m (choose-move world feet target climb)]
             (intent/assoc-intent world :intent/move m :intent/from feet)
@@ -162,7 +188,7 @@
             (if (nil? next)
               (reduce intent/dissoc-intent
                       (intent/assoc-intent world :intent/taken (inc taken))
-                      [:intent/move :intent/from :intent/op :intent/child])
+                      step-keys)
               (build/work-op world i next event))))))
 
 ;; ---------------------------------------------------------------- the goal
