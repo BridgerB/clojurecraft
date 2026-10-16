@@ -206,10 +206,11 @@
 
 (def standing-walks
   "The purposes of a walk that ends standing in its target cell, not near it: a build's stand
-   (#8: a pour is aimed from it), the pearl hunt's burrow (:shelter, issue #263) and a hiding
-   place out of a blaze's sight (:cover, issue #262: a cell within reach of the eye but round a
-   corner hides only once stood in)."
-  #{:build :shelter :cover})
+   (#8: a pour is aimed from it), the pearl hunt's burrow (:shelter, issue #263), a hiding place
+   out of a blaze's sight (:cover, issue #262: a cell within reach of the eye but round a corner
+   hides only once stood in) and a fight's stand round a wall (:fight, issue #262: a walk near
+   the target ended in reach of it through the wall, where it started)."
+  #{:build :shelter :cover :fight})
 
 (defn walk-goal
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell

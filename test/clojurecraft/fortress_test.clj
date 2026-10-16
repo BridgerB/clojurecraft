@@ -122,7 +122,7 @@
                  :player/pos [-1.5 64.0 0.5]
                  :plan/intent
                  {:intent/kind :tunnel-to
-                  :intent/target [4 64 0]
+                  :intent/target [9 64 0]
                   :intent/steps 8
                   :intent/move [1 0 0]
                   :intent/from [1 64 0]
