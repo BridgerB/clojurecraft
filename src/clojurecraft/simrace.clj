@@ -4,7 +4,7 @@
    cores can play, with no Java server.
 
      clojure -M:simrace --worlds cache/sim-worlds/R1 [--seeds 8] [--until nether]
-       [--max-minutes 90] [--threads n] [--out data/simrace]
+       [--max-minutes 330] [--threads n] [--out data/simrace]
 
    A run is a pure function of three inputs: the world file, the seed (the model's loot rolls
    and the bot's tick randomness, sim/tick-rand) and the code. So a run is never saved to be
@@ -34,7 +34,7 @@
 
 (def default-seeds 8)                 ; runs of each world
 (def default-until "nether")          ; the target a run plays every step up to
-(def default-max-minutes 90)          ; simulated minutes a run may take
+(def default-max-minutes 330)         ; simulated minutes a run may take: a real bot's horizon, a lane's job (#252)
 
 (def step "The bot's reducer, as a live run composes it." (game/compose game/step plan/step))
 
@@ -473,7 +473,7 @@
    a spec test. With --expect recur, it exits 1 unless every one recurs (the base code: the
    moment must reproduce the failure); with --expect pass, unless none does (the fix).
    --from-landing f replays a snapshot's run from its landing to its stage (from-landing!): a
-   probe's tool for the whole road, up to 90 simulated minutes, never the check's."
+   probe's tool for the whole road, up to default-max-minutes, never the check's."
   [& args]
   (let [o (cli/options args)]
     (cond (get o :judge)

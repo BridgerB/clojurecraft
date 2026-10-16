@@ -70,7 +70,7 @@ Sim:
 - snapshot `R4-35-2.edn.gz` in artifact `simrace-<sha>-6` (moment 1:30 before the stop, :intent-failed, judged over 2:30); or `clojure -M:simrace --world cache/sim-worlds/R4/35.edn.gz --seed 2 --seeds 1` at <sha>, landing [2360 3640 103]
 ```
 
-The snapshot is a moment the run kept from before the choice that failed (an intent that failed three times: when the first started; a wait: when it began; a `:timeout`: its last five minutes), with everything the next tick depends on and the window it is judged over: a value you can play on (8.4). The artifact holds that runner's `runs.edn` (one run map a line: `:run/signature`, `:pos`, `:held`, `:plan`, `:run/ms`, `:run/moment`), `simrace.log` and `snapshots/`. The command reruns the whole run from spawn (up to 90 simulated minutes).
+The snapshot is a moment the run kept from before the choice that failed (an intent that failed three times: when the first started; a wait: when it began; a `:timeout`: its last five minutes), with everything the next tick depends on and the window it is judged over: a value you can play on (8.4). The artifact holds that runner's `runs.edn` (one run map a line: `:run/signature`, `:pos`, `:held`, `:plan`, `:run/ms`, `:run/moment`), `simrace.log` and `snapshots/`. The command reruns the whole run from spawn (up to 330 simulated minutes, #252).
 
 Real:
 
@@ -275,7 +275,7 @@ You cannot debug interactively, and a linear script dies at its first bad call, 
 
 ### 8.4 Judging a snapshot
 
-`clojure -M:simrace --judge probe/<n>/R4-35-2.edn.gz[,...]` judges as the check does: from the snapshot's moment over its window (`:snapshot/moment :window-ms`, from the moment to a minute past the stop, or five minutes for a stall), uninstrumented, stopping when the plan ends or reaches the signature's stage. It prints one JUDGE line a snapshot (signature, moment, window, `:recurs?`, how it ended, simulated and wall ms) and a STORY line per intention fact from the moment on: what the bot did. `--expect recur|pass` sets the exit code. Run it on `main` and on the fix; both go in the PR. `simrace/judged` returns the RESULT, `simrace/recurs?` whether the failure recurs, `simrace/moment-of` the moment as `sim/play-from` takes it. `--from-landing f` replays the snapshot's whole run from its landing to its stage (up to 90 simulated minutes): a probe's view of the road, never the check's. To see what the bot does step by step, step it a quarter second at a time and print what changed:
+`clojure -M:simrace --judge probe/<n>/R4-35-2.edn.gz[,...]` judges as the check does: from the snapshot's moment over its window (`:snapshot/moment :window-ms`, from the moment to a minute past the stop, or five minutes for a stall), uninstrumented, stopping when the plan ends or reaches the signature's stage. It prints one JUDGE line a snapshot (signature, moment, window, `:recurs?`, how it ended, simulated and wall ms) and a STORY line per intention fact from the moment on: what the bot did. `--expect recur|pass` sets the exit code. Run it on `main` and on the fix; both go in the PR. `simrace/judged` returns the RESULT, `simrace/recurs?` whether the failure recurs, `simrace/moment-of` the moment as `sim/play-from` takes it. `--from-landing f` replays the snapshot's whole run from its landing to its stage (up to 330 simulated minutes): a probe's view of the road, never the check's. To see what the bot does step by step, step it a quarter second at a time and print what changed:
 
 ```clojure
 (require '[clojurecraft.sim :as sim] '[clojurecraft.plan :as plan])
@@ -453,7 +453,7 @@ A failure that will not reproduce is almost always a context difference, not fla
 5. **`:timeout` snapshots are stalls.** The moment is the run's last five simulated minutes; the check judges whether the stage is reached in that window (no new stage and no end: it recurs). Nothing replays a run from its landing in the check.
 6. **The sim race knows its landing.** Sim runs get `:go/at` like real bots; snapshots from before that are played with their captured world's landing (`simrace/moment`). An old snapshot behaving oddly: check `:plan/go-at`.
 7. **The captured world has an edge.** 625 chunks; past them every cell is `:unknown` where a real server would load more. A failure there is the model's limit: say so in the PR.
-8. **Server load is real.** 25 bots a server drop it to 7 or 8 ticks a second (`:sample/server-tick`, `server.log`). Anything the bot times by its own clock against something the server times in ticks breaks under load: digs, window answers. A real-only signature with load: look there first.
+8. **Server load is real.** 25 bots a server dropped it to 7 or 8 ticks a second (now 15 a server, #252) (`:sample/server-tick`, `server.log`). Anything the bot times by its own clock against something the server times in ticks breaks under load: digs, window answers. A real-only signature with load: look there first.
 9. **"The unmodelled packet."** `packet_test` decodes an id with no spec and expects `:unknown`; adding a spec for that packet breaks it: switch its example.
 10. **Give exact numbers.** Run ids, commits, counts, before and after lines. "Seems fixed" is not evidence.
 
@@ -835,7 +835,7 @@ Signature = `[target reason]`. Meaning is the common case; read the raising code
 | `:boxed` | stairs/tunnel/climb has no safe next cell | `stairs/boxed?`, `stairs/box`, `stairs/duck`, `stone/climb`, `stone/deeper`, `stone/mine-next`, `scoop/boxed-here?` | under a lake/aquifer/sea; `:plan/boxed-at`, `duck` (#37, #61) |
 | `:no-pickaxe` | dig needs a pickaxe, none held or makeable | `stairs/tool-missing`, `stone/tool-missing`, `intent/opening`, `make/spare-worth?` | spare not made in time, tools worn deep (#36, #39, #67) |
 | `:rejected` | server left the block unchanged 3 times on one cell | `intent/dig-stage :confirm`, `place/place-stage :sent`, `place/give-up`, `stairs/rejected` | slow server (`intent/slowdown`), block into a body (#44), protected cell |
-| `:timeout` | ran out of time busy but not failing (sim race: 90 simulated min); real-race cuts are never filed | `main/result`, `simrace/judged` | back-and-forth loops; `probe story` on the recording |
+| `:timeout` | ran out of time busy but not failing (sim race: 330 simulated min since #252, a real bot's horizon; 90 before); real-race cuts are never filed | `main/result`, `simrace/judged` | back-and-forth loops; `probe story` on the recording |
 | `:no-spot` | nowhere to put a block: no spot, niche, passage or fresh rock | `place/place-stage :spot`, `place/niche`, `place/dig-niche`, `place/ashore`, `stone/afloat-no-spot?` | aquifer dead ends, sand round the bot (#94, #148) |
 | `:stair-not-taken` | stair cut but feet never reached it in 10 s | `stairs/stairs-stage :step`/`:level`, `wood/climb-out` | unbroken block, mid-jump start (`airborne?`) |
 | `:no-shovel` | a staircase block needs a tool not makeable there | `stairs/tool-missing` | snow should be by hand (#42, #72) |
@@ -894,7 +894,7 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 | Workflow | Trigger | Does | Artifacts |
 |---|---|---|---|
 | `fleet.yml` | always on (hands over every 340 min), hourly backstop | keeps lanes in every free runner, cancels the newest when another job waits 90 s (floor 2+2), replaces lanes on replaced code | log lines `FLEET ...` |
-| `race.yml` | dispatched by the fleet, one lane a run (`race lane k`) | up to 8 lanes × 2 servers × 25 slots on pregenerated landings, refilled, 330 min; `bb churn batch` every 20 min | `race-<sha>-<runner>`: `s1/`,`s2/` with `race.log`, `server.log`, `samples.edn.zst`, `milestones.edn.zst`, a recording per slot |
+| `race.yml` | dispatched by the fleet, one lane a run (`race lane k`) | up to 8 lanes × 2 servers × 15 slots on pregenerated landings, refilled, 330 min; `bb churn batch` every 20 min | `race-<sha>-<runner>`: `s1/`,`s2/` with `race.log`, `server.log`, `samples.edn.zst`, `milestones.edn.zst`, a recording per slot |
 | `simrace.yml` | same (`simrace lane k`) | up to 8 lanes, bot against the model in captured worlds, every core | `simrace-<sha>-<runner>`: `runs.edn`, `simrace.log`, `snapshots/` |
 | `test.yml` | every push, any branch | `unit` (via `unit.yml`), one forest shard of 250 (dispatch: 8), actionlint | none |
 | `unit.yml` | called by `test.yml`, `issue.yml` | every test but the forest property (`bb test`), then `bb check` | none |
