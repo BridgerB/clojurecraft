@@ -9,7 +9,9 @@ name: issue
 # captured worlds the snapshots name are restored. Older issues are not judged again here: the
 # races are the regression guard (the filer reopens an issue whose failure comes back). Beside
 # it, unit.yml: every test but the forest property and the static checks (#98). test and gym
-# skip fix branches: these two are the checks a fix gets.
+# skip fix branches: these two are the checks a fix gets. A Copilot cloud agent's branch
+# (copilot/*, .github/agents/bot-fixer.agent.md) gets the same two; its issue is the first the
+# body fixes, since Copilot names its own branches.
 
 on:
   pull_request:
@@ -25,11 +27,11 @@ concurrency:
 
 jobs:
   unit:
-    if: startsWith(github.head_ref, 'fix/')
+    if: startsWith(github.head_ref, 'fix/') || startsWith(github.head_ref, 'copilot/')
     uses: ./.github/workflows/unit.yml
 
   check:
-    if: startsWith(github.head_ref, 'fix/')
+    if: startsWith(github.head_ref, 'fix/') || startsWith(github.head_ref, 'copilot/')
     runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
@@ -44,9 +46,12 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
-          n=$(echo "$HEAD_REF" | sed -E 's|^fix/([0-9]+).*|\1|')
-          case "$n" in ''|*[!0-9]*) echo "::error::branch $HEAD_REF names no issue number"; exit 1;; esac
           named=$(printf '%s\n' "$BODY" | grep -oiE '(fixes|closes|resolves) #[0-9]+' | grep -oE '[0-9]+' || true)
+          case "$HEAD_REF" in
+            copilot/*) n=$(printf '%s\n' "$named" | sed -n 1p) ;;
+            *) n=$(echo "$HEAD_REF" | sed -E 's|^fix/([0-9]+).*|\1|') ;;
+          esac
+          case "$n" in ''|*[!0-9]*) echo "::error::branch $HEAD_REF names no issue number (a copilot/ branch: no Fixes #n in the body)"; exit 1;; esac
           # only the snapshots this pull request adds or changes: its own evidence. A snapshot already
           # on main proved an earlier fix (and no longer recurs there), so a later PR for the same
           # issue (a fix/<n>-r2 after a regression, PR #245) is never judged by it
