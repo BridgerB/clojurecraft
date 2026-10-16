@@ -5,7 +5,8 @@
      bb issue-check fetch <n>     the issue's snapshots into test/issues/<n>/
 
    The issue is the data: bb failures writes each sim reproduction into the issue's comments as
-   its snapshot's file name and the artifact that holds it. fetch reads the comments newest
+   its snapshot's file name and the artifact that holds it, and each real one the model
+   reproduces the same way (issue #299: a real race's snapshot, real-<runner>-<s>-<bot>.edn.gz). fetch reads the comments newest
    first, then the body, and takes at most max-snapshots of them, never two of one world (a
    snapshot is named <set>-<world>-<seed>: two seeds of one world are the same moment), only
    snapshots that carry a kept moment (:snapshot/moment, a moment from before the choice that

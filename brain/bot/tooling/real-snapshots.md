@@ -25,6 +25,13 @@ sourceRefs:
   - src/clojurecraft/simrace.clj#defn world-for!
   - src/clojurecraft/record.clj#defn reduce-entries
   - src/clojurecraft/record.clj#defn input-of
+  - bb/clojurecraft/churn.clj#defn convert!
+  - bb/clojurecraft/churn.clj#defn convertible
+  - bb/clojurecraft/churn.clj#defn converted
+  - bb/clojurecraft/churn.clj#defn conversion-text
+  - bb/clojurecraft/failures.clj#defn snapshot-note
+  - bb/clojurecraft/failures.clj#defn labels
+  - bb/clojurecraft/issue_check.clj#defn world-of
   - test/clojurecraft/real_test.clj#a-runs-own-recording-judges-as-its-sim-snapshot-does
   - test/clojurecraft/real_test.clj#a-nether-moment-plays-in-a-nether-model
   - test/clojurecraft/real_test.clj#the-model-joins-holding-what-the-server-held
@@ -59,6 +66,9 @@ Issue #299. A real race's failure used to leave a recording and the line "replay
 - **The Nether is real.** The Nether's columns from the recording (16 sections from y 0; `chunk/decode` reads the height from the column) make a Nether in the model where the sim's own is one column (`:sim/nether`). `:sim/dimension` comes from the bot's, so the model's ultrawarm water, its mob rules and its column height follow (`a-nether-moment-plays-in-a-nether-model`). A moment still in the overworld of a run that ended in the Nether gets that Nether as its portal's destination (`nether-of`: the Nether columns the recording holds by its end round where the bot last arrived, `:nether-at`; `sim/arrive` takes them as `:nether {:columns :at}`, decoded on arrival, the overworld's entities left behind): the fortress failures came seconds after arrival, so their moments stood at the portal (`a-portal-at-the-moment-leads-to-the-real-nether`).
 - **The time of day is a guess** (`day-time-of`): set-time is decoded fieldless, so the bot never knows it; midnight when an undead stands unburnt under the open sky, else noon.
 - **The honest gate** (`from-recording!`, `gap`): the snapshot is written, read back as the check reads it, and judged at once with the same code. Kept (a `REAL` line) only when it recurs; otherwise it goes under `gaps/` and a `GAP` line names how the bot got past: `:reached`, `:other` (failed otherwise), `:active`, `:crashed`, `:halted` (out of wall time: the check would count that as recurring, but it is no sight of the failure), `:no-moment`, `:no-signature`. A gap is a finding about the model, never evidence.
+
+## In the races
+Every 20 minutes a real lane's batch (`bb churn batch real`, [[race]]) converts its failures before it files them (`convert!`). `convertible` takes the failed runs of real bots, the first `real-per-signature` (2) of each signature, the most a fix's check judges; one `clojure -J-Xmx3g -M:simrace --from-recording` folds their recordings (`<data-dir>/<s>/<bot>.edn`, closed before the bot's RESULT line was printed, `main/run-bot!`) on the race's runner at the race's own commit, `nice -n 19` under the servers, stopped after `real-budget-ms` (10 minutes, so the job's last report still uploads), the snapshots under `<data-dir>/snapshots/real-<runner>-<s>-<bot>.edn.gz` (`snapshot-name`, unique in the artifact: both servers' bots have the same names) and its lines in `snapshots/convert-<n>.log`, both in the round's artifact. Its REAL lines become each run's `:run/snapshot` and `:run/moment` (`converted`), so the issue's comment leads that run's reproduction with "snapshot `f` in artifact `a` (moment ...)" (`failures/snapshot-note`), the words `bb issue-check fetch` reads, and names its recording under its server's directory (`:run/dir`); a real snapshot's file is its own world for fetch's one-a-world rule (`issue-check/world-of`). An issue with a real snapshot is labelled `sim` too (`failures/labels`): the check then requires and judges its snapshots, and the Copilot sessions' setup fetches them. The batch's log and the job's summary say how many were kept and the gaps by kind (`conversion-text`).
 
 ## First results
 Probe 38940300595, then 38942963330 with the real Nether, on five recordings of race 38929353563 runner 4 (code 6bad315), folded at that commit with this conversion laid over it and judged again with the branch's code (main's bot):
