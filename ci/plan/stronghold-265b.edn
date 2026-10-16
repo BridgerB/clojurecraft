@@ -1,0 +1,9 @@
+;; Issue #265's search rows again, run as a plan from branch gym/265: the stronghold found from 250
+;; blocks off it, a way that swims and tunnels where no walk goes; and its portal room reached.
+;; One bot a server.
+{:plans/label "stronghold-265b"
+ :plans/jobs 6
+ :plans/issue 265
+ :plans/experiments
+ [{:exp/name "stronghold" :exp/kind :gym :exp/goal "stronghold" :exp/runs 3 :exp/est-s 1500}
+  {:exp/name "portal-room" :exp/kind :gym :exp/goal "portal-room" :exp/runs 3 :exp/est-s 2100}]}
