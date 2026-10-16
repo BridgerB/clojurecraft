@@ -1,0 +1,56 @@
+name: copilot
+
+# Copilot cloud agent sessions on the bot-failure issues, kept going until each closes (bb copilot
+# dispatch, bb/clojurecraft/copilot.clj): an unassigned issue is given to Copilot's bot-fixer agent
+# (.github/agents/bot-fixer.agent.md) while fewer than COPILOT_CAP are held, a green ready pull
+# request is merged (its Fixes line closes the issue), a red or abandoned one gets a continue
+# comment, a session that never started is retried. It runs when an issue is filed or reopened,
+# when a fix's checks finish, and every fifteen minutes. GitHub assigns Copilot and hears @copilot
+# only from a user, so it needs the secret COPILOT_TOKEN (a classic token with repo scope, or a
+# fine-grained one with read and write on actions, contents, issues and pull requests); without
+# it the job says so and does nothing. RACE-style off switch: the variable COPILOT_DISPATCH=false.
+
+on:
+  issues:
+    types: [opened, reopened, labeled]
+  workflow_run:
+    workflows: [issue, test]
+    types: [completed]
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: only print the moves
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copilot-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: vars.COPILOT_DISPATCH != 'false' && (github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'bot-failure'))
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Babashka
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+      - name: Dispatch
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
+          COPILOT_CAP: ${{ vars.COPILOT_CAP }}
+          DRY_RUN: ${{ inputs.dry-run }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::no COPILOT_TOKEN secret: nothing dispatched (see the comment at the top of copilot.yml)"
+            exit 0
+          fi
+          if [ "$DRY_RUN" = true ]; then bb copilot dispatch --dry-run; else bb copilot dispatch; fi
