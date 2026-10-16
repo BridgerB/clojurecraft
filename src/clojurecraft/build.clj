@@ -695,6 +695,19 @@
                     (stance-block world stand build origin facing))]
     (if (within-reach? world b) (way-dig b) (approach world b))))
 
+(defn dig-from-under
+  "The dig of the first block in the way to stand (stance-block, at the stand's height) when the
+   feet stand a block under that height, in a hole of the floor, and the block is in reach: the
+   same block clear-stand digs from the stand's height, dug from where the walk to it ended. nil
+   otherwise. Sim race 38855091523 (issue #178, world R1/34 seed 2, after #250): the walk to the
+   block in the way of the lava's stand ended a block under it, in a hole of the floor round the
+   pool; off the stand's height the refill sent the feet back to the landing, and the walk went
+   again, two walks every two seconds until the run's time ran out."
+  [world stand build origin facing]
+  (when-let [b (and (= (second stand) (inc (long (physics/y-of (intent/feet world)))))
+                    (stance-block world stand build origin facing))]
+    (when (within-reach? world b) (way-dig b))))
+
 (defn reaches-from?
   "Would the eye, standing in cell, be within reach of pos? The feet use the real eye; any
    other cell, the eye at its middle."
@@ -965,6 +978,8 @@
           (intent/centred? world stand) (scoop-at-station world sources)
           :else
           (or (stand-walk world stand)
+              ;; a block under the stand's height, the block in the way in reach: dig it from here
+              (dig-from-under world stand build origin facing)
               (cond (= (long (physics/y-of (intent/feet world))) (second stand))
                     (let [[lx _ _] (landing h)
                           [_ _ sz] (relative origin facing stand)
