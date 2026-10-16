@@ -21,6 +21,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.packet :as packet]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
@@ -126,11 +127,17 @@
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
 
 (defn route-walk
-  "A walk along a route to within a walk's range of entity e's cell (intent/routable?), for an
-   approach the straight way does not bring nearer; nil when no route reaches it."
+  "A walk to the end of a route to within approach-range of entity e's cell on the plane (path's
+   :near goal), stood in (intent/standing-walks: a walk near a cell ends within reach of it in a
+   straight line, through a wall), for an approach the straight way does not bring nearer; nil
+   when no route reaches it or it ends where the feet are."
   [world e]
-  (let [w {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :fight}]
-    (when (intent/routable? world w) w)))
+  (let [r (path/plan world
+                     (path/feet-cell (:player/pos world))
+                     {:goal/kind :near :goal/pos (cell (:entity/pos e)) :goal/range approach-range})
+        to (last (:path/waypoints r))]
+    (when (and (= :found (:path/status r)) to (not= to (intent/feet world)))
+      {:intent/kind :walk :intent/target to :intent/for :fight})))
 
 (defmethod fight-stage :approach
   ;; toward the target until approach-range: straight at it while that brings it nearer, and once
@@ -166,13 +173,14 @@
 (defn walk-on
   "One tick of an approach's route walk (the :fight's :intent/child) toward entity e: run, then
    dropped when done (the straight approach takes over, its stall clock begun again) or when e
-   has moved walk-drift from the cell it heads for; a walk that failed fails the fight
-   :unreachable."
+   has moved walk-drift past approach-range from the cell it heads for, on the plane; a walk that
+   failed fails the fight :unreachable."
   [world {:intent/keys [child]} e event]
   (cond (intent/done? child)
         (intent/dissoc-intent world :intent/child :intent/best-dist :intent/best-tick)
         (intent/failed? child) (intent/fail (assoc world :player/controls {}) :unreachable)
-        (> (physics/distance (physics/centre (:intent/target child)) (:entity/pos e)) walk-drift)
+        (> (physics/horizontal-distance (physics/centre (:intent/target child)) (:entity/pos e))
+           (+ approach-range walk-drift))
         (intent/dissoc-intent (assoc world :player/controls {})
                               :intent/child
                               :intent/best-dist
