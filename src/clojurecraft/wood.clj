@@ -7,6 +7,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.scoop :as scoop]
             [clojurecraft.stairs :as stairs]
@@ -18,6 +19,8 @@
 (def far-radius 256)                  ; a trunk remembered on the way in, past the near band
 (def far-candidates 3)                ; routes planned on the way back to the surface
 (def max-trunk 8)                     ; logs followed up one trunk column
+(def cross-reach 48)                  ; blocks along the way to a trunk a crossing looks for open water
+(def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
 (def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
 
 (defn ground?
@@ -253,17 +256,61 @@
           rock (assoc (intent/child-dig rock) :intent/exposes-ok? true :intent/for :into-water)
           :else {:intent/kind :swim-out :intent/for :rise :intent/to-y (or top (+ y 34))})))
 
+(defn open-water?
+  "Is the top of column [x z] near the eye (from 8 over it down to surface-span under) water:
+   a lake's or the sea's surface, the first cell down that is not clear to a route?"
+  [world [x z] eye-y]
+  (= :water
+     (first (remove #{:clear}
+                    (map #(path/classify world [x % z])
+                         (range (long (+ eye-y 8)) (long (- eye-y surface-span)) -1))))))
+
+(defn water-toward?
+  "Does the way on the plane from feet to pos meet open water within cross-reach?"
+  [world [fx _ fz] [tx _ tz] eye-y]
+  (let [d (physics/horizontal-distance [fx 0 fz] [tx 0 tz])]
+    (boolean (and (pos? d)
+                  (some (fn [k]
+                          (open-water? world
+                                       [(long (math/floor (+ fx 0.5 (* k (/ (- tx fx) d)))))
+                                        (long (math/floor (+ fz 0.5 (* k (/ (- tz fz) d)))))]
+                                       eye-y))
+                        (range 1 (inc (min cross-reach (long d)))))))))
+
+(defn crossing
+  "Under the open sky, nothing before it in gather-next reaching a tree (no walk, climb or hunt
+   a route reaches), and the nearest remembered standing trunk across open water
+   (water-toward?): a :cross toward it, swimming the water (swim's :cross), so the gather goes
+   on from the far side; a crossing that lands short (an inlet waded) is followed by the next.
+   Sim race 38811417241 runner 2 (issue #87, world R3/4): the stone pickaxe broke on the stairs,
+   a new one wanted a log, and the bot stood on a sand island at its landing with every trunk a
+   hundred blocks off across a lake; routes ended at the island's shore, all eight hunt
+   bearings forty out were water, and the plan waited :no-log until it failed. nil otherwise."
+  [world]
+  (let [feet (intent/feet world)
+        eye (game/eye world)]
+    (when (terrain/under-sky? world feet)
+      (when-let [trunk (->> (memory/positions-now world blocks/log-states)
+                            (memory/nearest-first eye far-radius)
+                            (remove (skipped world))
+                            (filter #(standing-trunk? world %))
+                            first)]
+        (when (water-toward? world feet trunk (physics/y-of eye))
+          {:intent/kind :cross :intent/target trunk})))))
+
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
    trunk a route reaches (near-walk). Any goal that needs a log uses this. With none in the near
    band a route reaches, climb out to the trees, or walk toward them (hunt), or boxed under water
-   dig up into it (into-water), instead of waiting :no-log."
+   dig up into it (into-water), or across open water swim for them (crossing), instead of
+   waiting :no-log."
   [world]
   (or (continue-gather world)
       (near-walk world)
       (climb-out world)
       (hunt world)
       (into-water world)
+      (crossing world)
       {:plan/wait :no-log}))
 
 
