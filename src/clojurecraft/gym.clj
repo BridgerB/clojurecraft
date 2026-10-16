@@ -167,10 +167,20 @@
   (summon "enderman" d "{NoAI:1b,PersistenceRequired:1b}"))
 
 (def pearl-kit
-  "What a pearl row gives (issue #263): an iron sword, the iron helmet and chestplate #259's
-   armour row makes (put on by the :wear-armour row), and food for the fights' hunger."
-  ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
-   "minecraft:cooked_beef 16"])
+  "What a pearl row gives (issue #263): an iron sword, an iron pickaxe for the burrow the hunt
+   fights from, the iron helmet and chestplate #259's armour row makes (put on by the
+   :wear-armour row), and food for the fights' hunger: what a chained run carries by then."
+  ["minecraft:iron_sword 1" "minecraft:iron_pickaxe 1" "minecraft:iron_helmet 1"
+   "minecraft:iron_chestplate 1" "minecraft:cooked_beef 16"])
+
+(def pearl-arena
+  "The live pearl row's arena (issue #263): stone eight deep under a floor 25 square open to the
+   midnight sky, so the burrow is cut in stone and the endermen stand ten blocks off, far enough
+   to be provoked by a stare (pearls/stare-from) and never by accident. The sealed Nether room
+   is seven square: every enderman in it is within reach, and gym batch pearls-263a's live
+   trials fought all three at once in the open."
+  ["time set midnight" "fill {x-12} {y-8} {z-12} {x+12} {y-1} {z+12} minecraft:stone"
+   "fill {x-12} {y} {z-12} {x+12} {y+6} {z+12} minecraft:air"])
 
 (defn pearls-held
   "A truth that the bot holds n or more ender pearls (re, a pattern of the count: \"[1-9]\")."
@@ -440,16 +450,17 @@
     :gym/summon (mapv no-ai-enderman [[2 0 0] [-2 0 0] [0 0 2] [0 0 -2] [2 0 2]])
     :gym/timeout-ms 180000
     :gym/truth [(pearls-held "[1-9][0-9]*")]}
-   ;; then live: three that fight back for 7 a hit at Normal, in the same room, the bot in the
-   ;; kit's iron helmet and chestplate; a pearl held, the bot alive with health left
+   ;; then live: three that fight back for 7 a hit at Normal, ten blocks off in a stone arena at
+   ;; midnight (pearl-arena), the bot in the kit's iron helmet and chestplate; a pearl held, the
+   ;; bot alive with health left
    {:gym/goal :ender-pearl
     :gym/until "pearls-1"
     :gym/name "pearls-1-live"
-    :gym/land :nether-arena
     :gym/difficulty "normal"
     :gym/prereqs pearl-kit
-    :gym/summon (into [] (mapcat #(endermen 1 %)) [[3 0 0] [-3 0 0] [0 0 3]])
-    :gym/timeout-ms 240000
+    :gym/setup pearl-arena
+    :gym/summon (into [] (mapcat #(endermen 1 %)) [[10 0 0] [-10 0 2] [0 0 10]])
+    :gym/timeout-ms 300000
     :gym/truth [(pearls-held "[1-9][0-9]*")
                 {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
    ;; the stage: twelve pearls from the endermen of the warped forest nearest the landing's

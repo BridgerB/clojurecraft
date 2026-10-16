@@ -1895,6 +1895,20 @@
               (send {:packet/name :entity-event :entity-id eid :status entity/death-status})
               (cond-> by-player? (drop-loot type pos))))))
 
+(defn anger
+  "The model with mob eid turned on the player (:angry?). An enderman shows it as the server
+   does when it takes a target: its creepy flag set (entity/creepy-index, set-entity-data), the
+   fact the bot's hunt reads to know one is coming (issue #263). Once only."
+  [sim eid]
+  (let [{:keys [type angry?]} (get-in sim [:sim/mobs eid])]
+    (cond angry? sim
+          :else
+          (cond-> (assoc-in sim [:sim/mobs eid :angry?] true)
+            (= :enderman type)
+            (send {:packet/name :set-entity-data
+                   :entity-id eid
+                   :metadata {entity/creepy-index true}})))))
+
 (defn hurt-mob
   "The model after mob eid takes amount of damage, by-player? when the player dealt it: within
    mob/hurt-window-ms of its last hurt only a harder one lands, for its excess (a swing inside
@@ -1913,7 +1927,7 @@
                          :health left
                          :hit-at (if window? hit-at now)
                          :last-hit amount)
-              (cond-> by-player? (assoc-in [:sim/mobs eid :angry?] true))
+              (cond-> by-player? (anger eid))
               (send (health-data eid left))
               (cond-> (<= left 0.0) (die-mob eid by-player?))))))
 
@@ -1975,8 +1989,7 @@
   (let [{:keys [type pos angry?]} (get-in sim [:sim/mobs eid])
         look (:sim/player-look sim)]
     (cond (or angry? (not (:neutral (mob/kinds type))) (nil? look)) sim
-          (mob/stared? (solid-fn sim) (physics/eye (:sim/player-pos sim)) look pos)
-          (assoc-in sim [:sim/mobs eid :angry?] true)
+          (mob/stared? (solid-fn sim) (physics/eye (:sim/player-pos sim)) look pos) (anger sim eid)
           :else sim)))
 
 (defn targets?
@@ -1997,11 +2010,13 @@
         stop (cond (:melee k) (* 0.8 (:reach k))
                    (:shoot k) (:keep k)
                    :else 1.0)]
-    (cond (not (pos? (:speed k 0.0))) sim
-          :else
-          (move-mob sim
-                    eid
-                    (mob/step-toward (free-fn sim) pos (:sim/player-pos sim) (:speed k) stop)))))
+    (cond
+      (not (pos? (:speed k 0.0))) sim
+      :else
+      (move-mob
+       sim
+       eid
+       (mob/step-toward (free-fn sim) pos (:sim/player-pos sim) (:speed k) stop (mob/tall type))))))
 
 (defn strike
   "A melee mob with the player in reach (on the plane within its :reach, feet within 1.5 in

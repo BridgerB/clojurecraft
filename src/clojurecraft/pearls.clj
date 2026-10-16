@@ -6,14 +6,18 @@
    about twenty-four kills. A warped forest spawns endermen and nothing else hostile (its biome
    file's monster spawner, the same probe), so that is where the Nether leg hunts.
 
-   Requiring this namespace registers the :pearls plan and the :provoke intent. A row planned by
-   :pearls (the :ender-pearls stage, the gym's :ender-pearl trial) takes, in order: the pearl of a
-   kill just made (a pearl lying where the enderman died, picked up by #262's :collect-drops, which
-   reads what a drop holds, so a carried block's drop is left); the drop still to come while
-   the body lies there (a wait); an enderman within strike-range, fought (combat's :fight, the
-   sword, 650 ms apart, a break-off under 10 health), or backed away from when the health is
-   already under 10; one in sight within stare-range, provoked (:provoke) so it comes to the bot
-   over ground the bot need not route; else a walk to the nearest a route reaches.
+   Requiring this namespace registers the :pearls plan and the :provoke and :burrow intents. A
+   row planned by :pearls (the :ender-pearls stage, the gym's :ender-pearl trial) takes, in order:
+   the pearl of a kill just made (picked up by #262's :collect-drops, which reads what a drop
+   holds, so a carried block's drop is left); the drop still to come while the body lies there (a
+   wait); then the fight, from a burrow (hunt). An enderman hits for 7 a second on Normal, 5.74
+   through iron, against forty health a sword takes seven hits to spend: in the open the bot
+   loses (gym batch pearls-263a, plan run 38892130785: five live trials, five deaths). So the
+   hunt digs a burrow first, three stairs down and a tunnel two high (:burrow); an enderman, 2.9
+   tall, follows down the stairs and stops at the tunnel's mouth, two cells from the bot, where
+   its reach (its box grown 0.83 sideways, never up or down) cannot touch the bot and the
+   sword's can touch it (shelter?). From the burrow's mouth the bot provokes one with a stare,
+   goes back to the end, and fights it there without a step (:fight :intent/hold?).
 
    An enderman is neutral (entity/neutral): it attacks only once looked in the face or hit. Its
    rules, read from the game's classes (EnderMan, EndermanLookForPlayerGoal, the same probe):
@@ -23,6 +27,8 @@
    fight's look is combat/aim, its legs, never its head. Water hurts it and it teleports out of
    rain and water: the trap rows already keep the bot from fighting while it stands in water."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.drops :as drops]
             [clojurecraft.entity :as entity]
@@ -31,6 +37,8 @@
             [clojurecraft.mob :as mob]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -41,8 +49,10 @@
 (def strike-range 4.5)                ; blocks on the plane within which the hunt fights (hunt/strike-range: past a walk's reach)
 (def stare-range 24.0)                ; blocks to the head within which a provoke stares, with a clear line
 (def stare-from 6.0)                  ; never stare nearer: an angry enderman stared at within 4 teleports away
-(def stare-ms 1000)                   ; ms a provoke stares: past the goal's 5-tick aggro delay with the server's lag to spare
-(def come-ms 12000)                   ; ms after the stare a provoked enderman has to come within strike-range
+(def stare-ms 3000)                   ; ms a provoke stares at most before the enderman says it has a target (creepy)
+(def burrow-depth 3)                  ; stairs down a burrow cuts: from the third, the ground roofs a tunnel two high
+(def burrow-length 2)                 ; tunnel steps past the stairs: two keep the bot out of an enderman's reach from the last stair
+(def shelter-reach 16.0)              ; blocks from the feet a burrow is still the hunt's shelter; farther, a new one is dug
 (def candidates 3)                    ; nearest endermen asked for a route, as the other acts ask
 
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
@@ -131,56 +141,152 @@
   {:control/look (physics/look-at (game/eye world) point)})
 
 (defmethod intent/run :provoke
-  ;; {:intent/kind :provoke :intent/target eid}: :stare at its head for stare-ms (it turns on the
-  ;; bot), then :wait looking at its legs (combat/aim: a stare frozen on it holds it still within
-  ;; 16 blocks, and within 4 sends it away) until it comes within strike-range, done; come-ms at
-  ;; most, failed :unprovoked (the planner blacklists it). Done at once when it is gone. It
-  ;; leaves the stare early when the enderman comes nearer than stare-from on its own
+  ;; {:intent/kind :provoke :intent/target eid}: a stare at its head until the server says it has
+  ;; a target (entity/creepy?), or it comes nearer than stare-from on its own: done, and the plan
+  ;; takes the bot to its burrow to meet it; stare-ms with neither, failed :unprovoked (the
+  ;; planner blacklists it). Done at once when it is gone. The look leaves its head the moment it
+  ;; is provoked: stared at within 16 an angry enderman stands frozen, within 4 it teleports away
   [world i _]
   (let [now (:time/now world)
-        i (cond-> i (nil? (:intent/stage i)) (assoc :intent/stage :stare :intent/since now))
+        i (cond-> i (nil? (:intent/since i)) (assoc :intent/since now))
         world (assoc world :plan/intent i)
-        e (get-in world [:world/entities (:intent/target i)])
-        {:intent/keys [stage since]} i]
+        e (get-in world [:world/entities (:intent/target i)])]
     (cond (entity/gone? world (:intent/target i))
           (-> world
               (assoc :player/controls {})
               intent/done)
-          (<= (combat/horizontal world e) strike-range)
+          (or (entity/creepy? e) (< (physics/distance (game/eye world) (head e)) stare-from))
           (-> world
               (assoc :player/controls (look-at world (combat/aim e)))
               intent/done)
-          (and (= :stare stage)
-               (or (>= (- now since) stare-ms)
-                   (< (physics/distance (game/eye world) (head e)) stare-from)))
-          (-> world
-              (assoc :player/controls (look-at world (combat/aim e)))
-              (intent/assoc-intent :intent/stage :wait :intent/since now))
-          (= :stare stage) (assoc world :player/controls (look-at world (head e)))
-          (> (- now since) come-ms)
+          (> (- now (:intent/since i)) stare-ms)
           (-> world
               (assoc :player/controls {})
               (intent/fail :unprovoked))
-          :else (assoc world :player/controls (look-at world (combat/aim e))))))
+          :else (assoc world :player/controls (look-at world (head e))))))
+
+;; ---------------------------------------------------------------- the burrow
+
+(defn solid-at?
+  "Is cell c solid, or not loaded (what the bot does not know is not a place to stand in)?"
+  [world c]
+  (let [id (terrain/block-at world c)] (or (nil? id) (blocks/solid? id))))
+
+(defn stand?
+  "Could an enderman stand with its feet in cell [x y z]: a solid floor under it and the three
+   cells it fills (mob/tall: 2.9 high) open?"
+  [world [x y z]]
+  (and (solid-at? world [x (dec y) z])
+       (not-any? #(solid-at? world [x (+ y %) z]) (range (mob/tall :enderman)))))
+
+(defn shelter?
+  "Can the bot standing with its feet in cell [x y z] not be hit by an enderman: its feet and head
+   cells open, and no cell an enderman could stand in (stand?) in the nine columns round it at the
+   heights whose body would overlap the bot's (feet two under to one over). A mob's melee reaches
+   its own box grown 0.83 sideways and not at all up or down (Mob.getAttackBoundingBox, probe run
+   38893918055), so an enderman two cells off on the plane, or wholly above or below, cannot
+   reach; one cell off it always can. Gym batch pearls-263a (plan run 38892130785): five of five
+   live trials died fighting in the open in iron, the enderman landing 5.74 a second."
+  [world [x y z]]
+  (and (not (solid-at? world [x y z]))
+       (not (solid-at? world [x (inc y) z]))
+       (not-any? #(stand? world %)
+                 (for [dx [-1 0 1] dz [-1 0 1] dy [-2 -1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))))
+
+(defn shelter
+  "The hunt's burrow (:pearls/shelter) while it is within shelter-reach of the feet and still a
+   shelter? by the terrain, else nil."
+  [world]
+  (let [s (:pearls/shelter world)]
+    (when (and s (<= (physics/distance (intent/feet world) s) shelter-reach) (shelter? world s))
+      s)))
+
+(defn away
+  "The heading [dx dz] of the four straight ones nearest to the way from entity e to the feet: a
+   burrow cut that way opens its stairs toward e, which comes down them to the tunnel's mouth."
+  [world e]
+  (let [[px _ pz] (:player/pos world)
+        [ex _ ez] (:entity/pos e)
+        dx (- px ex)
+        dz (- pz ez)]
+    (if (>= (abs dx) (abs dz)) [(if (neg? dx) -1 1) 0] [0 (if (neg? dz) -1 1)])))
+
+(defn pickaxe?
+  "Does the bot hold any pickaxe, which every stair of a burrow through rock needs (a stair the
+   held tool cannot drop is refused, stairs.clj)?"
+  [world]
+  (boolean (some (fn [[n c]] (and (pos? c) (str/ends-with? (name n) "_pickaxe")))
+                 (recipe/counts (:player/inventory world)))))
+
+(defmethod intent/run :burrow
+  ;; {:intent/kind :burrow :intent/dir [dx dz]}: stairs down burrow-depth (stairs.clj, refusing
+  ;; water, lava and drops, turning where refused), then a tunnel burrow-length on along the
+  ;; heading the stairs ended on: the stairs are three high, so an enderman follows down them,
+  ;; and the tunnel two high, so it stops at its mouth, two cells from the bot. Done when the
+  ;; feet stand in a shelter?, kept as :pearls/shelter, with where it began as :pearls/mouth;
+  ;; failed :no-shelter when they do not, or with a child's reason
+  [world {:intent/keys [stage dir mouth] :as i} event]
+  (let [mouth (or mouth (intent/feet world))
+        i (assoc i :intent/mouth mouth :intent/stage (or stage :down))
+        world (assoc world :plan/intent i)]
+    (case (:intent/stage i)
+      :down
+      (stone/link
+       world
+       i
+       event
+       {:intent/kind :stairs-down
+        :intent/to-y (- (physics/y-of mouth) burrow-depth)
+        :intent/dir dir}
+       (fn [w child]
+         (intent/assoc-intent w :intent/stage :along :intent/dir (:intent/dir child dir))))
+      :along
+      (stone/link world
+                  i
+                  event
+                  {:intent/kind :tunnel :intent/dir dir :intent/length burrow-length}
+                  (fn [w _]
+                    (let [feet (intent/feet w)]
+                      (cond (shelter? w feet)
+                            (-> w
+                                (assoc :pearls/shelter feet :pearls/mouth mouth :player/controls {})
+                                intent/done)
+                            :else (intent/fail w :no-shelter))))))))
 
 ;; ---------------------------------------------------------------- the plan
 
 (defn hunt
-  "The hunt's next step with no kill to pick up: toward the nearest of the endermen (endermen),
-   by the rules in this namespace's docstring; a wait when there is none."
+  "The hunt's next step with no kill to pick up, in order: in the burrow (shelter), the enderman
+   coming (creepy) or one at hand fought where the bot stands (:fight :intent/hold?); out of it,
+   one at hand fought, or backed away from under 10 health; one coming, back to the burrow; no
+   burrow near, one dug (:burrow, a pickaxe held) away from the nearest enderman; in the burrow
+   with none coming, out to its mouth to look round; one provokable? from here, provoked; else a
+   walk to the nearest a route reaches; a wait when there is none."
   [world]
-  (let [ms (endermen world)
-        [eid e] (entity/nearest ms (:player/pos world))
-        near? (and e (<= (combat/horizontal world e) strike-range))]
-    (cond (nil? e) {:plan/wait :no-enderman}
-          (and near? (< (:player/health world 20.0) combat/retreat-health))
-          {:intent/kind :back-off :intent/target eid :intent/for :pearls}
-          near? {:intent/kind :fight :intent/target eid :intent/for :pearls}
-          (provokable? world e) {:intent/kind :provoke :intent/target eid :intent/for :pearls}
-          :else
-          (if-let [[_ far] (routable world ms)]
-            {:intent/kind :walk :intent/target (cell (:entity/pos far)) :intent/for :pearls}
-            {:plan/wait :no-route}))))
+  (let [pos (:player/pos world)
+        ms (endermen world)
+        [eid e] (entity/nearest ms pos)
+        [ceid ce] (entity/nearest (into {} (filter (comp entity/creepy? val)) ms) pos)
+        near? (and e (<= (combat/horizontal world e) strike-range))
+        home (shelter world)
+        in? (and home (= home (intent/feet world)))]
+    (cond
+      (nil? e) {:plan/wait :no-enderman}
+      (and in? (or ce near?))
+      {:intent/kind :fight :intent/target (if ce ceid eid) :intent/hold? true :intent/for :pearls}
+      (and near? (< (:player/health world 20.0) combat/retreat-health))
+      {:intent/kind :back-off :intent/target eid :intent/for :pearls}
+      near? {:intent/kind :fight :intent/target eid :intent/for :pearls}
+      (and ce home) {:intent/kind :walk :intent/target home :intent/for :shelter}
+      (and (nil? home) (pickaxe? world))
+      {:intent/kind :burrow :intent/dir (away world e) :intent/for :pearls}
+      (and in? (:pearls/mouth world))
+      {:intent/kind :walk :intent/target (:pearls/mouth world) :intent/for :shelter}
+      (provokable? world e) {:intent/kind :provoke :intent/target eid :intent/for :pearls}
+      :else
+      (if-let [[_ far] (routable world ms)]
+        {:intent/kind :walk :intent/target (cell (:entity/pos far)) :intent/for :pearls}
+        {:plan/wait :no-route}))))
 
 (defmethod plan/next-intent :pearls
   [world _ _]

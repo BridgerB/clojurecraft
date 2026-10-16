@@ -10,8 +10,17 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/pearls.clj#def hunt-radius 32.0
   - src/clojurecraft/pearls.clj#def stare-from 6.0
-  - src/clojurecraft/pearls.clj#def stare-ms 1000
-  - src/clojurecraft/pearls.clj#def come-ms 12000
+  - src/clojurecraft/pearls.clj#def stare-ms 3000
+  - src/clojurecraft/pearls.clj#def burrow-depth 3
+  - src/clojurecraft/pearls.clj#def burrow-length 2
+  - src/clojurecraft/pearls.clj#defn stand?
+  - src/clojurecraft/pearls.clj#defn shelter?
+  - src/clojurecraft/pearls.clj#defn away
+  - src/clojurecraft/pearls.clj#defmethod intent/run :burrow
+  - src/clojurecraft/combat.clj#defmethod fight-stage :approach
+  - src/clojurecraft/entity.clj#def creepy-index 17
+  - src/clojurecraft/mob.clj#defn tall
+  - src/clojurecraft/sim.clj#defn anger
   - src/clojurecraft/pearls.clj#defn endermen
   - src/clojurecraft/pearls.clj#defn provokable?
   - src/clojurecraft/pearls.clj#defn fresh-kill
@@ -27,10 +36,14 @@ sourceRefs:
   - src/clojurecraft/mob.clj#defn absorbed
   - src/clojurecraft/sim.clj#defn armoured
   - test/clojurecraft/pearls_test.clj#one-in-reach-is-fought-one-in-sight-provoked-one-hidden-walked-to
-  - test/clojurecraft/pearls_test.clj#the-provoke-stares-at-the-head-then-looks-at-the-legs-until-it-comes
+  - test/clojurecraft/pearls_test.clj#the-provoke-stares-at-the-head-until-the-server-says-it-has-a-target
+  - test/clojurecraft/pearls_test.clj#the-burrow-end-is-out-of-an-endermans-reach
+  - test/clojurecraft/pearls_test.clj#the-hunt-digs-a-burrow-provokes-from-its-mouth-and-fights-from-its-end
+  - test/clojurecraft/combat_test.clj#a-fight-that-holds-its-ground-never-walks
+  - test/clojurecraft/mob_test.clj#an-enderman-stays-out-of-a-tunnel-two-high
   - test/clojurecraft/pearls_test.clj#a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
   - test/clojurecraft/pearls_test.clj#twelve-pearls-held-the-stage-is-done
-  - test/clojurecraft/pearls_test.clj#an-enderman-is-provoked-killed-and-its-pearl-picked-up-against-the-model
+  - test/clojurecraft/pearls_test.clj#an-enderman-is-provoked-and-killed-from-a-burrow-against-the-model
   - test/clojurecraft/mob_test.clj#armour-takes-its-share-of-a-mobs-hit
 related:
   - "[[bot/plan/_moc|Plan]]"
@@ -57,21 +70,32 @@ Twelve eyes of ender need twelve pearls. The roadmap (#10) first chose bartering
 In order:
 1. **The kill's drop.** `fresh-kill`: the last intent a `:fight` for `:pearls`, done, with `:intent/target-pos`, its target gone (dead or removed; a fight broken off under 10 health is done too, with its enderman alive, and is no kill). A pearl lying round where it was last seen (`drop-of`: `drops/nearest`, a drop holding a pearl or not yet saying what it holds) is picked up by #262's `:collect-drops`; the block an enderman carried drops beside its pearl and is left, since a drop now says what it holds.
 2. **The drop still to come.** While the body still lies there (`body?`: the entity still tracked, dead), `{:plan/wait :drop}`: the server drops the loot as it dies and removes the body a second later.
-3. **The fight.** The nearest of `endermen` (alive, not blacklisted, within `hunt-radius` 32) within `strike-range` 4.5 on the plane: `:fight` (combat.clj: the sword, attacks 650 ms apart, aimed at `combat/aim`, 0.9 over its feet, never its head). Under `combat/retreat-health` 10, `:back-off` instead.
-4. **The provoke.** One `provokable?` (its head within `stare-range` 24 of the eye and no nearer than `stare-from` 6, with a clear line by the terrain): `:provoke`.
-5. **The walk.** The first of the three nearest a route reaches: a `:walk` to its cell. None: `{:plan/wait :no-route}`; no enderman at all: `{:plan/wait :no-enderman}`.
+3. **The hunt** (`hunt`), over the nearest of `endermen` (alive, not blacklisted, within `hunt-radius` 32) and the nearest of them that is coming (`entity/creepy?`: the server's creepy flag, metadata index 17, set while it has a target):
+   - in the burrow (`shelter`: `:pearls/shelter` within `shelter-reach` 16 and still a `shelter?`), the one coming, or one at hand, is fought where the bot stands: `:fight` with `:intent/hold?` (combat.clj: it never walks, never presses after the target and never breaks off; the approach stands facing it until it comes within 3, at most 20 s);
+   - out of it, one within `strike-range` 4.5 is fought, or backed away from under 10 health (the open fight, the fallback);
+   - one coming and a burrow known: a walk back to its end (`:intent/for :shelter`: the walk ends in that very cell, as a build's stand does);
+   - no burrow and a pickaxe held (`pickaxe?`): `:burrow`, heading `away` from the nearest enderman, so the stairs open toward it;
+   - in the burrow with none coming: a walk to its mouth (`:pearls/mouth`) to look round;
+   - one `provokable?` (its head within `stare-range` 24 of the eye and no nearer than `stare-from` 6, with a clear line): `:provoke`;
+   - else a walk to the first of the three nearest a route reaches; `{:plan/wait :no-route}`, or `{:plan/wait :no-enderman}` with none at all.
+
+## The burrow
+Gym batch pearls-263a (plan run 38892130785) put three live endermen round the bot in iron helmet and chestplate: five trials, five deaths. A replay of one (probe 38893413043) showed the hits landing at 5.74 a second, the sword's sweep pulling a second enderman in, and a break-off with nowhere to go. A sword needs seven hits against forty health; the open fight loses. The game says where it cannot lose: a mob's melee is its box grown 0.83 sideways and not at all up or down (`Mob.getAttackBoundingBox`, `isWithinMeleeAttackRange`, probe 38893918055), and an enderman needs three free cells to stand. `shelter?` is that rule over the terrain: the bot's own two cells open, and no cell an enderman could stand in (`stand?`: a floor, three open cells) in the nine columns round it, at the heights whose body would overlap the bot's (feet two under to one over).
+
+`:burrow` (`{:intent/kind :burrow :intent/dir [dx dz]}`) cuts one with the executors already there: `:stairs-down` `burrow-depth` 3 (each stair three cells high, refusing water, lava and drops), then `:tunnel` `burrow-length` 2 along the heading the stairs ended on (two high, the ground over it from the third stair down), each a child run through `stone/link`. Done when the feet stand in a `shelter?`, kept as `:pearls/shelter` with `:pearls/mouth` where it began; failed `:no-shelter` otherwise. An enderman follows down the stairs and stops at the last one, two cells from the bot: out of its reach, inside the sword's (1.5).
 
 ## The :provoke intent
-`{:intent/kind :provoke :intent/target eid}`. `:stare`: the look on its head (`mob/head`) for `stare-ms` 1000, past the goal's 5-tick aggro delay; it leaves the stare early when the enderman comes nearer than `stare-from`. `:wait`: the look on its legs, which provokes nothing and frees it from the freeze a stare holds it in within 16 blocks, until it comes within `strike-range` (done; the fight comes next) or `come-ms` 12000 pass (failed `:unprovoked`, and the planner blacklists it). Done at once when it is gone. Controls are a look only: the bot stands while the enderman comes to it, over ground the bot need not route.
+`{:intent/kind :provoke :intent/target eid}`: the look on its head (`mob/head`) until the server says it has a target (`entity/creepy?`) or it comes nearer than `stare-from`, then done with the look moved to its legs at once (stared at within 16 an angry one stands frozen, within 4 it teleports away); failed `:unprovoked` after `stare-ms` 3000 with neither, and the planner blacklists it. Done at once when it is gone. The plan then takes the bot back to the burrow's end to meet it.
 
 ## Against the model
-The model's enderman (`mob/kinds`) is neutral until stared at (`sim/provoke`, from the look the client sends) or hit, then walks at the bot and hits for 7 a second. The model had no armour, so an enderman beat every sword before the 10-health break-off; `sim/armoured` now takes the worn pieces' share of every mob hit, arrow and blast (`mob/absorbed`, CombatRules: armour counts for points − damage / (2 + toughness / 4), at least a fifth of the points and at most 20, 4% a point; `mob/armour-points` from `ArmorMaterials`). An enderman's 7 is 5.74 on iron helmet and chestplate and 1.89 on all four diamond pieces. The sim test hunts one fixture enderman in diamond with an iron sword, eleven pearls given and a seed whose first mob roll drops the twelfth (`pearl-seed`).
+The model's enderman (`mob/kinds`) is neutral until stared at (`sim/provoke`, from the look the client sends) or hit, then walks at the bot and hits for 7 a second. The model had no armour, so an enderman beat every sword before the 10-health break-off; `sim/armoured` now takes the worn pieces' share of every mob hit, arrow and blast (`mob/absorbed`, CombatRules: armour counts for points − damage / (2 + toughness / 4), at least a fifth of the points and at most 20, 4% a point; `mob/armour-points` from `ArmorMaterials`). An enderman's 7 is 5.74 on iron helmet and chestplate and 1.89 on all four diamond pieces. The model's walkers stand where their box fits (`mob/tall`: an enderman three cells, every other walker two as before), so its enderman stops at the burrow's tunnel as the server's does, and `sim/anger` sends an enderman's creepy flag when it turns. The sim test hunts one fixture enderman with the chained run's kit (an iron sword and pickaxe, the iron helmet and chestplate, eleven pearls) and a seed whose first mob roll drops the twelfth (`pearl-seed`): it digs the burrow, provokes the enderman from the mouth, kills it from the end and picks the pearl up.
 
 ## Gym rows
-`pearls-1` (five NoAI endermen in the sealed Nether room, a pearl held), `pearls-1-live` (three live ones there, a pearl held and health left) and `pearls-12` (the warped forest nearest the landing's Nether coordinates, twelve held), all at Normal with an iron sword and the iron helmet and chestplate: [[gym-on-runners]].
+`pearls-1` (five NoAI endermen in the sealed Nether room, a pearl held), `pearls-1-live` (three live ones ten blocks off in a stone arena 25 square at midnight, `pearl-arena`, so they are provoked on purpose and the burrow is cut in stone; a pearl held and health left) and `pearls-12` (the warped forest nearest the landing's Nether coordinates, twelve held), all at Normal with an iron sword and pickaxe and the iron helmet and chestplate: [[gym-on-runners]].
 
 ## Limits
-- The fight is in the open, as the issue asks. Seven a hit, one a second, against forty health: an iron sword needs seven hits, so even in iron the fight costs most of the bot's health; the gym rows say how it goes on a real server.
+- The burrow needs ground it can be cut in: three stairs of rock with no water or lava beside them. Where it cannot be dug the hunt fights in the open, which loses.
+- The enderman must come down the stairs: the server's pathfinder takes it to the nearest place it fits, the last stair. One that stays at the top is out of reach: the held fight fails `:unreachable` after 20 s and the enderman is blacklisted.
 - No emergency escape into water yet (the Nether has none; water poured there evaporates).
 - No exploring: with no enderman within 32 the plan waits and fails `:no-enderman`.
 

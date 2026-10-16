@@ -159,6 +159,9 @@
 (s/def :entity/flags (s/int-in 0 256))
 (s/def :entity/died-at int?)
 (s/def :entity/item int?)
+(s/def :entity/creepy? boolean?)
+(s/def :pearls/shelter ::block-pos)
+(s/def :pearls/mouth ::block-pos)
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
@@ -422,6 +425,8 @@
 (s/def :intent/next-swing number?)
 (s/def :intent/swings pos-int?)
 (s/def :intent/target-pos ::vec3)
+(s/def :intent/hold? boolean?)
+(s/def :intent/mouth ::block-pos)
 (s/def :intent/finish-at number?)
 (s/def :intent/slot (s/int-in 0 9))
 (s/def :intent/tool (s/nilable int?))

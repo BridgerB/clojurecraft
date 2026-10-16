@@ -381,7 +381,7 @@
    "The loot table is one roll of ender_pearl, count uniform 0 to 1, plus 0 to 1 a level of looting (probe run 38889277228): a pearl a kill one time in two"
    "A warped forest is the hunting ground: its only monster spawner is the enderman, four at a time (the same probe)"
    "Provoke by a stare at the head from 6 blocks or more, then look at its legs: an angry enderman stared at within 4 teleports away, one stared at within 16 stands frozen, and a melee hit by the bot never teleports it (EnderMan.hurtServer, EndermanLookForPlayerGoal)"
-   "Fight in the open with combat's :fight (650 ms apart, a break-off under 10 health); never from water, which the escapes already forbid"
+   "Fight from a burrow, not in the open: three stairs down and a tunnel two high, the enderman stopped at the last stair two cells off, out of its reach (a mob's melee is its box grown 0.83 sideways, never up or down: Mob.getAttackBoundingBox, probe run 38893918055) and inside the sword's; the open fight is only the fallback where no burrow can be cut. Never from water, which the escapes already forbid"
    "The rows stay asides until the stages before them are proven; raising the chain to them is its own change"]
   :problem/risks
   ["Seven a hit on Normal, one hit a second, against forty health: an iron sword needs seven hits, so a fight in the open costs most of the bot's health even in iron"
@@ -392,6 +392,6 @@
   :problem/done
   "RCON: clear <bot> minecraft:ender_pearl 0 finds twelve or more after a warped forest landing at Normal (gym pearls-12), and one or more from summoned endermen (gym pearls-1)."
   :problem/last-failure
-  "clojurecraft has never hunted an enderman. steve hunted them (tasks/combat huntEndermen: do not look at its eyes before attacking) and its End attempts f7 dragon-1/3/5 were all slain by endermen; ruststeve bartered with piglins and never fought one."
+  "clojurecraft has never hunted an enderman. steve hunted them (tasks/combat huntEndermen: do not look at its eyes before attacking) and its End attempts f7 dragon-1/3/5 were all slain by endermen; ruststeve bartered with piglins and never fought one. Gym batch pearls-263a (plan run 38892130785): five NoAI trials passed, five live trials died fighting three endermen at once in the open in iron (5.74 a hit, the sweep pulling the next one in), and every warped forest landing failed to find a floor under the roots; the hunt now fights from a burrow, provoking from its mouth."
   :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/ender-pearls.md"
                     "brain/bot/plan/survival.md"]}]
