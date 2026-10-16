@@ -12,6 +12,7 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main]
             [clojurecraft.memory :as memory]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -162,10 +163,30 @@
              ((juxt :intent/status :intent/reason) (:plan/intent (camp w1 (+ 1001 blaze/camp-ms)))))
           "none in a minute"))))
 
-(deftest hurt-the-bot-backs-away-eats-or-waits
+(def closet
+  "A room five by three round the feet, walled and roofed in stone: nowhere ten blocks off to hide."
+  (into {}
+        (for [x (range 6 13)
+              z (range 6 11)
+              y [64 65 66]
+              :when (or (= y 66) (not (and (<= 7 x 11) (<= 7 z 9))))]
+          [[x y z] (blocks/default-state :stone)])))
+
+(deftest hurt-the-bot-hides-backs-away-eats-or-waits
   (let [near (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)
         hurt (fn [w] (assoc w :player/health 8.0))]
-    (is (= {:intent/kind :back-off :intent/target 7} (next-intent (hurt (standing {7 near})))))
+    (testing "seen by a blaze, out of its sight (gym blaze-fortress-e)"
+      (let [i (next-intent (hurt (standing {7 near})))]
+        (is (= [:walk :cover] [(:intent/kind i) (:intent/for i)]))
+        (is (> (physics/horizontal-distance (:intent/target i) [10 65 8]) blaze/cover-distance)
+            "ten off on the plane")))
+    (is (= {:intent/kind :back-off :intent/target 7}
+           (next-intent (hurt
+                         (assoc (standing {7 near}) :world/chunks {[0 0] (world/column closet)}))))
+        "nowhere to hide: backed away from")
+    (is (= {:plan/wait :healing}
+           (next-intent (assoc (standing {1 (item :cooked_beef 4)} {}) :player/health 12.0)))
+        "out of sight under 14: rest")
     (is (= {:intent/kind :eat :intent/item :cooked_beef}
            (next-intent
             (assoc (hurt (standing {1 (item :cooked_beef 4)} {7 near})) :player/food 15)))
