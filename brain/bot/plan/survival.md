@@ -1,9 +1,9 @@
 ---
 title: Survival
-description: How the bot lives through Normal difficulty (issue #259) - the food from set-health, the :eat always row and its executor (food in hand, one use-item, done when the server's food rises), the game's food as data, the sim's eating, the eat gym row's hungry landing, and armour (worn by two window-0 clicks, made from spare ingots).
+description: How the bot lives through Normal difficulty (issue #259) - the food from set-health, the :eat always row and its executor (food in hand, one use-item, done when the server's food rises), the game's food as data, the sim's eating, the eat gym row's hungry landing, armour (worn by two window-0 clicks, made from spare ingots), the food producer (:hunt) and the sword (:sword), and fighting (the 775 attack packet, :fight paced by the clock, :defend, :back-off, the gym's :attack, the sim's mobs).
 type: reference
 tags: [bot, plan, survival, food, intents, goals]
-aliases: [:wear, :wear-armour, :armour, :dressed?, :armoured?, spare-ingots, :eat, :fed?, :player/food, :player/saturation, hungry-below, edible, food-held, :not-eaten, food/nutrition, :sim/food, :hungry landing]
+aliases: [:hunt, :provisioned?, :sword, :armed?, :intent/target-pos, :fight, :back-off, :defend, :attack, :safe?, :cleared?, attack packet, :intent/swings, ghost, :wear, :wear-armour, :armour, :dressed?, :armoured?, spare-ingots, :eat, :fed?, :player/food, :player/saturation, hungry-below, edible, food-held, :not-eaten, food/nutrition, :sim/food, :hungry landing]
 status: verified
 lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
@@ -40,6 +40,47 @@ sourceRefs:
   - test/clojurecraft/armour_test.clj#a-refused-piece-goes-back-before-the-wear-fails
   - test/clojurecraft/armour_test.clj#only-spare-ingots-make-armour
   - test/clojurecraft/armour_test.clj#a-helmet-and-chestplate-are-made-and-worn-against-the-model
+  - "src/clojurecraft/packet.clj#[:play :c2s :attack]"
+  - src/clojurecraft/combat.clj#def swing-every 650
+  - src/clojurecraft/combat.clj#def max-swings 25
+  - src/clojurecraft/combat.clj#defn sword
+  - src/clojurecraft/combat.clj#defn attack
+  - src/clojurecraft/combat.clj#defmethod fight-stage :engage
+  - src/clojurecraft/combat.clj#defmethod fight-stage :retreat
+  - src/clojurecraft/combat.clj#defmethod intent/run :fight
+  - src/clojurecraft/combat.clj#defmethod intent/run :back-off
+  - src/clojurecraft/combat.clj#defn threats
+  - src/clojurecraft/combat.clj#defmethod plan/next-intent :defend
+  - src/clojurecraft/combat.clj#defn quarry
+  - src/clojurecraft/combat.clj#def look-ms 3000
+  - test/clojurecraft/combat_test.clj#an-attack-trial-looks-round-before-it-finds-nothing
+  - src/clojurecraft/hunt.clj#defn game
+  - src/clojurecraft/hunt.clj#defn fresh-kill
+  - src/clojurecraft/hunt.clj#defn hunting?
+  - test/clojurecraft/hunt_test.clj#a-hunt-running-is-never-done-under-it
+  - src/clojurecraft/hunt.clj#defmethod plan/next-intent :hunt
+  - src/clojurecraft/hunt.clj#def strike-range 4.5
+  - src/clojurecraft/sword.clj#defn wanted
+  - src/clojurecraft/sword.clj#defn blade?
+  - "resources/clojurecraft/goals.edn#{:goal/id :hunt"
+  - "resources/clojurecraft/goals.edn#{:goal/id :sword"
+  - test/clojurecraft/hunt_test.clj#hungry-with-nothing-to-eat-the-nearest-cow-is-walked-to-then-fought
+  - test/clojurecraft/hunt_test.clj#a-kill-just-made-is-collected-where-it-fell
+  - test/clojurecraft/hunt_test.clj#a-hungry-bot-kills-a-cow-picks-up-its-beef-and-eats-it-against-the-model
+  - test/clojurecraft/sword_test.clj#the-best-sword-the-held-items-make-better-than-the-one-held
+  - test/clojurecraft/sword_test.clj#iron-only-from-ingots-the-armour-leaves
+  - "resources/clojurecraft/goals.edn#{:goal/id :defend"
+  - "resources/clojurecraft/goals.edn#{:goal/id :attack"
+  - src/clojurecraft/plan.clj#defn through
+  - src/clojurecraft/sim.clj#defmethod on-packet [:play :attack]
+  - test/clojurecraft/combat_test.clj#an-attack-is-its-own-packet-the-entity-id-alone
+  - test/clojurecraft/combat_test.clj#a-fight-faces-its-target-then-attacks-650-ms-apart
+  - test/clojurecraft/combat_test.clj#a-target-that-takes-25-swings-is-a-ghost
+  - test/clojurecraft/combat_test.clj#under-ten-health-the-fight-breaks-off-and-walks-away
+  - test/clojurecraft/combat_test.clj#a-zombie-at-hand-is-fought-a-creeper-backed-away-from
+  - test/clojurecraft/combat_test.clj#no-two-attacks-within-600-ms
+  - test/clojurecraft/combat_test.clj#a-zombie-at-hand-is-killed-against-the-model
+  - test/clojurecraft/combat_test.clj#the-attack-trial-kills-a-zombie-coming-from-afar-against-the-model
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[water-escape]]"
@@ -79,6 +120,27 @@ Two always rows. `:wear-armour` (priority 0, after the meal) is done by `:dresse
 The issue's note that `inventory/left-click` "sends quick-move while claiming pickup" did not hold: it is mode 0 (`:pickup`) with button 0, and the sim classifies it `:left`.
 
 Gym row `armour`: the portal's iron, a table and 13 ingots given; judged by `execute if items entity <bot> armor.head minecraft:iron_helmet` and the same for the chest.
+
+## Fighting (combat.clj)
+**The packet.** 775 split attacking out of `interact`, which is a right-click now: `[:play :c2s :attack]`, id 1, one field, the target's `:entity-id` as a varint ([[sib-775-attack-packet]]: ruststeve dealt no damage for a session with interact, and an interact with no hand field got it kicked). The server judges reach from the pose it last had, so the look is set a tick before the first attack: the next tick's `game/on-tick` applies `:control/look` and `movement-packets` sends it before the planner runs.
+
+**`:fight`** (`{:intent/kind :fight :intent/target eid}`, the target an entity id since `:intent/target`, `:plan/blacklist` and `:intention/target` were widened to a position or an id). Stages `:arm` (the best `sword` held put in hand by `place/equip`, the hand when none), `:approach` (`intent/toward` the target's `aim`, `aim-height` 0.9 over its feet, until `approach-range` 3 on the plane; `:unreachable` after 20 s), `:engage` (face it every tick; when `:time/now` has passed `:intent/next-swing`, the eye is within `attack-reach` 3.2 of the aim and the eyes face it within 20° of yaw: `attack`, then `swing`, as the vanilla client sends them, the next swing `swing-every` 650 ms later, `:intent/swings` counted; back to `:approach` when it is more than 4 off). Done when the target is gone (`entity/gone?`: removed, or dead by the server's entity event, [[sib-blaze-combat]]); `:ghost` after `max-swings` 25 in reach, and the planner blacklists the id. Under `retreat-health` 10 it breaks off (`:retreat`: straight away until `retreat-distance` 6, or 10 s) and is done: a fight left is not a failure, and the `:defend` row then backs away instead. The pacing is a deadline on the intent, never a count of ticks: ruststeve's tick-paced swings collapsed under the packet flood into forty in 66 ms, all but one inside the mob's 10-tick hurt invulnerability. `no-two-attacks-within-600-ms` holds it over generated clocks. The order matters: gym attack-259a sent `set-carried-item`, `swing`, `attack` (the issue's order) and its stone sword took the husk's health a point a hit, twenty-two hits, each at the charge of a swing just begun; the recordings showed the attacks 650 ms apart (a minimum of 650 over 21 gaps).
+
+**`:back-off`**: straight away from the target until `back-off-to` 8 is between them, it is gone, or 10 s have passed (a cornered bot plans again).
+
+**`:defend`** (goals.edn): an always row at priority 0, inserted after the two escapes and so before the meal and the armour (`plan/in-play` sorts stably). Done by `:safe?`: no `threats`, the hostiles (`entity/hostiles`: the game's monsters, never an enderman or a zombified piglin) within `defend-radius` 4, a creeper within `creeper-radius` 6, none blacklisted. Planned by `:defend`: the nearest threat, backed away from when it is a creeper or the health is under 10, else fought. No sword is made first: a zombie at hand is answered with what is held.
+
+**`:attack`** (`--until attack`): the gym's trial, every hostile within `attack-radius` 16 fought (`quarry`, done by `:cleared?`, and not before `look-ms` 3000 after the plan went active: the server shows a landing's entities a moment after its chunks, and gym attack-259a run 3 was done 0.2 s after the go with its husk unseen). It is the first row marked `:goal/aside?`: `plan/through`, `plan/current-until` and the results page's chain leave asides out, as they leave out the water trial, so no chained run ever takes it as a step.
+
+**The model's mobs** are issue #258's ([[sim-mobs]]): `sim/init` takes `:mobs [{:type :pos}]`, zombies walk at the bot and hit it, and an `attack` in reach hurts by the held item. The fight tests kill a zombie at hand with `:defend` and one coming from afar with the `:attack` trial against it.
+
+**Gym rows.** `attack`: a husk with `NoAI` (a husk does not burn by day) three east of the landing at noon, a stone sword; judged by no husk within 24 of the landing, and the attacks' spacing read from the recording. `defend`: three zombies two blocks round the landing at midnight, the bot in iron armour put on by the fixture (`item replace`, since a zombie at hand comes before dressing) with an iron sword; judged by a zombie killed (a kill counter the setup adds, `minecraft.killed:minecraft.zombie`: counting zombies round the landing counted the night's new ones too), health left and no death. Not all three: the row is done when none is within 4, and in gym defend-259a the others wandered off while the first was fought. Truths are asked at the landing, not `execute as` the bot: that answered RCON with nothing.
+
+## The food producer (hunt.clj)
+`:hunt` is an always row at priority 0 after the meal: done by `:provisioned?`, not hungry, or food held (the meal comes first), or no `game` and no `fresh-kill` while no hunt intent runs (`hunting?`: the first run against the model killed its cow, the row found nothing left, and the planner abandoned the fight `:goal-met` the tick the cow died, before it was done, so its beef was never collected). `game` is the nearest cow, mooshroom, pig, sheep or rabbit (`game-kinds`, never a chicken: raw chicken may make the eater hungry), alive, not blacklisted, within `hunt-radius` 24, the first of the three nearest a route reaches (`intent/routable?`). Planned by `:hunt`: a kill just made (the last intent a `:fight` for `:hunt`, done, with `:intent/target-pos`, where the fight last saw its target) is a `:collect` of the meat there; else a `:walk` to the animal's cell, and once within `strike-range` 4.5 on the plane (past a walk's reach, so a walk that arrived is never asked again) a `:fight` for `:hunt`. The meat is eaten raw by `:eat`. Against the model a cow drops one to three beef by its loot table ([[sim-mobs]]).
+
+## The sword (sword.clj)
+`:sword` is an always row at the portal kit's priority after the armour, so a chained run comes to it once the portal's iron is in hand and the wood-hungry mining is behind it; only a chained run makes one (a gym stage measures its own target: with the row in play the kit stage placed its held table for a wooden sword, undid the kit, and dug the table back until it timed out). Done by `:armed?`: nothing `wanted`, the first of an iron, stone and wooden sword better than the best held (`combat/swords` order) whose blade the held items pay for (`blade?`: iron only from ingots spare once the armour wants nothing, cobblestone, planks; never a log) with a handle (a stick, or two planks for sticks) and a table at hand. Planned through the needs planner. Until it is made, fights are by hand: `:defend` never stops to make a sword with a zombie at hand.
 
 ## See also
 - [[water-escape]] - the other always rows, and the preemption they share.

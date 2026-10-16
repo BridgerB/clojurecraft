@@ -74,7 +74,8 @@
                      (filter #(and (:goal/target? %)
                                    (:goal/until %)
                                    (not (:goal/always? %))
-                                   (not= :wade (:goal/plan %))))
+                                   (not= :wade (:goal/plan %))
+                                   (not (:goal/aside? %))))
                      (sort-by :goal/priority))
         [before from] (split-with #(not= end (:goal/until %)) targets)]
     (mapv :goal/id (concat before (take 1 from)))))

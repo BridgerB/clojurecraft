@@ -75,7 +75,8 @@
       :dig (some? (memory/remembered w (:intent/target i))) ; the placed table, taken along
       :wade (some? (swim/entry w (intent/feet w))) ; into water the bot remembers, from a bank it can stand on
       nil
-      (contains? #{:no-log :no-water :in-water :no-site :other-dimension :no-mob} (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known: wait
+      (contains? #{:no-log :no-water :in-water :no-site :other-dimension :no-mob :looking}
+                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round: wait
       false)))
 
 (deftest the-planner-only-picks-executable-intents
@@ -112,14 +113,15 @@
   (testing
     "no item target needs a per-goal method: wood, kit and pickaxe all plan through the same registries;
             the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes,
-            the meal and the armour (issue #259), done by the server's food and slots, and the entities
-            trial (issue #258), done by a living entity's health the server sent"
+            the meal, the armour and the fights (issue #259), done by the server's food, slots and mobs, and the
+            entities trial (issue #258), done by a living entity's health the server sent"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
     (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :fed? :dressed?
-                              :armoured? :health-seen?}
+                              :armoured? :health-seen? :safe? :cleared? :provisioned? :armed?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
-    (is (= #{:needs :escape :wade :build :fortress :eat :wear :armour :watch}
+    (is (= #{:needs :escape :wade :build :fortress :eat :wear :armour :watch :defend :attack :hunt
+             :sword}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
