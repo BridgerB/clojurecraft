@@ -18,6 +18,7 @@ related:
 - [[physics-constants]] - every physics constant with its value and the behaviour tests pin.
 - [[blocks-tables]] - id-indexed arrays, passable types, what counts as a log.
 - [[memory-edge-cases]] - what memory never records, sticky air, the height window, time zero.
+- [[entities]] - every entity tracked: velocity, a living one's health and flags from its metadata, deaths; hostiles, nearest, gone.
 
 ## See also
 - [[bot/_moc|Bot pillar]]

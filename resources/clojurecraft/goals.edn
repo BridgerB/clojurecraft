@@ -249,4 +249,13 @@
   :goal/provides {:block/furnace :near}
   :goal/act :place
   :goal/item :furnace
-  :goal/done? :provided?}]
+  :goal/done? :provided?}
+ {:goal/id :eat
+  :goal/priority 0
+  :goal/target? true
+  :goal/always? true
+  :goal/until "eat"
+  :goal/doc
+  "eat when the food the server sent is under 14 and something edible is held (issue #259): on Normal hunger drains with every dig and jump, and an empty bar stops healing; an always row at priority 0 like the escapes, after them in this table, so a trap still comes first and every other target waits for the meal"
+  :goal/done? :fed?
+  :goal/plan :eat}]

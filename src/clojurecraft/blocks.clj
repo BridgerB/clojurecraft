@@ -13,6 +13,13 @@
 (def table "[[name type min-state max-state] ...]" (resource "blocks"))
 (def items "{name id}" (resource "items"))
 (def entity-types "{name id}" (resource "entity-types"))
+(def entity-names
+  "{id name}: entity-types turned round"
+  (into {} (map (fn [[n i]] [i n])) entity-types))
+(def mobs
+  "{entity-name {:max-health h :category c}}: every living entity type, the only kind with health
+   (the game's DefaultAttributes and MobCategory: a pig 10.0 :creature, a blaze 20.0 :monster)"
+  (resource "mobs"))
 (def hardness-by-name "{block-name hardness}; -1.0 is unbreakable" (resource "hardness"))
 (def harvest-by-name "{block-name {:tool kind :needs tier}}" (resource "harvest"))
 (def needs-tool-names

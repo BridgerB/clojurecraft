@@ -5,7 +5,7 @@ type: reference
 tags: [bot, protocol, packets, index]
 aliases: [packet index, which packets are modelled, specs table, who sends this packet]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/packet.clj#def specs
@@ -13,6 +13,7 @@ sourceRefs:
   - src/clojurecraft/window.clj#defn click
   - src/clojurecraft/place.clj#defn use-item-on
   - src/clojurecraft/intent.clj#defmethod run :dig
+  - src/clojurecraft/entity.clj#defn metadata-facts
 related:
   - "[[bot/protocol/_moc|Protocol]]"
   - "[[packet-specs]]"
@@ -62,7 +63,11 @@ Every row of `packet/specs` at 18afddc (58 specs; paired s2c/c2s rows share a li
 | container-close | window-id | game |
 | container-set-data | window-id varint, property i16, value i16 | game `:window/data` of the open window (a furnace: fuel left, fuel total, cook progress, cook total) |
 | set-held-slot | slot | game `:player/held-slot` (0-8 only) |
-| add-entity | entity-id, uuid, type, x y z (rest ignored) | game (items only) |
+| add-entity | entity-id, uuid, type, x y z, vel lpvec3, pitch yaw head-yaw i8, data | game, every entity ([[entities]]) |
+| set-entity-motion | entity-id, vel lpvec3 | game `:entity/vel` |
+| teleport-entity | entity-id, x y z dx dy dz f64, yaw pitch f32, flags u32, on-ground | game (relative per flags) |
+| entity-event | entity-id i32, status i8 | game: status 3 `:entity/died-at` |
+| set-entity-data | entity-id, metadata (skimmed, `read-metadata`) | game `entity/metadata-facts`: flags, a living entity's health |
 | remove-entities | ids [varint] | game |
 | move-entity-pos | entity-id, dx dy dz i16, on-ground | game |
 | move-entity-pos-rot | entity-id, dx dy dz i16 (rest ignored) | game |

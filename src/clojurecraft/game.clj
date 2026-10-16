@@ -19,10 +19,10 @@
    emitted, so it has one source of truth: clojurecraft.packet/transitions."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
-            [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.entity :as entity]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
             [clojurecraft.packet :as p]
@@ -297,7 +297,11 @@
 
 (defmethod on-packet [:play :set-health]
   [w p]
+  ;; the food and saturation ride on the same packet (issue #259: the :eat row reads the food); a
+  ;; packet decoded short, a prefix of the spec, has health alone
   (cond-> (assoc w :player/health (:health p))
+    (:food p) (assoc :player/food (:food p))
+    (:saturation p) (assoc :player/saturation (:saturation p))
     (and (<= (:health p) 0) (not (:player/dead? w))) die))
 
 (defmethod on-packet [:play :container-set-content]
@@ -341,13 +345,46 @@
 (defmethod on-packet [:play :set-player-inventory]
   [w {:keys [slot item]}]
   (inventory/set-slot w slot item))
+(defn track
+  "w with f applied to the tracked entity eid (and args); an entity the bot does not track (its
+   own player, one added before the bot saw it) is left alone."
+  [w eid f & args]
+  (if (get-in w [:world/entities eid]) (apply update-in w [:world/entities eid] f args) w))
+
 (defmethod on-packet [:play :add-entity]
-  [w {:keys [entity-id type x y z]}]
-  (if (= type blocks/item-entity-type)
-    (assoc-in w
-     [:world/entities entity-id]
-     {:entity/type type :entity/pos [x y z] :entity/seen-at (:time/now w)})
-    w))
+  ;; every entity, not only items (issue #258): mobs, players, projectiles, an eye of ender; its
+  ;; velocity when the packet carries one (a recording from before the spec grew does not)
+  [w {:keys [entity-id type x y z vel]}]
+  (assoc-in w
+   [:world/entities entity-id]
+   (cond-> {:entity/type type :entity/pos [x y z] :entity/seen-at (:time/now w)}
+     vel (assoc :entity/vel vel))))
+(defmethod on-packet [:play :set-entity-motion]
+  [w {:keys [entity-id vel]}]
+  (track w entity-id assoc :entity/vel vel))
+(defmethod on-packet [:play :teleport-entity]
+  ;; position and velocity, each axis relative when its Relative bit says so (X 1 Y 2 Z 4, the
+  ;; deltas 32 64 128), as the player's own teleport reads them
+  [w {:keys [entity-id x y z dx dy dz flags]}]
+  (track w
+         entity-id
+         (fn [e]
+           (let [[ox oy oz] (:entity/pos e)
+                 [ovx ovy ovz] (:entity/vel e [0.0 0.0 0.0])]
+             (assoc e
+                    :entity/pos
+                    [(relative flags 1 ox x) (relative flags 2 oy y) (relative flags 4 oz z)]
+                    :entity/vel
+                    [(relative flags 32 ovx dx) (relative flags 64 ovy dy)
+                     (relative flags 128 ovz dz)])))))
+(defmethod on-packet [:play :entity-event]
+  ;; status 3 is a living entity's death: a fact before the body is removed
+  [w {:keys [entity-id status]}]
+  (cond-> w (= entity/death-status status) (track entity-id assoc :entity/died-at (:time/now w))))
+(defmethod on-packet [:play :set-entity-data]
+  ;; the skimmed metadata: shared flags, and a living entity's health (entity/metadata-facts)
+  [w {:keys [entity-id metadata]}]
+  (track w entity-id (fn [e] (merge e (entity/metadata-facts (:entity/type e) metadata)))))
 (defmethod on-packet [:play :move-entity-pos]
   [w {:keys [entity-id dx dy dz]}]
   (move-entity w entity-id dx dy dz))
@@ -475,7 +512,10 @@
   (fn [world event] (reduce (fn [w f] (f w event)) world steps)))
 
 (defn summary
-  "The game part of the RESULT line: phase, position, counts and every :stats/* attribute."
+  "The game part of the RESULT line: phase, position, counts and every :stats/* attribute.
+   :entities counts the item entities, as it did when they were the only ones tracked: every
+   entity is since issue #258, and a recorded run's RESULT must still replay to the one it
+   printed."
   [world]
   {:phase (:bot/phase world)
    :pos (:player/pos world)
@@ -485,7 +525,7 @@
    :sightings (count (memory/latest world))
    :logs (inventory/logs-held world)
    :inventory (count (:player/inventory world))
-   :entities (count (:world/entities world))
+   :entities (count (filter entity/item? (vals (:world/entities world))))
    :stats (into {} (filter (fn [[k _]] (= "stats" (namespace k))) world))
    :disconnected (:bot/disconnected world)
    :closed (:bot/closed world)})

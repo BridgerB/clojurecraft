@@ -23,6 +23,7 @@
             [clojurecraft.cli :as cli]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.fixture :as fixture]
+            [clojurecraft.food :as food]
             [clojurecraft.landings :as landings]
             [clojurecraft.rcon :as rcon])
   (:gen-class))
@@ -67,6 +68,7 @@
 (def end-at [8 0])                    ; [x z] of the End landing: the main island's end stone 8 east of the fountain, as ruststeve's End gyms start
 (def end-reach 64)                    ; blocks round the fountain loaded for the End landing: the towers stand at radius 42
 (def dimension-wait-ms 30000)         ; how long the kit waits for the server to say the bot is in its row's dimension
+(def hungry-food 10)                  ; the food a :hungry landing waits for before the bot is told to go
 
 (def dimensions
   "The dimension each kind of landing (:gym/land) leaves the bot in; any other is the overworld.
@@ -324,7 +326,17 @@
     :gym/truth
     [{:truth/cmd
       "execute as {name} at @s unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water"
-      :truth/re "Test passed"} {:truth/cmd "data get entity {name} OnGround" :truth/re "1b"}]}])
+      :truth/re "Test passed"} {:truth/cmd "data get entity {name} OnGround" :truth/re "1b"}]}
+   ;; issue #259: landed hungry (the :hungry landing waits for the food to fall under
+   ;; hungry-food) with four breads, the bot eats until the bar is at 14 or more; judged by the
+   ;; server's food and the breads gone
+   {:gym/goal :eat
+    :gym/until "eat"
+    :gym/land :hungry
+    :gym/prereqs ["minecraft:bread 4"]
+    :gym/timeout-ms 60000
+    :gym/truth [{:truth/cmd "data get entity {name} foodLevel" :truth/re "data: (1[4-9]|20)$"}
+                {:truth/cmd "clear {name} minecraft:bread 0" :truth/re "Found [1-3] |No items"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
@@ -572,6 +584,29 @@
                   (rcon/command! rc (in-dimension dim (str "tp " name " " x ".5 " y " " z ".5"))))
          (finally (rcon/command! rc (in-dimension dim (str "forceload remove " where)))))
     at))
+
+(defn food-level
+  "The bot's food as the server holds it (data get entity <name> foodLevel), or nil when the
+   reply says none."
+  [rc name]
+  (some->> (rcon/command! rc (str "data get entity " name " foodLevel"))
+           (re-find #"data: (\d+)")
+           second
+           parse-long))
+
+(defmethod land! :hungry
+  ;; the surface landing, then hunger at its strongest until the server says the food is under
+  ;; hungry-food (at most 30 s), then no more: a bot told to go while still fed is done at once,
+  ;; and the effect takes a point every three ticks at best, slower than the go comes
+  [rc row name landing]
+  (let [landing ((get-method land! :surface) rc row name landing)]
+    (rcon/command! rc (str "effect give " name " minecraft:hunger 30 255"))
+    (try (loop [i 0]
+           (when (and (< i 150) (>= (or (food-level rc name) food/max-food) hungry-food))
+             (Thread/sleep 200)
+             (recur (inc i))))
+         (finally (rcon/command! rc (str "effect clear " name " minecraft:hunger"))))
+    landing))
 
 (defmethod land! :nether-fortress
   ;; the fortress nearest the landing's Nether coordinates (an eighth of the overworld's, so each
