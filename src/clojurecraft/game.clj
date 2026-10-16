@@ -508,7 +508,10 @@
   (fn [world event] (reduce (fn [w f] (f w event)) world steps)))
 
 (defn summary
-  "The game part of the RESULT line: phase, position, counts and every :stats/* attribute."
+  "The game part of the RESULT line: phase, position, counts and every :stats/* attribute.
+   :entities counts the item entities, as it did when they were the only ones tracked: every
+   entity is since issue #258, and a recorded run's RESULT must still replay to the one it
+   printed."
   [world]
   {:phase (:bot/phase world)
    :pos (:player/pos world)
@@ -518,7 +521,7 @@
    :sightings (count (memory/latest world))
    :logs (inventory/logs-held world)
    :inventory (count (:player/inventory world))
-   :entities (count (:world/entities world))
+   :entities (count (filter entity/item? (vals (:world/entities world))))
    :stats (into {} (filter (fn [[k _]] (= "stats" (namespace k))) world))
    :disconnected (:bot/disconnected world)
    :closed (:bot/closed world)})
