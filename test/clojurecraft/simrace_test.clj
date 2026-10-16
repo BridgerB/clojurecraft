@@ -214,3 +214,30 @@
   (is (= "ingots" (simrace/stage-until :ingots)))
   (is (= "table" (simrace/stage-until :kit)) "a target's --until name, not its id")
   (is (nil? (simrace/stage-until :no-such-stage))))
+
+(deftest a-crash-is-kept-as-a-moment-with-its-stage
+  ;; issue #152: a tick that threw used to leave no moment and file the run under :wood, the
+  ;; first stage of a RESULT with no plan; now the play ends there, :crashed, with the moment
+  ;; before it, and the crash is judged like any other failure
+  (let [opts {:host "sim" :port 0 :name "Clj_sim"}
+        s (sim/init {:columns (:capture/columns two-columns)
+                     :decoded (:capture/decoded two-columns)
+                     :spawn (simrace/spawn-of two-columns)
+                     :seed 1
+                     :tick-seed 1})
+        boom (fn [w e]
+               (if (and (= :tick (:event/kind e)) (>= (:event/now e) 3000))
+                 (throw (ex-info "boom" {}))
+                 (simrace/step w e)))
+        r (sim/play-from boom
+                         (sim/start-moment simrace/step (game/init opts) s)
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         (simrace/go-of two-columns "wood")
+                         1000)]
+    (is (= "boom" (ex-message (:crashed r))))
+    (is (= 3000 (:t (:last r))) "the moment of the tick that threw")
+    (is (seq (:moments r)) "the moments before it, to keep one from")
+    (is (= {:why :crash :t 5000}
+           (simrace/decision {:time/now 5000 :world/facts (memory/empty-facts)}
+                             [:portal :crashed])))))

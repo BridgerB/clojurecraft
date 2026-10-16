@@ -5,7 +5,7 @@ type: reference
 tags: [bot, crafting, windows]
 aliases: [window.clj, view, view/slot-of, player->window-slot, free-slot, window/click]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-15
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/window.clj#defn view
@@ -13,6 +13,16 @@ sourceRefs:
   - src/clojurecraft/window.clj#defn resync-click
   - src/clojurecraft/window.clj#defn waiting
   - src/clojurecraft/window.clj#defn free-slot
+  - src/clojurecraft/window.clj#What a full inventory throws away to make room
+  - src/clojurecraft/window.clj#defn junk-slot
+  - src/clojurecraft/window.clj#defn tossable
+  - src/clojurecraft/window.clj#Throw the whole stack at player slot p out of view v
+  - src/clojurecraft/window.clj#With no slot free, the resync click throws a junk stack out instead
+  - src/clojurecraft/inventory.clj#defn toss-click
+  - test/clojurecraft/craft_test.clj#a-full-inventory-throws-junk-before-it-crafts
+  - test/clojurecraft/craft_test.clj#cobblestone-is-thrown-only-above-what-is-kept
+  - test/clojurecraft/craft_test.clj#every-junk-item-is-an-item-of-the-game
+  - test/clojurecraft/sim_test.clj#a-full-inventory-throws-junk-to-take-the-pickaxe
   - src/clojurecraft/inventory.clj#defn player->window-slot
 related:
   - "[[bot/crafting/_moc|Crafting]]"
@@ -39,8 +49,10 @@ A view is a plain map describing one window the way the click rules need it, so 
 - `window.clj`, `resync-click` - the same click carrying state id -1, which the server always answers with the whole window and the real cursor ([[mc-state-ids-prediction]]); the smelt intent's way to learn the cursor after a lost click ([[smelt-intent]]).
 - `window.clj`, `waiting` - nil when nothing is unanswered, `:waiting` while that window's state id has not moved, `:overdue` after `answer-timeout` (3000 ms).
 - `window.clj`, `free-slot` - the first empty player slot, main inventory before hotbar, as a slot of this view.
+- `window.clj`, `junk`, `junk-slot`, `tossable`, `toss` - making room in a full inventory. `junk` is data: what mining and walking pick up that no stage asks for, no recipe the goals reach takes and no floor is laid from (sand, sandstone, clay, raw copper, lapis, saplings, dripstone, moss...); the stones that drop themselves stay, being fillers. `junk-slot` is the first player slot holding junk (main inventory first), else a cobblestone stack whose loss still leaves `cobblestone-keep` (128). `tossable` is that slot when the view has no free slot; the craft's and the smelt's `:settle` throw it before they move anything into the inventory. `toss` first looks up to `toss-pitch` (-30°) for a tick, then sends a throw click (`inventory/toss-click`, mode 4, button 1: the whole stack): thrown along a look down at a table, the stack lands a block off, in the pickup box, and comes back after its two seconds. `resync` with no free slot throws a junk stack with its resync click instead of failing; vanilla throws only with nothing on the cursor and answers a stale state id in full either way.
 
 ## Gotchas
+- **A full inventory had no room for a result.** Race 38805920624 runner 5 (issues #172, #192): eight bots at 36 full slots (450 to 830 cobblestone, granite, diorite, andesite, raw copper, lapis, sand, clay, up to ten stone pickaxes) shift-clicked a craft's result or a furnace's output into the inventory; the server had nowhere to put it and answered nothing, the click went overdue, and the resync found no free slot either, so the intent failed `:inventory-full` three times. One stack of junk is thrown first now (`a-full-inventory-throws-junk-before-it-crafts`, `a-full-inventory-throws-junk-to-take-the-pickaxe`). What fills the slots is unchanged: the pickaxes that pile up are not thrown.
 - The namespace docstring records the 775 click semantics as verified live: the server adopts the click's prediction and sends only what differs ([[mc-state-ids-prediction]]).
 - `waiting` compares against the state id of the window the click was sent to; a click into a table window that was closed since has no state id to compare and is no longer "waiting".
 - `click` writes onto `:plan/intent`, so it is only for use inside an intent.

@@ -13,7 +13,7 @@ sourceRefs:
   - src/clojurecraft/sim.clj#defn init
   - src/clojurecraft/sim.clj#defn full-ms
   - test/clojurecraft/sim_test.clj#a-niche-is-placed-into-only-once-the-slow-server-has-broken-it
-  - "src/clojurecraft/sim.clj#:sim/lag-ticks in sim delays every server->client packet by that many ticks"
+  - src/clojurecraft/sim.clj#defn tick-from
   - test/clojurecraft/sim_test.clj#no-blind-take-under-lag-or-a-dropped-click
   - src/clojurecraft/sim.clj#(update :sim/violations conj [:place-into-player dest])
   - test/clojurecraft/sim_test.clj#a-lost-craft-click-is-resynced-never-a-blind-take

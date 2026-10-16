@@ -361,18 +361,33 @@
    :plan/boxed-at: where a way out cannot be cut is a fact about the place, and the act that cut
    it chooses again from it (scoop/seen-source, scoop/from-below), never the same climb. Sim race
    38662908438 (issue #61, 115 runs): climbs for water under a lake or the sea were :boxed three
-   times with the water they needed in reach or over the head."
+   times with the water they needed in reach or over the head. A cut toward the bank of water
+   no route reaches (:intent/for :bank, scoop/to-bank) ends too, and the water it headed for
+   (:intent/target) is put in :plan/blacklist, so the next look chooses other water, or none and
+   a climb out: race 38805762352 runner 2 (issue #61, at 76010d2) had bot Clj_r18 at y 30 in a
+   cave, 80 under its landing, tunnel toward cave water 15 blocks off across the cave's floor,
+   and bot Clj_r22 tunnel at y 63 from the top of the steps its climb to that height had laid in
+   a cavern, toward pools 55 blocks off through the air; each tunnel was :boxed three times in a
+   row, the cut toward the water keeping the climb out from being chosen, and the plan failed."
   [world]
-  (let [{:intent/keys [kind for]} (:plan/intent world)]
-    (if (and (= :stairs-up kind) (= :surface for))
-      (-> world
-          (assoc :player/controls {})
-          (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
-          intent/done
-          (game/say "stairs: boxed in, no way out from here"))
-      (-> world
-          (assoc :player/controls {})
-          (intent/fail :boxed)))))
+  (let [{:intent/keys [kind for target]} (:plan/intent world)]
+    (cond (and (= :stairs-up kind) (= :surface for))
+          (-> world
+              (assoc :player/controls {})
+              (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+              intent/done
+              (game/say "stairs: boxed in, no way out from here"))
+          (and (= :bank for) target)
+          (-> world
+              (assoc :player/controls {})
+              (update :plan/blacklist (fnil conj #{}) target)
+              intent/done
+              (game/say
+               (str "stairs: boxed in on the way to the bank of " target ", other water next")))
+          :else
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :boxed)))))
 
 (def lake-ice #{:ice :frosted_ice})    ; what freezes over a lake's water: no shore
 
@@ -741,35 +756,60 @@
               (intent/fail :stair-not-taken))
           :else (assoc world :player/controls (onto world rise cell dir)))))
 
+(defn level-refused
+  "A level step whose cell a child dig would not cut (refusals) after the step was chosen: a
+   tunnel plans its step again from where it stands (tunnel-plan: the heading when level-safe?,
+   else its side, else :boxed), a staircase turns (refuse). The world changed under the step:
+   sim race 38762695024 runner 8 (issue #171, world R1/40, every seed): a tunnel for gravel at
+   y 40 ran under a gravel bed, the gravel over a step it opened fell into it round the body,
+   water came down onto the gravel, and the dig to clear the step was refused :unsafe; the
+   tunnel failed, the next one cut the step beside it and was buried the same way, and three
+   failed tunnels in eight seconds ended the run."
+  [world i why]
+  (if (= :tunnel (:intent/kind i))
+    (-> world
+        (assoc :player/controls {})
+        (intent/assoc-intent :intent/stage :plan)
+        (intent/dissoc-intent :intent/child :intent/level-cells :intent/rejections)
+        (game/say why))
+    (refuse world i why)))
+
 (defmethod stairs-stage :level
   ;; dig the level step's cells, one child at a time, then walk onto its feet cell; then plan
-  ;; the stairs again from there. The step's time is the walk's: it starts again after each dig
+  ;; the stairs again from there. The step's time is the walk's: it starts again after each dig.
+  ;; A cell the child will not dig (refusals) plans the step again (level-refused)
   [world {:intent/keys [child level-cells started-tick] :as i} event]
   (let [[fx fy fz] (last level-cells)]
-    (cond (and child (or (intent/done? child) (fell? child)))
-          (-> world
-              (intent/dissoc-intent :intent/child)
-              (intent/assoc-intent :intent/started-tick (:time/tick world)))
-          (and child (intent/failed? child) (= :rejected (:intent/reason child))) (rejected world i)
-          (and child (intent/failed? child))
-          (-> world
-              (assoc :player/controls {})
-              (intent/fail (:intent/reason child)))
-          child (intent/run-child world event)
-          (next-to-open world level-cells) (dig-next world (next-to-open world level-cells) event)
-          (= (intent/feet world) [fx fy fz])
-          (-> world
-              (assoc :player/controls {})
-              (intent/assoc-intent :intent/stage :plan)
-              (intent/dissoc-intent :intent/level-cells :intent/rejections))
-          (> (- (:time/tick world) started-tick) step-timeout-ticks)
-          (-> world
-              (assoc :player/controls {})
-              (intent/fail :stair-not-taken))
-          :else
-          (assoc world
-                 :player/controls
-                 (intent/toward world [(+ fx 0.5) (double fy) (+ fz 0.5)] 0.0)))))
+    (cond
+      (and child (or (intent/done? child) (fell? child)))
+      (-> world
+          (intent/dissoc-intent :intent/child)
+          (intent/assoc-intent :intent/started-tick (:time/tick world)))
+      (and child (intent/failed? child) (= :rejected (:intent/reason child))) (rejected world i)
+      (and child (contains? refusals (:intent/reason child)))
+      (level-refused
+       world
+       i
+       (str "stairs: level " (:intent/target child) " refused " (:intent/reason child) ", again"))
+      (and child (intent/failed? child))
+      (-> world
+          (assoc :player/controls {})
+          (intent/fail (:intent/reason child)))
+      child (intent/run-child world event)
+      (next-to-open world level-cells) (dig-next world (next-to-open world level-cells) event)
+      (= (intent/feet world) [fx fy fz])
+      (-> world
+          (assoc :player/controls {})
+          (intent/assoc-intent :intent/stage :plan)
+          (intent/dissoc-intent :intent/level-cells :intent/rejections))
+      (> (- (:time/tick world) started-tick) step-timeout-ticks)
+      (-> world
+          (assoc :player/controls {})
+          (intent/fail :stair-not-taken))
+      :else
+      (assoc world
+             :player/controls
+             (intent/toward world [(+ fx 0.5) (double fy) (+ fz 0.5)] 0.0)))))
 
 (defn tunnel-plan
   "Plan a tunnel's next level step: along its heading when level-safe?; else a step to one side,
