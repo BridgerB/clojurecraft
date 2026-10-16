@@ -28,6 +28,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -43,6 +44,8 @@
 (def candidates 3)                    ; nearest blazes asked for a route, as the hunt asks of its animals
 (def side-steps [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) ; the cells beside a spawner a stand is looked for in
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
+(def cover-range 16.0)                ; blazes this near that see the bot are the ones a hurt bot takes cover from (they shoot that far)
+(def cover-distance 10)               ; blocks on the plane a walk into cover puts between the bot and the blaze
 (def eat-under 14.0)                  ; health under which a meal comes before the next fight, the food under the healing level: one volley takes 9
 
 (def rod (recipe/item-id :blaze_rod))
@@ -155,14 +158,44 @@
                        (eat/food-held world))]
     {:intent/kind :eat :intent/item food}))
 
-(defn healing
-  "What a hurt bot does: the meal; else back away from the nearest blaze within
-   combat/back-off-to; else wait :healing. The meal first: gym blaze-7 run 1 (run 38891910129)
-   backed away three times round a room seven square with the food at 17, where no back-off gets
-   away, and burned to death without eating."
+(defn watcher
+  "[eid entity] of the nearest blaze alive within cover-range that has the bot in sight
+   (combat/seen?: a clear line from the eye to it), or nil: what a hurt bot hides from."
   [world]
-  (let [[eid e] (quarry world)]
+  (let [pos (:player/pos world)]
+    (entity/nearest (into {}
+                          (filter (fn [[_ e]]
+                                    (and (= :blaze (entity/kind e))
+                                         (not (entity/dead? e))
+                                         (combat/seen? world e))))
+                          (:world/entities world))
+                    pos
+                    cover-range)))
+
+(defn cover
+  "A walk out of the sight of blaze e: to the end of a route at least cover-distance away from it
+   on the plane (path's :away goal; back along the tunnel the bot came by), or nil when there is
+   none. Gym blaze-fortress-e (run 38900794167) stood by its spawner under 10 health, waiting
+   to heal while burning and shot, and every run died there."
+  [world e]
+  (let [r (path/plan
+           world
+           (path/feet-cell (:player/pos world))
+           {:goal/kind :away :goal/pos (hunt/cell (:entity/pos e)) :goal/range cover-distance})]
+    (when (= :found (:path/status r))
+      {:intent/kind :walk :intent/target (last (:path/waypoints r)) :intent/for :cover})))
+
+(defn healing
+  "What a hurt bot does: the meal; else out of a watching blaze's sight (watcher, cover); else
+   back away from the nearest blaze within combat/back-off-to; else wait :healing. The meal
+   first: gym blaze-7 run 1 (run 38891910129) backed away three times round a room seven square
+   with the food at 17, where no back-off gets away, and burned to death without eating."
+  [world]
+  (let [[eid e] (quarry world)
+        [_ w] (watcher world)
+        hide (when w (cover world w))]
     (cond (meal world) (meal world)
+          hide hide
           (and e (< (physics/distance (:player/pos world) (:entity/pos e)) combat/back-off-to))
           {:intent/kind :back-off :intent/target eid}
           :else {:plan/wait :healing})))
@@ -205,6 +238,7 @@
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
           (hurt? world) (healing world)
           (and (wary? world) (meal world)) (meal world)
+          (and (wary? world) (nil? (watcher world))) {:plan/wait :healing}
           lying
           {:intent/kind :collect-drops
            :intent/item :blaze_rod
