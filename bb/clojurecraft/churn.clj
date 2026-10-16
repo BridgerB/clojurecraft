@@ -35,6 +35,7 @@
 (def fresh {:churn/offsets {} :churn/batch 0 :churn/counts {}})
 (def snapshots-dir "snapshots")        ; in data-dir: a real batch's snapshots, uploaded with the artifact
 (def real-budget-ms 600000)            ; wall time a real batch's conversions may take: never past the job's last report
+(def real-per-signature 2)             ; real failures a batch converts of each signature: the most a fix's check judges (issue-check)
 (def real-heap "-J-Xmx3g")             ; the conversion's JVM, beside two 3 GB servers and two 2 GB races on a 16 GB runner
 
 ;; ---------------------------------------------------------------- a batch, as values
@@ -97,14 +98,15 @@
 
 (defn convertible
   "A real batch's failures to turn into snapshots: the failed runs (failures/failed) of a real
-   bot whose recording is known (:run/bot, :run/dir), the first failures/examples of each
-   signature, the ones its comment lists."
+   bot whose recording is known (:run/bot, :run/dir), the first real-per-signature of each
+   signature, as its comment lists them: a fold takes from half a minute to four on the runner
+   (probe 38940300595), and a fix's check judges two at most."
   [runs]
   (->> (failures/failed runs)
        (filter #(and (= :real (failures/source %)) (:run/bot %) (:run/dir %)))
        (group-by failures/key-of)
        vals
-       (mapcat #(take failures/examples %))))
+       (mapcat #(take real-per-signature %))))
 
 (defn snapshot-name
   "The file a real run's snapshot is kept in: real-<runner>-<server dir>-<bot>.edn.gz, one bot of
