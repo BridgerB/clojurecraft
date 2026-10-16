@@ -31,6 +31,7 @@
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.observe]
+            [clojurecraft.pearls]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]

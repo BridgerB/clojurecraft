@@ -47,9 +47,10 @@
 (s/def :gym/summon (s/coll-of string? :kind vector?)) ; RCON commands run in the row's dimension once the bot stands there with its kit (fill-in): the mobs it meets
 (s/def :gym/difficulty #{"peaceful" "easy" "normal" "hard"}) ; set before the bot is landed
 (s/def :gym/fixture? true?)              ; a row that judges the landing alone: its --until puts no goal in play
+(s/def :gym/name string?)                ; a row's own name, for a row that shares its goal and --until with another (issue #263)
 (s/def ::row
   (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]
-          :opt [:gym/setup :gym/land :gym/summon :gym/difficulty :gym/fixture?]))
+          :opt [:gym/setup :gym/land :gym/summon :gym/difficulty :gym/fixture? :gym/name]))
 (s/def :gym/run pos-int?)
 (s/def :gym/landing (s/coll-of int? :kind vector? :count 3))
 (s/def :gym/landed? boolean?)
@@ -72,10 +73,20 @@
 (def dimension-wait-ms 30000)         ; how long the kit waits for the server to say the bot is in its row's dimension
 (def hungry-food 10)                  ; the food a :hungry landing waits for before the bot is told to go
 
+(def warped-reach 8)                  ; blocks round a located warped forest loaded while its floor is looked for
+(def warped-up 32)                    ; blocks over the located height the floor is looked for
+(def warped-down 40)                  ; and under it
+(def warped-columns ; columns round the located point tried for a floor, nearest first: a grid 4 apart, 8 out
+  (vec (sort-by (fn [[dx dz]] [(+ (abs dx) (abs dz)) dx dz])
+                (for [dx (range -8 9 4) dz (range -8 9 4)] [dx dz]))))
+
 (def dimensions
   "The dimension each kind of landing (:gym/land) leaves the bot in; any other is the overworld.
    The kit is given only once the server says the bot stands there (landing!)."
-  {:nether-fortress dimension/nether :nether-arena dimension/nether :end dimension/end})
+  {:nether-fortress dimension/nether
+   :nether-arena dimension/nether
+   :warped-forest dimension/nether
+   :end dimension/end})
 
 (def fortress-pad
   "The fortress row's start: a hollow box of netherrack round three cells of air at the pad."
@@ -148,6 +159,23 @@
         ds))
 
 (def night "time set midnight")       ; a :gym/summon entry: the hostiles' hour, for a row that defends
+
+(defn no-ai-enderman
+  "An enderman that never moves, attacks or teleports (NoAI) and never despawns, at d: the first
+   thing the pearl rows kill (issue #263)."
+  [d]
+  (summon "enderman" d "{NoAI:1b,PersistenceRequired:1b}"))
+
+(def pearl-kit
+  "What a pearl row gives (issue #263): an iron sword, the iron helmet and chestplate #259's
+   armour row makes (put on by the :wear-armour row), and food for the fights' hunger."
+  ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
+   "minecraft:cooked_beef 16"])
+
+(defn pearls-held
+  "A truth that the bot holds n or more ender pearls (re, a pattern of the count: \"[1-9]\")."
+  [re]
+  {:truth/cmd "clear {name} minecraft:ender_pearl 0" :truth/re (str "Found " re " ")})
 
 (def portal-arena
   "The portal rows' arena round the landing: stone ten deep under air, and a trench of lava
@@ -399,7 +427,40 @@
                 "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
     :gym/timeout-ms 120000
     :gym/truth [{:truth/cmd "scoreboard players get {name} zkills" :truth/re "has [1-9]"}
-                {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}])
+                {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
+   ;; issue #263: endermen in the sealed Nether room (#261's arena), the pearl kit given there;
+   ;; judged by a pearl held. Five that never move or teleport (NoAI), each within the hunt's
+   ;; strike range of the landing, since a kill drops a pearl only one time in two (the loot
+   ;; table, probe 38889277228): one pearl is then 31 trials in 32
+   {:gym/goal :ender-pearl
+    :gym/until "pearls-1"
+    :gym/land :nether-arena
+    :gym/difficulty "normal"
+    :gym/prereqs pearl-kit
+    :gym/summon (mapv no-ai-enderman [[2 0 0] [-2 0 0] [0 0 2] [0 0 -2] [2 0 2]])
+    :gym/timeout-ms 180000
+    :gym/truth [(pearls-held "[1-9][0-9]*")]}
+   ;; then live: three that fight back for 7 a hit at Normal, in the same room, the bot in the
+   ;; kit's iron helmet and chestplate; a pearl held, the bot alive with health left
+   {:gym/goal :ender-pearl
+    :gym/until "pearls-1"
+    :gym/name "pearls-1-live"
+    :gym/land :nether-arena
+    :gym/difficulty "normal"
+    :gym/prereqs pearl-kit
+    :gym/summon (into [] (mapcat #(endermen 1 %)) [[3 0 0] [-3 0 0] [0 0 3]])
+    :gym/timeout-ms 240000
+    :gym/truth [(pearls-held "[1-9][0-9]*")
+                {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
+   ;; the stage: twelve pearls from the endermen of the warped forest nearest the landing's
+   ;; Nether coordinates, where they spawn by themselves at Normal and nothing else hostile does
+   {:gym/goal :ender-pearls
+    :gym/until "pearls-12"
+    :gym/land :warped-forest
+    :gym/difficulty "normal"
+    :gym/prereqs (conj pearl-kit "minecraft:cooked_beef 32")
+    :gym/timeout-ms 2400000
+    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
@@ -416,9 +477,12 @@
 ;; ---------------------------------------------------------------- data
 
 (defn gym
-  "The registry row for a goal, named by its keyword or its --until name, or nil."
+  "The registry row for a goal, named by its keyword or its --until name, or a row by its own
+   :gym/name (a row that shares both with another: pearls-1-live, issue #263); the first that
+   answers, or nil."
   [goal]
-  (let [n (name goal)] (some #(when (or (= n (name (:gym/goal %))) (= n (:gym/until %))) %) gyms)))
+  (let [n (name goal)]
+    (some #(when (or (= n (:gym/name %)) (= n (name (:gym/goal %))) (= n (:gym/until %))) %) gyms)))
 
 (defn fill-in
   "cmd with {name} the bot's name and {x} {y} {z} the landing's coordinates, each with an offset
@@ -590,6 +654,13 @@
                                 ["" (str "outcomes: " (tally (map :gym/outcome rs)))
                                  (str "reasons: " (tally (map :gym/reason rs))) ""])))))
 
+(defn trial-name
+  "The name a trial carries across the job boundary for row, which gym finds it by again: its own
+   :gym/name when it has one (issue #263: pearls-1 and pearls-1-live share a goal and a --until),
+   else its --until name."
+  [row]
+  (:gym/name row (:gym/until row)))
+
 (defn plan-matrix
   "The trial matrix for goals x runs as JSON, {\"include\": [{\"goal\", \"run\", \"minutes\"}]}.
    Only goals, run numbers and the job's minutes cross the job boundary; each trial recomputes
@@ -601,7 +672,7 @@
                        :let [row (gym g)]
                        run (range 1 (inc runs))]
                    (str "{\"goal\":\""
-                        (:gym/until row)
+                        (trial-name row)
                         "\",\"run\":"
                         run
                         ",\"minutes\":"
@@ -710,6 +781,81 @@
           [(quot x 8) (quot z 8) pad-y]
           arena-half
           (into nether-arena (:gym/setup row))))
+
+(defn located-pos
+  "[x y z] from a `locate biome` reply, which names the height it found, or nil."
+  [reply]
+  (when-let [[_ x y z] (re-find #"\[(-?\d+), (-?\d+), (-?\d+)\]" (str reply))]
+    (mapv parse-long [x y z])))
+
+(defn floor-cells
+  "The cells a warped forest landing tries to stand the bot in round the located point [x y z],
+   in order: each of warped-columns, from warped-up over y down to warped-down under it."
+  [[x y z]]
+  (for [[dx dz] warped-columns
+        h (range (+ y warped-up) (- y warped-down) -1)]
+    [(+ x dx) h (+ z dz)]))
+
+(defn open
+  "The test clause that passes when a body fits in cell [x y z]: a block a body passes through
+   (#minecraft:replaceable: air, and the warped roots and nether sprouts that carpet a warped
+   forest, probe run 38893018465), and not
+   lava or water, which that tag holds too."
+  [[x y z]]
+  (let [at (str x " " y " " z)]
+    (str " if block "
+         at
+         " #minecraft:replaceable unless block "
+         at
+         " minecraft:lava unless block "
+         at
+         " minecraft:water")))
+
+(defn floor-test
+  "The test the server passes when a body can stand at [x y z] in the Nether: nylium under the
+   feet, the feet and the head open. Gym batch pearls-263a (plan run 38892130785) asked for air
+   there and found no floor in any of three forests: warped roots and nether sprouts carpet them."
+  [[x y z]]
+  (str "execute in "
+       dimension/nether
+       " if block "
+       x
+       " "
+       (dec y)
+       " "
+       z
+       " #minecraft:nylium"
+       (open [x y z])
+       (open [x (inc y) z])))
+
+(defmethod land! :warped-forest
+  ;; the warped forest nearest the landing's Nether coordinates (an eighth of the overworld's, so
+  ;; each landing has its own; issue #263's hunting ground, where endermen are the only hostile
+  ;; that spawns), its chunks loaded, a floor found by asking the server cell by cell
+  ;; (floor-cells, floor-test: under the Nether's roof there is no heightmap to stand on), the
+  ;; bot stood there with the row's setup round it
+  [rc row name [x z _]]
+  (let [dim dimension/nether
+        reply (rcon/command! rc
+                             (str "execute in "
+                                  dim
+                                  " positioned "
+                                  (quot x 8)
+                                  " 64 "
+                                  (quot z 8)
+                                  " run locate biome minecraft:warped_forest"))
+        [bx _ bz :as at] (or (located-pos reply)
+                             (throw (ex-info "no warped forest located" {:reply reply})))
+        square [(- bx warped-reach) (- bz warped-reach) (+ bx warped-reach) (+ bz warped-reach)]
+        where (str/join " " square)]
+    (rcon/command! rc (in-dimension dim (str "forceload add " where)))
+    (try (when-not (wait-loaded-in! rc dim square)
+           (throw (ex-info "the warped forest's chunks never loaded" {:at at})))
+         (let [[fx fy fz] (or (first (filter #(fixture/passed? (rcon/command! rc (floor-test %)))
+                                             (floor-cells at)))
+                              (throw (ex-info "no floor in the warped forest" {:at at})))]
+           (place! rc dim name [fx fz fy] 2 (vec (:gym/setup row))))
+         (finally (rcon/command! rc (in-dimension dim (str "forceload remove " where)))))))
 
 (defmethod land! :end
   ;; the main island (issue #261), ruststeve's End start: the island round the fountain loaded,

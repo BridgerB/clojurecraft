@@ -96,7 +96,9 @@
 
 (defn landing-commands
   "The RCON commands landing! sends for goal, against a server that answers every test with
-   reply-for and every position with one in the arena; [result commands]."
+   reply-for and every position with one in the arena; [result commands]. It redefines the RCON
+   client for the whole JVM, so every test that calls it is :eftest/synchronized: two at once
+   (the warped forest landing beside the kit test, issue #263) swapped each other's answers."
   [goal reply-for]
   (let [sent (atom [])
         landings (java.io.File/createTempFile "landings" ".edn")]
@@ -117,7 +119,7 @@
         (.delete landings)
         [r @sent]))))
 
-(deftest the-kit-is-given-only-in-the-rows-dimension
+(deftest ^:eftest/synchronized the-kit-is-given-only-in-the-rows-dimension
   ;; steve gave its End kit before the cross-dimension teleport and the server held none of it
   ;; (issue #10): the gym lands, asks the server which dimension the bot is in, then gives
   (let [[r sent] (landing-commands :arena-nether (constantly "Test passed"))
@@ -138,6 +140,48 @@
                   #(if (str/includes? % "if dimension") "Test failed" "Test passed"))]
     (is (not (:gym/landed? r)) "a bot that never reaches the dimension is a failed landing")
     (is (not-any? #(str/starts-with? % "give ") sent) "and never gets its kit in the wrong world")))
+
+(deftest the-pearl-rows-are-found-by-their-own-names
+  ;; issue #263: pearls-1 and pearls-1-live share the goal :ender-pearl and the --until pearls-1
+  (let [still (gym/gym "pearls-1")
+        live (gym/gym "pearls-1-live")]
+    (is (= [:ender-pearl :ender-pearl :ender-pearls]
+           (mapv :gym/goal [still live (gym/gym "pearls-12")])))
+    (is (not= still live))
+    (is (every? #(str/includes? % "NoAI:1b") (:gym/summon still)) "first, endermen that never move")
+    (is (not-any? #(str/includes? % "NoAI") (:gym/summon live)) "then live ones")
+    (is (= ["pearls-1" "pearls-1-live"] (mapv gym/trial-name [still live])))
+    (is (str/includes? (gym/plan-matrix ["pearls-1-live"] 1)
+                       "{\"goal\":\"pearls-1-live\",\"run\":1")
+        "the live trial crosses the job boundary under its own name")
+    (is (str/includes? (gym/plan-matrix ["table"] 1) "{\"goal\":\"table\",\"run\":1")
+        "every other row as before")
+    (is (:truth/ok? (gym/truth (first (:gym/truth (gym/gym "pearls-12")))
+                               "c"
+                               "Found 13 matching item(s) on player")))
+    (is (not (:truth/ok? (gym/truth (first (:gym/truth (gym/gym "pearls-12")))
+                                    "c"
+                                    "Found 1 matching item(s) on player"))))))
+
+(deftest ^:eftest/synchronized a-warped-forest-landing-stands-on-its-nylium
+  ;; issue #263: the forest nearest the landing's Nether coordinates, a floor found cell by cell
+  (let [[r sent] (landing-commands
+                  :ender-pearls
+                  #(cond (str/includes? % "locate biome")
+                         "The nearest minecraft:warped_forest is at [120, 70, 240] (90 blocks away)"
+                         (str/includes? % "#minecraft:nylium")
+                         (if (str/includes? % " if block 120 65 240 ") "Test passed" "Test failed")
+                         :else "Test passed"))]
+    (is (:gym/landed? r))
+    (is (= [120 240 66] (:gym/landing r)))
+    (is
+     (some
+      #{"execute in minecraft:the_nether positioned 100 64 200 run locate biome minecraft:warped_forest"}
+      sent)
+     "an eighth of the overworld landing [800 1600]")
+    (is (some #(str/includes? % "run tp Clj_g1 120.5 66 240.5") sent))
+    (is (some #{"difficulty normal"} sent))
+    (is (some #{"give Clj_g1 minecraft:iron_sword 1"} sent))))
 
 (deftest a-truth-reads-the-servers-reply
   (let [row {:truth/cmd "clear {name} minecraft:stick 0" :truth/re "Found ([4-9]|[1-9][0-9])"}]

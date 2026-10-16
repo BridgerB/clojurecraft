@@ -21,6 +21,7 @@
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as p]
             [clojurecraft.path :as path]
+            [clojurecraft.pearls :as pearls]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
@@ -745,6 +746,9 @@
   :args
   (s/cat :world (requires :world/entities)
          :eid int?))
+(s/fdef pearls/endermen
+  :args
+  (s/cat :world (requires :world/entities :player/pos)))
 (s/fdef eat/food-held
   :args
   (s/cat :world (requires :player/inventory)))
@@ -764,6 +768,6 @@
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
-   `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held
-   `drops/lying])
+   `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held `drops/lying
+   `pearls/endermen])
 (s/def :stats/deaths pos-int?)
