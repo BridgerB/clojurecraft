@@ -80,6 +80,11 @@
          "The bot-failure board (AGENTS.md section 3): todo | heal | move <n> <todo|progress|done>"
          :requires ([clojurecraft.board :as board])
          :task (apply board/-main *command-line-args*)}
+  copilot
+  {:doc
+   "Copilot sessions on the bot-failure issues until each closes (copilot.yml): dispatch [--dry-run]"
+   :requires ([clojurecraft.copilot :as copilot])
+   :task (apply copilot/-main *command-line-args*)}
   probe
   {:doc
    "A code question on a runner (probe.yml): run <label> <command> [worlds] for the pushed branch | log <id>"
