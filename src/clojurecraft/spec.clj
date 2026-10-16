@@ -12,6 +12,7 @@
             [clojurecraft.drops :as drops]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.eyes]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.hunt]

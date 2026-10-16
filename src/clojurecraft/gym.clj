@@ -559,7 +559,17 @@
     :gym/difficulty "normal"
     :gym/prereqs (conj pearl-kit "minecraft:cooked_beef 32")
     :gym/timeout-ms 2400000
-    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}])
+    :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
+   ;; issue #264: twelve eyes of ender crafted from what the two stages before make, given on a
+   ;; surface landing: seven rods and twelve pearls. Nothing to fight or fetch, so the row measures
+   ;; the 2x2 crafts alone (six of blaze powder, twelve of eyes)
+   {:gym/goal :eyes-of-ender
+    :gym/until "eyes"
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:blaze_rod 7" "minecraft:ender_pearl 12"]
+    :gym/timeout-ms 180000
+    :gym/truth [{:truth/cmd "clear {name} minecraft:ender_eye 0"
+                 :truth/re "Found (1[2-9]|[2-9][0-9]) "}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."

@@ -394,4 +394,27 @@
   :problem/last-failure
   "clojurecraft has never hunted an enderman. steve hunted them (tasks/combat huntEndermen: do not look at its eyes before attacking) and its End attempts f7 dragon-1/3/5 were all slain by endermen; ruststeve bartered with piglins and never fought one. Gym batch pearls-263a (plan run 38892130785): five NoAI trials passed, five live trials died fighting three endermen at once in the open in iron (5.74 a hit, the sweep pulling the next one in), and every warped forest landing failed to find a floor under the roots; the hunt now fights from a burrow, provoking from its mouth. Batch pearls-263d: three warped forest landings stood looking round for forty minutes with seventeen endermen 30 to 80 blocks off, none routable, the nearest behind a ledge; the stare now goes to the nearest in sight within 64."
   :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/ender-pearls.md"
-                    "brain/bot/plan/survival.md"]}]
+                    "brain/bot/plan/survival.md"]}
+ {:problem/stage :eyes-of-ender
+  :problem/issue 264
+  :problem/goals [:eyes-of-ender]
+  :problem/statement
+  "Split from :end-and-dragon. Twelve eyes of ender, one for each frame of the end portal, crafted from the rods and pearls the two stages before hold: blaze powder from a rod (two a rod), an eye from a powder and a pearl, both in the 2x2 grid with no table."
+  :problem/needs
+  ["The two recipes as data: blaze_powder (shapeless, one rod, two powder) and ender_eye (shapeless, a pearl and a powder), already generated craft rows (make/craft-rows)"
+   "The held rods, powder, pearls and eyes, from the inventory the server sent"
+   "What is short when the eyes cannot be made, named for its stage: :no-pearls or :no-rods (eyes/lacking)"]
+  :problem/decisions
+  ["Twelve, not fourteen: the pearl stage makes twelve, and the throws that find the stronghold (an eye breaks one throw in five) are the stronghold stage's to count, from pearls it asks for then"
+   "No producer for a rod or a pearl in the needs planner: each is its own stage with its own rules (blaze.clj, pearls.clj), so a short eye stage waits and names it"
+   "An aside at priority 20 after the pearls, so the run's current stage stays the fortress until the stages before it are proven"]
+  :problem/risks
+  ["A craft click lost or answered late on a loaded server, as at the kit (window/lost, window/resync)"
+   "The inventory full, so a powder or an eye has nowhere to go"
+   "Rods or pearls spent or lost between their stages and this one: a chained run does not go back for them"]
+  :problem/done
+  "RCON: clear <bot> minecraft:ender_eye 0 finds twelve or more after seven rods and twelve pearls are given on a surface landing (gym eyes)."
+  :problem/last-failure
+  "clojurecraft has never crafted an eye. First proof against the model: sim_test eyes-of-ender-from-rods-and-pearls. Gym batch eyes-264a (plan run 38920108562): 6/6 passed, twelve eyes held 20 to 30 s after landing."
+  :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/eyes-of-ender.md"
+                    "brain/bot/crafting/make-goals.md"]}]

@@ -173,6 +173,16 @@
                                     "c"
                                     "Found 1 matching item(s) on player"))))))
 
+(deftest the-eyes-row-gives-rods-and-pearls-and-counts-the-eyes
+  ;; issue #264: seven rods and twelve pearls given, twelve eyes or more held
+  (let [row (gym/gym "eyes")
+        truth (first (:gym/truth row))]
+    (is (= :eyes-of-ender (:gym/goal row)))
+    (is (= ["give c minecraft:blaze_rod 7" "give c minecraft:ender_pearl 12"] (gym/kit row "c")))
+    (is (:truth/ok? (gym/truth truth "c" "Found 12 matching item(s) on player c")))
+    (is (not (:truth/ok? (gym/truth truth "c" "Found 11 matching item(s) on player c"))))
+    (is (not (:truth/ok? (gym/truth truth "c" "No items were found on player c"))))))
+
 (deftest ^:eftest/synchronized a-warped-forest-landing-is-spread-onto-its-floor
   ;; issue #263: the forest nearest the landing's Nether coordinates; its located height can be
   ;; inside the rock (probe 38896760962), so the bot is spread onto a floor round it and kept
