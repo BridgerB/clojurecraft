@@ -14,11 +14,13 @@
    the counts) is a value in data-dir's .churn.edn, written only after a batch is reported; a
    batch with no run ended in it reports nothing and keeps its lines for the next.
 
-   A real batch first turns its failures into snapshots (issue #299): each failed bot's recording,
-   closed when its RESULT was printed, is folded on this runner at the commit that played it
-   (clojure -M:simrace --from-recording, real.clj), and kept under <data-dir>/snapshots (so in the
-   artifact) only when the model reproduces the failure; the issue's comment then lists it as a
-   sim snapshot is listed, so bb issue-check fetch takes it and the fix's check judges it.
+   A batch first finds which of its failures the model reproduces on this commit (issue #299): a
+   real batch folds each failed bot's recording, closed when its RESULT was printed, into a
+   snapshot on this runner at the commit that played it (clojure -M:simrace --from-recording,
+   real.clj), kept under <data-dir>/snapshots (so in the artifact) only when it recurs; a sim
+   batch judges each failed run's snapshot (clojure -M:simrace --judge). A run whose snapshot
+   recurs is :run/recurs?, and only those are filed (bb failures): an issue is open only while it
+   has a reproducible snapshot, which bb issue-check fetch takes and the fix's check judges.
 
    Babashka runs this; nothing here requires the bot."
   (:require [babashka.fs :as fs]
@@ -34,9 +36,10 @@
 (def logs #{"race.log" "runs.edn"})    ; the files a run ends into, a line each
 (def fresh {:churn/offsets {} :churn/batch 0 :churn/counts {}})
 (def snapshots-dir "snapshots")        ; in data-dir: a real batch's snapshots, uploaded with the artifact
-(def real-budget-ms 600000)            ; wall time a real batch's conversions may take: never past the job's last report
-(def real-per-signature 2)             ; real failures a batch converts of each signature: the most a fix's check judges (issue-check)
+(def budget-ms 600000)                 ; wall time a batch's conversions or judges may take: never past the job's last report
+(def per-signature 2)                  ; failures a batch converts or judges of each signature: the most a fix's check judges (issue-check)
 (def real-heap "-J-Xmx3g")             ; the conversion's JVM, beside two 3 GB servers and two 2 GB races on a 16 GB runner
+(def sim-heap "-J-Xmx2g")              ; the judge's JVM, beside the sim race's (ci/simrace.edn's heap)
 
 ;; ---------------------------------------------------------------- a batch, as values
 
@@ -98,7 +101,7 @@
 
 (defn convertible
   "A real batch's failures to turn into snapshots: the failed runs (failures/failed) of a real
-   bot whose recording is known (:run/bot, :run/dir), the first real-per-signature of each
+   bot whose recording is known (:run/bot, :run/dir), the first per-signature of each
    signature, as its comment lists them: a fold takes from half a minute to four on the runner
    (probe 38940300595), and a fix's check judges two at most."
   [runs]
@@ -106,7 +109,7 @@
        (filter #(and (= :real (failures/source %)) (:run/bot %) (:run/dir %)))
        (group-by failures/key-of)
        vals
-       (mapcat #(take real-per-signature %))))
+       (mapcat #(take per-signature %))))
 
 (defn snapshot-name
   "The file a real run's snapshot is kept in: real-<runner>-<server dir>-<bot>.edn.gz, one bot of
@@ -123,9 +126,9 @@
          (catch Exception _ nil))))
 
 (defn converted
-  "runs with the snapshots a conversion kept (its REAL lines): each run whose snapshot-name one
-   kept gets :run/snapshot (the file) and :run/moment (when and why), what bb failures' repro
-   lists."
+  "runs with the snapshots a conversion kept (its REAL lines, each one that recurred): each run
+   whose snapshot-name one kept gets :run/snapshot (the file), :run/moment (when and why) and
+   :run/recurs?, what bb failures files and its repro lists."
   [runs lines runner]
   (let [kept (into {}
                    (for [l lines
@@ -133,7 +136,8 @@
                      [(last (str/split (str (:path l)) #"/")) l]))]
     (mapv (fn [r]
             (let [l (when (:run/dir r) (kept (snapshot-name runner r)))]
-              (cond-> r l (assoc :run/snapshot (:path l) :run/moment (:moment l)))))
+              (cond-> r
+                l (assoc :run/snapshot (:path l) :run/moment (:moment l) :run/recurs? true))))
           runs)))
 
 (defn conversion-text
@@ -144,6 +148,49 @@
        " kept of " (count lines)
        "; model gaps (not filed) "
        (pr-str (frequencies (keep :gap (filter #(= :gap (:line/kind %)) lines))))))
+
+(defn judgeable
+  "A sim batch's failures to judge: the failed sim runs (failures/failed) that kept a snapshot
+   (:run/snapshot), the first per-signature of each signature."
+  [runs]
+  (->> (failures/failed runs)
+       (filter #(and (= :sim (failures/source %)) (:run/snapshot %)))
+       (group-by failures/key-of)
+       vals
+       (mapcat #(take per-signature %))))
+
+(defn judge-line-of
+  "A judge's JUDGE line (simrace/judge!) read, its map; nil for any other line, or one that does
+   not read."
+  [s]
+  (when-let [[_ m] (re-matches #"JUDGE (.*)" s)]
+    (try (edn/read-string {:default (fn [_ v] v)} m) (catch Exception _ nil))))
+
+(defn recurred?
+  "Did a JUDGE line's snapshot recur as evidence: it recurs, its play was not halted, and it was
+   not slow (simrace/slow-ms: a verdict that near the budget would flip on a slower runner)?"
+  [l]
+  (boolean (and (:recurs? l) (not (:halted? l)) (not (:slow? l)))))
+
+(defn judged-runs
+  "runs with what a judge said (its JUDGE lines): each run whose snapshot recurred? gets
+   :run/recurs?, what bb failures files."
+  [runs lines]
+  (let [ok (set (for [l lines :when (recurred? l)] (str (:path l))))]
+    (mapv #(cond-> % (contains? ok (str (:run/snapshot %))) (assoc :run/recurs? true)) runs)))
+
+(defn judging-text
+  "What a sim batch's judges said, one line for the log and the job's summary: how many recurred,
+   and how the rest did not (never filed)."
+  [lines]
+  (str "sim snapshots: " (count (filter recurred? lines))
+       " recur of " (count lines)
+       "; not filed "
+       (pr-str (frequencies (keep #(cond (recurred? %) nil
+                                         (:halted? %) :halted
+                                         (and (:recurs? %) (:slow? %)) :slow
+                                         :else :passed)
+                                  lines)))))
 
 ;;;; I/O: the record files, the batch's copy, the reports ;;;;
 
@@ -169,41 +216,56 @@
     (spit (str f) (str (str/join "\n" ls) "\n")))
   dir)
 
+(defn budgeted!
+  "Run clojure with args, niced under the lane's own work, its output to log, stopped at
+   budget-ms (what it did not reach stays unreproduced, never filed); returns the log's lines."
+  [log args]
+  (let [proc (apply p/process {:out log :err :inherit} "nice" "-n" "19" "clojure" args)]
+    (when-not (.waitFor ^Process (:proc proc)
+                        (long budget-ms)
+                        java.util.concurrent.TimeUnit/MILLISECONDS)
+      (p/destroy-tree proc)
+      (println "churn: out of time:" log))
+    (str/split-lines (slurp log))))
+
 (defn convert!
   "Turn a real batch's failures (convertible) into snapshots: one clojure -M:simrace
-   --from-recording over their recordings (<data-dir>/<dir>/<bot>.edn), niced under the race's
-   servers, its heap held to real-heap, writing <data-dir>/snapshots (gaps under its gaps/) and its lines to
-   snapshots/convert-<n>.log, stopped at real-budget-ms (the runs it did not reach keep their
-   replay lines). Returns the REAL and GAP lines it printed (line-of)."
+   --from-recording over their recordings (<data-dir>/<dir>/<bot>.edn), its heap held to
+   real-heap, writing <data-dir>/snapshots (gaps under its gaps/) and its lines to
+   snapshots/convert-<n>.log (budgeted!). Returns the REAL and GAP lines it printed (line-of)."
   [{:keys [data-dir run runner]} n runs]
   (let [todo (convertible runs)
-        out (fs/path data-dir snapshots-dir)
-        log (fs/file out (str "convert-" n ".log"))]
+        out (fs/path data-dir snapshots-dir)]
     (when (seq todo)
       (fs/create-dirs out)
-      (let [proc (p/process {:out log :err :inherit}
-                            "nice"
-                            "-n"
-                            "19"
-                            "clojure"
-                            real-heap
-                            "-M:simrace"
-                            "--from-recording"
-                            (str/join
-                             ","
-                             (map #(str (fs/path data-dir (:run/dir %) (str (:run/bot %) ".edn")))
-                                  todo))
-                            "--name" (str/join "," (map #(snapshot-name runner %) todo))
-                            "--out" (str out)
-                            "--round" (str run))]
-        (when-not (.waitFor ^Process (:proc proc)
-                            (long real-budget-ms)
-                            java.util.concurrent.TimeUnit/MILLISECONDS)
-          (p/destroy-tree proc)
-          (println "churn: the real conversions ran out of time; the rest keep their replay lines"))
-        (let [lines (vec (keep line-of (str/split-lines (slurp log))))]
-          (println "churn:" (conversion-text lines))
-          lines)))))
+      (let [lines (vec (keep line-of
+                             (budgeted! (fs/file out (str "convert-" n ".log"))
+                                        [real-heap "-M:simrace" "--from-recording"
+                                         (str/join ","
+                                                   (map #(str (fs/path data-dir
+                                                                       (:run/dir %)
+                                                                       (str (:run/bot %) ".edn")))
+                                                        todo)) "--name"
+                                         (str/join "," (map #(snapshot-name runner %) todo)) "--out"
+                                         (str out) "--round" (str run)])))]
+        (println "churn:" (conversion-text lines))
+        lines))))
+
+(defn judge!
+  "Judge a sim batch's failures' snapshots (judgeable) as the fix's check will, on this commit:
+   one clojure -M:simrace --judge over them, its heap held to sim-heap, its lines to
+   <data-dir>/snapshots/judge-<n>.log (budgeted!). Returns the JUDGE lines (judge-line-of)."
+  [{:keys [data-dir]} n runs]
+  (let [todo (judgeable runs)
+        out (fs/path data-dir snapshots-dir)]
+    (when (seq todo)
+      (fs/create-dirs out)
+      (let [lines (vec (keep judge-line-of
+                             (budgeted! (fs/file out (str "judge-" n ".log"))
+                                        [sim-heap "-M:simrace" "--judge"
+                                         (str/join "," (map #(str (:run/snapshot %)) todo))])))]
+        (println "churn:" (judging-text lines))
+        lines))))
 
 (defn report!
   "Report a batch's runs: the issues, the job summary's wall, the page's batch, a win."
@@ -239,10 +301,16 @@
     (cond (empty? runs) (println "churn: no run ended since batch" (:churn/batch state))
           :else
           (let [after (next-state state lines runs)
-                real (when (= :real (:kind job)) (convert! job n runs))
-                runs (cond-> runs (seq real) (converted real (:runner job)))]
-            (when-let [summary (and (seq real) (System/getenv "GITHUB_STEP_SUMMARY"))]
-              (spit summary (str (conversion-text real) "\n\n") :append true))
+                real? (= :real (:kind job))
+                said (if real? (convert! job n runs) (judge! job n runs))
+                runs (cond (empty? said) runs
+                           real? (converted runs said (:runner job))
+                           :else (judged-runs runs said))]
+            (when-let [summary (and (seq said) (System/getenv "GITHUB_STEP_SUMMARY"))]
+              (spit summary
+                    (str (if real? (conversion-text said) (judging-text said)) "\n\n")
+                    :append
+                    true))
             (report! job n dir runs (:churn/counts after))
             (spit (str (fs/file data-dir state-file)) (pr-str after))))))
 

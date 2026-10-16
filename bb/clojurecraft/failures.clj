@@ -4,18 +4,24 @@
    target it was on and why it stopped). One GitHub issue per signature, labelled bot-failure and
    found again by the signature it carries in a marker, open or closed; each round adds one
    comment to that issue (how many runs, the intents they stopped in, how many landings, up to
-   five reproductions, the run's page) and brings the body's tally up to date (rounds, runs,
-   first and last seen), so a signature seen a thousand times is one issue with a tally, and
-   every round notifies (issue #116).
+   five reproducible snapshots, the run's page) and brings the body's tally up to date (rounds,
+   runs, first and last seen, when it was last reproduced), so a signature seen a thousand times
+   is one issue with a tally, and every round notifies (issue #116).
 
-   What is not filed: a run that stopped for a reason that is not the bot's play
-   (:run/infra?: the server closed the socket or disconnected it), counted in the report's
-   output only; and a signature fewer than min-runs runs hit, a one-off, listed but not filed.
-   A closed issue whose signature comes back in runs of code newer than its closing is reopened
-   and its section says regressed; runs of older code (a round that started before the fix merged)
-   add their section and leave it closed, since they never ran the fix. Each
-   issue is labelled sim, real or both by where its runs came from: a failure only the model
-   produces may be the model's, not the bot's. Before an issue is opened the open and closed
+   An issue is open only while it has a reproducible snapshot (issue #299, Bridger's rule): a
+   signature is filed, commented or reopened only when a run of the batch has a snapshot that
+   recurred against the model on the batch's own commit (:run/recurs?, judged by bb churn at batch
+   time: a sim run's snapshot judged, a real run's recording converted), one such run being
+   enough; the comment lists those snapshots and nothing else. Runs with no recurring snapshot
+   are counted in the report's output (and on the page), never filed; so are runs that stopped
+   for a reason that is not the bot's play (:run/infra?: the server closed the socket or
+   disconnected it). An open issue last reproduced longer ago than retention-days, its
+   snapshots' artifacts gone, is closed as not planned with closing-text, and a batch that
+   reproduces it reopens it. A closed issue whose signature comes back in runs of code newer than
+   its closing is reopened and its section says regressed; runs of older code (a round that
+   started before the fix merged) add their section and leave it closed, since they never ran the
+   fix. Each issue is labelled bot-failure and sim (the model reproduces it, so the fix's check
+   judges its snapshots), and real when real runs hit it. Before an issue is opened the open and closed
    issues are read again, so two reports finishing together do not open the same one twice. At
    most max-new issues are opened a report, the most frequent signatures first.
 
@@ -30,7 +36,8 @@
 
 (def label "bot-failure")             ; every failure issue carries it
 (def infra-reasons #{:disconnected :closed}) ; not the bot's play, for runs that predate :run/infra?
-(def min-runs 3)                      ; a signature fewer runs hit is a one-off: listed, not filed
+(def retention-days 7)                ; an artifact, and the snapshots in it, lives this long (upload-artifact's retention-days)
+(def closing-text "closed: no reproducible snapshot; reopens when a batch reproduces it")
 (def max-new 10)                      ; issues opened by one report, at most
 (def examples 5)                      ; reproductions listed per signature per report
 
@@ -88,14 +95,20 @@
        (some-> reason
                name)))
 
+(defn reproduced
+  "The runs whose snapshot recurred against the model on the batch's own commit (:run/recurs?,
+   bb churn): the only evidence an issue is filed on."
+  [runs]
+  (filter :run/recurs? runs))
+
 (defn labels
   "An issue's labels for runs: bot-failure, and sim and/or real by where they came from; sim too
-   when a real run's failure was kept as a snapshot (:run/snapshot, issue #299): the model
-   reproduces it, so the fix's check can judge it and requires one."
+   when a real run's failure was kept as a recurring snapshot (issue #299): the model reproduces
+   it, so the fix's check can judge it and requires one."
   [runs]
   (into [label]
         (map name)
-        (sort (distinct (concat (map source runs) (when (some :run/snapshot runs) [:sim]))))))
+        (sort (distinct (concat (map source runs) (when (seq (reproduced runs)) [:sim]))))))
 
 (defn clock
   "Simulated ms as m:ss."
@@ -116,71 +129,68 @@
          ")")))
 
 (defn snapshot-note
-  "A kept snapshot in a reproduction's words, \"snapshot `f` in artifact `a` (moment ...); or \",
+  "A kept snapshot in a reproduction's words, \"snapshot `f` in artifact `a` (moment ...)\",
    the shape bb issue-check fetch looks for; nil when the run kept none."
   [r]
   (when (:run/snapshot r)
-    (str "snapshot `"
-         (last (str/split (str (:run/snapshot r)) #"/"))
-         "` in artifact `"
-         (:run/artifact r)
-         "`"
-         (moment-note (:run/moment r))
-         "; or ")))
+    (str "snapshot `" (last (str/split (str (:run/snapshot r)) #"/"))
+         "` in artifact `" (:run/artifact r)
+         "`" (moment-note (:run/moment r)))))
 
 (defn repro
-  "One line that reproduces a run: for a sim run its snapshot (a moment kept from before the
-   choice that failed, in the runner's artifact: bb issue-check fetch brings it down, and the
-   fix's check judges it) and the sim race's command that made it; for a real one its snapshot
-   when the model reproduced it (issue #299, the same words: fetch takes either), and the
-   recording's replay, under its server's directory (:run/dir, s1 or s2: each server's bots have
-   the same names)."
+  "One line that reproduces a run whose snapshot recurred (reproduced): its snapshot (a moment
+   kept from before the choice that failed, in the runner's artifact: bb issue-check fetch brings
+   it down, and the fix's check judges it), then for a sim run the sim race's command that made
+   it, for a real one its bot under its server's directory (:run/dir, s1 or s2: each server's
+   bots have the same names). The replay line of a real run's recording is gone (issue #299): a
+   replay judges nothing."
   [r]
   (cond (:run/file r)
         (str "- " (snapshot-note r)
-             "`clojure -M:simrace --world " (:run/file r)
+             "; or `clojure -M:simrace --world " (:run/file r)
              " --seed " (:run/seed r)
              " --seeds 1` at " (:run/commit r)
              ", landing " (pr-str (get-in r [:run/world :capture/landing])))
         :else
         (str "- "
              (snapshot-note r)
-             "real race: bot "
+             "; real race: bot "
              (:run/bot r)
-             ", replay its recording with `clojure -M:replay <artifact>/"
-             (some-> (:run/dir r)
-                     (str "/"))
-             (:run/bot r)
-             ".edn`")))
+             (some->> (:run/dir r)
+                      (str " in ")))))
 
 (defn section
-  "This report's section for one signature: how many runs, sim or real, the intents they stopped
-   in, how many landings, and reproductions; regressed when its issue had been closed."
+  "This report's section for one signature: how many runs, how many of them reproduced against
+   the model, sim or real, the intents they stopped in, how many landings, and the reproducible
+   snapshots (repro, reproduced runs only); regressed when its issue had been closed."
   [report-title runs regressed?]
   (str/join "\n"
             (concat
-             [(str "### "
-                   report-title
-                   ": "
-                   (count runs)
-                   " run"
-                   (when (> (count runs) 1) "s")
-                   (when regressed? " (regressed: this issue was closed)")) ""
+             [(str "### " report-title
+                   ": " (count runs)
+                   " run" (when (> (count runs) 1) "s")
+                   ", " (count (reproduced runs))
+                   " reproduced" (when regressed? " (regressed: this issue was closed)")) ""
               (str "From: " (pr-str (frequencies (map source runs)))
                    "; last intents: "
                    (pr-str (frequencies (map #(get-in % [:plan :plan/last :intent/kind]) runs)))
                    "; landings: "
                    (count (distinct (keep #(get-in % [:run/world :capture/landing]) runs)))) ""]
-             (map repro (take examples runs))
+             (map repro (take examples (reproduced runs)))
              [""])))
 
 (defn regressed?
-  "Did a closed issue come back: the runs' code was committed (code-at, an ISO instant) after the
-   issue was closed? A round whose code predates the fix never ran it, so its failures say
-   nothing about the fix; with no code-at every closed issue counts as come back."
+  "Did a closed issue come back: closed for want of a reproducible snapshot (state_reason
+   not_planned, closing-text: any batch that reproduces it reopens it), or the runs' code was
+   committed (code-at, an ISO instant) after the issue was closed? A round whose code predates
+   the fix never ran it, so its failures say nothing about the fix; with no code-at every closed
+   issue counts as come back."
   [issue code-at]
   (and (= "closed" (:state issue))
-       (or (nil? code-at) (nil? (:closed_at issue)) (pos? (compare code-at (:closed_at issue))))))
+       (or (= "not_planned" (:state_reason issue))
+           (nil? code-at)
+           (nil? (:closed_at issue))
+           (pos? (compare code-at (:closed_at issue))))))
 
 (defn opening
   "A new issue's body before its tally."
@@ -195,23 +205,38 @@
 (def tally-marker "<!-- tally ")           ; the line that keeps the issue's count across rounds
 
 (defn tally-of
-  "The tally a body carries, {:rounds n :runs m :first title :last title}, or nil."
+  "The tally a body carries, {:rounds n :runs m :first title :last title :reproduced instant},
+   or nil."
   [body]
   (some->> (re-find #"<!-- tally (\{.*?\}) -->" (str body))
            second
            (edn/read-string {:default (fn [_ v] v)})))
 
 (defn tallied
-  "The tally after one more round of runs under report-title."
-  [tally report-title runs]
+  "The tally after one more round of runs under report-title, reproduced at now (an ISO instant:
+   the newest reproducible snapshot's batch, which stale? measures from)."
+  [tally report-title runs now]
   (-> (or tally {:rounds 0 :runs 0 :first report-title})
       (update :rounds inc)
       (update :runs + (count runs))
-      (assoc :last report-title)))
+      (assoc :last report-title :reproduced now)))
+
+(defn stale?
+  "Is an open issue past its evidence at now (an ISO instant): last reproduced (its tally's
+   :reproduced) more than retention-days ago, so every snapshot its comments list is in an
+   expired artifact? An issue whose tally never said (filed before issue #299) is left to a
+   person."
+  [issue now]
+  (let [at (:reproduced (tally-of (:body issue)))]
+    (boolean (and (= "open" (:state issue))
+                  at
+                  (.isBefore (java.time.Instant/parse at)
+                             (.minus (java.time.Instant/parse now)
+                                     (java.time.Duration/ofDays retention-days)))))))
 
 (defn tally-lines
   "The tally as the body shows it: a sentence, then the marker that keeps it."
-  [{:keys [rounds runs first last]}]
+  [{:keys [rounds runs first last reproduced]}]
   (str "Seen in "
        rounds
        " round"
@@ -224,9 +249,11 @@
        first
        ", last in "
        last
+       (when reproduced (str "; last reproduced " reproduced))
        ".\n"
        tally-marker
-       (pr-str {:rounds rounds :runs runs :first first :last last})
+       (pr-str (cond-> {:rounds rounds :runs runs :first first :last last}
+                 reproduced (assoc :reproduced reproduced)))
        " -->"))
 
 (defn with-tally
@@ -249,14 +276,21 @@
   (str section (when run-url (str "\nRun: " run-url "\n"))))
 
 (defn summary-lines
-  "What a report prints beyond the issues: the infrastructure stops and the one-offs, counted
-   (by counts, the job's runs so far, when given)."
+  "What a report prints beyond the issues: the infrastructure stops, and the signatures no run
+   of the batch reproduced (no recurring snapshot: never filed), with the job's runs of each so
+   far (counts, when given)."
   [runs groups counts]
   (concat [(str "infrastructure stops (not filed): "
                 (pr-str (frequencies (map :reason (filter #(and (not (:ok %)) (infra? %)) runs)))))]
           (for [[sig rs] groups
-                :when (< (get counts sig (count rs)) min-runs)]
-            (str "one-off (not filed): " (count rs) " " (pr-str sig)))))
+                :when (empty? (reproduced rs))]
+            (str "not reproduced (not filed): "
+                 (count rs)
+                 " "
+                 (pr-str sig)
+                 " ("
+                 (get counts sig (count rs))
+                 " in the job)"))))
 
 ;;;; I/O: the files, the GitHub API ;;;;
 
@@ -314,17 +348,26 @@
   [n text]
   (gh! "-X" "POST" (str "repos/" (repo) "/issues/" n "/comments") "-f" (str "body=" text)))
 
+(defn close!
+  "Close issue n as not planned with closing-text: no reproducible snapshot is left."
+  [n]
+  (comment! n closing-text)
+  (gh! "-X"
+       "PATCH" (str "repos/" (repo) "/issues/" n)
+       "-f" "state=closed"
+       "-f" "state_reason=not_planned"))
+
 (defn file!
-  "One signature's round: one comment on its issue (reopened when closed and the runs' code is
-   newer than its closing, regressed?) with the body's tally brought up to date, or a new issue
-   with its first comment. The body is the summary (first seen, last seen, rounds, runs), the
-   comments are the rounds, so every round notifies (issue #116). Returns :added, :reopened or
-   :opened."
-  [report-title sig runs code-at]
+  "One signature's round, runs with a reproducible snapshot among them: one comment on its issue
+   (reopened when closed and come back, regressed?) with the body's tally brought up to date
+   (reproduced now), or a new issue with its first comment. The body is the summary (first seen,
+   last seen, last reproduced, rounds, runs), the comments are the rounds, so every round
+   notifies (issue #116). Returns :added, :reopened or :opened."
+  [report-title sig runs code-at now]
   (let [existing (issue-for (issues) sig) ; read again now: another report may have just opened it
         closed? (regressed? existing code-at)
         text (comment-text (section report-title runs closed?) (run-url))
-        tally (tallied (tally-of (:body existing)) report-title runs)]
+        tally (tallied (tally-of (:body existing)) report-title runs now)]
     (cond existing
           (do (apply gh!
                      "-X"
@@ -332,7 +375,7 @@
                      (str "repos/" (repo) "/issues/" (:number existing))
                      "-f"
                      (str "body=" (with-tally (:body existing) tally))
-                     (when closed? ["-f" "state=open"]))
+                     (when closed? ["-f" "state=open" "-f" "state_reason=reopened"]))
               (comment! (:number existing) text)
               (doseq [l (labels runs)]
                 (gh! "-X"
@@ -352,12 +395,21 @@
             (when (:number made) (comment! (:number made) text))
             :opened))))
 
+(defn sweep!
+  "Close every open issue past its evidence (stale? at now, close!); print each."
+  [now]
+  (doseq [i (issues)
+          :when (stale? i now)]
+    (close! (:number i))
+    (println "closed" (:number i)
+             ": no reproducible snapshot since" (:reproduced (tally-of (:body i))))))
+
 (defn report-runs!
-  "File runs (values): every signature hit at least min-runs times, the most frequent first,
-   opening at most max-new issues; print what was filed and what was not. counts, when given, is
-   how many runs of each signature the job has had so far ({signature n}): a churn batch is judged
-   by those (issue #127), so a signature a few runs a batch hit is still filed once it adds up;
-   with no counts, by runs alone."
+  "File runs (values): every signature with a reproduced run (one is enough), the most frequent
+   first, opening at most max-new issues; print what was filed and what was not (summary-lines:
+   the job's counts so far of each, {signature n}, when given); then close the open issues past
+   their evidence (sweep!). A run is reproduced only when bb churn judged its snapshot to recur
+   at batch time, so bb failures report over a directory files nothing new."
   [runs report-title code-at counts]
   (doseq [[l color] [[label "d93f0b"] ["sim" "1d76db"] ["real" "0e8a16"]]]
     (gh! "-X"
@@ -365,21 +417,23 @@
          "-f" (str "name=" l)
          "-f" (str "color=" color)))
   (let [groups (grouped runs)
-        seen (fn [sig rs] (get counts sig (count rs)))]
+        now (str (java.time.Instant/now))]
     (println "runs:" (count runs)
-             "failed and filed-able:" (count (mapcat second groups))
+             "failed:" (count (mapcat second groups))
+             "reproduced:" (count (reproduced runs))
              "signatures:" (count groups))
     (doseq [line (summary-lines runs groups counts)] (println line))
     (reduce (fn [opened [sig rs]]
-              (cond (or (< (seen sig rs) min-runs) ; a one-off, so far
+              (cond (or (empty? (reproduced rs)) ; no evidence: counted, never filed
                         (and (>= opened max-new) (nil? (issue-for (issues) sig)))) ; no room for a new issue
                     opened
                     :else
-                    (let [what (file! report-title sig rs code-at)]
+                    (let [what (file! report-title sig rs code-at now)]
                       (println (count rs) (pr-str sig) (name what))
                       (if (= :opened what) (inc opened) opened))))
             0
-            groups)))
+            groups)
+    (sweep! now)))
 
 (defn report!
   "File the failed runs under dir (report-runs!)."
