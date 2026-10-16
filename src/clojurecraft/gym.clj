@@ -73,12 +73,8 @@
 (def dimension-wait-ms 30000)         ; how long the kit waits for the server to say the bot is in its row's dimension
 (def hungry-food 10)                  ; the food a :hungry landing waits for before the bot is told to go
 
-(def warped-reach 8)                  ; blocks round a located warped forest loaded while its floor is looked for
-(def warped-up 32)                    ; blocks over the located height the floor is looked for
-(def warped-down 40)                  ; and under it
-(def warped-columns ; columns round the located point tried for a floor, nearest first: a grid 4 apart, 8 out
-  (vec (sort-by (fn [[dx dz]] [(+ (abs dx) (abs dz)) dx dz])
-                (for [dx (range -8 9 4) dz (range -8 9 4)] [dx dz]))))
+(def warped-ranges [16 32 64 96])     ; blocks round a located warped forest a floor is spread for, nearer first
+(def warped-tries 3)                  ; spreads at each range before a wider one
 
 (def dimensions
   "The dimension each kind of landing (:gym/land) leaves the bot in; any other is the overworld.
@@ -799,52 +795,31 @@
   (when-let [[_ x y z] (re-find #"\[(-?\d+), (-?\d+), (-?\d+)\]" (str reply))]
     (mapv parse-long [x y z])))
 
-(defn floor-cells
-  "The cells a warped forest landing tries to stand the bot in round the located point [x y z],
-   in order: each of warped-columns, from warped-up over y down to warped-down under it."
-  [[x y z]]
-  (for [[dx dz] warped-columns
-        h (range (+ y warped-up) (- y warped-down) -1)]
-    [(+ x dx) h (+ z dz)]))
+(defn spread
+  "The command that stands the bot named name on a floor in the Nether within r blocks of x z,
+   under the roof (spreadplayers ... under 110: the highest place a body fits below y 110, where
+   vanilla judges a player safe: no lava, no fire)."
+  [x z r name]
+  (str "execute in " dimension/nether
+       " run spreadplayers " x
+       " " z
+       " 0 " r
+       " under 110 false " name))
 
-(defn open
-  "The test clause that passes when a body fits in cell [x y z]: a block a body passes through
-   (#minecraft:replaceable: air, and the warped roots and nether sprouts that carpet a warped
-   forest, probe run 38893018465), and not
-   lava or water, which that tag holds too."
+(defn warped?
+  "The test the server passes when cell [x y z] of the Nether is in a warped forest."
   [[x y z]]
-  (let [at (str x " " y " " z)]
-    (str " if block "
-         at
-         " #minecraft:replaceable unless block "
-         at
-         " minecraft:lava unless block "
-         at
-         " minecraft:water")))
-
-(defn floor-test
-  "The test the server passes when a body can stand at [x y z] in the Nether: nylium under the
-   feet, the feet and the head open. Gym batch pearls-263a (plan run 38892130785) asked for air
-   there and found no floor in any of three forests: warped roots and nether sprouts carpet them."
-  [[x y z]]
-  (str "execute in "
-       dimension/nether
-       " if block "
-       x
-       " "
-       (dec y)
-       " "
-       z
-       " #minecraft:nylium"
-       (open [x y z])
-       (open [x (inc y) z])))
+  (str "execute in " dimension/nether " if biome " x " " y " " z " minecraft:warped_forest"))
 
 (defmethod land! :warped-forest
   ;; the warped forest nearest the landing's Nether coordinates (an eighth of the overworld's, so
   ;; each landing has its own; issue #263's hunting ground, where endermen are the only hostile
-  ;; that spawns), its chunks loaded, a floor found by asking the server cell by cell
-  ;; (floor-cells, floor-test: under the Nether's roof there is no heightmap to stand on), the
-  ;; bot stood there with the row's setup round it
+  ;; that spawns), and a floor in it: the bot spread onto one round the located point (spread),
+  ;; nearer ranges first, until the server says where it stands is warped forest (warped?), then
+  ;; stood on that cell with the row's setup round it. Gym batches pearls-263a and b (plan runs
+  ;; 38892130785, 38895776486) looked for nylium cell by cell round the located point and found
+  ;; none: probe 38896760962 read that column netherrack from y 4 to 125, the biome's located
+  ;; height inside the rock
   [rc row name [x z _]]
   (let [dim dimension/nether
         reply (rcon/command! rc
@@ -857,16 +832,16 @@
                                   " run locate biome minecraft:warped_forest"))
         [bx _ bz :as at] (or (located-pos reply)
                              (throw (ex-info "no warped forest located" {:reply reply})))
-        square [(- bx warped-reach) (- bz warped-reach) (+ bx warped-reach) (+ bz warped-reach)]
-        where (str/join " " square)]
-    (rcon/command! rc (in-dimension dim (str "forceload add " where)))
-    (try (when-not (wait-loaded-in! rc dim square)
-           (throw (ex-info "the warped forest's chunks never loaded" {:at at})))
-         (let [[fx fy fz] (or (first (filter #(fixture/passed? (rcon/command! rc (floor-test %)))
-                                             (floor-cells at)))
-                              (throw (ex-info "no floor in the warped forest" {:at at})))]
-           (place! rc dim name [fx fz fy] 2 (vec (:gym/setup row))))
-         (finally (rcon/command! rc (in-dimension dim (str "forceload remove " where)))))))
+        floor (some (fn [r]
+                      (let [spread-reply (str (rcon/command! rc (spread bx bz r name)))
+                            p (when (str/starts-with? spread-reply "Spread")
+                                (fixture/position rc name))
+                            c (when p (mapv #(long (math/floor %)) p))]
+                        (cli/log "spread:" r spread-reply c)
+                        (when (and c (fixture/passed? (rcon/command! rc (warped? c)))) c)))
+                    (mapcat #(repeat warped-tries %) warped-ranges))
+        [fx fy fz] (or floor (throw (ex-info "no floor in the warped forest" {:at at})))]
+    (place! rc dim name [fx fz fy] 2 (vec (:gym/setup row)))))
 
 (defmethod land! :end
   ;; the main island (issue #261), ruststeve's End start: the island round the fountain loaded,
