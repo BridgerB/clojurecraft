@@ -940,6 +940,20 @@
          (<= (physics/horizontal-distance (physics/centre feet) (physics/centre stand))
              beside-reach))))
 
+(defn out-first?
+  "Does the refill's way to stand go out along the landing's column to out first (the feet nearer
+   the frame than the stand, fz under sz, measured out from it): not from beside the stand
+   (beside-stand?), and not when the straight way on from out crosses a cell a way never opens
+   (barred: the frame's rock, a cell lava lies in or beside), from which round-corner only sends
+   the feet back. Sim race 38855091523 (issue #178, world R1/34 seed 2): with the pool scooped to
+   its far side, the next stand's row from out crossed the pool's lava; round-corner sent the feet
+   a corner back toward the frame, the refill sent them out again, and from beside the stand
+   itself out again, until the run's time ran out."
+  [world origin facing stand out fz sz]
+  (and (< fz sz)
+       (not (beside-stand? world stand))
+       (clear-of? (barred world origin facing) out stand)))
+
 (defn refill
   "The child that refills lava, or the reason it cannot (:no-station, :no-bucket): the feet to the
    station's stand (toward-stand, from the room's landing at the lava's height when no route
@@ -956,7 +970,11 @@
                           [_ _ sz] (relative origin facing stand)
                           [_ _ fz] (relative origin facing (intent/feet world))
                           out (cell origin facing [lx h sz])]
-                      (toward-stand world (if (< fz sz) out stand) build origin facing))
+                      (toward-stand world
+                                    (if (out-first? world origin facing stand out fz sz) out stand)
+                                    build
+                                    origin
+                                    facing))
                     ;; a block off the stand's height beside it: stairs to it, not the landing again
                     (beside-stand? world stand) (toward-stand world stand build origin facing)
                     :else
