@@ -285,7 +285,7 @@
   :problem/done
   "sim tests for each mechanic pass against the model, and the sim lanes' runs show deaths and foods eaten (:run/respawns, :run/eaten)."
   :problem/last-failure
-  "Not played yet: the sim lanes ran without hunger or mobs while the real races ran at Normal (#257), so a death or an empty bar was a real-only failure."
+  "Not played yet: the sim lanes ran without hunger or mobs while the real races ran at Normal (#257), so a death or an empty bar was a real-only failure. Hunger landed first (PR #270: the bar drains at Normal in every sim lane run); then mobs (night and dark spawns, melee, arrows, creeper blasts, the 775 attack with its hurt window, loot), so a lane run now dies to a zombie as a real one does (mob_test the-bot-killed-by-a-zombie-respawns)."
   :problem/sources ["brain/bot/tooling/server-model.md" "docs/RICH-HICKEY.md"]}
  {:problem/stage :mob-model
   :problem/issue 258
