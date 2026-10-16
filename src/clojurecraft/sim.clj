@@ -2088,7 +2088,11 @@
           dead-at (cond-> sim (>= (- (:sim/now sim) dead-at) over) (remove-mob eid))
           (:perched k) (perch sim eid)
           (or (:passive k) (:crystal k)) sim
-          :else (let [sim (burn sim eid)] (cond-> sim (get-in sim [:sim/mobs eid]) (chase eid))))))
+          :else
+          (let [sim (burn sim eid)
+                burnt (get-in sim [:sim/mobs eid])]
+            ;; one the sun just killed is dying, not chasing
+            (cond-> sim (and burnt (not (:dead-at burnt))) (chase eid))))))
 
 (defn spawning?
   "Does the night rule spawn hostiles: a difficulty above peaceful, in the overworld?"
