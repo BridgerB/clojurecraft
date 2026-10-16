@@ -128,6 +128,17 @@
    (at-offset d)
    " minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}},SpawnCount:2,MaxNearbyEntities:6,RequiredPlayerRange:16,SpawnRange:2,MinSpawnDelay:40,MaxSpawnDelay:80}"))
 
+(defn slow-blaze-spawner
+  "A blaze spawner at d that makes one blaze at a time, every three to six seconds, two at most
+   near it: blaze-spawner's two every two to four seconds put three blazes' volleys on the bot at
+   once, and gym blaze-7c runs 1 and 2 (run 38894258652) went from 16 health to nothing in two
+   seconds, five hits in a row, before any break-off could act."
+  [d]
+  (str
+   "setblock "
+   (at-offset d)
+   " minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}},SpawnCount:1,MaxNearbyEntities:2,RequiredPlayerRange:16,SpawnRange:2,MinSpawnDelay:60,MaxSpawnDelay:120}"))
+
 (defn endermen
   "n endermen at d that never despawn: the pearls' other source, the End's crowd."
   [n d]
@@ -450,7 +461,8 @@
    ;; their fireballs, so the break-off under 10 health and the meal after it are played. Fire
    ;; Resistance, as ruststeve's arena gave ("fire resistance only stops the burn"): a burning bot
    ;; in the Nether has no water to put it out, and blaze-7a runs 1 and 2 (run 38891910129) burned
-   ;; to death inside a minute
+   ;; to death inside a minute. The spawner is the slow one (slow-blaze-spawner): blaze-7c died to
+   ;; volleys of three blazes at once
    {:gym/goal :blaze-rods
     :gym/name "blaze-7"
     :gym/until "blaze-rods"
@@ -458,7 +470,7 @@
     :gym/difficulty "normal"
     :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 16"]
     :gym/summon (into iron-armour
-                      [fire-resistance no-fire (blaze-spawner [3 0 3])
+                      [fire-resistance no-fire (slow-blaze-spawner [3 0 3])
                        (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
     :gym/timeout-ms 900000
     :gym/truth [(rods-held 7)]}
