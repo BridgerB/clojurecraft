@@ -45,7 +45,6 @@
 (def side-steps [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) ; the cells beside a spawner a stand is looked for in
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def cover-range 16.0)                ; blazes this near that see the bot are the ones a hurt bot takes cover from (they shoot that far)
-(def cover-distance 10)               ; blocks on the plane a walk into cover puts between the bot and the blaze
 (def eat-under 14.0)                  ; health under which a meal comes before the next fight, the food under the healing level: one volley takes 9
 
 (def rod (recipe/item-id :blaze_rod))
@@ -172,16 +171,29 @@
                     pos
                     cover-range)))
 
+(def body-over-cell 0.4)               ; blocks over its cell's centre a blaze's body is looked for (its aim, combat/aim-height over its feet)
+
+(defmethod path/goal-done? :unseen
+  ;; a cell from whose eye height the line to the body of the blaze in the cell :goal/pos is
+  ;; blocked: out of its sight
+  [world {:goal/keys [pos]} [x y z]]
+  (not (combat/clear? world
+                      [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)]
+                      (update (physics/centre pos) 1 + body-over-cell))))
+
+(defmethod path/heuristic :unseen [_ _] 0.0)
+
 (defn cover
-  "A walk out of the sight of blaze e: to the end of a route at least cover-distance away from it
-   on the plane (path's :away goal; back along the tunnel the bot came by), or nil when there is
-   none. Gym blaze-fortress-e (run 38900794167) stood by its spawner under 10 health, waiting
-   to heal while burning and shot, and every run died there."
+  "A walk into the nearest cell out of the sight of blaze e (path's :unseen goal; back round the
+   tunnel's corner the bot came by), stood in, or nil when no route finds one. Gym
+   blaze-fortress-e (run 38900794167) stood by its spawner under 10 health, waiting to heal while
+   burning and shot, and every run died there; blaze-fortress-f (run 38902306126) walked to a
+   cell ten off on the plane that the blazes still saw, the walk done at once in reach of it,
+   twenty times a second."
   [world e]
-  (let [r (path/plan
-           world
-           (path/feet-cell (:player/pos world))
-           {:goal/kind :away :goal/pos (hunt/cell (:entity/pos e)) :goal/range cover-distance})]
+  (let [r (path/plan world
+                     (path/feet-cell (:player/pos world))
+                     {:goal/kind :unseen :goal/pos (hunt/cell (:entity/pos e))})]
     (when (= :found (:path/status r))
       {:intent/kind :walk :intent/target (last (:path/waypoints r)) :intent/for :cover})))
 

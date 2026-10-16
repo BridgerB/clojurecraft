@@ -12,7 +12,6 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main]
             [clojurecraft.memory :as memory]
-            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -175,11 +174,14 @@
 (deftest hurt-the-bot-hides-backs-away-eats-or-waits
   (let [near (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)
         hurt (fn [w] (assoc w :player/health 8.0))]
-    (testing "seen by a blaze, out of its sight (gym blaze-fortress-e)"
-      (let [i (next-intent (hurt (standing {7 near})))]
-        (is (= [:walk :cover] [(:intent/kind i) (:intent/for i)]))
-        (is (> (physics/horizontal-distance (:intent/target i) [10 65 8]) blaze/cover-distance)
-            "ten off on the plane")))
+    (testing
+      "seen by a blaze, into the cell behind a pillar, out of its sight (gym blaze-fortress-e, f)"
+      (let [pillar {[6 64 8] (blocks/default-state :stone) [6 65 8] (blocks/default-state :stone)}]
+        (is (= {:intent/kind :walk :intent/target [5 64 8] :intent/for :cover}
+               (next-intent
+                (hurt (assoc (standing {7 near}) :world/chunks {[0 0] (world/column pillar)})))))
+        (is (= {:intent/kind :back-off :intent/target 7} (next-intent (hurt (standing {7 near}))))
+            "in the open nothing hides: backed away from")))
     (is (= {:intent/kind :back-off :intent/target 7}
            (next-intent (hurt
                          (assoc (standing {7 near}) :world/chunks {[0 0] (world/column closet)}))))

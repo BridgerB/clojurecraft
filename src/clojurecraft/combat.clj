@@ -220,17 +220,20 @@
 (def creeper-radius 6.0)              ; a creeper this near is backed away from, never fought
 (def attack-radius 16.0)              ; the gym's :attack kills every hostile this near
 
-(defn seen?
-  "Is the line from the eye to entity e's aim clear of solid cells (terrain/solid-fn: an unloaded
-   cell is solid), sampled every sight-step?"
-  [world e]
-  (let [eye (game/eye world)
-        to (aim e)
-        d (physics/distance eye to)
+(defn clear?
+  "Is the line from point a to point b clear of solid cells (terrain/solid-fn: an unloaded cell is
+   solid), sampled every sight-step, a's own cell aside?"
+  [world a b]
+  (let [d (physics/distance a b)
         solid? (terrain/solid-fn world)]
     (or (< d 1.0e-6)
         (not-any? (fn [[x y z]] (solid? x y z))
-                  (rest (physics/cells-along eye (mapv #(/ (- %2 %1) d) eye to) d sight-step))))))
+                  (rest (physics/cells-along a (mapv #(/ (- %2 %1) d) a b) d sight-step))))))
+
+(defn seen?
+  "Is the line from the eye to entity e's aim clear (clear?)?"
+  [world e]
+  (clear? world (game/eye world) (aim e)))
 
 (defn hittable?
   "Can entity e be fought from where the bot stands: its feet no more than over-feet over the
