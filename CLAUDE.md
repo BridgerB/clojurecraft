@@ -79,6 +79,7 @@ src/clojurecraft/mob.clj      mobs as the server runs them, for the model: kinds
 src/clojurecraft/end.clj      the End for the model: frame states, the ring that lights the portal, the platform, the spikes, an eye's flight
 src/clojurecraft/capture.clj  real worlds for the model: a real server's chunk columns round each landing, one world file a landing
 src/clojurecraft/simrace.clj  the sim race: the whole bot in captured worlds against the model, every core, failures by signature
+src/clojurecraft/real.clj     real failures as snapshots: a race's recording folded at its commit, the model joined to the bot at a moment, kept when it recurs
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin
 src/clojurecraft/claims.clj   landing cells as values: the pure claims reducer (first come first served) and the spiral of cells
 src/clojurecraft/race.clj     the race: N bots (main/run-bot!, each its own atom and loop) on one server, one claims channel, the board
@@ -119,6 +120,7 @@ clojure -M:capture --port 25571 --rcon-port 25581 --rcon-pass "$(cat data/local-
 clojure -M:simrace --worlds cache/sim-worlds/R1 --seeds 2       # the bot in captured worlds against the model (simrace.yml: eight runners)
 clojure -M:simrace --world cache/sim-worlds/R1/7.edn.gz --seed 3 --seeds 1   # one run again, as an issue reproduces it
 clojure -M:simrace --judge test/issues/37/R2-16-3.edn.gz      # a failure's kept moment judged over its window, as the check does: does it recur?
+clojure -M:simrace --from-recording s2/Clj_r17.edn.zst --out d # a real failure as a snapshot (real.clj), kept only when it recurs against the model
 bb issue-check fetch 37                                        # an issue's snapshots into test/issues/37/, for a fix/37-* PR to commit
 bb churn batch real|sim <data-dir> <artifact> <run> <sha> <code-at> <runner>   # a runner's report every 20 minutes: the runs ended since its last (race.yml, simrace.yml)
 bb failures report <dir> <title>                                # failed runs by signature, one issue each, one comment a batch (bb churn calls it on each batch)

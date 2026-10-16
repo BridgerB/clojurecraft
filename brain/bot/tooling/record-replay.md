@@ -34,6 +34,7 @@ related:
   - "[[bot/tooling/_moc|Tooling]]"
   - "[[reducer-and-effects]]"
   - "[[randomness-on-the-tick]]"
+  - "[[real-snapshots]]"
 ---
 
 # Record and replay
@@ -60,6 +61,7 @@ related:
 - **A fold by other code is another run, not a truncated file.** Issue #111 took the race's recordings for truncated: folded with `main` of the day, Clj_r11 (race 38477665442, runner 3) ended tens of blocks from its RESULT with the plan still `:active`. The file was whole (96,338 lines, its last tick 50 ms before the race log's RESULT, the `#:record{:result ...}` line last) and at its own commit, 1d31d21, replayed `:replay/result :identical`; with a07f814 the first mismatch was event 7843, a dig that #101 made wait for the server's block update where the old code took the ack. So `replayed` now says whose code folded the file: `:replay/commit {:recorded sha :running sha}` (`record/header`, `running-commit` = git's HEAD) and `:replay/code` (`replay-code`: `:same`, `:other`, `:unrecorded`, `:unknown`); `clojure -M:replay` warns on stderr at `:other`. `bb replay <file>` (`bb/clojurecraft/replays.clj`) folds at the recording's own commit in a detached worktree under `.worktrees/<sha>` (fetched when missing), unpacks a race artifact's `.zst` beside itself, and `--here` folds with the working tree's code on purpose (`a-replay-says-whose-code-folded-the-recording`).
 - A recording ends at RESULT: `main` writes the RESULT into the file (`{:record/result ...}`, read back by `recorded-result`) and closes the tap before any hold, so the hold for an outside judge is not recorded. `main/replayed` judges the fold with the run's own `--until` and the same `ok?` rule, and reports `:replay/result :identical` when it reaches exactly the RESULT the run printed (else the recorded one, to compare). Older recordings without a result report `:not-recorded`.
 - Harness `:go` is an external event and is recorded like any other.
+- A race's recording is hundreds of thousands of lines: `record/reduce-entries` folds one a line at a time (`entries` holds them all), and `input-of` reads `.gz` through gzip and a race artifact's `.zst` through the zstd command. [[real-snapshots]] folds whole ones this way.
 
 ## See also
 - [[gym-on-runners]]

@@ -503,7 +503,9 @@
    a spec test. With --expect recur, it exits 1 unless every one recurs (the base code: the
    moment must reproduce the failure); with --expect pass, unless none does (the fix).
    --from-landing f replays a snapshot's run from its landing to its stage (from-landing!): a
-   probe's tool for the whole road, up to default-max-minutes, never the check's."
+   probe's tool for the whole road, up to default-max-minutes, never the check's.
+   --from-recording f turns a real race's recording into a snapshot of its failure
+   (real/from-recording!: --signature, --out, --name, --seed, --round), kept only when it recurs."
   [& args]
   (let [o (cli/options args)]
     (cond (get o :judge)
