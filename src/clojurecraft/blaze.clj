@@ -93,16 +93,18 @@
   (< (:player/health world 20.0) combat/retreat-health))
 
 (defn healing
-  "What a hurt bot does: back away from the nearest blaze within combat/back-off-to; else eat when
-   the food is under hunger/heal-level (health comes back only from there) and food is held; else
-   wait :healing."
+  "What a hurt bot does: eat when the food is under hunger/heal-level (health comes back only from
+   there, and fast while the meal's saturation lasts) and food is held; else back away from the
+   nearest blaze within combat/back-off-to; else wait :healing. The meal first: gym blaze-7 run 1
+   (run 38891910129) backed away three times round a room seven square with the food at 17, where
+   no back-off gets away, and burned to death without eating."
   [world]
   (let [[eid e] (quarry world)
         food (eat/food-held world)]
-    (cond (and e (< (physics/distance (:player/pos world) (:entity/pos e)) combat/back-off-to))
-          {:intent/kind :back-off :intent/target eid}
-          (and food (< (:player/food world hunger/heal-level) hunger/heal-level))
+    (cond (and food (< (:player/food world hunger/heal-level) hunger/heal-level))
           {:intent/kind :eat :intent/item food}
+          (and e (< (physics/distance (:player/pos world) (:entity/pos e)) combat/back-off-to))
+          {:intent/kind :back-off :intent/target eid}
           :else {:plan/wait :healing})))
 
 (defn to-spawner
