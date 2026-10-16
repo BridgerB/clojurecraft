@@ -10,6 +10,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.eyes]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
@@ -2985,4 +2986,25 @@
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (:wooden_pickaxe (held w))))
     (is (= (* 32 64) (:sand (held w))) "one stack of sand thrown, no more")
+    (is (= [] (:sim/violations sim)))))
+
+(deftest eyes-of-ender-from-rods-and-pearls
+  ;; issue #264: the rods and pearls the two stages before make, given; blaze powder from the rods
+  ;; and twelve eyes from the powder and the pearls, all in the 2x2 grid, through the craft rows
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes {})
+                                    :spawn [0.5 64.0 0.5]
+                                    :inventory
+                                    {[:hotbar 0] {:item (recipe/item-id :blaze_rod) :count 7}
+                                     [:hotbar 1] {:item (recipe/item-id :ender_pearl) :count 12}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         120000
+                         {:event/kind :go :go/goals [:eyes-of-ender]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (<= 12 (get (held w) :ender_eye 0)))
+    (is (= 1 (get (held w) :blaze_rod 0)) "six rods for twelve powder, one left")
+    (is (zero? (get (held w) :ender_pearl 0)))
+    (is (empty? (:window/grid w)) "nothing left in the grid")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
     (is (= [] (:sim/violations sim)))))

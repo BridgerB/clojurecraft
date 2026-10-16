@@ -26,6 +26,7 @@
             [clojurecraft.drops]
             [clojurecraft.eat]
             [clojurecraft.entity :as entity]
+            [clojurecraft.eyes]
             [clojurecraft.fortress]
             [clojurecraft.game :as game]
             [clojurecraft.hunt]
