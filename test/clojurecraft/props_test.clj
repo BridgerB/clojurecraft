@@ -135,9 +135,13 @@
                  (>= (- t1 t0) (intent/dig-time id)))))))
 
 (def breakable-states
-  "Every state id of a block with a hardness above zero: what a dig may be asked for."
-  (vec
-   (for [[n _ lo _] blocks/table :let [h (blocks/hardness-by-name n)] :when (and h (pos? h))] lo)))
+  "Every state id of a block with a hardness above zero that a dig may be asked for: never a
+   block intent/never-dug refuses (obsidian: the property drew it with a diamond pickaxe and
+   expected START, run 38828627876)."
+  (vec (for [[n _ lo _] blocks/table
+             :let [h (blocks/hardness-by-name n)]
+             :when (and h (pos? h) (not (contains? intent/never-dug (keyword n))))]
+         lo)))
 
 (def holdable-items "Every tool item id, and the hand." (into [nil] (keys blocks/tools)))
 

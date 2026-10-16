@@ -410,7 +410,14 @@
            {:name name :result r :truth @truth})
          (catch Exception e
            (cli/log name "failed:" e)
-           {:name name :result {:ok false :reason :crashed :error (ex-message e)}})
+           (let [r {:ok false
+                    :reason :crashed
+                    :error (ex-message e)
+                    :until (:until server)
+                    :plan (plan/summary @world*)}]
+             (println "RESULT" name (pr-str (marked r))) ; filed at the stage it crashed in (issue #152)
+             (flush)
+             {:name name :result r}))
          (finally ((:unwatch watcher) world*) (swap! live dissoc name)))))
 
 (defn slot!
