@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, dig, data, tools]
 aliases: [dig/ms, hardness.edn, harvest.edn, materials.edn, needs-tool.edn, best-tool, harvest?, drops-need-tool?, requiresCorrectToolForDrops, tier-rank, jar-probe]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-15
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/dig.clj#defn ms
@@ -22,6 +22,7 @@ sourceRefs:
   - dev/clojurecraft/jar_probe.clj#defn materials
   - dev/clojurecraft/datagen.clj#defn harvest
   - test/clojurecraft/dig_test.clj#the-worked-table
+  - test/clojurecraft/dig_test.clj#a-block-of-hardness-zero-breaks-at-once
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[dig-timeline]]"
@@ -46,6 +47,7 @@ The fastest held tool of the block's own kind that harvests it, as `[slot item]`
 ## Gotchas
 - **Stone by hand drops nothing, in 7500 ms.** The issue said so; reading only the tags (no `needs_*_tool` tag on stone) had made it 2300 ms with cobblestone dropped, and the sim handed out cobblestone to a bare hand. The tags carry the tier, not whether the block needs its tool at all: that is `requiresCorrectToolForDrops`, a property of the block in code (411 blocks in 26.1.2), now read from the game's classes.
 - **A penalty divides the speed before the ceiling.** Stone with a wooden pickaxe off the ground is 5650 ms (speed 0.4, ceil(112.5) = 113 ticks), not 5750 (5 × 1150).
+- **Hardness 0 is never divided by.** An azalea, a torch, a sapling break at once: `dig/ms` answers 0 before the formula. The hardness is a boxed double, and Clojure's `/` on boxed numbers throws on a zero divisor where a primitive one gives infinity: sim race 38762695024 runner 8 (issue #152, every seed of world R1/24) tunnelled toward the water's bank through a lush cave at y 8, dug a block of hardness 0, and the run crashed with `ArithmeticException: Divide by zero` (`a-block-of-hardness-zero-breaks-at-once`). The crash RESULT carries no plan, so it was filed as `[:wood :crashed]`, though the run was at the water bucket.
 - Leaves' hardness is `0.20000000298023224`: the game's float widened. Kept as the game has it; the ceiling makes it 6 ticks either way.
 - `materials.edn` names tiers as item names spell them (`:wooden`, `:golden`), not as `ToolMaterial` does (`WOOD`, `GOLD`).
 
