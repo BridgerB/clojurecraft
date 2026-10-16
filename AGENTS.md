@@ -579,7 +579,7 @@ Walk, dig, collect, each `:intent/for :log`, chained from `:plan/last`. `:wood` 
 2. `:lay`: child `:place` of a `filler` per cell; refused or no filler → `refuse`.
 3. `:open`: child dig of the topmost solid cell (`dig-next` equips a stowed tool or fails via `tool-missing`). Child `:target-gone` counts done (`fell?`); child in `refusals` `#{:needs-tool :unsafe}` → turn; `:rejected` → dig again up to `max-rejections` 3, then `:rejected`; any other child reason fails the staircase.
 4. `:step`: walk `onto` the new feet cell. `taken?`: half a block past start in the stair's direction, `centred?`, on ground going up. Stair cell solid again (gravel) → `:open`. `step-timeout-ticks` 200 (10 s) → `:stair-not-taken`.
-5. `:level`: child digs of level cells, walk until feet in the cell; 200-tick clock restarts per dig.
+5. `:level`: child digs of level cells, walk until feet in the cell; 200-tick clock restarts per dig. A child in `refusals` (gravel fallen in under water after the step was chosen, #171) is `level-refused`: a tunnel plans again, a staircase turns.
 6. Done: down at/below `to-y`; up on ground at `to-y`, or `out?` unless `:intent/to-height?`.
 - Cells: `stair-cells` head-up, head, new feet one down; `up-cells` over head, new head, new feet one up; `level-cells` head and feet one along.
 - `clear-way?`: no opened cell water, lava or unloaded; no lava in any `exposed` cell; new feet not in `:plan/boxed-at`. `safe?` adds a solid floor. Water beside a stair is allowed, lava is not; a cell that itself borders water is refused by the dig (`:unsafe`) and the stair turns.
