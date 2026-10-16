@@ -501,6 +501,28 @@
                      :smallest (get-in r [:shrunk :smallest])})))
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk :num-tests :seed])))))
 
+(deftest a-trunk-on-a-two-high-mound-is-not-dug-from-its-foot
+  ;; the forest property at FOREST_SEED 388575908371, shrunk: the trunk on the two-high mound was
+  ;; dug from the ground three cells off, its drop rested on the mound top out of the pickup box,
+  ;; the collect timed out and a second log was dug for the first. Banks the bot climbs stand
+  ;; beside it; it ends holding one log, from one of them
+  (let [trees [{:x 12 :z 5 :h 3 :id 137 :mound 1 :canopy? false :branch nil}
+               {:x 8 :z 6 :h 3 :id 137 :mound 0 :canopy? true :branch nil}
+               {:x 4 :z 6 :h 3 :id 137 :mound 2 :canopy? false :branch nil}]
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes (forest trees))
+                                    :spawn [0.5 64.0 0.5]})
+                         #(or (plan/done? %) (plan/failed? %))
+                         (:gym/timeout-ms (gym/gym "wood"))
+                         {:event/kind :go :go/goals [:wood]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (inventory/logs-held w)) "one log, no second dug for a drop left on the mound")
+    (is (not-any? #(= [:failed :not-picked-up] [(:intention/event %) (:intention/reason %)])
+                  (memory/intentions w))
+        "no collect timed out")
+    (is (empty? (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- intentions as facts
 
 (deftest what-the-bot-was-doing-is-a-query-as-of-any-moment
