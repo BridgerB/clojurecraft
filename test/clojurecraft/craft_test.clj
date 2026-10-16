@@ -193,7 +193,7 @@
     (is (= [[(inventory/toss-click main-0) 5]] (clicks fx))
         "one stack of junk thrown, once the eyes look up, and nothing laid")
     (is (= window/toss-pitch (second (:player/look w))))
-    (let [[_ fx] (fx/fold step w [(set-slot 6 main-0 nil) (tick 200)])]
+    (let [[_ fx] (fx/fold step w [(set-slot 6 main-0 nil) (tick 200) (tick 250)])]
       (is (= [[(inventory/left-click hotbar-0) 6]] (clicks fx))
           "with a slot free for the sticks, the planks are laid"))))
 
