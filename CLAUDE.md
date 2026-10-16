@@ -38,6 +38,7 @@ src/clojurecraft/memory.clj   observation facts in DataScript, with time, after 
 src/clojurecraft/game.clj     the protocol reducer: handshake, keep-alive, teleports, every packet's handler, ticks
 src/clojurecraft/inventory.clj the player's items and screen as values: slot maps, window state, what is held
 src/clojurecraft/entity.clj   every entity the server shows as values: type, position, velocity, a living one's health; hostiles, nearest, gone?
+src/clojurecraft/observe.clj  trials of what the bot sees: goals done when the world holds a fact the server sent (the entities trial)
 src/clojurecraft/terrain.clj  the blocks around the bot: columns, the block overlay, block-at, solid-fn; feeds memory
 src/clojurecraft/path.clj     a route for the feet over the block grid: A* with a node budget, moves and goals as data
 src/clojurecraft/dig.clj      a block's break time and drop as a pure function of block, held item and penalties, over the generated tables
@@ -68,6 +69,8 @@ src/clojurecraft/record.clj   the recording: a channel tap, reading it back, rep
 src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server, print RESULT
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs; holds a whole world of columns
 src/clojurecraft/fluid.clj    water and lava as the server moves them: levels, flow, spread, mixing, as data and pure rules
+src/clojurecraft/hunger.clj   hunger as the server keeps it: exhaustion, saturation, regeneration, starvation, eating, as data and pure rules
+src/clojurecraft/mob.clj      mobs as the server runs them, for the model: kinds as data, spawning, walking, hitting, shooting, blasting, loot
 src/clojurecraft/capture.clj  real worlds for the model: a real server's chunk columns round each landing, one world file a landing
 src/clojurecraft/simrace.clj  the sim race: the whole bot in captured worlds against the model, every core, failures by signature
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin

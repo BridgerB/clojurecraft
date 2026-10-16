@@ -3,7 +3,7 @@ title: Survival
 description: How the bot lives through Normal difficulty (issue #259) - the food from set-health, the :eat always row and its executor (food in hand, one use-item, done when the server's food rises), the game's food as data, the sim's eating, the eat gym row's hungry landing, armour (worn by two window-0 clicks, made from spare ingots), and fighting (the 775 attack packet, :fight paced by the clock, :defend, :back-off, the gym's :attack, the sim's mobs).
 type: reference
 tags: [bot, plan, survival, food, intents, goals]
-aliases: [:fight, :back-off, :defend, :attack, :safe?, :cleared?, attack packet, :intent/swings, ghost, :sim/mobs, :wear, :wear-armour, :armour, :dressed?, :armoured?, spare-ingots, :eat, :fed?, :player/food, :player/saturation, hungry-below, edible, food-held, :not-eaten, food/nutrition, :sim/food, :hungry landing]
+aliases: [:fight, :back-off, :defend, :attack, :safe?, :cleared?, attack packet, :intent/swings, ghost, :wear, :wear-armour, :armour, :dressed?, :armoured?, spare-ingots, :eat, :fed?, :player/food, :player/saturation, hungry-below, edible, food-held, :not-eaten, food/nutrition, :sim/food, :hungry landing]
 status: verified
 lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
@@ -58,7 +58,6 @@ sourceRefs:
   - "resources/clojurecraft/goals.edn#{:goal/id :attack"
   - src/clojurecraft/plan.clj#defn through
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :attack]
-  - src/clojurecraft/sim.clj#defn mob-packets
   - test/clojurecraft/combat_test.clj#an-attack-is-its-own-packet-the-entity-id-alone
   - test/clojurecraft/combat_test.clj#a-fight-faces-its-target-then-attacks-650-ms-apart
   - test/clojurecraft/combat_test.clj#a-target-that-takes-25-swings-is-a-ghost
@@ -66,7 +65,7 @@ sourceRefs:
   - test/clojurecraft/combat_test.clj#a-zombie-at-hand-is-fought-a-creeper-backed-away-from
   - test/clojurecraft/combat_test.clj#no-two-attacks-within-600-ms
   - test/clojurecraft/combat_test.clj#a-zombie-at-hand-is-killed-against-the-model
-  - test/clojurecraft/combat_test.clj#the-attack-trial-walks-to-a-husk-and-kills-it-against-the-model
+  - test/clojurecraft/combat_test.clj#the-attack-trial-kills-a-zombie-coming-from-afar-against-the-model
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[water-escape]]"
@@ -118,7 +117,7 @@ Gym row `armour`: the portal's iron, a table and 13 ingots given; judged by `exe
 
 **`:attack`** (`--until attack`): the gym's trial, every hostile within `attack-radius` 16 fought (`quarry`, done by `:cleared?`, and not before `look-ms` 3000 after the plan went active: the server shows a landing's entities a moment after its chunks, and gym attack-259a run 3 was done 0.2 s after the go with its husk unseen). It is the first row marked `:goal/aside?`: `plan/through`, `plan/current-until` and the results page's chain leave asides out, as they leave out the water trial, so no chained run ever takes it as a step.
 
-**The model's mobs.** `sim/init` takes `:mobs {eid {:type :pos :health}}`: shown at login (`mob-packets`: add-entity, then the health as metadata index 9), standing where they are. An `attack` on one in reach (`mob-reach` 4 from the eye to its middle) and past its `hurt-ms` 500 takes the held sword's damage (`weapon-damage`, a fist 1) and tells the health; at none, its death event (status 3) and its removal. `:sim/attacks` and `:sim/hits` count them. The mobs do not move or hit back.
+**The model's mobs** are issue #258's ([[sim-mobs]]): `sim/init` takes `:mobs [{:type :pos}]`, zombies walk at the bot and hit it, and an `attack` in reach hurts by the held item. The fight tests kill a zombie at hand with `:defend` and one coming from afar with the `:attack` trial against it.
 
 **Gym rows.** `attack`: a husk with `NoAI` (a husk does not burn by day) three east of the landing at noon, a stone sword; judged by no husk within 24 of the landing, and the attacks' spacing read from the recording. `defend`: three zombies two blocks round the landing at midnight, the bot in iron armour put on by the fixture (`item replace`, since a zombie at hand comes before dressing) with an iron sword; judged by a zombie killed (a kill counter the setup adds, `minecraft.killed:minecraft.zombie`: counting zombies round the landing counted the night's new ones too), health left and no death. Not all three: the row is done when none is within 4, and in gym defend-259a the others wandered off while the first was fought. Truths are asked at the landing, not `execute as` the bot: that answered RCON with nothing.
 
