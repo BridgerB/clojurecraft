@@ -6,11 +6,15 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.main :as main]
+            [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.sim :as sim]
             [clojurecraft.stronghold :as stronghold]
             [clojurecraft.world :as world]))
 
@@ -144,7 +148,7 @@
                                 [(eye-added 90 [8.5 64.9 8.5])]
                                 flight
                                 [(fx/packet {:packet/name :remove-entities :ids [90]})]
-                                (fx/ticks 2950 3050)))
+                                (fx/ticks 2950 4000)))
         use (first (filter #(= :use-item (:packet/name %)) (fx/packets fx)))
         [t :as ts] (:stronghold/throws w)
         i (:plan/intent w)]
@@ -175,3 +179,135 @@
                            :stronghold/throws
                            [{:throw/from [0.0 64.0 0.0] :throw/dir [1.0 0.0] :throw/at 0}])
                     throw-row)))
+
+(deftest a-throw-waits-for-the-eyes-drop-after-the-removal
+  ;; the removal and the dropped item's add need not come in one tick: the throw is done when the
+  ;; item lies where the eye ended, and the search's next step picks it up
+  (let [flight (mapcat (fn [k]
+                         (concat (fx/ticks (+ 450 (* k 250)) (+ 700 (* k 250)))
+                                 [(eye-moved 90 [0.6 0.1 0.8])]))
+                (range 10))
+        removed (concat (fx/ticks 0 450)
+                        [(eye-added 90 [8.5 64.9 8.5])]
+                        flight
+                        [(fx/packet {:packet/name :remove-entities :ids [90]})]
+                        (fx/ticks 2950 3100))
+        [w _] (fx/fold intent-step throwing removed)
+        [w2 _] (fx/fold intent-step
+                        w
+                        (concat [(fx/packet {:packet/name :add-entity
+                                             :entity-id 91
+                                             :uuid nil
+                                             :type blocks/item-entity-type
+                                             :x 14.5
+                                             :y 64.0
+                                             :z 16.5})]
+                                (fx/ticks 3100 3200)))]
+    (is (= :active (:intent/status (:plan/intent w))) "the eye gone, its drop not yet come")
+    (is (= :done (:intent/status (:plan/intent w2))) "done once the drop lies there")
+    (is (= {:intent/kind :collect-drops
+            :intent/item :ender_eye
+            :intent/target [14 64 16]
+            :intent/for :stronghold}
+           (stronghold/stronghold-next (assoc w2 :plan/last (:plan/intent w2))))
+        "the search picks it up first")))
+
+;; ---------------------------------------------------------------- the search
+
+(def flat
+  "Chunk columns of the stone floor from chunk -4 to 4 each way: blocks -64 to 79."
+  (into {} (for [cx (range -4 5) cz (range -4 5)] [[cx cz] (world/column {})])))
+
+(defn throw-fact
+  "A throw from [x y z] along [dx dz] made at ms at."
+  [from dir at]
+  {:throw/from (mapv double from) :throw/dir (mapv double dir) :throw/at at})
+
+(defn searching
+  "standing on the flat floor at [x 64 z] with the throws ts."
+  [[x z] ts]
+  (cond-> (assoc (standing) :world/chunks flat :player/pos [x 64.0 z])
+    (seq ts) (assoc :stronghold/throws (vec ts))))
+
+(def row (first (filter #(= :stronghold (:goal/id %)) plan/goals)))
+
+(defn plane-distance [[ax _ az] [bx bz]] (math/hypot (- ax bx) (- az bz)))
+
+(deftest the-search-throws-walks-off-the-line-and-throws-again
+  (testing "no throw yet: one"
+    (is (= {:intent/kind :throw-eye :intent/for :stronghold}
+           (stronghold/stronghold-next (searching [8.5 8.5] [])))))
+  (testing "one throw: a hop toward the second throw's spot, 150 blocks off at 45 degrees"
+    (let [t (throw-fact [8.5 64.9 8.5] [0 1] 0)
+          spot (stronghold/second-spot t)
+          i (stronghold/stronghold-next (searching [8.5 8.5] [t]))]
+      (is (near? [-97.57 114.57] spot 0.01))
+      (is (= [:walk :stronghold] [(:intent/kind i) (:intent/for i)]))
+      (is (< 28 (plane-distance (:intent/target i) [8.5 8.5]) 36) "a hop of 32")
+      (is (< (plane-distance (:intent/target i) spot) (- (plane-distance [8.5 0 8.5] spot) 28))
+          "toward the spot")))
+  (testing "at the spot: the second throw"
+    (let [t (throw-fact [8.5 64.9 8.5] [0 1] 0)
+          [sx sz] (stronghold/second-spot t)]
+      (is (= {:intent/kind :throw-eye :intent/for :stronghold}
+             (stronghold/stronghold-next
+              (assoc (searching [8.5 8.5] [t]) :player/pos [sx 64.0 sz]))))))
+  (testing "no eye left: the wait names it"
+    (is (= {:plan/wait :no-eye}
+           (stronghold/stronghold-next (assoc (searching [8.5 8.5] []) :player/inventory {}))))))
+
+(deftest two-crossing-throws-walk-to-the-crossing-and-look-round-it
+  (testing "far from the crossing: a hop toward it"
+    (let [a (throw-fact [8.5 64.9 8.5] [0 1] 0)
+          b (throw-fact [108.5 64.9 8.5]
+                        [(/ -100 (math/hypot 100 300)) (/ 300 (math/hypot 100 300))]
+                        1)
+          w (searching [8.5 8.5] [a b])
+          i (stronghold/stronghold-next w)]
+      (is (near? [8.5 308.5] (stronghold/crossing w) 1e-6))
+      (is (= :walk (:intent/kind i)))
+      (is (< 36 (nth (:intent/target i) 2) 42) "32 blocks on toward it")))
+  (testing "at the crossing, the last throw far off: a throw from here"
+    (let [a (throw-fact [8.5 64.9 -291.5] [0 1] 0)
+          b (throw-fact [308.5 64.9 8.5] [-1 0] 1)]
+      (is (= {:intent/kind :throw-eye :intent/for :stronghold}
+             (stronghold/stronghold-next (searching [8.5 8.5] [a b]))))))
+  (testing "at the crossing, thrown from near it already: walks round it"
+    (let [a (throw-fact [8.5 64.9 -291.5] [0 1] 0)
+          b (throw-fact [40.5 64.9 8.5] [-1 0] 1)
+          i (stronghold/stronghold-next (searching [8.5 8.5] [a b]))]
+      (is (= [:walk :stronghold] [(:intent/kind i) (:intent/for i)])))))
+
+(deftest a-remembered-frame-is-the-stronghold-found
+  (let [frame (blocks/default-state :end_portal_frame)
+        w (searching [8.5 8.5] [])]
+    (is (not (plan/done-by w row)))
+    (is (plan/done-by (memory/observe w [40 20 60] frame) row) "however deep: chunk data holds it")
+    (is (= [40 20 60] (stronghold/nearest-frame (memory/observe w [40 20 60] frame))))))
+
+(deftest the-stronghold-is-found-by-throws-and-walks-against-the-model
+  ;; issue #265 end to end against the server model (#260's eyes): a frame deep in stone 113 blocks
+  ;; off, columns streamed two chunks round the player, six eyes held; a throw, the walk off the
+  ;; line, a second throw, the walk to the crossing, the frame seen as its chunk loads
+  (let [frame (blocks/default-state :end_portal_frame)
+        plain (world/column-bytes {})
+        columns (into {}
+                      (for [cx (range -2 13)
+                            cz (range -2 13)]
+                        [[cx cz]
+                         (if (= [cx cz] [5 5]) (world/column-bytes {[8 30 8] frame}) plain)]))
+        [w sim] (sim/run main/step
+                         (game/init fx/opts)
+                         (sim/init {:columns columns
+                                    :spawn [8.5 64.0 8.5]
+                                    :view-distance 2
+                                    :stronghold [88.0 30.0 88.0]
+                                    :inventory {[:hotbar 0] {:item (recipe/item-id :ender_eye)
+                                                             :count 6}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         600000
+                         {:event/kind :go :go/goals [:stronghold]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= [88 30 88] (stronghold/nearest-frame w)))
+    (is (<= 2 (count (:stronghold/throws w))) "two lines at least")
+    (is (empty? (:sim/violations sim)))))
