@@ -133,6 +133,9 @@
    [:entity/died-at
     "ms the server said the entity died (entity-event status 3); the body is removed after"
     "inside :world/entities, after a death"]
+   [:entity/item
+    "the item id a dropped item entity holds, from its metadata (index 8, its stack): a blaze rod told from cobblestone (issue #262)"
+    "inside :world/entities, a dropped item, once its metadata said"]
    [:sight/pos "an observation's block position" "a fact in :world/facts"]
    [:sight/state "the state id observed there" "a fact in :world/facts"]
    [:sight/at "ms of the observation" "a fact in :world/facts"]
@@ -336,7 +339,9 @@
    [:intent/clicks "clicks still to send" "craft, :click stage; smelt, :load stage"]
    [:intent/result "result item id" "craft, smelt"]
    [:intent/makes "items one craft yields; for a smelt, the batch" "craft, smelt"]
-   [:intent/before "result items held before crafting, smelting or scooping" "craft, smelt, scoop"]
+   [:intent/before
+    "result items held before crafting, smelting or scooping, or of a :collect-drops's item"
+    "craft, smelt, scoop, collect-drops"]
    [:intent/smelt "furnace recipe id to cook (smelting.edn)" "smelt"]
    [:intent/count "how many of the input the batch cooks" "smelt"]
    [:intent/lost "clicks the server lost in this intent; the intent resumed from its slots"
@@ -349,7 +354,8 @@
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
-   [:intent/item "item to place, put in the hand, eat or wear" "place, redig, equip, eat, wear"]
+   [:intent/item "item to place, put in the hand, eat or wear, or to pick up off the ground"
+    "place, redig, equip, eat, wear, collect-drops"]
    [:intent/food-before "the food level when an :eat sent its use-item; a higher one is the meal"
     "eat, :eating stage"]
    [:intent/eat-by "ms past which an :eat whose food has not risen fails :not-eaten"

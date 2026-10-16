@@ -22,6 +22,7 @@
             [clojurecraft.cli :as cli]
             [clojurecraft.combat]
             [clojurecraft.conn :as conn]
+            [clojurecraft.drops]
             [clojurecraft.eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.fortress]
