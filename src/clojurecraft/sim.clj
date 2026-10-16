@@ -31,6 +31,7 @@
             [clojurecraft.dig :as dig]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.fluid :as fluid]
+            [clojurecraft.hunger :as hunger]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memo :as memo]
             [clojurecraft.packet :as packet]
@@ -71,7 +72,15 @@
         (let [k (column-key pos)]
           (when-let [column (column-of sim k)] (chunk/block-at {k column} pos)))))
 
-(declare disturb full sync-window stream-from set-cell ultrawarm?)
+(declare disturb full sync-window stream-from set-cell ultrawarm? eye-under?)
+
+(def player-eid 1)                    ; the player's entity id, as the model's login gives it
+
+(defn add-exhaustion
+  "The model after the player's act cost amount of exhaustion (hunger/exhaust); nothing without
+   hunger (:sim/food, a model given a :difficulty)."
+  [sim amount]
+  (cond-> sim (:sim/food sim) (update :sim/food hunger/exhaust amount)))
 
 (defn held-slot
   "The window-0 slot of the hotbar place the client last selected (set-carried-item), the
@@ -173,10 +182,13 @@
    a run's tick randomness starts; 0.5 every tick when absent), :kill-at ms (the
    player dies then, a fault as an input: a death mid-task), :dimension (the dimension the
    player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
-   there) and :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
-   and where the player arrives)."
+   there), :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
+   and where the player arrives) and :difficulty (:peaceful, :easy, :normal or :hard, as the
+   server's setting: hunger drains the bar and heals and starves by it, issue #260; absent, the
+   model has no hunger at all, as it had none before, so a snapshot from then plays the same)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
-           inventory lag-ticks slow-breaks respawn seed tick-seed kill-at dimension nether]
+           inventory lag-ticks slow-breaks respawn seed tick-seed kill-at dimension nether
+           difficulty]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -217,7 +229,11 @@
     view-distance (assoc :sim/view-distance view-distance)
     kill-at (assoc :sim/kill-at kill-at)
     dimension (assoc :sim/dimension dimension)
-    nether (assoc :sim/nether nether)))
+    nether (assoc :sim/nether nether)
+    difficulty
+    (assoc :sim/difficulty difficulty
+           :sim/food hunger/fresh
+           :sim/sent-health [max-health hunger/max-level false])))
 
 (defn send "Queue pkt for the client in :sim/out." [sim pkt] (update sim :sim/out conj pkt))
 
@@ -344,12 +360,39 @@
                :carried nil})
         stream)))
 
+(defn on-ground-flag?
+  "Does a movement packet's flags byte say the player stands on the ground (bit 1)?"
+  [flags]
+  (pos? (bit-and (long (or flags 0)) 1)))
+
+(defn moved
+  "The model after the client reports the player at pos with flags: its position and on-ground
+   flag, its chunks streamed, and, with hunger, what the move cost: a jump when it left the
+   ground going up (the server's own test: ServerGamePacketListenerImpl.handleMovePlayer calls
+   jumpFromGround for it), and a swim for every block moved with the eye under water."
+  [sim [x y z :as pos] flags]
+  (let [[px py pz :as prev] (:sim/player-pos sim)
+        ground? (on-ground-flag? flags)
+        jumped? (and prev (:sim/on-ground? sim) (not ground?) (> y py))
+        swum (if (and prev (eye-under? sim))
+               (math/sqrt (+ (* (- x px) (- x px)) (* (- y py) (- y py)) (* (- z pz) (- z pz))))
+               0.0)]
+    (-> sim
+        (assoc :sim/player-pos pos :sim/on-ground? ground?)
+        (cond-> jumped? (add-exhaustion (hunger/exhaustion :jump))
+                (pos? swum) (add-exhaustion (* hunger/swim-per-block swum)))
+        stream)))
+
 (defmethod on-packet [:play :move-player-pos-rot]
-  [sim {:keys [x y z]}]
-  (stream (assoc sim :sim/player-pos [x y z])))
-(defmethod on-packet [:play :move-player-pos]
-  [sim {:keys [x y z]}]
-  (stream (assoc sim :sim/player-pos [x y z])))
+  [sim {:keys [x y z flags]}]
+  (moved sim [x y z] flags))
+(defmethod on-packet [:play :move-player-pos] [sim {:keys [x y z flags]}] (moved sim [x y z] flags))
+(defmethod on-packet [:play :move-player-status-only]
+  [sim {:keys [flags]}]
+  (assoc sim :sim/on-ground? (on-ground-flag? flags)))
+(defmethod on-packet [:play :move-player-rot]
+  [sim {:keys [flags]}]
+  (assoc sim :sim/on-ground? (on-ground-flag? flags)))
 (defmethod on-packet [:play :keep-alive]
   [sim {:keys [id]}]
   (update sim :sim/keep-alives-pending disj id))
@@ -376,8 +419,8 @@
 
 (defn break-block
   "Block id at pos is broken by the player holding held in slot: gone (placed or not), its
-   block update, its drop as an item entity, the tool worn, the neighbours disturbed; ice over
-   water or a solid becomes a water source (melts?)."
+   block update, its drop as an item entity, the tool worn, the dig's exhaustion (with hunger),
+   the neighbours disturbed; ice over water or a solid becomes a water source (melts?)."
   [sim pos id held slot]
   (let [eid (:sim/next-eid sim)
         [x y z] pos
@@ -390,6 +433,7 @@
                 (update :sim/broken conj pos)
                 (send {:packet/name :block-update :pos pos :state blocks/air})
                 (update :sim/inv wear slot)
+                (add-exhaustion (hunger/exhaustion :mine))
                 (disturb pos)
                 (cond-> (melts? sim pos id) (set-cell pos blocks/water-base)))
         sim (sync-window sim :inventory before (:sim/cursor sim) false)]
@@ -455,11 +499,15 @@
               (break-block pos id held slot))
           :else sim)))
 
+(def release-use-item 5)              ; player-action status RELEASE_USE_ITEM: the use key let go (ServerboundPlayerActionPacket.Action)
+
 (defmethod on-packet [:play :player-action]
+  ;; a release of the use key stops eating (ServerPlayerGameMode's releaseUsingItem)
   [sim {:keys [status pos] :as p}]
   (cond (= status (packet/value :dig :start-destroy))
         (assoc sim :sim/dig {:pos pos :at (:sim/now sim)})
         (= status (packet/value :dig :stop-destroy)) (finish-dig sim p)
+        (= status release-use-item) (dissoc sim :sim/eating)
         :else sim))
 
 ;; ---------------------------------------------------------------- windows
@@ -990,12 +1038,14 @@
 
 (defmethod on-packet [:play :client-command]
   [sim {:keys [action]}]
-  ;; a dead player asking to respawn gets a new life at spawn, full health and breath, then the
-  ;; teleport that places it
+  ;; a dead player asking to respawn gets a new life at spawn, full health, breath and food
+  ;; (with hunger), eating nothing, then the teleport that places it
   (if (and (= action (packet/value :client-command :perform-respawn)) (<= (:sim/health sim) 0.0))
     (let [[x y z] (:sim/respawn sim)]
       (-> sim
           (assoc :sim/health max-health :sim/air max-air :sim/player-pos [x y z])
+          (dissoc :sim/eating)
+          (cond-> (:sim/food sim) (assoc :sim/food hunger/fresh))
           (update :sim/respawns inc)
           (send respawn)
           (send {:packet/name :player-position
@@ -1284,33 +1334,60 @@
         (assoc :sim/inv inv)
         (sync-window :inventory before (:sim/cursor sim) false))))
 
-(defmethod on-packet [:play :use-item]
+(defn held-use
+  "What a use-item does with the held item, as use-held dispatches on it: :bucket (an empty or a
+   filled one), :food (hunger/foods), or :default (nothing the model knows)."
+  [sim]
+  (let [item (held-item sim)]
+    (cond (contains? bucket-fluids item) :bucket
+          (hunger/food? item) :food
+          :else :default)))
+
+(defmulti use-held
+  "The model after a use-item with the held item along look [yaw pitch], by what the item is
+   (held-use); on-packet then acks it. Anything the model does not know does nothing."
+  {:arglists '([sim look])}
+  (fn [sim _look] (held-use sim)))
+(defmethod use-held :default [sim _] sim)
+
+(defmethod use-held :bucket
   ;; a held bucket used along the look: an empty one aimed at a water or lava source fills and the
   ;; source becomes air; a filled one puts its fluid in the cell before the first solid block,
-  ;; empties, and water meeting lava turns it to stone. Anything else does nothing here. Either
-  ;; way, the ack.
-  [sim {:keys [sequence y-rot x-rot]}]
-  (let [ack {:packet/name :block-changed-ack :sequence sequence}
-        item (:item (get-in sim [:sim/inv (held-slot sim)]))
-        look [y-rot x-rot]
-        bucket? (and (:sim/player-pos sim) (contains? bucket-fluids item))
+  ;; empties, and water meeting lava turns it to stone
+  [sim look]
+  (let [item (held-item sim)
         fluid (get bucket-fluids item)
-        src (when (and bucket? (nil? fluid)) (scooped sim look))
-        into (when (and bucket? fluid) (poured sim look))]
+        src (when (and (:sim/player-pos sim) (nil? fluid)) (scooped sim look))
+        into (when (and (:sim/player-pos sim) fluid) (poured sim look))]
     (cond src
           (let [state (block-at sim src)]
             (-> sim
                 (assoc-in [:sim/placed src] blocks/air)
                 (disturb src)
                 (send {:packet/name :block-update :pos src :state blocks/air})
-                (swap-held (filled-bucket state))
-                (send ack)))
+                (swap-held (filled-bucket state))))
           into
           (-> sim
               (set-cell into fluid)
-              (swap-held (get blocks/items :bucket))
-              (send ack))
-          :else (send sim ack))))
+              (swap-held (get blocks/items :bucket)))
+          :else sim)))
+
+(defmethod use-held :food
+  ;; a food starts eating when the bar may take it (hunger/can-eat?); tick-eating finishes it
+  ;; hunger/eat-ticks later. A model without hunger has a full bar: nothing is eaten
+  [sim _]
+  (let [item (held-item sim)]
+    (cond (not (and (:sim/food sim) (hunger/can-eat? (:sim/food sim) item))) sim
+          :else
+          (assoc sim
+                 :sim/eating
+                 {:slot (held-slot sim)
+                  :item item
+                  :until (+ (:sim/now sim) (* hunger/eat-ticks physics/tick-ms))}))))
+
+(defmethod on-packet [:play :use-item]
+  [sim {:keys [sequence y-rot x-rot]}]
+  (send (use-held sim [y-rot x-rot]) {:packet/name :block-changed-ack :sequence sequence}))
 
 ;; ---------------------------------------------------------------- falling blocks
 
@@ -1441,6 +1518,115 @@
                                             [(long (math/floor x)) (long (math/floor (+ y 1.62)))
                                              (long (math/floor z))]))))))
 
+(defn food-of
+  "The player's food: the model's hunger (:sim/food), or a full bar with the start saturation in
+   a model without hunger."
+  [sim]
+  (:sim/food sim hunger/fresh))
+
+(defn tell-health
+  "The model having told the client the player's health and food (set-health, the food's level
+   and saturation as food-of holds them), what it told kept in :sim/sent-health for sync-health."
+  [sim]
+  (let [food (food-of sim)]
+    (-> sim
+        (send {:packet/name :set-health
+               :health (:sim/health sim)
+               :food (:food/level food)
+               :saturation (:food/saturation food)})
+        (assoc :sim/sent-health
+               [(:sim/health sim) (:food/level food) (zero? (:food/saturation food))]))))
+
+(defn sync-health
+  "The model at the end of a tick, with a set-health when the health, the food level, or whether
+   saturation is zero changed since the last one told (ServerPlayer.doTick's rule). Only with
+   hunger (:sim/difficulty): a model without it tells health only where it always did."
+  [sim]
+  (let [food (food-of sim)]
+    (cond (or (nil? (:sim/difficulty sim))
+              (= (:sim/sent-health sim)
+                 [(:sim/health sim) (:food/level food) (zero? (:food/saturation food))]))
+          sim
+          :else (tell-health sim))))
+
+(def hurt-window-ms 500)              ; after a hurt, only a harder one lands, for its excess (LivingEntity's invulnerableTime above 10 of its 20 ticks)
+
+(defn hurt
+  "The model after the player takes amount of damage, exhausting? (a mob's hit, an arrow, a blast:
+   hunger/exhaustion :hurt; starving: not): within hurt-window-ms of the last hurt only a harder
+   one lands, for what it exceeds the last by (LivingEntity.hurtServer); health never under
+   zero. A dead player is not hurt; the client learns its health from sync-health or the
+   caller's tell-health."
+  [sim amount exhausting?]
+  (let [{:keys [at last]} (:sim/hurt sim)
+        window? (and at (< (- (:sim/now sim) at) hurt-window-ms))
+        dealt (if window? (- amount last) amount)]
+    (cond (or (<= (:sim/health sim) 0.0) (and window? (<= amount last))) sim
+          :else
+          (-> sim
+              (update :sim/health #(max 0.0 (- % dealt)))
+              (assoc :sim/hurt {:at (if window? at (:sim/now sim)) :last amount})
+              (cond-> exhausting? (add-exhaustion (hunger/exhaustion :hurt)))))))
+
+(defn heal
+  "The model after a living player heals amount, up to max-health."
+  [sim amount]
+  (cond-> sim (pos? (:sim/health sim)) (update :sim/health #(min max-health (+ % amount)))))
+
+(def peaceful-heal-every 20)          ; game ticks between peaceful's free hearts (Player.aiStep)
+(def peaceful-feed-every 10)          ; game ticks between peaceful's free food points
+
+(defn peaceful-regen
+  "On peaceful, a heart back every peaceful-heal-every ticks and a food point every
+   peaceful-feed-every while the bar is not full (Player.aiStep); elsewhere nothing."
+  [sim]
+  (let [t (quot (:sim/now sim) physics/tick-ms)
+        peaceful? (= :peaceful (:sim/difficulty sim))]
+    (cond-> sim
+      (and peaceful? (zero? (mod t peaceful-heal-every))) (heal 1.0)
+      (and peaceful?
+           (zero? (mod t peaceful-feed-every))
+           (< (:food/level (:sim/food sim)) hunger/max-level))
+      (update-in [:sim/food :food/level] inc))))
+
+(defn feed
+  "One game tick of hunger at the model's difficulty (hunger/tick), its heal or starvation hurt
+   applied, then peaceful's free regeneration. Nothing without hunger (:sim/food) or for a dead
+   player, who is left for client-command to respawn."
+  [sim]
+  (let [food (:sim/food sim)
+        health (:sim/health sim)]
+    (cond (or (nil? food) (<= health 0.0)) sim
+          :else
+          (let [{food' :food healed :heal starved :hurt}
+                (hunger/tick food health max-health (:sim/difficulty sim))]
+            (-> sim
+                (assoc :sim/food food')
+                (cond-> (pos? healed) (heal healed)
+                        (pos? starved) (hurt starved false))
+                peaceful-regen)))))
+
+(def use-finished 9)                  ; entity-event status: the player finished using an item (EntityEvent.USE_ITEM_COMPLETE)
+
+(defn tick-eating
+  "Eating (use-held :food) finishes once its time is up with the same food still in the same held
+   slot: one taken, the food eaten (hunger/eat), the client told the use finished (entity-event
+   status use-finished) and what window 0 now holds. Another slot or item ends it uneaten."
+  [sim]
+  (let [{:keys [slot item until]} (:sim/eating sim)]
+    (cond (nil? slot) sim
+          (or (not= slot (held-slot sim)) (not= item (held-item sim))) (dissoc sim :sim/eating)
+          (< (:sim/now sim) until) sim
+          :else
+          (let [before (full (:sim/inv sim) (inventory/layouts :inventory))]
+            (-> sim
+                (dissoc :sim/eating)
+                (update :sim/eaten (fnil inc 0))
+                (update :sim/inv take-one slot)
+                (update :sim/food hunger/eat item)
+                (send {:packet/name :entity-event :entity-id player-eid :status use-finished})
+                (sync-window :inventory before (:sim/cursor sim) false))))))
+
 (defn kill
   "At :sim/kill-at, once: the player dies, told to the client as set-health; the respawn then is
    client-command's, as after any death."
@@ -1451,7 +1637,7 @@
           (-> sim
               (assoc :sim/health 0.0)
               (dissoc :sim/kill-at)
-              (send {:packet/name :set-health :health 0.0 :food 20 :saturation 5.0})))))
+              tell-health))))
 
 (defn drown
   "One tick of breath: air falls while the eye is under and refills otherwise; at zero, a hurt
@@ -1465,26 +1651,24 @@
                    (zero? (mod (quot (:sim/now sim) physics/tick-ms) drown-every))
                    (pos? (:sim/health sim)))
         health (if hurt? (max 0.0 (- (:sim/health sim) drown-damage)) (:sim/health sim))]
-    (cond-> (assoc sim :sim/air air :sim/health health)
-      hurt? (send {:packet/name :set-health :health health :food 20 :saturation 5.0}))))
+    (cond-> (assoc sim :sim/air air :sim/health health) hurt? tell-health)))
 
-(defn tick
-  "Advance the server clock to now, one game tick: send a keep-alive when one is due, breathe
-   or drown, cook in every furnace, let gravel and sand fall, let water and lava flow, carry a
-   player through a portal,
-   and hand over every item whose pickup delay has passed and
-   that the player stands within reach of."
-  [sim now]
-  (let [sim (through-portal (tick-fluids (tick-falls (tick-furnaces
-                                                      (tick-delayed
-                                                       (drown (kill (assoc sim :sim/now now)))))))
-                            now)
-        sim (if (>= now (:sim/next-keep-alive sim))
-              (-> sim
-                  (send {:packet/name :keep-alive :id now})
-                  (update :sim/keep-alives-pending conj now)
-                  (assoc :sim/next-keep-alive (+ now (:sim/keep-alive-every sim))))
-              sim)]
+(defn keep-alive
+  "A keep-alive for the client when one is due, remembered as pending until answered."
+  [sim]
+  (let [now (:sim/now sim)]
+    (cond (< now (:sim/next-keep-alive sim)) sim
+          :else
+          (-> sim
+              (send {:packet/name :keep-alive :id now})
+              (update :sim/keep-alives-pending conj now)
+              (assoc :sim/next-keep-alive (+ now (:sim/keep-alive-every sim)))))))
+
+(defn pick-up
+  "Hand over every item whose pickup delay has passed and that the player stands within reach
+   of."
+  [sim]
+  (let [now (:sim/now sim)]
     (reduce
      (fn [sim [eid {:keys [pos spawned]}]]
        (if (and (:sim/player-pos sim)
@@ -1492,12 +1676,33 @@
                 (within-pickup? (:sim/player-pos sim) pos))
          (-> sim
              (update :sim/items dissoc eid)
-             (send {:packet/name :take-item-entity :collected eid :collector 1 :count 1})
+             (send {:packet/name :take-item-entity :collected eid :collector player-eid :count 1})
              (send {:packet/name :remove-entities :ids [eid]})
              (give (get (get (:sim/items sim) eid) :item {:item (:oak_log blocks/items) :count 1})))
          sim))
      sim
      (:sim/items sim))))
+
+(defn tick
+  "Advance the server clock to now, one game tick: the scheduled death, breath or drowning,
+   hunger (feed) and eating, a delayed destroy, every furnace, falling gravel and sand, flowing
+   water and lava, a player carried through a portal, a keep-alive when one is due, every item
+   handed over whose pickup delay has passed and that the player stands within reach of, and,
+   with hunger, the health and food told when they changed (sync-health)."
+  [sim now]
+  (-> (assoc sim :sim/now now)
+      kill
+      drown
+      feed
+      tick-eating
+      tick-delayed
+      tick-furnaces
+      tick-falls
+      tick-fluids
+      (through-portal now)
+      keep-alive
+      pick-up
+      sync-health))
 
 (defn step
   "The model's reducer: a client packet or a tick in, the next sim out."
