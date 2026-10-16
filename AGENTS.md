@@ -508,7 +508,7 @@ Consult on demand. Spot-checked against `src/clojurecraft/` at 51505a9; when the
 **One tick (`plan/plan-tick`), in order.**
 1. `trap/trapped-tick` re-derives `:plan/trap` (only with `:player/pos`); `plan/reach` adds milestones on a chained run.
 2. `plan/choose`: highest-priority target in play (`:plan/goals` or every target, plus `:goal/always?` rows), not in `:plan/reached`, `done-by` false, worked in this dimension (`here?`).
-3. Running intent whose cursor holds an item (`can-abandon?` false): run it anyway (it puts the item down).
+3. Running intent whose cursor holds an item, or with a click unanswered (`can-abandon?` false): run it anyway (it puts the item down, the answer comes).
 4. No goal here but one undone elsewhere (`elsewhere?`): abandon `:goal-met`, wait `:other-dimension`.
 5. No goal: abandon `:goal-met`, `:plan/status :done`.
 6. Running intent for another goal than the chosen one: abandon `:preempted`, plan again this tick.

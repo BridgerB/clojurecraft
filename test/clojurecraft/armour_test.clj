@@ -142,3 +142,19 @@
     (is (zero? (:iron_ingot (recipe/counts (:player/inventory w)) 0)))
     (is (nil? (:window/cursor w)))
     (is (= [] (:sim/violations sim)))))
+
+(deftest a-click-unanswered-is-never-abandoned
+  ;; the armour row's first run against the model: a :wear preempted between its pick-up and the
+  ;; answer left the helmet on a cursor the bot believed empty
+  (let [w (assoc (standing {})
+                 :plan/intent
+                 {:intent/kind :wear
+                  :intent/item :iron_helmet
+                  :intent/status :active
+                  :intent/awaiting 5
+                  :intent/awaiting-window 0
+                  :intent/sent-at 0})]
+    (is (not (plan/can-abandon? w)) "the click went out under state id 5, still the window's")
+    (is (plan/can-abandon? (assoc w :window/state-id 6)) "answered: the cursor is known again")
+    (is (not (plan/can-abandon?
+              (assoc w :window/state-id 6 :window/cursor (item :iron_helmet 1)))))))

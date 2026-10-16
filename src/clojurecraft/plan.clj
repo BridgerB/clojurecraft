@@ -17,7 +17,8 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.terrain :as terrain]
-            [clojurecraft.trap :as trap]))
+            [clojurecraft.trap :as trap]
+            [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
 
@@ -299,9 +300,16 @@
 
 (defn can-abandon?
   "May the planner drop the running work now? Not while the cursor holds an item: the intent
-   puts it down first, and the planner looks again next tick."
+   puts it down first, and the planner looks again next tick. Nor while a click of the running
+   intent is unanswered (window/waiting): a click forgets the cursor as it sends (window/click),
+   so what it holds is unknown until the server answers. The armour row's first run against the
+   model (issue #259) preempted a :wear between its pick-up and the answer, the helmet on a cursor
+   the bot believed empty; the row that came next crafted another helmet from ingots the bot no
+   longer knew where they were, and the run ended with eight of them unseen and no chestplate."
   [world]
-  (nil? (:window/cursor world)))
+  (and (nil? (:window/cursor world))
+       (nil? (some->> (:plan/intent world)
+                      (window/waiting world)))))
 
 (defn wait
   "Nothing to do yet for reason; waiting longer than wait-ticks (400 planner ticks, 20 s at
