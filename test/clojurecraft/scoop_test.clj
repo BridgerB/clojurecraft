@@ -310,3 +310,28 @@
       "both edges walled: no point of the surface in sight, round to the bank")
   (is (nil? (scoop/seen-source (assoc (deep-in {[6 41 5] water}) :plan/blacklist #{[6 41 5]})))
       "a source given up is not scooped from the side again"))
+
+(deftest a-bank-tunnel-that-comes-no-nearer-gives-the-pond-up
+  ;; sim race 38839767273 runner 6 (issue #69, worlds R3/8 and R4/35): the tunnel toward a bank
+  ;; walked an open corridor past its water, eight steps east, eight back, two thousand tunnels
+  ;; until the run's ninety minutes were spent
+  (let [w (standing {[10 63 8] water [11 63 8] water} [8.5 8.5])
+        tunnel (fn [from]
+                 {:intent/kind :tunnel
+                  :intent/for :bank
+                  :intent/target [10 63 8]
+                  :intent/from-feet from
+                  :intent/dir [1 0]
+                  :intent/length 8
+                  :intent/level-steps 8
+                  :intent/stage :plan
+                  :intent/status :active})
+        ran #(let [i (tunnel %)]
+               (intent/run (assoc w :plan/intent i)
+                           i
+                           {:event/kind :tick :event/now 1000 :event/rand 0.5}))]
+    (let [w (ran [8 64 8])]
+      (is (= :done (get-in w [:plan/intent :intent/status])))
+      (is (= #{[10 63 8] [11 63 8]} (:plan/blacklist w))
+          "no nearer than it began: the pond given up"))
+    (is (empty? (:plan/blacklist (ran [2 64 8]))) "six blocks nearer: the water kept")))

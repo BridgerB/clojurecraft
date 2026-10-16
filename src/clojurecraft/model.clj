@@ -226,6 +226,9 @@
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
     ":tunnel-to, during a step"]
+   [:intent/from-feet
+    "the feet a tunnel toward a bank (scoop/to-bank) began at, to judge whether it came nearer"
+    ":tunnel for :bank"]
    [:intent/from "the feet a :tunnel-to's step started from, where its ops are worked"
     ":tunnel-to, during a step"]
    [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"
