@@ -9,7 +9,7 @@
    The environment (`bb server`): PORT RCON_PORT RCON_PASS WORLD, required for start (WORLD for
    stop); JAVA (default: java on PATH, else the flake's), HEAP_MB (2048), JAR (data/local-server/
    server-26.1.2.jar, downloaded and sha1-checked when missing), LEVEL_SEED (typecraft),
-   DIFFICULTY (normal: mobs and hunger, issue #10)."
+   DIFFICULTY (peaceful)."
   (:require [babashka.fs :as fs]
             [babashka.http-client :as http]
             [babashka.process :as p]
@@ -151,7 +151,7 @@
      :heap-mb (or (env "HEAP_MB") "2048")
      :jar (or (env "JAR") (str root "/data/local-server/server-26.1.2.jar"))
      :level-seed (or (env "LEVEL_SEED") "typecraft")
-     :difficulty (or (env "DIFFICULTY") "normal")
+     :difficulty (or (env "DIFFICULTY") "peaceful")
      :max-tick-time (env "MAX_TICK_TIME")
      :max-players (env "MAX_PLAYERS")
      :compression-threshold (env "COMPRESSION_THRESHOLD")
