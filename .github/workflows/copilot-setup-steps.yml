@@ -1,0 +1,83 @@
+name: copilot-setup-steps
+
+# The machine a Copilot cloud agent session works on (.github/agents/bot-fixer.agent.md): set up
+# before the session starts, while the network is still open. Java 25, the Clojure CLI and
+# Babashka as unit.yml has them; every alias the tests and bb check use, downloaded; the four
+# captured sim worlds a snapshot is played in, as probe.yml restores them; and the snapshots of
+# every open sim bot-failure issue (bb issue-check fetch) moved to cache/issues/<n>/, outside the
+# tree, so the session copies only its own issue's into test/issues/<n>/. The job must be named
+# copilot-setup-steps; a push or pull request that changes this file runs it as a check.
+
+on:
+  workflow_dispatch:
+  push:
+    paths: [.github/workflows/copilot-setup-steps.yml]
+  pull_request:
+    paths: [.github/workflows/copilot-setup-steps.yml]
+
+permissions:
+  contents: read
+  actions: read                         # the snapshot artifacts of the race lanes
+  issues: read                          # which bot-failure issues are open, and their comments
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: R1's captured worlds
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R1
+          key: simworld-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+      - name: R2's captured worlds
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R2
+          key: simworld-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+      - name: R3's captured worlds
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R3
+          key: simworld-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+      - name: R4's captured worlds
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-worlds/R4
+          key: simworld-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI and Babashka
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: clj-${{ hashFiles('deps.edn') }}
+      - name: Every alias the session runs, downloaded
+        run: |
+          clojure -P -M:dev:test
+          clojure -P -M:simrace
+          for a in fmt lint splint lsp brain; do clojure -P -M:$a; done
+          bb tasks > /dev/null
+      - name: The snapshots of every open sim bot-failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --label bot-failure --label sim --state open --limit 100 --json number --jq '.[].number'); do
+            bb issue-check fetch "$n" || echo "issue $n: fetch failed"
+            for f in $(git ls-files --others --exclude-standard "test/issues/$n"); do
+              mkdir -p "cache/issues/$n"
+              mv "$f" "cache/issues/$n/"
+            done
+          done
+          ls -R cache/issues 2>/dev/null || echo "no snapshots fetched"
