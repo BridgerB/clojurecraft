@@ -17,6 +17,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.wood :as wood]
             [clojurecraft.world :as world]))
 
 (def origin [100 64 200])
@@ -383,6 +384,45 @@
     (is (not (build/way-refilled? (at 1) walk)) "stone in the way: a failure as before")
     (is (not (build/way-refilled? (at gravel) (assoc walk :intent/reason :stuck))))))
 
+(deftest a-build-carries-a-crafting-table
+  ;; sim races 38806318231 and 38843552659 (issue #186): the cast wore out every pickaxe, sticks
+  ;; and cobblestone in hand and the table left at the furnace, and the bot climbed out for a log
+  ;; and waited :no-log on treeless ground
+  (let [kit {0 {:item (recipe/item-id :stone_pickaxe) :count 1}
+             1 {:item (recipe/item-id :cobblestone) :count 8}}
+        placed (let [w (standing-at (open-ground (assoc trench
+                                                        [11 63 10]
+                                                        (blocks/default-state :crafting_table)))
+                                    feet-pos)]
+                 (assoc (memory/remember-column w [0 0] (get-in w [:world/chunks [0 0]]))
+                        :player/inventory
+                        kit))
+        bare (assoc (standing-at (open-ground trench) feet-pos) :player/inventory kit)
+        planks (assoc-in bare [:player/inventory 2] {:item (recipe/item-id :oak_planks) :count 4})]
+    (is (= :take-table (:intent/for (plan/next-intent placed cast-one-row plan/goals)))
+        "the placed table within reach is taken along")
+    (is (not= :build (:intent/kind (plan/next-intent planks cast-one-row plan/goals)))
+        "planks enough and no table: one is made for the kit first")
+    (is (= :build (:intent/kind (plan/next-intent bare cast-one-row plan/goals)))
+        "nothing to make one from: no trip out for it, the build")))
+
+(deftest a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
+  ;; sim race 38843552659 (issue #186, world R1/18): on a ravine's floor sixty under the landing,
+  ;; the sky open and no hunt target in its band, the bot waited :no-log
+  (let [w (assoc (standing-at (open-ground {}) feet-pos) :plan/go-at [10.5 80.0 10.5])]
+    (is (= {:plan/wait :no-log} (wood/gather-next w)) "nothing to set out for")
+    (is (= (scoop/pit-climb w) (wood/gather-or-out w)) "the way out of the pit first")
+    (is (some? (scoop/pit-climb w)))))
+
+(deftest a-way-never-opens-a-cell-beside-lava
+  ;; sim race 38843557186 runner 3 (issue #231, world R1/31): the way to a landing at the lava
+  ;; sea's height was dug along its edge, a cell beside a source opened, and the lava flowed in
+  (let [w (standing-at (open-ground {[12 63 10] 1 [13 63 10] blocks/lava-base}) feet-pos)
+        none (constantly false)]
+    (is (not (build/diggable? w [12 63 10] none none)) "stone beside lava is not dug for a way")
+    (is (build/diggable? (standing-at (open-ground {[12 63 10] 1}) feet-pos) [12 63 10] none none)
+        "the same stone with no lava by it is")))
+
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
   ;; server refusing it three times, :rejected
@@ -540,3 +580,15 @@
       (let [near (run (physics/centre (build/cell site :south (build/landing 1))))]
         (is (= :no-path (get-in near [:plan/intent :intent/reason])))
         (is (empty? (memory/given-up-sites near)))))))
+
+(deftest a-stand-still-in-the-rock-is-cut-to-not-walked-near
+  ;; sim race 38855091523 (issue #178, world R1/34 seed 2): the lava's stand was stone, a route
+  ;; led beside it, the walk ended a block under it, and the refill went back to the landing and
+  ;; out again, three walks every five seconds until the run's time ran out
+  (let [w (standing-at (open-ground {[8 63 5] 1 [8 64 5] 1}) [5.5 63.0 5.5])]
+    (is (nil? (build/stand-walk w [8 63 5])) "stone where the feet would stand: no walk")
+    (is (= {:intent/kind :walk :intent/target [7 63 5] :intent/for :build}
+           (build/stand-walk w [7 63 5]))
+        "open with a floor: walked to")
+    (is (build/beside-stand? w [6 64 5]) "a block up beside the feet: the way is to its height")
+    (is (not (build/beside-stand? w [9 64 5])) "four off: by the landing, as before")))
