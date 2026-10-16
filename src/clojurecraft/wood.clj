@@ -278,9 +278,10 @@
                         (range 1 (inc (min cross-reach (long d)))))))))
 
 (defn crossing
-  "Under the open sky with every hunt bearing ending where no ground is (scoop/hunt-targets
-   none) and the nearest remembered standing trunk across open water (water-toward?): a :cross
-   toward it, swimming the water (swim's :cross), so the gather goes on from the far side.
+  "Under the open sky, nothing before it in gather-next reaching a tree (no walk, climb or hunt
+   a route reaches), and the nearest remembered standing trunk across open water
+   (water-toward?): a :cross toward it, swimming the water (swim's :cross), so the gather goes
+   on from the far side; a crossing that lands short (an inlet waded) is followed by the next.
    Sim race 38811417241 runner 2 (issue #87, world R3/4): the stone pickaxe broke on the stairs,
    a new one wanted a log, and the bot stood on a sand island at its landing with every trunk a
    hundred blocks off across a lake; routes ended at the island's shore, all eight hunt
@@ -288,7 +289,7 @@
   [world]
   (let [feet (intent/feet world)
         eye (game/eye world)]
-    (when (and (terrain/under-sky? world feet) (empty? (scoop/hunt-targets world true)))
+    (when (terrain/under-sky? world feet)
       (when-let [trunk (->> (memory/positions-now world blocks/log-states)
                             (memory/nearest-first eye far-radius)
                             (remove (skipped world))
