@@ -293,3 +293,20 @@
     (is (= :done (get-in boxed [:plan/intent :intent/status])) "boxed, it ends: no attempt counted")
     (is (contains? (:plan/blacklist boxed) [12 40 5]) "and gives that water up")
     (is (= :surface (:intent/for (scoop/scoop-next boxed))) "so the climb out is chosen next")))
+
+(deftest a-ray-past-a-blocks-edge-is-a-wall
+  ;; race 38759618225 runner 4 (issue #83): four bots held the bucket and sent nine scoops each
+  ;; along lines that passed within 0.03 of a block's edge; the server's exact ray stopped there
+  ;; and filled nothing, while samples of the line stepped past the edge
+  (let [src [10 63 10]
+        w (standing {src water [9 65 8] 1} [8.7 8.7])]
+    (is
+     (= [10.25 63.85 10.5] (scoop/surface-aim w src))
+     "the line to the surface's centre runs along the stone's edge: a quarter block west is clear")
+    (is (= {:intent/kind :scoop :intent/target src} (scoop/scoop-next w))))
+  (is (= :walk
+         (:intent/kind (scoop/scoop-next (standing {[10 63 10] water [9 65 8] 1 [8 65 9] 1}
+                                                   [8.7 8.7]))))
+      "both edges walled: no point of the surface in sight, round to the bank")
+  (is (nil? (scoop/seen-source (assoc (deep-in {[6 41 5] water}) :plan/blacklist #{[6 41 5]})))
+      "a source given up is not scooped from the side again"))

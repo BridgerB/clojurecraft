@@ -134,10 +134,13 @@
            (:path/status
             (path/plan hill (path/feet-cell pos) {:goal/kind :block :goal/pos hill-stand})))
         "the stand is inside the hill, so a walk at it has no route")
-    (is (=
-         {:intent/kind :dig :intent/target [3 63 8] :intent/status :active :intent/exposes-ok? true}
-         (build/op-child hill hill-intent hill-op))
-        "the first solid on the way, in reach")
+    (is (= {:intent/kind :dig
+            :intent/target [3 63 8]
+            :intent/status :active
+            :intent/exposes-ok? true
+            :intent/drop-ok? true}
+           (build/op-child hill hill-intent hill-op))
+        "the first solid on the way, in reach, its drop not wanted (issue #70)")
     (let [opened (assoc-in hill [:world/blocks [3 63 8]] blocks/air)]
       (is (= [3 64 8] (:intent/target (build/op-child opened hill-intent hill-op)))
           "then the head over it"))
@@ -292,6 +295,22 @@
     (is (nil? (site-at lone)) "one source: no site")
     (is (nil? (site-at nine)) "nine: one short of the frame")
     (is (some? (site-at ten)) "ten: a site")))
+
+(deftest a-build-dig-puts-the-stowed-pickaxe-in-hand-first
+  ;; sim race 38806318231 (issue #70): the pickaxe in the hotbar broke on the way to the landing,
+  ;; the spare was in slot 35, the way was dug by hand and iron ore in it failed :needs-tool
+  (let [ore (first (blocks/states-where (fn [[n]] (= n :iron_ore))))
+        w (assoc (standing-at (open-ground {[3 63 8] ore}) [2.5 63.0 8.5])
+                 :player/inventory
+                 {35 {:item (recipe/item-id :stone_pickaxe) :count 1}})
+        dig (build/way-dig [3 63 8])]
+    (is (= {:intent/kind :equip :intent/item :stone_pickaxe} (build/tool-first w dig))
+        "the spare to hand before the dig")
+    (is (= dig
+           (build/tool-first
+            (assoc w :player/inventory {0 {:item (recipe/item-id :stone_pickaxe) :count 1}})
+            dig))
+        "in the hotbar already: the dig")))
 
 (deftest the-lava-hunt-goes-down-past-lava-it-cannot-cast-from
   ;; sim race 38811561269 (issue #41): the hunt tunnelled toward a lone source and toward a

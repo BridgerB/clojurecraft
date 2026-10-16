@@ -669,6 +669,15 @@
          {:intent/kind :walk :intent/target pos :intent/for :build :intent/pickup? true})
     {:intent/kind :walk :intent/target pos :intent/for :build :intent/pickup? true}))
 
+(defn way-dig
+  "A child dig of a cell the build opens (its room, a hole, the way to a stand, the rock before a
+   pool): beside water or lava when it must be (:intent/exposes-ok?), and with its drop not wanted
+   (:intent/drop-ok?), so ore the held pickaxe cannot harvest is broken for nothing rather than
+   refused: the cell is what the build needs. Sim race 38806318231 (issue #70) met deepslate
+   redstone ore in the room at y -24 with a wooden pickaxe and failed :needs-tool three times."
+  [cell]
+  (assoc (intent/child-dig cell) :intent/exposes-ok? true :intent/drop-ok? true))
+
 (defn clear-stand
   "The child that opens a way to stand at the feet's height, or nil when the way is clear or the
    stand is at another height (the line would start under the feet: to-height). The block in the
@@ -677,9 +686,7 @@
   [world stand build origin facing]
   (when-let [b (and (= (second stand) (long (physics/y-of (intent/feet world))))
                     (stance-block world stand build origin facing))]
-    (if (within-reach? world b)
-      (assoc (intent/child-dig b) :intent/exposes-ok? true)
-      (approach world b))))
+    (if (within-reach? world b) (way-dig b) (approach world b))))
 
 (defn reaches-from?
   "Would the eye, standing in cell, be within reach of pos? The feet use the real eye; any
@@ -800,7 +807,7 @@
       (nil? src) :no-station
       (nil? block)
       {:intent/kind :scoop :intent/target src :intent/fluid :lava :intent/aim (scoop/aim-point src)}
-      :else (assoc (intent/child-dig block) :intent/exposes-ok? true :intent/for :lava))))
+      :else (assoc (way-dig block) :intent/for :lava))))
 
 (defn refill
   "The child that refills lava, or the reason it cannot (:no-station, :no-bucket): the feet to the
@@ -929,7 +936,7 @@
               (if-let [c (foundation world pos)]
                 {:intent/kind :place :intent/item item :intent/cell c}
                 :no-support)
-              :dig (assoc (intent/child-dig pos) :intent/exposes-ok? true)
+              :dig (way-dig pos)
               :pour
               {:intent/kind :pour
                :intent/item item
@@ -988,6 +995,18 @@
   [{:intent/keys [kind reason]}]
   (and (= :dig kind) (= :target-gone reason)))
 
+(defn tool-first
+  "c, the child op-child gave, or before a dig the :equip of the tool it should hold when that one
+   is only in the main inventory (intent/stowed-breaker), as a staircase equips before its digs
+   (stairs/dig-next). A pickaxe that breaks in the cast leaves its spare stowed: sim race
+   38806318231 (issue #70) dug the way to the landing at y 29 by hand, nine seconds a stone, with a
+   stone pickaxe in slot 35, and failed :needs-tool on iron ore in the way, three times."
+  [world c]
+  (let [[_ item :as stowed] (when (= :dig (:intent/kind c))
+                              (some->> (terrain/block-at world (:intent/target c))
+                                       (intent/stowed-breaker world)))]
+    (if stowed {:intent/kind :equip :intent/item (recipe/item-name item)} c)))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i (a dig that found
@@ -1019,7 +1038,8 @@
               missing (when (= :dig (:intent/kind c))
                         (stairs/tool-missing world (:intent/target c)))
               ;; the needs planner is asked only when no pickaxe is held
-              c (or (when (and missing (hand-dig-refused? world (:intent/target c))) missing) c)]
+              c (or (when (and missing (hand-dig-refused? world (:intent/target c))) missing)
+                    (tool-first world c))]
           (cond (and (= :no-station c)
                      (spent? world (lava-sources world) (:intent/origin i) (:intent/facing i)))
                 ;; the pool is spent, not the build: the planner chooses a site with lava enough
