@@ -228,13 +228,20 @@
    the landing (docs/RICH-HICKEY.md: write the validation, run it against past results, never
    re-run the system from spawn): until the plan is done or failed, or reaches the stage the
    signature names, or the window ends. A moment from before the bot loaded still gets its :go
-   (go-of), as the run did. The RESULT, marked (failure/mark), with :run/ms the time
-   it ended at, :run/from the moment's time and :run/story what the bot did between (story)."
-  [snap w]
+   (go-of), as the run did. halt? (no arguments, default never) ends the play early too: the
+   caller's wall-clock budget, so a judge cannot outlast its job; a play it ended is :run/halted?.
+   The RESULT, marked (failure/mark), with :run/ms the time it ended at, :run/from the moment's
+   time and :run/story what the bot did between (story)."
+  [snap w & [halt?]]
   (let [{:keys [world] :as m} (moment-of snap w)
         stage (stage-of snap)
         until (:snapshot/until snap)
-        stop? #(or (plan/done? %) (plan/failed? %) (contains? (:plan/reached %) stage))
+        halt? (or halt? (constantly false))
+        halted (volatile! false)
+        stop? #(or (plan/done? %)
+                   (plan/failed? %)
+                   (contains? (:plan/reached %) stage)
+                   (vreset! halted (boolean (halt?))))
         {world' :world crashed :crashed}
         (sim/play-from step m stop? (window-of snap) (go-of w until) nil)]
     (assoc (failure/mark
@@ -242,6 +249,7 @@
               crashed (assoc :reason :crashed :error (str crashed))))
            :run/ms (:time/now world')
            :run/from (:time/now world)
+           :run/halted? @halted
            :run/story (vec (story world' (:time/now world))))))
 
 (defn timeout-signature?
@@ -253,9 +261,12 @@
   "Does a snapshot's failure come back when it is judged (judged)? A stall recurs when the window
    ends with its stage still not reached and the plan not done; any other failure when the plan
    fails again with the same signature. A plan still running at the end of a failure's window,
-   or failed otherwise, got past this moment."
+   or failed otherwise, got past this moment. A play the wall-clock budget halted did not get
+   past it in that time: it recurs (the base code that is too slow to pass its own moment fails
+   it, and so does a fix that is)."
   [snap played]
-  (cond (timeout-signature? snap)
+  (cond (:run/halted? played) true
+        (timeout-signature? snap)
         (not (or (:ok played)
                  (= :done (get-in played [:plan :plan/status]))
                  (contains? (set (get-in played [:plan :plan/reached])) (stage-of snap))))
@@ -355,9 +366,13 @@
       (flush))
     r))
 
+(def judge-wall-ms 240000)            ; a judge's wall-clock budget a snapshot: four minutes, inside issue.yml's 15
+
 (defn judge!
-  "Judge the snapshot at path as the issue check does (judged), its captured world read and
-   prepared: print one JUDGE line (the signature, why and when its moment was kept, the window,
+  "Judge the snapshot at path as the issue check does (judged, halted after judge-wall-ms of wall
+   time: a snapshot whose code plays too slowly to pass the moment recurs, never outlasts the
+   check; PR #197's base planner took 862 s on one), its captured world read and prepared: print
+   one JUDGE line (the signature, why and when its moment was kept, the window,
    whether it recurs, how it ended, simulated and wall ms) and the STORY of what the bot did over
    the window, one line an intention fact. Returns {:path :recurs? :played}."
   [path]
@@ -366,7 +381,7 @@
         w (assoc (prepared (capture/read-world (:snapshot/file snap)))
                  :capture/file
                  (:snapshot/file snap))
-        r (judged snap w)
+        r (judged snap w #(> (- (System/currentTimeMillis) t0) judge-wall-ms))
         recurs (recurs? snap r)]
     (println "JUDGE"
              (pr-str {:path path
@@ -374,6 +389,7 @@
                       :moment (:snapshot/moment snap)
                       :window-ms (window-of snap)
                       :recurs? recurs
+                      :halted? (:run/halted? r)
                       :run/signature (:run/signature r)
                       :plan/status (get-in r [:plan :plan/status])
                       :sim-ms (- (:run/ms r) (:run/from r))
