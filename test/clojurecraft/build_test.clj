@@ -406,6 +406,22 @@
     (is (= :build (:intent/kind (plan/next-intent bare cast-one-row plan/goals)))
         "nothing to make one from: no trip out for it, the build")))
 
+(deftest a-build-carries-sticks-beside-its-table
+  ;; world R3/12 seed 1 from spawn (Refs #178): the cast wore out the pickaxes, a table, 684
+  ;; cobblestone and one plank in hand and no sticks, and the bot cut stairs up through deepslate
+  ;; by hand for a log until its time ran out
+  (let [kit {0 {:item (recipe/item-id :stone_pickaxe) :count 1}
+             1 {:item (recipe/item-id :cobblestone) :count 8}
+             2 {:item (recipe/item-id :crafting_table) :count 1}}
+        bare (assoc (standing-at (open-ground trench) feet-pos) :player/inventory kit)
+        planks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :oak_planks) :count 2})
+        sticks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :stick) :count 2})]
+    (is (build/carry-sticks? planks) "a table held and planks for sticks: sticks for the kit")
+    (is (not= :build (:intent/kind (plan/next-intent planks cast-one-row plan/goals)))
+        "made before the build")
+    (is (not (build/carry-sticks? sticks)) "sticks held already")
+    (is (not (build/carry-sticks? bare)) "nothing to make them from: no trip out for them")))
+
 (deftest a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
   ;; sim race 38843552659 (issue #186, world R1/18): on a ravine's floor sixty under the landing,
   ;; the sky open and no hunt target in its band, the bot waited :no-log
