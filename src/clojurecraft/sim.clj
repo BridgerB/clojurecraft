@@ -1497,53 +1497,62 @@
     (cond (or (nil? every) (and last-t (< (- (:t m) last-t) every))) moments
           :else (let [v (conj moments m)] (if (> (count v) moment-keep) (subvec v 1) v)))))
 
-(defn play-from
-  "Play a bot reducer against the model on from a moment m, a tick (physics/tick-ms) at a time,
-   until (stop? world) or max-ms of play. A moment is everything the next tick depends on:
-   {:world :sim :pending :t :rand :went? :inflight}: the bot's world and the model's state, what
-   the bot has sent and the model not yet taken (pending), the tick's time, the tick seed's state
-   (rand), whether go was sent, and the packets still in flight under :sim/lag-ticks. So playing
-   on from a moment is the run itself, packet for packet. Returns {:world :sim :before :last
-   :moments}: :last the moment of the stopping tick, :before its world and model, and, with
-   every (simulated ms; nil keeps none), :moments, the run's moments that far apart, the last moment-keep of them, for a
-   failure to be kept from before the choice that led to it (simrace/snapshot). go is sent once
-   the bot is loaded, or never when nil. :sim/lag-ticks in sim delays every server->client
-   packet by that many ticks, in order. Each tick's :event/rand is 0.5, or, with a rand state,
-   the next of a pure generator (tick-rand), so runs of one world with different seeds are
-   different runs, each the same every time."
-  [bot-step m stop? max-ms go every]
-  (let [lag (* physics/tick-ms (:sim/lag-ticks (:sim m) 0))
-        t0 (:t m)]
-    (loop [{:keys [world sim pending t went? inflight] r :rand :as m} m
-           moments []]
-      (let [moments (kept moments m every)
-            sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim pending)
-            sim (step sim {:sim/kind :tick :sim/now t})
-            [sim fresh] (drain sim)
-            inflight (into inflight (map (fn [p] [(+ t lag) p]) fresh))
-            inbound (map second (take-while #(<= (first %) t) inflight))
-            inflight (vec (drop-while #(<= (first %) t) inflight))
-            world (reduce #(bot-step %1 {:event/kind :packet :event/packet %2}) world inbound)
-            [r rand] (if r (tick-rand r) [nil 0.5])
-            world (bot-step world {:event/kind :tick :event/now t :event/rand rand})
-            go? (and (not went?) (:player/loaded? world))
-            world (if go? (bot-step world go) world)
-            out (sends world)
-            world (assoc world :bot/effects [])]
-        (if (or (stop? world) (> t (+ t0 max-ms)))
-          {:world world
-           :sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out) ; deliver the last tick's packets
-           :before [(:world m) (:sim m)]
-           :last m
-           :moments moments}
-          (recur {:world world
+(defn tick-from
+  "One tick of a bot reducer against the model from moment m (see play-from): {:next m'} the
+   moment after it, or {:stop {:world :sim}} when (stop? world) holds after it or t is past
+   until-t, the last tick's packets delivered to the model."
+  [bot-step {:keys [world sim pending t went? inflight] r :rand} stop? until-t go lag]
+  (let [sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim pending)
+        sim (step sim {:sim/kind :tick :sim/now t})
+        [sim fresh] (drain sim)
+        inflight (into inflight (map (fn [p] [(+ t lag) p]) fresh))
+        inbound (map second (take-while #(<= (first %) t) inflight))
+        inflight (vec (drop-while #(<= (first %) t) inflight))
+        world (reduce #(bot-step %1 {:event/kind :packet :event/packet %2}) world inbound)
+        [r rand] (if r (tick-rand r) [nil 0.5])
+        world (bot-step world {:event/kind :tick :event/now t :event/rand rand})
+        go? (and (not went?) (:player/loaded? world))
+        world (if go? (bot-step world go) world)
+        out (sends world)
+        world (assoc world :bot/effects [])]
+    (cond (or (stop? world) (> t until-t))
+          {:stop {:world world :sim (reduce #(step %1 {:sim/kind :packet :sim/packet %2}) sim out)}}
+          :else
+          {:next {:world world
                   :sim sim
                   :pending out
                   :t (+ t physics/tick-ms)
                   :rand r
                   :went? (boolean (or went? go?))
-                  :inflight inflight}
-                 moments))))))
+                  :inflight inflight}})))
+
+(defn play-from
+  "Play a bot reducer against the model on from a moment m, a tick (physics/tick-ms) at a time
+   (tick-from), until (stop? world) or max-ms of play. A moment is everything the next tick
+   depends on: {:world :sim :pending :t :rand :went? :inflight}: the bot's world and the model's
+   state, what the bot has sent and the model not yet taken (pending), the tick's time, the tick
+   seed's state (rand), whether go was sent, and the packets still in flight under
+   :sim/lag-ticks. So playing on from a moment is the run itself, packet for packet. Returns
+   {:world :sim :before :last :moments}: :last the moment of the stopping tick, :before its world
+   and model, and, with every (simulated ms; nil keeps none), :moments, the run's moments that
+   far apart, the last moment-keep of them, for a failure to be kept from before the choice that
+   led to it (simrace/snapshot). A tick that throws ends the play there with :crashed (the
+   exception) and the world and model of the moment before it, so a crash is kept and judged
+   like any other failure (issue #152: a crash used to leave no moment and no stage). go is sent
+   once the bot is loaded, or never when nil. Each tick's :event/rand is 0.5, or, with a rand
+   state, the next of a pure generator (tick-rand), so runs of one world with different seeds
+   are different runs, each the same every time."
+  [bot-step m stop? max-ms go every]
+  (let [lag (* physics/tick-ms (:sim/lag-ticks (:sim m) 0))
+        until-t (+ (:t m) max-ms)]
+    (loop [m m
+           moments []]
+      (let [moments (kept moments m every)
+            r (try (tick-from bot-step m stop? until-t go lag) (catch Exception e {:crashed e}))
+            ended {:before [(:world m) (:sim m)] :last m :moments moments}]
+        (cond (:crashed r) (assoc ended :world (:world m) :sim (:sim m) :crashed (:crashed r))
+              (:stop r) (merge ended (:stop r))
+              :else (recur (:next r) moments))))))
 
 (defn play-on
   "Play a bot reducer against the model on from world and sim as they are, from t0 with pending

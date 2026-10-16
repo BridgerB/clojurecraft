@@ -63,16 +63,30 @@
     (.flush out)
     (let [r (read-response in)]
       (when (= -1 (:id r)) (throw (ex-info "rcon auth failed" {:host host :port port}))))
-    {:sock sock :in in :out out :next-id (atom 10)}))
+    {:sock sock :in in :out out :next-id (atom 10) :server [host (int port)]}))
+
+(def server-locks (atom {}))           ; one lock a server ([host port]): see command!
+
+(defn server-lock
+  "The lock every connection to server ([host port]) takes round a command and its reply."
+  [server]
+  (get (swap! server-locks update server #(or % (Object.))) server))
 
 (defn command!
-  "Send one command, return the server's text response."
-  [{:keys [^DataInputStream in ^DataOutputStream out next-id]} ^String s]
-  (let [id (swap! next-id inc)]
-    (.write out ^bytes (encode-packet id 2 s))
-    (.flush out)
-    (loop [acc ""]
-      (let [r (read-response in)] (if (= id (:id r)) (str acc (:body r)) (recur acc))))))
+  "Send one command, return the server's text response. One command at a time a server, across
+   every connection to it: vanilla gathers every RCON connection's command output in one console
+   source (MinecraftServer.runCommand reads rconConsoleSource's buffer), so two connections'
+   commands at once read each other's replies. Race 38709089706 runner 6 (issue #167): four bots
+   landing at once got each other's tp replies, took another bot's position as their landing and
+   failed :no-landing."
+  [{:keys [^DataInputStream in ^DataOutputStream out next-id server]} ^String s]
+  (let [lock (server-lock server)]
+    (locking lock
+      (let [id (swap! next-id inc)]
+        (.write out ^bytes (encode-packet id 2 s))
+        (.flush out)
+        (loop [acc ""]
+          (let [r (read-response in)] (if (= id (:id r)) (str acc (:body r)) (recur acc))))))))
 
 (defn close! "Close the connection's socket." [{:keys [^Socket sock]}] (.close sock))
 

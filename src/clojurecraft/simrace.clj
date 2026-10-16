@@ -77,18 +77,19 @@
    was :boxed five columns short of the shore."
   [w seed until max-ms]
   (let [opts {:host "sim" :port 0 :name "Clj_sim"}
-        {:keys [world sim last moments]} (sim/run+ step
-                                                   (game/init opts)
-                                                   (sim/init {:columns (:capture/columns w)
-                                                              :decoded (:capture/decoded w)
-                                                              :spawn (spawn-of w)
-                                                              :seed seed
-                                                              :tick-seed seed})
-                                                   #(or (plan/done? %) (plan/failed? %))
-                                                   max-ms
-                                                   (go-of w until))
-        ok (main/ok? world until)]
-    (assoc (main/result world until ok)
+        {:keys [world sim last moments crashed]} (sim/run+ step
+                                                           (game/init opts)
+                                                           (sim/init {:columns (:capture/columns w)
+                                                                      :decoded (:capture/decoded w)
+                                                                      :spawn (spawn-of w)
+                                                                      :seed seed
+                                                                      :tick-seed seed})
+                                                           #(or (plan/done? %) (plan/failed? %))
+                                                           max-ms
+                                                           (go-of w until))
+        ok (and (nil? crashed) (main/ok? world until))]
+    (assoc (cond-> (main/result world until ok)
+             crashed (assoc :reason :crashed :error (str crashed)))
            :run/world (select-keys w [:capture/set :capture/landing])
            :run/seed seed
            :run/ms (:time/now world)
@@ -110,7 +111,8 @@
    that ran out (the plan failed with the reason it was waiting on) went wrong when the wait
    began, :plan/waiting-since. Anything else is an intent that failed max-attempts times in a
    row: the first of those failures started when its intention's :started fact says (memory
-   intentions), so the choice that failed is caught, not the tick before the stop."
+   intentions), so the choice that failed is caught, not the tick before the stop. A crash went
+   wrong at the tick that threw."
   [world signature]
   (let [now (:time/now world)
         facts (memory/intentions world)
@@ -123,6 +125,7 @@
                          (:intention/at %))
                       facts)]
     (cond (= :timeout (second signature)) {:why :stall :t (- now stall-window-ms)}
+          (= :crashed (second signature)) {:why :crash :t now}
           (and (:plan/waiting-since world) (= (:plan/reason world) (:plan/waiting world)))
           {:why :wait :t (:plan/waiting-since world)}
           :else {:why :intent-failed :t (or started now)})))
@@ -232,8 +235,11 @@
         stage (stage-of snap)
         until (:snapshot/until snap)
         stop? #(or (plan/done? %) (plan/failed? %) (contains? (:plan/reached %) stage))
-        {world' :world} (sim/play-from step m stop? (window-of snap) (go-of w until) nil)]
-    (assoc (failure/mark (main/result world' until (main/ok? world' until)))
+        {world' :world crashed :crashed}
+        (sim/play-from step m stop? (window-of snap) (go-of w until) nil)]
+    (assoc (failure/mark
+            (cond-> (main/result world' until (and (nil? crashed) (main/ok? world' until)))
+              crashed (assoc :reason :crashed :error (str crashed))))
            :run/ms (:time/now world')
            :run/from (:time/now world)
            :run/story (vec (story world' (:time/now world))))))
