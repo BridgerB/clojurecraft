@@ -96,6 +96,28 @@
            (plan/next-intent (assoc-in near [:world/entities 7 :entity/died-at] 0) row plan/goals))
         "a dead one is no quarry")))
 
+(deftest the-stare-is-for-the-nearest-one-in-sight-not-only-the-nearest
+  ;; gym batch pearls-263d (probe 38904622614): seventeen endermen round a warped forest landing,
+  ;; the nearest behind a ledge, and the bot looked round for forty minutes
+  (let [w (standing {7 (enderman [8.5 64.0 15.5]) 9 (enderman [1.5 64.0 2.5])} wall)]
+    (is (= 9 (first (pearls/quarry w))))
+    (is (= {:intent/kind :provoke :intent/target 9 :intent/for :pearls}
+           (plan/next-intent w row plan/goals)))
+    (is (nil? (pearls/quarry (assoc-in w [:world/entities 9 :entity/creepy?] true)))
+        "one already coming is no quarry")))
+
+(deftest a-lookout-that-found-nothing-roams-somewhere-else
+  ;; gym batch pearls-263e (plan run 38905343997): forty minutes of looking round from one place
+  (let [w (-> (standing {})
+              (assoc :time/now 0)
+              (assoc-in [:world/chunks [1 0]] (world/column {})))]
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals)))
+    (is (= {:intent/kind :walk :intent/target [24 64 8] :intent/for :pearls}
+           (plan/next-intent (assoc w :plan/last {:intent/kind :lookout :intent/status :done})
+                             row
+                             plan/goals))
+        "east first at this hour, sixteen blocks, onto the floor there")))
+
 (deftest the-provoke-stares-at-the-head-until-the-server-says-it-has-a-target
   (let [pos [8.5 64.0 15.5]
         w (assoc (standing {7 (enderman pos)})

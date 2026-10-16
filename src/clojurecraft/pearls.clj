@@ -35,6 +35,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.mob :as mob]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -49,8 +50,13 @@
 (def seek-radius 64.0)                ; blocks from the feet an enderman is walked toward, none nearer
 (def lookout-ms 5000)                 ; ms a :lookout stands turning before the plan looks again
 (def lookout-turn 0.09)               ; degrees of yaw a :lookout turns a ms: a full turn in four seconds
+(def roam-reach 16)                   ; blocks a roam walks from the feet to look round somewhere else
+(def roam-rise 8)                     ; blocks over and under the feet a roam's end is looked for in its column
+(def roam-turn-ms 10000)              ; ms after which a roam sets out a heading further round
+(def headings ; the eight ways a roam may go, a quarter turn of each other in pairs
+  [[1 0] [1 1] [0 1] [-1 1] [-1 0] [-1 -1] [0 -1] [1 -1]])
 (def strike-range 4.5)                ; blocks on the plane within which the hunt fights (hunt/strike-range: past a walk's reach)
-(def stare-range 24.0)                ; blocks to the head within which a provoke stares, with a clear line
+(def stare-range 64.0)                ; blocks to the head within which a provoke stares, with a clear line: the enderman's follow range
 (def stare-from 6.0)                  ; never stare nearer: an angry enderman stared at within 4 teleports away
 (def stare-ms 3000)                   ; ms a provoke stares at most before the enderman says it has a target (creepy)
 (def burrow-depth 3)                  ; stairs down a burrow cuts: from the third, the ground roofs a tunnel two high
@@ -96,6 +102,40 @@
   (let [eye (game/eye world)
         d (physics/distance eye (head e))]
     (and (<= stare-from d stare-range) (mob/sight? (sight-fn world) eye (head e)))))
+
+(defn quarry
+  "[eid entity] of the enderman a stare is for: the nearest within stare-range not yet coming
+   (entity/creepy?) that is provokable? from where the bot stands, or nil. Not only the nearest:
+   gym batch pearls-263d (plan run 38899294690, probe 38904622614) tracked seventeen endermen 30
+   to 80 blocks round each warped forest landing, none within a route's reach, and stood looking
+   round for forty minutes while the nearest, behind a ledge, could not be stared at. One stared
+   at from past 16 blocks teleports toward the bot (EndermanLookForPlayerGoal): it need not be
+   walked to."
+  [world]
+  (let [pos (:player/pos world)]
+    (->> (endermen world stare-range)
+         (remove (comp entity/creepy? val))
+         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
+         (some (fn [[_ e :as ee]] (when (provokable? world e) ee))))))
+
+(defn roam
+  "A walk roam-reach blocks off to look round from somewhere else: along the first of the eight
+   headings, from one the clock picks (roam-turn-ms a heading), to a cell a body can stand in
+   within roam-rise of the feet's height there, that a route reaches; nil when none does. Gym
+   batch pearls-263e (plan run 38905343997): with the stare reaching 64 blocks, a warped forest
+   landing still stood looking round for forty minutes, every enderman out of its sight."
+  [world]
+  (let [[x y z] (intent/feet world)
+        start (mod (quot (:time/now world 0) roam-turn-ms) (count headings))]
+    (some (fn [k]
+            (let [[dx dz] (nth headings (mod (+ start k) (count headings)))
+                  tx (+ x (* dx roam-reach))
+                  tz (+ z (* dz roam-reach))
+                  ty (first (filter #(path/standable? world [tx % tz])
+                                    (range (+ y roam-rise) (- y roam-rise 1) -1)))
+                  i (when ty {:intent/kind :walk :intent/target [tx ty tz] :intent/for :pearls})]
+              (when (and i (intent/routable? world i)) i)))
+          (range (count headings)))))
 
 (defn routable
   "[eid entity] of the first of the candidates nearest endermen a route reaches
@@ -286,22 +326,26 @@
    coming (creepy), one at hand, or under 10 health, back to it (gym batch pearls-263b: a bot
    that met one in the open, or backed away hurt, died); in it, the one coming or one at hand
    fought where the bot stands (:fight :intent/hold?); with no burrow, one at hand fought, or
-   backed away from under 10 health; no burrow near, one dug (:burrow, a pickaxe held) away from
-   the nearest enderman; in the burrow with none coming, out to its mouth to look round; one not
-   yet coming and provokable? from here, provoked (never one already coming: a provoke of it
+   backed away from under 10 health; no burrow near and one to provoke or coming, one dug there
+   (:burrow, a pickaxe held) away from it, so the stare goes from its mouth; in the burrow with none coming, out to its mouth to look round; one not
+   yet coming and provokable? from here within stare-range (quarry), provoked (never one already coming: a provoke of it
    ends at once, and batch pearls-263b's bot, its pickaxe lost, provoked one 26 times in a row);
    one coming and no burrow to meet it in, fought; else a walk to the nearest within seek-radius a
    route reaches; else a :lookout, standing where it is: no enderman yet is no failure (batch
-   pearls-263c's warped forest landings failed :no-enderman and :no-route in 40 s)."
+   pearls-263c's warped forest landings failed :no-enderman and :no-route in 40 s); after a
+   lookout that found nothing, a roam somewhere else to look from."
   [world]
   (let [pos (:player/pos world)
         ms (endermen world)
         [eid e] (entity/nearest ms pos)
-        [ceid ce] (entity/nearest (into {} (filter (comp entity/creepy? val)) ms) pos)
+        [ceid ce] (entity/nearest
+                   (into {} (filter (comp entity/creepy? val)) (endermen world stare-range))
+                   pos)
         near? (and e (<= (combat/horizontal world e) strike-range))
         hurt? (< (:player/health world 20.0) combat/retreat-health)
         home (shelter world)
-        in? (and home (= home (intent/feet world)))]
+        in? (and home (= home (intent/feet world)))
+        [qid q] (quarry world)]
     (cond
       (and home (not in?) (or ce near? hurt?))
       {:intent/kind :walk :intent/target home :intent/for :shelter}
@@ -309,17 +353,17 @@
       {:intent/kind :fight :intent/target (if ce ceid eid) :intent/hold? true :intent/for :pearls}
       (and near? hurt?) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       near? {:intent/kind :fight :intent/target eid :intent/for :pearls}
-      (and (nil? home) (pickaxe? world))
-      {:intent/kind :burrow :intent/dir (if e (away world e) [1 0]) :intent/for :pearls}
+      (and (nil? home) (pickaxe? world) (or ce q))
+      {:intent/kind :burrow :intent/dir (away world (or q ce)) :intent/for :pearls}
       (and in? (:pearls/mouth world))
       {:intent/kind :walk :intent/target (:pearls/mouth world) :intent/for :shelter}
-      (and e (not (entity/creepy? e)) (provokable? world e))
-      {:intent/kind :provoke :intent/target eid :intent/for :pearls}
+      qid {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       :else
-      (if-let [[_ far] (routable world (endermen world seek-radius))]
-        {:intent/kind :walk :intent/target (cell (:entity/pos far)) :intent/for :pearls}
-        {:intent/kind :lookout :intent/for :pearls}))))
+      (or (when-let [[_ far] (routable world (endermen world seek-radius))]
+            {:intent/kind :walk :intent/target (cell (:entity/pos far)) :intent/for :pearls})
+          (when (= :lookout (:intent/kind (:plan/last world))) (roam world))
+          {:intent/kind :lookout :intent/for :pearls}))))
 
 (defmethod plan/next-intent :pearls
   [world _ _]

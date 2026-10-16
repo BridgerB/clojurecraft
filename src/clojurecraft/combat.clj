@@ -44,6 +44,7 @@
 (def route-range 2.0)                 ; blocks on the plane from the target's cell a route walk ends within: nearer than approach-range, where the straight approach stalled
 (def walk-drift 3.0)                  ; blocks the target may move from the cell a route walk heads for before the walk is dropped
 (def press-within 0.8)                ; blocks on the plane under which an engage out of reach stops pressing in (it is under the target)
+(def hold-timeout-ms 60000)           ; a fight that holds its ground waits this long for its target to come
 (def back-off-timeout-ms 10000)       ; a walk away ends after this, however far it got
 
 (def swords
@@ -149,8 +150,8 @@
   ;; :unreachable when no route reaches it or after approach-timeout-ms. Gym blaze-fortress-h
   ;; (run 38905665758) failed three fights in a row :unreachable on blazes in sight with a route
   ;; to them, walking straight into the fortress's fences for twenty seconds each. A fight that
-  ;; holds its ground (:intent/hold?) stands facing it while it comes, the same
-  ;; approach-timeout-ms at most
+  ;; holds its ground (:intent/hold?) stands facing it while it comes, hold-timeout-ms at most: an
+  ;; enderman stared at 60 blocks off teleports toward the bot and walks the rest (issue #263)
   [world {:intent/keys [since hold? best-dist best-tick] :or {best-dist Double/MAX_VALUE}} e]
   (let [now (:time/now world)
         tick (:time/tick world)
@@ -164,7 +165,8 @@
               (assoc :player/controls (face world e))
               (intent/dissoc-intent :intent/best-dist :intent/best-tick)
               (intent/assoc-intent :intent/stage :engage :intent/since now))
-          (> (- now since) approach-timeout-ms) (intent/fail world :unreachable)
+          (> (- now since) (if hold? hold-timeout-ms approach-timeout-ms))
+          (intent/fail world :unreachable)
           hold? (assoc world :player/controls (face world e))
           (> (- tick best-tick) stall-ticks)
           (let [w (route-walk world e)]
