@@ -12,6 +12,8 @@ sourceRefs:
   - src/clojurecraft/stone.clj#def drops-of-row
   - src/clojurecraft/stone.clj#defn tool-missing
   - src/clojurecraft/stone.clj#defn exposed-of-states
+  - src/clojurecraft/path.clj#defn near-lava-trap?
+  - test/clojurecraft/stone_test.clj#ore-beside-a-lava-trap-is-left-alone
   - src/clojurecraft/stone.clj#defn beside
   - src/clojurecraft/stone.clj#defn step-down?
   - src/clojurecraft/path.clj#defn step-down-node?
@@ -71,6 +73,7 @@ A mining row is data: `:goal/act :mine`, the blocks it digs (`:goal/blocks`) and
 Gravel's loot table drops flint one time in ten, else the gravel itself. The `:flint-from-gravel` row needs one gravel and provides flint; its act starts a `:redig` intent, which runs three child intents in its own place (`link`, as stairs runs its digs): `:place` the held gravel (in a passage if need be, `:intent/passage-ok?`, since it is dug again at once), `:dig` what it placed, `:collect` with the row's drops (flint and gravel). One intent from placing to picking up matters: as three separate intents, the placing spent the gravel the row needs, and on the next tick the planner went for more gravel with `:dig-gravel` instead of digging the one it had just placed. When gravel comes back, the planner simply starts another `:redig`; there is no counter. In the sim, seed 4 rolls gravel four times and flint on the fifth dig, and the run replays to the same tick.
 
 ## Gotchas
+- **Lava that caught the bot is still coming.** Ore within `path/lava-trap-reach` (4) on the plane of a lava trap still in force (`:world/traps`, ten minutes) is left alone (`path/near-lava-trap?`): sim race 38844683780 (issue #230, world R2/9) fled lava falling from ten blocks up, then mined the iron two blocks off under the same flow and was caught again until the flee found no footing (`ore-beside-a-lava-trap-is-left-alone`).
 - **A tunnel shows its floor too.** Live run 14 (local landing 2360,2360, 58fc6aa) held an ingot and needed flint, tunnelled for gravel at y 18 and walked over five gravel blocks in its own floor, none counted because a block a level under the feet was never reachable (`gravel-in-the-tunnel-floor-is-dug-and-picked-up-from-its-hole`).
 - **A tunnel shows its head and its ceiling too.** Until a block at the head or overhead counted, a two-high tunnel showed ore only in the walls at its feet: batch iron-a2 run 4 tunnelled over a hundred blocks at y 16 without seeing an iron ore (`a-tunnel-shows-ore-at-the-head-and-overhead`).
 - The depths are where the game makes each ore densest (iron peaks at y 16; coal is densest high up, around y 96, and absent below y 0, so its stairs stop at 40: at 0, the twelfth live run tunnelled thirteen minutes in deepslate for coal it never found): where a tunnel is cut. Iron's went 16, then 0 (the second live run waited at 16 with the only iron in sight out of reach), then back to 16 when tunnels came, since a tunnel at the peak shows the most.
