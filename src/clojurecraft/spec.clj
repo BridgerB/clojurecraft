@@ -6,6 +6,7 @@
             [clojure.string :as str]
             [clojurecraft.build :as build]
             [clojurecraft.claims :as claims]
+            [clojurecraft.eat :as eat]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -347,6 +348,10 @@
 (s/def :server/time-at int?)
 (s/def :server/tick-ms number?)
 (s/def :player/health number?)
+(s/def :player/food int?)               ; 0-20 from a server; the wire allows any varint, and step is total over it
+(s/def :player/saturation number?)
+(s/def :intent/food-before int?)
+(s/def :intent/eat-by number?)
 (s/def :entity/seen-at int?)
 (s/def :sight/pos ::block-pos)
 (s/def :sight/state int?)
@@ -586,18 +591,17 @@
 (s/def :sim/keep-alives-pending set?)
 ;; hunger in the model (issue #260): the server's FoodData, its difficulty, eating, hurts
 (s/def :sim/difficulty #{:peaceful :easy :normal :hard})
-(s/def :food/level (s/int-in 0 21))
-(s/def :food/saturation (s/double-in :min 0.0 :max 20.0 :NaN? false))
-(s/def :food/exhaustion (s/double-in :min 0.0 :max 40.0 :NaN? false))
-(s/def :food/timer nat-int?)
-(s/def :sim/food (s/keys :req [:food/level :food/saturation :food/exhaustion :food/timer]))
+(s/def :sim/food (s/int-in 0 21))                         ; the hunger bar (#259)
+(s/def :sim/saturation (s/double-in :min 0.0 :max 20.0 :NaN? false)) ; spent before the bar
+(s/def :sim/exhaustion (s/double-in :min 0.0 :max 40.0 :NaN? false)) ; four of it cost a point
+(s/def :sim/food-timer nat-int?)                         ; ticks on the heal or starve clock
 (s/def :sim/sent-health (s/tuple number? int? boolean?)) ; health, food, saturation zero? last told
 (s/def :sim/on-ground? boolean?)                         ; the last movement packet's flag
 (s/def :sim/eaten nat-int?)                              ; foods the player finished eating
 (s/def :sim.eating/slot int?)
 (s/def :sim.eating/item int?)
-(s/def :sim.eating/until int?)
-(s/def :sim/eating (s/keys :req-un [:sim.eating/slot :sim.eating/item :sim.eating/until]))
+(s/def :sim.eating/at int?)
+(s/def :sim/eating (s/keys :req-un [:sim.eating/slot :sim.eating/item :sim.eating/at]))
 (s/def :sim.hurt/at int?)
 (s/def :sim.hurt/last number?)
 (s/def :sim/hurt (s/keys :req-un [:sim.hurt/at :sim.hurt/last])) ; the last hurt: when, how hard
@@ -693,6 +697,9 @@
   :args
   (s/cat :world (requires :world/chunks)
          :pos ::block-pos))
+(s/fdef eat/food-held
+  :args
+  (s/cat :world (requires :player/inventory)))
 (s/fdef window/view
   :args
   (s/cat :world (requires :window/grid)
@@ -703,5 +710,5 @@
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
-   `window/view `path/plan `path/classify])
+   `window/view `path/plan `path/classify `eat/food-held])
 (s/def :stats/deaths pos-int?)

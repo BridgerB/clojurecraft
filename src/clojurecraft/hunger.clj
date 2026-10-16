@@ -1,6 +1,7 @@
 (ns clojurecraft.hunger
-  "Hunger as the server keeps it: the rules of vanilla's FoodData, FoodConstants and Foods
-   (26.1.2), as values and pure functions, for the server model (sim.clj).
+  "Hunger as the server keeps it: the rules of vanilla's FoodData and FoodConstants (26.1.2), as
+   values and pure functions, for the server model (sim.clj). What each food restores is
+   clojurecraft.food's.
 
    A player's food is a map {:food/level 0-20 :food/saturation 0-level :food/exhaustion
    :food/timer}: the hunger bar, the hidden saturation that drains first, the exhaustion that
@@ -14,14 +15,11 @@
    easy starvation stops at 10 health, on normal at 1, on hard it kills.
 
    Not modelled: the hunger effect of raw chicken and rotten flesh, sprinting (the bot never
-   sprints), saturation's own client sync (set-health carries it, the caller sends it), and the
-   natural_health_regeneration game rule (always on)."
-  (:require [clojurecraft.blocks :as blocks]
-            [clojurecraft.recipe :as recipe]))
+   sprints), and the natural_health_regeneration game rule (always on)."
+  (:require [clojurecraft.food :as food]))
 
 (set! *warn-on-reflection* true)
 
-(def max-level 20)                    ; a full hunger bar (FoodConstants.MAX_FOOD)
 (def start-saturation 5.0)            ; saturation a spawn and a respawn give (FoodConstants.START_SATURATION)
 (def exhaustion-per-point 4.0)        ; exhaustion that costs one saturation, else one food (FoodData.tick)
 (def heal-level 18)                   ; food at or over which health regenerates (FoodConstants.HEAL_LEVEL)
@@ -29,7 +27,7 @@
 (def fast-heal-ticks 10)              ; game ticks between saturated heals (a full bar with saturation)
 (def max-fast-heal 6.0)               ; saturation one saturated heal spends at most, healing a sixth of it
 (def heal-exhaustion 6.0)             ; exhaustion one slow heal costs (FoodConstants.EXHAUSTION_HEAL)
-(def eat-ticks 32)                    ; game ticks eating takes (Consumable's default 1.6 s)
+(def max-exhaustion 40.0)             ; exhaustion never grows past this (FoodData.addExhaustion)
 
 (def exhaustion
   "What each act costs, as FoodConstants and the damage types' exhaustion say: a jump (0.05), a
@@ -39,70 +37,24 @@
 
 (def swim-per-block 0.01)             ; exhaustion a block swum under water costs (FoodConstants.EXHAUSTION_SWIM)
 
-(def foods
-  "Every food the bot may hold, by item name → [nutrition saturation], as vanilla's Foods table
-   gives them (saturation already nutrition × modifier × 2). Hand-written: datagen reads no
-   food table yet."
-  {:apple [4 2.4]
-   :baked_potato [5 6.0]
-   :beef [3 1.8]
-   :beetroot [1 1.2]
-   :bread [5 6.0]
-   :carrot [3 3.6]
-   :chicken [2 1.2]
-   :cod [2 0.4]
-   :cooked_beef [8 12.8]
-   :cooked_chicken [6 7.2]
-   :cooked_cod [5 6.0]
-   :cooked_mutton [6 9.6]
-   :cooked_porkchop [8 12.8]
-   :cooked_rabbit [5 6.0]
-   :cooked_salmon [6 9.6]
-   :cookie [2 0.4]
-   :golden_apple [4 9.6]
-   :golden_carrot [6 14.4]
-   :melon_slice [2 1.2]
-   :mutton [2 1.2]
-   :porkchop [3 1.8]
-   :potato [1 0.6]
-   :pumpkin_pie [8 4.8]
-   :rabbit [3 1.8]
-   :rotten_flesh [4 0.8]
-   :salmon [2 0.4]
-   :sweet_berries [2 0.4]})
-
-(def always-edible "Foods eaten with a full bar (FoodProperties.canAlwaysEat)." #{:golden_apple})
-
-(def food-items
-  "item id → [nutrition saturation], for the foods the item table knows."
-  (into {} (for [[n v] foods :let [id (get blocks/items n)] :when id] [id v])))
-
-(defn food? "Is item id a food?" [id] (contains? food-items id))
-
 (def fresh
   "A new life's food: a full bar, the start saturation, nothing spent."
-  {:food/level max-level :food/saturation start-saturation :food/exhaustion 0.0 :food/timer 0})
+  {:food/level food/max-food :food/saturation start-saturation :food/exhaustion 0.0 :food/timer 0})
 
 (defn exhaust
-  "food after amount more exhaustion (FoodData.addExhaustion: capped at 40)."
+  "food after amount more exhaustion, never past max-exhaustion."
   [food amount]
-  (update food :food/exhaustion #(min 40.0 (+ % amount))))
-
-(defn can-eat?
-  "May a player with food eat item id now: a food, and a bar below full or one eaten anyway?"
-  [food id]
-  (boolean (and (food? id)
-                (or (< (:food/level food) max-level) (always-edible (recipe/item-name id))))))
+  (update food :food/exhaustion #(min max-exhaustion (+ % amount))))
 
 (defn eat
-  "food after eating item id (FoodData.eat): the level up by its nutrition to at most full, the
-   saturation up by its saturation to at most the new level."
-  [food id]
-  (let [[nutrition saturation] (food-items id)
-        level (min max-level (+ (:food/level food) nutrition))]
+  "food after eating the food named n (FoodData.eat): the level up by its nutrition to at most
+   full, the saturation up by its saturation (food/saturation) to at most the new level."
+  [food n]
+  (let [level (min food/max-food (+ (:food/level food) (food/nutrition n 0)))]
     (assoc food
            :food/level level
-           :food/saturation (min (double level) (+ (:food/saturation food) saturation)))))
+           :food/saturation
+           (min (double level) (+ (:food/saturation food) (food/saturation n 0.0))))))
 
 (defn spend
   "food after spending its exhaustion (FoodData.tick's first part): past four, four go and cost
@@ -133,7 +85,7 @@
         clock (fn [food every]
                 (let [t (inc (:food/timer food))]
                   [(assoc food :food/timer (if (>= t every) 0 t)) (>= t every)]))]
-    (cond (and hurt? (pos? (:food/saturation food)) (>= (:food/level food) max-level))
+    (cond (and hurt? (pos? (:food/saturation food)) (>= (:food/level food) food/max-food))
           (let [[food due?] (clock food fast-heal-ticks)
                 spent (min (:food/saturation food) max-fast-heal)]
             (if due?

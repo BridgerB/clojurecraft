@@ -33,27 +33,26 @@
   (is (hunger/starves? 1.0 :hard)))
 
 (deftest eating-adds-nutrition-and-saturation-up-to-the-bar
-  (let [bread (recipe/item-id :bread)
-        hungry (assoc hunger/fresh :food/level 10 :food/saturation 0.0)]
+  (let [hungry (assoc hunger/fresh :food/level 10 :food/saturation 0.0)]
     (is (= {:food/level 15 :food/saturation 6.0}
-           (select-keys (hunger/eat hungry bread) [:food/level :food/saturation])))
-    (is (= 20 (:food/level (hunger/eat (assoc hungry :food/level 18) bread))) "capped at full")
-    (is (hunger/can-eat? hungry bread))
-    (is (not (hunger/can-eat? hunger/fresh bread)) "a full bar eats no bread")
-    (is (hunger/can-eat? hunger/fresh (recipe/item-id :golden_apple)) "a golden apple always")
-    (is (not (hunger/can-eat? hungry (recipe/item-id :stick))) "a stick is no food")))
+           (select-keys (hunger/eat hungry :bread) [:food/level :food/saturation])))
+    (is (= 20 (:food/level (hunger/eat (assoc hungry :food/level 18) :bread))) "capped at full")
+    (is (= 20.0
+           (:food/saturation (hunger/eat (assoc hungry :food/level 12 :food/saturation 10.0)
+                                         :cooked_beef)))
+        "saturation up to the new bar, never above it")))
 
 ;; ---------------------------------------------------------------- on the model
 
 (defn hungry-sim
   "A model in play at difficulty, the player at [0.5 64 0.5] on the stone floor with inv as
-   window 0's slots and food as its hunger."
-  [difficulty inv food]
+   window 0's slots and attrs (:sim/food, :sim/saturation ...) over its fresh hunger."
+  [difficulty inv attrs]
   (->
     (sim/init
      {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5] :inventory inv :difficulty difficulty})
     (assoc :sim/phase :play :sim/player-pos [0.5 64.0 0.5] :sim/on-ground? true)
-    (update :sim/food merge food)))
+    (merge attrs)))
 
 (defn ticks
   "The model after n game ticks, 50 ms apart."
@@ -86,10 +85,10 @@
   ;; 0.05 a jump (ServerGamePacketListenerImpl.handleMovePlayer: on the ground, then not, going
   ;; up): 81 jumps are past four exhaustion, and with no saturation the bar drops one
   (let [sim
-        (reduce (fn [sim _] (jump sim)) (hungry-sim :normal {} {:food/saturation 0.0}) (range 81))
+        (reduce (fn [sim _] (jump sim)) (hungry-sim :normal {} {:sim/saturation 0.0}) (range 81))
         after (ticks sim 1)]
-    (is (< 4.0 (:food/exhaustion (:sim/food sim)) 4.1))
-    (is (= 19 (:food/level (:sim/food after))))
+    (is (< 4.0 (:sim/exhaustion sim) 4.1))
+    (is (= 19 (:sim/food after)))
     (is (= [[20.0 19 0.0]] (map (juxt :health :food :saturation) (said after :set-health)))
         "the client is told once the bar changed")))
 
@@ -102,12 +101,12 @@
         jumped (ticks (reduce (fn [sim _] (jump sim)) sim (range 100)) 100)
         ate (ticks (sends sim use-held) 40)]
     (is (nil? (:sim/food jumped)))
+    (is (nil? (:sim/exhaustion jumped)))
     (is (empty? (said jumped :set-health)) "no health told where none was before")
     (is (= 3 (get-in ate [:sim/inv (inventory/slot [:hotbar 0]) :count])) "nothing eaten")))
 
 (deftest starving-on-normal-stops-at-one-health
-  (let [sim (-> (hungry-sim :normal {} {:food/level 0 :food/saturation 0.0})
-                (assoc :sim/health 3.0))
+  (let [sim (hungry-sim :normal {} {:sim/food 0 :sim/saturation 0.0 :sim/health 3.0})
         after (ticks sim 400)]
     (is (= 1.0 (:sim/health after)) "two hurts, one every 80 ticks, then none at one")
     (is (= [3.0 2.0 1.0] (map :health (said after :set-health)))
@@ -116,36 +115,36 @@
       (is (= 0.0 (:sim/health (ticks (assoc sim :sim/difficulty :hard) 400)))))))
 
 (deftest a-bar-at-eighteen-heals-a-heart-every-four-seconds-for-six-exhaustion
-  (let [sim (-> (hungry-sim :normal {} {:food/level 18 :food/saturation 0.0})
-                (assoc :sim/health 10.0))
+  (let [sim (hungry-sim :normal {} {:sim/food 18 :sim/saturation 0.0 :sim/health 10.0})
         after (ticks sim 80)]
     (is (= 11.0 (:sim/health after)))
-    (is (= 6.0 (:food/exhaustion (:sim/food after))))))
+    (is (= 6.0 (:sim/exhaustion after)))))
 
-(deftest bread-eaten-for-thirty-two-ticks-restores-five
+(deftest bread-eaten-for-thirty-two-ticks-restores-five-and-six-saturation
   (let [bread (recipe/item-id :bread)
         sim (sends (hungry-sim :normal
                                {[:hotbar 0] {:item bread :count 2}}
-                               {:food/level 10 :food/saturation 0.0})
+                               {:sim/food 10 :sim/saturation 0.0})
                    use-held)
         slot (inventory/slot [:hotbar 0])
         early (ticks sim 31)
         done (ticks sim 32)]
-    (is (= 10 (:food/level (:sim/food early))) "not before 32 ticks")
+    (is (= 10 (:sim/food early)) "not before 32 ticks")
     (is (= 2 (get-in early [:sim/inv slot :count])))
-    (is (= 15 (:food/level (:sim/food done))))
-    (is (= 6.0 (:food/saturation (:sim/food done))))
+    (is (= 15 (:sim/food done)))
+    (is (= 6.0 (:sim/saturation done)))
     (is (= 1 (get-in done [:sim/inv slot :count])) "one bread taken")
     (is (= 1 (:sim/eaten done)))
     (is (= [{:entity-id sim/player-eid :status sim/use-finished}]
            (map #(select-keys % [:entity-id :status]) (said done :entity-event))))
-    (is (some #(= 15 (:food %)) (said done :set-health)) "the client is told the new bar")))
+    (is (some #(and (= 15 (:food %)) (= 6.0 (:saturation %))) (said done :set-health))
+        "the client is told the new bar and saturation")))
 
 (deftest eating-stops-when-the-held-slot-changes-or-the-use-is-released
   (let [bread (recipe/item-id :bread)
         sim (sends (hungry-sim :normal
                                {[:hotbar 0] {:item bread :count 2}}
-                               {:food/level 10 :food/saturation 0.0})
+                               {:sim/food 10 :sim/saturation 0.0})
                    use-held)
         swapped (ticks (sends (ticks sim 10) {:packet/name :set-carried-item :slot 1}) 40)
         released (ticks (sends (ticks sim 10)
@@ -155,19 +154,25 @@
                                 :face 0
                                 :sequence 0})
                         40)]
-    (is (= 10 (:food/level (:sim/food swapped))))
-    (is (= 10 (:food/level (:sim/food released))))
+    (is (= 10 (:sim/food swapped)))
+    (is (= 10 (:sim/food released)))
     (is (= 2 (get-in released [:sim/inv (inventory/slot [:hotbar 0]) :count])))))
 
-(deftest a-full-bar-eats-nothing
-  (let [sim (sends (hungry-sim :normal {[:hotbar 0] {:item (recipe/item-id :bread) :count 2}} {})
-                   use-held)]
-    (is (nil? (:sim/eating sim)))))
+(deftest a-full-bar-eats-only-what-is-always-eaten
+  (let [bread (sends (hungry-sim :normal {[:hotbar 0] {:item (recipe/item-id :bread) :count 2}} {})
+                     use-held)
+        apple (sends
+               (hungry-sim :normal {[:hotbar 0] {:item (recipe/item-id :golden_apple) :count 1}} {})
+               use-held)]
+    (is (nil? (:sim/eating bread)))
+    (is (some? (:sim/eating apple)) "a golden apple is eaten with a full bar")))
 
 (deftest a-respawn-refills-the-bar
-  (let [sim (-> (hungry-sim :normal {} {:food/level 3 :food/saturation 0.0})
-                (assoc :sim/health 0.0 :sim/respawn [0.5 64.0 0.5])
+  (let [sim (-> (hungry-sim
+                 :normal
+                 {}
+                 {:sim/food 3 :sim/saturation 0.0 :sim/health 0.0 :sim/respawn [0.5 64.0 0.5]})
                 (sends {:packet/name :client-command
                         :action (packet/value :client-command :perform-respawn)}))]
-    (is (= hunger/fresh (:sim/food sim)))
+    (is (= hunger/fresh (sim/food-value sim)))
     (is (= sim/max-health (:sim/health sim)))))

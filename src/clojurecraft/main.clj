@@ -20,6 +20,7 @@
             [clojurecraft.build]
             [clojurecraft.cli :as cli]
             [clojurecraft.conn :as conn]
+            [clojurecraft.eat]
             [clojurecraft.fortress]
             [clojurecraft.game :as game]
             [clojurecraft.make]

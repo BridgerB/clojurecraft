@@ -788,6 +788,7 @@ Most are stated where they apply above (grass type, resting vy, `:name` collisio
 |---|---|---|---|
 | 0 | `:escape-water` (always) | `:not-trapped-in` | `:escape` → `:swim-out` |
 | 0 | `:escape-lava` (always) | `:not-trapped-in` | `:escape` → `:flee` |
+| 0 | `:eat` (always, after the escapes; `eat`) | `:fed?`: food ≥ 14, unknown, or nothing safe to eat held | `:eat` → `:eat` (issue #259) |
 | 1 | `:wood` | `{:tag/logs 1}` | needs |
 | 2 | `:kit` (`table`) | `{:item/crafting_table 1 :item/stick 4}` | needs |
 | 3 | `:pickaxe` | wooden pickaxe | needs |
