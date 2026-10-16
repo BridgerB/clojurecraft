@@ -1,0 +1,7 @@
+;; Issue #264's eyes row, run as a plan from branch gym/264 (gym.yml's goal dropdown cannot name
+;; it yet): seven blaze rods and twelve ender pearls given on a surface landing, twelve eyes of
+;; ender crafted in the 2x2 grid. One bot a server.
+{:plans/label "eyes-264a"
+ :plans/jobs 3
+ :plans/issue 264
+ :plans/experiments [{:exp/name "eyes" :exp/kind :gym :exp/goal "eyes" :exp/runs 6 :exp/est-s 300}]}
