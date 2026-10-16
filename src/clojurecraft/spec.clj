@@ -465,7 +465,7 @@
 (s/def :path/max-nodes pos-int?)
 (s/def :path/from ::block-pos)
 (s/def ::route (s/keys :req [:path/waypoints :path/cost :path/status] :opt [:path/from]))
-(s/def :goal/kind #{:near :block :xz :away :pickup :sky})
+(s/def :goal/kind #{:near :block :xz :away :pickup :sky :unseen}) ; :unseen is blaze.clj's: out of a blaze's sight
 (s/def :goal/pos ::block-pos)
 (s/def :goal/range number?)
 (s/def :goal/rise nat-int?)

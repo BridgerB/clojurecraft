@@ -204,6 +204,12 @@
 
 ;; ---------------------------------------------------------------- walk
 
+(def standing-walks
+  "The purposes of a walk that ends standing in its target cell, not near it: a build's stand
+   (#8: a pour is aimed from it) and a hiding place out of a blaze's sight (issue #262: a cell
+   within reach of the eye but round a corner hides only once stood in)."
+  #{:build :cover})
+
 (defn walk-goal
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell
    within pickup-range of it whose feet are where the drop lands in reach (path's :pickup goal:
@@ -218,7 +224,7 @@
           step-down? (assoc :goal/step-down? true))
         (= :scoop for)
         {:goal/kind :pickup :goal/pos (update target 1 inc) :goal/range scoop-range :goal/rise 1}
-        (= :build for) {:goal/kind :block :goal/pos target}
+        (contains? standing-walks for) {:goal/kind :block :goal/pos target}
         :else {:goal/kind :near :goal/pos target :goal/range goal-range}))
 
 (def centred-within 0.25)             ; how far from a cell's middle the feet may stand and count as on it
@@ -258,7 +264,7 @@
                  (= :scoop for)
                  (and (<= -1 rise 0) (<= (path/octile (feet world) target) scoop-range))
                  (= :log for) (<= rise pickup-rise)
-                 (= :build for) (centred? world target)
+                 (contains? standing-walks for) (centred? world target)
                  :else true)))))
 
 (defn routable?
