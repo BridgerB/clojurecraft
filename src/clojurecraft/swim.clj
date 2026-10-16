@@ -451,6 +451,19 @@
                       #(physics/horizontal-distance (physics/centre feet) (physics/centre %))))
        first))
 
+(defn flee-controls
+  "The controls a flee holds toward target: forward with jump while in the lava or against a
+   step, forward alone out of it, nothing once centred in the target, so the body lands and the
+   trap clears on dry land (trap/dry-land? held dry-ticks-to-clear). Jump held over dry ground
+   bounces the body off it every tick, and the trap never clears: sim races 38844683780 runner
+   7 and 38843557186 runner 3 (issues #230 and #231, worlds R2/9 and R1/3) came out of the lava
+   onto the footing and bounced on it until flee-timeout-ticks failed them :no-footing."
+  [world target]
+  (cond (intent/centred? world target) {}
+        (or (:player/in-lava? world) (:player/horizontal-collision? world))
+        (assoc (intent/toward world (physics/centre target) 0.0) :control/jump? true)
+        :else (intent/toward world (physics/centre target) 0.0)))
+
 (defmethod intent/run :flee
   [world {:intent/keys [target started]} _]
   (let [tick (:time/tick world)
@@ -469,10 +482,7 @@
             (-> world
                 (assoc :player/controls {})
                 (intent/fail :no-footing)))
-          :else
-          (assoc world
-                 :player/controls
-                 (assoc (intent/toward world (physics/centre target) 0.0) :control/jump? true)))))
+          :else (assoc world :player/controls (flee-controls world target)))))
 
 ;; ---------------------------------------------------------------- the goals' rules
 
