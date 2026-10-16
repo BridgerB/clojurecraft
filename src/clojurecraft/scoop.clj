@@ -350,26 +350,30 @@
    own digging two below a pond's surface, the water in reach but over the eyes; on ravine
    floors at y 8 and y 32 under pools remembered at y 62; and on a mountain ledge at y 80 over
    pools at y 62 with no route down; and at y 63, forty blocks from pools at y 62, under a
-   lip of rock. Every hunt and walk had no route, and each waited :no-water."
+   lip of rock. Every hunt and walk had no route, and each waited :no-water.
+   The cut names the water it heads for (:intent/target): a cut that is :boxed gives that water
+   up (stairs/box) and the next look chooses other water, or none and a climb."
   [world]
   (let [fy (physics/y-of (intent/feet world))]
     (when-let [[_ y _ :as w] (first (concat (sources world) (pools-near world)))]
       (let [bank (inc y)]
-        (cond (> bank fy)
-              {:intent/kind :stairs-up
-               :intent/to-y (stairs/climb-to world bank)
-               :intent/to-height? true
-               :intent/for :bank}
-              (< bank fy)
-              {:intent/kind :stairs-down
-               :intent/to-y (max bank (- fy stone/stair-depth))
-               :intent/dir (heading-to world w)
-               :intent/for :bank}
-              :else
-              {:intent/kind :tunnel
-               :intent/dir (heading-to world w)
-               :intent/length tunnel-out-length
-               :intent/for :bank})))))
+        (assoc (cond (> bank fy)
+                     {:intent/kind :stairs-up
+                      :intent/to-y (stairs/climb-to world bank)
+                      :intent/to-height? true
+                      :intent/for :bank}
+                     (< bank fy)
+                     {:intent/kind :stairs-down
+                      :intent/to-y (max bank (- fy stone/stair-depth))
+                      :intent/dir (heading-to world w)
+                      :intent/for :bank}
+                     :else
+                     {:intent/kind :tunnel
+                      :intent/dir (heading-to world w)
+                      :intent/length tunnel-out-length
+                      :intent/for :bank})
+               :intent/target
+               w)))))
 
 (defn dig-out
   "Out of the ground when the sky is not open over the feet, whatever the height: walk up the
