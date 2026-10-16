@@ -290,6 +290,31 @@
                cells))
         "the air over a pond: a bridge, never laid")))
 
+(deftest a-stair-down-turns-into-the-rock-before-it-lays-a-floor
+  ;; race 38842339863 runner 4 (issue #37) bots Clj_r01 and Clj_r08: the mine's stairs down ran
+  ;; along a cliff's face and a cave's wall, laying a floor before every stair with the rock a turn
+  ;; away, until the cobblestone was spent and every stair was :boxed. Here a cave opens east of
+  ;; the feet, under them from x 6 on; south is rock
+  (let [cave (into {} (for [x (range 6 16) y (range 58 64) z (range 16)] [[x y z] blocks/air]))
+        down {:intent/kind :stairs-down :intent/to-y 58 :intent/status :active}
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        at (fn [blocks]
+             (let [w (assoc (standing 64 :stone_pickaxe :cobblestone)
+                            :world/chunks {[0 0] (world/column blocks)}
+                            :plan/intent down)]
+               (:plan/intent (intent/run w down tick))))]
+    (is (= [:open [0 1]] ((juxt :intent/stage :intent/dir) (at cave)))
+        "the stair goes south into the rock, nothing laid")
+    (is (= :lay
+           (:intent/stage (at (merge cave
+                                     (into {}
+                                           (for [x (range 16)
+                                                 y (range 58 64)
+                                                 z (range 16)
+                                                 :when (not= [x z] [5 5])]
+                                             [[x y z] blocks/air]))))))
+        "with air every way, a floor is laid as before")))
+
 (deftest a-tunnel-step-the-dig-refuses-is-planned-again
   ;; sim race 38762695024 runner 8 (issue #171, world R1/40): a tunnel for gravel at y 40 ran
   ;; under a gravel bed; the gravel over each step it opened fell into the step round the body,
