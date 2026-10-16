@@ -249,6 +249,8 @@
       (and (empty? (quarry world)) (>= (- (:time/now world) (:plan/since world 0)) look-ms))))
 
 (defmethod plan/next-intent :attack
+  ;; the nearest in the quarry fought; none yet while the trial looks round (:cleared?), a wait
   [world _ _]
-  (when-let [[eid _] (entity/nearest (quarry world) (:player/pos world))]
-    {:intent/kind :fight :intent/target eid}))
+  (if-let [[eid _] (entity/nearest (quarry world) (:player/pos world))]
+    {:intent/kind :fight :intent/target eid}
+    {:plan/wait :looking}))
