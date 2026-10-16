@@ -15,9 +15,9 @@
    enough; the comment lists those snapshots and nothing else. Runs with no recurring snapshot
    are counted in the report's output (and on the page), never filed; so are runs that stopped
    for a reason that is not the bot's play (:run/infra?: the server closed the socket or
-   disconnected it). An open issue last reproduced longer ago than retention-days, its
-   snapshots' artifacts gone, is closed as not planned with closing-text, and a batch that
-   reproduces it reopens it. A closed issue whose signature comes back in runs of code newer than
+   disconnected it). An open issue last reproduced longer ago than retention-days (its evidence
+   a week old: the snapshots stay in their release, but the code has moved on) is closed as not
+   planned with closing-text, and a batch that reproduces it reopens it. A closed issue whose signature comes back in runs of code newer than
    its closing is reopened and its section says regressed; runs of older code (a round that
    started before the fix merged) add their section and leave it closed, since they never ran the
    fix. Each issue is labelled bot-failure and sim (the model reproduces it, so the fix's check
@@ -36,7 +36,7 @@
 
 (def label "bot-failure")             ; every failure issue carries it
 (def infra-reasons #{:disconnected :closed}) ; not the bot's play, for runs that predate :run/infra?
-(def retention-days 7)                ; an artifact, and the snapshots in it, lives this long (upload-artifact's retention-days)
+(def retention-days 7)                ; an issue no batch reproduced for this long is closed (an artifact lives as long)
 (def closing-text "closed: no reproducible snapshot; reopens when a batch reproduces it")
 (def max-new 10)                      ; issues opened by one report, at most
 (def examples 5)                      ; reproductions listed per signature per report
@@ -129,18 +129,23 @@
          ")")))
 
 (defn snapshot-note
-  "A kept snapshot in a reproduction's words, \"snapshot `f` in artifact `a` (moment ...)\",
-   the shape bb issue-check fetch looks for; nil when the run kept none."
+  "A kept snapshot in a reproduction's words, the shape bb issue-check fetch looks for: \"snapshot
+   `f` as `asset` in release `tag` (moment ...)\" once bb churn uploaded it for good (:run/release,
+   :run/asset), else \"snapshot `f` in artifact `a` (moment ...)\", the runner's artifact, uploaded
+   at the job's end and gone after retention-days; nil when the run kept none."
   [r]
-  (when (:run/snapshot r)
-    (str "snapshot `" (last (str/split (str (:run/snapshot r)) #"/"))
-         "` in artifact `" (:run/artifact r)
-         "`" (moment-note (:run/moment r)))))
+  (let [file (last (str/split (str (:run/snapshot r)) #"/"))
+        moment (moment-note (:run/moment r))]
+    (cond
+      (:run/release r)
+      (str "snapshot `" file "` as `" (:run/asset r) "` in release `" (:run/release r) "`" moment)
+      (:run/snapshot r) (str "snapshot `" file "` in artifact `" (:run/artifact r) "`" moment)
+      :else nil)))
 
 (defn repro
   "One line that reproduces a run whose snapshot recurred (reproduced): its snapshot (a moment
-   kept from before the choice that failed, in the runner's artifact: bb issue-check fetch brings
-   it down, and the fix's check judges it), then for a sim run the sim race's command that made
+   kept from before the choice that failed, in the hour's evidence release, snapshot-note: bb
+   issue-check fetch brings it down, and the fix's check judges it), then for a sim run the sim race's command that made
    it, for a real one its bot under its server's directory (:run/dir, s1 or s2: each server's
    bots have the same names). The replay line of a real run's recording is gone (issue #299): a
    replay judges nothing."
@@ -223,9 +228,9 @@
 
 (defn stale?
   "Is an open issue past its evidence at now (an ISO instant): last reproduced (its tally's
-   :reproduced) more than retention-days ago, so every snapshot its comments list is in an
-   expired artifact? An issue whose tally never said (filed before issue #299) is left to a
-   person."
+   :reproduced) more than retention-days ago, so no batch of the last week saw it (an older
+   comment's artifact has expired by then; a release keeps its snapshots)? An issue whose tally
+   never said (filed before issue #299) is left to a person."
   [issue now]
   (let [at (:reproduced (tally-of (:body issue)))]
     (boolean (and (= "open" (:state issue))

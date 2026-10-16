@@ -4,7 +4,8 @@ name: copilot-setup-steps
 # before the session starts, while the network is still open. Java 25, the Clojure CLI and
 # Babashka as unit.yml has them; every alias the tests and bb check use, downloaded; the four
 # captured sim worlds a snapshot is played in, as probe.yml restores them; and the snapshots of
-# every open sim bot-failure issue (bb issue-check fetch) moved to cache/issues/<n>/, outside the
+# every open sim bot-failure issue (bb issue-check fetch: from the evidence releases its comments
+# name, or an older comment's artifact) moved to cache/issues/<n>/, outside the
 # tree, so the session copies only its own issue's into test/issues/<n>/. The job must be named
 # copilot-setup-steps; a push or pull request that changes this file runs it as a check.
 
@@ -17,7 +18,7 @@ on:
 
 permissions:
   contents: read
-  actions: read                         # the snapshot artifacts of the race lanes
+  actions: read                         # an older comment's snapshot artifact (newer ones are release assets)
   issues: read                          # which bot-failure issues are open, and their comments
 
 jobs:

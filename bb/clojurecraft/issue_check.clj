@@ -4,14 +4,17 @@
 
      bb issue-check fetch <n>     the issue's snapshots into test/issues/<n>/
 
-   The issue is the data: bb failures writes each sim reproduction into the issue's comments as
-   its snapshot's file name and the artifact that holds it, and each real one the model
-   reproduces the same way (issue #299: a real race's snapshot, real-<runner>-<s>-<bot>.edn.gz). fetch reads the comments newest
-   first, then the body, and takes at most max-snapshots of them, never two of one world (a
-   snapshot is named <set>-<world>-<seed>: two seeds of one world are the same moment), only
-   snapshots that carry a kept moment (:snapshot/moment, a moment from before the choice that
-   failed), each artifact downloaded once (gh run download, by name, from the run the artifact's
-   name belongs to). The pull request then commits them: the check is a judgement over committed
+   The issue is the data: bb failures writes each reproduction into the issue's comments as its
+   snapshot's file name and where it is, a sim run's or a real one the model reproduces (issue
+   #299: a real race's snapshot, real-<runner>-<s>-<bot>.edn.gz). bb churn uploads each to the
+   hour's evidence release before the comment names it (\"as `<run>-<file>` in release
+   `evidence-<day>-<hour>`\": gh release download, kept for good); an older comment names its
+   runner's artifact (gh run download, by name, from the run the artifact's name belongs to, each
+   downloaded once; gone after 7 days). fetch reads the comments newest first, then the body, and
+   takes at most max-snapshots of them, never two of one world (a snapshot is named
+   <set>-<world>-<seed>: two seeds of one world are the same moment), only snapshots that carry a
+   kept moment (:snapshot/moment, a moment from before the choice that failed), each under its
+   file name. The pull request then commits them: the check is a judgement over committed
    fixtures, and a fixture never silently updates."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
@@ -24,22 +27,35 @@
 
 ;; ---------------------------------------------------------------- the issue as values
 
-(defn snapshots
-  "The snapshots a text names, [[file artifact] ...], each once, in the order listed."
+(def note
+  "A reproduction's snapshot as failures/snapshot-note writes it: the file, then its release's
+   asset and tag or its artifact, then the kept moment when it has one."
+  #"snapshot `([^`]+)` (?:as `([^`]+)` in release `([^`]+)`|in artifact `([^`]+)`)( \(moment )?")
+
+(defn sources
+  "The snapshots a text names, each once, in the order listed: {:file :release :asset} for one
+   uploaded to an evidence release, {:file :artifact} for one in a runner's artifact, each with
+   :moment? when its line says its kept moment."
   [body]
   (into []
         (distinct)
-        (for [[_ f a] (re-seq #"snapshot `([^`]+)` in artifact `([^`]+)`" (str body))] [f a])))
+        (for [[_ f asset tag artifact moment] (re-seq note (str body))]
+          (cond-> {:file f :moment? (some? moment)}
+            tag (assoc :release tag :asset asset)
+            artifact (assoc :artifact artifact)))))
 
 (defn kept-snapshots
   "The snapshots a text names whose line says their kept moment (bb failures writes
-   \"(moment m:ss before the stop, ...)\" after the artifact), [[file artifact] ...]: the only
-   ones the check can judge, found without downloading anything."
+   \"(moment m:ss before the stop, ...)\" after where it is), as sources: the only ones the check
+   can judge, found without downloading anything."
   [body]
-  (into []
-        (distinct)
-        (for [[_ f a] (re-seq #"snapshot `([^`]+)` in artifact `([^`]+)` \(moment " (str body))]
-          [f a])))
+  (filterv :moment? (sources body)))
+
+(defn place
+  "Where a source is, in words."
+  [{:keys [release asset artifact]}]
+  (cond release (str "release " release " asset " asset)
+        :else (str "artifact " artifact)))
 
 (defn world-of
   "The world a snapshot's file name names: R4-35-2.edn.gz is world R4-35 (its seed, 2, does not
@@ -95,13 +111,27 @@
           :artifacts first
           :workflow_run :id))
 
+(defn release-file!
+  "Download asset of release tag into a temporary directory: its path, or nil when it is not
+   there."
+  [tag asset]
+  (let [tmp (fs/create-temp-dir {:prefix "issue-check"})
+        f (fs/path tmp asset)]
+    (p/shell {:continue true}
+             "gh" "release"
+             "download" tag
+             "--repo" (repo)
+             "-p" asset
+             "-D" (str tmp))
+    (when (fs/exists? f) f)))
+
 (defn fetch!
   "Bring issue n's snapshots into test/issues/<n>/ (see the namespace): the reproductions in its
    comments newest first, then its body, at most max-snapshots, one a world, only those with a
-   kept moment, each artifact downloaded once into a temporary directory. Prints what it took and
-   why it passed over the rest."
+   kept moment, each from its release (release-file!) or its artifact (each artifact downloaded
+   once into a temporary directory). Prints what it took and why it passed over the rest."
   [n]
-  (let [pairs (kept-snapshots (str/join "\n" (issue-texts n)))
+  (let [found (kept-snapshots (str/join "\n" (issue-texts n)))
         dest (fs/path root (str n))
         downloaded (atom {})
         dir-of (fn [artifact]
@@ -116,32 +146,38 @@
                                   "-n" artifact
                                   "-D" (str tmp)))
                        (swap! downloaded assoc artifact (when run tmp))
-                       (when run tmp))))]
-    (when (empty? pairs)
+                       (when run tmp))))
+        file-of (fn [{:keys [file release asset artifact]}]
+                  (cond release (release-file! release asset)
+                        :else
+                        (some-> (dir-of artifact)
+                                (fs/glob (str "**/" file))
+                                first)))]
+    (when (empty? found)
       (println
        "issue"
        n
        "lists no snapshot with a kept moment yet: the lanes file one with its next failure"))
     (fs/create-dirs dest)
-    (reduce (fn [taken [file artifact]]
-              (let [world (world-of file)
-                    tmp (when (and (< (count taken) max-snapshots) (not (contains? taken world)))
-                          (dir-of artifact))
-                    from (when tmp (first (fs/glob tmp (str "**/" file))))]
-                (cond (>= (count taken) max-snapshots) (reduced taken)
-                      (contains? taken world)
-                      (do (println "passed over" file ": world" world "taken already") taken)
-                      (nil? tmp)
-                      (do (println "artifact" artifact "not found (expired after 7 days?)") taken)
-                      (nil? from) (do (println "missing in" artifact ":" file) taken)
-                      (not (kept-moment? from))
-                      (do (println "passed over" file ": no kept moment (an older snapshot)") taken)
-                      :else
-                      (do (fs/copy from (fs/path dest file) {:replace-existing true})
-                          (println "fetched" (str (fs/path dest file)))
-                          (conj taken world)))))
-            #{}
-            pairs)
+    (reduce
+     (fn [taken {:keys [file] :as s}]
+       (let [world (world-of file)
+             from (when (and (< (count taken) max-snapshots) (not (contains? taken world)))
+                    (file-of s))]
+         (cond (>= (count taken) max-snapshots) (reduced taken)
+               (contains? taken world)
+               (do (println "passed over" file ": world" world "taken already") taken)
+               (nil? from)
+               (do (println "not found:" file "in" (place s) "(an artifact expires after 7 days)")
+                   taken)
+               (not (kept-moment? from))
+               (do (println "passed over" file ": no kept moment (an older snapshot)") taken)
+               :else
+               (do (fs/copy from (fs/path dest file) {:replace-existing true})
+                   (println "fetched" (str (fs/path dest file)))
+                   (conj taken world)))))
+     #{}
+     found)
     (println (count (fs/list-dir dest)) "snapshots under" (str dest))))
 
 (defn -main
