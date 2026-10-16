@@ -10,6 +10,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.scoop :as scoop]
             [clojurecraft.spec]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.swim]
@@ -245,6 +246,22 @@
         w (remembered (merge field {[14 64 8] 136 [14 65 8] 136}) [8.5 64.0 8.5])]
     (is (= :clear (path/classify w [9 63 8])) "powder snow: no collision for a player")
     (is (= :walk (:intent/kind (wood/near-walk w))) "the trunk is walked to through the snow")))
+
+(deftest on-an-island-the-bot-swims-for-the-trees
+  ;; sim race 38811417241 runner 2 (issue #87, world R3/4): on a sand island at its landing,
+  ;; the trees across a lake, every route ending at the shore and every hunt bearing at water,
+  ;; the plan waited :no-log; now it crosses
+  (let [lake (into {}
+                   (for [x (range 16)
+                         z (range 16)
+                         y (range 60 64)
+                         :when (not (or (and (<= 2 x 6) (<= 2 z 6)) (>= x 13)))]
+                     [[x y z] blocks/water-base]))
+        w (remembered (merge lake {[14 64 8] 136 [14 65 8] 136}) [4.5 64.0 4.5])]
+    (is (nil? (wood/near-walk w)) "no route crosses the water")
+    (is (empty? (scoop/hunt-targets w true)))
+    (is (wood/water-toward? w (intent/feet w) [14 64 8] (physics/y-of (game/eye w))))
+    (is (= {:intent/kind :cross :intent/target [14 64 8]} (wood/gather-next w)))))
 
 (def quarry
   "A quarry two wide and two deep in the stone, open to the sky, as the stone mine digs round its

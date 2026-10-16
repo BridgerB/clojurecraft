@@ -48,7 +48,9 @@
    [:trap/kind "what the trap was, :water or :lava" "inside :world/traps"]
    [:trap/at "ms the trap cleared" "inside :world/traps"]
    [:intent/bank "the cell a :swim-out swims to, chosen once" "while a :swim-out has one"]
-   [:intent/wet? "a :wade has had the body in water at some point" "while a :wade runs"]
+   [:intent/wet? "a :wade or a :cross has had the body in water at some point"
+    "while a :wade or a :cross runs"]
+   [:intent/from-dist "how far on the plane a :cross started from its trunk" "while a :cross runs"]
    [:intent/water "the water cell a :wade enters from its bank (:intent/target)"
     "while a :wade has an entry"]
    [:intent/dig-when-down "the cell a :swim-out will dig once it has sunk to the floor"

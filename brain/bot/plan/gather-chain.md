@@ -23,6 +23,9 @@ sourceRefs:
   - test/clojurecraft/sim_test.clj#a-log-is-gathered-from-a-pocket-under-a-canopy
   - src/clojurecraft/stairs.clj#defn out?
   - src/clojurecraft/wood.clj#defn hunt
+  - src/clojurecraft/wood.clj#defn crossing
+  - src/clojurecraft/wood.clj#defn water-toward?
+  - test/clojurecraft/plan_test.clj#on-an-island-the-bot-swims-for-the-trees
   - src/clojurecraft/wood.clj#defn into-water
   - test/clojurecraft/plan_test.clj#boxed-under-the-sea-the-bot-digs-up-into-it
   - test/clojurecraft/plan_test.clj#with-no-tree-known-the-wood-hunt-sets-out

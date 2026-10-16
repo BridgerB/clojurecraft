@@ -99,6 +99,7 @@
 (s/def :intent/dig-when-down ::block-pos)
 (s/def :intent/water ::block-pos)
 (s/def :intent/wet? boolean?)
+(s/def :intent/from-dist number?)
 (s/def :intent/exposes-ok? boolean?)
 (s/def :intent/drop-ok? boolean?)
 (s/def :intent/passage-ok? boolean?)
