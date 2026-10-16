@@ -472,5 +472,5 @@
   :problem/done
   "A recorded real failure from a lane becomes a snapshot on a runner that recurs on main's code with JUDGE and STORY lines matching the recording, and the real rounds' comments list real snapshots that bb issue-check fetch takes."
   :problem/last-failure
-  "Not played yet: real-only issues (#37, #284, #286, #287) had a replay line and nothing a check could judge."
+  "Before #299, real-only issues (#37, #284, #286, #287) had a replay line and nothing a check could judge. Probes 38940300595 and 38942963330 folded five recordings of race 38929353563 (6bad315): Clj_r17 [:fortress :no-path] and Clj_r05 [:fortress :blocked] recur against the model once a moment at the portal leads to the recording's own Nether (before it, both failed :rejected in a copy of the overworld), their stories the recording's last intents; [:ingots :boxed] and [:portal :no-stand] were still playing at their windows' end (a mob the real bot fought the model never spawned), and [:water-bucket :no-water] ran out of the judge's wall time, its ticks that slow."
   :problem/sources ["brain/bot/tooling/real-snapshots.md" "docs/RICH-HICKEY.md"]}]

@@ -13,6 +13,10 @@ sourceRefs:
   - src/clojurecraft/real.clj#defn model
   - src/clojurecraft/real.clj#defn day-time-of
   - src/clojurecraft/real.clj#defn convert
+  - src/clojurecraft/real.clj#defn nether-of
+  - src/clojurecraft/real.clj#defn from-recordings!
+  - "src/clojurecraft/sim.clj#is that whole Nether instead, decoded once on arrival"
+  - test/clojurecraft/real_test.clj#a-portal-at-the-moment-leads-to-the-real-nether
   - src/clojurecraft/real.clj#defn gap
   - src/clojurecraft/real.clj#defn from-recording!
   - src/clojurecraft/sim.clj#defn joined
@@ -52,9 +56,18 @@ Issue #299. A real race's failure used to leave a recording and the line "replay
 - **The moment, exactly as a sim run's**: `fold-step` keeps a joinable moment every `sim/moment-every-ms` (the last `sim/moment-keep`, `sim/kept`), and `convert` chooses with `simrace/decision` and `simrace/chosen-moment`. Its next tick: nothing pending (the real server had taken the bot's packets), `:go` long sent, the tick seed at the snapshot's seed.
 - **Self-contained**: `:snapshot/columns` and `:snapshot/landing` stand in for `:snapshot/file`, so `simrace/own-world` prepares the world from the snapshot itself and `issue.yml` restores nothing (its world grep finds no `cache/sim-worlds`). `:snapshot/source :real`, `:snapshot/recording`, `:snapshot/bot`, `:snapshot/round` say where it came from.
 - **Fold at the recording's commit.** A fold is the run again only with the reducer that recorded it. The churn converts on the race's runner, at the commit that played the race, so the fold is exact there; the judge of the result on later code is what the check does with every snapshot.
-- **The Nether is real.** The Nether's columns from the recording (16 sections from y 0; `chunk/decode` reads the height from the column) make a Nether in the model where the sim's own is one column (`:sim/nether`). `:sim/dimension` comes from the bot's, so the model's ultrawarm water, its mob rules and its column height follow (`a-nether-moment-plays-in-a-nether-model`).
+- **The Nether is real.** The Nether's columns from the recording (16 sections from y 0; `chunk/decode` reads the height from the column) make a Nether in the model where the sim's own is one column (`:sim/nether`). `:sim/dimension` comes from the bot's, so the model's ultrawarm water, its mob rules and its column height follow (`a-nether-moment-plays-in-a-nether-model`). A moment still in the overworld of a run that ended in the Nether gets that Nether as its portal's destination (`nether-of`: the Nether columns the recording holds by its end round where the bot last arrived, `:nether-at`; `sim/arrive` takes them as `:nether {:columns :at}`, decoded on arrival, the overworld's entities left behind): the fortress failures came seconds after arrival, so their moments stood at the portal (`a-portal-at-the-moment-leads-to-the-real-nether`).
 - **The time of day is a guess** (`day-time-of`): set-time is decoded fieldless, so the bot never knows it; midnight when an undead stands unburnt under the open sky, else noon.
 - **The honest gate** (`from-recording!`, `gap`): the snapshot is written, read back as the check reads it, and judged at once with the same code. Kept (a `REAL` line) only when it recurs; otherwise it goes under `gaps/` and a `GAP` line names how the bot got past: `:reached`, `:other` (failed otherwise), `:active`, `:crashed`, `:halted` (out of wall time: the check would count that as recurring, but it is no sight of the failure), `:no-moment`, `:no-signature`. A gap is a finding about the model, never evidence.
+
+## First results
+Probe 38940300595, then 38942963330 with the real Nether, on five recordings of race 38929353563 runner 4 (code 6bad315), folded at that commit with this conversion laid over it and judged again with the branch's code (main's bot):
+- `s2/Clj_r17` `[:fortress :no-path]` (#284) and `s2/Clj_r05` `[:fortress :blocked]` (#286): recur on both, 5 to 7 s of wall a judge, their STORY lines the recording's last intents (`:tunnel-to [485 37 447]` failing `:no-path`; `[536 70 386]`, `[441 70 387]`, `[536 70 387]` failing `:blocked`). Before the real Nether both were `:other`, `[:fortress :rejected]` in a copy of the overworld.
+- `s2/Clj_r13` `[:water-bucket :no-water]`: recurred in the first probe after 220 s of wall for 50 simulated seconds, then `:halted` at the 240 s budget in the second: the bot's own ticks are that slow there (a fold of its recording took 240 to 350 s).
+- `s1/Clj_r03` `[:ingots :boxed]` (#37): `:active`. The real bot backed off and fought a mob (`:back-off`, `:fight`) before its climb boxed; the model's mobs spawn by their own rolls and the bot mined on.
+- `s1/Clj_r02` `[:portal :no-stand]`: `:active`, the build still running at the window's end where the real one failed three times in a second.
+
+Folds took 29 to 350 s on a probe runner; each snapshot is about 2 MB gzipped.
 
 ## Known gaps
 The time of day (a guess); a closed furnace's contents (the model's furnaces start empty); the hunger clock (exhaustion and the heal timer start at zero); the respawn point (a death respawns on the landing, where the real server uses the world spawn); entities the model does not model (told gone); fluids already flowing (the model wakes a fluid only when a neighbour changes); a portal out of the Nether (the model goes nowhere). Each is a way a real snapshot can fail to recur, which the gate prints rather than files.
