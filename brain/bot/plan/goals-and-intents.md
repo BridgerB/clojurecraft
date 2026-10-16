@@ -11,6 +11,8 @@ sourceRefs:
   - src/clojurecraft/plan.clj#def goals
   - resources/clojurecraft/goals.edn#{:goal/id :wood :goal/priority 1 :goal/target? true :goal/until "wood" :goal/doc "hold one log"
   - src/clojurecraft/plan.clj#defmulti done-by
+  - src/clojurecraft/plan.clj#defn can-abandon?
+  - test/clojurecraft/armour_test.clj#a-click-unanswered-is-never-abandoned
   - src/clojurecraft/plan.clj#defmulti act
   - src/clojurecraft/plan.clj#defmulti next-intent
   - src/clojurecraft/plan.clj#defn run-intent
@@ -58,7 +60,7 @@ The goal table is data in `resources/clojurecraft/goals.edn`: rows of `{:goal/id
 - No item goal needs a method of its own: wood, kit and pickaxe are rows that differ only in data; `make_test` asserts the registered planners are `:needs`, `:escape` and `:wade` (the escapes and the shore trial, [[water-escape]]).
 - Rows are retired, never rewritten: a superseded row (`:goal/superseded-by`) stays in the table and is never chosen, and a `:go` that names it is mapped to its replacement by `plan/current-id` ([[add-a-goal]]).
 - Completion is re-derived from the world each tick, so a lost log is simply planned for again; nothing remembers "done".
-- The planner re-chooses every active tick, even while an intent runs (`plan-tick`): no target left means `:done` and the running intent is abandoned `:goal-met`; a running intent whose `:intent/goal` is not the target chosen now (a higher-priority target regressed) is abandoned `:preempted` and the new target planned. Neither happens while the cursor holds an item (`can-abandon?`): the intent puts it down first. `abandon-intent` closes any open container, so the server is never left with one. A live pickaxe run ended with the craft abandoned `:goal-met` the tick the pickaxe arrived, and the table window closed. Escaping water is a target that preempts this way ([[water-escape]]): a running walk or dig yields to `:swim-out` the tick the trap is called. An abandon also drops `:plan/last`, so the next goal never continues a chain from it.
+- The planner re-chooses every active tick, even while an intent runs (`plan-tick`): no target left means `:done` and the running intent is abandoned `:goal-met`; a running intent whose `:intent/goal` is not the target chosen now (a higher-priority target regressed) is abandoned `:preempted` and the new target planned. Neither happens while the cursor holds an item (`can-abandon?`): the intent puts it down first; nor while one of the running intent's clicks is unanswered (`window/waiting`), since a click forgets the cursor as it sends and what it holds is unknown until the answer (issue #259: a `:wear` preempted between its pick-up and the answer left the helmet on the cursor, `a-helmet-and-chestplate-are-made-and-worn-against-the-model`). `abandon-intent` closes any open container, so the server is never left with one. A live pickaxe run ended with the craft abandoned `:goal-met` the tick the pickaxe arrived, and the table window closed. Escaping water is a target that preempts this way ([[water-escape]]): a running walk or dig yields to `:swim-out` the tick the trap is called. An abandon also drops `:plan/last`, so the next goal never continues a chain from it.
 
 ## See also
 - [[make-goals]] - the needs planner, the generated recipe rows and the acts.

@@ -17,6 +17,7 @@
             [clojure.java.shell :as sh]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [clojurecraft.armour]
             [clojurecraft.build]
             [clojurecraft.cli :as cli]
             [clojurecraft.conn :as conn]

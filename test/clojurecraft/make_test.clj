@@ -112,14 +112,14 @@
   (testing
     "no item target needs a per-goal method: wood, kit and pickaxe all plan through the same registries;
             the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes,
-            and the meal (issue #259), done by the server's food, and the entities trial (issue #258), done
-            by a living entity's health the server sent"
+            the meal and the armour (issue #259), done by the server's food and slots, and the entities
+            trial (issue #258), done by a living entity's health the server sent"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
-    (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :fed?
-                              :health-seen?}
+    (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :fed? :dressed?
+                              :armoured? :health-seen?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
-    (is (= #{:needs :escape :wade :build :fortress :eat :watch}
+    (is (= #{:needs :escape :wade :build :fortress :eat :wear :armour :watch}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))

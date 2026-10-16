@@ -47,6 +47,7 @@ src/clojurecraft/stairs.clj   the :stairs-down executor: a staircase of child :d
 src/clojurecraft/stone.clj    the :mine act: a row's blocks (stone, ore, gravel) walk → dig → collect, or stairs down to its depth
 src/clojurecraft/swim.clj     the escape goals' rules and executors: :swim-out, :flee, and :wade (the shore trial)
 src/clojurecraft/eat.clj      the :eat always row and executor: hungry under 14 with safe food held, one use-item, done when the server's food rises
+src/clojurecraft/armour.clj   the :wear-armour and :armour always rows: a piece held put on by two window-0 clicks; a helmet and chestplate from spare ingots
 src/clojurecraft/food.clj     the game's food as data: nutrition and eating time per item, for the bot and the server model
 src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with clicks, verify, take
 src/clojurecraft/smelt.clj    the :smelt executor: settle, lay the fuel and the input, cook, take, close; fuel in burn order
@@ -67,6 +68,7 @@ src/clojurecraft/record.clj   the recording: a channel tap, reading it back, rep
 src/clojurecraft/replay.clj   clojure -M:replay: fold a recording with no server, print RESULT
 src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs; holds a whole world of columns
 src/clojurecraft/fluid.clj    water and lava as the server moves them: levels, flow, spread, mixing, as data and pure rules
+src/clojurecraft/hunger.clj   hunger as the server keeps it: exhaustion, saturation, regeneration, starvation, eating, as data and pure rules
 src/clojurecraft/capture.clj  real worlds for the model: a real server's chunk columns round each landing, one world file a landing
 src/clojurecraft/simrace.clj  the sim race: the whole bot in captured worlds against the model, every core, failures by signature
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin

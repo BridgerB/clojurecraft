@@ -453,7 +453,7 @@ A failure that will not reproduce is almost always a context difference, not fla
 5. **`:timeout` snapshots are stalls.** The moment is the run's last five simulated minutes; the check judges whether the stage is reached in that window (no new stage and no end: it recurs). Nothing replays a run from its landing in the check.
 6. **The sim race knows its landing.** Sim runs get `:go/at` like real bots; snapshots from before that are played with their captured world's landing (`simrace/moment`). An old snapshot behaving oddly: check `:plan/go-at`.
 7. **The captured world has an edge.** 625 chunks; past them every cell is `:unknown` where a real server would load more. A failure there is the model's limit: say so in the PR.
-8. **Difficulty is Normal** (issue #10): night mobs and hunger on every real server and gym; keep_inventory stays on. The sim has no mobs or hunger until its mob model lands, so sim runs are easier than real ones until then.
+8. **Difficulty is Normal** (issue #10): night mobs and hunger on every real server and gym; keep_inventory stays on. The sim lanes run the model at Normal too (`simrace/difficulty`): hunger drains, heals and starves by vanilla's rules (#260, `hunger.clj`, `brain/bot/tooling/sim-hunger.md`); its mobs come with the rest of #260, so until then sim runs are still easier than real ones.
 9. **Server load is real.** 25 bots a server dropped it to 7 or 8 ticks a second (now 15 a server, #252) (`:sample/server-tick`, `server.log`). Anything the bot times by its own clock against something the server times in ticks breaks under load: digs, window answers. A real-only signature with load: look there first.
 10. **"The unmodelled packet."** `packet_test` decodes an id with no spec and expects `:unknown`; adding a spec for that packet breaks it: switch its example.
 11. **Give exact numbers.** Run ids, commits, counts, before and after lines. "Seems fixed" is not evidence.
@@ -508,7 +508,7 @@ Consult on demand. Spot-checked against `src/clojurecraft/` at 51505a9; when the
 **One tick (`plan/plan-tick`), in order.**
 1. `trap/trapped-tick` re-derives `:plan/trap` (only with `:player/pos`); `plan/reach` adds milestones on a chained run.
 2. `plan/choose`: highest-priority target in play (`:plan/goals` or every target, plus `:goal/always?` rows), not in `:plan/reached`, `done-by` false, worked in this dimension (`here?`).
-3. Running intent whose cursor holds an item (`can-abandon?` false): run it anyway (it puts the item down).
+3. Running intent whose cursor holds an item, or with a click unanswered (`can-abandon?` false): run it anyway (it puts the item down, the answer comes).
 4. No goal here but one undone elsewhere (`elsewhere?`): abandon `:goal-met`, wait `:other-dimension`.
 5. No goal: abandon `:goal-met`, `:plan/status :done`.
 6. Running intent for another goal than the chosen one: abandon `:preempted`, plan again this tick.
@@ -766,7 +766,7 @@ Every attribute, its meaning and lifetime is in `src/clojurecraft/model.clj` (`m
 ### 20.9 The server model (`sim.clj`) and its limits
 
 - `(sim/step sim event)`; driven by `sim/play-from` (from a moment: world, model, pending packets, tick seed; keeps moments when asked), `sim/run`/`run+` (from the handshake, 50 ms ticks, moments kept), `sim/play-on` (from a world and model), `sim/connect!` (behind channels like `conn/open!`).
-- Faithful: handshake, chunk streaming, breaks at 70% with update before ack, delayed destroy, seeded loot, tool wear (tools stack to 1, #36), pickup after 500 ms, windows with vanilla click rules, furnaces cooking every tick, placement under `placeable-into?`, buckets, fluid flow (`tick-fluids`), falling blocks, portal lighting (dimension changes after 4000 ms), drowning, respawn.
+- Faithful: handshake, chunk streaming, breaks at 70% with update before ack, delayed destroy, seeded loot, tool wear (tools stack to 1, #36), pickup after 500 ms, windows with vanilla click rules, furnaces cooking every tick, placement under `placeable-into?`, buckets, fluid flow (`tick-fluids`), falling blocks, portal lighting (dimension changes after 4000 ms), drowning, respawn, hunger and eating at a given `:difficulty` (#260).
 - Inputs: `:columns`, faults `:drop-clicks :drop-breaks :lag-ticks :slow-breaks :kill-at`, `:inventory`, `:seed`, `:tick-seed`. `:sim/violations` (`:click-on-empty-result`, `:close-with-cursor`, `:click-inventory-while-open`, `:place-into-player`) must be `[]` in end-to-end tests.
 - Not modelled: real server lag (no reorder, duplicate, lost cursor, set-time, so `:server/tick-ms` never stretches in the sim); the captured world's edge (radius 12 columns; past it unloaded = solid/`:unknown`); water push and rubber-banding (model trusts reported position); `use-item-on` reach; block facing; break penalties; stacking of buckets (64); hoppers, lava-bucket fuel; a never-opened furnace does not tick.
 - A sim-only failure touching those may be the model's limit: if a real race on the same signature does not fail, fix `sim.clj` first against the jar (#44: model refused placing into water; #36: tools stacked). Real-only failures under load need a fault input before a sim test can hold the fix.
@@ -789,6 +789,8 @@ Most are stated where they apply above (grass type, resting vy, `:name` collisio
 | 0 | `:escape-water` (always) | `:not-trapped-in` | `:escape` → `:swim-out` |
 | 0 | `:escape-lava` (always) | `:not-trapped-in` | `:escape` → `:flee` |
 | 0 | `:eat` (always, after the escapes; `eat`) | `:fed?`: food ≥ 14, unknown, or nothing safe to eat held | `:eat` → `:eat` (issue #259) |
+| 0 | `:wear-armour` (always, after `:eat`) | `:dressed?`: no piece held over an empty armour slot | `:wear` → `:wear` |
+| 13 | `:armour` (always, after `:portal-kit`; `armour`) | `:armoured?`: no iron helmet or chestplate the spare ingots pay for, table at hand | `:armour` → needs planner (craft) |
 | 1 | `:wood` | `{:tag/logs 1}` | needs |
 | 2 | `:kit` (`table`) | `{:item/crafting_table 1 :item/stick 4}` | needs |
 | 3 | `:pickaxe` | wooden pickaxe | needs |
