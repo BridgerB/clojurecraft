@@ -635,6 +635,22 @@
 (s/def :sim/populated (s/coll-of (s/tuple int? int?) :kind set?)) ; chunks whose animals were placed
 (s/def :sim/populated-at (s/tuple int? int?))  ; the column the player was in when they last were
 (s/def :sim/player-look (s/tuple double? double?)) ; [yaw pitch] the client last reported
+;; eyes, the portal and the End in the model (issue #260; end.clj)
+(s/def ::point (s/coll-of number? :kind vector? :count 3))
+(s/def :sim/stronghold ::point)                ; where a thrown eye flies toward
+(s/def :sim.eye/from ::point)
+(s/def :sim.eye/pos ::point)
+(s/def :sim.eye/target ::point)
+(s/def :sim.eye/at int?)
+(s/def :sim.eye/survives? boolean?)
+(s/def :sim/eyes
+  (s/map-of int?
+            (s/keys :req-un
+                    [:sim.eye/from :sim.eye/pos :sim.eye/target :sim.eye/at :sim.eye/survives?])))
+(s/def :sim.end/columns (s/map-of ::column-key bytes?))
+(s/def :sim.end/dragon ::point)
+(s/def :sim.end/crystals (s/coll-of ::point))
+(s/def :sim/end (s/keys :opt-un [:sim.end/columns :sim.end/dragon :sim.end/crystals]))
 (s/def ::sim (s/keys :req [:sim/phase :sim/now :sim/out]))
 (s/fdef sim/step
   :args

@@ -30,6 +30,7 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.end :as end]
             [clojurecraft.entity :as entity]
             [clojurecraft.fluid :as fluid]
             [clojurecraft.food :as food]
@@ -75,7 +76,16 @@
         (let [k (column-key pos)]
           (when-let [column (column-of sim k)] (chunk/block-at {k column} pos)))))
 
-(declare disturb full sync-window stream-from set-cell ultrawarm? eye-under? with-mobs)
+(declare disturb
+         full
+         sync-window
+         stream-from
+         set-cell
+         ultrawarm?
+         eye-under?
+         with-mobs
+         frame-takes-eye
+         perch)
 
 (def player-eid 1)                    ; the player's entity id, as the model's login gives it
 (def mob-salt 0x2545F4914F6CDD1D)     ; the mobs' rolls start from :seed mixed with this, apart from the loot's (mob-roll)
@@ -212,10 +222,14 @@
    starves by it, issue #260; absent, nothing drains the bar, as before, so a snapshot from then
    plays the same; given, the day turns from :day-time (game ticks, 0 when absent), hostiles
    spawn at night and in the dark, and animals stand on newly loaded chunks), and :mobs
-   [{:type kind :pos [x y z]}] (a fixture's mobs, mob/kinds, sent at login and never despawned)."
+   [{:type kind :pos [x y z]}] (a fixture's mobs, mob/kinds, sent at login and never despawned),
+   :stronghold [x y z] (where a thrown eye flies toward; absent, an eye is not thrown) and :end
+   {:columns {[cx cz] bytes} :dragon [x y z] :crystals [[x y z] ...]} (the End an end portal
+   leads to: its columns, a void when absent, where the dragon perches, the fountain's top when
+   absent, and its crystals, one on every spike when absent)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
            inventory lag-ticks slow-breaks respawn seed tick-seed kill-at dimension nether food
-           difficulty day-time mobs]
+           difficulty day-time mobs stronghold end]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -263,6 +277,8 @@
         (with-food-value (assoc hunger/fresh :food/level (or food food/max-food)))
         (assoc :sim/sent-health [max-health (or food food/max-food) false]))
     (or difficulty (seq mobs)) (assoc :sim/mob-rng (bit-xor (long (or seed 0)) mob-salt))
+    stronghold (assoc :sim/stronghold stronghold)
+    end (assoc :sim/end end)
     (seq mobs)
     (assoc :sim/fixture-mobs (vec mobs)
            :sim/sent-health [max-health (or food food/max-food) false])))
@@ -1301,6 +1317,7 @@
       (-> sim
           (send ack)
           (open-furnace pos))
+      :end_portal_frame (frame-takes-eye sim pos face ack)
       (if (= (:item (get-in sim [:sim/inv (held-slot sim)])) (get blocks/items :flint_and_steel))
         (light sim pos face ack)
         (place sim pos face ack)))))
@@ -1425,11 +1442,13 @@
 
 (defn held-use
   "What a use-item does with the held item, as use-held dispatches on it: :food (food/nutrition),
-   :bucket (an empty or a filled one), or :default (nothing the model knows)."
+   :bucket (an empty or a filled one), :eye (an eye of ender), or :default (nothing the model
+   knows)."
   [sim]
   (let [item (held-item sim)]
     (cond (food/nutrition (recipe/item-name item)) :food
           (contains? bucket-fluids item) :bucket
+          (= item (recipe/item-id :ender_eye)) :eye
           :else :default)))
 
 (defmulti use-held
@@ -1818,14 +1837,14 @@
 
 (def max-delta 32767)                 ; the largest move move-entity-pos carries, in 1/4096 blocks
 
-(defn move-mob
-  "The model with mob eid at pos, the client told as the server tells it: move-entity-pos with the
-   change in 1/4096 blocks between the positions as sent (so the client's sum is the model's
-   position), or entity-position-sync for a move too long for it (a fall)."
-  [sim eid [x y z :as pos]]
+(defn tell-move
+  "The model having told the client entity eid moved from one point to another as the server
+   tells it: move-entity-pos with the change in 1/4096 blocks between the points as sent (so the
+   client's sum is the model's position), entity-position-sync for a move too long for it (a
+   fall), nothing for none."
+  [sim eid from [x y z :as to]]
   (let [q #(math/round (* 4096.0 (double %)))
-        d (mapv #(- (q %2) (q %1)) (get-in sim [:sim/mobs eid :pos]) pos)
-        sim (assoc-in sim [:sim/mobs eid :pos] pos)]
+        d (mapv #(- (q %2) (q %1)) from to)]
     (cond
       (= [0 0 0] d) sim
       (some #(> (abs %) max-delta) d)
@@ -1835,6 +1854,13 @@
         (send
          sim
          {:packet/name :move-entity-pos :entity-id eid :dx dx :dy dy :dz dz :on-ground true})))))
+
+(defn move-mob
+  "The model with mob eid at pos, the client told (tell-move)."
+  [sim eid pos]
+  (-> sim
+      (tell-move eid (get-in sim [:sim/mobs eid :pos]) pos)
+      (assoc-in [:sim/mobs eid :pos] pos)))
 
 (defn drop-loot
   "The model with the loot of a mob of kind killed at [x y z]: each row's count rolled
@@ -2051,7 +2077,8 @@
 
 (defn act-mob
   "One game tick of mob eid: a dead one is removed once its death is over (mob/death-ticks, the
-   dragon's mob/dragon-death-ticks); an animal, a perched dragon and a crystal stand; any other
+   dragon's mob/dragon-death-ticks); the perched dragon heals from its crystals (perch); an
+   animal and a crystal stand; any other
    burns in daylight when undead (burn) and goes after the player (chase)."
   [sim eid]
   (let [{:keys [type dead-at] :as m} (get-in sim [:sim/mobs eid])
@@ -2059,7 +2086,8 @@
         over (* physics/tick-ms (if (= :ender_dragon type) mob/dragon-death-ticks mob/death-ticks))]
     (cond (nil? m) sim
           dead-at (cond-> sim (>= (- (:sim/now sim) dead-at) over) (remove-mob eid))
-          (or (:passive k) (:perched k) (:crystal k)) sim
+          (:perched k) (perch sim eid)
+          (or (:passive k) (:crystal k)) sim
           :else (let [sim (burn sim eid)] (cond-> sim (get-in sim [:sim/mobs eid]) (chase eid))))))
 
 (defn spawning?
@@ -2204,10 +2232,168 @@
             (despawn (reduce act-mob sim (sort (keys (:sim/mobs sim)))))))))
 
 
+;; ---------------------------------------------------------------- eyes, the portal and the End (issue #260)
+
+(def eye-type (get blocks/entity-types :eye_of_ender)) ; add-entity's type for a thrown eye
+(def eye-body 0.9)                    ; an eye leaves from the middle of the thrower's body (EnderEyeItem: getY(0.5))
+(def dragon-heal-every 10)            ; game ticks between a crystal's heals of the dragon (EnderDragon.checkCrystals)
+
+(def end-respawn
+  "The respawn the model sends for the End: the dimension change an end portal makes."
+  (assoc respawn
+         :dimension-type (:dimension/id (dimension/by-name dimension/end))
+         :dimension dimension/end))
+
+(defmethod use-held :eye
+  ;; an eye thrown toward the stronghold (:sim/stronghold): one taken, an eye of ender entity at
+  ;; the body's middle flying for end/eye-target (tick-eyes); with no stronghold the eye stays in
+  ;; hand, as the game throws none in a world without one
+  [sim _]
+  (let [[x y z :as player] (:sim/player-pos sim)
+        stronghold (:sim/stronghold sim)]
+    (cond (not (and player stronghold)) sim
+          :else
+          (let [eid (:sim/next-eid sim)
+                from [x (+ y eye-body) z]
+                [sim r] (mob-roll sim)
+                before (full (:sim/inv sim) (inventory/layouts :inventory))]
+            (-> sim
+                (assoc :sim/next-eid (inc eid))
+                (update :sim/inv take-one (held-slot sim))
+                (sync-window :inventory before (:sim/cursor sim) false)
+                (assoc-in [:sim/eyes eid]
+                          {:from from
+                           :pos from
+                           :target (end/eye-target from stronghold)
+                           :at (:sim/now sim)
+                           :survives? (< r end/eye-survives)})
+                (send {:packet/name :add-entity
+                       :entity-id eid
+                       :uuid nil
+                       :type eye-type
+                       :x (first from)
+                       :y (second from)
+                       :z (last from)}))))))
+
+(defn tick-eyes
+  "One game tick of every thrown eye: along its flight (end/eye-pos), each move told (tell-move);
+   at the end of its life it is gone, and one that survives (end/eye-survives, rolled at the
+   throw) drops as an eye item where it falls to."
+  [sim]
+  (reduce (fn [sim [eid {:keys [from pos target at survives?]}]]
+            (let [ticks (quot (- (:sim/now sim) at) physics/tick-ms)
+                  to (end/eye-pos from target ticks)]
+              (cond (< ticks end/eye-life-ticks)
+                    (-> sim
+                        (tell-move eid pos to)
+                        (assoc-in [:sim/eyes eid :pos] to))
+                    :else
+                    (-> sim
+                        (update :sim/eyes dissoc eid)
+                        (send {:packet/name :remove-entities :ids [eid]})
+                        (cond-> survives?
+                                (spawn-item (mob/fall (free-fn sim) pos)
+                                            {:item (recipe/item-id :ender_eye) :count 1}))))))
+          sim
+          (sort-by key (:sim/eyes sim))))
+
+(defn frame-takes-eye
+  "use-item-on an end portal frame with no eye, an eye held: the frame takes it (its state with
+   the eye), one eye taken, and when that closes a ring of twelve the portal fills its interior
+   (end/lit); then the ack. With anything else held it is a placement against the frame's face
+   (place); a frame that has its eye only acks."
+  [sim pos face ack]
+  (let [id (block-at sim pos)
+        eye? (= (held-item sim) (recipe/item-id :ender_eye))]
+    (cond (not eye?) (place sim pos face ack)
+          (end/eyed? id) (send sim ack)
+          :else
+          (let [before (full (:sim/inv sim) (inventory/layouts :inventory))
+                sim (-> sim
+                        (set-cell pos (end/with-eye id))
+                        (update :sim/inv take-one (held-slot sim))
+                        (sync-window :inventory before (:sim/cursor sim) false))]
+            (->
+              (reduce (fn [sim c] (set-cell sim c end/portal)) sim (end/lit #(block-at sim %) pos))
+              (send ack))))))
+
+(defn arrive-end
+  "The model in the End: the overworld's columns, blocks, items, eyes and mobs gone (the client
+   drops them at the respawn), the End's columns (:sim/end's, none for a void), the player on
+   the obsidian platform (end/platform, told block by block after the chunks), the dragon
+   perched at :sim/end's :dragon (the fountain's top when absent) and a crystal on every spike
+   (:sim/end's :crystals, end/spikes' when absent)."
+  [sim]
+  (let [{:keys [columns dragon crystals]} (:sim/end sim)
+        [x y z] end/spawn
+        platform (end/platform)
+        sim (-> sim
+                (assoc :sim/dimension dimension/end
+                       :sim/columns (or columns {})
+                       :sim/placed platform
+                       :sim/broken #{}
+                       :sim/items {}
+                       :sim/eyes {}
+                       :sim/mobs {}
+                       :sim/fluids {}
+                       :sim/falls {}
+                       :sim/falling {}
+                       :sim/player-pos end/spawn
+                       :sim/view #{})
+                (dissoc :sim/decoded :sim/view-at :sim/portal-since)
+                (send end-respawn)
+                (send {:packet/name :player-position
+                       :teleport-id 4
+                       :x x
+                       :y y
+                       :z z
+                       :dx 0.0
+                       :dy 0.0
+                       :dz 0.0
+                       :yaw 0.0
+                       :pitch 0.0
+                       :flags 0})
+                stream)]
+    (reduce #(add-mob %1 :end_crystal %2 {:persistent? true})
+            (-> (reduce (fn [sim [c state]]
+                          (send sim {:packet/name :block-update :pos c :state state}))
+                        sim
+                        (sort-by key platform))
+                (add-mob :ender_dragon (or dragon [0.5 65.0 0.5]) {:persistent? true}))
+            (or crystals (map end/crystal-at end/spikes)))))
+
+(defn through-end-portal
+  "The model a tick on: a player whose feet are in an end portal outside the End arrives in it at
+   once (arrive-end), as the game's end portal has no wait."
+  [sim]
+  (let [pos (:sim/player-pos sim)]
+    (cond (or (nil? pos) (= dimension/end (:sim/dimension sim))) sim
+          (= end/portal (block-at sim (mob/cell-of (update pos 1 + 0.1)))) (arrive-end sim)
+          :else sim)))
+
+(defn perch
+  "The perched dragon's tick: while any crystal stands, one health back every dragon-heal-every
+   ticks up to its kind's full health, told (set-entity-data)."
+  [sim eid]
+  (let [{:keys [health]} (get-in sim [:sim/mobs eid])
+        full-health (:health (mob/kinds :ender_dragon))
+        crystal? (some #(and (= :end_crystal (:type %)) (not (:dead-at %))) (vals (:sim/mobs sim)))]
+    (cond (not (and crystal?
+                    (< health full-health)
+                    (zero? (mod (quot (:sim/now sim) physics/tick-ms) dragon-heal-every))))
+          sim
+          :else
+          (let [h (min full-health (inc health))]
+            (-> sim
+                (assoc-in [:sim/mobs eid :health] h)
+                (send (health-data eid h)))))))
+
+
 (defn tick
   "Advance the server clock to now, one game tick: the scheduled death, breath or drowning,
    hunger (feed) and eating, a delayed destroy, every furnace, falling gravel and sand, flowing
-   water and lava, a player carried through a portal, the mobs (tick-mobs), a keep-alive when one
+   water and lava, a player carried through a portal or an end portal, thrown eyes (tick-eyes),
+   the mobs (tick-mobs), a keep-alive when one
    is due, every item
    handed over whose pickup delay has passed and that the player stands within reach of, and,
    with hunger, the health and food told when they changed (sync-health)."
@@ -2222,6 +2408,8 @@
       tick-falls
       tick-fluids
       (through-portal now)
+      through-end-portal
+      tick-eyes
       tick-mobs
       keep-alive
       pick-up

@@ -50,7 +50,9 @@
    grass_block's type is :grass, short_grass's is :tall_grass. Powder snow is here: it has no
    collision for a player without leather boots (the game's PowderSnowBlock), who sinks through
    it to the block below. As a full cube it walled sim race 38811417241 runner 2 (issue #87,
-   world R2/20) into a powder-snow field, a spruce eight blocks off and no route a move long."
+   world R2/20) into a powder-snow field, a spruce eight blocks off and no route a move long.
+   The end portal is here: a player falls into it (EndPortalBlock has no collision for entities),
+   which is how one goes to the End (issue #260)."
   #{:air :liquid :structure_void :light :bubble_column :flower :tall_flower :flower_bed :flower_pot
     :eyeblossom :wither_rose :bush :firefly_bush :sapling :bamboo_sapling :mangrove_propagule
     :tall_grass :double_plant :short_dry_grass :tall_dry_grass :dry_vegetation :leaf_litter
@@ -64,7 +66,8 @@
     :redstone_wire :lever :button :pressure_plate :weighted_pressure_plate :tripwire :trip_wire_hook
     :rail :powered_rail :detector_rail :carpet :wool_carpet :mossy_carpet :banner :wall_banner
     :standing_sign :wall_sign :ceiling_hanging_sign :wall_hanging_sign :ladder :snow_layer :web
-    :fire :soul_fire :lily_pad :small_dripleaf :moving_piston :nether_portal :powder_snow})
+    :fire :soul_fire :lily_pad :small_dripleaf :moving_piston :nether_portal :powder_snow
+    :end_portal})
 
 (def falling-types
   "Block definition types that fall when the cell under them is free: the game's FallingBlock
