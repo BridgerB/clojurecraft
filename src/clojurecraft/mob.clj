@@ -15,7 +15,8 @@
 
    Not modelled: pathfinding round walls (a mob walks straight and stops at what it cannot step
    up), knockback, an arrow's flight (the damage lands when the skeleton fires), a blast breaking
-   blocks, an enderman's teleports, spiders climbing, mobs swimming, armour."
+   blocks, an enderman's teleports, spiders climbing, mobs swimming, armour wearing out. The armour
+   the player wears takes its share of a mob's hit (absorbed, issue #263)."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.physics :as physics]
@@ -175,6 +176,50 @@
     :easy (min damage (inc (/ damage 2.0)))
     :hard (* damage 1.5)
     damage))
+
+(def armour-points
+  "Each armour piece's armour points and toughness, [points toughness], by item name
+   (ArmorMaterials: a material's defense for the piece's slot, its toughness for every piece;
+   read from the game's classes, probe run 38890566495)."
+  {:leather_helmet [1 0.0]
+   :leather_chestplate [3 0.0]
+   :leather_leggings [2 0.0]
+   :leather_boots [1 0.0]
+   :copper_helmet [2 0.0]
+   :copper_chestplate [4 0.0]
+   :copper_leggings [3 0.0]
+   :copper_boots [1 0.0]
+   :chainmail_helmet [2 0.0]
+   :chainmail_chestplate [5 0.0]
+   :chainmail_leggings [4 0.0]
+   :chainmail_boots [1 0.0]
+   :golden_helmet [2 0.0]
+   :golden_chestplate [5 0.0]
+   :golden_leggings [3 0.0]
+   :golden_boots [1 0.0]
+   :iron_helmet [2 0.0]
+   :iron_chestplate [6 0.0]
+   :iron_leggings [5 0.0]
+   :iron_boots [2 0.0]
+   :diamond_helmet [3 2.0]
+   :diamond_chestplate [8 2.0]
+   :diamond_leggings [6 2.0]
+   :diamond_boots [3 2.0]
+   :netherite_helmet [3 3.0]
+   :netherite_chestplate [8 3.0]
+   :netherite_leggings [6 3.0]
+   :netherite_boots [3 3.0]
+   :turtle_helmet [2 0.0]})
+
+(defn absorbed
+  "The damage left of a hit of damage on a player wearing armour points and toughness
+   (CombatRules.getDamageAfterAbsorb): the armour counts for points - damage / (2 + toughness / 4),
+   never under a fifth of the points nor over 20, each point taking 4% off. Issue #263: an
+   enderman's 7 on iron helmet and chestplate (8 points) is 5.74."
+  [damage points toughness]
+  (let [f (+ 2.0 (/ toughness 4.0))
+        a (min 20.0 (max (* points 0.2) (- points (/ damage f))))]
+    (* damage (- 1.0 (/ a 25.0)))))
 
 (defn blast-damage
   "The damage a blast of power does to a player dist from its centre with a clear line
