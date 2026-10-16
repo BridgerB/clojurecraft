@@ -375,7 +375,7 @@
   :goal/aside? true
   :goal/until "stronghold"
   :goal/doc
-  "the stronghold found by eyes of ender (issue #265): an eye thrown and followed, the eye it drops picked up; a walk of 150 blocks off its line at 45 degrees, in hops a route reaches, and a second throw there; the walk to where the two lines cross (stronghold/triangulate), and there with nothing seen a throw from there and walks round it; done when an end portal frame is remembered: the portal room is in the chunk data the moment its chunk loads, however deep. In the overworld only. An aside until the eyes (#264) are proven and the chain is raised to it"
+  "the stronghold found by eyes of ender (issue #265): an eye thrown and followed, the eye it drops picked up; a way 64 blocks off its line at 60 degrees (hops a route reaches, a swim over water, else a dry tunnel) and a second throw once 32 off the line; the way to where the two lines cross (stronghold/triangulate), a tunnel there going down to y 30, and there with nothing seen a throw from there and walks round it; done when an end portal frame is remembered: the portal room is in the chunk data the moment its chunk loads, however deep. In the overworld only. An aside until the eyes (#264) are proven and the chain is raised to it"
   :goal/dimension "minecraft:overworld"
   :goal/done? :frames-seen?
   :goal/plan :stronghold}
