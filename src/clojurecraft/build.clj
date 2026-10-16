@@ -921,13 +921,15 @@
    in two rounds) chose a site 70 blocks off across an aquifer, the walk there failed :no-path,
    the stairs down toward its landing at y 24 were refused for the water beside them, the swim
    out of the water let in dug down a staircase it flooded until :stuck, and the escape from
-   that water failed :stuck too: three failures, all toward the one site the planner kept."
-  [world {:intent/keys [origin facing access]} {:intent/keys [reason] :as child}]
-  (let [to (cell origin facing (landing (or access 0)))]
-    (boolean (and (intent/failed? child)
-                  (#{:no-path :stuck} reason)
-                  (> (physics/distance (physics/centre (intent/feet world)) (physics/centre to))
-                     site-reach)))))
+   that water failed :stuck too: three failures, all toward the one site the planner kept. Only
+   a :build has a site: a :tunnel-to (fortress) works its steps through work-op too."
+  [world {:intent/keys [kind origin facing access]} {:intent/keys [reason] :as child}]
+  (boolean (and (= :build kind)
+                (intent/failed? child)
+                (#{:no-path :stuck} reason)
+                (> (physics/distance (physics/centre (intent/feet world))
+                                     (physics/centre (cell origin facing (landing (or access 0)))))
+                   site-reach))))
 
 (defn way-back
   "The way back to the build's site from far off: toward the room's landing (landing for the
