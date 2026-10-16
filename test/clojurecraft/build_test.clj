@@ -10,7 +10,10 @@
             [clojurecraft.build :as build]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
@@ -478,3 +481,30 @@
     (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [5 62 6]} (toward cobble))
         "the hole's top cell is floored from the feet")
     (is (= :walk (:intent/kind (toward {}))) "nothing to place: the walk, as before")))
+
+(deftest a-site-no-way-reaches-is-given-up
+  ;; sim race 38839665459 (issue #222, world R1/11): the build kept a site 70 blocks off across an
+  ;; aquifer; the walk there failed :no-path, the swim out of the water it let in :stuck, and the
+  ;; escape from that water :stuck: three failures toward the one site
+  (let [site [8 40 4]
+        i {:intent/kind :build
+           :intent/build :cast-one
+           :intent/origin site
+           :intent/facing :south
+           :intent/access 1
+           :intent/status :active
+           :intent/child {:intent/kind :walk :intent/status :failed :intent/reason :no-path}}
+        op (first (build/plan-for :cast-one site :south 1))
+        i (assoc i :intent/op op)
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        run (fn [pos]
+              (build/work-op (assoc (standing-at (open-ground {}) pos) :plan/intent i) i op tick))
+        far (run feet-pos)]
+    (is (intent/done? (:plan/intent far)) "the build ends, it does not fail")
+    (is (= #{site} (memory/given-up-sites far)) "and its site is given up")
+    (is (build/given-up? #{site} [11 40 6]) "the same pool's other facings with it")
+    (is (not (build/given-up? #{site} [40 40 4])))
+    (testing "at the site a failed walk is the op's, and fails the build as before"
+      (let [near (run (physics/centre (build/cell site :south (build/landing 1))))]
+        (is (= :no-path (get-in near [:plan/intent :intent/reason])))
+        (is (empty? (memory/given-up-sites near)))))))
