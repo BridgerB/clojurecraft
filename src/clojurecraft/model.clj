@@ -264,6 +264,7 @@
    [:intent/target-pos "where a :fight last saw its target; a hunt picks the drop up there"
     "fight, while its target is seen"]
    [:intent/spawner "the remembered spawner a :camp waits by for its blazes (issue #262)" "camp"]
+   [:intent/blazes "the blazes within fight range when a :camp began; a new one ends it" "camp"]
    [:intent/swings
     "attacks a :fight has sent in reach of its target; combat/max-swings make it a ghost"
     "fight, after its first attack"] [:intent/finish-at "ms after which FINISH may be sent" "dig"]

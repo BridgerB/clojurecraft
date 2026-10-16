@@ -39,6 +39,9 @@
 (def camp-range 8.0)                  ; blocks from the spawner's centre to the eye where the bot waits for its blazes (a spawner wakes for a player within 16)
 (def camp-ms 60000)                   ; a camp with no blaze this long fails :no-blaze (a natural spawner waits 10 to 40 s between spawns)
 (def spawner-radius 256)              ; how far off a remembered spawner may be and still be gone to
+(def over-feet 3.0)                   ; blocks a blaze's feet may hover over the bot's and be fought (its body, aim-height up, comes within reach)
+(def under-feet 2.0)                  ; blocks under the bot's feet a blaze may be and be fought
+(def candidates 3)                    ; nearest blazes asked for a route, as the hunt asks of its animals
 
 (def rod (recipe/item-id :blaze_rod))
 (def spawner (blocks/default-state :spawner))
@@ -58,10 +61,26 @@
                          (<= (physics/distance pos (:entity/pos e)) fight-radius))))
           (:world/entities world))))
 
+(defn reachable?
+  "Can blaze e be fought from where the bot can walk: its feet no more than over-feet over the
+   bot's nor under-feet under them, and a route reaching within a walk's range of its cell on the
+   plane (intent/routable?, which judges the plane only). Gym blaze-fortress-a (run 38892386220)
+   tunnelled to its spawner and failed three fights in a row :unreachable on blazes seen through
+   the fortress's walls, every run."
+  [world e]
+  (let [dy (- (physics/y-of (:entity/pos e)) (physics/y-of (:player/pos world)))]
+    (and (<= (- under-feet) dy over-feet)
+         (intent/routable? world {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e))}))))
+
 (defn quarry
-  "[eid entity] of the nearest blaze to fight, or nil."
+  "[eid entity] of the blaze to fight: the first of the candidates nearest (blazes) that is
+   reachable?, or nil."
   [world]
-  (entity/nearest (blazes world) (:player/pos world)))
+  (let [pos (:player/pos world)]
+    (->> (blazes world)
+         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
+         (take candidates)
+         (some (fn [[_ e :as ee]] (when (reachable? world e) ee))))))
 
 (defn rod-lying
   "[eid entity] of the nearest drop that may be a rod (drops/holds?) within drops/drop-radius of
@@ -137,17 +156,20 @@
 ;; ---------------------------------------------------------------- the :camp intent
 
 (defmethod intent/run :camp
-  ;; {:intent/kind :camp :intent/spawner cell}: stand by the spawner until a blaze is within
-  ;; fight-radius or a rod lies near (done), failed :no-blaze after camp-ms. A camp is an intent,
-  ;; not a planner wait: a wait fails the plan after plan/wait-ticks (20 s), shorter than a
-  ;; natural spawner's delay. Its spawner is not its :intent/target, so a camp that saw nothing
-  ;; never blacklists it; three in a row fail the plan
-  [world {:intent/keys [since]} _]
+  ;; {:intent/kind :camp :intent/spawner cell}: stand by the spawner until a blaze comes within
+  ;; fight-radius that was not there when the camp began (:intent/blazes: one there then could not
+  ;; be fought, or the act would have chosen it) or a rod lies near (done), failed :no-blaze after
+  ;; camp-ms. A camp is an intent, not a planner wait: a wait fails the plan after
+  ;; plan/wait-ticks (20 s), shorter than a natural spawner's delay. Its spawner is not its
+  ;; :intent/target, so a camp that saw nothing never blacklists it; three in a row fail the plan
+  [world {:intent/keys [since] seen :intent/blazes} _]
   (let [now (:time/now world)
+        here (set (keys (blazes world)))
+        seen (or seen here)
         since (or since now)
         world (-> world
                   (assoc :player/controls {})
-                  (intent/assoc-intent :intent/since since))]
-    (cond (or (quarry world) (rod-lying world)) (intent/done world)
+                  (intent/assoc-intent :intent/since since :intent/blazes seen))]
+    (cond (or (seq (remove seen here)) (rod-lying world)) (intent/done world)
           (> (- now since) camp-ms) (intent/fail world :no-blaze)
           :else world)))

@@ -83,6 +83,36 @@
              (next-intent
               (assoc (with-spawner (standing {7 near})) :plan/blacklist #{7 spawner-at})))))))
 
+(def boxed-in
+  "Stone round the feet cell [8 64 8], two high, and a roof over it: no route leaves it."
+  (merge (into {}
+               (for [x (range 7 10)
+                     z (range 7 10)
+                     y [64 65]
+                     :when (not= [x z] [8 8])]
+                 [[x y z] (blocks/default-state :stone)]))
+         {[8 66 8] (blocks/default-state :stone)}))
+
+(deftest only-a-blaze-the-bot-can-reach-is-fought
+  ;; gym blaze-fortress-a (run 38892386220): three fights in a row failed :unreachable on blazes
+  ;; seen through the fortress's walls from the tunnel, every run
+  (let [near (entity :blaze [12.5 65.0 8.5] :entity/health 20.0)]
+    (is (= {:plan/wait :no-blaze}
+           (next-intent (assoc (standing {7 near}) :world/chunks {[0 0] (world/column boxed-in)})))
+        "behind a wall: no route, no fight")
+    (is (= {:plan/wait :no-blaze}
+           (next-intent (standing {7 (entity :blaze [10.5 72.0 8.5] :entity/health 20.0)})))
+        "eight over the feet: out of reach from the floor")
+    (testing "a camp that began with it there goes on"
+      (let [w (assoc (standing {7 near})
+                     :world/chunks {[0 0] (world/column boxed-in)}
+                     :time/now 1000
+                     :plan/intent
+                     {:intent/kind :camp :intent/spawner [11 64 10] :intent/status :active})
+            w (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})]
+        (is (= #{7} (:intent/blazes (:plan/intent w))))
+        (is (= :active (:intent/status (:plan/intent w))))))))
+
 (deftest by-the-spawner-the-bot-camps
   (let [w (memory/observe (standing {}) [11 64 10] blaze/spawner)]
     (is (= {:intent/kind :camp :intent/spawner [11 64 10]} (next-intent w)))

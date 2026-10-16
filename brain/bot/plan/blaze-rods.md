@@ -12,6 +12,9 @@ sourceRefs:
   - src/clojurecraft/blaze.clj#def fight-radius 12.0
   - src/clojurecraft/blaze.clj#def camp-ms 60000
   - src/clojurecraft/blaze.clj#defn blazes
+  - src/clojurecraft/blaze.clj#defn reachable?
+  - src/clojurecraft/blaze.clj#defn quarry
+  - test/clojurecraft/blaze_test.clj#only-a-blaze-the-bot-can-reach-is-fought
   - src/clojurecraft/blaze.clj#defn rod-lying
   - src/clojurecraft/blaze.clj#defn nearest-spawner
   - src/clojurecraft/blaze.clj#defn healing
@@ -54,14 +57,14 @@ Issue #262, the first stage past the fortress and a child of the roadmap #10. Se
 1. Outside the Nether, a wait `:other-dimension` (the planner never chooses the row there anyway).
 2. Hurt (`:player/health` under `combat/retreat-health` 10): `healing` eats (`:eat`, the food held) when the food is under `hunger/heal-level` 18, where health comes back from (fast while the meal's saturation lasts), else backs away from a blaze within `combat/back-off-to` 8, else waits `:healing`. ruststeve broke off under 10 and ate ([[sib-blaze-combat]]): a run that fought on killed the blaze and died with it. The meal comes first: gym blaze-7a run 1 backed away three times round a room seven square with the food at 17, where no back-off gets away, and burned to death without eating.
 3. A rod lying near (`rod-lying`: a drop that may be a rod within `drops/drop-radius` 8 of the feet, its cell not blacklisted by a failed pickup): `:collect-drops` of `:blaze_rod` at its cell. First, because it lies there now and the blazes stay.
-4. The nearest blaze within `fight-radius` 12 (`blazes`: alive, not a blacklisted ghost): `:fight`. The engage walks on toward a blaze hovering out of reach (`combat/pressing?`).
+4. The blaze to fight (`quarry`): of the `candidates` 3 nearest within `fight-radius` 12 (`blazes`: alive, not a blacklisted ghost), the first `reachable?`: its feet no more than `over-feet` 3 over the bot's nor `under-feet` 2 under, and a route within a walk's range of its cell on the plane (`intent/routable?` judges the plane only). Gym blaze-fortress-a tunnelled to its spawner and failed three fights in a row `:unreachable` on blazes seen through the fortress's walls, every run. The engage walks on toward a blaze hovering out of reach (`combat/pressing?`).
 5. The spawner on record nearest the eye within 256, not blacklisted: when the eye is more than `camp-range` 8 from it, `to-spawner` walks there (`intent/routable?`) or tunnels by the fortress's steps (`:tunnel-to`, never opening a cell beside lava); within 8, a `:camp` by it.
 6. Nothing: a wait `:no-blaze` (the plan fails after `plan/wait-ticks`).
 
 The `:defend` row (priority 0) still answers anything hostile within 4 first, a blaze too, and a wither skeleton beside the spawner.
 
 ## The :camp intent
-`{:intent/kind :camp :intent/spawner cell}` stands still by the spawner: done when a blaze is within `fight-radius` or a rod lies near, failed `:no-blaze` after `camp-ms` 60 s. It is an intent and not a planner wait because a wait fails the plan after 20 s, shorter than a natural spawner's 10 to 40 s between spawns; and its spawner is not its `:intent/target`, so a camp that saw nothing never blacklists the spawner: three in a row fail the plan.
+`{:intent/kind :camp :intent/spawner cell}` stands still by the spawner: done when a blaze comes within `fight-radius` that was not there when it began (`:intent/blazes`: one there then could not be fought, or the act would have chosen it, and ending on it would start a camp a tick) or a rod lies near, failed `:no-blaze` after `camp-ms` 60 s. It is an intent and not a planner wait because a wait fails the plan after 20 s, shorter than a natural spawner's 10 to 40 s between spawns; and its spawner is not its `:intent/target`, so a camp that saw nothing never blacklists the spawner: three in a row fail the plan.
 
 ## Gym rows (gym.clj)
 Three rows play this one goal from three starts, each named by `:gym/name` (the registry finds a row by it first, and the trial matrix carries it, [[gym-on-runners]]):
