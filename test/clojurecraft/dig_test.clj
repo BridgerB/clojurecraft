@@ -70,6 +70,14 @@
     (is (nil? (dig/ms bedrock (item :diamond_pickaxe) none)))
     (is (nil? (dig/ms 999999 nil none)))))
 
+;; sim race 38762695024 runner 8 (issue #152): a tunnel through a lush cave dug a block of
+;; hardness 0, and the division by it threw and crashed the run
+(deftest a-block-of-hardness-zero-breaks-at-once
+  (is (= 0.0 (blocks/hardness (state :azalea))))
+  (is (= 0 (dig/ms (state :azalea) nil none)))
+  (is (= 0 (dig/ms (state :azalea) (item :stone_pickaxe) {:eyes-in-water? true :off-ground? true})))
+  (is (= 0 (dig/ms (state :torch) (item :wooden_axe) none))))
+
 (deftest the-best-tool-is-the-fastest-that-harvests
   (let [inv {0 {:item (item :oak_log) :count 3}
              3 {:item (item :wooden_pickaxe) :count 1}
