@@ -200,7 +200,8 @@
   ["Chunks stay a snapshot of the dimension the bot is in, emptied on a change, as the server streams them again; memory keeps every dimension, each fact saying which"
    "A column's height is the sections the server sent (16 or 24), looked up in dimensions.edn: the reader thread decodes without knowing the dimension"
    "The dimension is the respawn's and login's name (:player/dimension, from #8), not the registry id, which only dimensions.edn's row order explains"
-   "No lava capping: a cell behind a wall cannot be capped before the wall is dug, so a tunnel step never opens a cell beside lava and tries another step instead"]
+   "No lava capping: a cell behind a wall cannot be capped before the wall is dug, so a tunnel step never opens a cell beside lava and tries another step instead"
+   "The gym gives a row's kit only once the server says the bot stands in the row's dimension (execute as <bot> at @s if dimension): steve gave its End kit before the cross-dimension teleport and the server held none of it (issue #261)"]
   :problem/risks
   ["Stale overworld columns answer Nether lookups (a brick reported exactly 64 blocks off)"
    "Parsing a Nether chunk as 24 sections runs off the buffer"
