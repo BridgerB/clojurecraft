@@ -836,11 +836,16 @@
    landing is gone to at its height (toward-stand: stairs to it first, then a level way dug); a
    room cell (its stand the cell itself) is dug from anywhere that reaches it, the nearest such cell a route
    reaches (reachable-stand); any other op from its designated stand (toward), or, for a place or
-   a dig whose stand cannot be occupied, a cell that already reaches the block. A keyword is why
-   no such cell exists. Ground in the way is dug only for a :build, whose plan says which rock to
-   keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
+   a dig whose stand cannot be occupied, a cell that already reaches the block. A room cell no
+   stand reaches and no way can be cut to from the feet's height is gone back to by the room's
+   landing (toward-stand: stairs to its height first): sim race 38806318231 (issue #74, world R3/27
+   round after round) broke its pickaxe in the room at y -22, climbed out for wood, made one at
+   y 64 and failed :no-stand three times in a tick, the room 86 blocks under the feet. A keyword
+   is why no such cell exists. Ground in the way is dug only for a :build, whose plan says which
+   rock to keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
   [world i {:build/keys [op stand pos step]}]
-  (let [{:intent/keys [build origin facing]} i]
+  (let [{:intent/keys [build origin facing access]} i
+        home (when build (cell origin facing (landing (or access 0))))]
     (cond (and (= :landing step) build) (toward-stand world stand build origin facing)
           (and (= :dig op) (= stand pos))
           (cond (within-reach? world pos) nil
@@ -850,6 +855,9 @@
                   (cond alt {:intent/kind :walk :intent/target alt :intent/for :build}
                         ;; no route into the room: cut the way to the stand nearest the feet
                         cut (toward-stand world cut build origin facing)
+                        ;; nothing from here: back down (or up) to the room by its landing
+                        (and home (not (intent/centred? world home)))
+                        (toward-stand world home build origin facing)
                         :else :no-stand)))
           (intent/centred? world stand) nil
           :else

@@ -305,6 +305,21 @@
     (is (= down (hunt {[12 40 4] blocks/lava-base})) "a lone source: on down toward the sea")
     (is (= down (hunt (pool-at 50))) "a pool over the head: on down toward the sea")))
 
+(deftest a-room-far-under-the-feet-is-gone-back-to-by-its-landing
+  ;; sim race 38806318231 (issue #74, world R3/27): the pickaxe broke in the room at y -22, the
+  ;; bot climbed out for wood, made one at y 64, and the next room cell had no stand from there:
+  ;; :no-stand three times in a tick
+  (let [w (standing-at (open-ground {}) feet-pos)
+        i {:intent/kind :build
+           :intent/build :cast-one
+           :intent/origin [8 40 4]
+           :intent/facing :south
+           :intent/access 1}
+        room-cell [8 42 6]
+        op {:build/op :dig :build/pos room-cell :build/stand room-cell :build/step :room}]
+    (is (= {:intent/kind :stairs-down :intent/to-y 57} (build/op-child w i op))
+        "stairs down toward the landing's height, six at a time")))
+
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
   ;; server refusing it three times, :rejected
