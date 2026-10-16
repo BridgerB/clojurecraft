@@ -18,6 +18,7 @@ related:
 - [[server-model]] - the pure vanilla-server model tests run the whole bot against.
 - [[sim-hunger]] - hunger in the model: FoodData drained, healed, starved and fed at the difficulty given.
 - [[sim-mobs]] - mobs in the model: the night rule, straight approach, melee, arrows, fuses, the attack, loot, fixtures.
+- [[sim-end]] - eyes of ender toward a stronghold, the frames and the end portal, the End's platform, the perched dragon and its crystals.
 - [[sim-race]] - real worlds captured once, the whole bot played in them against the model, thousands of runs a runner.
 - [[datagen]] - six EDN tables: four from --reports, recipes and tags from the inner jar.
 - [[specs-and-instrumentation]] - what is specced, what is instrumented, what is not.
