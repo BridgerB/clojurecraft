@@ -1040,6 +1040,23 @@
                                        (intent/stowed-breaker world)))]
     (if stowed {:intent/kind :equip :intent/item (recipe/item-name item)} c)))
 
+(defn way-refilled?
+  "Did child, a walk along the build's way, fail :no-path with a falling block (gravel, sand:
+   blocks/falls?) now on the straight way from the feet to its target (stance-line, body or
+   head)? What lay over the way fell into it after the route was planned; the next clear digs it
+   out, so the walk is dropped, not failed, and never sent again over the same cells while the
+   block stands there. Sim race 38837004562 (issue #45, world R1/6): the level way to the landing
+   at y 21 ran under a bed of gravel, each dug cell filled again, and three walks along it failed
+   :no-path."
+  [world {:intent/keys [kind reason target]}]
+  (boolean (and (= :walk kind)
+                (= :no-path reason)
+                target
+                (some #(some-> (terrain/block-at world %)
+                               blocks/falls?)
+                      (mapcat (fn [c] [c (update c 1 inc)])
+                       (stance-line (intent/feet world) target))))))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i (a dig that found
@@ -1061,6 +1078,12 @@
             (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
         (and child (intent/failed? child) (found-open? child))
         (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
+        (and child (intent/failed? child) (way-refilled? world child))
+        ;; gravel fell into the way after the walk was planned: clear it again
+        (-> world
+            (assoc :player/controls {})
+            (intent/dissoc-intent :intent/child)
+            (game/say "build: the way filled with what fell over it, clearing it again"))
         (and child (intent/failed? child) (boxed-way? child))
         ;; a way to the site boxed in: the pocket is remembered and the build looks again from it
         ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's

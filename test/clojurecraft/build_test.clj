@@ -368,6 +368,17 @@
     (is (not ((build/kept origin facing) (:intent/target child))) "never the frame's rock")
     (is (not= (at [2 0 -2]) (:intent/target child)) "not the straight way into the rock")))
 
+(deftest a-way-filled-by-falling-gravel-is-cleared-again
+  ;; sim race 38837004562 (issue #45, world R1/6): the level way to the landing ran under a bed
+  ;; of gravel, each dug cell filled again, and three walks along it failed :no-path
+  (let [gravel (first (blocks/states-where (fn [[n]] (= n :gravel))))
+        walk
+        {:intent/kind :walk :intent/target [10 63 4] :intent/status :failed :intent/reason :no-path}
+        at (fn [b] (standing-at (open-ground {[10 63 7] b}) feet-pos))]
+    (is (build/way-refilled? (at gravel) walk) "gravel in the way: dropped, cleared again")
+    (is (not (build/way-refilled? (at 1) walk)) "stone in the way: a failure as before")
+    (is (not (build/way-refilled? (at gravel) (assoc walk :intent/reason :stuck))))))
+
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
   ;; server refusing it three times, :rejected
