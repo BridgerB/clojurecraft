@@ -16,6 +16,7 @@ related:
 - [[hardness-and-tools]] - hardness, harvest tags and tool materials read from the game at datagen; the break formula; choosing a tool.
 - [[stairs-down]] - a staircase cut one stair at a time, refusing water, lava and drops, never digging the support.
 - [[water-escape]] - the trap with hysteresis, the two always-on priority-zero goals, :swim-out (one bank, dig from the floor), :flee, :wade, trap facts, dig refusals beside water.
+- [[survival]] - Normal difficulty (issue #259): the food from set-health, the :eat always row (food in hand, one use-item, done when the server's food rises), the sim's eating, the eat gym row.
 - [[pathfinder]] - a route for the feet over the block grid: A* with a node budget, moves and goals as data, water and lava as walls.
 - [[walk-intent]] - plan a route on the first tick, follow it waypoint by waypoint, plan again when the world changes, fail :no-path after six plans.
 - [[collect-intent]] - walk onto the drop until any log is held; name a blocking leaf; 10 s timeout.

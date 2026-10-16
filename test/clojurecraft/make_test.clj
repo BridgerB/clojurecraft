@@ -109,12 +109,13 @@
     (is (= plan/goals (clojure.edn/read-string (pr-str plan/goals)))))
   (testing
     "no item target needs a per-goal method: wood, kit and pickaxe all plan through the same registries;
-            the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes"
+            the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes,
+            and the meal (issue #259), done by the server's food"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
-    (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress?}
+    (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :fed?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
-    (is (= #{:needs :escape :wade :build :fortress}
+    (is (= #{:needs :escape :wade :build :fortress :eat}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
