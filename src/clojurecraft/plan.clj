@@ -54,14 +54,22 @@
   [until]
   (some (fn [g] (when (= until (:goal/until g)) [(:goal/id g)])) targets))
 
+(defn aside?
+  "Is a target row a trial of its own rather than a step of the run: the water trial (:goal/plan
+   :wade, from before the flag) or any row marked :goal/aside? (the gym's entities trial, issue
+   #258)? A run from spawn never plays one, and none is the current stage."
+  [row]
+  (boolean (or (:goal/aside? row) (= :wade (:goal/plan row)))))
+
 (defn current-until
   "The --until name a fresh run aims at. Of the live targets that name a :goal/until and are not
-   :goal/always?, it is the one with the greatest :goal/priority. Escapes stay in play on any
-   --until. Nil when none qualify."
+   :goal/always? and are not asides (aside?), it is the one with the greatest :goal/priority.
+   Escapes stay in play on any --until. Nil when none qualify."
   ([] (current-until goals))
   ([table]
    (->> (targets-of table)
         (remove :goal/always?)
+        (remove aside?)
         (filter :goal/until)
         (sort-by :goal/priority)
         last
@@ -69,14 +77,14 @@
 
 (defn through
   "The chain up to until: every live target with a :goal/until that is not an escape and not an
-   aside (the water trial, :goal/plan :wade), whose priority is at most the named target's, in
-   priority order. A fresh run plays these, so --until nether starts at wood. Nil when until
-   names nothing. One gym stage still uses goals-for, which names only that target."
+   aside (aside?), whose priority is at most the named target's, in priority order. A fresh run
+   plays these, so --until nether starts at wood. Nil when until names nothing. One gym stage
+   still uses goals-for, which names only that target."
   [until]
   (when-let [end (first (filter #(= until (:goal/until %)) targets))]
     (->> targets
          (remove :goal/always?)
-         (remove #(= :wade (:goal/plan %)))
+         (remove aside?)
          (filter :goal/until)
          (filter #(<= (:goal/priority %) (:goal/priority end)))
          (sort-by :goal/priority)

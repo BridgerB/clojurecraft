@@ -254,6 +254,7 @@
 (s/def :goal/target? boolean?)
 (s/def :goal/until string?)                ; the --until name that selects a target row
 (s/def :goal/always? boolean?)
+(s/def :goal/aside? boolean?)              ; a trial of its own, never a step of a run (plan/aside?)
 (s/def :goal/trap #{:water :lava})
 (s/def :goal/plan keyword?)                ; which next-intent planner the row uses (default :needs)
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
@@ -266,8 +267,8 @@
   (s/keys :req [:goal/id :goal/priority :goal/done?]
           :opt
           [:goal/needs :goal/holds :goal/spares :goal/passage-ok? :goal/build :goal/act
-           :goal/target? :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/trap
-           :goal/plan :goal/blocks :goal/depth :goal/dimension]))
+           :goal/target? :goal/until :goal/doc :goal/superseded-by :goal/always? :goal/aside?
+           :goal/trap :goal/plan :goal/blocks :goal/depth :goal/dimension]))
 
 (s/def ::world
   (s/keys :req [:bot/phase :bot/effects :time/now :time/tick]
