@@ -256,6 +256,16 @@
     (is (= {:plan/wait :no-eye}
            (stronghold/stronghold-next (assoc (searching [8.5 8.5] []) :player/inventory {}))))))
 
+(deftest the-next-throws-spot-is-on-the-side-the-feet-are-on
+  ;; gym batch stronghold-265b (plan run 38930188463) run 2 walked to and fro between the two
+  ;; spots twelve times, a lake between
+  (let [t (throw-fact [8.5 64.9 8.5] [0 1] 0)
+        [a b] [(stronghold/second-spot t 60.0) (stronghold/second-spot t -60.0)]]
+    (is (= [a b] (stronghold/spots (searching [8.5 20.5] [t]) t))
+        "on the line: the first way first")
+    (is (= [b a] (stronghold/spots (searching [30.5 8.5] [t]) t)) "off it: its own side first")
+    (is (= [a b] (stronghold/spots (searching [-12.5 8.5] [t]) t)))))
+
 (deftest two-crossing-throws-walk-to-the-crossing-and-look-round-it
   (testing "far from the crossing: a hop toward it"
     (let [a (throw-fact [8.5 64.9 8.5] [0 1] 0)
@@ -369,6 +379,9 @@
       (is (not (plan/done-by seen room-row))))
     (testing "within 6 of it: there"
       (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
+    (testing "in water: out to the nearest bank first"
+      (is (= {:intent/kind :swim-out :intent/for :retreat}
+             (plan/next-intent (assoc seen :player/in-water? true) room-row plan/goals))))
     (testing "on a shore where every first step opens a cell by water: stairs down toward it"
       (let [wet (assoc seen
                        :world/chunks

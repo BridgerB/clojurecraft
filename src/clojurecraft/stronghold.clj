@@ -308,17 +308,30 @@
   ([{:throw/keys [from dir]} turn]
    (let [[x z] (plane from) [dx dz] (rotate dir turn)] [(+ x (* travel dx)) (+ z (* travel dz))])))
 
-(defn spots
-  "The two places the throw after t may be made from: second-spot turned either way."
-  [t]
-  [(second-spot t travel-turn) (second-spot t (- travel-turn))])
+(defn side
+  "Which side of throw t's line point [x z] lies on, as the sign of the cross product, times how
+   far off it it is."
+  [{:throw/keys [from dir]} [x z]]
+  (let [[fx fz] (plane from)] (cross dir [(- x fx) (- z fz)])))
 
 (defn off-line
   "Blocks on the plane from the feet to the line of throw t."
-  [world {:throw/keys [from dir]}]
-  (let [[fx fz] (plane from)
-        [px _ pz] (:player/pos world)]
-    (abs (cross dir [(- px fx) (- pz fz)]))))
+  [world t]
+  (let [[px _ pz] (:player/pos world)] (abs (side t [px pz]))))
+
+(def on-line 4.0)                     ; blocks off a throw's line within which the feet are on it, for spots
+
+(defn spots
+  "The two places the throw after t may be made from, second-spot turned either way: the one on
+   the side of its line the feet are on first, once they are more than on-line off it. Gym batch
+   stronghold-265b (plan run 38930188463) run 2: a lake between, a hop toward one spot ended where
+   only the other had a way, and the bot walked to and fro between them twelve times."
+  [world t]
+  (let [[px _ pz] (:player/pos world)
+        a (second-spot t travel-turn)
+        b (second-spot t (- travel-turn))
+        here (side t [px pz])]
+    (if (and (> (abs here) on-line) (neg? (* here (side t a)))) [b a] [a b])))
 
 (defn crossing
   "[x z] of the stronghold by the throws on record: the latest throw crossed with each earlier
@@ -447,7 +460,7 @@
               (throw-now world)
               c (or (explore world c) {:plan/wait :no-frame})
               (>= (off-line world t) min-offset) (throw-now world)
-              :else (or (some #(way world % fy) (spots t)) {:plan/wait :no-way})))))
+              :else (or (some #(way world % fy) (spots world t)) {:plan/wait :no-way})))))
 
 (defmethod plan/done-by :frames-seen? [world _] (boolean (seq (frames world))))
 
@@ -467,12 +480,14 @@
    ground, through the stronghold's walls, never into its frames: fortress/unbreakable); else,
    more than room-over above the frame, a staircase down to that height toward it (stairs.clj,
    which turns where water or lava is, and steps aside), the issue's dig down at the crossing;
-   else the wait :no-way. Gym batch stronghold-265b (plan run 38930188463) run 2 of the portal
-   room: on a lake's shore, the frame at y 0 under the lake, every first step of the tunnel
-   opened a cell by water and it failed :blocked."
+   else the wait :no-way. In water, first out to the nearest bank (swim's :swim-out :retreat).
+   Gym batch stronghold-265b (plan run 38930188463) run 2 of the portal room: the frame at y 0
+   under a lake, seen while the bot swam it, every first step of the tunnel from the water opened
+   a cell by water and it failed :blocked."
   [world [x y z :as f]]
   (let [[fx fy fz :as feet] (intent/feet world)]
-    (cond (fortress/choose-move world feet f fortress/climb-past true)
+    (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
+          (fortress/choose-move world feet f fortress/climb-past true)
           {:intent/kind :tunnel-to
            :intent/target f
            :intent/steps fortress/steps-per-tunnel
