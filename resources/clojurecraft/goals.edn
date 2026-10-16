@@ -378,4 +378,14 @@
   "the stronghold found by eyes of ender (issue #265): an eye thrown and followed, the eye it drops picked up; a walk of 150 blocks off its line at 45 degrees, in hops a route reaches, and a second throw there; the walk to where the two lines cross (stronghold/triangulate), and there with nothing seen a throw from there and walks round it; done when an end portal frame is remembered: the portal room is in the chunk data the moment its chunk loads, however deep. In the overworld only. An aside until the eyes (#264) are proven and the chain is raised to it"
   :goal/dimension "minecraft:overworld"
   :goal/done? :frames-seen?
-  :goal/plan :stronghold}]
+  :goal/plan :stronghold}
+ {:goal/id :portal-room
+  :goal/priority 23
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "portal-room"
+  :goal/doc
+  "the stronghold's portal room reached (issue #265): with an end portal frame remembered, the fortress's tunnel to it, one step at a time, each a plan of ops, down through the ground and the stronghold's walls, no step opening a cell beside lava or water, the frames never dug; with none remembered yet, the stronghold's search first (throws, walks, the crossing). Done within 6 blocks of a frame. In the overworld only. An aside until the eyes (#264) are proven and the chain is raised to it"
+  :goal/dimension "minecraft:overworld"
+  :goal/done? :in-portal-room?
+  :goal/plan :portal-room}]

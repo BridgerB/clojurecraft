@@ -431,6 +431,7 @@
 (s/def :intent/steps pos-int?)
 (s/def :intent/reach (s/and number? pos?))
 (s/def :intent/climb nat-int?)
+(s/def :intent/dry? boolean?)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
