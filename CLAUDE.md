@@ -75,6 +75,7 @@ src/clojurecraft/sim.clj      pure server model for socket-free end-to-end runs;
 src/clojurecraft/fluid.clj    water and lava as the server moves them: levels, flow, spread, mixing, as data and pure rules
 src/clojurecraft/hunger.clj   hunger as the server keeps it: exhaustion, saturation, regeneration, starvation, eating, as data and pure rules
 src/clojurecraft/mob.clj      mobs as the server runs them, for the model: kinds as data, spawning, walking, hitting, shooting, blasting, loot
+src/clojurecraft/end.clj      the End for the model: frame states, the ring that lights the portal, the platform, the spikes, an eye's flight
 src/clojurecraft/capture.clj  real worlds for the model: a real server's chunk columns round each landing, one world file a landing
 src/clojurecraft/simrace.clj  the sim race: the whole bot in captured worlds against the model, every core, failures by signature
 src/clojurecraft/harness.clj  the fixture process: RCON forest landing, prints one {:event/kind :go} for the bot's stdin

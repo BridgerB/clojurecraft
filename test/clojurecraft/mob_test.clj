@@ -295,3 +295,12 @@
     (is (= 1 (:stats/deaths w)) (pr-str (plan/summary w)))
     (is (:player/dead? w) "the zombie killed it")
     (is (= 1 (:sim/respawns sim)) "its client-command was answered with a new life")))
+
+(deftest a-zombie-the-sun-kills-hits-no-more
+  ;; the burn and the swing fall on one tick: a mob that dies to the sun is dying, not chasing
+  (let [sim (arena {} {} :normal 1000 [{:type :zombie :pos [1.5 64.0 0.5]}])
+        [eid] (the-mob sim :zombie)
+        sim (update-in sim [:sim/mobs eid] assoc :health 1.0 :attack-at 1000)
+        burnt (ticks sim 20)]
+    (is (some? (:dead-at (get-in burnt [:sim/mobs eid]))))
+    (is (= 20.0 (:sim/health burnt)))))
