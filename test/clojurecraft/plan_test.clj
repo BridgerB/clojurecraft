@@ -158,6 +158,10 @@
             :intent/for :into-water}
            (wood/gather-next (boxed (bed :dirt))))
         "boxed: dig the bed over the head, letting the sea in")
+    (is (= {:intent/kind :swim-out :intent/for :rise :intent/to-y 64}
+           (wood/gather-next (boxed (remembered (assoc sea [8 53 8] blocks/water-base)
+                                                [8.5 50.0 8.5]))))
+        "the bed dug and the sea in: up the shaft to the top of the water")
     (is (= {:plan/wait :no-log} (wood/gather-next (boxed (bed :gravel))))
         "never under gravel, which would fall on the bot")))
 

@@ -59,6 +59,13 @@
   [world kind [x y z]]
   (or (first (filter #(not= kind (terrain/fluid-kind world [x % z])) (range y (+ y 16)))) (+ y 16)))
 
+(defn in-the-open?
+  "Is pos under the open sky with no water or lava over it (terrain/under-sky? alone lets water
+   through: a cell on the sea floor is under it)?"
+  [world [x y z :as pos]]
+  (and (terrain/under-sky? world pos)
+       (not-any? #(terrain/fluid-kind world [x % z]) (range (inc y) (+ y 32)))))
+
 (defn float-top
   "The highest feet level the body reaches in this column: float-depth under an open surface
    cell, or the body's height under a roof; rounded to the cell the impulse can lift from."
@@ -70,9 +77,9 @@
   "Cells the feet could stand in, nearest first, within bank-radius of feet on the plane and
    between bank-drop under the float-top and bank-rise over it (a ledge higher than that is
    out of the impulse's lift); blacklist removes cells that failed. Under the open sky (the feet
-   with nothing over them but water and air, terrain/under-sky?), only banks under it too: a
-   pocket under the rock beside the water is no way out of the sea over it. Issue #89 (sim race
-   38811426215 runner 8, worlds R4/21 and R1/32): a bot that dug up into the sea from its tunnel
+   with nothing over them but water and air, terrain/under-sky?), only banks in the open
+   (in-the-open?): a pocket under the rock beside the water, or a ledge under it, is no way out
+   of the sea over it. Issue #89 (sim race 38811426215 runner 8, worlds R4/21 and R1/32): a bot that dug up into the sea from its tunnel
    under the sea floor swam back into the tunnel's dry end, the trap cleared, and it climbed and
    dug again, until its run's time ran out."
   ([world feet surface blacklist]
@@ -80,7 +87,7 @@
           feet
           surface
           blacklist
-          (if (terrain/under-sky? world feet) #(terrain/under-sky? world %) any?)))
+          (if (terrain/under-sky? world feet) #(in-the-open? world %) any?)))
   ([world [fx _ fz :as feet] surface blacklist keep?]
    (->> (for [dx (range (- bank-radius) (inc bank-radius))
               dz (range (- bank-radius) (inc bank-radius))
@@ -243,9 +250,10 @@
         [(long (math/floor hx)) surface (long (math/floor hz))])))
 
 (defn shore-controls
-  "Rising with jump held, and toward shore (far-shore) when there is one."
-  [world shore]
-  (if shore
+  "Rising with jump held, and toward shore (far-shore) when there is one and the feet are not
+   still under to-y (a :rise goes straight up its shaft first)."
+  [world shore to-y]
+  (if (and shore (not (and to-y (< (physics/y-of (intent/feet world)) (- to-y 2)))))
     (assoc (intent/toward world (physics/centre shore) 0.0) :control/jump? true)
     {:control/jump? true}))
 
@@ -262,8 +270,10 @@
 
 (defmethod intent/run :swim-out
   ;; an escape's swim-out is ended by its goal, when the trap clears; one for a :retreat (out of a
-  ;; flooded tunnel) ends itself on dry land
-  [world {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for shore]}
+  ;; flooded tunnel) ends itself on dry land, and one for a :rise (up a shaft dug into the sea,
+  ;; wood/into-water) on dry land in the open
+  [world
+   {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for shore to-y]}
    event]
   (let [tick (:time/tick world)
         started (or started tick)
@@ -272,7 +282,8 @@
         dist (when bank (physics/horizontal-distance (:player/pos world) (physics/centre bank)))
         nearer? (and dist (< dist (- (or best-dist Double/MAX_VALUE) progress)))
         best-tick (if (or nearer? (nil? best-tick)) tick best-tick)]
-    (cond (and (= :retreat for) (trap/dry-land? world))
+    (cond (or (and (= :retreat for) (trap/dry-land? world))
+              (and (= :rise for) (trap/dry-land? world) (in-the-open? world feet)))
           (-> world
               (assoc :player/controls {})
               intent/done)
@@ -295,12 +306,13 @@
               (intent/dissoc-intent :intent/bank :intent/target :intent/best-dist :intent/best-tick)
               (game/say (str "swim-out: bank " bank " flooded, looking again")))
           (and (nil? bank) next-search (< tick next-search))
-          (assoc world :player/controls (shore-controls world shore)) ; rise until the next look
+          (assoc world :player/controls (shore-controls world shore to-y)) ; rise until the next look
           (nil? bank)
           (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
                 b (banks world feet surface (:plan/blacklist world #{}))
-                cap (when-not b (obstacle world feet nil))
-                wall (when-not (or b cap) (notch world feet surface))]
+                rise? (= :rise for)
+                cap (when-not (or b rise?) (obstacle world feet nil))
+                wall (when-not (or b cap rise?) (notch world feet surface))]
             (cond b
                   (-> world
                       (intent/assoc-intent :intent/bank b :intent/target b)
@@ -314,7 +326,7 @@
                         shore (when-not (solid-cell? world [fx surface fz])
                                 (far-shore world feet surface))]
                     (-> world
-                        (assoc :player/controls (shore-controls world shore))
+                        (assoc :player/controls (shore-controls world shore to-y))
                         (intent/assoc-intent :intent/next-search (+ tick search-every-ticks))
                         (cond-> shore (intent/assoc-intent :intent/shore shore))
                         (cond-> (nil? shore) (intent/dissoc-intent :intent/shore))))))
