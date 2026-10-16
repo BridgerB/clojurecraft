@@ -26,6 +26,7 @@ related:
 - [[mine-act]] - mining rows as data (stone, coal, iron, gravel): the tool, the drops, the walk beside the block, stairs down to the row's depth.
 - [[build-plan]] - a build as data: ops with done-predicates, the first not satisfied is worked; portal-plan, the portal cut into the rock beside a lava pool.
 - [[fortress-tunnel]] - the Nether leg: bricks as sightings, a tunnel whose steps are plans of ops, never opening a cell beside lava.
+- [[blaze-rods]] - seven rods in the Nether: hurt first, a rod lying near, the nearest blaze, the remembered spawner walked or tunnelled to and camped by; the blaze gym rows.
 - [[roadmap-issues]] - which GitHub issue number is which roadmap step and draft.
 
 - [[intentions-as-facts]] - every intent's story in memory; what the bot was doing at any moment is a query.

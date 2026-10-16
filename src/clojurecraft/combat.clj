@@ -25,6 +25,7 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
@@ -227,12 +228,41 @@
 ;; ---------------------------------------------------------------- the rows
 
 (def defend-radius 4.0)               ; a hostile this near preempts any plan
+(def over-feet 3.0)                   ; blocks a mob's feet may be over the bot's and be fought (its body, aim-height up, comes within reach)
+(def under-feet 2.0)                  ; blocks under the bot's feet a mob may be and be fought
+(def sight-step 0.25)                 ; blocks between the samples of a line of sight
 (def creeper-radius 6.0)              ; a creeper this near is backed away from, never fought
 (def attack-radius 16.0)              ; the gym's :attack kills every hostile this near
 
+(defn clear?
+  "Is the line from point a to point b clear of solid cells (terrain/solid-fn: an unloaded cell is
+   solid), sampled every sight-step, a's own cell aside?"
+  [world a b]
+  (let [d (physics/distance a b)
+        solid? (terrain/solid-fn world)]
+    (or (< d 1.0e-6)
+        (not-any? (fn [[x y z]] (solid? x y z))
+                  (rest (physics/cells-along a (mapv #(/ (- %2 %1) d) a b) d sight-step))))))
+
+(defn seen?
+  "Is the line from the eye to entity e's aim clear (clear?)?"
+  [world e]
+  (clear? world (game/eye world) (aim e)))
+
+(defn hittable?
+  "Can entity e be fought from where the bot stands: its feet no more than over-feet over the
+   bot's nor under-feet under them, and in sight (seen?). Gym blaze-fortress-c (run 38895759229):
+   from its tunnel beside a fortress the :defend row went after blazes through the walls and
+   hovering over it, failed :unreachable, and switched every half second between one of them and
+   the blaze the blaze-rods row was fighting, killing neither, three times until the plan failed."
+  [world e]
+  (let [dy (- (physics/y-of (:entity/pos e)) (physics/y-of (:player/pos world)))]
+    (and (<= (- under-feet) dy over-feet) (seen? world e))))
+
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers: within defend-radius of
-   the feet, a creeper within creeper-radius; none the plan blacklisted (a ghost)."
+   the feet, a creeper within creeper-radius; none the plan blacklisted (a ghost), and only what
+   can be fought from here (hittable?)."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})]
@@ -240,7 +270,8 @@
           (filter (fn [[eid e]]
                     (and (not (contains? bl eid))
                          (<= (physics/distance pos (:entity/pos e))
-                             (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))))
+                             (if (= :creeper (entity/kind e)) creeper-radius defend-radius))
+                         (hittable? world e))))
           (entity/hostiles world))))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))

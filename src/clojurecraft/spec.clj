@@ -5,6 +5,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.armour]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.build :as build]
             [clojurecraft.claims :as claims]
             [clojurecraft.combat]
@@ -416,6 +417,8 @@
 (s/def :intent/from-feet ::block-pos)
 (s/def :intent/taken nat-int?)
 (s/def :intent/steps pos-int?)
+(s/def :intent/reach (s/and number? pos?))
+(s/def :intent/climb nat-int?)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
@@ -425,6 +428,8 @@
 (s/def :intent/next-swing number?)
 (s/def :intent/swings pos-int?)
 (s/def :intent/target-pos ::vec3)
+(s/def :intent/spawner ::block-pos)
+(s/def :intent/blazes (s/coll-of int? :kind set?))
 (s/def :intent/hold? boolean?)
 (s/def :intent/mouth ::block-pos)
 (s/def :intent/finish-at number?)
@@ -466,7 +471,7 @@
 (s/def :path/max-nodes pos-int?)
 (s/def :path/from ::block-pos)
 (s/def ::route (s/keys :req [:path/waypoints :path/cost :path/status] :opt [:path/from]))
-(s/def :goal/kind #{:near :block :xz :away :pickup :sky})
+(s/def :goal/kind #{:near :block :xz :away :pickup :sky :unseen}) ; :unseen is blaze.clj's: out of a blaze's sight
 (s/def :goal/pos ::block-pos)
 (s/def :goal/range number?)
 (s/def :goal/rise nat-int?)
@@ -758,6 +763,9 @@
 (s/fdef eat/food-held
   :args
   (s/cat :world (requires :player/inventory)))
+(s/fdef blaze/blazes
+  :args
+  (s/cat :world (requires :player/pos :world/entities)))
 (s/fdef drops/lying
   :args
   (s/cat :world (requires :world/entities)
@@ -775,5 +783,5 @@
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
    `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held `drops/lying
-   `pearls/endermen])
+   `blaze/blazes `pearls/endermen])
 (s/def :stats/deaths pos-int?)
