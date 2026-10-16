@@ -2681,6 +2681,33 @@
         "the notch is two cells over the wall's top")
     (is (empty? (:sim/violations sim)))))
 
+(def frozen-sea
+  "A sea frozen over: water three deep (y 60-62) on the stone, ice at y 63 over all of it and
+   air above; no bank anywhere but on the ice."
+  (merge (into {} (for [x (range 16) y [60 61 62] z (range 16)] [[x y z] blocks/water-base]))
+         (into {} (for [x (range 16) z (range 16)] [[x 63 z] (blocks/default-state :ice)]))))
+
+(deftest under-a-frozen-sea-the-bot-digs-out-through-the-ice-and-stands-on-it
+  ;; issue #177 (sim race 38806318231, world R2/43, 83 runs): come up under a frozen sea, the
+  ;; bot dug the ice over its head, which broke to air in the model (a server leaves water),
+  ;; floated a block under the hole's rim with no bank in the band (a route stands on no ice)
+  ;; and pressed toward a far shore under the ice until it timed out, three times, :no-escape
+  (let [[w sim _] (escape-run frozen-sea
+                              [8.5 61.0 8.5]
+                              90000
+                              {:inventory {[:hotbar 0]
+                                           {:item wooden-pickaxe :count 1 :durability 59}}})]
+    (is (= [:water] (map :trap/kind (:world/traps w))) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (trap/dry-land? w))
+    (is (= :ice
+           (let [[x y z] (path/feet-cell (:player/pos w))]
+             (blocks/name-of (terrain/block-at w [x (dec y) z]))))
+        "standing on the ice")
+    (is (= :water (:fluid/kind (blocks/fluid (sim/block-at sim [8 63 8]))))
+        "the ice dug over the head left water, as on a server")
+    (is (empty? (:sim/violations sim)))))
+
 (def shore
   "A plain at y 64 with a pond six by six and two deep eight blocks east of the spawn: the
    gym's shore trial, in the model."

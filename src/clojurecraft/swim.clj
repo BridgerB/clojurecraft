@@ -77,6 +77,23 @@
   (math/round
    (if (solid-cell? world [x surface z]) (- surface physics/height) (- surface float-depth))))
 
+(defn bank?
+  "Could the feet rest in cell once out of the water: a cell they could stand in
+   (path/standable?), or one over a lake's ice (stairs/lake-ice) with the body and the head clear.
+   A route never stands on ice (path/awkward-types: the physics does not slide), but the impulse
+   lifts the body onto it as onto any solid, and on it the bot is on dry land (trap/dry-land?).
+   Sim race 38806318231 world R2/43 (issue #177, 83 runs): the bot came up under a frozen sea,
+   dug the ice over its head and floated in the hole, the ice round it a block over the water's
+   top, and with no other bank within sixteen it pressed toward a far shore under the ice until
+   its escape timed out, three times, :no-escape."
+  [world [x y z :as cell]]
+  (or (path/standable? world cell)
+      (boolean (and (some-> (terrain/block-at world [x (dec y) z])
+                            blocks/name-of
+                            stairs/lake-ice)
+                    (path/clear? world cell)
+                    (path/clear? world [x (inc y) z])))))
+
 (defn banks
   "Cells the feet could stand in, nearest first, within bank-radius of feet on the plane and
    between bank-drop under the float-top and bank-rise over it (a ledge higher than that is
@@ -98,7 +115,7 @@
               :let [top (float-top world feet surface)]
               y (range (- top bank-drop) (+ top bank-rise 1))
               :let [cell [(+ fx dx) y (+ fz dz)]]
-              :when (and (not (blacklist cell)) (path/standable? world cell) (keep? cell))]
+              :when (and (not (blacklist cell)) (bank? world cell) (keep? cell))]
           cell)
         (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
                                                           (physics/centre cell))
@@ -225,14 +242,14 @@
 
 (defn flooded?
   "Has the bank a swim-out keeps been flooded since it was picked: is it no longer a cell the
-   feet could stand in (path/standable?), water now in it or over its floor? Reached, it holds
+   feet could stand in (bank?), water now in it or over its floor? Reached, it holds
    the body in water: the trap never clears, no step brings it nearer, and stuck-ticks later
    the swim-out digs over its head and fails :stuck. Race 38805758078 runner 1 bot Clj_r44
    (issue #157) and race 38709226128 runner 8 bot Clj_r31 (issue #156), replayed in probe
    38830884734: in a flooded tunnel the bank picked a block off was reached at distance 0 with
    water flowed into it, and the escape failed :stuck there, the third failure of the plan."
   [world bank]
-  (not (path/standable? world bank)))
+  (not (bank? world bank)))
 
 (defn far-shore
   "With no bank in reach and the water open to the sky over the feet: the nearest column, along
