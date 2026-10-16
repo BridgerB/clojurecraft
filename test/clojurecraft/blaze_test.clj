@@ -143,6 +143,15 @@
         "the food under the healing level: a meal, even with a blaze at hand (gym blaze-7 run 1)")
     (is (= {:plan/wait :healing} (next-intent (hurt (standing {1 (item :cooked_beef 4)} {}))))
         "fed: the health comes back by itself")
+    (testing "under 14 a meal comes before the next fight when the food is low (gym blaze-7b run 2)"
+      (is (= {:intent/kind :eat :intent/item :cooked_beef}
+             (next-intent (assoc (standing {1 (item :cooked_beef 4)} {7 near})
+                                 :player/health 12.0
+                                 :player/food 17))))
+      (is (= {:intent/kind :fight :intent/target 7}
+             (next-intent
+              (assoc (standing {1 (item :cooked_beef 4)} {7 near}) :player/health 12.0)))
+          "fed, it fights on"))
     (is (= {:plan/wait :other-dimension}
            (next-intent (assoc (standing {}) :player/dimension dimension/overworld))))))
 
