@@ -29,6 +29,17 @@
                    (fx/packet {:packet/name :finish-configuration})
                    (fx/packet {:packet/name :login :entity-id 7})])))
 
+(def metadata-value
+  "A value a metadata skim can give: a byte or varint, a float, a boolean, a string."
+  (gen/one-of [(gen/choose 0 255) (gen/choose -2147483648 2147483647)
+               (gen/double* {:infinite? false :NaN? false :min -1e6 :max 1e6}) gen/boolean
+               gen/string]))
+
+(def metadata-gen
+  "A skimmed metadata map, {index value}, as packet/read-metadata gives one; the health and flags
+   indexes are drawn often."
+  (gen/map (gen/one-of [(gen/elements [0 9]) (gen/choose 0 254)]) metadata-value {:max-elements 6}))
+
 (defn field-gen
   [t]
   (cond (and (vector? t) (vector? (first t)))
@@ -53,6 +64,8 @@
           :position (gen/vector (gen/choose -1000 1000) 3)
           :bytes gen/bytes
           :rest gen/bytes
+          :lpvec3 (gen/vector (gen/double* {:infinite? false :NaN? false :min -100 :max 100}) 3)
+          :metadata metadata-gen
           :hashed-slot
           (gen/one-of [(gen/return nil)
                        (gen/hash-map :item (gen/choose 0 2000) :count (gen/choose 1 64))])
@@ -79,6 +92,26 @@
   (check (prop/for-all [pkts (gen/vector s2c-play-packet 1 20)]
                        (let [[w _] (fx/fold game/step (in-play) (map fx/packet pkts))]
                          (s/valid? :clojurecraft.spec/world w)))))
+
+(deftest step-is-total-over-generated-metadata
+  ;; issue #258: any skimmed metadata on any tracked entity, living or not, leaves a valid world;
+  ;; a living entity's health is the float at the health index, and nothing else's ever is
+  (check
+   (prop/for-all
+    [type (gen/elements (vals blocks/entity-types)) metadata metadata-gen]
+    (let [[w _]
+          (fx/fold
+           game/step
+           (in-play)
+           (map fx/packet
+                [{:packet/name :add-entity :entity-id 60 :uuid nil :type type :x 0.5 :y 64.0 :z 0.5}
+                 {:packet/name :set-entity-data :entity-id 60 :metadata metadata}]))
+          e (get-in w [:world/entities 60])
+          h (get metadata 9)]
+      (and (s/valid? :clojurecraft.spec/world w)
+           (= (:entity/health e)
+              (when (and (number? h) (contains? blocks/mobs (blocks/entity-names type)))
+                (double h))))))))
 
 (deftest the-phase-only-moves-along-the-transition-table
   (check (prop/for-all [pkts (gen/vector s2c-play-packet 1 20)]

@@ -6,6 +6,7 @@
             [clojure.string :as str]
             [clojurecraft.build :as build]
             [clojurecraft.claims :as claims]
+            [clojurecraft.entity :as entity]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -145,6 +146,10 @@
 (s/def :world/entities (s/map-of int? (s/keys :req [:entity/type :entity/pos])))
 (s/def :entity/type int?)
 (s/def :entity/pos ::vec3)
+(s/def :entity/vel ::vec3)
+(s/def :entity/health double?)
+(s/def :entity/flags (s/int-in 0 256))
+(s/def :entity/died-at int?)
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
@@ -676,6 +681,13 @@
   :args
   (s/cat :world (requires :world/chunks)
          :pos ::block-pos))
+(s/fdef entity/hostiles
+  :args
+  (s/cat :world (requires :world/entities)))
+(s/fdef entity/gone?
+  :args
+  (s/cat :world (requires :world/entities)
+         :eid int?))
 (s/fdef window/view
   :args
   (s/cat :world (requires :window/grid)
@@ -686,5 +698,5 @@
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
-   `window/view `path/plan `path/classify])
+   `window/view `path/plan `path/classify `entity/hostiles `entity/gone?])
 (s/def :stats/deaths pos-int?)
