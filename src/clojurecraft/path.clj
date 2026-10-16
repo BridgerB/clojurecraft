@@ -351,6 +351,25 @@
       trap-cost
       1.0)))
 
+(def lava-trap-reach 4)                ; cells on the plane round a lava trap's column a mine leaves alone
+
+(defn near-lava-trap?
+  "Is cell within lava-trap-reach on the plane of a lava trap still in force (:world/traps,
+   :trap/kind :lava, younger than trap-ttl)? Lava that caught the bot once is still flowing
+   there. Sim race 38844683780 (issue #230, world R2/9): lava falling from ten blocks up caught
+   the bot smelting at y 38; it fled to the next cell, the mine chose the iron ore two blocks
+   off, under the same flow, and the lava caught it again and again until the flee found no
+   footing."
+  [world [x _ z]]
+  (let [now (:time/now world 0)]
+    (boolean (some (fn [{:trap/keys [pos at kind]}]
+                     (let [[tx tz] pos]
+                       (and (= :lava kind)
+                            (<= (- now at) trap-ttl)
+                            (<= (abs (- x tx)) lava-trap-reach)
+                            (<= (abs (- z tz)) lava-trap-reach))))
+                   (:world/traps world)))))
+
 (defn search
   "A* from start over the world toward goal, spending at most max-nodes expansions. Returns
    {:path/waypoints :path/cost :path/status}: :found when a node satisfies the goal, else

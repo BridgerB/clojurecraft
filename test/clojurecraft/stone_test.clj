@@ -223,6 +223,28 @@
          (stone/mine-next w (row :mine-iron)))
         "the open one, farther, is the one walked to")))
 
+(deftest ore-beside-a-lava-trap-is-left-alone
+  ;; sim race 38844683780 (issue #230, world R2/9): lava falling from ten blocks up caught the bot
+  ;; at y 38; it fled a cell, the mine chose the iron two blocks off under the same flow, and the
+  ;; lava caught it again until the flee found no footing
+  (let [w (assoc (standing 64 :stone_pickaxe)
+                 :world/chunks {[0 0] (world/column sealed-ore)}
+                 :time/now 60000)
+        trapped (fn [kind at]
+                  (assoc w :world/traps [{:trap/pos [9 8] :trap/kind kind :trap/at at}]))
+        first-ore #(first (stone/exposed-of-states % (stone/states-of-row (row :mine-iron))))]
+    (is (= [8 61 8] (first-ore w)) "no trap: the nearest ore")
+    (is (not= [8 61 8] (first-ore (trapped :lava 50000))) "a lava trap a column off: passed over")
+    (is (= [8 61 8] (first-ore (trapped :water 50000))) "a water trap does not keep the mine away")
+    (is (= [8 61 8] (first-ore (assoc (trapped :lava 50000) :time/now 700000)))
+        "ten minutes on, the trap is out of force")
+    (let [bare (assoc (standing 64 :stone_pickaxe) :time/now 60000)
+          caught (assoc bare :world/traps [{:trap/pos [5 5] :trap/kind :lava :trap/at 50000}])]
+      (is (= :stairs-down (:intent/kind (stone/mine-next bare (row :mine-iron))))
+          "nothing in sight: stairs down")
+      (is (= :retreat (:intent/for (stone/mine-next caught (row :mine-iron))))
+          "where lava just caught it: away first, no stair under the flow"))))
+
 (def corridor
   "A tunnel two high at y 64-65 along x from 2 to 12 at z 8, cut into stone filling y 64-70, with
    iron ore in its wall at the head (x 5), in its ceiling (x 8) and in its floor (x 11)."
