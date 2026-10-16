@@ -201,13 +201,13 @@
                                              :type blocks/item-entity-type
                                              :x 14.5
                                              :y 64.0
-                                             :z 16.5})]
+                                             :z 14.5})]
                                 (fx/ticks 3100 3200)))]
     (is (= :active (:intent/status (:plan/intent w))) "the eye gone, its drop not yet come")
     (is (= :done (:intent/status (:plan/intent w2))) "done once the drop lies there")
     (is (= {:intent/kind :collect-drops
             :intent/item :ender_eye
-            :intent/target [14 64 16]
+            :intent/target [14 64 14]
             :intent/for :stronghold}
            (stronghold/stronghold-next (assoc w2 :plan/last (:plan/intent w2))))
         "the search picks it up first")))
@@ -255,6 +255,16 @@
   (testing "no eye left: the wait names it"
     (is (= {:plan/wait :no-eye}
            (stronghold/stronghold-next (assoc (searching [8.5 8.5] []) :player/inventory {}))))))
+
+(deftest the-next-throws-spot-is-on-the-side-the-feet-are-on
+  ;; gym batch stronghold-265b (plan run 38930188463) run 2 walked to and fro between the two
+  ;; spots twelve times, a lake between
+  (let [t (throw-fact [8.5 64.9 8.5] [0 1] 0)
+        [a b] [(stronghold/second-spot t 60.0) (stronghold/second-spot t -60.0)]]
+    (is (= [a b] (stronghold/spots (searching [8.5 20.5] [t]) t))
+        "on the line: the first way first")
+    (is (= [b a] (stronghold/spots (searching [30.5 8.5] [t]) t)) "off it: its own side first")
+    (is (= [a b] (stronghold/spots (searching [-12.5 8.5] [t]) t)))))
 
 (deftest two-crossing-throws-walk-to-the-crossing-and-look-round-it
   (testing "far from the crossing: a hop toward it"
@@ -368,7 +378,21 @@
              (plan/next-intent seen room-row plan/goals)))
       (is (not (plan/done-by seen room-row))))
     (testing "within 6 of it: there"
-      (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))))
+      (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
+    (testing "in water: out to the nearest bank first"
+      (is (= {:intent/kind :swim-out :intent/for :retreat}
+             (plan/next-intent (assoc seen :player/in-water? true) room-row plan/goals))))
+    (testing "on a shore where every first step opens a cell by water: stairs down toward it"
+      (let [wet (assoc seen
+                       :world/chunks
+                       {[0 0] (world/column (into {}
+                                                  (for [x (range 16)
+                                                        z (range 16)
+                                                        y [64 65]
+                                                        :when (not= [x z] [8 8])]
+                                                    [[x y z] blocks/water-base])))})]
+        (is (= {:intent/kind :stairs-down :intent/to-y 24 :intent/dir [0 1] :intent/for :stronghold}
+               (plan/next-intent wet room-row plan/goals)))))))
 
 (deftest the-portal-room-is-reached-against-the-model
   ;; a frame 24 blocks under the feet in stone: the tunnel down to within 6 of it, an iron pickaxe

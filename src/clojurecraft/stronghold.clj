@@ -62,6 +62,8 @@
 (def travel 64)                       ; blocks from a throw the next is made, off its line
 (def travel-turn 60.0)                ; degrees off a throw's line the way to the next turns, either side: ahead and well aside
 (def min-offset 32.0)                 ; blocks off the last throw's line from which the next throw is made, wherever the way got to
+(def pickup-rise 2)                   ; blocks over or under the feet a dropped eye is picked up within
+(def room-over 4)                     ; blocks over a frame the feet may stand and the tunnel to it start; higher, stairs down first
 (def tunnel-y 30)                     ; feet height a tunnel toward the crossing goes down to: under lakes and seas, where strongholds lie
 (def hop-reach 32)                    ; blocks a walk toward somewhere far goes at a time
 (def hop-rise 12)                     ; blocks over and under the feet a hop's end is looked for in its column
@@ -306,17 +308,30 @@
   ([{:throw/keys [from dir]} turn]
    (let [[x z] (plane from) [dx dz] (rotate dir turn)] [(+ x (* travel dx)) (+ z (* travel dz))])))
 
-(defn spots
-  "The two places the throw after t may be made from: second-spot turned either way."
-  [t]
-  [(second-spot t travel-turn) (second-spot t (- travel-turn))])
+(defn side
+  "Which side of throw t's line point [x z] lies on, as the sign of the cross product, times how
+   far off it it is."
+  [{:throw/keys [from dir]} [x z]]
+  (let [[fx fz] (plane from)] (cross dir [(- x fx) (- z fz)])))
 
 (defn off-line
   "Blocks on the plane from the feet to the line of throw t."
-  [world {:throw/keys [from dir]}]
-  (let [[fx fz] (plane from)
-        [px _ pz] (:player/pos world)]
-    (abs (cross dir [(- px fx) (- pz fz)]))))
+  [world t]
+  (let [[px _ pz] (:player/pos world)] (abs (side t [px pz]))))
+
+(def on-line 4.0)                     ; blocks off a throw's line within which the feet are on it, for spots
+
+(defn spots
+  "The two places the throw after t may be made from, second-spot turned either way: the one on
+   the side of its line the feet are on first, once they are more than on-line off it. Gym batch
+   stronghold-265b (plan run 38930188463) run 2: a lake between, a hop toward one spot ended where
+   only the other had a way, and the bot walked to and fro between them twelve times."
+  [world t]
+  (let [[px _ pz] (:player/pos world)
+        a (second-spot t travel-turn)
+        b (second-spot t (- travel-turn))
+        here (side t [px pz])]
+    (if (and (> (abs here) on-line) (neg? (* here (side t a)))) [b a] [a b])))
 
 (defn crossing
   "[x z] of the stronghold by the throws on record: the latest throw crossed with each earlier
@@ -384,7 +399,9 @@
         target [(long (math/floor x)) y (long (math/floor z))]]
     (or (hop world [x z])
         (when (wood/water-toward? world feet target (physics/y-of (game/eye world)))
-          {:intent/kind :cross :intent/target target :intent/for :stronghold})
+          {:intent/kind :cross
+           :intent/target (assoc target 1 (physics/y-of feet))
+           :intent/for :stronghold})
         (when (fortress/choose-move world feet target fortress/climb-past true)
           {:intent/kind :tunnel-to
            :intent/target target
@@ -394,16 +411,19 @@
 
 (defn picked-up
   "The pickup of the eye the last throw dropped: when the last intent was a :throw-eye that ended
-   done and an eye lies where it fell (eye-drop), a :collect-drops of it; else nil."
+   done and an eye lies where it fell (eye-drop) within pickup-rise of the feet's height, in a cell
+   a route reaches, a :collect-drops of it; else nil. Gym batch stronghold-265b (plan run
+   38930188463): four of six landings went for an eye lying on a tree or a hill six over the
+   feet and failed :not-picked-up, each an attempt toward the three that end a plan."
   [world]
   (let [l (:plan/last world)
         [_ d] (when (and (= :throw-eye (:intent/kind l)) (intent/done? l) (:intent/eye-pos l))
-                (eye-drop world (:intent/eye-pos l)))]
-    (when d
-      {:intent/kind :collect-drops
-       :intent/item eye
-       :intent/target (mapv #(long (math/floor %)) (:entity/pos d))
-       :intent/for :stronghold})))
+                (eye-drop world (:intent/eye-pos l)))
+        c (when d (mapv #(long (math/floor %)) (:entity/pos d)))]
+    (when (and c
+               (<= (abs (- (physics/y-of c) (physics/y-of (intent/feet world)))) pickup-rise)
+               (intent/routable? world {:intent/kind :walk :intent/target c}))
+      {:intent/kind :collect-drops :intent/item eye :intent/target c :intent/for :stronghold})))
 
 
 (defn explore
@@ -440,7 +460,7 @@
               (throw-now world)
               c (or (explore world c) {:plan/wait :no-frame})
               (>= (off-line world t) min-offset) (throw-now world)
-              :else (or (some #(way world % fy) (spots t)) {:plan/wait :no-way})))))
+              :else (or (some #(way world % fy) (spots world t)) {:plan/wait :no-way})))))
 
 (defmethod plan/done-by :frames-seen? [world _] (boolean (seq (frames world))))
 
@@ -454,15 +474,36 @@
   (boolean (some->> (nearest-frame world)
                     (fortress/arrived? world))))
 
+(defn to-room
+  "The way to the portal room's frame f: the fortress's tunnel to it, its steps opening no cell by
+   water (fortress/dry?), when its first step can be taken from the feet (down through the
+   ground, through the stronghold's walls, never into its frames: fortress/unbreakable); else,
+   more than room-over above the frame, a staircase down to that height toward it (stairs.clj,
+   which turns where water or lava is, and steps aside), the issue's dig down at the crossing;
+   else the wait :no-way. In water, first out to the nearest bank (swim's :swim-out :retreat).
+   Gym batch stronghold-265b (plan run 38930188463) run 2 of the portal room: the frame at y 0
+   under a lake, seen while the bot swam it, every first step of the tunnel from the water opened
+   a cell by water and it failed :blocked."
+  [world [x y z :as f]]
+  (let [[fx fy fz :as feet] (intent/feet world)]
+    (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
+          (fortress/choose-move world feet f fortress/climb-past true)
+          {:intent/kind :tunnel-to
+           :intent/target f
+           :intent/steps fortress/steps-per-tunnel
+           :intent/dry? true}
+          (> fy (+ y room-over))
+          {:intent/kind :stairs-down
+           :intent/to-y (+ y room-over)
+           :intent/dir (if (>= (abs (- x fx)) (abs (- z fz)))
+                         [(if (neg? (- x fx)) -1 1) 0]
+                         [0 (if (neg? (- z fz)) -1 1)])
+           :intent/for :stronghold}
+          :else {:plan/wait :no-way})))
+
 (defmethod plan/next-intent :portal-room
-  ;; a frame remembered: the fortress's tunnel to it, its steps opening no cell by water
-  ;; (fortress/dry?), from wherever the bot stands (down through the ground, through the
-  ;; stronghold's walls, never into its frames: fortress/unbreakable); none yet: the search
-  ;; (stronghold-next)
+  ;; a frame remembered: the way to it (to-room); none yet: the search (stronghold-next)
   [world _ _]
   (if-let [f (nearest-frame world)]
-    {:intent/kind :tunnel-to
-     :intent/target f
-     :intent/steps fortress/steps-per-tunnel
-     :intent/dry? true}
+    (to-room world f)
     (stronghold-next world)))
