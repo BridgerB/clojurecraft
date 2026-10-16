@@ -451,7 +451,7 @@
 
 ;; ---------------------------------------------------------------- acts
 
-(defmethod plan/act :gather [world _] (wood/gather-next world))
+(defmethod plan/act :gather [world _] (wood/gather-or-out world))
 
 (defmethod plan/act :place
   [world row]

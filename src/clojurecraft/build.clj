@@ -1390,25 +1390,50 @@
   [world]
   (or (lava-walk world) (uncap world) (toward-lava world)))
 
+(defn table-at-hand?
+  "Could a crafting table be made without going out for anything: the needs planner's next step
+   toward one (make/next-row over plan/goals) a craft from planks or logs held, not a gather
+   (make/fetch?)?"
+  [world]
+  (let [row (make/next-row world
+                           {:goal/id :crafting-table :goal/provides {:item/crafting_table 1}}
+                           plan/goals)]
+    (boolean (and (map? row) (not (make/fetch? row))))))
+
+(defn carry-table?
+  "Should a build take a crafting table into its kit: none held, none placed within reach to take
+   along (make/take-table-along), and one can be made from what is held (table-at-hand?). A cast
+   wears out every pickaxe it holds; with a table, sticks and cobblestone the next is made where
+   the bot stands. Sim races 38806318231 and 38843552659 (issue #186, worlds R1/25, R2/11, R1/18,
+   R4/39): the pickaxes broke in the cast with sticks and four hundred cobblestone in hand and no
+   table, and the bot climbed out for a log and waited :no-log on treeless ground."
+  [world]
+  (and (zero? (get (make/counts world) :crafting_table 0))
+       (nil? (make/take-table-along world))
+       (table-at-hand? world)))
+
 (defn held-first
   "What the needs planner does for what a build row holds before it starts: the tools of
    :goal/holds (a pickaxe for the way down to lava and the digs: sim race 38477665389, issue #70,
-   dug for its stance with none and failed :needs-tool three times) and the blocks plan places at
-   the site (blocks-needed, issue #124: counted from the plan for the place chosen). An intent
-   that makes them, a wait, or nil when they are held."
+   dug for its stance with none and failed :needs-tool three times), a crafting table when one
+   can be made from what is held and none is at hand (carry-table?, issue #186), and the blocks
+   plan places at the site (blocks-needed, issue #124: counted from the plan for the place
+   chosen). An intent that makes them, a wait, or nil when they are held."
   [world goal table plan]
   (let [n (if plan (blocks-needed world plan) 0)
-        holds (cond-> (or (:goal/holds goal) {}) (pos? n) (assoc :item/cobblestone n))]
+        holds (cond-> (or (:goal/holds goal) {})
+                (pos? n) (assoc :item/cobblestone n)
+                (carry-table? world) (assoc :item/crafting_table 1))]
     (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))))
 
 (defmethod plan/next-intent :build
-  ;; what the row holds first (held-first); then build the row's plan (:goal/build) at the site
-  ;; remembered while its pool can finish it (spent?), else at one chosen now (the :build intent
-  ;; remembers it), its access steps up to the lava's height (station); with none, hunt for lava
-  ;; (lava-hunt), the placed table taken along first (make/take-table-along: the hunt goes down to
-  ;; the lava sea, and a pickaxe broken there is made again only from sticks, cobblestone and a
-  ;; table; sim race 38669750355, issue #135, had the sticks and the cobblestone and no table at
-  ;; y -21), else wait :no-site
+  ;; what the row holds first (held-first); then the placed table taken along (make/take-table-along:
+  ;; the build and the hunt go down to the lava, and a pickaxe broken there is made again only from
+  ;; sticks, cobblestone and a table; sim race 38669750355, issue #135, had the sticks and the
+  ;; cobblestone and no table at y -21, and issue #186's casts left the table at the furnace); then
+  ;; build the row's plan (:goal/build) at the site remembered while its pool can finish it
+  ;; (spent?), else at one chosen now (the :build intent remembers it), its access steps up to the
+  ;; lava's height (station); with none, hunt for lava (lava-hunt), else wait :no-site
   [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]}
         (let [{:site/keys [origin facing] :as site} (memory/site world)]
@@ -1418,17 +1443,15 @@
         facing (or facing (:facing chosen))
         h (when origin (or (:h chosen) (:h (station world origin facing)) 1))]
     (or (held-first world goal table (when origin (plan-for build origin facing h)))
+        (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+        (make/take-table-along world)
         (cond origin
               {:intent/kind :build
                :intent/build build
                :intent/origin origin
                :intent/facing facing
                :intent/access h}
-              :else
-              (or (intent/chain-next (:plan/last world) :take-table make/table-drops {})
-                  (make/take-table-along world)
-                  (lava-hunt world)
-                  {:plan/wait :no-site})))))
+              :else (or (lava-hunt world) {:plan/wait :no-site})))))
 
 (defmethod plan/done-by :built?
   [world {:goal/keys [build]}]
