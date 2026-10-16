@@ -7,6 +7,7 @@
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dig :as dig]
+            [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.packet :as packet]
@@ -580,10 +581,12 @@
 ;; ---------------------------------------------------------------- collect
 
 (defn nearest-item
-  "The tracked entity nearest the point near, within 6 blocks, or nil."
+  "The tracked item entity nearest the point near, within 6 blocks, or nil. Only items: every
+   entity is tracked since issue #258, and a pig beside the drop is not the drop."
   [world near]
   (->> (:world/entities world)
        vals
+       (filter entity/item?)
        (map (fn [e] [(physics/distance near (:entity/pos e)) e]))
        (filter (fn [[d _]] (<= d 6.0)))
        (sort-by first)

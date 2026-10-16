@@ -44,7 +44,8 @@
                             [:cursor-y :f32] [:cursor-z :f32] [:inside-block :bool]
                             [:world-border-hit :bool] [:sequence :varint]]
  [:play :s2c :add-entity] [[:entity-id :varint] [:uuid :uuid] [:type :varint] [:x :f64] [:y :f64]
-                           [:z :f64]]
+                           [:z :f64] [:vel :lpvec3] [:pitch :i8] [:yaw :i8] [:head-yaw :i8]
+                           [:data :varint]]
  [:play :s2c :block-changed-ack] [[:sequence :varint]]
  [:play :s2c :block-update] [[:pos :position] [:state :varint]]
  [:play :s2c :chunk-batch-finished] [[:batch-size :varint]]
@@ -87,4 +88,10 @@
  [:play :s2c :set-player-inventory] [[:slot :varint] [:item :slot]]
  [:play :s2c :set-time] []
  [:play :s2c :start-configuration] []
- [:play :s2c :take-item-entity] [[:collected :varint] [:collector :varint] [:count :varint]]}
+ [:play :s2c :take-item-entity] [[:collected :varint] [:collector :varint] [:count :varint]]
+ [:play :s2c :set-entity-motion] [[:entity-id :varint] [:vel :lpvec3]]
+ [:play :s2c :teleport-entity] [[:entity-id :varint] [:x :f64] [:y :f64] [:z :f64] [:dx :f64]
+                                [:dy :f64] [:dz :f64] [:yaw :f32] [:pitch :f32] [:flags :u32]
+                                [:on-ground :bool]]
+ [:play :s2c :entity-event] [[:entity-id :i32] [:status :i8]]
+ [:play :s2c :set-entity-data] [[:entity-id :varint] [:metadata :metadata]]}

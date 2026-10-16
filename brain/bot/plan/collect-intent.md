@@ -28,9 +28,9 @@ related:
 
 ## Key files
 - `intent.clj`, `run :collect` - the logic below.
-- `intent.clj`, `nearest-item` - the tracked entity nearest the target block's centre, within 6 blocks; with none, the goal point is the block centre.
+- `intent.clj`, `nearest-item` - the tracked item entity (`entity/item?`) nearest the target block's centre, within 6 blocks; with none, the goal point is the block centre. Every entity is tracked since issue #258, so a mob beside the drop is filtered out.
 - `intent.clj`, `blocker` - the leaf block in the way from the player toward the goal: it probes the cells 0.8 blocks ahead in x, in z and diagonally, at head then feet height, and returns the first that `blocks/leaves?` accepts. Only leaves; anything else is left to the pathfinder (issue #4).
-- `game.clj`, `on-packet [:play :add-entity]` - only item entities (type 71) are tracked in `:world/entities`.
+- `game.clj`, `on-packet [:play :add-entity]` - every entity is tracked in `:world/entities` ([[entities]]); items are type 71.
 
 ## How it works
 1. Progress is horizontal distance to the goal beating the best so far by 0.1; its tick is `:intent/best-tick`.
