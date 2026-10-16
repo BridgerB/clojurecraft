@@ -100,6 +100,7 @@
 (s/def :intent/water ::block-pos)
 (s/def :intent/wet? boolean?)
 (s/def :intent/exposes-ok? boolean?)
+(s/def :intent/drop-ok? boolean?)
 (s/def :intent/passage-ok? boolean?)
 (s/def :intent/retreated? boolean?)
 (s/def :player/dead? boolean?)

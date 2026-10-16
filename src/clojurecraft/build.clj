@@ -669,6 +669,15 @@
          {:intent/kind :walk :intent/target pos :intent/for :build :intent/pickup? true})
     {:intent/kind :walk :intent/target pos :intent/for :build :intent/pickup? true}))
 
+(defn way-dig
+  "A child dig of a cell the build opens (its room, a hole, the way to a stand, the rock before a
+   pool): beside water or lava when it must be (:intent/exposes-ok?), and with its drop not wanted
+   (:intent/drop-ok?), so ore the held pickaxe cannot harvest is broken for nothing rather than
+   refused: the cell is what the build needs. Sim race 38806318231 (issue #70) met deepslate
+   redstone ore in the room at y -24 with a wooden pickaxe and failed :needs-tool three times."
+  [cell]
+  (assoc (intent/child-dig cell) :intent/exposes-ok? true :intent/drop-ok? true))
+
 (defn clear-stand
   "The child that opens a way to stand at the feet's height, or nil when the way is clear or the
    stand is at another height (the line would start under the feet: to-height). The block in the
@@ -677,9 +686,7 @@
   [world stand build origin facing]
   (when-let [b (and (= (second stand) (long (physics/y-of (intent/feet world))))
                     (stance-block world stand build origin facing))]
-    (if (within-reach? world b)
-      (assoc (intent/child-dig b) :intent/exposes-ok? true)
-      (approach world b))))
+    (if (within-reach? world b) (way-dig b) (approach world b))))
 
 (defn reaches-from?
   "Would the eye, standing in cell, be within reach of pos? The feet use the real eye; any
@@ -734,23 +741,66 @@
 
 (defn to-height
   "The way to y from the feet when no route reaches a stand there: stairs down (stone/stairs) or
-   stairs up, cut in the rock as the bot cuts them all day; nil at y already."
+   stairs up, cut in the rock as the bot cuts them all day; nil at y already. From a pocket a
+   descent died :boxed in (:plan/boxed-at, work-op records it), where stairs give nothing, the
+   way out the mine takes (stone/retreat, stone/climb), the next descent from elsewhere. Sim race
+   38806318231 (issue #130, world R3/11): the way down to the cast's landing at y -22 met an
+   aquifer at y 11, every stair refused, and the build was sent down the same stairs from the
+   same cell three times, :boxed."
   [world y]
   (let [fy (long (physics/y-of (intent/feet world)))]
-    (cond (> fy y) (stone/stairs world {:goal/depth y})
+    (cond (> fy y)
+          (or (stone/stairs world {:goal/depth y}) (stone/retreat world) (stone/climb world))
           (< fy y) {:intent/kind :stairs-up :intent/to-y y :intent/for :build}
           :else nil)))
+
+(defn way-columns
+  "The columns [x z] of the straight way from the feet's column to stand's, as stance-block
+   walks it: along x first, then along z, both ends included."
+  [[fx _ fz] [sx _ sz]]
+  (let [step (fn [a b] (if (> a b) -1 1))]
+    (concat (for [x (range fx (+ sx (step fx sx)) (step fx sx))] [x fz])
+            (for [z (range (+ fz (step fz sz)) (+ sz (step fz sz)) (step fz sz))] [sx z]))))
+
+(defn floor-gap
+  "The cell under the first cell of the straight way to stand, at the stand's height and past
+   the feet's own column, that nothing holds the feet up over: no solid under it, it and the
+   head open (stance-block found the way clear), no lava in it. nil when every cell of the way
+   has a floor."
+  [world stand]
+  (let [y (second stand)]
+    (->> (rest (way-columns (intent/feet world) stand))
+         (map (fn [[x z]] [x (dec y) z]))
+         (filter #(and (some? (terrain/block-at world %))
+                       (not (holds? world [:solid %]))
+                       (not (contains? blocks/lava-states (terrain/block-at world %)))))
+         first)))
+
+(defn bridge
+  "The child that lays the missing floor on the way to stand at the feet's height (floor-gap): a
+   cobblestone placed in it, or in the lowest cell under it that is held up (foundation), when
+   it is in reach and a block is held; nil otherwise. Sim race 38665691522 and a probe at
+   8356e28 (issue #162, world R3/37): the refill's way out from the landing ran over a cave's
+   open cell beside the room, the line clear and nothing to dig, and the walk there, with no
+   floor to stand on, failed :no-path three times."
+  [world stand]
+  (when-let [gap (and (held? world :cobblestone) (floor-gap world stand))]
+    (when-let [c (and (<= (physics/distance (game/eye world) (physics/centre gap))
+                          place/place-reach)
+                      (foundation world gap))]
+      {:intent/kind :place :intent/item :cobblestone :intent/cell c})))
 
 (defn toward-stand
   "The child that brings the feet to stand, a cell of the build's way (a landing, the lava's
    stand): a walk when a route reaches it, else at its height the first block in the way dug
-   (clear-stand), else the way to its height (to-height); nil when the feet are there."
+   (clear-stand) or the missing floor laid (bridge), else the way to its height (to-height); nil
+   when the feet are there."
   [world stand build origin facing]
   (let [walk {:intent/kind :walk :intent/target stand :intent/for :build}]
     (cond (intent/centred? world stand) nil
           (intent/routable? world walk) walk
           (= (long (physics/y-of (intent/feet world))) (second stand))
-          (or (clear-stand world stand build origin facing) walk)
+          (or (clear-stand world stand build origin facing) (bridge world stand) walk)
           :else (or (to-height world (second stand)) walk))))
 
 (defn sight-block
@@ -768,27 +818,49 @@
                     (not (or (blocks/air? id) (terrain/fluid-at world %)))))
          first)))
 
+(defn source-in-sight
+  "[src block] for the first of sources (nearest first) the eyes can be given a clear line to:
+   block is the first block on the line to src (sight-block), nil when the line is clear already,
+   and never one a dig may not take (obsidian). nil when no source has such a line."
+  [world sources]
+  (some (fn [src]
+          (let [block (sight-block world src)]
+            (when (or (nil? block)
+                      (not (contains? intent/never-dug
+                                      (blocks/name-of (terrain/block-at world block)))))
+              [src block])))
+        sources))
+
+(defn scoop-at-station
+  "The child that fills the empty bucket with lava from the station's stand, sources those in
+   reach (reach-sources), or :no-station: a scoop along the eyes' line of the nearest source the
+   eyes see, else the first block on the line to one dug (source-in-sight: the rock between the stand and a
+   sealed pool, then the cell over the source). The scoop is aimed (:intent/aim), so it asks only
+   that the source is still there (scoop/source?), never air over it: the bucket's ray passes air
+   and every fluid that is not a source (SOURCE_ONLY), so a source whose top is flowing lava, or
+   one the line enters from the side through a cell just dug, fills it. Sim race 38715231137
+   (issue #142, regressed: 166 runs in 44 rounds, worlds R4/15, R1/26, R2/34): the source over
+   the nearest had been scooped and lava flowed into its cell, or the sight-block dug the cell
+   beside a sealed source under another; the line was clear, the source had no air over it
+   (scoop/scoopable?), and the refill failed :no-station three times in three ticks with the pool
+   half full (refill-scoops-a-source-under-flowing-lava)."
+  [world sources]
+  (let [[src block] (source-in-sight world sources)]
+    (cond
+      (nil? src) :no-station
+      (nil? block)
+      {:intent/kind :scoop :intent/target src :intent/fluid :lava :intent/aim (scoop/aim-point src)}
+      :else (assoc (way-dig block) :intent/for :lava))))
+
 (defn refill
   "The child that refills lava, or the reason it cannot (:no-station, :no-bucket): the feet to the
    station's stand (toward-stand, from the room's landing at the lava's height when no route
-   reaches it); there, a scoop of the nearest source in reach the eyes see, else the first block
-   on the line to it dug (sight-block: the rock between the stand and a sealed pool, then the
-   cell over the source)."
+   reaches it); there, the scoop or the dig that opens the line to a source (scoop-at-station)."
   [world {:intent/keys [origin facing build access]}]
-  (let [{:keys [stand sources h]} (station world origin facing access)
-        src (first sources)
-        block (when src (sight-block world src))]
+  (let [{:keys [stand sources h]} (station world origin facing access)]
     (cond (nil? stand) :no-station
           (not (held? world :bucket)) :no-bucket
-          (intent/centred? world stand)
-          (cond (nil? src) :no-station
-                (and (nil? block) (scoop/scoopable? world src :lava))
-                {:intent/kind :scoop :intent/target src :intent/fluid :lava}
-                (and block
-                     (not (contains? intent/never-dug
-                                     (blocks/name-of (terrain/block-at world block)))))
-                (assoc (intent/child-dig block) :intent/exposes-ok? true :intent/for :lava)
-                :else :no-station)
+          (intent/centred? world stand) (scoop-at-station world sources)
           (intent/routable? world {:intent/kind :walk :intent/target stand :intent/for :build})
           {:intent/kind :walk :intent/target stand :intent/for :build}
           (= (long (physics/y-of (intent/feet world))) (second stand))
@@ -907,7 +979,7 @@
               (if-let [c (foundation world pos)]
                 {:intent/kind :place :intent/item item :intent/cell c}
                 :no-support)
-              :dig (assoc (intent/child-dig pos) :intent/exposes-ok? true)
+              :dig (way-dig pos)
               :pour
               {:intent/kind :pour
                :intent/item item
@@ -966,6 +1038,24 @@
   [{:intent/keys [kind reason]}]
   (and (= :dig kind) (= :target-gone reason)))
 
+(defn boxed-way?
+  "Did child, a staircase or a tunnel (plan/boxing-kinds), fail :boxed: no way on from where the
+   feet stand?"
+  [{:intent/keys [kind reason]}]
+  (and (contains? plan/boxing-kinds kind) (= :boxed reason)))
+
+(defn tool-first
+  "c, the child op-child gave, or before a dig the :equip of the tool it should hold when that one
+   is only in the main inventory (intent/stowed-breaker), as a staircase equips before its digs
+   (stairs/dig-next). A pickaxe that breaks in the cast leaves its spare stowed: sim race
+   38806318231 (issue #70) dug the way to the landing at y 29 by hand, nine seconds a stone, with a
+   stone pickaxe in slot 35, and failed :needs-tool on iron ore in the way, three times."
+  [world c]
+  (let [[_ item :as stowed] (when (= :dig (:intent/kind c))
+                              (some->> (terrain/block-at world (:intent/target c))
+                                       (intent/stowed-breaker world)))]
+    (if stowed {:intent/kind :equip :intent/item (recipe/item-name item)} c)))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i (a dig that found
@@ -987,6 +1077,14 @@
             (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
         (and child (intent/failed? child) (found-open? child))
         (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
+        (and child (intent/failed? child) (boxed-way? child))
+        ;; a way to the site boxed in: the pocket is remembered and the build looks again from it
+        ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's
+        (-> world
+            (assoc :player/controls {})
+            (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+            (intent/dissoc-intent :intent/child)
+            (game/say (str "build: " (:intent/kind child) " boxed in, the way out")))
         (and child (intent/failed? child))
         (-> world
             (assoc :player/controls {})
@@ -997,7 +1095,8 @@
               missing (when (= :dig (:intent/kind c))
                         (stairs/tool-missing world (:intent/target c)))
               ;; the needs planner is asked only when no pickaxe is held
-              c (or (when (and missing (hand-dig-refused? world (:intent/target c))) missing) c)]
+              c (or (when (and missing (hand-dig-refused? world (:intent/target c))) missing)
+                    (tool-first world c))]
           (cond (and (= :no-station c)
                      (spent? world (lava-sources world) (:intent/origin i) (:intent/facing i)))
                 ;; the pool is spent, not the build: the planner chooses a site with lava enough
