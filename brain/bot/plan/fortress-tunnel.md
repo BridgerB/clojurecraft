@@ -21,6 +21,8 @@ sourceRefs:
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-spawner
   - src/clojurecraft/fortress.clj#defn arrived?
   - src/clojurecraft/fortress.clj#def aside
+  - src/clojurecraft/fortress.clj#defn off-step?
+  - test/clojurecraft/fortress_test.clj#a-step-the-feet-left-is-chosen-again
   - test/clojurecraft/sim_test.clj#the-fortress-from-a-nether-landing-and-its-recording-replays
 related:
   - "[[bot/plan/_moc|Plan]]"
@@ -44,6 +46,9 @@ A row with `:goal/dimension` is chosen only there (`plan/here?`). When no row ca
 
 ## Reach and climb
 A `:tunnel-to` is done at its target from `reach` 6 (`arrived?`, from the feet cell's centre), or from `:intent/reach` when the intent gives one; its steps go up or down first only past `climb-past` 3 blocks off, or past `:intent/climb` when given. The blaze rods' tunnel to a spawner goes into the open cell beside it on its floor (reach 0.5, climb 0), or to within 2 of it when none is known ([[blaze-rods]]): from 6 off, gym blaze-fortress-b stood in the wall four over the spawner, and with climb 3 blaze-fortress-c run 3 came up three under its floor, out of reach of every blaze and rod. A target straight over or under the feet used to leave no move at all; `moves` then tries every direction (`aside`).
+
+## A step the feet left
+A step's move and the cell it started from are kept on the intent until the step is stood in. When the feet are in none of its cells (`off-step?`: knocked back by a fireball, or moved by a fight or a cover walk between its ticks), or its walk back to the cell it started from fails `:no-path` (`lost-way?`), the step is dropped and chosen again from where the feet are, never failed. Gym blaze-fortress-h run 1 failed its tunnel into the spawner's room `:no-path` twice, and the plan with it (issue #262).
 
 ## Gotchas
 - The sightings are passive: a brick is remembered when its chunk loads (`memory/landmark-kinds`), in the dimension it was seen in, so no scan and no line of sight.

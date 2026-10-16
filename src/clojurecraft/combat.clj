@@ -39,6 +39,8 @@
 (def retreat-health 10)               ; health under which a fight breaks off
 (def retreat-distance 6.0)            ; blocks a broken-off fight puts between the bot and the target
 (def approach-timeout-ms 20000)       ; an approach that never reaches the target fails :unreachable
+(def stall-ticks 20)                  ; ticks an approach straight at the target may go without coming 0.1 nearer before it takes a route
+(def walk-drift 3.0)                  ; blocks the target may move from the cell a route walk heads for before the walk is dropped
 (def press-within 0.8)                ; blocks on the plane under which an engage out of reach stops pressing in (it is under the target)
 (def back-off-timeout-ms 10000)       ; a walk away ends after this, however far it got
 
@@ -121,18 +123,61 @@
   [world e]
   {:control/look (physics/look-at (game/eye world) (aim e))})
 
+(defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
+
+(defn route-walk
+  "A walk along a route to within a walk's range of entity e's cell (intent/routable?), for an
+   approach the straight way does not bring nearer; nil when no route reaches it."
+  [world e]
+  (let [w {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :fight}]
+    (when (intent/routable? world w) w)))
+
 (defmethod fight-stage :approach
-  ;; toward the target until approach-range; a fight that holds its ground (:intent/hold?) stands
-  ;; facing it while it comes, the same approach-timeout-ms at most
-  [world {:intent/keys [since hold?]} e]
-  (let [now (:time/now world)]
-    (cond (<= (horizontal world e) approach-range)
+  ;; toward the target until approach-range: straight at it while that brings it nearer, and once
+  ;; it has not for stall-ticks, along a route (route-walk, a child :walk the :fight runs), failed
+  ;; :unreachable when no route reaches it or after approach-timeout-ms. Gym blaze-fortress-h
+  ;; (run 38905665758) failed three fights in a row :unreachable on blazes in sight with a route
+  ;; to them, walking straight into the fortress's fences for twenty seconds each. A fight that
+  ;; holds its ground (:intent/hold?) stands facing it while it comes, the same
+  ;; approach-timeout-ms at most
+  [world {:intent/keys [since hold? best-dist best-tick] :or {best-dist Double/MAX_VALUE}} e]
+  (let [now (:time/now world)
+        tick (:time/tick world)
+        h (horizontal world e)
+        progressed? (< h (- best-dist 0.1))
+        best-tick (if (or progressed? (nil? best-tick)) tick best-tick)
+        world
+        (intent/assoc-intent world :intent/best-dist (min h best-dist) :intent/best-tick best-tick)]
+    (cond (<= h approach-range)
           (-> world
               (assoc :player/controls (face world e))
+              (intent/dissoc-intent :intent/best-dist :intent/best-tick)
               (intent/assoc-intent :intent/stage :engage))
           (> (- now since) approach-timeout-ms) (intent/fail world :unreachable)
           hold? (assoc world :player/controls (face world e))
+          (> (- tick best-tick) stall-ticks)
+          (if-let [w (route-walk world e)]
+            (-> world
+                (assoc :player/controls {})
+                (intent/assoc-intent :intent/child (assoc w :intent/status :active)))
+            (intent/fail world :unreachable))
           :else (assoc world :player/controls (intent/toward world (aim e) 0.0)))))
+
+(defn walk-on
+  "One tick of an approach's route walk (the :fight's :intent/child) toward entity e: run, then
+   dropped when done (the straight approach takes over, its stall clock begun again) or when e
+   has moved walk-drift from the cell it heads for; a walk that failed fails the fight
+   :unreachable."
+  [world {:intent/keys [child]} e event]
+  (cond (intent/done? child)
+        (intent/dissoc-intent world :intent/child :intent/best-dist :intent/best-tick)
+        (intent/failed? child) (intent/fail (assoc world :player/controls {}) :unreachable)
+        (> (physics/distance (physics/centre (:intent/target child)) (:entity/pos e)) walk-drift)
+        (intent/dissoc-intent (assoc world :player/controls {})
+                              :intent/child
+                              :intent/best-dist
+                              :intent/best-tick)
+        :else (intent/run-child world event)))
 
 (defn pressing?
   "Should an engaged fight walk on toward entity e: its aim out of attack-reach of the eye while
@@ -182,7 +227,7 @@
   ;; With :intent/hold? the bot never walks: it waits for the target to come within approach-range,
   ;; never presses after it, and never breaks off (issue #263: the pearl hunt fights from a burrow
   ;; an enderman cannot reach into, where a step out is the one way to be hit)
-  [world i _]
+  [world i event]
   (let [now (:time/now world)
         e (get-in world [:world/entities (:intent/target i)])
         i (cond-> i
@@ -196,7 +241,10 @@
           (and (not= :retreat (:intent/stage i))
                (not (:intent/hold? i))
                (< (:player/health world 20.0) retreat-health))
-          (intent/assoc-intent world :intent/stage :retreat :intent/since now)
+          (-> world
+              (intent/dissoc-intent :intent/child)
+              (intent/assoc-intent :intent/stage :retreat :intent/since now))
+          (and (= :approach (:intent/stage i)) (:intent/child i)) (walk-on world i e event)
           :else
           (case (window/waiting world i)
             :overdue (window/lost world i :arm)
