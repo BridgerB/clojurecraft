@@ -318,7 +318,7 @@
             (contains? % :recipe/ingredients))))
 (s/def :click/slot (s/int-in 0 46))
 (s/def :click/button (s/int-in 0 9))
-(s/def :click/mode #{0 1 2})
+(s/def :click/mode #{0 1 2 4})
 (s/def ::click (s/keys :req [:click/slot :click/button :click/mode]))
 
 (def recipes-valid? (every? #(s/valid? ::recipe %) recipe/recipes))

@@ -5,7 +5,7 @@ type: reference
 tags: [bot, crafting, intents, furnace, smelting]
 aliases: [:smelt, smelt.clj, burn-order, batch, fuel-clicks, lay, lost click, resync, intent/resync, intent/lost]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-15
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/smelt.clj#defmethod intent/run :smelt
@@ -14,6 +14,8 @@ sourceRefs:
   - src/clojurecraft/smelt.clj#defn fuel-clicks
   - src/clojurecraft/smelt.clj#defn lay
   - src/clojurecraft/smelt.clj#defmethod stage :cook
+  - src/clojurecraft/smelt.clj#defn cooking?
+  - test/clojurecraft/smelt_test.clj#a-furnace-still-cooking-past-the-deadline-is-waited-on
   - src/clojurecraft/smelt.clj#defn lost
   - "src/clojurecraft/window.clj#Learn the server's cursor after a lost click"
   - src/clojurecraft/window.clj#defn lost
@@ -44,9 +46,9 @@ The needs planner's generated smelt rows (one per `smelting.edn` recipe: the inp
 - `lay`: a whole stack is two clicks (pick up, put down); part of one is a pick up, a right click per item, and the rest put back.
 
 ## Stages
-1. **`:settle`**: an unknown recipe fails `:unknown-recipe`; no state id yet waits up to 5 s (`:no-window`); a loaded cursor is put down; anything in the furnace's input, fuel or output is shift-clicked out; then `load-plan` (fuel, then input; nil fails `:no-ingredient`) records the clicks, the batch (capped by the input stack), `:intent/result`, `:intent/makes` and `:intent/before`.
+1. **`:settle`**: an unknown recipe fails `:unknown-recipe`; no state id yet waits up to 5 s (`:no-window`); a loaded cursor is put down; with no slot free, a junk stack is thrown out (`window/tossable`, [[window-views]]; race 38805920624 bot Clj_r09 shift-clicked a furnace's leftover output into 36 full slots and failed `:inventory-full`, issue #192); anything in the furnace's input, fuel or output is shift-clicked out; then `load-plan` (fuel, then input; nil fails `:no-ingredient`) records the clicks, the batch (capped by the input stack), `:intent/result`, `:intent/makes` and `:intent/before`.
 2. **`:load`**: the next planned click, or on to `:cook`.
-3. **`:cook`**: done cooking when the output holds the batch → `:take`. First it waits (5 s, else `:not-loaded`) until the furnace holds the input and either fuel or a fire (`loaded?`), and sets `:intent/cook-by` to now + input × cook ticks × 50 ms + 5 s. When the fire is out, the fuel slot empty and input left, it lays fuel from the next held stack and returns through `:load` (`:out-of-fuel` when none). Past `cook-by` fails `:not-cooked`.
+3. **`:cook`**: done cooking when the output holds the batch → `:take`. First it waits (5 s, else `:not-loaded`) until the furnace holds the input and either fuel or a fire (`loaded?`), and sets `:intent/cook-by` to now + input × cook ticks × 50 ms + 5 s. When the fire is out, the fuel slot empty and input left, it lays fuel from the next held stack and returns through `:load` (`:out-of-fuel` when none). Past `cook-by` it fails `:not-cooked` only once the furnace has stopped cooking (`cooking?`: a fire going and the input still in it): the deadline is the bot's clock and the cook the server's ticks. Race 38805920624 runner 5 (issues #199, #200) ran both servers behind, over 200 "Can't keep up" each; bot Clj_r17's cooked three raw iron in 53 s against the 35 s deadline, and the smelt failed 1.2 s before the second ingot came out. A furnace that cooks gives an item within its cook total of the server's ticks, so the wait ends; one whose input is gone or whose fire is out with no fuel fails as before (`a-furnace-still-cooking-past-the-deadline-is-waited-on`).
 4. **`:take`**: shift-click the output until the inventory holds before + makes (5 s, else `:not-taken`).
 5. **`:close`**: put a loaded cursor down, shift-click anything left out, then `container-close`: done.
 
@@ -59,6 +61,7 @@ The resync (`window/resync`, `window/resync-click`) puts the cursor down into a 
 
 ## Gotchas
 - The planner plans the whole target at once: two raw iron never start a smelt toward four ingots; the batch only covers what the planner chose.
+- A failed smelt leaves the furnace open (only an abandon closes it), and the server ignores a window-0 click while a container is its open menu: 20 bots of race 38805920624 runner 5 (issues #131, #132) failed `:not-cooked`, then every swap into the hand after it `:stale-window` until the plan did. A swap into the hand now closes an open container first ([[place-intent]]).
 - A smelt abandoned mid-cook (a higher-priority target, an escape) closes the furnace with the batch inside; the planner does not know what a furnace holds, so that input is lost to the plan. Not yet seen in a run.
 
 ## See also

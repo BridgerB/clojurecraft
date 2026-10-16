@@ -1171,15 +1171,37 @@
       [(long (math/signum (double dx))) 0]
       [0 (long (math/signum (double dz)))])))
 
+(defn castable?
+  "Could a frame be cast from the lava round source src: at least as many sources of sources
+   within pool-radius of it as the frame has cells (spent? asks the same of a site's stands)?
+   A lone source never is."
+  [sources src]
+  (>= (count (near sources src pool-radius)) (count frame-cells)))
+
+(defn hunt-target
+  "The lava source the hunt cuts toward (toward-lava): the nearest loaded within hunt-radius
+   (sources-near) whose cell over it is not above the feet, since the hunt's stairs go down and
+   its tunnel goes level, and round which a frame could be cast (castable?); nil when none.
+   Sim race 38811561269 runner 6 (issue #41, worlds R1/38, R2/8 and R2/32 round after round,
+   R2/26 on runner 8): the hunt took the nearest source whatever its height, tunnelled under a
+   lone source six blocks over the feet (R1/38) and under a small pool eleven over (R2/26),
+   stopped a block short of the column with nothing to cut, the roof out of reach, and waited
+   :no-site with fifteen thousand sources of the lava sea loaded below."
+  [world]
+  (let [fy (physics/y-of (intent/feet world))
+        sources (lava-sources world)]
+    (first (filter #(and (<= (inc (physics/y-of %)) fy) (castable? sources %))
+                   (sources-near world)))))
+
 (defn toward-lava
-  "The way toward the nearest lava source loaded: stairs down (stone/stairs, stair-depth at a
-   time) while the feet are above the cell over it, else a tunnel of level steps toward it, as
-   many as the plane distance less one (the step onto the cell over the source is refused for
-   the lava under it, and the roof is then in reach: uncap). With no source loaded, stairs down
-   to lava-depth. nil when nothing can be cut from here."
+  "The way toward lava a frame can be cast from (hunt-target): stairs down (stone/stairs,
+   stair-depth at a time) while the feet are above the cell over it, else a tunnel of level
+   steps toward it, as many as the plane distance less one (the step onto the cell over the
+   source is refused for the lava under it, and the roof is then in reach: uncap). With no such
+   source loaded, stairs down to lava-depth. nil when nothing can be cut from here."
   [world]
   (let [feet (intent/feet world)
-        [sx sy sz :as src] (first (sources-near world))
+        [sx sy sz :as src] (hunt-target world)
         to (if src (inc sy) lava-depth)]
     (cond (> (physics/y-of feet) to) (stone/stairs world {:goal/depth to})
           (nil? src) nil
@@ -1198,7 +1220,8 @@
    nil when none can be taken. Issue #41, the wall before the Nether: race 38477665442's 47
    real bots and 950 of the sim race's runs stood at the surface with the kit, no lava within
    sixteen of any origin, and waited :no-site out. Lava is not on the surface of a 1.18+ world:
-   it is the sea under y -54, roofed, and cave springs."
+   it is the sea under y -54, roofed, and cave springs; the stairs and tunnel go only toward
+   lava a frame can be cast from, below or level with the feet (hunt-target)."
   [world]
   (or (lava-walk world) (uncap world) (toward-lava world)))
 

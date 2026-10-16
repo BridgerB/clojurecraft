@@ -7,7 +7,9 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
-            [clojurecraft.recipe :as recipe]))
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.window :as window]
+            [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
 
@@ -178,3 +180,32 @@
         "the craft settles again and lays the planks with the state id the resync brought")
     (is (= 1 (get-in w [:plan/intent :intent/lost])))
     (is (= :active (:intent/status (:plan/intent w))))))
+
+(deftest a-full-inventory-throws-junk-before-it-crafts
+  ;; race 38805920624 runner 5 (issues #172, #192): eight bots at 36 full slots shift-clicked a
+  ;; craft's result or a furnace's output into the inventory, the server had nowhere to put it
+  ;; and answered nothing, and the resync found no free slot: :inventory-full
+  (let [sand (recipe/item-id :sand)
+        full (-> (in-play)
+                 (assoc :world/chunks {[0 0] (world/column {})} :player/on-ground? true)
+                 (update :player/inventory into (for [p (range 1 36)] [p {:item sand :count 64}])))
+        [w fx] (fx/fold step full [(tick 50) (tick 100) (tick 150)])]
+    (is (= [[(inventory/toss-click main-0) 5]] (clicks fx))
+        "one stack of junk thrown, once the eyes look up, and nothing laid")
+    (is (= window/toss-pitch (second (:player/look w))))
+    (let [[_ fx] (fx/fold step w [(set-slot 6 main-0 nil) (tick 200) (tick 250)])]
+      (is (= [[(inventory/left-click hotbar-0) 6]] (clicks fx))
+          "with a slot free for the sticks, the planks are laid"))))
+
+(deftest cobblestone-is-thrown-only-above-what-is-kept
+  (let [cobblestone {:item (recipe/item-id :cobblestone) :count 64}
+        w {:player/inventory {9 cobblestone 10 cobblestone 11 cobblestone}}]
+    (is (= 9 (window/junk-slot w)) "192 held: a stack goes, 128 stay")
+    (is (nil? (window/junk-slot (update w :player/inventory dissoc 11))) "128 held: nothing goes")
+    (is (= 12
+           (window/junk-slot
+            (assoc-in w [:player/inventory 12] {:item (recipe/item-id :sand) :count 1})))
+        "junk before any cobblestone")))
+
+(deftest every-junk-item-is-an-item-of-the-game
+  (is (every? recipe/item-id window/junk) (pr-str (remove recipe/item-id window/junk))))

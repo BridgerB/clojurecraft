@@ -292,6 +292,19 @@
     (is (nil? (site-at nine)) "nine: one short of the frame")
     (is (some? (site-at ten)) "ten: a site")))
 
+(deftest the-lava-hunt-goes-down-past-lava-it-cannot-cast-from
+  ;; sim race 38811561269 (issue #41): the hunt tunnelled toward a lone source and toward a
+  ;; pool over the head, stopped under them with nothing left to cut, and waited :no-site with
+  ;; the lava sea below
+  (let [pos [10.5 41.0 10.5]
+        room {[10 41 10] blocks/air [10 42 10] blocks/air}
+        hunt #(build/toward-lava (standing-at (open-ground (merge room %)) pos))
+        pool-at (fn [y] (into {} (for [x [11 12 13] z [2 3 4 5]] [[x y z] blocks/lava-base])))
+        down {:intent/kind :stairs-down :intent/to-y 35}]
+    (is (= :tunnel (:intent/kind (hunt (pool-at 40)))) "a pool level with the feet: a tunnel to it")
+    (is (= down (hunt {[12 40 4] blocks/lava-base})) "a lone source: on down toward the sea")
+    (is (= down (hunt (pool-at 50))) "a pool over the head: on down toward the sea")))
+
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
   ;; server refusing it three times, :rejected

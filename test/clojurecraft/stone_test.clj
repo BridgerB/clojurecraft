@@ -289,3 +289,34 @@
                [5 64 5]
                cells))
         "the air over a pond: a bridge, never laid")))
+
+(deftest a-tunnel-step-the-dig-refuses-is-planned-again
+  ;; sim race 38762695024 runner 8 (issue #171, world R1/40): a tunnel for gravel at y 40 ran
+  ;; under a gravel bed; the gravel over each step it opened fell into the step round the body,
+  ;; water came down onto it, and the dig to clear the step was refused :unsafe: three tunnels
+  ;; failed in eight seconds and the run with them
+  (let [refused
+        {:intent/kind :dig :intent/target [6 16 5] :intent/status :failed :intent/reason :unsafe}
+        tunnel {:intent/kind :tunnel
+                :intent/dir [1 0]
+                :intent/length stone/tunnel-length
+                :intent/stage :level
+                :intent/level-cells [[6 17 5] [6 16 5]]
+                :intent/level-steps 1
+                :intent/started-tick 0
+                :intent/status :active
+                :intent/child refused}
+        w (assoc (standing 16 :stone_pickaxe) :plan/intent tunnel :time/tick 10)
+        i (:plan/intent (intent/run w tunnel {:event/kind :tick :event/now 1000 :event/rand 0.5}))]
+    (is (= :active (:intent/status i)) "the tunnel goes on")
+    (is (= :plan (:intent/stage i)) "its next step planned from where the body stands")
+    (is (nil? (:intent/child i)))
+    (is (nil? (:intent/level-cells i)))
+    (testing "a staircase's level step turns instead"
+      (let [stairs (assoc tunnel :intent/kind :stairs-up :intent/to-y 70)
+            i (:plan/intent (intent/run (assoc w :plan/intent stairs)
+                                        stairs
+                                        {:event/kind :tick :event/now 1000 :event/rand 0.5}))]
+        (is (= :active (:intent/status i)))
+        (is (= :plan (:intent/stage i)))
+        (is (= 1 (:intent/turns i)))))))
