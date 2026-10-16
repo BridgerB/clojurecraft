@@ -95,6 +95,7 @@
 (s/def :world/traps (s/coll-of ::trap :kind vector?))
 (s/def :intent/bank ::block-pos)
 (s/def :intent/next-search int?)
+(s/def :intent/shore ::block-pos)
 (s/def :intent/dig-when-down ::block-pos)
 (s/def :intent/water ::block-pos)
 (s/def :intent/wet? boolean?)
@@ -213,6 +214,7 @@
 (s/def :plan/trunk-failures (s/map-of (s/tuple int? int?) pos-int?))
 (s/def :plan/boxed-at (s/coll-of ::block-pos :kind set?)) ; feet cells where a staircase died :boxed
 (s/def :plan/unwalkable nat-int?)
+(s/def :plan/surfaced (s/tuple ::block-pos int?)) ; where and when the last climb out came out
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :plan/chain? boolean?)
 (s/def :plan/reached (s/coll-of keyword? :kind set?))
@@ -385,6 +387,7 @@
 (s/def :intent/fluid #{:water :lava})
 (s/def :intent/move (s/coll-of #{-1 0 1} :kind vector? :count 3)) ; a :tunnel step's [dx dy dz]
 (s/def :intent/from ::block-pos)
+(s/def :intent/from-feet ::block-pos)
 (s/def :intent/taken nat-int?)
 (s/def :intent/steps pos-int?)
 (s/def :intent/trunk ::block-pos)

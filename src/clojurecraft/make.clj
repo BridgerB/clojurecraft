@@ -25,6 +25,8 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.smelt :as smelt]
+            [clojurecraft.stairs :as stairs]
+            [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
@@ -164,11 +166,19 @@
    would wait :no-log is not either, which is the open sky with no tree remembered. Gym batch
    iron-a7 runs 1-3, deep in the mine with a working pickaxe and no wood, waited :no-log for a
    second pickaxe. Full run 068485c kept mining on its last stone pickaxe until it broke at y 16,
-   then the wooden one broke on the stairs and three :no-pickaxe failures ended the plan."
+   then the wooden one broke on the stairs and three :no-pickaxe failures ended the plan. A climb
+   out (:intent/for :surface) is worth it once from a place, not again from below where a climb
+   came out within the window (stairs/surfaced-near?): it came out where the gather found nothing
+   worth the spare, and the mine went back down. Sim race 38806318231 (issue #161, 206 runs in 73
+   rounds, world R1/37) climbed from y 58 to the surface, found no tree in reach, cut stairs back
+   down for the iron, and climbed again, every twenty seconds for ninety minutes."
   [world action]
   (cond (or (nil? action) (= :stuck action) (= :mine (:goal/act action))) false
         (= :gather (:goal/act action))
-        (let [n (wood/gather-next world)] (and (:intent/kind n) (not= :opening (:intent/for n))))
+        (let [n (wood/gather-next world)]
+          (and (:intent/kind n)
+               (not= :opening (:intent/for n))
+               (not (and (= :surface (:intent/for n)) (stairs/surfaced-near? world)))))
         :else true))
 
 (def spare-uses 40)                   ; digs a tool must have left to count as a spare: a tunnel's twelve level steps dig about thirty
@@ -403,16 +413,30 @@
   [world row]
   (when (fetch? row) (take-table-along world)))
 
+(defn make-room
+  "A :toss of junk (window/tossable) before row goes out for something (fetch?) with every slot
+   of the inventory full and no container open: what it fetches is picked up on contact, and with
+   no slot free it is never picked up. nil otherwise. Sim race 38806318231 (issue #161, world
+   R3/7): at the portal kit, three planks short of a table for the bucket, 36 slots full of
+   cobblestone, stones, sand, lapis and copper, the bot dug log after log and every collect timed
+   out :not-picked-up, for the run's last half hour."
+  [world row]
+  (when (and (fetch? row)
+             (nil? (:window/open world))
+             (window/tossable world (window/view world :inventory)))
+    {:intent/kind :toss}))
+
 (defn decide
   "The next intent toward goal: continue a log chain or a table pick-up in flight, else take the
-   table along (take-table) or act on the row the needs planner reaches through table."
+   table along (take-table), make room (make-room) or act on the row the needs planner reaches
+   through table."
   [world goal table]
   (or (wood/continue-gather world)
       (intent/chain-next (:plan/last world) :take-table table-drops {})
       (let [row (next-row world goal table)]
         (cond (nil? row) nil
               (= :stuck row) {:plan/wait :stuck}
-              :else (or (take-table world row) (plan/act world row))))))
+              :else (or (take-table world row) (make-room world row) (plan/act world row))))))
 
 (defmethod plan/next-intent :needs [world goal table] (decide world goal table))
 
