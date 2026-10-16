@@ -17,6 +17,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.wood :as wood]
             [clojurecraft.world :as world]))
 
 (def origin [100 64 200])
@@ -383,6 +384,61 @@
     (is (not (build/way-refilled? (at 1) walk)) "stone in the way: a failure as before")
     (is (not (build/way-refilled? (at gravel) (assoc walk :intent/reason :stuck))))))
 
+(deftest a-build-carries-a-crafting-table
+  ;; sim races 38806318231 and 38843552659 (issue #186): the cast wore out every pickaxe, sticks
+  ;; and cobblestone in hand and the table left at the furnace, and the bot climbed out for a log
+  ;; and waited :no-log on treeless ground
+  (let [kit {0 {:item (recipe/item-id :stone_pickaxe) :count 1}
+             1 {:item (recipe/item-id :cobblestone) :count 8}}
+        placed (let [w (standing-at (open-ground (assoc trench
+                                                        [11 63 10]
+                                                        (blocks/default-state :crafting_table)))
+                                    feet-pos)]
+                 (assoc (memory/remember-column w [0 0] (get-in w [:world/chunks [0 0]]))
+                        :player/inventory
+                        kit))
+        bare (assoc (standing-at (open-ground trench) feet-pos) :player/inventory kit)
+        planks (assoc-in bare [:player/inventory 2] {:item (recipe/item-id :oak_planks) :count 4})]
+    (is (= :take-table (:intent/for (plan/next-intent placed cast-one-row plan/goals)))
+        "the placed table within reach is taken along")
+    (is (not= :build (:intent/kind (plan/next-intent planks cast-one-row plan/goals)))
+        "planks enough and no table: one is made for the kit first")
+    (is (= :build (:intent/kind (plan/next-intent bare cast-one-row plan/goals)))
+        "nothing to make one from: no trip out for it, the build")))
+
+(deftest a-build-carries-sticks-beside-its-table
+  ;; world R3/12 seed 1 from spawn (Refs #178): the cast wore out the pickaxes, a table, 684
+  ;; cobblestone and one plank in hand and no sticks, and the bot cut stairs up through deepslate
+  ;; by hand for a log until its time ran out
+  (let [kit {0 {:item (recipe/item-id :stone_pickaxe) :count 1}
+             1 {:item (recipe/item-id :cobblestone) :count 8}
+             2 {:item (recipe/item-id :crafting_table) :count 1}}
+        bare (assoc (standing-at (open-ground trench) feet-pos) :player/inventory kit)
+        planks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :oak_planks) :count 2})
+        sticks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :stick) :count 2})]
+    (is (build/carry-sticks? planks) "a table held and planks for sticks: sticks for the kit")
+    (is (not= :build (:intent/kind (plan/next-intent planks cast-one-row plan/goals)))
+        "made before the build")
+    (is (not (build/carry-sticks? sticks)) "sticks held already")
+    (is (not (build/carry-sticks? bare)) "nothing to make them from: no trip out for them")))
+
+(deftest a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
+  ;; sim race 38843552659 (issue #186, world R1/18): on a ravine's floor sixty under the landing,
+  ;; the sky open and no hunt target in its band, the bot waited :no-log
+  (let [w (assoc (standing-at (open-ground {}) feet-pos) :plan/go-at [10.5 80.0 10.5])]
+    (is (= {:plan/wait :no-log} (wood/gather-next w)) "nothing to set out for")
+    (is (= (scoop/pit-climb w) (wood/gather-or-out w)) "the way out of the pit first")
+    (is (some? (scoop/pit-climb w)))))
+
+(deftest a-way-never-opens-a-cell-beside-lava
+  ;; sim race 38843557186 runner 3 (issue #231, world R1/31): the way to a landing at the lava
+  ;; sea's height was dug along its edge, a cell beside a source opened, and the lava flowed in
+  (let [w (standing-at (open-ground {[12 63 10] 1 [13 63 10] blocks/lava-base}) feet-pos)
+        none (constantly false)]
+    (is (not (build/diggable? w [12 63 10] none none)) "stone beside lava is not dug for a way")
+    (is (build/diggable? (standing-at (open-ground {[12 63 10] 1}) feet-pos) [12 63 10] none none)
+        "the same stone with no lava by it is")))
+
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
   ;; server refusing it three times, :rejected
@@ -540,3 +596,50 @@
       (let [near (run (physics/centre (build/cell site :south (build/landing 1))))]
         (is (= :no-path (get-in near [:plan/intent :intent/reason])))
         (is (empty? (memory/given-up-sites near)))))))
+
+(deftest a-stand-still-in-the-rock-is-cut-to-not-walked-near
+  ;; sim race 38855091523 (issue #178, world R1/34 seed 2): the lava's stand was stone, a route
+  ;; led beside it, the walk ended a block under it, and the refill went back to the landing and
+  ;; out again, three walks every five seconds until the run's time ran out
+  (let [w (standing-at (open-ground {[8 63 5] 1 [8 64 5] 1}) [5.5 63.0 5.5])]
+    (is (nil? (build/stand-walk w [8 63 5])) "stone where the feet would stand: no walk")
+    (is (= {:intent/kind :walk :intent/target [7 63 5] :intent/for :build}
+           (build/stand-walk w [7 63 5]))
+        "open with a floor: walked to")
+    (is (build/beside-stand? w [6 64 5]) "a block up beside the feet: the way is to its height")
+    (is (not (build/beside-stand? w [9 64 5])) "four off: by the landing, as before")))
+
+(deftest the-way-out-is-not-taken-across-lava-nor-from-beside-the-stand
+  ;; sim race 38855091523 (issue #178, world R1/34 seed 2): the next lava stand lay past the pool,
+  ;; the way out along it crossed the lava, round-corner sent the feet back toward the frame and
+  ;; the refill out again, and from beside the stand itself out again, until the time ran out
+  (let [origin [2 63 2]
+        stand [12 63 9]
+        out [5 63 9]
+        at (fn [blocks feet] (standing-at (open-ground blocks) feet))]
+    (is (build/out-first? (at {} [5.5 63.0 5.5]) origin :south stand out 1 4)
+        "nearer the frame, the way out clear: out first")
+    (is (not (build/out-first? (at {[8 62 9] blocks/lava-base} [5.5 63.0 5.5])
+                               origin
+                               :south
+                               stand
+                               out
+                               1
+                               4))
+        "lava under the way out: straight for the stand instead")
+    (is (not (build/out-first? (at {} [11.5 63.0 9.5]) origin :south stand out 1 4))
+        "beside the stand: no way out first")
+    (is (not (build/out-first? (at {} [5.5 63.0 5.5]) origin :south stand out 4 4))
+        "already as far out as the stand")))
+
+(deftest a-block-in-the-way-is-dug-from-a-hole-under-the-stands-height
+  ;; sim race 38855091523 (issue #178, world R1/34 seed 2, after #250): the walk to the block in
+  ;; the way of the lava's stand ended a block under it in a hole of the floor, and the refill
+  ;; sent the feet back to the landing, two walks every two seconds until the time ran out
+  (let [blocks {[5 62 5] blocks/air [6 63 5] 1 [6 64 5] 1}
+        stand [9 63 5]
+        dig #(build/dig-from-under % stand :portal [100 64 200] :south)]
+    (is (= [6 63 5] (:intent/target (dig (standing-at (open-ground blocks) [5.5 62.0 5.5]))))
+        "in the hole, the block in the way in reach: dug from there")
+    (is (nil? (dig (standing-at (open-ground blocks) [5.5 63.0 4.5])))
+        "at the stand's height it is clear-stand's, not this")))

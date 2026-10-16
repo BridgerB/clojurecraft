@@ -5,9 +5,11 @@ type: reference
 tags: [bot, plan, intents, walk]
 aliases: [:walk, waypoints, follow, waypoint-reached?, route-stale?, :no-path, replans, reach 4.0]
 status: verified
-lastUpdated: 2026-10-12
+lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
 sourceRefs:
+  - src/clojurecraft/intent.clj#defn walk-deadline
+  - test/clojurecraft/plan_test.clj#a-long-route-gets-the-time-to-walk-it
   - src/clojurecraft/intent.clj#defmethod run :walk
   - src/clojurecraft/intent.clj#defn route!
   - src/clojurecraft/intent.clj#defn route-stale?
@@ -44,7 +46,7 @@ related:
 
 ## How it works
 1. Arrived (`arrived?`): set only `:control/look` at the target and finish, so the next intent starts already looking.
-2. More than `walk-timeout-ticks` (1200, 60 s) since the walk began: fail `:stuck`.
+2. More than `walk-deadline` since the walk began: `walk-timeout-ticks` (1200, 60 s) and `waypoint-ticks` (10, half a second) more for each waypoint of the route: fail `:stuck`. Sim world R2/19 seed 12 (issue #87's second round, 5f1542d against 090ef14) walked to three pools across a snowy mountain, routes of 123 and 175 waypoints, at waypoint 116 when the flat sixty seconds ran out, and three such walks ended the plan (`a-long-route-gets-the-time-to-walk-it`).
 3. No route yet: plan. A route that is `:none` with no waypoints at all fails `:no-path` at once.
 4. The route is stale: a waypoint still ahead can no longer be stood on, no waypoint was reached for `stuck-ticks` (40, 2 s), or the route ended short of the target (`:partial` or `:none`) with every waypoint behind. Plan again, unless `max-replans` (6) plans were already made: then fail `:no-path`. A chunk arriving is not by itself a reason: gym batch cobble-a1 run 7 saw six arrive in the first seconds after landing, each spending a plan on the same route, and the walk failed `:no-path` without a step taken.
 5. The route is walked to its end but the target is still out of reach (a `:found` route ends within 3 of the target; reach is 4): press straight toward the target.

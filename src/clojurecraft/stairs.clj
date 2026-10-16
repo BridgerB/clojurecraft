@@ -883,13 +883,21 @@
    it gives that water up, and the pond round it (pond-sources), into :plan/blacklist.
    Sim race 38839767273 runner 6 (issue #69, worlds R3/8 and R4/35 at 3f836ff): the tunnel
    walked an open corridor past its water, its heading turning as it passed, eight steps east,
-   eight back west, two thousand tunnels until the run's ninety minutes were spent."
+   eight back west, two thousand tunnels until the run's ninety minutes were spent. Not when a
+   walk to the water's bank has a route now (intent/routable?): the tunnel opened the way, if
+   it came no nearer. Sim world R4/30 seed 1 (issue #69's second round, ef4e73b against
+   5e93cae): a bank tunnel ended where the walk to the pond's bank was clear, the pond was given
+   up, and the bot tunnelled on to other water; the bucket filled 39 s later and the run's road
+   changed from the cast to the portal kit's :no-log."
   [world {:intent/keys [for target from-feet]}]
   (boolean (and (= :bank for)
                 target
                 from-feet
                 (> (+ (physics/horizontal-distance (intent/feet world) target) nearer-by)
-                   (physics/horizontal-distance from-feet target)))))
+                   (physics/horizontal-distance from-feet target))
+                (not (intent/routable?
+                      world
+                      {:intent/kind :walk :intent/target target :intent/for :scoop})))))
 
 (defmethod intent/run :tunnel
   [world {:intent/keys [length level-steps stage target] :or {level-steps 0} :as i} event]

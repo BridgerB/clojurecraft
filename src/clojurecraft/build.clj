@@ -465,6 +465,11 @@
   [cell]
   (map #(mapv + cell %) [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
 
+(defn lava-touching?
+  "Does lava lie in cell or beside it (its six neighbours)? A way dug there lets it in."
+  [world cell]
+  (boolean (some #(= :lava (terrain/fluid-kind world %)) (cons cell (touching cell)))))
+
 (defn dry?
   "Does no cell of cells hold a fluid?"
   [world cells]
@@ -618,12 +623,14 @@
 
 (defn diggable?
   "Is pos a solid or awkward block a clear may dig: not unloaded, not obsidian, not the frame's
-   rock (kept?: the rock the holes are cut into, whatever it is made of), and not cobblestone the
+   rock (kept?: the rock the holes are cut into, whatever it is made of), not beside lava
+   (lava-touching?: issue #231, a way dug along the lava sea's edge let it in), and not cobblestone the
    plan places. Stone or dirt where a floor will go later is still dug: the place is satisfied by
    whatever is solid, and the hill would stay in the way."
   [world pos placed? kept?]
   (when-let [id (terrain/block-at world pos)]
     (and (not (kept? pos))
+         (not (lava-touching? world pos))
          (not (and (placed? pos) (= :cobblestone (blocks/name-of id))))
          (not (contains? intent/never-dug (blocks/name-of id)))
          (contains? #{:solid :awkward} (path/classify-id id)))))
@@ -687,6 +694,19 @@
   (when-let [b (and (= (second stand) (long (physics/y-of (intent/feet world))))
                     (stance-block world stand build origin facing))]
     (if (within-reach? world b) (way-dig b) (approach world b))))
+
+(defn dig-from-under
+  "The dig of the first block in the way to stand (stance-block, at the stand's height) when the
+   feet stand a block under that height, in a hole of the floor, and the block is in reach: the
+   same block clear-stand digs from the stand's height, dug from where the walk to it ended. nil
+   otherwise. Sim race 38855091523 (issue #178, world R1/34 seed 2, after #250): the walk to the
+   block in the way of the lava's stand ended a block under it, in a hole of the floor round the
+   pool; off the stand's height the refill sent the feet back to the landing, and the walk went
+   again, two walks every two seconds until the run's time ran out."
+  [world stand build origin facing]
+  (when-let [b (and (= (second stand) (inc (long (physics/y-of (intent/feet world)))))
+                    (stance-block world stand build origin facing))]
+    (when (within-reach? world b) (way-dig b))))
 
 (defn reaches-from?
   "Would the eye, standing in cell, be within reach of pos? The feet use the real eye; any
@@ -769,6 +789,15 @@
   [kept? a b]
   (not-any? #(or (kept? %) (kept? (update % 1 inc))) (stance-line a b)))
 
+(defn barred
+  "The cells a way to a stand never opens: the frame's rock (kept) and any cell lava lies in or
+   beside (lava-touching?). Sim race 38843557186 runner 3 (issue #231, world R1/31): the way to a
+   landing 72 blocks off at the lava sea's height was dug along the sea's edge, a cell beside a
+   source opened (a build's dig may expose fluid), the lava flowed in, and no footing was in
+   reach: :no-footing three times in a tick."
+  [world origin facing]
+  (let [kept? (kept origin facing)] (fn [c] (or (kept? c) (lava-touching? world c)))))
+
 (defn round-corner
   "Where a way at the stand's height turns to go round the frame's rock (kept) when the straight
    way from the feet to stand crosses it: a loaded cell within round-reach of stand from which both
@@ -777,7 +806,7 @@
    the landing straight ahead through the frame's rock, which a way never digs; the cells past the
    rock were dug, the landing itself was out of reach, and three walks at it failed :no-path."
   [world stand origin facing]
-  (let [kept? (kept origin facing)
+  (let [kept? (barred world origin facing)
         feet (intent/feet world)
         [fx _ fz] feet
         [sx sy sz] stand]
@@ -828,23 +857,35 @@
                       (foundation world gap))]
       {:intent/kind :place :intent/item :cobblestone :intent/cell c})))
 
+(defn stand-walk
+  "A walk to stand, a cell of the build's way, when the feet can stand in it as it is
+   (path/standable?: a floor, the body clear) and a route reaches it; nil otherwise. A stand
+   still in the rock is walked near, never into: the walk ends beside it, uncentred, and the
+   stand is no nearer. Sim race 38855091523 (issue #178, world R1/34 seed 2, at 5d78c91): the
+   lava's stand at y -53 was stone, a route led to beside it, and the refill walked from the
+   landing out to it and back, three walks every five seconds, for the run's last minutes."
+  [world stand]
+  (let [walk {:intent/kind :walk :intent/target stand :intent/for :build}]
+    (when (and (path/standable? world stand) (intent/routable? world walk)) walk)))
+
 (defn toward-stand
   "The child that brings the feet to stand, a cell of the build's way (a landing, the lava's
-   stand): a walk when a route reaches it, else at its height the first block in the way dug
+   stand): a walk when it can be stood in and a route reaches it (stand-walk), else at its height the first block in the way dug
    (clear-stand), going round the frame's rock by a corner when the straight way crosses it
    (round-corner), or the missing floor laid (bridge), else the way to its height (to-height);
    nil when the feet are there."
   [world stand build origin facing]
   (let [walk {:intent/kind :walk :intent/target stand :intent/for :build}]
     (cond (intent/centred? world stand) nil
-          (intent/routable? world walk) walk
-          (= (long (physics/y-of (intent/feet world))) (second stand))
-          (or (when-let [c (and origin (round-corner world stand origin facing))]
-                (toward-stand world c build origin facing))
-              (clear-stand world stand build origin facing)
-              (bridge world stand)
-              walk)
-          :else (or (to-height world (second stand)) walk))))
+          :else
+          (or (stand-walk world stand)
+              (if (= (long (physics/y-of (intent/feet world))) (second stand))
+                (or (when-let [c (and origin (round-corner world stand origin facing))]
+                      (toward-stand world c build origin facing))
+                    (clear-stand world stand build origin facing)
+                    (bridge world stand)
+                    walk)
+                (or (to-height world (second stand)) walk))))))
 
 (defn sight-block
   "The first loaded block on the eyes' ray to the surface of lava source src (scoop/aim-point)
@@ -898,6 +939,34 @@
            :intent/aim (or (lava-aim world src) (scoop/aim-point src))}
           :else (assoc (way-dig block) :intent/for :lava))))
 
+(def beside-reach 2.5)                ; blocks on the plane from a lava stand that count as beside it
+
+(defn beside-stand?
+  "Are the feet beside stand: within beside-reach of it on the plane, a block or so off its
+   height? The way from there is to the stand's height (toward-stand), not back out to the
+   landing. Sim race 38855091523 (issue #178, world R1/34 seed 2, at 5d78c91): a walk toward the
+   lava's stand, still stone, ended a block under it in the cell beside it, and the refill sent
+   the feet back to the landing, out again, and back, three walks every five seconds."
+  [world stand]
+  (let [feet (intent/feet world)]
+    (and (<= (abs (- (second feet) (second stand))) 2)
+         (<= (physics/horizontal-distance (physics/centre feet) (physics/centre stand))
+             beside-reach))))
+
+(defn out-first?
+  "Does the refill's way to stand go out along the landing's column to out first (the feet nearer
+   the frame than the stand, fz under sz, measured out from it): not from beside the stand
+   (beside-stand?), and not when the straight way on from out crosses a cell a way never opens
+   (barred: the frame's rock, a cell lava lies in or beside), from which round-corner only sends
+   the feet back. Sim race 38855091523 (issue #178, world R1/34 seed 2): with the pool scooped to
+   its far side, the next stand's row from out crossed the pool's lava; round-corner sent the feet
+   a corner back toward the frame, the refill sent them out again, and from beside the stand
+   itself out again, until the run's time ran out."
+  [world origin facing stand out fz sz]
+  (and (< fz sz)
+       (not (beside-stand? world stand))
+       (clear-of? (barred world origin facing) out stand)))
+
 (defn refill
   "The child that refills lava, or the reason it cannot (:no-station, :no-bucket): the feet to the
    station's stand (toward-stand, from the room's landing at the lava's height when no route
@@ -907,17 +976,25 @@
     (cond (nil? stand) :no-station
           (not (held? world :bucket)) :no-bucket
           (intent/centred? world stand) (scoop-at-station world sources)
-          (intent/routable? world {:intent/kind :walk :intent/target stand :intent/for :build})
-          {:intent/kind :walk :intent/target stand :intent/for :build}
-          (= (long (physics/y-of (intent/feet world))) (second stand))
-          (let [[lx _ _] (landing h)
-                [_ _ sz] (relative origin facing stand)
-                [_ _ fz] (relative origin facing (intent/feet world))
-                out (cell origin facing [lx h sz])]
-            (toward-stand world (if (< fz sz) out stand) build origin facing))
           :else
-          (or (toward-stand world (cell origin facing (landing h)) build origin facing)
-              {:intent/kind :walk :intent/target stand :intent/for :build}))))
+          (or (stand-walk world stand)
+              ;; a block under the stand's height, the block in the way in reach: dig it from here
+              (dig-from-under world stand build origin facing)
+              (cond (= (long (physics/y-of (intent/feet world))) (second stand))
+                    (let [[lx _ _] (landing h)
+                          [_ _ sz] (relative origin facing stand)
+                          [_ _ fz] (relative origin facing (intent/feet world))
+                          out (cell origin facing [lx h sz])]
+                      (toward-stand world
+                                    (if (out-first? world origin facing stand out fz sz) out stand)
+                                    build
+                                    origin
+                                    facing))
+                    ;; a block off the stand's height beside it: stairs to it, not the landing again
+                    (beside-stand? world stand) (toward-stand world stand build origin facing)
+                    :else
+                    (or (toward-stand world (cell origin facing (landing h)) build origin facing)
+                        {:intent/kind :walk :intent/target stand :intent/for :build}))))))
 
 (defn room-stand
   "A cell of the room (room-cells for the build's access h) the feet can stand in, that reaches
@@ -1431,25 +1508,75 @@
   [world]
   (or (lava-walk world) (uncap world) (toward-lava world)))
 
+(defn table-at-hand?
+  "Could a crafting table be made without going out for anything: the needs planner's next step
+   toward one (make/next-row over plan/goals) a craft from planks or logs held, not a gather
+   (make/fetch?)?"
+  [world]
+  (let [row (make/next-row world
+                           {:goal/id :crafting-table :goal/provides {:item/crafting_table 1}}
+                           plan/goals)]
+    (boolean (and (map? row) (not (make/fetch? row))))))
+
+(defn carry-table?
+  "Should a build take a crafting table into its kit: none held, none placed within reach to take
+   along (make/take-table-along), and one can be made from what is held (table-at-hand?). A cast
+   wears out every pickaxe it holds; with a table, sticks and cobblestone the next is made where
+   the bot stands. Sim races 38806318231 and 38843552659 (issue #186, worlds R1/25, R2/11, R1/18,
+   R4/39): the pickaxes broke in the cast with sticks and four hundred cobblestone in hand and no
+   table, and the bot climbed out for a log and waited :no-log on treeless ground."
+  [world]
+  (and (zero? (get (make/counts world) :crafting_table 0))
+       (nil? (make/take-table-along world))
+       (table-at-hand? world)))
+
+(def kit-sticks 2)                    ; sticks a build carries: one pickaxe's worth, made again where the cast wore the last out
+
+(defn sticks-at-hand?
+  "Could kit-sticks be made without going out for anything: the needs planner's next step toward
+   them a craft from planks or logs held, not a gather (make/fetch?)?"
+  [world]
+  (let [row (make/next-row world
+                           {:goal/id :kit-sticks :goal/provides {:item/stick kit-sticks}}
+                           plan/goals)]
+    (boolean (and (map? row) (not (make/fetch? row))))))
+
+(defn carry-sticks?
+  "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or placed
+   within reach already (the table first: carry-table?, so the planks a table needs are never
+   spent on sticks), and they can be made from what is held (sticks-at-hand?). A table and
+   cobblestone make no pickaxe without sticks: a probe of world R3/12 seed 1 from spawn on main
+   (Refs #178) wore out its pickaxes in the cast holding a table, 684 cobblestone and one plank,
+   no sticks, and cut stairs up through deepslate by hand for a log, fifteen seconds a block,
+   until its ninety minutes ran out."
+  [world]
+  (and (< (get (make/counts world) :stick 0) kit-sticks)
+       (or (pos? (get (make/counts world) :crafting_table 0)) (some? (make/take-table-along world)))
+       (sticks-at-hand? world)))
+
 (defn held-first
   "What the needs planner does for what a build row holds before it starts: the tools of
    :goal/holds (a pickaxe for the way down to lava and the digs: sim race 38477665389, issue #70,
-   dug for its stance with none and failed :needs-tool three times) and the blocks plan places at
-   the site (blocks-needed, issue #124: counted from the plan for the place chosen). An intent
-   that makes them, a wait, or nil when they are held."
+   dug for its stance with none and failed :needs-tool three times), a crafting table when one
+   can be made from what is held and none is at hand (carry-table?, issue #186), and the blocks
+   plan places at the site (blocks-needed, issue #124: counted from the plan for the place
+   chosen). An intent that makes them, a wait, or nil when they are held."
   [world goal table plan]
   (let [n (if plan (blocks-needed world plan) 0)
-        holds (cond-> (or (:goal/holds goal) {}) (pos? n) (assoc :item/cobblestone n))]
+        holds (cond-> (or (:goal/holds goal) {})
+                (pos? n) (assoc :item/cobblestone n)
+                (carry-table? world) (assoc :item/crafting_table 1)
+                (carry-sticks? world) (assoc :item/stick kit-sticks))]
     (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))))
 
 (defmethod plan/next-intent :build
-  ;; what the row holds first (held-first); then build the row's plan (:goal/build) at the site
-  ;; remembered while its pool can finish it (spent?), else at one chosen now (the :build intent
-  ;; remembers it), its access steps up to the lava's height (station); with none, hunt for lava
-  ;; (lava-hunt), the placed table taken along first (make/take-table-along: the hunt goes down to
-  ;; the lava sea, and a pickaxe broken there is made again only from sticks, cobblestone and a
-  ;; table; sim race 38669750355, issue #135, had the sticks and the cobblestone and no table at
-  ;; y -21), else wait :no-site
+  ;; what the row holds first (held-first); then the placed table taken along (make/take-table-along:
+  ;; the build and the hunt go down to the lava, and a pickaxe broken there is made again only from
+  ;; sticks, cobblestone and a table; sim race 38669750355, issue #135, had the sticks and the
+  ;; cobblestone and no table at y -21, and issue #186's casts left the table at the furnace); then
+  ;; build the row's plan (:goal/build) at the site remembered while its pool can finish it
+  ;; (spent?), else at one chosen now (the :build intent remembers it), its access steps up to the
+  ;; lava's height (station); with none, hunt for lava (lava-hunt), else wait :no-site
   [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]}
         (let [{:site/keys [origin facing] :as site} (memory/site world)]
@@ -1462,17 +1589,15 @@
         facing (or facing (:facing chosen))
         h (when origin (or (:h chosen) (:h (station world origin facing)) 1))]
     (or (held-first world goal table (when origin (plan-for build origin facing h)))
+        (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+        (make/take-table-along world)
         (cond origin
               {:intent/kind :build
                :intent/build build
                :intent/origin origin
                :intent/facing facing
                :intent/access h}
-              :else
-              (or (intent/chain-next (:plan/last world) :take-table make/table-drops {})
-                  (make/take-table-along world)
-                  (lava-hunt world)
-                  {:plan/wait :no-site})))))
+              :else (or (lava-hunt world) {:plan/wait :no-site})))))
 
 (defmethod plan/done-by :built?
   [world {:goal/keys [build]}]

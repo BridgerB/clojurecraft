@@ -172,7 +172,9 @@
    came out within the window (stairs/surfaced-near?): it came out where the gather found nothing
    worth the spare, and the mine went back down. Sim race 38806318231 (issue #161, 206 runs in 73
    rounds, world R1/37) climbed from y 58 to the surface, found no tree in reach, cut stairs back
-   down for the iron, and climbed again, every twenty seconds for ninety minutes."
+   down for the iron, and climbed again, every twenty seconds for ninety minutes. A log taken
+   after the climb ends its mark (plan/finish-intent): that climb found trees, and the next is
+   worth it."
   [world action]
   (cond (or (nil? action) (= :stuck action) (= :mine (:goal/act action))) false
         (= :gather (:goal/act action))
@@ -453,7 +455,7 @@
 
 ;; ---------------------------------------------------------------- acts
 
-(defmethod plan/act :gather [world _] (wood/gather-next world))
+(defmethod plan/act :gather [world _] (wood/gather-or-out world))
 
 (defmethod plan/act :place
   [world row]

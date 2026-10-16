@@ -481,3 +481,13 @@
         "the spare, from the table")
     (is (nil? (make/near (assoc w :plan/blacklist #{[7 64 5]}) :crafting_table))
         "a table the plan blacklisted (a walk to it failed) is not near: it is replaced")))
+
+(deftest a-log-taken-after-a-climb-out-makes-the-next-climb-worth-it
+  ;; the full sim run of world R4/30 seed 1 (issue #161's second round, 74fa27b against 2736e27):
+  ;; it came out of the ground for its first logs near the landing and took them; two minutes on,
+  ;; its stone pickaxe made at y 60, the spare's short climb back to those trees was declined, and
+  ;; the run timed out at the water bucket. A log picked up ends the climb's mark
+  (let [w (assoc (world-holding {} false) :plan/surfaced [[6 66 6] 990000])
+        done #(plan/finish-intent w {:intent/kind :collect :intent/for % :intent/status :done})]
+    (is (nil? (:plan/surfaced (done :log))) "a log picked up: the climb came out to trees")
+    (is (= [[6 66 6] 990000] (:plan/surfaced (done :mine-iron))) "ore picked up: the mark kept")))

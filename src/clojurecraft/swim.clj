@@ -138,13 +138,20 @@
 
 (defn obstacle
   "The cell to dig when the swim makes no progress: a lid over the head, else the cell ahead at
-   head height, else the cell over the head (the cap of a roofed pool); never the cell ahead at
-   feet height, which is the bank. nil when none of them is solid."
+   head height, else the cell ahead at feet height when the bank is no higher than the feet (a
+   wall between them, not a bank to climb), else the cell over the head (the cap of a roofed
+   pool); never the cell ahead at feet height under a higher bank, which is the step the impulse
+   needs to collide with. nil when none of them is solid. Race 38805758078 runner 1 (issues
+   #156, #157) bot Clj_r44, in a flooded tunnel at y 16, had its bank two blocks off at its own
+   height with a block between at the feet; the swim dug the ceiling over its head again and
+   again, then nothing was named and it failed :stuck."
   [world [x y z :as feet] bank]
   (let [over [x (+ y 2) z]
-        head (when bank (update (ahead feet bank) 1 inc))]
+        level (when bank (ahead feet bank))
+        head (when level (update level 1 inc))]
     (cond (lid? world feet) over
           (and head (solid-cell? world head)) head
+          (and level (<= (second bank) y) (solid-cell? world level)) level
           (solid-cell? world over) over
           :else nil)))
 
@@ -384,8 +391,12 @@
   ;; land jumping only when blocked, in the water with jump held, so the body swims at the
   ;; surface with the eye in air and the trap never calls the escape back to the near bank;
   ;; done on dry land once it has been in the water and come cross-gain nearer the trunk, so a
-  ;; wade along the near shore is not the far side
-  [world {:intent/keys [target started wet? from-dist best-dist best-tick]} _]
+  ;; wade along the near shore is not the far side. Stuck in the water (a far bank too high
+  ;; for the swim's lift), a child :swim-out for :retreat takes it to the nearest bank and the
+  ;; crossing ends on dry land: sim race 38844589684 runner 6 (issue #57, world R1/30 seed 4,
+  ;; probe 38853120299) swam forty blocks, stuck eight short against the far bank, and failed
+  ;; :stuck three times between other intents before a climb and an escape got it out
+  [world {:intent/keys [target started wet? from-dist best-dist best-tick child]} event]
   (let [tick (:time/tick world)
         started (or started tick)
         wet? (or wet? (boolean (:player/in-water? world)))
@@ -399,14 +410,31 @@
                                    :intent/from-dist from-dist
                                    :intent/best-dist (if nearer? dist best-dist)
                                    :intent/best-tick best-tick)]
-    (cond (and wet? (trap/dry-land? world) (<= dist (- from-dist cross-gain)))
+    (cond (and child (intent/done? child))
           (-> world
               (assoc :player/controls {})
+              (intent/dissoc-intent :intent/child)
               intent/done)
+          (and child (intent/failed? child))
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail (:intent/reason child)))
           (> (- tick started) cross-timeout-ticks)
           (-> world
               (assoc :player/controls {})
               (intent/fail :no-crossing))
+          child (intent/run-child world event)
+          (and wet? (trap/dry-land? world) (<= dist (- from-dist cross-gain)))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (and (> (- tick best-tick) cross-stuck-ticks) (:player/in-water? world))
+          (-> world
+              (intent/assoc-intent
+               :intent/child
+               {:intent/kind :swim-out :intent/for :retreat :intent/status :active})
+              (game/say "cross: stuck in the water, to the nearest bank")
+              (intent/run-child event))
           (> (- tick best-tick) cross-stuck-ticks)
           (-> world
               (assoc :player/controls {})
@@ -417,9 +445,26 @@
                  (cond-> (intent/toward world (physics/centre target) 0.0)
                    (:player/in-water? world) (assoc :control/jump? true))))))
 
+(defn lava-free?
+  "Is there no lava in cell, in the head's cell over it, nor in the cell under it: a place the body
+   is out of lava once it stands there?"
+  [world [x y z]]
+  (not-any? #(= :lava (terrain/fluid-kind world %)) [[x (dec y) z] [x y z] [x (inc y) z]]))
+
+(defn lava-beside?
+  "Does lava touch cell on any of its four sides?"
+  [world [x y z]]
+  (boolean (some #(= :lava (terrain/fluid-kind world %))
+                 [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)]])))
+
 (defn footing
-  "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand
-   in with no lava beside or under it, or nil."
+  "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand in,
+   those out of the lava first (lava-free?: none in it, over it or under it), then those with no
+   lava beside them (lava-beside?); a cell the flow covers only when there is no other; nil when
+   none is standable. A cell the flowing lava covers is standable to a route, and a
+   flee to it ends still in the lava: sim race 38844683780 runner 7 (issue #230, world R2/9)
+   smelted in a pocket at y 38 when lava from a source ten over flowed in, fled to a cell the
+   flow covered, and timed out :no-footing, three times."
   [world [fx fy fz :as feet]]
   (->> (for [dx (range (- flee-radius) (inc flee-radius))
              dz (range (- flee-radius) (inc flee-radius))
@@ -427,8 +472,23 @@
              :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]]
              :when (and (not= cell feet) (path/standable? world cell))]
          cell)
-       (sort-by #(physics/horizontal-distance (physics/centre feet) (physics/centre %)))
+       (sort-by (juxt #(if (lava-free? world %) 0 1)
+                      #(if (lava-beside? world %) 1 0)
+                      #(physics/horizontal-distance (physics/centre feet) (physics/centre %))))
        first))
+
+(defn flee-controls
+  "The controls a flee holds toward target: forward with jump while in the lava or against a
+   step, forward alone out of it, nothing once centred in the target, so the body lands and the
+   trap clears on dry land (trap/dry-land? held dry-ticks-to-clear). Jump held over dry ground
+   bounces the body off it every tick, and the trap never clears: sim races 38844683780 runner
+   7 and 38843557186 runner 3 (issues #230 and #231, worlds R2/9 and R1/3) came out of the lava
+   onto the footing and bounced on it until flee-timeout-ticks failed them :no-footing."
+  [world target]
+  (cond (intent/centred? world target) {}
+        (or (:player/in-lava? world) (:player/horizontal-collision? world))
+        (assoc (intent/toward world (physics/centre target) 0.0) :control/jump? true)
+        :else (intent/toward world (physics/centre target) 0.0)))
 
 (defmethod intent/run :flee
   [world {:intent/keys [target started]} _]
@@ -448,10 +508,7 @@
             (-> world
                 (assoc :player/controls {})
                 (intent/fail :no-footing)))
-          :else
-          (assoc world
-                 :player/controls
-                 (assoc (intent/toward world (physics/centre target) 0.0) :control/jump? true)))))
+          :else (assoc world :player/controls (flee-controls world target)))))
 
 ;; ---------------------------------------------------------------- the goals' rules
 

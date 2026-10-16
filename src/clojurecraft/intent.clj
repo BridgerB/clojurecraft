@@ -18,6 +18,7 @@
 
 (def reach 4.0)                       ; eye → block centre; the server allows ~4.5
 (def walk-timeout-ticks 1200)         ; 60 s
+(def waypoint-ticks 10)               ; and half a second more for each waypoint of the route walked
 (def stuck-ticks 40)                  ; no waypoint reached for 2 s → plan again
 (def max-replans 6)                   ; plans one walk may make before it fails :no-path
 (def goal-range 3)                    ; a walk's route ends within this of its target
@@ -334,6 +335,16 @@
         (> (- (:time/tick world) best-tick) stuck-ticks)
         (and (empty? ahead) (not= :found route)))))
 
+(defn walk-deadline
+  "The ticks a walk may take: walk-timeout-ticks, and waypoint-ticks more for each waypoint of the
+   route it walks, so a long route up a mountain is not cut short of its end. Sim world R2/19 seed
+   12 (issue #87's second round, 5f1542d against 090ef14): the walks to three pools across a
+   snowy mountain had routes of 123 and 175 waypoints; the first was at waypoint 116, a block a
+   half second all the way, when its sixty seconds ran out, and three such :stuck walks ended the
+   plan at the water bucket."
+  [{:intent/keys [waypoints]}]
+  (+ walk-timeout-ticks (* waypoint-ticks (count waypoints))))
+
 (defmethod run :walk
   [world {:intent/keys [target started waypoints at replans] :or {replans 0}} _]
   (let [tick (:time/tick world)
@@ -346,7 +357,7 @@
               (assoc :player/controls
                      {:control/look (physics/look-at (game/eye world) (physics/centre target))})
               done)
-          (> (- tick started) walk-timeout-ticks)
+          (> (- tick started) (walk-deadline i))
           (-> world
               (assoc :player/controls {})
               (fail :stuck))

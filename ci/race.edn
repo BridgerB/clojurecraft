@@ -5,12 +5,15 @@
 ;; Sized by the capacity ramp of run 38348283421 (b2f34ea): with the bot's CPU cut to a third
 ;; (memo/by, path/cells), the slowest tenth of the bots held 20 ticks a second at every load up to
 ;; 210 bots a runner, so the bots are not the limit. A vanilla server ticks on one thread: its p95
-;; tick was 67 ms at 30 bots and about 130 ms from 50. So two servers of 25 bots a runner. Memory:
+;; tick was 67 ms at 30 bots and about 130 ms from 50. Two servers of 25 bots a runner ran at 130 ms
+;; a tick, 7 to 8 ticks a second, in the rounds of 2026-10-15, and the bots' clock-against-ticks
+;; rules paid for it (#88, #131, #199): so 15 a server, near the 50 ms a 20-ticks server needs (#252).
+;; Memory:
 ;; a server's live heap is about 0.8 GB + 0.06 GB a bot, a race process's under 1 GB at 50 bots.
 {:race/runners 8 ; GitHub runners; the sim race has eight more, and the other four of the twenty stay free for the suite, a fix's checks and the gym
  :race/servers 2 ; servers per runner, each its own world copy, race process and bots
  :race/landing-sets ["R1" "R2" "R3" "R4"] ; ci/gym.edn's race worlds: runner r races on set (r-1) mod 4
- :race/bots 25             ; bot slots per server, each refilled the moment its bot ends: 400 bots playing at every moment
+ :race/bots 15             ; bot slots per server, each refilled the moment its bot ends: 240 bots playing at every moment (#252)
  :race/prefix "Clj_r"      ; bot names: Clj_r01, Clj_r02, ... one serial per server for the job
  :race/until "nether"      ; the target; the run plays every step up to it (plan/through)
  :race/run-minutes 330     ; how long each runner plays, its slots refilled the whole time (issue #127): near GitHub's 6 h job cap, inside the job's 355 minutes with setup, the last report and the uploads

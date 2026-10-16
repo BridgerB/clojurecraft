@@ -403,7 +403,13 @@
         eye (game/eye w)]
     (is (nil? (memory/nearest-log w eye wood/search-radius (wood/skipped w) wood/standing-trunk?))
         "more than 12 above the eye: the near search misses it")
-    (is (= {:intent/kind :walk :intent/target [14 56 9] :intent/for :log :intent/trunk [14 56 9]}
+    ;; sixteen over the feet: the walk ends where the drop lies in the pickup box (wood/log-walk,
+    ;; the forest property at FOREST_SEED 388575908371)
+    (is (= {:intent/kind :walk
+            :intent/target [14 56 9]
+            :intent/for :log
+            :intent/trunk [14 56 9]
+            :intent/pickup? true}
            (wood/gather-next w)))))
 
 (deftest a-failed-intent-is-blacklisted-and-retried
@@ -697,6 +703,15 @@
           broken (terrain/set-block arrivals (get (:intent/waypoints i) (:intent/at i)) 1) ; stone where the next step is
           [w2 _] (run broken [{:event/kind :tick :event/now 1000 :event/rand 0.5}])]
       (is (= 2 (:intent/replans (:plan/intent w2))) "a waypoint ahead gone solid: plan again"))))
+
+(deftest a-long-route-gets-the-time-to-walk-it
+  ;; sim world R2/19 seed 12 (issue #87's second round): a route of 123 waypoints over a snowy
+  ;; mountain was at waypoint 116 when the walk's sixty seconds ran out, and three such walks
+  ;; failed :stuck
+  (let [route (fn [n] {:intent/kind :walk :intent/waypoints (vec (repeat n [0 64 0]))})]
+    (is (= intent/walk-timeout-ticks (intent/walk-deadline (route 0))) "no route yet: the base")
+    (is (< (* 116 10) (- (intent/walk-deadline (route 123)) intent/walk-timeout-ticks))
+        "123 waypoints: time for every one, at half a second each")))
 
 (deftest a-walk-with-no-way-on-fails-no-path
   ;; walled in on every side two blocks high: the search exhausts its frontier at once
