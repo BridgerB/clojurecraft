@@ -345,3 +345,24 @@
         (is (= :active (:intent/status i)))
         (is (= :plan (:intent/stage i)))
         (is (= 1 (:intent/turns i)))))))
+
+(deftest a-cell-beside-a-gravel-bed-over-water-is-never-dug
+  ;; race 38842339863 runner 4 (issue #37) bot Clj_r26: a stair dug beside gravel standing on a
+  ;; cave lake dropped the beach into it, the lake over it poured into the pit, and every stair
+  ;; from there was refused for the water: :boxed
+  (let [gravel (blocks/default-state :gravel)
+        at (fn [blocks] (assoc (standing 61) :world/chunks {[0 0] (world/column blocks)}))
+        target [5 60 5]]
+    (is (intent/exposes-fluid? (at {[6 60 5] gravel [6 59 5] blocks/water-base}) target)
+        "gravel beside it, on water")
+    (is (intent/exposes-fluid? (at {[6 60 5] gravel [6 59 5] gravel [6 58 5] blocks/water-base})
+                               target)
+        "a stack of gravel beside it, on water")
+    (is (not (intent/exposes-fluid? (at {[6 60 5] gravel}) target)) "gravel on stone stays put")
+    (is (not (intent/exposes-fluid? (at {[6 60 5] gravel [6 59 5] blocks/air}) target))
+        "gravel over a cave drops into air, and no water follows")
+    (is (stairs/level-safe? (at {[6 60 5] gravel}) [[5 61 5] target])
+        "beside a bed on stone: a level step")
+    (is (not (stairs/level-safe? (at {[6 60 5] gravel [6 59 5] blocks/water-base})
+                                 [[5 61 5] target]))
+        "beside a bed on water: refused, so the stairs go round")))
