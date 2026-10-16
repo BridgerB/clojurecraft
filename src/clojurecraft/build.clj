@@ -781,27 +781,49 @@
                     (not (or (blocks/air? id) (terrain/fluid-at world %)))))
          first)))
 
+(defn source-in-sight
+  "[src block] for the first of sources (nearest first) the eyes can be given a clear line to:
+   block is the first block on the line to src (sight-block), nil when the line is clear already,
+   and never one a dig may not take (obsidian). nil when no source has such a line."
+  [world sources]
+  (some (fn [src]
+          (let [block (sight-block world src)]
+            (when (or (nil? block)
+                      (not (contains? intent/never-dug
+                                      (blocks/name-of (terrain/block-at world block)))))
+              [src block])))
+        sources))
+
+(defn scoop-at-station
+  "The child that fills the empty bucket with lava from the station's stand, sources those in
+   reach (reach-sources), or :no-station: a scoop along the eyes' line of the nearest source the
+   eyes see, else the first block on the line to one dug (source-in-sight: the rock between the stand and a
+   sealed pool, then the cell over the source). The scoop is aimed (:intent/aim), so it asks only
+   that the source is still there (scoop/source?), never air over it: the bucket's ray passes air
+   and every fluid that is not a source (SOURCE_ONLY), so a source whose top is flowing lava, or
+   one the line enters from the side through a cell just dug, fills it. Sim race 38715231137
+   (issue #142, regressed: 166 runs in 44 rounds, worlds R4/15, R1/26, R2/34): the source over
+   the nearest had been scooped and lava flowed into its cell, or the sight-block dug the cell
+   beside a sealed source under another; the line was clear, the source had no air over it
+   (scoop/scoopable?), and the refill failed :no-station three times in three ticks with the pool
+   half full (refill-scoops-a-source-under-flowing-lava)."
+  [world sources]
+  (let [[src block] (source-in-sight world sources)]
+    (cond
+      (nil? src) :no-station
+      (nil? block)
+      {:intent/kind :scoop :intent/target src :intent/fluid :lava :intent/aim (scoop/aim-point src)}
+      :else (assoc (way-dig block) :intent/for :lava))))
+
 (defn refill
   "The child that refills lava, or the reason it cannot (:no-station, :no-bucket): the feet to the
    station's stand (toward-stand, from the room's landing at the lava's height when no route
-   reaches it); there, a scoop of the nearest source in reach the eyes see, else the first block
-   on the line to it dug (sight-block: the rock between the stand and a sealed pool, then the
-   cell over the source)."
+   reaches it); there, the scoop or the dig that opens the line to a source (scoop-at-station)."
   [world {:intent/keys [origin facing build access]}]
-  (let [{:keys [stand sources h]} (station world origin facing access)
-        src (first sources)
-        block (when src (sight-block world src))]
+  (let [{:keys [stand sources h]} (station world origin facing access)]
     (cond (nil? stand) :no-station
           (not (held? world :bucket)) :no-bucket
-          (intent/centred? world stand)
-          (cond (nil? src) :no-station
-                (and (nil? block) (scoop/scoopable? world src :lava))
-                {:intent/kind :scoop :intent/target src :intent/fluid :lava}
-                (and block
-                     (not (contains? intent/never-dug
-                                     (blocks/name-of (terrain/block-at world block)))))
-                (assoc (way-dig block) :intent/for :lava)
-                :else :no-station)
+          (intent/centred? world stand) (scoop-at-station world sources)
           (intent/routable? world {:intent/kind :walk :intent/target stand :intent/for :build})
           {:intent/kind :walk :intent/target stand :intent/for :build}
           (= (long (physics/y-of (intent/feet world))) (second stand))
