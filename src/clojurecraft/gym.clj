@@ -475,7 +475,9 @@
     :gym/timeout-ms 900000
     :gym/truth [(rods-held 7)]}
    ;; blaze-fortress: from the fortress row's pad 48 west of a located fortress, the spawner found
-   ;; in the chunks loaded round it, tunnelled to, camped by, seven rods from its blazes
+   ;; in the chunks loaded round it, tunnelled to, camped by, seven rods from its blazes. Fire
+   ;; Resistance as blaze-7 has it: blaze-fortress-f and -g (runs 38902306126, 38904048480) burned
+   ;; to death by the spawner in four runs of six, its blazes' fire all round it
    {:gym/goal :blaze-rods
     :gym/name "blaze-fortress"
     :gym/until "blaze-rods"
@@ -483,7 +485,7 @@
     :gym/difficulty "normal"
     :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
                   "minecraft:cooked_beef 16"]
-    :gym/summon iron-armour
+    :gym/summon (conj iron-armour fire-resistance)
     :gym/timeout-ms 1800000
     :gym/truth [(rods-held 7)]}])
 

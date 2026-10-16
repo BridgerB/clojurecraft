@@ -189,13 +189,16 @@
    blaze-fortress-e (run 38900794167) stood by its spawner under 10 health, waiting to heal while
    burning and shot, and every run died there; blaze-fortress-f (run 38902306126) walked to a
    cell ten off on the plane that the blazes still saw, the walk done at once in reach of it,
-   twenty times a second."
+   twenty times a second. A route found with no step (the feet's own cell counted unseen, its
+   line a touch apart from the eye's to the blaze) is none: blaze-fortress-g run 3 (run
+   38904048480) walked to nothing and the run threw."
   [world e]
   (let [r (path/plan world
                      (path/feet-cell (:player/pos world))
-                     {:goal/kind :unseen :goal/pos (hunt/cell (:entity/pos e))})]
-    (when (= :found (:path/status r))
-      {:intent/kind :walk :intent/target (last (:path/waypoints r)) :intent/for :cover})))
+                     {:goal/kind :unseen :goal/pos (hunt/cell (:entity/pos e))})
+        to (last (:path/waypoints r))]
+    (when (and (= :found (:path/status r)) to (not= to (intent/feet world)))
+      {:intent/kind :walk :intent/target to :intent/for :cover})))
 
 (defn healing
   "What a hurt bot does: the meal; else out of a watching blaze's sight (watcher, cover); else
