@@ -3,6 +3,7 @@
    against a server that never answers."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.build :as build]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -335,3 +336,17 @@
       (is (= #{[10 63 8] [11 63 8]} (:plan/blacklist w))
           "no nearer than it began: the pond given up"))
     (is (empty? (:plan/blacklist (ran [2 64 8]))) "six blocks nearer: the water kept")))
+
+(deftest the-refills-ray-past-a-blocks-edge-is-a-wall
+  ;; race 38839564087 runner 1 (issue #225): bots Clj_r12, Clj_r19 and Clj_r21 sent nine scoops each
+  ;; at a lava source from the station along lines within 0.03 of a block's edge, and the build
+  ;; failed :no-scoop
+  (let [src [10 63 10]
+        w (standing {src blocks/lava-base [9 65 8] 1} [8.7 8.7])]
+    (is (= [9 65 8] (build/sight-block w src)) "the line to the centre runs along the stone's edge")
+    (is (= [10.25 63.85 10.5] (build/lava-aim w src)) "a quarter block west of it is clear")
+    (is (=
+         {:intent/kind :scoop :intent/target src :intent/fluid :lava :intent/aim [10.25 63.85 10.5]}
+         (build/scoop-at-station w [src]))
+        "scooped along the clear ray, nothing dug")))
+

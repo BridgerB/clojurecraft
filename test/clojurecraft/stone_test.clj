@@ -180,6 +180,15 @@
            (stone/mine-next pocket (row :dig-gravel)))
         "a climb, eight stairs at a time")
     (is (nil? (stone/climb (standing 64 :stone_pickaxe))) "out of the ground there is none"))
+  (testing
+    "never back under the stairs just cut: sim race 38839665459 runner 3 (issue #71, world R1/19) cut stairs west to y 1, tunnelled east under them and undermined its only way back up"
+    (let [w (standing 16 :stone_pickaxe)
+          down
+          (assoc w :plan/last {:intent/kind :stairs-down :intent/dir [-1 0] :intent/status :done})]
+      (is (= [1 0] (stone/tunnel-heading w)) "plain rock: east first")
+      (is (some? (stone/tunnel-heading down)))
+      (is (not= [1 0] (stone/tunnel-heading down))
+          "the stairs came down westward: not east under them")))
   (testing "a tunnel that died :boxed is not started again from its pocket"
     (let [w (standing 16 :stone_pickaxe)
           died (plan/fail-intent
@@ -290,6 +299,31 @@
                cells))
         "the air over a pond: a bridge, never laid")))
 
+(deftest a-stair-down-turns-into-the-rock-before-it-lays-a-floor
+  ;; race 38842339863 runner 4 (issue #37) bots Clj_r01 and Clj_r08: the mine's stairs down ran
+  ;; along a cliff's face and a cave's wall, laying a floor before every stair with the rock a turn
+  ;; away, until the cobblestone was spent and every stair was :boxed. Here a cave opens east of
+  ;; the feet, under them from x 6 on; south is rock
+  (let [cave (into {} (for [x (range 6 16) y (range 58 64) z (range 16)] [[x y z] blocks/air]))
+        down {:intent/kind :stairs-down :intent/to-y 58 :intent/status :active}
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        at (fn [blocks]
+             (let [w (assoc (standing 64 :stone_pickaxe :cobblestone)
+                            :world/chunks {[0 0] (world/column blocks)}
+                            :plan/intent down)]
+               (:plan/intent (intent/run w down tick))))]
+    (is (= [:open [0 1]] ((juxt :intent/stage :intent/dir) (at cave)))
+        "the stair goes south into the rock, nothing laid")
+    (is (= :lay
+           (:intent/stage (at (merge cave
+                                     (into {}
+                                           (for [x (range 16)
+                                                 y (range 58 64)
+                                                 z (range 16)
+                                                 :when (not= [x z] [5 5])]
+                                             [[x y z] blocks/air]))))))
+        "with air every way, a floor is laid as before")))
+
 (deftest a-tunnel-step-the-dig-refuses-is-planned-again
   ;; sim race 38762695024 runner 8 (issue #171, world R1/40): a tunnel for gravel at y 40 ran
   ;; under a gravel bed; the gravel over each step it opened fell into the step round the body,
@@ -320,3 +354,24 @@
         (is (= :active (:intent/status i)))
         (is (= :plan (:intent/stage i)))
         (is (= 1 (:intent/turns i)))))))
+
+(deftest a-cell-beside-a-gravel-bed-over-water-is-never-dug
+  ;; race 38842339863 runner 4 (issue #37) bot Clj_r26: a stair dug beside gravel standing on a
+  ;; cave lake dropped the beach into it, the lake over it poured into the pit, and every stair
+  ;; from there was refused for the water: :boxed
+  (let [gravel (blocks/default-state :gravel)
+        at (fn [blocks] (assoc (standing 61) :world/chunks {[0 0] (world/column blocks)}))
+        target [5 60 5]]
+    (is (intent/exposes-fluid? (at {[6 60 5] gravel [6 59 5] blocks/water-base}) target)
+        "gravel beside it, on water")
+    (is (intent/exposes-fluid? (at {[6 60 5] gravel [6 59 5] gravel [6 58 5] blocks/water-base})
+                               target)
+        "a stack of gravel beside it, on water")
+    (is (not (intent/exposes-fluid? (at {[6 60 5] gravel}) target)) "gravel on stone stays put")
+    (is (not (intent/exposes-fluid? (at {[6 60 5] gravel [6 59 5] blocks/air}) target))
+        "gravel over a cave drops into air, and no water follows")
+    (is (stairs/level-safe? (at {[6 60 5] gravel}) [[5 61 5] target])
+        "beside a bed on stone: a level step")
+    (is (not (stairs/level-safe? (at {[6 60 5] gravel [6 59 5] blocks/water-base})
+                                 [[5 61 5] target]))
+        "beside a bed on water: refused, so the stairs go round")))

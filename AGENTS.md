@@ -549,7 +549,7 @@ To within `intent/reach` 4.0 (eye to block centre) of `:intent/target`; route pl
 ### 19.3 Dig (`intent/run :dig`, `intent/dig-stage`)
 
 Stages `:settle` → `:digging` → `:confirm`, absolute times against `:time/now`. Run as a child by stairs, swim-out, build, redig, place niche.
-- `:settle` refusals, in order: block `intent/open?` (air, water or lava only; an awkward block is dug, #91) → `:target-gone`; eye > 4.5 from centre → `:out-of-reach`; `choose-tool` `:needs-tool`; block in `intent/never-dug` `#{:obsidian}` or `exposes-fluid?` (fluid in any of six neighbours, or `fluid-over-falling?`: gravel/sand over it within 16 with fluid on top) without `:intent/exposes-ok?` → `:unsafe`.
+- `:settle` refusals, in order: block `intent/open?` (air, water or lava only; an awkward block is dug, #91) → `:target-gone`; eye > 4.5 from centre → `:out-of-reach`; `choose-tool` `:needs-tool`; block in `intent/never-dug` `#{:obsidian}` or `exposes-fluid?` (fluid in any of six neighbours, or `fluid-over-falling?`: gravel/sand over it within 16 with fluid on top, or `bed-over-fluid?`: gravel/sand beside it resting on a fluid, #37) without `:intent/exposes-ok?` → `:unsafe`.
 - Start after 3 `still?` ticks and `settle-ms` 150, or `settle-deadline` 2000. `still?` = horizontal speed < 0.05, on ground or afloat. Sends `set-carried-item`, `player-action :start-destroy` (`face-toward`), `swing`; `:intent/finish-at` = now + `finish-delay`.
 - `:digging`: tool gone from slot → `:tool-broke`; swing every 350 ms; at `finish-at` send `:stop-destroy`, go `:confirm` with `confirm-ticks` 60.
 - `:confirm`: block differs from START state → done. Ticks out and FINISH acked → `:rejected`. Ticks out with no ack at all → done, cell predicted air (`terrain/predict`, `:world/unconfirmed`, dropped after `terrain/unconfirmed-ms` 3000).
@@ -570,7 +570,8 @@ Walk, dig, collect, each `:intent/for :log`, chained from `:plan/last`. `:wood` 
 2. `near-walk`: nearest standing trunk within `search-radius` 48, ±12 of the eye (`memory/nearest-log`), skipping blacklisted logs and failed trunks; first routable of 3 nearest. Target = `trunk-target` (log nearest feet height, up to `max-trunk` 8 up).
 3. `climb-out`: trunks within `far-radius` 256: walk to the first routable; else (not `stairs/out?`, feet not in `:plan/boxed-at`) `intent/opening`, else `:stairs-up` to top of world, `:intent/for :surface`.
 4. `hunt` (under open sky): a walk `:intent/for :log-hunt` via `scoop/hunt-targets`/`first-walk`. Logs remembered within `far-radius`: toward the ground nearest the nearest log, and may walk back toward the landing. None remembered: sets out anyway in the water hunt's order (#57). nil underground or with no routable ground.
-5. `{:plan/wait :no-log}`.
+5. `crossing` (#87): under open sky, nothing else reaching a tree, the nearest trunk across open water → `:cross` (swum at the surface, jump held; done on dry land once wet and 8 nearer).
+6. `{:plan/wait :no-log}`.
 - The `:log` tag exists so a walk to a table is never continued as a dig. A trunk no route reaches is passed over, never walked at (#75). Stairs only once a trunk is remembered, unreachable, and the shaft cannot be walked up. `stairs/out?` is false in a pit (`stairs/pit-rim`; #54, #56, #58, #63, #102-#104).
 
 ### 19.6 Stairs and tunnel (`stairs.clj`)
@@ -631,8 +632,8 @@ A build is a vector of ops with done-predicates as data (`build/holds?`); `next-
 - `:build` intent per tick: `plan-for` (memoized), `next-op`, `work-op`. `op-child`: lava pour with no lava bucket → `refill`; water pour with other lava touching → `:stray-lava`; `:place` into `foundation` (up to depth 4) or `:no-support`; `:dig` with `:intent/exposes-ok?`; `:pour`/`:use-on` equip, aim, use, wait `:intent/expect`; `:stand-in` → `:await`; `:verify` → `:unverified`.
 - A dig child failing `:target-gone` counts done (`found-open?`, #91). A place child `:rejected` with its cell inside the player is re-approached (`refused-for-the-body?`, #44).
 - `approach-stand`: `reachable-stand` (refuses a stand whose feet or head is the worked cell, #44; also tries feet one under the cell), `room-stand`; with no route to any, cuts toward `nearest-stand-cell` (feet's height only, sorted by distance to the worked cell, line must have a diggable block; `stance-block` never takes frame rock; #74) via `toward-stand`.
-- `work-op`: `:no-station` with a `spent?` pool ends the build done (new site chosen); any other keyword fails it.
-- `choose-site`: beside the `max-sources` 3 nearest lava sources, any depth; `site-ok?` wants footprint loaded, no fluid in or touching it, pool not `spent?` (≥ as many reachable sources as cells left; #142); then fewest `blocks-needed` (≤ `site-blocks` 8), then nearest.
+- `work-op`: `:no-station` with a `spent?` pool ends the build done (new site chosen); a way child failing `:no-path`/`:stuck` beyond `site-reach` of the landing gives the site up and ends the build (`lost-way?`, `memory/give-up-site`; #222); any other keyword fails it.
+- `choose-site`: beside the `max-sources` 3 nearest lava sources not within `give-up-radius` of a given-up site, any depth; `site-ok?` wants footprint loaded, no fluid in or touching it, pool not `spent?` (≥ as many reachable sources as cells left; #142); then fewest `blocks-needed` (≤ `site-blocks` 8), then nearest.
 - `refill`: `station` (4 to `station-depth` 9 in front, within `station-span` 8 aside, sources in reach); scoop the nearest seen source, else dig `sight-block`; returns `:no-station`/`:no-bucket`.
 - `plan/next-intent :build`: `held-first` (row's `:goal/holds` + cobblestone by `blocks-needed`; #70) via `make/decide`; then `:build` at the remembered site unless spent, else a chosen one; else `lava-hunt` (`lava-walk`, `uncap`, `toward-lava`; #41); else wait `:no-site`.
 - Rules: never dig obsidian; water above the lava, never beside; landing reached at the lava's height (`:no-stand` otherwise); every worked cell in `footprint`; `kept` cells never dug for a way; a stand over water placed from shore (#45). `:no-effect` = pour/use-on with no effect in 3000 ms; `:not-yet` = `:await` past `await-ms` 10000.
@@ -647,7 +648,7 @@ A build is a vector of ops with done-predicates as data (`build/holds?`); `next-
 ### 19.12 Pathfinder (`path/plan`)
 
 `(path/plan world from goal opts)` → `{:path/waypoints :path/cost :path/status :found|:partial|:none :path/from}`. Pure A*, budget in node expansions (`default-max-nodes` 6000) so replays match; `:partial` when spent, `:none` when the open set empties, both return the route to the nearest node seen.
-- Classes (`classify-id`): `:water :lava :awkward` (shape taller than 0.125, or slime, ice, magma, cobweb) `:solid :clear :unknown`. One snow layer is `:clear` (#38: 39 bots froze). `:unknown` is never floor nor clear: routes stop at the loaded edge.
+- Classes (`classify-id`): `:water :lava :awkward` (shape taller than 0.125, or slime, ice, magma, cobweb) `:solid :clear :unknown`. One snow layer is `:clear` (#38: 39 bots froze). Powder snow is `:clear` and not solid: a player sinks through it (#87). `:unknown` is never floor nor clear: routes stop at the loaded edge.
 - Moves: `:walk` 1, `:jump-up` 2, `:diagonal` √2 (both corners clear), `:drop` 1 + 0.5/block up to `max-fall` 3; `landing` refuses water, lava, awkward, unknown. `clear?` refuses lava in the four sides or below. Water is a wall, never a floor.
 - `start-cell`: feet cell if standable, else nearest within one block (block-edge starts).
 - Goals (`goal-done?`, `heuristic`): `:near` (3) `:block :xz :away :pickup` (`:goal/rise`, `:goal/step-down?`) `:sky` (`sky-weight` 4, not admissible).

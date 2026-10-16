@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, path, intents]
 aliases: [path/plan, A*, route, waypoints, :awkward, lava rule, node budget, path.clj]
 status: verified
-lastUpdated: 2026-10-14
+lastUpdated: 2026-10-15
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/path.clj#defn plan
@@ -13,6 +13,7 @@ sourceRefs:
   - src/clojurecraft/path.clj#defn classify-id
   - src/clojurecraft/path.clj#defn cells
   - src/clojurecraft/path.clj#def awkward-types
+  - test/clojurecraft/plan_test.clj#a-trunk-across-powder-snow-is-walked-to
   - src/clojurecraft/path.clj#def one-layer-snow
   - src/clojurecraft/path.clj#def templates
   - src/clojurecraft/path.clj#defn landing
@@ -66,6 +67,7 @@ related:
 - No parkour, no digging through, no scaffolding: a one-wide gap with no ramp is `:none`, by design.
 - `:awkward` is conservative: a slab or stair is routed around, not stood on, until the physics can collide with its shape (a `shapes.edn` would be an accretion).
 - **A snowfield was unwalkable.** Race 38477665442 (issue #38): 39 bots landed on snowy ground never moved, twelve walks failing `:no-path` in a second. One layer of snow lay on every block round them, `snow_layer` was in `awkward-types` whatever its depth, so neither the feet cell nor any cell beside it was standable, `start-cell` found nothing and every plan was `:none` from nowhere. `one-layer-snow` is `:clear` now; the test `a-snowfield-is-crossed-through-its-one-layer-snow` holds it, with a two-layer field still refused.
+- **A powder-snow field was unwalkable.** Sim race 38811417241 runner 2 (issue #87, world R2/20): out of the mine on one cobblestone block among powder snow, a spruce eight blocks off; powder snow was in `awkward-types`, neither floor nor clear, so no route had a single move and the plan waited `:no-log`. A player without leather boots has no collision with it and sinks to the block below (the game's `PowderSnowBlock`), so it is in `blocks/passable-types` (not solid, the physics falls through it) and `:clear` to a route, which goes through it to the floor under it (`a-trunk-across-powder-snow-is-walked-to`). Not modelled: the slowing, and the freezing after seven seconds inside.
 
 ## See also
 - [[walk-intent]] - the consumer: how the route is followed and when it is planned again.

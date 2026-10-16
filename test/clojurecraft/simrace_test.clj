@@ -241,3 +241,14 @@
     (is (= {:why :crash :t 5000}
            (simrace/decision {:time/now 5000 :world/facts (memory/empty-facts)}
                              [:portal :crashed])))))
+
+(deftest a-judge-out-of-wall-time-counts-as-recurring
+  ;; a judge has a wall-clock budget (judge-wall-ms) so a slow base cannot outlast issue.yml's
+  ;; job (PR #197's base planner took 862 s on one moment): a play it halts did not get past
+  ;; the moment, so it recurs
+  (let [r (simrace/run bare 3 "nether" 300000)
+        snap (kept-snapshot bare r)
+        played (simrace/judged snap bare (constantly true))]
+    (is (:run/halted? played))
+    (is (simrace/recurs? snap played))
+    (is (not (:run/halted? (simrace/judged snap bare))) "without a budget, never halted")))
