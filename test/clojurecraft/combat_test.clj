@@ -146,6 +146,20 @@
     (is (plan/done-by (standing {9 (mob :pig [10.0 64.0 8.5] 10.0)}) (row :defend))
         "a pig is no threat")))
 
+(deftest only-a-hostile-in-sight-and-in-reach-of-the-floor-is-a-threat
+  ;; gym blaze-fortress-c (run 38895759229): the :defend row went after blazes through the
+  ;; fortress's walls and hovering over the bot's tunnel, and failed :unreachable
+  (let [zombie {7 (mob :zombie [11.0 64.0 8.5] 20.0)}
+        walled (assoc (standing zombie)
+                      :world/chunks
+                      {[0 0] (world/column {[10 64 8] (blocks/default-state :stone)
+                                            [10 65 8] (blocks/default-state :stone)})})]
+    (is (= #{7} (set (keys (combat/threats (standing zombie))))) "in the open, a threat")
+    (is (empty? (combat/threats walled)) "behind a wall, none")
+    (is (plan/done-by walled (row :defend)))
+    (is (empty? (combat/threats (standing {8 (mob :blaze [9.5 68.0 8.5] 20.0)})))
+        "a blaze four over the feet is out of reach from the floor")))
+
 (deftest a-back-off-ends-eight-blocks-away
   (let [w (assoc (standing {8 (mob :creeper [10.5 64.0 8.5] 20.0)})
                  :plan/intent
