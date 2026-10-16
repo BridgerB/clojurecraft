@@ -15,6 +15,7 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.mob :as mob]
             [clojurecraft.packet :as p]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
@@ -611,6 +612,29 @@
 (s/def :sim.hurt/at int?)
 (s/def :sim.hurt/last number?)
 (s/def :sim/hurt (s/keys :req-un [:sim.hurt/at :sim.hurt/last])) ; the last hurt: when, how hard
+;; mobs in the model (issue #260): each one's kind, place, health and clocks (mob.clj, sim/tick-mobs)
+(s/def :sim.mob/type (set (keys mob/kinds)))
+(s/def :sim.mob/pos ::vec3)
+(s/def :sim.mob/health (s/double-in :min 0.0 :NaN? false :infinite? false))
+(s/def :sim.mob/hit-at int?)                   ; when it was last hurt (the hurt window)
+(s/def :sim.mob/last-hit number?)              ; how hard
+(s/def :sim.mob/attack-at int?)                ; when it may hit or shoot again
+(s/def :sim.mob/fuse-at int?)                  ; when a creeper lit its fuse
+(s/def :sim.mob/dead-at int?)                  ; when it died; removed once its death is over
+(s/def :sim.mob/angry? boolean?)               ; a neutral one has turned on the player
+(s/def :sim.mob/persistent? boolean?)          ; never despawned: a fixture's, an animal
+(s/def ::sim-mob
+  (s/keys :req-un [:sim.mob/type :sim.mob/pos :sim.mob/health]
+          :opt-un
+          [:sim.mob/hit-at :sim.mob/last-hit :sim.mob/attack-at :sim.mob/fuse-at :sim.mob/dead-at
+           :sim.mob/angry? :sim.mob/persistent?]))
+(s/def :sim/mobs (s/map-of int? ::sim-mob))
+(s/def :sim/fixture-mobs (s/coll-of (s/keys :req-un [:sim.mob/type :sim.mob/pos]) :kind vector?))
+(s/def :sim/mob-rng int?)                      ; the mobs' own roll stream (sim/mob-roll)
+(s/def :sim/day-time int?)                     ; game ticks into the days, night from 13000 of each 24000
+(s/def :sim/populated (s/coll-of (s/tuple int? int?) :kind set?)) ; chunks whose animals were placed
+(s/def :sim/populated-at (s/tuple int? int?))  ; the column the player was in when they last were
+(s/def :sim/player-look (s/tuple double? double?)) ; [yaw pitch] the client last reported
 (s/def ::sim (s/keys :req [:sim/phase :sim/now :sim/out]))
 (s/fdef sim/step
   :args
