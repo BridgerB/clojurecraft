@@ -94,7 +94,7 @@ bb board move <n> progress       # todo | progress | done; prints what it reads 
 
 `bb board` looks the ids up each run (never hard-code them). `heal` applies four rules: an open bot-failure issue not on the board is added as Todo; an open issue that is Done or unsorted goes to Todo (reopened); a closed issue that is Todo or In Progress goes to Done; an open issue In Progress over six hours with no `fix/<n>` or `fix/<n>-rK` branch on origin goes to Todo (no branch, no claim). It never touches a claim that has a branch.
 
-You may take only: status `Todo`, open, labelled `bot-failure`; never #10 (the roadmap), never an issue without `bot-failure`, never an item `In Progress` unless it is stale.
+You may take only: status `Todo`, open, labelled `bot-failure`; never #10 (the roadmap), never an issue without `bot-failure`, never an item `In Progress` unless it is stale. Never an issue assigned to Copilot: a cloud agent session holds it (`.github/agents/bot-fixer.agent.md`), on a `copilot/*` branch whose PR says `Fixes #<n>`, and `issue.yml` checks that PR as it checks `fix/<n>`.
 
 **Stale claims.** An item with a branch is stale when all three hold: In Progress for over six hours (the Status value's `updatedAt`); its claim branch has no commit in six hours that is not on `main`; no open PR from it was updated in six hours. Any agent may return a stale item without asking: push its branch to `stale/fix/<n>-<YYYYMMDD>`, delete `fix/<n>`, close its PR (`gh pr close <pr>`, no comment), set it to Todo. Never return one that fails any of the three tests: an agent thinking for a long time still pushes.
 
