@@ -753,7 +753,8 @@
          :eid int?))
 (s/fdef pearls/endermen
   :args
-  (s/cat :world (requires :world/entities :player/pos)))
+  (s/cat :world (requires :world/entities :player/pos)
+         :radius (s/? number?)))
 (s/fdef eat/food-held
   :args
   (s/cat :world (requires :player/inventory)))
