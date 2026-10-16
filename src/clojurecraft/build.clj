@@ -951,6 +951,32 @@
 
 (def site-reach 8) ; feet this far or nearer the room's landing are at the site: nothing to go back by
 
+(def give-up-radius 16)               ; blocks round a given-up site's origin no new site is chosen in: the same pool, another facing
+
+(defn given-up?
+  "Is a frame at origin as good as a site given up: within give-up-radius of one of given, the
+   origins given up (memory/given-up-sites)?"
+  [given origin]
+  (boolean (some #(<= (physics/distance (physics/centre %) (physics/centre origin)) give-up-radius)
+                 given)))
+
+(defn lost-way?
+  "Did child, the way to the site from far off (a walk, a swim out, stairs), fail for want of a
+   way (:no-path, :stuck) with the feet beyond site-reach of the room's landing? Then it is the
+   site that no way reaches, not an op: sim race 38839665459 (issue #222, world R1/11, six runs
+   in two rounds) chose a site 70 blocks off across an aquifer, the walk there failed :no-path,
+   the stairs down toward its landing at y 24 were refused for the water beside them, the swim
+   out of the water let in dug down a staircase it flooded until :stuck, and the escape from
+   that water failed :stuck too: three failures, all toward the one site the planner kept. Only
+   a :build has a site: a :tunnel-to (fortress) works its steps through work-op too."
+  [world {:intent/keys [kind origin facing access]} {:intent/keys [reason] :as child}]
+  (boolean (and (= :build kind)
+                (intent/failed? child)
+                (#{:no-path :stuck} reason)
+                (> (physics/distance (physics/centre (intent/feet world))
+                                     (physics/centre (cell origin facing (landing (or access 0)))))
+                   site-reach))))
+
 (defn way-back
   "The way back to the build's site from far off: toward the room's landing (landing for the
    build's access h) as a landing op goes (toward-stand: a walk, else stairs to its height and a
@@ -1146,6 +1172,13 @@
             (assoc :player/controls {})
             (intent/dissoc-intent :intent/child)
             (game/say "build: the way filled with what fell over it, clearing it again"))
+        (and child (lost-way? world i child))
+        ;; no way reaches the site from here: it is given up and the planner chooses another
+        (-> world
+            (assoc :player/controls {})
+            (memory/give-up-site (:intent/origin i))
+            intent/done
+            (game/say (str "build: no way to the site at " (:intent/origin i) ", a new site")))
         (and child (intent/failed? child) (boxed-way? child))
         ;; a way to the site boxed in: the pocket is remembered and the build looks again from it
         ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's
@@ -1255,11 +1288,16 @@
   "{:origin :facing :h} for a new frame (issue #124: the rock is the mould): beside a lava source
    among the max-sources nearest the feet, a cell beside the cell over it (stands-beside) put at
    one of station-spots, every facing; of those site-ok? accepts, the fewest blocks to place
-   (blocks-needed, at most site-blocks), then the nearest the feet. nil when none."
+   (blocks-needed, at most site-blocks), then the nearest the feet. nil when none. Sources and
+   origins within give-up-radius of a site given up are passed over (given-up?, issue #222)."
   [world]
   (let [feet (physics/centre (intent/feet world))
         sources (lava-sources world)
-        near (take max-sources (sort-by #(physics/distance (physics/centre %) feet) sources))]
+        given (memory/given-up-sites world)
+        near (->> sources
+                  (remove #(given-up? given %))
+                  (sort-by #(physics/distance (physics/centre %) feet))
+                  (take max-sources))]
     (->> (for [src near
                :let [local (doall (build-near sources src))]
                [stand _] (stands-beside world src)
@@ -1267,7 +1305,7 @@
                [dx h] station-spots
                :let [[tx tz] (turn facing [dx station-reach])
                      origin (mapv - stand [tx h tz])]
-               :when (site-ok? world local origin facing h)
+               :when (and (not (given-up? given origin)) (site-ok? world local origin facing h))
                :let [n (blocks-needed world (plan-for :nether origin facing h))]
                :when (<= n site-blocks)]
            {:origin origin
@@ -1415,7 +1453,10 @@
   [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]}
         (let [{:site/keys [origin facing] :as site} (memory/site world)]
-          (when-not (and origin (spent? world (lava-sources world) origin facing)) site))
+          (when-not (and origin
+                         (or (spent? world (lava-sources world) origin facing)
+                             (given-up? (memory/given-up-sites world) origin)))
+            site))
         chosen (when-not origin (choose-site world))
         origin (or origin (:origin chosen))
         facing (or facing (:facing chosen))
