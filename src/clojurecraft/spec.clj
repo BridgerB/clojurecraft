@@ -5,6 +5,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.armour]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.build :as build]
             [clojurecraft.claims :as claims]
             [clojurecraft.combat]
@@ -421,6 +422,7 @@
 (s/def :intent/next-swing number?)
 (s/def :intent/swings pos-int?)
 (s/def :intent/target-pos ::vec3)
+(s/def :intent/spawner ::block-pos)
 (s/def :intent/finish-at number?)
 (s/def :intent/slot (s/int-in 0 9))
 (s/def :intent/tool (s/nilable int?))
@@ -748,6 +750,9 @@
 (s/fdef eat/food-held
   :args
   (s/cat :world (requires :player/inventory)))
+(s/fdef blaze/blazes
+  :args
+  (s/cat :world (requires :player/pos :world/entities)))
 (s/fdef drops/lying
   :args
   (s/cat :world (requires :world/entities)
@@ -764,6 +769,6 @@
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
-   `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held
-   `drops/lying])
+   `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held `drops/lying
+   `blaze/blazes])
 (s/def :stats/deaths pos-int?)

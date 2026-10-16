@@ -47,9 +47,10 @@
 (s/def :gym/summon (s/coll-of string? :kind vector?)) ; RCON commands run in the row's dimension once the bot stands there with its kit (fill-in): the mobs it meets
 (s/def :gym/difficulty #{"peaceful" "easy" "normal" "hard"}) ; set before the bot is landed
 (s/def :gym/fixture? true?)              ; a row that judges the landing alone: its --until puts no goal in play
+(s/def :gym/name string?)                ; the row's own name when several rows play one goal from different starts (issue #262: blaze-1, blaze-7)
 (s/def ::row
   (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]
-          :opt [:gym/setup :gym/land :gym/summon :gym/difficulty :gym/fixture?]))
+          :opt [:gym/setup :gym/land :gym/summon :gym/difficulty :gym/fixture? :gym/name]))
 (s/def :gym/run pos-int?)
 (s/def :gym/landing (s/coll-of int? :kind vector? :count 3))
 (s/def :gym/landed? boolean?)
@@ -148,6 +149,26 @@
         ds))
 
 (def night "time set midnight")       ; a :gym/summon entry: the hostiles' hour, for a row that defends
+
+(def invulnerable
+  "What makes the bot take no harm, as :gym/summon entries: Resistance V (every hurt cut to
+   nothing) and Fire Resistance, for a row that measures a fight and not the bot's survival
+   (ruststeve's arena gave its bot Invulnerable:1b, which no command can set on a player)."
+  ["effect give {name} minecraft:resistance 1000000 4 true"
+   "effect give {name} minecraft:fire_resistance 1000000 0 true"])
+
+(def iron-armour
+  "Iron armour put on the bot, as :gym/summon entries: given after the dimension change with the
+   kit (item replace, since a mob at hand comes before dressing)."
+  ["item replace entity {name} armor.head with minecraft:iron_helmet"
+   "item replace entity {name} armor.chest with minecraft:iron_chestplate"
+   "item replace entity {name} armor.legs with minecraft:iron_leggings"
+   "item replace entity {name} armor.feet with minecraft:iron_boots"])
+
+(defn rods-held
+  "A truth that the bot holds n blaze rods or more (n under 10)."
+  [n]
+  {:truth/cmd "clear {name} minecraft:blaze_rod 0" :truth/re (str "Found ([" n "-9]|[1-9][0-9]) ")})
 
 (def portal-arena
   "The portal rows' arena round the landing: stone ten deep under air, and a trench of lava
@@ -399,7 +420,46 @@
                 "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
     :gym/timeout-ms 120000
     :gym/truth [{:truth/cmd "scoreboard players get {name} zkills" :truth/re "has [1-9]"}
-                {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}])
+                {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
+   ;; issue #262: blaze rods. blaze-1: the nether arena with a blaze spawner in its corner and a
+   ;; blaze summoned, the bot unharmed (invulnerable) with six rods given, so one more is the
+   ;; goal's seventh: the fight, the pickup of a drop that may not come, the spawner camped by
+   {:gym/goal :blaze-rods
+    :gym/name "blaze-1"
+    :gym/until "blaze-rods"
+    :gym/land :nether-arena
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 8" "minecraft:blaze_rod 6"]
+    :gym/summon (into invulnerable
+                      [(blaze-spawner [3 0 3])
+                       (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
+    :gym/timeout-ms 300000
+    :gym/truth [(rods-held 7)]}
+   ;; blaze-7: the same room, all seven rods from its blazes, the bot in iron armour and hurt by
+   ;; their fireballs, so the break-off under 10 health and the meal after it are played
+   {:gym/goal :blaze-rods
+    :gym/name "blaze-7"
+    :gym/until "blaze-rods"
+    :gym/land :nether-arena
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 16"]
+    :gym/summon (into iron-armour
+                      [(blaze-spawner [3 0 3])
+                       (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
+    :gym/timeout-ms 900000
+    :gym/truth [(rods-held 7)]}
+   ;; blaze-fortress: from the fortress row's pad 48 west of a located fortress, the spawner found
+   ;; in the chunks loaded round it, tunnelled to, camped by, seven rods from its blazes
+   {:gym/goal :blaze-rods
+    :gym/name "blaze-fortress"
+    :gym/until "blaze-rods"
+    :gym/land :nether-fortress
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
+                  "minecraft:cooked_beef 16"]
+    :gym/summon iron-armour
+    :gym/timeout-ms 1800000
+    :gym/truth [(rods-held 7)]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
@@ -416,9 +476,12 @@
 ;; ---------------------------------------------------------------- data
 
 (defn gym
-  "The registry row for a goal, named by its keyword or its --until name, or nil."
+  "The registry row named goal: by its own :gym/name first (several rows may play one goal from
+   different starts), else the first row of that goal keyword or --until name; nil for none."
   [goal]
-  (let [n (name goal)] (some #(when (or (= n (name (:gym/goal %))) (= n (:gym/until %))) %) gyms)))
+  (let [n (name goal)]
+    (or (some #(when (= n (:gym/name %)) %) gyms)
+        (some #(when (or (= n (name (:gym/goal %))) (= n (:gym/until %))) %) gyms))))
 
 (defn fill-in
   "cmd with {name} the bot's name and {x} {y} {z} the landing's coordinates, each with an offset
@@ -592,8 +655,8 @@
 
 (defn plan-matrix
   "The trial matrix for goals x runs as JSON, {\"include\": [{\"goal\", \"run\", \"minutes\"}]}.
-   Only goals, run numbers and the job's minutes cross the job boundary; each trial recomputes
-   the rest from the registry."
+   Only goals (a row's :gym/name, else its --until name), run numbers and the job's minutes cross
+   the job boundary; each trial recomputes the rest from the registry."
   [goals runs]
   (str "{\"include\":["
        (str/join ","
@@ -601,7 +664,7 @@
                        :let [row (gym g)]
                        run (range 1 (inc runs))]
                    (str "{\"goal\":\""
-                        (:gym/until row)
+                        (:gym/name row (:gym/until row))
                         "\",\"run\":"
                         run
                         ",\"minutes\":"

@@ -8,6 +8,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build]
             [clojurecraft.fixtures :as fx]
@@ -114,14 +115,16 @@
     "no item target needs a per-goal method: wood, kit and pickaxe all plan through the same registries;
             the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes,
             the meal, the armour and the fights (issue #259), done by the server's food, slots and mobs, and the
-            entities trial (issue #258), done by a living entity's health the server sent"
+            entities trial (issue #258), done by a living entity's health the server sent, and the blaze
+            rods (issue #262), done by the rods held, planned by their own rule"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
     (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :fed? :dressed?
-                              :armoured? :health-seen? :safe? :cleared? :provisioned? :armed?}
+                              :armoured? :health-seen? :safe? :cleared? :provisioned? :armed?
+                              :rods-held?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
     (is (= #{:needs :escape :wade :build :fortress :eat :wear :armour :watch :defend :attack :hunt
-             :sword}
+             :sword :blaze-rods}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))

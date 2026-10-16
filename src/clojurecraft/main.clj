@@ -18,6 +18,7 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.armour]
+            [clojurecraft.blaze]
             [clojurecraft.build]
             [clojurecraft.cli :as cli]
             [clojurecraft.combat]
