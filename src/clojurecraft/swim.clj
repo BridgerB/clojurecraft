@@ -192,6 +192,17 @@
       (and (:player/in-water? world) (not (solid-cell? world [x (surface-y world :water feet) z])))
       (update :player/controls assoc :control/jump? true))))
 
+(defn flooded?
+  "Has the bank a swim-out keeps been flooded since it was picked: is it no longer a cell the
+   feet could stand in (path/standable?), water now in it or over its floor? Reached, it holds
+   the body in water: the trap never clears, no step brings it nearer, and stuck-ticks later
+   the swim-out digs over its head and fails :stuck. Race 38805758078 runner 1 bot Clj_r44
+   (issue #157) and race 38709226128 runner 8 bot Clj_r31 (issue #156), replayed in probe
+   38830884734: in a flooded tunnel the bank picked a block off was reached at distance 0 with
+   water flowed into it, and the escape failed :stuck there, the third failure of the plan."
+  [world bank]
+  (not (path/standable? world bank)))
+
 (defn swim-controls
   "Toward the bank's centre: in the water, forward with jump held (the swim-up and, pressed
    into the bank, the impulse); out of it, a plain walk, and on dry land nothing at all, so the
@@ -233,6 +244,10 @@
           (and dig-when-down (or (:player/on-ground? world) (not (:player/in-water? world))))
           (start-dig world dig-when-down "down")
           dig-when-down (assoc world :player/controls {:control/sneak? true})
+          (and bank (flooded? world bank))
+          (-> world
+              (intent/dissoc-intent :intent/bank :intent/target :intent/best-dist :intent/best-tick)
+              (game/say (str "swim-out: bank " bank " flooded, looking again")))
           (and (nil? bank) next-search (< tick next-search))
           (assoc world :player/controls {:control/jump? true}) ; rise until the next look
           (nil? bank)
