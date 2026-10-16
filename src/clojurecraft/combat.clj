@@ -39,6 +39,7 @@
 (def retreat-distance 6.0)            ; blocks a broken-off fight puts between the bot and the target
 (def approach-timeout-ms 20000)       ; an approach that never reaches the target fails :unreachable
 (def press-within 0.8)                ; blocks on the plane under which an engage out of reach stops pressing in (it is under the target)
+(def hold-timeout-ms 60000)           ; a fight that holds its ground waits this long for its target to come
 (def back-off-timeout-ms 10000)       ; a walk away ends after this, however far it got
 
 (def swords
@@ -122,14 +123,16 @@
 
 (defmethod fight-stage :approach
   ;; toward the target until approach-range; a fight that holds its ground (:intent/hold?) stands
-  ;; facing it while it comes, the same approach-timeout-ms at most
+  ;; facing it while it comes, hold-timeout-ms at most: an enderman stared at 60 blocks off
+  ;; teleports toward the bot and walks the rest (issue #263)
   [world {:intent/keys [since hold?]} e]
   (let [now (:time/now world)]
     (cond (<= (horizontal world e) approach-range)
           (-> world
               (assoc :player/controls (face world e))
               (intent/assoc-intent :intent/stage :engage))
-          (> (- now since) approach-timeout-ms) (intent/fail world :unreachable)
+          (> (- now since) (if hold? hold-timeout-ms approach-timeout-ms))
+          (intent/fail world :unreachable)
           hold? (assoc world :player/controls (face world e))
           :else (assoc world :player/controls (intent/toward world (aim e) 0.0)))))
 
