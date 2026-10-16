@@ -42,9 +42,11 @@
 
 (defn world-of
   "The world a snapshot's file name names: R4-35-2.edn.gz is world R4-35 (its seed, 2, does not
-   change the moment)."
+   change the moment); a real failure's (real-4-s2-Clj_r17.edn.gz, issue #299: one bot of one
+   race, on a landing of its own) is its own world."
   [file]
-  (second (re-find #"^(.+)-\d+\.edn\.gz$" file)))
+  (cond (str/starts-with? file "real-") (str/replace file #"\.edn\.gz$" "")
+        :else (second (re-find #"^(.+)-\d+\.edn\.gz$" file))))
 
 ;;;; I/O: the GitHub API, the files ;;;;
 
