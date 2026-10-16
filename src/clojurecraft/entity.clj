@@ -98,3 +98,14 @@
    kill is the target being gone (ruststeve and steve both judge a kill so)."
   [world eid]
   (let [e (get-in world [:world/entities eid])] (or (nil? e) (dead? e))))
+
+(defn healths
+  "{kind health} of the living entities whose health the server has said, for each kind the one
+   nearest the point from: what the bot knows of the mobs round it, for the RESULT line and the
+   gym's entities trial, which compares the nearest pig's with the server's own word."
+  [world from]
+  (->> (:world/entities world)
+       (filter (fn [[_ e]] (contains? e :entity/health)))
+       (group-by (fn [[_ e]] (kind e)))
+       (map (fn [[k es]] [k (:entity/health (second (nearest es from)))]))
+       (into {})))

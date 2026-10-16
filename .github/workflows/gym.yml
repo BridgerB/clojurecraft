@@ -10,7 +10,7 @@ on:
     inputs:
       goal:
         type: choice
-        options: [wood, table, pickaxe, cobblestone, stone-pickaxe, furnace, ingots, bucket, water-bucket, flint-and-steel, iron-kit, cast-one, portal, nether, fortress, shore]
+        options: [wood, table, pickaxe, cobblestone, stone-pickaxe, furnace, ingots, bucket, water-bucket, flint-and-steel, iron-kit, cast-one, portal, nether, fortress, shore, entities]
         default: wood
       runs:
         default: '6'

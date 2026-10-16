@@ -19,6 +19,9 @@ sourceRefs:
   - src/clojurecraft/game.clj#defn track
   - src/clojurecraft/game.clj#defmethod on-packet [:play :set-entity-data]
   - src/clojurecraft/blocks.clj#def mobs
+  - src/clojurecraft/entity.clj#defn healths
+  - src/clojurecraft/observe.clj#defmethod plan/done-by :health-seen?
+  - test/clojurecraft/entity_test.clj#healths-name-the-nearest-of-each-kind
   - dev/clojurecraft/jar_probe.clj#defn mobs
   - test/clojurecraft/entity_test.clj#hostiles-are-the-living-monsters-that-attack-on-sight
   - test/clojurecraft/game_test.clj#a-mob-is-tracked-with-its-motion-health-and-death
@@ -51,6 +54,10 @@ Issue #258. Until then `:world/entities` held item drops only (`add-entity` drop
 - `nearest` - `[eid entity]` nearest a point, within an optional radius.
 - `gone?` - removed, or dead by the server's word: a kill is the target being gone.
 - `kind`, `item?`, `living?`, `dead?`, `on-fire?`.
+- `healths` - `{kind health}`, the nearest of each kind with a known health: the RESULT's `:mobs`.
+
+## Proven on real servers
+The gym's `entities` row ([[gym-on-runners]]): a summoned pig at a health no natural pig has; the goal (`:entities`, an aside: `plan/aside?` keeps it out of every run's chain, `observe.clj`) is done once a health is known, and the server's `data get entity` must report the health the RESULT names.
 
 ## Gotchas
 - `intent/nearest-item` filters `entity/item?`: with every entity tracked, a pig beside a drop is not the drop ([[collect-intent]]).

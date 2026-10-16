@@ -20,10 +20,12 @@
             [clojurecraft.build]
             [clojurecraft.cli :as cli]
             [clojurecraft.conn :as conn]
+            [clojurecraft.entity :as entity]
             [clojurecraft.fortress]
             [clojurecraft.game :as game]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.observe]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -68,7 +70,9 @@
 
 (defn result
   "The RESULT map: :ok, :until, the reason, the game summary, held items, the nearest
-   remembered table and the plan summary (once a plan began)."
+   remembered table, the health of the nearest living entity of each kind whose health is known
+   (:mobs, only when there is one, so older recordings' RESULTs are unchanged; the gym's entities
+   trial reads it) and the plan summary (once a plan began)."
   [world until ok]
   (merge {:ok ok
           :until until
@@ -86,6 +90,9 @@
          (when-let [t (and (:player/pos world)
                            (memory/nearest world (game/eye world) 32 memory/crafting-table?))]
            {:table/pos t}) ; no position yet (an early end): no table to speak of
+         (when-let [h (and (:player/pos world)
+                           (not-empty (entity/healths world (:player/pos world))))]
+           {:mobs h})
          (when (seq (:world/traps world)) {:escaped true}) ; only once a trap was escaped, so older recordings' RESULTs are unchanged
          (when (:plan/status world) {:plan (plan/summary world)})))
 

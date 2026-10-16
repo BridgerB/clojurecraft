@@ -142,3 +142,19 @@
     (is (landings/fit? [0 70 0] [[:water "Test failed"] [:tree "Test failed"]]))
     (is (not (landings/fit? [0 50 0] [[:water "Test failed"]])) "too low")
     (is (not (landings/fit? [0 70 0] [[:water "Test passed"]])) "water")))
+
+(deftest a-truth-can-hold-the-server-to-what-the-bot-saw
+  ;; issue #258: the entities trial passes only when the server reports the pig's health the bot
+  ;; read from its metadata; a RESULT with no such value never passes
+  (let [row (:truth/re (first (:gym/truth (gym/gym :entities))))
+        truth (first (:gym/truth (gym/gym :entities)))
+        reply "Pig has the following entity data: 7.5f"]
+    (is (= "entity data: {result}f" row))
+    (is (:truth/ok? (gym/truth truth "cmd" reply {:ok true :mobs {:pig 7.5}})))
+    (is (not (:truth/ok? (gym/truth truth "cmd" reply {:ok true :mobs {:pig 10.0}}))))
+    (is (not (:truth/ok? (gym/truth truth "cmd" reply {:ok true}))) "the bot saw no pig")
+    (is (not (:truth/ok? (gym/truth truth
+                                    "cmd"
+                                    "Pig has the following entity data: 715f"
+                                    {:ok true :mobs {:pig 7.5}})))
+        "the value is quoted, its dot no wildcard")))

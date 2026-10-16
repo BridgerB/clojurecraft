@@ -38,6 +38,7 @@ src/clojurecraft/memory.clj   observation facts in DataScript, with time, after 
 src/clojurecraft/game.clj     the protocol reducer: handshake, keep-alive, teleports, every packet's handler, ticks
 src/clojurecraft/inventory.clj the player's items and screen as values: slot maps, window state, what is held
 src/clojurecraft/entity.clj   every entity the server shows as values: type, position, velocity, a living one's health; hostiles, nearest, gone?
+src/clojurecraft/observe.clj  trials of what the bot sees: goals done when the world holds a fact the server sent (the entities trial)
 src/clojurecraft/terrain.clj  the blocks around the bot: columns, the block overlay, block-at, solid-fn; feeds memory
 src/clojurecraft/path.clj     a route for the feet over the block grid: A* with a node budget, moves and goals as data
 src/clojurecraft/dig.clj      a block's break time and drop as a pure function of block, held item and penalties, over the generated tables

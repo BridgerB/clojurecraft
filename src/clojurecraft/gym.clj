@@ -35,9 +35,11 @@
 (s/def :gym/timeout-ms pos-int?)
 (s/def :truth/cmd string?)
 (s/def :truth/re string?)
+(s/def :truth/result (s/coll-of keyword? :kind vector?)) ; a path into the bot's RESULT whose value {result} in :truth/re stands for
 (s/def :truth/reply string?)
 (s/def :truth/ok? boolean?)
-(s/def :gym/truth (s/coll-of (s/keys :req [:truth/cmd :truth/re]) :kind vector? :min-count 1))
+(s/def :gym/truth
+  (s/coll-of (s/keys :req [:truth/cmd :truth/re] :opt [:truth/result]) :kind vector? :min-count 1))
 (s/def :gym/setup (s/coll-of string? :kind vector?)) ; RCON commands that build the row's arena round the landing (fill-in)
 (s/def :gym/land keyword?)               ; how the bot is landed (land!): :surface when absent
 (s/def ::row
@@ -196,6 +198,20 @@
      {:truth/cmd
       "execute as {name} at @s run clone ~-6 ~-6 ~-6 ~6 ~6 ~6 ~-6 ~20 ~-6 filtered minecraft:nether_bricks"
       :truth/re "cloned [1-9]"}]}
+   ;; issue #258: a pig summoned over the landing, held still and unhurt at a health no natural
+   ;; pig has; the bot's RESULT names the nearest pig's health from its metadata, and the server
+   ;; must report the same for the pig nearest the bot
+   {:gym/goal :entities
+    :gym/until "entities"
+    :gym/prereqs []
+    :gym/setup
+    ["summon minecraft:pig {x} {y+2} {z} {NoAI:1b,Invulnerable:1b,PersistenceRequired:1b,Health:7.5f}"]
+    :gym/timeout-ms 90000
+    :gym/truth
+    [{:truth/cmd
+      "execute as {name} at @s run data get entity @e[type=minecraft:pig,limit=1,sort=nearest] Health"
+      :truth/re "entity data: {result}f"
+      :truth/result [:mobs :pig]}]}
    {:gym/goal :shore
     :gym/until "shore"
     :gym/prereqs []
@@ -239,13 +255,26 @@
   [{:truth/keys [cmd]} bot landing]
   (fill-in cmd bot landing))
 
+(defn truth-re
+  "A truth row's pattern for the bot's RESULT: the row's :truth/re, or, when the row names a
+   :truth/result path, that pattern with {result} the value at the path, quoted, so the server
+   must say what the bot saw (the entities trial: the pig's health, issue #258); nil when the
+   RESULT has no value there, which no reply passes."
+  [{:truth/keys [re] path :truth/result} result]
+  (let [v (when path (get-in result path))]
+    (cond (nil? path) re
+          (some? v) (str/replace re "{result}" (java.util.regex.Pattern/quote (str v)))
+          :else nil)))
+
 (defn truth
-  "A truth row's verdict on the server's reply to cmd (the row's command, filled in):
-   {:truth/cmd :truth/reply :truth/ok?}."
-  [row cmd reply]
-  {:truth/cmd cmd
-   :truth/reply (str reply)
-   :truth/ok? (boolean (re-find (re-pattern (:truth/re row)) (str reply)))})
+  "A truth row's verdict on the server's reply to cmd (the row's command, filled in), given the
+   bot's RESULT when the row compares with it (truth-re): {:truth/cmd :truth/reply :truth/ok?}."
+  ([row cmd reply] (truth row cmd reply nil))
+  ([row cmd reply result]
+   (let [re (truth-re row result)]
+     {:truth/cmd cmd
+      :truth/reply (str reply)
+      :truth/ok? (boolean (and re (re-find (re-pattern re) (str reply))))})))
 
 (defn result-line
   "The RESULT map a whole line of the bot's output carries, or nil for any other line."
@@ -504,7 +533,7 @@
                                       rcon-pass
                                       (fn [rc]
                                         (mapv #(let [c (truth-cmd % name (:gym/landing left))]
-                                                 (truth % c (rcon/command! rc c)))
+                                                 (truth % c (rcon/command! rc c) result))
                                               (:gym/truth row))))
                       (catch Exception e (cli/log "truth failed:" e) [])))
         judged-row (judged (assoc left
