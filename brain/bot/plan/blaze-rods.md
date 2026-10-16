@@ -31,6 +31,7 @@ sourceRefs:
   - src/clojurecraft/gym.clj#def iron-armour
   - src/clojurecraft/gym.clj#def no-fire
   - src/clojurecraft/gym.clj#def fire-resistance
+  - src/clojurecraft/gym.clj#defn slow-blaze-spawner
   - src/clojurecraft/gym.clj#defn rods-held
   - test/clojurecraft/blaze_test.clj#seven-rods-held-is-done
   - test/clojurecraft/blaze_test.clj#a-rod-lying-near-then-the-nearest-blaze-then-the-spawner
@@ -75,7 +76,7 @@ The `:defend` row (priority 0) still answers anything hostile within 4 first, a 
 ## Gym rows (gym.clj)
 Three rows play this one goal from three starts, each named by `:gym/name` (the registry finds a row by it first, and the trial matrix carries it, [[gym-on-runners]]):
 - `blaze-1`: the nether arena, a blaze spawner in its corner (`blaze-spawner`, two at a time every two to four seconds) and one blaze summoned, and `no-fire` (`gamerule mob_griefing false`: a fireball sets no block alight; a fire lights the cells round it past 11, a spawner's blaze spawns only at light 11 or less, and in blaze-7a run 3 the spawner made no blaze for three minutes once the floor by it burned); the bot `invulnerable` (Resistance V and Fire Resistance: no command sets `Invulnerable` on a player) with an iron sword, food and six rods, so one more rod is the seventh. Judged by `rods-held` 7 (`clear <bot> minecraft:blaze_rod 0`).
-- `blaze-7`: the same room, no rods given, the bot in iron armour (`iron-armour`, given with the kit after the dimension) and `fire-resistance` (as ruststeve's arena: no water puts a burning bot out in the Nether, and blaze-7a runs 1 and 2 burned to death inside a minute), hurt by the fireballs' hits: the break-off and the meal are played. Fifteen minutes.
+- `blaze-7`: the same room, no rods given, the bot in iron armour (`iron-armour`, given with the kit after the dimension) and `fire-resistance` (as ruststeve's arena: no water puts a burning bot out in the Nether, and blaze-7a runs 1 and 2 burned to death inside a minute), hurt by the fireballs' hits: the break-off and the meal are played. Its spawner is `slow-blaze-spawner` (one blaze every three to six seconds, two at most near it): with ruststeve's two every two to four, blaze-7c runs 1 and 2 took five hits in two seconds from three blazes' volleys and died from 16 health before any break-off could act (3/5 passed). Fifteen minutes.
 - `blaze-fortress`: the fortress row's pad 48 west of a located fortress, a pickaxe and cobblestone for the tunnel, the spawner found in the chunks loaded round it. Thirty minutes.
 
 ## Against the model

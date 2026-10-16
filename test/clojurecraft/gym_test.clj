@@ -75,6 +75,11 @@
   (is (str/starts-with?
        (gym/fill-in (gym/blaze-spawner [3 0 3]) "Clj_g1" [0 0 72])
        "setblock 3 72 3 minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}}"))
+  (is (str/includes? (gym/fill-in (gym/slow-blaze-spawner [3 0 3]) "Clj_g1" [0 0 72])
+                     "setblock 3 72 3 minecraft:spawner{")
+      "issue #262: the slower one, one blaze at a time")
+  (is (= "effect give Clj_g1 minecraft:fire_resistance 1000000 0 true"
+         (gym/fill-in gym/fire-resistance "Clj_g1" [0 0 72])))
   (is (= 3 (count (gym/endermen 3 [0 0 2]))))
   (is (every? #(str/starts-with? % "summon minecraft:enderman {x} {y} {z+2}")
               (gym/endermen 3 [0 0 2])))
