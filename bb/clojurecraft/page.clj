@@ -37,7 +37,7 @@
             [clojurecraft.failures :as failures]
             [hiccup2.core :as h]))
 
-(def branch "gh-pages")                ; the page's branch: index.html and rounds.edn, nothing else
+(def branch "gh-pages")                ; the page's branch: index.html, agents.html, rounds.edn and the orchestrator's orchestrator.json
 (def rounds-file "rounds.edn")
 (def goals-file "resources/clojurecraft/goals.edn")
 (def race-file "ci/race.edn")          ; the race's settings: its :race/until is where the chain ends
@@ -455,6 +455,15 @@
       (interpose ", "
        (for [[sig c] (take 3 (:round/failures r))] (list (issue-link repo r sig) (str " " c))))]]))
 
+(def agents-script
+  "The Agents tab: what the orchestrator (copilot.yml, bb copilot dispatch) last wrote to
+   orchestrator.json on gh-pages, read live, so the tab is current without a rebuild."
+  "(function(){\n  var fmt=new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'});\n  var rel=new Intl.RelativeTimeFormat(undefined,{numeric:'auto'});\n  function ago(d){var s=(d-Date.now())/1000,a=Math.abs(s);\n    if(a<90)return rel.format(Math.round(s),'second');if(a<5400)return rel.format(Math.round(s/60),'minute');\n    if(a<172800)return rel.format(Math.round(s/3600),'hour');return rel.format(Math.round(s/86400),'day');}\n  function esc(t){return String(t==null?'':t).replace(/[&<>\"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c];});}\n  var repo=document.body.dataset.repo,gh='https://github.com/'+repo;\n  function issue(n){return '<a href=\"'+gh+'/issues/'+n+'\">#'+n+'</a>';}\n  function pr(n){return n?'<a href=\"'+gh+'/pull/'+n+'\">PR #'+n+'</a>':'';}\n  var words={assign:'assigned to Copilot',reassign:'assigned again (the session never started)',ready:'marked ready for review',\n    release:'released runs held for approval',nudge:'asked Copilot to go on',merge:'merged',review:'left for a person (it changes CI)',\n    stuck:'left for a person (asked eight times)',wait:'waiting',leave:'left alone'};\n  var checks={green:'green',red:'red',pending:'running',approval:'held for approval'};\n  fetch('https://raw.githubusercontent.com/'+repo+'/gh-pages/orchestrator.json?t='+Date.now(),{cache:'no-store'})\n  .then(function(r){if(!r.ok)throw r.status;return r.json();}).then(function(st){\n    var at=new Date(st.at),fresh=(Date.now()-at)<15*60000,held=st.issues.filter(function(i){return i.copilot;}),\n        queue=st.issues.filter(function(i){return !i.copilot;});\n    document.getElementById('alive').innerHTML='<span class=\"dot'+(fresh?' on':'')+'\"></span><b>Orchestrator</b>: last pass '+ago(at)+\n      ' ('+fmt.format(at)+'); '+st.issues.length+' open bot-failure issues, Copilot on '+held.length+' of at most '+st.cap+' at once.'+\n      (fresh?'':' <b>It has not reported for 15 minutes: check the copilot workflow.</b>');\n    var w=held.map(function(i){var m=st.moves.filter(function(x){return x.issue===i.number;})[0]||{};\n      return '<tr><td>'+issue(i.number)+'</td><td>'+esc(i.title)+'</td><td>'+pr(i.pr)+'</td><td>'+(i.pr?esc(checks[i.checks]||i.checks):'')+\n        (i.draft?' (draft)':'')+'</td><td>'+(i.session?'<span class=\"dot on\"></span>running':'ended')+'</td><td class=\"num\">'+(i.nudges||0)+'/8</td><td>'+\n        esc(words[m.move]||m.move||'')+(m.why?' ('+esc(m.why)+')':'')+(i.quiet?' <b>quiet for 2 h</b>':'')+'</td></tr>';}).join('');\n    document.getElementById('working').innerHTML=w||'<tr><td colspan=\"7\" class=\"muted\">nothing held right now</td></tr>';\n    document.getElementById('queue').innerHTML=queue.map(function(i){var off=i.labels.filter(function(l){return /no-agent|agent-stuck|needs-review/.test(l);});\n      return '<tr><td>'+issue(i.number)+'</td><td>'+esc(i.title)+'</td><td class=\"muted\">'+esc(off.join(', '))+'</td></tr>';}).join('')||\n      '<tr><td colspan=\"3\" class=\"muted\">empty</td></tr>';\n    document.getElementById('log').innerHTML=st.log.slice().reverse().map(function(e){var d=new Date(e.at);\n      return '<tr><td class=\"time\" title=\"'+d+'\">'+fmt.format(d)+'</td><td>'+issue(e.issue)+'</td><td>'+esc(words[e.move]||e.move)+\n        '</td><td>'+pr(e.pr)+'</td><td class=\"muted\">'+esc(e.why||'')+'</td></tr>';}).join('')||'<tr><td colspan=\"5\" class=\"muted\">nothing yet</td></tr>';\n  }).catch(function(){document.getElementById('alive').textContent='No orchestrator status yet (orchestrator.json on gh-pages).';});\n})();")
+
+(def tabs
+  "The links between the page's two tabs."
+  [:nav.tabs [:a {:href "./"} "Race"] [:a {:href "agents.html"} "Agents"]])
+
 (def style
   ":root{--bg:#fff;--fg:#1b1f24;--muted:#6b7280;--line:#e5e7eb;--card:#f8fafc;--wood:#a16207;--stone:#6b7280;--iron:#b45309;--portal:#7c3aed;--nether:#dc2626;--ok:#15803d}
    @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--line:#30363d;--card:#161b22}}
@@ -464,6 +473,7 @@
    .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem}.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.75rem .9rem}
    .big{font-size:1.6rem;font-weight:700}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
    .live{display:flex;gap:1.5rem;flex-wrap:wrap;margin:.4rem 0 1rem}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-right:6px}.dot.on{background:var(--ok);box-shadow:0 0 6px var(--ok)}
+   .tabs{display:flex;gap:1.2rem;margin:0 0 .6rem}.tabs a{color:var(--muted);text-decoration:none;font-weight:600}.tabs a:hover{color:var(--fg)}
    table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:middle}th{font-size:12px;color:var(--muted);font-weight:600}
    .n{color:var(--muted);font-family:ui-monospace,monospace}.tick{display:inline-block;width:1em;text-align:center}.done .tick{color:var(--ok);font-weight:700}.wall{background:color-mix(in srgb,var(--nether) 9%,transparent)}.wall .tick{color:var(--nether)}.wallmark{color:var(--nether);font-weight:600;font-size:12px}
    .pill{font-size:10px;text-transform:uppercase;padding:1px 6px;border-radius:999px;color:#fff;letter-spacing:.04em}.pill.wood{background:var(--wood)}.pill.stone{background:var(--stone)}.pill.iron{background:var(--iron)}.pill.portal{background:var(--portal)}.pill.nether{background:var(--nether)}
@@ -513,7 +523,7 @@
      [:head [:meta {:charset "utf-8"}]
       [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
       [:title "clojurecraft: the race to the Nether"] [:style (h/raw style)]]
-     [:body {:data-repo repo} [:h1 "clojurecraft: the race to the Nether"]
+     [:body {:data-repo repo} tabs [:h1 "clojurecraft: the race to the Nether"]
       [:p.muted
        "Bots play from spawn to the Nether, with nothing given, on real servers and against the server model, round after round on the newest code. Times are in "
        [:span#tz "your zone"] "."]
@@ -555,6 +565,31 @@
         [:tbody (for [r (take table-rounds (reverse rounds))] (table-row repo milestones r))]]]
       [:footer "Built by " [:code "bb page"] " from " [:a {:href "rounds.edn"} "rounds.edn"]
        ", one round a line, beside this file. Issue #116."] [:script (h/raw script)]]]))
+
+(defn agents-page
+  "The Agents tab as hiccup: a shell agents-script fills from orchestrator.json."
+  [repo]
+  [:html {:lang "en"}
+   [:head [:meta {:charset "utf-8"}]
+    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
+    [:title "clojurecraft: the agents"] [:style (h/raw style)]]
+   [:body {:data-repo repo} tabs [:h1 "clojurecraft: the agents"]
+    [:p.muted
+     "The orchestrator (the copilot workflow, one runner, once a minute) gives the bot-failure issues to Copilot's bot-fixer agent one at a time, releases its held runs, marks its finished drafts ready, merges what is green and asks it to go on when a check is red. This tab reads what it last wrote."]
+    [:div#alive.live.muted "…"] [:h2 "Working now"]
+    [:div.scroll
+     [:table
+      [:thead
+       [:tr [:th "issue"] [:th "failure"] [:th "pull request"] [:th "checks"] [:th "session"]
+        [:th "asks"] [:th "this minute"]]] [:tbody#working]]] [:h2 "Waiting"]
+    [:p.muted
+     "Open bot-failure issues Copilot has not been given yet, oldest first: the order it takes them."]
+    [:div.scroll [:table [:tbody#queue]]] [:h2 "What it did"]
+    [:div.scroll
+     [:table [:thead [:tr [:th "when"] [:th "issue"] [:th "action"] [:th ""] [:th "why"]]]
+      [:tbody#log]]]
+    [:footer "Written by " [:code "bb copilot dispatch"] " to " [:code "orchestrator.json"]
+     " on gh-pages."] [:script (h/raw agents-script)]]])
 
 (defn html
   "The page as a string."
@@ -633,6 +668,9 @@
   (let [rounds (read-rounds rounds-path)]
     (spit (str (fs/path out-dir "index.html"))
           (html (rows rounds) (chain (goals) (race-end)) (repo)))
+    (spit (str (fs/path out-dir "agents.html"))
+          (str "<!DOCTYPE html>
+" (h/html (agents-page (repo)))))
     (println "built" (str (fs/path out-dir "index.html")) "from" (count rounds) "rounds")))
 
 (defn git!

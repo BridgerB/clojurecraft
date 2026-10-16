@@ -9,7 +9,8 @@ name: copilot
 # gets a continue comment, a session that never started is retried. The hourly schedule is its
 # watchdog: while a loop runs, the next run waits behind it in the concurrency group and starts
 # the moment it ends, so one loop is always running and never two. A dispatch with dry-run makes
-# one pass that only prints.
+# one pass that only prints. Each pass first moves to the newest main, so a merged change to the
+# dispatcher reaches the loop within a minute (this file itself takes effect at the next restart).
 #
 # GitHub assigns Copilot and hears @copilot only from a user, so it needs the secret COPILOT_TOKEN
 # in the environment copilot-dispatch (deployment branches: main only, so no other branch's
@@ -62,6 +63,7 @@ jobs:
           end=$(( $(date +%s) + 345 * 60 ))      # the job's six hours less a margin; the watchdog run takes over
           while [ "$(date +%s)" -lt "$end" ]; do
             echo "== $(date -u +%H:%M:%SZ)"
+            git fetch -q origin main && git reset -q --hard origin/main   # each pass runs the newest main: a merged change reaches the loop within a minute
             bb copilot dispatch || echo "dispatch failed; the next pass tries again"
             sleep 60
           done
