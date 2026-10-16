@@ -3,7 +3,9 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.entity :as entity]
-            [clojurecraft.fixtures :as fx]))
+            [clojurecraft.fixtures :as fx]
+            [clojurecraft.observe]
+            [clojurecraft.plan :as plan]))
 
 (use-fixtures :once fx/instrumented)
 
@@ -48,3 +50,24 @@
     (testing "a blaze's flags say it burns"
       (is (entity/on-fire? (merge (mob :blaze [0.0 0.0 0.0])
                                   (entity/metadata-facts (blocks/entity-types :blaze) {0 1})))))))
+
+(deftest healths-name-the-nearest-of-each-kind
+  (let [w {:player/pos [0.0 64.0 0.0]
+           :world/entities {1 (mob :pig [5.0 64.0 0.0] :entity/health 10.0)
+                            2 (mob :pig [0.0 66.0 0.0] :entity/health 7.5)
+                            3 (mob :zombie [9.0 64.0 0.0] :entity/health 20.0)
+                            4 (mob :cow [1.0 64.0 0.0])}}]
+    (is (= {:pig 7.5 :zombie 20.0} (entity/healths w (:player/pos w)))
+        "the pig over the bot, not the farther one; a cow whose health was never said is absent")
+    (testing "the gym's entities trial is done once one is known (issue #258)"
+      (is (plan/done-by w {:goal/done? :health-seen?}))
+      (is (not (plan/done-by (assoc w :world/entities {4 (mob :cow [1.0 64.0 0.0])})
+                             {:goal/done? :health-seen?})))
+      (is
+       (not (plan/done-by (update w :world/entities dissoc 2) {:goal/done? :health-seen?}))
+       "a health known only of mobs farther off (round the spawn the bot joined at) is not the
+           one beside it: gym batch entities-258a run 4 ended there, naming a natural pig")
+      (is (= {:plan/wait :no-mob} (plan/next-intent w {:goal/plan :watch} plan/goals))))
+    (testing "it is a trial of its own, never a step of a run"
+      (is (plan/aside? (first (filter #(= :entities (:goal/id %)) plan/goals))))
+      (is (not-any? #{:entities} (plan/through (plan/current-until)))))))

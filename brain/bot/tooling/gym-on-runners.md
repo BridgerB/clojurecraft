@@ -16,6 +16,8 @@ sourceRefs:
   - src/clojurecraft/gym.clj#defn located-in
   - src/clojurecraft/gym.clj#defn judge!
   - src/clojurecraft/gym.clj#defn fill-in
+  - src/clojurecraft/gym.clj#defn truth-re
+  - test/clojurecraft/gym_test.clj#a-truth-can-hold-the-server-to-what-the-bot-saw
   - src/clojurecraft/gym.clj#def portal-arena
   - src/clojurecraft/gym.clj#def nether-arena
   - src/clojurecraft/gym.clj#defmethod land! :nether-arena
@@ -65,6 +67,9 @@ The iron kit (issue #6) has a row per stage, each given what the stages before i
 
 ## Arenas (#8)
 A row may build its own arena: `:gym/setup` is RCON commands run in `landing!` before the teleport, inside `fixture/with-forceload` over `arena-reach` (16) round the landing, written with `fill-in` placeholders (`{x} {y} {z}` the landing, with offsets as `{x+14}`; `{name}` the bot). The portal rows (`cast-one`, `portal`, `nether`) share `portal-arena` (a stone floor two thick, air over it, a one-wide lava trench 14 east) and `portal-kit` (two lava buckets, one water, one empty, 192 cobblestone, flint and steel). Their truths go through `fill-in` too: a frame the bot sited itself is judged by `block-count`, a `clone ... filtered` of the arena whose reply says how many obsidian or `nether_portal` blocks there are; the Nether by `data get entity {name} Dimension`. The push runs `cast-one` (about 70 s, 5/5 in batch p1-cast-one); `portal` and `nether` are dispatched.
+
+## Holding the server to what the bot saw (#258)
+A truth row may name `:truth/result`, a path into the bot's RESULT: `{result}` in its pattern is that value, quoted (`truth-re`), and a RESULT without it passes nothing. The `entities` row (an aside, [[entities]]) summons a pig over the landing (`NoAI`, `Invulnerable`, `Health:7.5f`, a health no natural pig has); the bot's goal is done once a living entity within 4 blocks has a known health, its RESULT's `:mobs` names the nearest of each kind's health, and the server's `data get entity` on the pig nearest the bot must report the same (`entity data: {result}f`).
 
 ## Arenas in the Nether and the End (#261)
 A row says how it starts with `:gym/land`, a `land!` method; `gym/dimensions` names the dimension each kind leaves the bot in (`:nether-fortress` and `:nether-arena` the Nether, `:end` the End, any other the overworld). `place!` builds a start in any dimension: the square round it forceloaded and every corner waited for (a box across a chunk edge fills nothing in an unloaded chunk), the fill-in commands run there with `execute in`, the bot teleported onto the cell, the forceload released. `:nether-arena` is `nether-arena`, ruststeve's arena-run.sh room: netherrack two thick round a room seven square and four high, at y 72 over the landing's Nether coordinates (an eighth of the overworld's), the row's `:gym/setup` built inside; ruststeve built its blaze arena in the overworld only because its SDK streamed Nether chunks too slowly. `:end` is ruststeve's End start: the island forceloaded 64 round the fountain, the bot on the surface 8 east of it (its arrival starts the dragon fight), the setup round where it stands. `:nether-fortress` builds its pad with `place!` too (`fortress-pad`).
