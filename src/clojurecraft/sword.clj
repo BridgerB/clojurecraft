@@ -66,6 +66,7 @@
   (or (not (:plan/chain? world)) (nil? (wanted world))))
 
 (defmethod plan/next-intent :sword
+  ;; nothing outside a chained run, as :armed? says
   [world goal table]
-  (when-let [k (wanted world)]
+  (when-let [k (and (:plan/chain? world) (wanted world))]
     (make/decide world (assoc goal :goal/provides {(keyword "item" (name k)) 1}) table)))

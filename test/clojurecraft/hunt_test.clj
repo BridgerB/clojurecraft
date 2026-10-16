@@ -60,6 +60,16 @@
         "a chicken is not hunted")
     (is (plan/done-by (standing 8 {} {7 (animal :zombie [11.5 64.0 8.5])}) hunt-row))))
 
+(deftest a-hunt-running-is-never-done-under-it
+  ;; the cow dies, game has none, but the fight is not over until it sees the death: the row
+  ;; stays undone so the planner does not abandon it (feat/259-hunt 8ed7f50)
+  (let [w (assoc (standing 8 {} {})
+                 :plan/intent
+                 {:intent/kind :fight :intent/target 5 :intent/for :hunt :intent/status :active})]
+    (is (not (plan/done-by w hunt-row)))
+    (is (plan/done-by (assoc-in w [:plan/intent :intent/for] :defend) hunt-row)
+        "another row's fight does not hold it")))
+
 (deftest a-kill-just-made-is-collected-where-it-fell
   (let [w (assoc (standing 8 {} {})
                  :plan/last

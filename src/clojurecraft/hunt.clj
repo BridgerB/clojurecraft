@@ -57,11 +57,20 @@
   (let [l (:plan/last world)]
     (when (and (= :fight (:intent/kind l)) (= :hunt (:intent/for l)) (:intent/target-pos l)) l)))
 
+(defn hunting?
+  "Is the running intent the hunt's (:intent/for :hunt): a walk to an animal, its fight, the
+   meat's collect?"
+  [world]
+  (= :hunt (:intent/for (:plan/intent world))))
+
 (defmethod plan/done-by :provisioned?
+  ;; never while a hunt intent runs: the hunt test's first run (feat/259-hunt 8ed7f50) killed its
+  ;; cow, which left game with none, and the planner, the row done, abandoned the fight :goal-met
+  ;; the tick the cow died, before the fight was done: no kill to collect, the beef left lying
   [world _]
   (or (not (eat/hungry? world))
       (some? (eat/food-held world))
-      (and (nil? (fresh-kill world)) (nil? (game world)))))
+      (and (not (hunting? world)) (nil? (fresh-kill world)) (nil? (game world)))))
 
 (defmethod plan/next-intent :hunt
   [world _ _]
