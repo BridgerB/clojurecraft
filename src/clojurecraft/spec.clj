@@ -4,6 +4,7 @@
    this namespace and `instrument` in tests; nothing here runs in the hot loop."
   (:require [clojure.spec.alpha :as s]
             [clojure.string :as str]
+            [clojurecraft.armour]
             [clojurecraft.build :as build]
             [clojurecraft.claims :as claims]
             [clojurecraft.eat :as eat]

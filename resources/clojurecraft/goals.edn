@@ -258,4 +258,21 @@
   :goal/doc
   "eat when the food the server sent is under 14 and something edible is held (issue #259): on Normal hunger drains with every dig and jump, and an empty bar stops healing; an always row at priority 0 like the escapes, after them in this table, so a trap still comes first and every other target waits for the meal"
   :goal/done? :fed?
-  :goal/plan :eat}]
+  :goal/plan :eat}
+ {:goal/id :wear-armour
+  :goal/priority 0
+  :goal/target? true
+  :goal/always? true
+  :goal/doc
+  "put on any armour held whose slot is empty (issue #259): two clicks in window 0, so an always row at priority 0 after the meal, as the escapes preempt"
+  :goal/done? :dressed?
+  :goal/plan :wear}
+ {:goal/id :armour
+  :goal/priority 13
+  :goal/target? true
+  :goal/always? true
+  :goal/until "armour"
+  :goal/doc
+  "an iron helmet, then an iron chestplate, from the ingots left once the iron the portal needs (flint and steel, the water bucket, the empty bucket) is held, with a table at hand (issue #259); an always row at the portal kit's priority, after it in this table, so a chained run makes them the moment that iron is in hand and never mines for them"
+  :goal/done? :armoured?
+  :goal/plan :armour}]

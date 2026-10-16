@@ -204,7 +204,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -343,7 +343,7 @@
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
-   [:intent/item "item to place, put in the hand, or eat" "place, redig, equip, eat"]
+   [:intent/item "item to place, put in the hand, eat or wear" "place, redig, equip, eat, wear"]
    [:intent/food-before "the food level when an :eat sent its use-item; a higher one is the meal"
     "eat, :eating stage"]
    [:intent/eat-by "ms past which an :eat whose food has not risen fails :not-eaten"
