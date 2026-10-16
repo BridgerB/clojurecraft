@@ -163,23 +163,31 @@
                                     "c"
                                     "Found 1 matching item(s) on player"))))))
 
-(deftest ^:eftest/synchronized a-warped-forest-landing-stands-on-its-nylium
-  ;; issue #263: the forest nearest the landing's Nether coordinates, a floor found cell by cell
+(deftest ^:eftest/synchronized a-warped-forest-landing-is-spread-onto-its-floor
+  ;; issue #263: the forest nearest the landing's Nether coordinates; its located height can be
+  ;; inside the rock (probe 38896760962), so the bot is spread onto a floor round it and kept
+  ;; where the server says that floor is warped forest
   (let [[r sent] (landing-commands
                   :ender-pearls
-                  #(cond (str/includes? % "locate biome")
-                         "The nearest minecraft:warped_forest is at [120, 70, 240] (90 blocks away)"
-                         (str/includes? % "#minecraft:nylium")
-                         (if (str/includes? % " if block 120 65 240 ") "Test passed" "Test failed")
-                         :else "Test passed"))]
+                  #(cond
+                     (str/includes? % "locate biome")
+                     "The nearest minecraft:warped_forest is at [120, 70, 240] (90 blocks away)"
+                     (str/includes? % "spreadplayers")
+                     "Spread 1 player around 120, 240 with an average distance of 0 blocks apart"
+                     :else "Test passed"))]
     (is (:gym/landed? r))
-    (is (= [120 240 66] (:gym/landing r)))
+    (is (= [100 200 72] (:gym/landing r)) "where the spread stood it (the server's Pos)")
     (is
      (some
       #{"execute in minecraft:the_nether positioned 100 64 200 run locate biome minecraft:warped_forest"}
       sent)
      "an eighth of the overworld landing [800 1600]")
-    (is (some #(str/includes? % "run tp Clj_g1 120.5 66 240.5") sent))
+    (is (some
+         #{"execute in minecraft:the_nether run spreadplayers 120 240 0 16 under 110 false Clj_g1"}
+         sent))
+    (is (some #{"execute in minecraft:the_nether if biome 100 72 200 minecraft:warped_forest"}
+              sent))
+    (is (some #(str/includes? % "run tp Clj_g1 100.5 72 200.5") sent))
     (is (some #{"difficulty normal"} sent))
     (is (some #{"give Clj_g1 minecraft:iron_sword 1"} sent))))
 

@@ -71,12 +71,13 @@ In order:
 1. **The kill's drop.** `fresh-kill`: the last intent a `:fight` for `:pearls`, done, with `:intent/target-pos`, its target gone (dead or removed; a fight broken off under 10 health is done too, with its enderman alive, and is no kill). A pearl lying round where it was last seen (`drop-of`: `drops/nearest`, a drop holding a pearl or not yet saying what it holds) is picked up by #262's `:collect-drops`; the block an enderman carried drops beside its pearl and is left, since a drop now says what it holds.
 2. **The drop still to come.** While the body still lies there (`body?`: the entity still tracked, dead), `{:plan/wait :drop}`: the server drops the loot as it dies and removes the body a second later.
 3. **The hunt** (`hunt`), over the nearest of `endermen` (alive, not blacklisted, within `hunt-radius` 32) and the nearest of them that is coming (`entity/creepy?`: the server's creepy flag, metadata index 17, set while it has a target):
-   - in the burrow (`shelter`: `:pearls/shelter` within `shelter-reach` 16 and still a `shelter?`), the one coming, or one at hand, is fought where the bot stands: `:fight` with `:intent/hold?` (combat.clj: it never walks, never presses after the target and never breaks off; the approach stands facing it until it comes within 3, at most 20 s);
-   - out of it, one within `strike-range` 4.5 is fought, or backed away from under 10 health (the open fight, the fallback);
-   - one coming and a burrow known: a walk back to its end (`:intent/for :shelter`: the walk ends in that very cell, as a build's stand does);
+   - out of the burrow (`shelter`: `:pearls/shelter` within `shelter-reach` 16 and still a `shelter?`) with one coming, one within `strike-range` 4.5, or under 10 health: a walk back to its end (`:intent/for :shelter`: the walk ends in that very cell, as a build's stand does). Batch pearls-263b: one bot met an enderman in the open after a provoke that ended by its coming near, and another backed away hurt; both died;
+   - in it, the one coming, or one at hand, is fought where the bot stands: `:fight` with `:intent/hold?` (combat.clj: it never walks, never presses after the target and never breaks off; the approach stands facing it until it comes within 3, at most 20 s);
+   - with no burrow, one at hand is fought, or backed away from under 10 health (the open fight, the fallback);
    - no burrow and a pickaxe held (`pickaxe?`): `:burrow`, heading `away` from the nearest enderman, so the stairs open toward it;
    - in the burrow with none coming: a walk to its mouth (`:pearls/mouth`) to look round;
-   - one `provokable?` (its head within `stare-range` 24 of the eye and no nearer than `stare-from` 6, with a clear line): `:provoke`;
+   - one not yet coming and `provokable?` (its head within `stare-range` 24 of the eye and no nearer than `stare-from` 6, with a clear line): `:provoke`. Never one already coming: its provoke ends at once, and batch pearls-263b's bot, its pickaxe lost to a death, provoked one 26 times in a row;
+   - one coming and no burrow to meet it in: fought;
    - else a walk to the first of the three nearest a route reaches; `{:plan/wait :no-route}`, or `{:plan/wait :no-enderman}` with none at all.
 
 ## The burrow
@@ -97,6 +98,7 @@ The model's enderman (`mob/kinds`) is neutral until stared at (`sim/provoke`, fr
 - The burrow needs ground it can be cut in: three stairs of rock with no water or lava beside them. Where it cannot be dug the hunt fights in the open, which loses.
 - The enderman must come down the stairs: the server's pathfinder takes it to the nearest place it fits, the last stair. One that stays at the top is out of reach: the held fight fails `:unreachable` after 20 s and the enderman is blacklisted.
 - No emergency escape into water yet (the Nether has none; water poured there evaporates).
+- Gym batch pearls-263b (plan run 38895776486), with the burrow: `pearls-1-live` passed 3 of 5 where the open fight had died five times in five. One death came from a zombie the unlit midnight arena spawned, which the `:defend` row backed away from turn about with the hunt; the other from an enderman met in the open. The arena is lit now, and an enderman at hand, one coming or a hurt bot sends it back to its burrow.
 - No exploring: with no enderman within 32 the plan waits and fails `:no-enderman`.
 
 ## See also

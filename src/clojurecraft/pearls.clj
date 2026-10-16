@@ -256,33 +256,40 @@
 ;; ---------------------------------------------------------------- the plan
 
 (defn hunt
-  "The hunt's next step with no kill to pick up, in order: in the burrow (shelter), the enderman
-   coming (creepy) or one at hand fought where the bot stands (:fight :intent/hold?); out of it,
-   one at hand fought, or backed away from under 10 health; one coming, back to the burrow; no
-   burrow near, one dug (:burrow, a pickaxe held) away from the nearest enderman; in the burrow
-   with none coming, out to its mouth to look round; one provokable? from here, provoked; else a
-   walk to the nearest a route reaches; a wait when there is none."
+  "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
+   coming (creepy), one at hand, or under 10 health, back to it (gym batch pearls-263b: a bot
+   that met one in the open, or backed away hurt, died); in it, the one coming or one at hand
+   fought where the bot stands (:fight :intent/hold?); with no burrow, one at hand fought, or
+   backed away from under 10 health; no burrow near, one dug (:burrow, a pickaxe held) away from
+   the nearest enderman; in the burrow with none coming, out to its mouth to look round; one not
+   yet coming and provokable? from here, provoked (never one already coming: a provoke of it
+   ends at once, and batch pearls-263b's bot, its pickaxe lost, provoked one 26 times in a row);
+   one coming and no burrow to meet it in, fought; else a walk to the nearest a route reaches; a
+   wait when there is none."
   [world]
   (let [pos (:player/pos world)
         ms (endermen world)
         [eid e] (entity/nearest ms pos)
         [ceid ce] (entity/nearest (into {} (filter (comp entity/creepy? val)) ms) pos)
         near? (and e (<= (combat/horizontal world e) strike-range))
+        hurt? (< (:player/health world 20.0) combat/retreat-health)
         home (shelter world)
         in? (and home (= home (intent/feet world)))]
     (cond
       (nil? e) {:plan/wait :no-enderman}
+      (and home (not in?) (or ce near? hurt?))
+      {:intent/kind :walk :intent/target home :intent/for :shelter}
       (and in? (or ce near?))
       {:intent/kind :fight :intent/target (if ce ceid eid) :intent/hold? true :intent/for :pearls}
-      (and near? (< (:player/health world 20.0) combat/retreat-health))
-      {:intent/kind :back-off :intent/target eid :intent/for :pearls}
+      (and near? hurt?) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       near? {:intent/kind :fight :intent/target eid :intent/for :pearls}
-      (and ce home) {:intent/kind :walk :intent/target home :intent/for :shelter}
       (and (nil? home) (pickaxe? world))
       {:intent/kind :burrow :intent/dir (away world e) :intent/for :pearls}
       (and in? (:pearls/mouth world))
       {:intent/kind :walk :intent/target (:pearls/mouth world) :intent/for :shelter}
-      (provokable? world e) {:intent/kind :provoke :intent/target eid :intent/for :pearls}
+      (and (not (entity/creepy? e)) (provokable? world e))
+      {:intent/kind :provoke :intent/target eid :intent/for :pearls}
+      ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       :else
       (if-let [[_ far] (routable world ms)]
         {:intent/kind :walk :intent/target (cell (:entity/pos far)) :intent/for :pearls}
