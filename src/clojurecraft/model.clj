@@ -55,6 +55,8 @@
     "while a :swim-out sinks"]
    [:intent/next-search "the tick a :swim-out with no bank yet looks for one again"
     "while a :swim-out rises with no bank"]
+   [:intent/shore "the point at the water's surface a :swim-out with no bank swims toward"
+    "while a :swim-out with no bank sees dry ground out to swim/shore-reach"]
    [:intent/exposes-ok?
     "a :dig that may open a cell beside water or lava (an escape digs beside the water it is in)"
     "on an escape's child dig"]

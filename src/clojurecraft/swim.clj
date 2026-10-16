@@ -28,6 +28,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.trap :as trap]))
 
@@ -42,6 +43,7 @@
 (def escape-timeout-ticks 2400)       ; 120 s: an escape longer than this has failed
 (def search-every-ticks 20)           ; with no bank in reach yet, look again this often while rising
 (def notch-radius 4)                  ; how far on the plane a wall is notched into for a bank when there is none (a dig's reach)
+(def shore-reach 64)                  ; how far along eight bearings a swim with no bank in reach looks for dry ground
 (def flee-radius 6)                   ; how far a lava flee looks for footing
 (def flee-timeout-ticks 200)          ; 10 s
 
@@ -203,6 +205,35 @@
   [world bank]
   (not (path/standable? world bank)))
 
+(defn far-shore
+  "With no bank in reach and the water open to the sky over the feet: the nearest column, along
+   eight bearings from bank-radius out to shore-reach, whose top is dry ground (stairs/dry-top?),
+   as the point at the water's surface to swim toward; nil when none is loaded there. Each pass
+   that looks for a bank looks again, so the bank found near the shore takes over. Before it, an
+   escape at sea rose to the surface and floated there until it timed out: sim race
+   38811426215 runner 8 (issue #89, worlds R4/21 and R1/32 at 76010d2) had bots under the sea floor
+   with land 33 and 40 blocks off, the only way out up through the water."
+  [world [fx _ fz] surface]
+  (->> (range 8)
+       (keep (fn [k]
+               (let [a (* k (/ math/PI 4))
+                     [dx dz] [(math/cos a) (math/sin a)]]
+                 (some (fn [d]
+                         (let [x (long (math/floor (+ fx 0.5 (* d dx))))
+                               z (long (math/floor (+ fz 0.5 (* d dz))))]
+                           (when (stairs/dry-top? world [x z]) [d [x surface z]])))
+                       (range bank-radius (inc shore-reach))))))
+       (sort-by first)
+       (map second)
+       first))
+
+(defn shore-controls
+  "Rising with jump held, and toward shore (far-shore) when there is one."
+  [world shore]
+  (if shore
+    (assoc (intent/toward world (physics/centre shore) 0.0) :control/jump? true)
+    {:control/jump? true}))
+
 (defn swim-controls
   "Toward the bank's centre: in the water, forward with jump held (the swim-up and, pressed
    into the bank, the impulse); out of it, a plain walk, and on dry land nothing at all, so the
@@ -217,7 +248,7 @@
 (defmethod intent/run :swim-out
   ;; an escape's swim-out is ended by its goal, when the trap clears; one for a :retreat (out of a
   ;; flooded tunnel) ends itself on dry land
-  [world {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for]}
+  [world {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for shore]}
    event]
   (let [tick (:time/tick world)
         started (or started tick)
@@ -249,7 +280,7 @@
               (intent/dissoc-intent :intent/bank :intent/target :intent/best-dist :intent/best-tick)
               (game/say (str "swim-out: bank " bank " flooded, looking again")))
           (and (nil? bank) next-search (< tick next-search))
-          (assoc world :player/controls {:control/jump? true}) ; rise until the next look
+          (assoc world :player/controls (shore-controls world shore)) ; rise until the next look
           (nil? bank)
           (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
                 b (banks world feet surface (:plan/blacklist world #{}))
@@ -261,11 +292,17 @@
                       (game/say (str "swim-out: bank " b)))
                   cap (dig-or-sink world feet cap "no bank")
                   wall (start-dig world wall "no bank, notching the wall")
-                  ;; nothing in reach: rise (the roof or a bank comes into reach, or the timeout ends it)
+                  ;; nothing in reach: rise, toward a shore when the water is open over the feet
+                  ;; (the roof or a bank comes into reach, or the timeout ends it)
                   :else
-                  (-> world
-                      (assoc :player/controls {:control/jump? true})
-                      (intent/assoc-intent :intent/next-search (+ tick search-every-ticks)))))
+                  (let [[fx _ fz] feet
+                        shore (when-not (solid-cell? world [fx surface fz])
+                                (far-shore world feet surface))]
+                    (-> world
+                        (assoc :player/controls (shore-controls world shore))
+                        (intent/assoc-intent :intent/next-search (+ tick search-every-ticks))
+                        (cond-> shore (intent/assoc-intent :intent/shore shore))
+                        (cond-> (nil? shore) (intent/dissoc-intent :intent/shore))))))
           (> (- tick best-tick) stuck-ticks)
           (if-let [cell (obstacle world feet bank)]
             (dig-or-sink world feet cell "stuck")

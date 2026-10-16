@@ -42,3 +42,32 @@
       (let [b (:intent/bank (:plan/intent (intent/run w i tick)))]
         (is (some? b) "another bank picked")
         (is (not= bank b))))))
+
+(deftest at-sea-with-no-bank-in-reach-the-escape-swims-for-the-shore
+  ;; sim race 38811426215 runner 8 (issue #89, worlds R4/21 and R1/32): bots under the sea floor,
+  ;; land 33 and 40 blocks off; an escape with no bank within reach rose and floated until it
+  ;; timed out
+  (let [sea (fn [xs]
+              (into {} (for [x xs y (range 55 64) z (range 16)] [[x y z] blocks/water-base])))
+        swim {:intent/kind :swim-out :intent/status :active}
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [8.5 58.0 8.5]
+                 :player/loaded? true
+                 :player/in-water? true
+                 :player/eye-in-water? true
+                 :time/tick 10
+                 :world/chunks
+                 {[0 0] (world/column (sea (range 16)))
+                  [1 0] (world/column (sea (range 16)))
+                  [2 0] (world/column (sea (range 8)))
+                  [3 0] (world/column {})}
+                 :plan/intent swim)
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        w2 (intent/run w swim tick)
+        i (:plan/intent w2)]
+    (is (nil? (:intent/bank i)) "no bank within reach")
+    (is (= [40 64 8] (:intent/shore i)) "the shore east, at the water's surface")
+    (is (= [true true]
+           [(:control/forward? (:player/controls w2)) (:control/jump? (:player/controls w2))])
+        "swimming toward it, rising")))
