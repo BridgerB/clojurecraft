@@ -72,11 +72,31 @@
    no ingot is spare."
   [:flint_and_steel :water_bucket :bucket])
 
-(defn spare-ingots
-  "The iron ingots held once every item of kit-iron is, else 0: armour never takes the iron the
-   portal still needs."
+(defn counts
+  "Held items by name, wherever the bot's windows have them: the inventory, a crafting grid's
+   cells (window 0's, or an open crafting table's, never the result) and the cursor.
+   A craft moves its ingredients out of the inventory into the grid, and a :wear lifts its piece
+   onto the cursor: counted from the inventory alone, the armour row's first run against the
+   model (issue #259) saw its chestplate's eight ingots leave as they were laid, found nothing
+   wanted, and abandoned the craft :goal-met with the grid full."
   [world]
-  (let [c (make/counts world)] (if (every? #(pos? (get c % 0)) kit-iron) (get c :iron_ingot 0) 0)))
+  (let [grid (dissoc (:window/grid world) inventory/result-slot)
+        {:window/keys [menu-type slots]} (:window/open world)
+        own (when (some-> (inventory/layout-of-menu menu-type)
+                          inventory/crafting?)
+              (dissoc slots inventory/result-slot))]
+    (recipe/counts (zipmap (range)
+                           (concat (vals (:player/inventory world))
+                                   (vals grid)
+                                   (vals own)
+                                   (some-> (:window/cursor world)
+                                           vector))))))
+
+(defn spare-ingots
+  "The iron ingots held (counts) once every item of kit-iron is, else 0: armour never takes the
+   iron the portal still needs."
+  [world]
+  (let [c (counts world)] (if (every? #(pos? (get c % 0)) kit-iron) (get c :iron_ingot 0) 0)))
 
 (def table-planks 4)                  ; planks a crafting table takes
 
@@ -92,10 +112,10 @@
                  (pos? (recipe/have c (recipe/tags :logs)))))))
 
 (defn wanted
-  "The name of the next piece of made the spare ingots pay for and the bot does not hold (worn
-   counts as held), when a table is at hand (table-at-hand?); nil otherwise."
+  "The name of the next piece of made the spare ingots pay for and the bot does not hold (counts:
+   worn, in a grid or on the cursor counts as held), when a table is at hand (table-at-hand?); nil otherwise."
   [world]
-  (let [c (make/counts world)
+  (let [c (counts world)
         spare (spare-ingots world)
         k (some (fn [[k cost]] (when (and (zero? (get c k 0)) (>= spare cost)) k)) made)]
     (when (and k (table-at-hand? world)) k)))
