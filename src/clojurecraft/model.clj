@@ -258,6 +258,8 @@
    [:intent/still "ticks the bot has been still" "settling intents"]
    [:intent/face "block face it acts on" "dig"]
    [:intent/next-swing "ms of the next arm swing, or of a :fight's next attack" "dig, fight"]
+   [:intent/target-pos "where a :fight last saw its target; a hunt picks the drop up there"
+    "fight, while its target is seen"]
    [:intent/swings
     "attacks a :fight has sent in reach of its target; combat/max-swings make it a ghost"
     "fight, after its first attack"] [:intent/finish-at "ms after which FINISH may be sent" "dig"]

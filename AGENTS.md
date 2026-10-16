@@ -790,7 +790,9 @@ Most are stated where they apply above (grass type, resting vy, `:name` collisio
 | 0 | `:escape-lava` (always) | `:not-trapped-in` | `:escape` → `:flee` |
 | 0 | `:defend` (always, after the escapes; `defend`) | `:safe?`: no hostile within 4, no creeper within 6 (blacklisted ghosts aside) | `:defend` → `:fight`, or `:back-off` from a creeper or under 10 health (issue #259) |
 | 0 | `:eat` (always, after `:defend`; `eat`) | `:fed?`: food ≥ 14, unknown, or nothing safe to eat held | `:eat` → `:eat` (issue #259) |
-| 0 | `:wear-armour` (always, after `:eat`) | `:dressed?`: no piece held over an empty armour slot | `:wear` → `:wear` |
+| 0 | `:hunt` (always, after `:eat`) | `:provisioned?`: fed, food held, or no animal a route reaches within 24 and no kill to pick up | `:hunt` → `:walk`, `:fight`, `:collect` the meat |
+| 0 | `:wear-armour` (always, after `:hunt`) | `:dressed?`: no piece held over an empty armour slot | `:wear` → `:wear` |
+| 13 | `:sword` (always, after `:armour`) | `:armed?`: no better sword the held items make with a handle and a table at hand | `:sword` → needs planner (craft) |
 | 5 | `:attack` (aside: gym only, never chained; `attack`) | `:cleared?`: no hostile within 16 | `:attack` → `:fight` |
 | 13 | `:armour` (always, after `:portal-kit`; `armour`) | `:armoured?`: no iron helmet or chestplate the spare ingots pay for, table at hand | `:armour` → needs planner (craft) |
 | 1 | `:wood` | `{:tag/logs 1}` | needs |

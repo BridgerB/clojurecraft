@@ -176,8 +176,8 @@
    player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
    there), :food (the hunger bar the player joins with, told at login; absent, no food is
    modelled and none is told), :mobs {eid {:type name :pos [x y z] :health h}} (mobs that stand
-   where they are, shown at login, hurt by attacks and removed when their health is gone: a
-   fight's fixture) and :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
+   where they are, shown at login, hurt by attacks and removed when their health is gone, leaving
+   their optional :drop, an item name, where they die: a fight's fixture) and :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
    and where the player arrives)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
            inventory lag-ticks slow-breaks respawn seed tick-seed kill-at dimension nether food
@@ -444,14 +444,29 @@
                       (some-> below
                               blocks/solid?))))))
 
+(defn drop-item
+  "The model with item ({:item id :count n}) dropped at the point [x y z]: an item entity the
+   player picks up after pickup-delay, shown to the client by its add-entity."
+  [sim [x y z :as at] item]
+  (let [eid (:sim/next-eid sim)]
+    (-> sim
+        (assoc :sim/next-eid (inc eid))
+        (assoc-in [:sim/items eid] {:pos at :spawned (:sim/now sim) :item item})
+        (send {:packet/name :add-entity
+               :entity-id eid
+               :uuid nil
+               :type blocks/item-entity-type
+               :x x
+               :y y
+               :z z}))))
+
 (defn break-block
   "Block id at pos is broken by the player holding held in slot: gone (placed or not), its
    block update, its drop as an item entity, the tool worn, the neighbours disturbed; ice over
    water or a solid becomes a water source (melts?)."
   [sim pos id held slot]
-  (let [eid (:sim/next-eid sim)
-        [x y z] pos
-        [ix iy iz :as item-pos] [(+ x 0.5) (+ y drop-rise) (+ z 0.5)]
+  (let [[x y z] pos
+        item-pos [(+ x 0.5) (+ y drop-rise) (+ z 0.5)]
         [sim item] (loot sim id held)
         drop (when item {:item item :count 1})
         before (full (:sim/inv sim) (inventory/layouts :inventory))
@@ -463,18 +478,7 @@
                 (disturb pos)
                 (cond-> (melts? sim pos id) (set-cell pos blocks/water-base)))
         sim (sync-window sim :inventory before (:sim/cursor sim) false)]
-    (if drop
-      (-> sim
-          (assoc :sim/next-eid (inc eid))
-          (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
-          (send {:packet/name :add-entity
-                 :entity-id eid
-                 :uuid nil
-                 :type blocks/item-entity-type
-                 :x ix
-                 :y iy
-                 :z iz}))
-      sim)))
+    (cond-> sim drop (drop-item item-pos drop))))
 
 (defn finish-dig
   "The client says it finished breaking pos: broken, with its drop, when it started breaking
@@ -1379,7 +1383,9 @@
               (-> sim
                   (update :sim/mobs dissoc entity-id)
                   (send {:packet/name :entity-event :entity-id entity-id :status 3})
-                  (send {:packet/name :remove-entities :ids [entity-id]})))))))
+                  (send {:packet/name :remove-entities :ids [entity-id]})
+                  (cond-> (:drop m)
+                          (drop-item (:pos m) {:item (recipe/item-id (:drop m)) :count 1}))))))))
 
 (defn eats?
   "Does a use-item with item (an id) held start eating it: food is modelled (:sim/food), the bar

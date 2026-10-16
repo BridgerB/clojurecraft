@@ -153,12 +153,15 @@
 
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
-  ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure)
+  ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
+  ;; Where the target was last seen is kept (:intent/target-pos): a hunt collects its drop there
   [world i _]
   (let [now (:time/now world)
-        i (cond-> i (nil? (:intent/stage i)) (assoc :intent/stage :arm :intent/since now))
-        world (assoc world :plan/intent i)
-        e (get-in world [:world/entities (:intent/target i)])]
+        e (get-in world [:world/entities (:intent/target i)])
+        i (cond-> i
+            (nil? (:intent/stage i)) (assoc :intent/stage :arm :intent/since now)
+            e (assoc :intent/target-pos (:entity/pos e)))
+        world (assoc world :plan/intent i)]
     (cond (entity/gone? world (:intent/target i))
           (-> world
               (assoc :player/controls {})

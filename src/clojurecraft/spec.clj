@@ -12,6 +12,7 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
+            [clojurecraft.hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
@@ -23,6 +24,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.sword]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
@@ -415,6 +417,7 @@
 (s/def :intent/face int?)
 (s/def :intent/next-swing number?)
 (s/def :intent/swings pos-int?)
+(s/def :intent/target-pos ::vec3)
 (s/def :intent/finish-at number?)
 (s/def :intent/slot (s/int-in 0 9))
 (s/def :intent/tool (s/nilable int?))

@@ -113,10 +113,10 @@
             the meal, the armour and the fights (issue #259), done by the server's food, slots and mobs"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
     (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :fed? :dressed?
-                              :armoured? :safe? :cleared?}
+                              :armoured? :safe? :cleared? :provisioned? :armed?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
-    (is (= #{:needs :escape :wade :build :fortress :eat :wear :armour :defend :attack}
+    (is (= #{:needs :escape :wade :build :fortress :eat :wear :armour :defend :attack :hunt :sword}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))

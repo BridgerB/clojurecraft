@@ -215,7 +215,7 @@
                     "brain/siblings/sib-dimension-change.md"]}
  {:problem/stage :survival
   :problem/issue 259
-  :problem/goals [:eat :wear-armour :armour :defend :attack]
+  :problem/goals [:eat :wear-armour :armour :defend :attack :hunt :sword]
   :problem/statement
   "Normal difficulty brings hunger and night mobs to every stage. Food drains with every dig and jump, an empty bar stops healing and starves the bot to one heart, and zombies, skeletons and creepers find a bot that cannot hit back. The world value read the health from set-health and threw the food away; the bot could not eat, wear armour or attack."
   :problem/needs
@@ -228,6 +228,8 @@
    "The meal is the server's food rising; a deadline from the food's eating time, stretched by the server's slowdown, fails it :not-eaten"
    "Never eat what poisons or makes hungry, chorus fruit, suspicious stew or golden apples"
    "A fight is its own intent (:fight): the 775 attack packet, the look set a tick before, attacks 650 ms apart by the clock (a deadline on the intent), a kill when the target is gone, a ghost after 25 swings in reach, broken off under 10 health; :defend is an always row after the escapes (a hostile within 4, a creeper within 6 backed away from); the gym's :attack is an aside, never a step of a chained run"
+   "Food is produced by :hunt, an always row after the meal: hungry with nothing edible, walk to the nearest cow, pig, sheep or rabbit a route reaches within 24, fight it, collect its meat where it fell, eat it raw; never chickens"
+   "The sword is the :sword always row after the armour: iron from ingots the armour leaves, else stone from cobblestone, else wood from planks, never from a log, so it takes nothing the pickaxes need; until it is made the fights are by hand"
    "Armour is put on by two window-0 clicks (pick up, put down in the armour slot) and made only from ingots spare once the portal's iron is held, with a table at hand: it never sends the bot mining or after a tree"]
   :problem/risks
   ["A meal preempts work mid-intent: a smelt abandoned leaves its input in the furnace"

@@ -25,6 +25,7 @@
             [clojurecraft.eat]
             [clojurecraft.fortress]
             [clojurecraft.game :as game]
+            [clojurecraft.hunt]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
@@ -36,6 +37,7 @@
             [clojurecraft.stairs]
             [clojurecraft.stone]
             [clojurecraft.swim]
+            [clojurecraft.sword]
             [clojurecraft.watch :as watch]
             [clojurecraft.wood])
   (:gen-class))
