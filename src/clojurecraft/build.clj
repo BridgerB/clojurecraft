@@ -798,13 +798,28 @@
   [world origin facing]
   (let [kept? (kept origin facing)] (fn [c] (or (kept? c) (lava-touching? world c)))))
 
+(def room-footprint
+  "[origin facing] → the set of cells the cast's room opens (room-cells, its stair and access
+   steps for a landing at the lava's own height) at origin facing. Memoized."
+  (memoize (fn [origin facing] (set (map #(cell origin facing %) (room-cells 0))))))
+
+(defn in-room?
+  "Is c a cell the cast's room opens at origin facing (room-footprint)? What is dug there is no
+   floor and no corner for a way to stand on: the room op digs what a bridge lays."
+  [origin facing c]
+  (contains? (room-footprint origin facing) c))
+
 (defn round-corner
   "Where a way at the stand's height turns to go round the frame's rock (kept) when the straight
    way from the feet to stand crosses it: a loaded cell within round-reach of stand from which both
    legs keep off the rock, the shortest way first; nil when the straight way is clear, or no
    corner is. The sim race at 76010d2 (issue #45, world R4/33): the bot stood behind its own frame,
    the landing straight ahead through the frame's rock, which a way never digs; the cells past the
-   rock were dug, the landing itself was out of reach, and three walks at it failed :no-path."
+   rock were dug, the landing itself was out of reach, and three walks at it failed :no-path.
+   Never a corner inside the room the cast digs (in-room?): sim race 38924530337 (issue #45,
+   regressed, world R2/9): the corner chosen was a cell of the room's upper row, no floor under
+   it but the room's own cell, so the bridge laid cobblestone there, the room op dug it out
+   again, and the two alternated until the walk to the corner failed :no-path."
   [world stand origin facing]
   (let [kept? (barred world origin facing)
         feet (intent/feet world)
@@ -815,6 +830,7 @@
                  dz (range (- round-reach) (inc round-reach))
                  :let [c [(+ sx dx) sy (+ sz dz)]]
                  :when (and (some? (terrain/block-at world c))
+                            (not (in-room? origin facing c))
                             (clear-of? kept? feet c)
                             (clear-of? kept? c stand))]
              c)
