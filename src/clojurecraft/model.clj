@@ -173,6 +173,9 @@
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
     "after a :boxed staircase or tunnel"]
+   [:plan/surfaced
+    "[feet ms] where and when the last climb out to the surface came out: a spare's climb is not cut again from below near it for a while"
+    "after a climb out comes out"]
    [:plan/intents "intents started so far; the next one's :intent/id" "after the first intent"]
    [:plan/intent "the intent being executed" "while one runs"]
    [:plan/last "the last intent that ended, with its outcome" "after one ends"]
@@ -184,7 +187,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -223,6 +226,9 @@
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
     ":tunnel-to, during a step"]
+   [:intent/from-feet
+    "the feet a tunnel toward a bank (scoop/to-bank) began at, to judge whether it came nearer"
+    ":tunnel for :bank"]
    [:intent/from "the feet a :tunnel-to's step started from, where its ops are worked"
     ":tunnel-to, during a step"]
    [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"

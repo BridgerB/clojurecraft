@@ -351,6 +351,38 @@
     (is (= :retreat (:intent/for (build/to-height w' 41)))
         "from the pocket: the way out, not the same stairs")))
 
+(deftest a-landing-behind-the-frame-is-gone-round-to
+  ;; the sim race at 76010d2 (issue #45, world R4/33): the bot stood behind its own frame with the
+  ;; landing straight ahead through the frame's rock, which no way digs; three walks at the
+  ;; landing failed :no-path
+  (let [origin [6 63 6]
+        facing :south
+        at #(build/cell origin facing %)
+        feet (at [2 0 -3])
+        rock (into {} (for [x (range 16) y [63 64] z (range 16)] [[x y z] 1]))
+        w (standing-at (open-ground (assoc rock feet blocks/air (update feet 1 inc) blocks/air))
+                       (mapv + feet [0.5 0.0 0.5]))
+        stand (at [2 0 2])
+        child (build/toward-stand w stand :cast-one origin facing)
+        corner (build/round-corner w stand origin facing)]
+    (is (some? corner) "a corner round the rock")
+    (is (build/clear-of? (build/kept origin facing) feet corner))
+    (is (build/clear-of? (build/kept origin facing) corner stand))
+    (is (= :dig (:intent/kind child)))
+    (is (not ((build/kept origin facing) (:intent/target child))) "never the frame's rock")
+    (is (not= (at [2 0 -2]) (:intent/target child)) "not the straight way into the rock")))
+
+(deftest a-way-filled-by-falling-gravel-is-cleared-again
+  ;; sim race 38837004562 (issue #45, world R1/6): the level way to the landing ran under a bed
+  ;; of gravel, each dug cell filled again, and three walks along it failed :no-path
+  (let [gravel (first (blocks/states-where (fn [[n]] (= n :gravel))))
+        walk
+        {:intent/kind :walk :intent/target [10 63 4] :intent/status :failed :intent/reason :no-path}
+        at (fn [b] (standing-at (open-ground {[10 63 7] b}) feet-pos))]
+    (is (build/way-refilled? (at gravel) walk) "gravel in the way: dropped, cleared again")
+    (is (not (build/way-refilled? (at 1) walk)) "stone in the way: a failure as before")
+    (is (not (build/way-refilled? (at gravel) (assoc walk :intent/reason :stuck))))))
+
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
   ;; server refusing it three times, :rejected

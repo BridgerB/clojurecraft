@@ -418,7 +418,8 @@
    pools at y 62 with no route down; and at y 63, forty blocks from pools at y 62, under a
    lip of rock. Every hunt and walk had no route, and each waited :no-water.
    The cut names the water it heads for (:intent/target): a cut that is :boxed gives that water
-   up (stairs/box) and the next look chooses other water, or none and a climb."
+   up (stairs/box) and the next look chooses other water, or none and a climb; so does a tunnel
+   that ends no nearer it than it began (:intent/from-feet, stairs/no-nearer?)."
   [world]
   (let [fy (physics/y-of (intent/feet world))]
     (when-let [[_ y _ :as w] (first (concat (sources world) (pools-near world)))]
@@ -437,7 +438,8 @@
                      {:intent/kind :tunnel
                       :intent/dir (heading-to world w)
                       :intent/length tunnel-out-length
-                      :intent/for :bank})
+                      :intent/for :bank
+                      :intent/from-feet (intent/feet world)})
                :intent/target
                w)))))
 

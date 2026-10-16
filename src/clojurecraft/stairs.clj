@@ -583,6 +583,23 @@
   {:arglists '([world intent event])}
   (fn [_world i _event] (:intent/stage i :plan)))
 
+(defn rock-heading
+  "For a stair down the heading would have to lay a floor for, the first other heading, a quarter
+   turn at a time, whose stair is cut into the rock as it stands (safe?, given the heading): a
+   stair into rock spends no filler, a floor laid over a cave or a cliff's air spends one or two a
+   stair. nil for a climb, a level way, or a cut toward a bank's water (:intent/for :bank), whose
+   heading is the point. Race 38842339863 runner 4 (issue #37) bots Clj_r01 and Clj_r08: the mine's
+   stairs down ran east along a cliff's face and the wall of a cave, a floor laid before every
+   stair, the rock a turn away west, until the few cobblestone the furnace had left were spent and
+   every stair was :boxed."
+  [{:intent/keys [kind for dir]} safe-toward?]
+  (when (and (= :stairs-down kind) (not= :bank for))
+    (->> (iterate turn (or dir (first directions)))
+         rest
+         (take 3)
+         (filter safe-toward?)
+         first)))
+
 (defmethod stairs-stage :plan
   [world {:intent/keys [kind dir turns visited] :or {turns 0 visited #{}} :as i} _]
   (let [dir (or dir (first directions))
@@ -591,7 +608,8 @@
         safe? (fn [world cells] (and (fresh? cells) (shape-safe? world cells)))
         feet (intent/feet world)
         cells (cells-of feet dir)
-        to-lay (when (and lay (fresh? cells) (not (safe? world cells))) (lay world feet cells))]
+        to-lay (when (and lay (fresh? cells) (not (safe? world cells))) (lay world feet cells))
+        rock (when to-lay (rock-heading i #(safe? world (cells-of feet %))))]
     (cond (airborne? world) (assoc world :player/controls {}) ; land first
           (safe? world cells)
           (intent/assoc-intent world
@@ -600,6 +618,15 @@
                                :intent/stage :open
                                :intent/started-y (physics/y-of (:player/pos world))
                                :intent/started-tick (:time/tick world))
+          rock
+          (-> world
+              (intent/assoc-intent :intent/dir rock
+                                   :intent/cells (cells-of feet rock)
+                                   :intent/stage :open
+                                   :intent/started-y (physics/y-of (:player/pos world))
+                                   :intent/started-tick (:time/tick world))
+              (game/say (str "stairs: into the rock toward " rock
+                             " rather than a floor laid toward " dir)))
           to-lay
           (-> world
               (intent/assoc-intent :intent/dir dir
@@ -835,12 +862,44 @@
             (game/say (str "tunnel: refused toward " dir ", a step toward " d))))
       (box world))))
 
+(def nearer-by 1.0)                   ; blocks on the plane a tunnel toward a bank must close on its water
+(def pond-reach 6)                    ; how far round its water a tunnel that came no nearer gives the sources up
+
+(defn pond-sources
+  "The plain water sources within pond-reach of target on the plane and a block above or below
+   it: the water one tunnel toward a bank was cutting for, which the next would cut for the
+   same way."
+  [world [tx ty tz]]
+  (for [x (range (- tx pond-reach) (inc (+ tx pond-reach)))
+        z (range (- tz pond-reach) (inc (+ tz pond-reach)))
+        y [(dec ty) ty (inc ty)]
+        :let [c [x y z]]
+        :when (= blocks/water-base (terrain/block-at world c))]
+    c))
+
+(defn no-nearer?
+  "Did a tunnel toward a bank (:intent/for :bank, scoop/to-bank) end no nearer the water it
+   heads for (:intent/target) on the plane than it began (:intent/from-feet), by nearer-by? Then
+   it gives that water up, and the pond round it (pond-sources), into :plan/blacklist.
+   Sim race 38839767273 runner 6 (issue #69, worlds R3/8 and R4/35 at 3f836ff): the tunnel
+   walked an open corridor past its water, its heading turning as it passed, eight steps east,
+   eight back west, two thousand tunnels until the run's ninety minutes were spent."
+  [world {:intent/keys [for target from-feet]}]
+  (boolean (and (= :bank for)
+                target
+                from-feet
+                (> (+ (physics/horizontal-distance (intent/feet world) target) nearer-by)
+                   (physics/horizontal-distance from-feet target)))))
+
 (defmethod intent/run :tunnel
-  [world {:intent/keys [length level-steps stage] :or {level-steps 0} :as i} event]
+  [world {:intent/keys [length level-steps stage target] :or {level-steps 0} :as i} event]
   (cond (and (>= level-steps length) (not= :level stage))
-        (-> world
-            (assoc :player/controls {})
-            intent/done)
+        (cond-> (-> world
+                    (assoc :player/controls {})
+                    intent/done)
+          (no-nearer? world i)
+          (-> (update :plan/blacklist (fnil into #{}) (cons target (pond-sources world target)))
+              (game/say (str "tunnel: no nearer the bank of " target ", other water next"))))
         (= :level stage) (stairs-stage world i event)
         :else (tunnel-plan world i)))
 
@@ -926,15 +985,46 @@
                       directions))
        (nil? (pit-rim world feet))))
 
+(def surfaced-window 600000)            ; ms a climb out stays a fact about its place for a spare's sake
+(def surfaced-radius 16)               ; blocks on the plane round where a climb came out that count as the same place
+
+(defn surfaced
+  "world with :plan/surfaced, [feet now], when the running intent is a climb out to the surface
+   (:intent/for :surface) that ends out of the ground (out?) at the feet; world otherwise. What
+   the climb found up there is the act's to judge again; that it came out here, and when, is a
+   fact (surfaced-near?)."
+  [world]
+  (let [{:intent/keys [for to-height?]} (:plan/intent world)
+        feet (intent/feet world)]
+    (cond-> world
+      (and (= :surface for) (not to-height?) (out? world feet))
+      (assoc :plan/surfaced [feet (:time/now world)]))))
+
+(defn surfaced-near?
+  "Did a climb out to the surface come out within surfaced-radius on the plane of the feet in the
+   last surfaced-window ms (:plan/surfaced), the feet now below where it came out: the bot climbed
+   out here and went back down. Sim race 38806318231 (issue #161, 206 runs in 73 rounds) cut stairs
+   up from an iron mine for a spare pickaxe's wood, came out where no tree was in reach, went back
+   down for the iron, and climbed again, every twenty seconds for ninety minutes."
+  [world]
+  (let [[[x y z] at] (:plan/surfaced world)
+        [fx fy fz] (intent/feet world)]
+    (boolean (and at
+                  (< fy y)
+                  (<= (- (:time/now world) at) surfaced-window)
+                  (<= (physics/horizontal-distance [x 0 z] [fx 0 fz]) surfaced-radius)))))
+
 (defmethod intent/run :stairs-up
   ;; done standing at to-y, or out of the ground (out?), whichever comes first; one that is
-  ;; :intent/to-height? ends at to-y alone: the open sky over a pit's floor is not out
+  ;; :intent/to-height? ends at to-y alone: the open sky over a pit's floor is not out. A climb
+  ;; out that comes out is remembered (surfaced)
   [world {:intent/keys [to-y to-height?] :as i} event]
   (if (and (:player/on-ground? world)
            (or (>= (physics/y-of (intent/feet world)) to-y)
                (and (not to-height?) (out? world (intent/feet world)))))
     (-> world
         (assoc :player/controls {})
+        surfaced
         intent/done)
     (stairs-stage world i event)))
 
