@@ -627,6 +627,7 @@
 (s/def :sim/view (s/coll-of ::column-key :kind set?)) ; the columns the client holds now
 (s/def :sim/view-at ::column-key)                     ; the column the player was streamed from
 (s/def :sim/view-distance pos-int?)
+(s/def :sim/player-eid int?)                          ; a joined model's player: the real server's id (sim/joined)
 (s/def :sim/tick-seed int?)                           ; where a run's tick randomness starts
 (s/def :sim/spawn ::vec3)
 (s/def :sim/broken (s/coll-of ::block-pos :kind set?))

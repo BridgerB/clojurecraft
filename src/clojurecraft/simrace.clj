@@ -213,6 +213,16 @@
                      (cond-> (nil? (:plan/go-at world)) (assoc :plan/go-at (spawn-of w))))
           :sim (assoc sim :sim/columns (:capture/columns w) :sim/decoded (:capture/decoded w))}))
 
+(defn own-world
+  "The world a self-contained snapshot is played in, prepared: the columns it carries
+   (:snapshot/columns, a real failure's, issue #299: what the real server had sent the bot, with
+   no captured world file to name) and its landing; nil for a snapshot that names a captured
+   world's file instead (a sim run's), which the caller reads."
+  [snap]
+  (when-let [columns (:snapshot/columns snap)]
+    (prepared
+     {:capture/set "real" :capture/landing (:snapshot/landing snap) :capture/columns columns})))
+
 (defn moment
   "The world and model a snapshot holds, [world sim] (moment-of)."
   [snap w]
@@ -381,6 +391,15 @@
       (flush))
     r))
 
+(defn world-for!
+  "The world a snapshot is played in, prepared: its own columns (own-world, a real failure's),
+   else the captured world file it names, read."
+  [snap]
+  (or (own-world snap)
+      (assoc (prepared (capture/read-world (:snapshot/file snap)))
+             :capture/file
+             (:snapshot/file snap))))
+
 (def judge-wall-ms 240000)            ; a judge's wall-clock budget a snapshot: four minutes, inside issue.yml's 15
 
 (defn judge!
@@ -393,9 +412,7 @@
   [path]
   (let [t0 (System/currentTimeMillis)
         snap (capture/read-world path)
-        w (assoc (prepared (capture/read-world (:snapshot/file snap)))
-                 :capture/file
-                 (:snapshot/file snap))
+        w (world-for! snap)
         r (judged snap w #(> (- (System/currentTimeMillis) t0) judge-wall-ms))
         recurs (recurs? snap r)]
     (println "JUDGE"
@@ -417,9 +434,7 @@
    stage its signature names (replay), never the check's judgement. Prints one REPLAY line."
   [path]
   (let [snap (capture/read-world path)
-        w (assoc (prepared (capture/read-world (:snapshot/file snap)))
-                 :capture/file
-                 (:snapshot/file snap))
+        w (world-for! snap)
         r (replay snap w (* 60000 default-max-minutes))]
     (println "REPLAY"
              (pr-str {:path path
@@ -502,4 +517,9 @@
             (shutdown-agents)
             (System/exit (if (seq bad) 1 0)))
           (get o :from-landing) (do (from-landing! (get o :from-landing)) (shutdown-agents))
+          ;; real.clj builds on this namespace (decision, chosen-moment, judged), so its entry
+          ;; is resolved here rather than required: one command line, no cycle
+          (get o :from-recording)
+          (do ((requiring-resolve 'clojurecraft.real/from-recording!) (get o :from-recording) o)
+              (shutdown-agents))
           :else (race! o))))
