@@ -6,9 +6,12 @@ name: copilot
 # request is merged (its Fixes line closes the issue), a red or abandoned one gets a continue
 # comment, a session that never started is retried. It runs when an issue is filed or reopened,
 # when a fix's checks finish, and every fifteen minutes. GitHub assigns Copilot and hears @copilot
-# only from a user, so it needs the secret COPILOT_TOKEN (a classic token with repo scope, or a
-# fine-grained one with read and write on actions, contents, issues and pull requests); without
-# it the job says so and does nothing. RACE-style off switch: the variable COPILOT_DISPATCH=false.
+# only from a user, so it needs the secret COPILOT_TOKEN in the environment copilot-dispatch
+# (deployment branches: main only, so no other branch's workflow can read it): a user token with
+# repo scope (gh's own OAuth token), or a fine-grained one with read and write on actions,
+# contents, issues and pull requests. The dispatcher never merges a change to the workflows or
+# itself (copilot/guarded), the one way a session's code could reach the token. Without the
+# secret the job says so and does nothing. RACE-style off switch: the variable COPILOT_DISPATCH=false.
 
 on:
   issues:
@@ -37,6 +40,7 @@ jobs:
     if: vars.COPILOT_DISPATCH != 'false' && (github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'bot-failure'))
     runs-on: ubuntu-26.04
     timeout-minutes: 5
+    environment: copilot-dispatch    # COPILOT_TOKEN lives here, readable only from main
     steps:
       - uses: actions/checkout@v7
       - name: Install Babashka
