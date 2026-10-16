@@ -104,6 +104,25 @@
       (is (= :done (:intent/status (:plan/intent (intent/run landed i tick))))
           "wet, then on dry land ten nearer the trunk: across"))))
 
+(deftest a-wall-between-the-swim-and-a-level-bank-is-dug
+  ;; race 38805758078 runner 1 bot Clj_r44 (issues #156, #157), replayed in probe 38830884734: in
+  ;; a flooded tunnel at y 16 the bank lay two blocks off at the feet's height with a block
+  ;; between at the feet; the swim dug the ceiling over its head, then named nothing, :stuck
+  (let [cells {[5 60 5] blocks/water-base
+               [5 61 5] blocks/water-base
+               [4 61 5] blocks/air
+               [3 60 5] blocks/air
+               [3 61 5] blocks/air}
+        at (fn [extra]
+             (assoc (game/init fx/opts)
+                    :bot/phase :play
+                    :player/pos [5.5 60.0 5.5]
+                    :player/loaded? true
+                    :world/chunks {[0 0] (world/column (merge cells extra))}))]
+    (is (= [4 60 5] (swim/obstacle (at {}) [5 60 5] [3 60 5])) "the wall at the feet is dug")
+    (is (= [5 62 5] (swim/obstacle (at {[3 62 5] blocks/air}) [5 60 5] [3 61 5]))
+        "under a bank a block up the step stays, the impulse climbs it: the ceiling instead")))
+
 (deftest a-crossing-stuck-in-the-water-retreats-to-a-bank
   ;; sim race 38844589684 runner 6 (issue #57, world R1/30 seed 4): forty blocks over, the swim
   ;; met a far bank too high to climb out onto and failed :stuck three times; now it swims for
