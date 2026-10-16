@@ -88,14 +88,16 @@
     [(+ px (* far ux)) py (+ pz (* far uz))]))
 
 (defn attack
-  "Send one attack on eid with the held slot restated (set-carried-item), the arm swung, the next
-   swing swing-every from now and the swing counted."
+  "Send one attack on eid, then the arm's swing, as the vanilla client sends them
+   (MultiPlayerGameMode.attack, then the swing); the next swing swing-every from now, the swing
+   counted. Never the swing first, nor the held slot restated: gym attack-259a (run 38881958899)
+   sent set-carried-item, swing, attack, and its stone sword took a NoAI husk's twenty health a
+   point a hit, twenty-two hits for a kill, every one at the charge of a swing just begun."
   [world eid]
   (let [now (:time/now world)]
     (-> world
-        (game/emit {:packet/name :set-carried-item :slot (:player/held-slot world)})
-        (game/emit {:packet/name :swing :hand (packet/value :hand :main-hand)})
         (game/emit {:packet/name :attack :entity-id eid})
+        (game/emit {:packet/name :swing :hand (packet/value :hand :main-hand)})
         (intent/assoc-intent :intent/next-swing (+ now swing-every)
                              :intent/swings (inc (:intent/swings (:plan/intent world) 0))))))
 

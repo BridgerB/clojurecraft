@@ -82,11 +82,12 @@
         sent (fx/names fx)]
     (is (= [150 800 1450] (mapv first hits)) "the look a tick before the first, then 650 ms apart")
     (is (every? #(= 7 (:entity-id (second %))) hits))
-    (testing "each attack restates the slot and swings first"
-      (is (= [:set-carried-item :swing :attack]
+    (testing "each attack goes before its swing, the slot never restated (gym attack-259a)"
+      (is (= [:attack :swing]
              (->> sent
-                  (drop-while #(not= :set-carried-item %))
-                  (take 3)))))
+                  (drop-while #(not= :attack %))
+                  (take 2))))
+      (is (not-any? #{:set-carried-item} sent) "the sword was in hand already"))
     (is (= :engage (:intent/stage (:plan/intent w))))
     (is (= 3 (:intent/swings (:plan/intent w))))))
 
