@@ -116,14 +116,22 @@
     (place/equip world n :approach)
     (intent/assoc-intent world :intent/stage :approach)))
 
+(defn face
+  "Controls that stand still and look at entity e's aim."
+  [world e]
+  {:control/look (physics/look-at (game/eye world) (aim e))})
+
 (defmethod fight-stage :approach
-  [world {:intent/keys [since]} e]
+  ;; toward the target until approach-range; a fight that holds its ground (:intent/hold?) stands
+  ;; facing it while it comes, the same approach-timeout-ms at most
+  [world {:intent/keys [since hold?]} e]
   (let [now (:time/now world)]
     (cond (<= (horizontal world e) approach-range)
           (-> world
-              (assoc :player/controls {:control/look (physics/look-at (game/eye world) (aim e))})
+              (assoc :player/controls (face world e))
               (intent/assoc-intent :intent/stage :engage))
           (> (- now since) approach-timeout-ms) (intent/fail world :unreachable)
+          hold? (assoc world :player/controls (face world e))
           :else (assoc world :player/controls (intent/toward world (aim e) 0.0)))))
 
 (defn pressing?
@@ -139,14 +147,15 @@
   ;; face the target every tick, walking on toward it while it is out of reach (pressing?);
   ;; attack when the deadline has passed, the eyes face it (the look went out a tick before, with
   ;; the movement packet) and it is in reach
-  [world {:intent/keys [target next-swing swings] :or {next-swing 0 swings 0}} e]
+  [world {:intent/keys [target next-swing swings hold?] :or {next-swing 0 swings 0}} e]
   (let [now (:time/now world)
         eye (game/eye world)
         [yaw _ :as look] (physics/look-at eye (aim e))
-        world (assoc
-               world
-               :player/controls
-               (if (pressing? world e) (intent/toward world (aim e) 0.0) {:control/look look}))]
+        world (assoc world
+                     :player/controls
+                     (if (and (not hold?) (pressing? world e))
+                       (intent/toward world (aim e) 0.0)
+                       {:control/look look}))]
     (cond (> (horizontal world e) (inc approach-range))
           (intent/assoc-intent world :intent/stage :approach :intent/since now)
           (>= swings max-swings) (intent/fail world :ghost)
@@ -169,7 +178,10 @@
 (defmethod intent/run :fight
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
-  ;; Where the target was last seen is kept (:intent/target-pos): a hunt collects its drop there
+  ;; Where the target was last seen is kept (:intent/target-pos): a hunt collects its drop there.
+  ;; With :intent/hold? the bot never walks: it waits for the target to come within approach-range,
+  ;; never presses after it, and never breaks off (issue #263: the pearl hunt fights from a burrow
+  ;; an enderman cannot reach into, where a step out is the one way to be hit)
   [world i _]
   (let [now (:time/now world)
         e (get-in world [:world/entities (:intent/target i)])
@@ -181,7 +193,9 @@
           (-> world
               (assoc :player/controls {})
               intent/done)
-          (and (not= :retreat (:intent/stage i)) (< (:player/health world 20.0) retreat-health))
+          (and (not= :retreat (:intent/stage i))
+               (not (:intent/hold? i))
+               (< (:player/health world 20.0) retreat-health))
           (intent/assoc-intent world :intent/stage :retreat :intent/since now)
           :else
           (case (window/waiting world i)

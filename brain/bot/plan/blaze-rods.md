@@ -57,7 +57,7 @@ related:
 
 # Blaze rods
 
-Issue #262, the first stage past the fortress and a child of the roadmap #10. Seven rods: six give the twelve blaze powder twelve eyes of ender take, one is spare. The row (`:blaze-rods`, priority 18, `--until blaze-rods`, `:goal/dimension` the Nether) is done by `:rods-held?`, `rods-wanted` 7 rods counted across every slot. With it the current stage (`plan/current-until`) is the blaze rods; the race's own `:race/until` in `ci/race.edn` stays the fortress until it is raised.
+Issue #262, the first stage past the fortress and a child of the roadmap #10. Seven rods: six give the twelve blaze powder twelve eyes of ender take, one is spare. The row (`:blaze-rods`, priority 18, `--until blaze-rods`, `:goal/dimension` the Nether) is done by `:rods-held?`, `rods-wanted` 7 rods counted across every slot. It is an aside (`:goal/aside?`, as the pearls' rows are) until it passes from the fortress pad: `plan/current-until` stays the fortress, and no chained run takes it as a step yet.
 
 ## Key files
 - `blaze.clj` - the row's rules and the `:camp` executor.

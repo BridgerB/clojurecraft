@@ -22,6 +22,7 @@
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as p]
             [clojurecraft.path :as path]
+            [clojurecraft.pearls :as pearls]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
@@ -159,6 +160,9 @@
 (s/def :entity/flags (s/int-in 0 256))
 (s/def :entity/died-at int?)
 (s/def :entity/item int?)
+(s/def :entity/creepy? boolean?)
+(s/def :pearls/shelter ::block-pos)
+(s/def :pearls/mouth ::block-pos)
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
@@ -426,6 +430,8 @@
 (s/def :intent/target-pos ::vec3)
 (s/def :intent/spawner ::block-pos)
 (s/def :intent/blazes (s/coll-of int? :kind set?))
+(s/def :intent/hold? boolean?)
+(s/def :intent/mouth ::block-pos)
 (s/def :intent/finish-at number?)
 (s/def :intent/slot (s/int-in 0 9))
 (s/def :intent/tool (s/nilable int?))
@@ -750,6 +756,10 @@
   :args
   (s/cat :world (requires :world/entities)
          :eid int?))
+(s/fdef pearls/endermen
+  :args
+  (s/cat :world (requires :world/entities :player/pos)
+         :radius (s/? number?)))
 (s/fdef eat/food-held
   :args
   (s/cat :world (requires :player/inventory)))
@@ -773,5 +783,5 @@
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
    `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held `drops/lying
-   `blaze/blazes])
+   `blaze/blazes `pearls/endermen])
 (s/def :stats/deaths pos-int?)

@@ -16,6 +16,7 @@
 (def health-index 9)                  ; LivingEntity.DATA_HEALTH_ID, a float (probe run 38876275250)
 (def flags-index 0)                   ; Entity.DATA_SHARED_FLAGS_ID, a byte: 0x01 on fire, 0x02 crouching, 0x20 invisible
 (def item-index 8)                    ; ItemEntity.DATA_ITEM, an item stack: what a drop holds
+(def creepy-index 17)                 ; EnderMan.DATA_CREEPY, a boolean: it has a target (probe run 38876275250)
 (def death-status 3)                  ; an entity-event's status for a living entity's death (EntityEvent.DEATH)
 (def on-fire-bit 0x01)                ; in the shared flags: burning (a blaze's state, a mob in lava)
 
@@ -67,18 +68,28 @@
    another shape there (no server sends one) is left out. The same health index is an
    interaction's height and a boat's hurt direction, so health is never read off a type the game
    gives no health; the same item index is a fireball's look (issue #262: a drop is told apart by
-   what it holds, a blaze rod from cobblestone). An index the skim did not reach is simply absent:
-   what was known stays."
+   what it holds, a blaze rod from cobblestone); for an enderman only, its creepy flag at
+   creepy-index (issue #263: true while it has a target, the hunt's sign one is coming). An index
+   the skim did not reach is simply absent: what was known stays."
   [type-id metadata]
   (let [flags (get metadata flags-index)
         health (get metadata health-index)
-        stack (get metadata item-index)]
+        stack (get metadata item-index)
+        creepy (get metadata creepy-index)]
     (cond-> {}
       (and (int? flags) (<= 0 flags 255)) (assoc :entity/flags flags)
       (and (number? health) (contains? blocks/mobs (blocks/entity-names type-id)))
       (assoc :entity/health (double health))
       (and (= blocks/item-entity-type type-id) (map? stack) (int? (:item stack)))
-      (assoc :entity/item (:item stack)))))
+      (assoc :entity/item (:item stack))
+      (and (= :enderman (blocks/entity-names type-id)) (boolean? creepy))
+      (assoc :entity/creepy? creepy))))
+
+(defn creepy?
+  "Has the server said enderman e has a target (:entity/creepy?): it is coming for someone,
+   most likely the bot that stared at it or hit it."
+  [e]
+  (true? (:entity/creepy? e)))
 
 ;; ---------------------------------------------------------------- the questions a fight asks
 

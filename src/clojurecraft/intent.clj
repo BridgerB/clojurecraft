@@ -206,9 +206,10 @@
 
 (def standing-walks
   "The purposes of a walk that ends standing in its target cell, not near it: a build's stand
-   (#8: a pour is aimed from it) and a hiding place out of a blaze's sight (issue #262: a cell
-   within reach of the eye but round a corner hides only once stood in)."
-  #{:build :cover})
+   (#8: a pour is aimed from it), the pearl hunt's burrow (:shelter, issue #263) and a hiding
+   place out of a blaze's sight (:cover, issue #262: a cell within reach of the eye but round a
+   corner hides only once stood in)."
+  #{:build :shelter :cover})
 
 (defn walk-goal
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell
@@ -216,7 +217,9 @@
    the block at or up to pickup-rise above them; no single cell beside it, which a wall may
    close off), and with :intent/step-down? a straight neighbour a block up too (the block in the
    floor beside the feet, path's :goal/step-down?); for water to scoop, its bank (arrived?: path's :pickup goal at the cell over the
-   source, rise 1); for a build's stand, that cell itself; else anywhere within goal-range."
+   source, rise 1); for a build's stand or the pearl hunt's burrow (:intent/for :shelter, issue #263:
+   a step short of it is where an enderman reaches the bot), that cell itself; else anywhere
+   within goal-range."
   [{:intent/keys [target for pickup? step-down?]}]
   (cond pickup?
         (cond->
@@ -252,7 +255,8 @@
    scoop, on its bank: the feet level with the cell over the source or a block lower, within
    scoop-range on the plane, where the eyes look down on its surface; the tenth live run's walk
    ended in reach but in its own stair pit two below the surface, and saw no water. For a build's
-   stand (#8: a pour is aimed from it), the feet in that cell near its middle (centred?). For a
+   stand (#8: a pour is aimed from it) or the hunt's burrow (:shelter), the feet in that cell near
+   its middle (centred?). For a
    walk up to the open sky (:intent/for :opening), the feet under it, however far the mouth is:
    within reach of the mouth the bot is still in the shaft."
   [world {:intent/keys [target for pickup?] :as i} d]

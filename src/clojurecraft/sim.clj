@@ -1848,6 +1848,24 @@
           sim
           (:loot (mob/kinds kind))))
 
+(defn armoured
+  "What is left of a mob's hit of amount on the player once the armour it wears in window 0's
+   four armour slots takes its share (mob/absorbed over the pieces' summed points and
+   toughness, mob/armour-points). Issue #263: with no armour in the model, an enderman's 7 a
+   second beat every sword before the fight's 10-health break-off, armour or not."
+  [sim amount]
+  (let [[points toughness]
+        (reduce (fn [[p t] n]
+                  (let [[dp dt] (get mob/armour-points
+                                     (some->> (get-in sim
+                                                      [:sim/inv (inventory/slot [:armour n]) :item])
+                                              recipe/item-name)
+                                     [0 0.0])]
+                    [(+ p dp) (+ t dt)]))
+                [0 0.0]
+                (range 4))]
+    (mob/absorbed amount points toughness)))
+
 (defn blast
   "Mob eid blows up with its kind's power (a creeper's fuse, a crystal hit): it is gone, and the
    player is hurt by the blast (mob/blast-damage by its distance from the mob's feet, scaled by
@@ -1862,7 +1880,7 @@
         (remove-mob eid)
         (cond-> (and (pos? dmg)
                      (mob/sight? (solid-fn sim) (mob/head type pos) (physics/eye player)))
-                (hurt (mob/scaled dmg (:sim/difficulty sim)) true)))))
+                (hurt (armoured sim (mob/scaled dmg (:sim/difficulty sim))) true)))))
 
 (defn die-mob
   "Mob eid at zero health: a crystal blasts (blast); any other dies, the client told
@@ -1876,6 +1894,20 @@
               (assoc-in [:sim/mobs eid :dead-at] (:sim/now sim))
               (send {:packet/name :entity-event :entity-id eid :status entity/death-status})
               (cond-> by-player? (drop-loot type pos))))))
+
+(defn anger
+  "The model with mob eid turned on the player (:angry?). An enderman shows it as the server
+   does when it takes a target: its creepy flag set (entity/creepy-index, set-entity-data), the
+   fact the bot's hunt reads to know one is coming (issue #263). Once only."
+  [sim eid]
+  (let [{:keys [type angry?]} (get-in sim [:sim/mobs eid])]
+    (cond angry? sim
+          :else
+          (cond-> (assoc-in sim [:sim/mobs eid :angry?] true)
+            (= :enderman type)
+            (send {:packet/name :set-entity-data
+                   :entity-id eid
+                   :metadata {entity/creepy-index true}})))))
 
 (defn hurt-mob
   "The model after mob eid takes amount of damage, by-player? when the player dealt it: within
@@ -1895,7 +1927,7 @@
                          :health left
                          :hit-at (if window? hit-at now)
                          :last-hit amount)
-              (cond-> by-player? (assoc-in [:sim/mobs eid :angry?] true))
+              (cond-> by-player? (anger eid))
               (send (health-data eid left))
               (cond-> (<= left 0.0) (die-mob eid by-player?))))))
 
@@ -1957,8 +1989,7 @@
   (let [{:keys [type pos angry?]} (get-in sim [:sim/mobs eid])
         look (:sim/player-look sim)]
     (cond (or angry? (not (:neutral (mob/kinds type))) (nil? look)) sim
-          (mob/stared? (solid-fn sim) (physics/eye (:sim/player-pos sim)) look pos)
-          (assoc-in sim [:sim/mobs eid :angry?] true)
+          (mob/stared? (solid-fn sim) (physics/eye (:sim/player-pos sim)) look pos) (anger sim eid)
           :else sim)))
 
 (defn targets?
@@ -1979,11 +2010,13 @@
         stop (cond (:melee k) (* 0.8 (:reach k))
                    (:shoot k) (:keep k)
                    :else 1.0)]
-    (cond (not (pos? (:speed k 0.0))) sim
-          :else
-          (move-mob sim
-                    eid
-                    (mob/step-toward (free-fn sim) pos (:sim/player-pos sim) (:speed k) stop)))))
+    (cond
+      (not (pos? (:speed k 0.0))) sim
+      :else
+      (move-mob
+       sim
+       eid
+       (mob/step-toward (free-fn sim) pos (:sim/player-pos sim) (:speed k) stop (mob/tall type))))))
 
 (defn strike
   "A melee mob with the player in reach (on the plane within its :reach, feet within 1.5 in
@@ -2001,7 +2034,7 @@
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              (hurt (mob/scaled (:melee k) (:sim/difficulty sim)) true)))))
+              (hurt (armoured sim (mob/scaled (:melee k) (:sim/difficulty sim))) true)))))
 
 (defn shoot
   "A shooter (a skeleton's arrow, a blaze's fireball) within its :range of the player, with a
@@ -2020,7 +2053,7 @@
           :else
           (-> sim
               (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
-              (hurt (mob/scaled (:shoot k) (:sim/difficulty sim)) true)))))
+              (hurt (armoured sim (mob/scaled (:shoot k) (:sim/difficulty sim))) true)))))
 
 (defn swell
   "A creeper within :swell of the player lights its fuse; with the player past unswell the fuse

@@ -15,7 +15,8 @@
 
    Not modelled: pathfinding round walls (a mob walks straight and stops at what it cannot step
    up), knockback, an arrow's flight (the damage lands when the skeleton fires), a blast breaking
-   blocks, an enderman's teleports, spiders climbing, mobs swimming, armour."
+   blocks, an enderman's teleports, spiders climbing, mobs swimming, armour wearing out. The armour
+   the player wears takes its share of a mob's hit (absorbed, issue #263)."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.physics :as physics]
@@ -176,6 +177,50 @@
     :hard (* damage 1.5)
     damage))
 
+(def armour-points
+  "Each armour piece's armour points and toughness, [points toughness], by item name
+   (ArmorMaterials: a material's defense for the piece's slot, its toughness for every piece;
+   read from the game's classes, probe run 38890566495)."
+  {:leather_helmet [1 0.0]
+   :leather_chestplate [3 0.0]
+   :leather_leggings [2 0.0]
+   :leather_boots [1 0.0]
+   :copper_helmet [2 0.0]
+   :copper_chestplate [4 0.0]
+   :copper_leggings [3 0.0]
+   :copper_boots [1 0.0]
+   :chainmail_helmet [2 0.0]
+   :chainmail_chestplate [5 0.0]
+   :chainmail_leggings [4 0.0]
+   :chainmail_boots [1 0.0]
+   :golden_helmet [2 0.0]
+   :golden_chestplate [5 0.0]
+   :golden_leggings [3 0.0]
+   :golden_boots [1 0.0]
+   :iron_helmet [2 0.0]
+   :iron_chestplate [6 0.0]
+   :iron_leggings [5 0.0]
+   :iron_boots [2 0.0]
+   :diamond_helmet [3 2.0]
+   :diamond_chestplate [8 2.0]
+   :diamond_leggings [6 2.0]
+   :diamond_boots [3 2.0]
+   :netherite_helmet [3 3.0]
+   :netherite_chestplate [8 3.0]
+   :netherite_leggings [6 3.0]
+   :netherite_boots [3 3.0]
+   :turtle_helmet [2 0.0]})
+
+(defn absorbed
+  "The damage left of a hit of damage on a player wearing armour points and toughness
+   (CombatRules.getDamageAfterAbsorb): the armour counts for points - damage / (2 + toughness / 4),
+   never under a fifth of the points nor over 20, each point taking 4% off. Issue #263: an
+   enderman's 7 on iron helmet and chestplate (8 points) is 5.74."
+  [damage points toughness]
+  (let [f (+ 2.0 (/ toughness 4.0))
+        a (min 20.0 (max (* points 0.2) (- points (/ damage f))))]
+    (* damage (- 1.0 (/ a 25.0)))))
+
 (defn blast-damage
   "The damage a blast of power does to a player dist from its centre with a clear line
    (ServerExplosion: impact = 1 - dist / 2·power; damage = (impact² + impact) / 2 · 7 · 2·power
@@ -234,6 +279,18 @@
   [free? [x y z]]
   (and (free? [x y z]) (free? [x (inc y) z])))
 
+(defn tall
+  "How many cells a body of kind fills upward to walk: its box's height rounded up, two at the
+   least, as every walking mob was modelled before (issue #263: an enderman, 2.9 tall, takes
+   three, so a tunnel two high keeps it out, as the server's pathfinder does)."
+  [kind]
+  (max 2 (long (math/ceil (second (:box (kinds kind) [0.6 1.8]))))))
+
+(defn stands-in?
+  "May a body n cells tall stand with its feet in cell [x y z]: those n cells free?"
+  [free? [x y z] n]
+  (every? #(free? [x (+ y %) z]) (range n)))
+
 (defn fall
   "pos come down onto what is under it: the feet on the top of the first cell below that is not
    free (free? of a cell), at most 32 blocks, as a falling body ends a tick's fall."
@@ -246,20 +303,22 @@
 (defn step-toward
   "A mob at pos one tick on toward target at speed blocks a tick, stopping stop short of it on
    the plane: the straight step when the body stands there, one block up when a single block is
-   in the way and the head clears it (a mob jumps it), else it stays; then it falls (fall)."
-  [free? pos target speed stop]
-  (let [[x y z] pos
-        d (flat-distance pos target)
-        k (min speed (max 0.0 (- d stop)))
-        [tx _ tz] target
-        nx (if (pos? d) (+ x (* k (/ (- tx x) d))) x)
-        nz (if (pos? d) (+ z (* k (/ (- tz z) d))) z)
-        [cx cy cz] (cell-of [nx y nz])]
-    (cond (zero? k) pos
-          (stands? free? [cx cy cz]) (fall free? [nx y nz])
-          (and (stands? free? [cx (inc cy) cz]) (free? (update (cell-of pos) 1 + 2)))
-          [nx (double (inc cy)) nz]
-          :else pos)))
+   in the way and the head clears it (a mob jumps it), else it stays; then it falls (fall). A
+   body n cells tall (tall; two when not given) stands and jumps only where its n cells are free."
+  ([free? pos target speed stop] (step-toward free? pos target speed stop 2))
+  ([free? pos target speed stop n]
+   (let [[x y z] pos
+         d (flat-distance pos target)
+         k (min speed (max 0.0 (- d stop)))
+         [tx _ tz] target
+         nx (if (pos? d) (+ x (* k (/ (- tx x) d))) x)
+         nz (if (pos? d) (+ z (* k (/ (- tz z) d))) z)
+         [cx cy cz] (cell-of [nx y nz])]
+     (cond (zero? k) pos
+           (stands-in? free? [cx cy cz] n) (fall free? [nx y nz])
+           (and (stands-in? free? [cx (inc cy) cz] n) (free? (update (cell-of pos) 1 + n)))
+           [nx (double (inc cy)) nz]
+           :else pos))))
 
 ;; ---------------------------------------------------------------- spawning
 
