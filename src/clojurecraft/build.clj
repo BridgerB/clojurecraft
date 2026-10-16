@@ -947,6 +947,19 @@
   [{:intent/keys [kind reason]}]
   (and (= :dig kind) (= :target-gone reason)))
 
+(defn equip-first
+  "An :equip of the tool child, a dig, needs when that tool is only in the main inventory
+   (intent/stowed-tool), so the dig chooses it from the hotbar; nil otherwise. A dig takes its
+   tool from the hotbar alone, as stairs/dig-next equips first. Sim race 38665691522 and a probe
+   at 8356e28 (issue #163, world R3/16): the hotbar's stone pickaxe broke on a frame hole in the
+   deepslate at y 4, the other stone pickaxe and a wooden one were in the main inventory, and
+   the next dig failed :needs-tool three times."
+  [world {:intent/keys [kind target]}]
+  (when-let [[_ item] (and (= :dig kind)
+                           (some->> (terrain/block-at world target)
+                                    (intent/stowed-tool world)))]
+    {:intent/kind :equip :intent/item (recipe/item-name item)}))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i (a dig that found
@@ -955,7 +968,8 @@
    pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand when one can be
    made without going out for anything (pickaxe-at-hand?), so the build's row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
    in the cast's room at y -20 and dug deepslate by hand, fifteen seconds a block, for the last
-   half hour of its ninety minutes."
+   half hour of its ninety minutes. A dig whose tool is only in the main inventory puts it in hand first
+   (equip-first)."
   [world {:intent/keys [child op] :as i} next event]
   (cond (not= next op)
         (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child)
@@ -978,7 +992,9 @@
               missing (when (= :dig (:intent/kind c))
                         (stairs/tool-missing world (:intent/target c)))
               ;; the needs planner is asked only when no pickaxe is held
-              c (or (when (and missing (hand-dig-refused? world (:intent/target c))) missing) c)]
+              c (or (when (and missing (hand-dig-refused? world (:intent/target c))) missing)
+                    (equip-first world c)
+                    c)]
           (cond (and (= :no-station c)
                      (spent? world (lava-sources world) (:intent/origin i) (:intent/facing i)))
                 ;; the pool is spent, not the build: the planner chooses a site with lava enough

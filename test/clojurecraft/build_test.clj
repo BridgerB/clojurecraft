@@ -371,3 +371,29 @@
     (is (nil? (build/reachable-stand w [14 63 5] [14 63 5])) "walled in: no route reaches a stand")
     (is (= [13 63 5] (build/nearest-stand-cell w i [14 63 5]))
         "the stand nearest the cell, at the feet's height, the wall in the way to dig")))
+
+(deftest a-stowed-pickaxe-is-put-in-hand-before-a-dig
+  ;; sim race 38665691522 (issue #163, world R3/16): the hotbar's stone pickaxe broke on a frame
+  ;; hole at y 4, two pickaxes were left in the main inventory, and the next dig, which takes its
+  ;; tool from the hotbar alone, failed :needs-tool three times
+  (let [op {:build/op :dig :build/pos [5 62 6] :build/stand [5 63 5] :build/step :room}
+        i {:intent/kind :build
+           :intent/build :cast-one
+           :intent/origin [100 64 200]
+           :intent/facing :south
+           :intent/status :active
+           :intent/op op}
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        child (fn [slot]
+                (get-in (build/work-op (assoc (standing-at (open-ground {}) [5.5 63.0 5.5])
+                                              :plan/intent i
+                                              :player/inventory
+                                              {slot {:item (recipe/item-id :stone_pickaxe)
+                                                     :count 1}})
+                                       i
+                                       op
+                                       tick)
+                        [:plan/intent :intent/child]))]
+    (is (= [:equip :stone_pickaxe] ((juxt :intent/kind :intent/item) (child 20)))
+        "the pickaxe only in the main inventory: in hand first")
+    (is (= :dig (:intent/kind (child 3))) "in the hotbar: the dig")))
