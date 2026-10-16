@@ -63,6 +63,10 @@
       (is (plan/done-by w {:goal/done? :health-seen?}))
       (is (not (plan/done-by (assoc w :world/entities {4 (mob :cow [1.0 64.0 0.0])})
                              {:goal/done? :health-seen?})))
+      (is
+       (not (plan/done-by (update w :world/entities dissoc 2) {:goal/done? :health-seen?}))
+       "a health known only of mobs farther off (round the spawn the bot joined at) is not the
+           one beside it: gym batch entities-258a run 4 ended there, naming a natural pig")
       (is (= {:plan/wait :no-mob} (plan/next-intent w {:goal/plan :watch} plan/goals))))
     (testing "it is a trial of its own, never a step of a run"
       (is (plan/aside? (first (filter #(= :entities (:goal/id %)) plan/goals))))

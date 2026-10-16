@@ -57,7 +57,7 @@ Issue #258. Until then `:world/entities` held item drops only (`add-entity` drop
 - `healths` - `{kind health}`, the nearest of each kind with a known health: the RESULT's `:mobs`.
 
 ## Proven on real servers
-The gym's `entities` row ([[gym-on-runners]]): a summoned pig at a health no natural pig has; the goal (`:entities`, an aside: `plan/aside?` keeps it out of every run's chain, `observe.clj`) is done once a health is known, and the server's `data get entity` must report the health the RESULT names.
+The gym's `entities` row ([[gym-on-runners]]): a summoned pig at a health no natural pig has; the goal (`:entities`, an aside: `plan/aside?` keeps it out of every run's chain, `observe.clj`) is done once a living entity within 4 blocks has a known health (entities round the spawn it joined at stay tracked until removed: batch entities-258a run 4 ended on one of them, 4/5), and the server's `data get entity` must report the health the RESULT names.
 
 ## Gotchas
 - `intent/nearest-item` filters `entity/item?`: with every entity tracked, a pig beside a drop is not the drop ([[collect-intent]]).
