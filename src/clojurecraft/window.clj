@@ -183,3 +183,19 @@
               (resync-click v (inventory/toss-click (slot-of p)))
               (intent/dissoc-intent :intent/resync))
           :else (intent/fail world :inventory-full))))
+
+(defmethod intent/run :toss
+  ;; {:intent/kind :toss}: throw junk out of window 0 (tossable, toss) until a slot is free, then
+  ;; done; with nothing to throw it is done too
+  [world i _]
+  (let [world (assoc world :plan/intent i)
+        v (view world :inventory)]
+    (case (waiting world i)
+      :overdue (lost world i :toss)
+      :waiting world
+      (cond (:intent/resync i) (resync world v)
+            (tossable world v) (toss world v (tossable world v))
+            :else
+            (-> world
+                (assoc :player/controls {})
+                intent/done)))))

@@ -345,6 +345,23 @@
     (is (= :gather-log (row [[6 66 6] 300000])) "came out long ago: the climb again")
     (is (= :gather-log (row [[60 66 60] 990000])) "came out far off: a climb from here")))
 
+(deftest a-full-inventory-throws-junk-before-it-goes-for-a-log
+  ;; sim race 38806318231 (issue #161, world R3/7): 36 slots full of cobblestone, stones, sand,
+  ;; lapis and copper, three planks short of a table, the bot dug log after log and every collect
+  ;; timed out :not-picked-up. A fetch with no slot free throws junk out first
+  (let [w (world-holding {} false)
+        full (assoc (into {}
+                          (for [p (range 35)] [p {:item (recipe/item-id :cobblestone) :count 64}]))
+                    35
+                    {:item (recipe/item-id :sand) :count 6})
+        gather {:goal/id :gather-log :goal/act :gather}]
+    (is (= {:intent/kind :toss} (make/make-room (assoc w :player/inventory full) gather))
+        "every slot full and junk held: throw it first")
+    (is (nil? (make/make-room (assoc w :player/inventory (dissoc full 3)) gather)) "a slot free")
+    (is (nil? (make/make-room (assoc w :player/inventory full)
+                              {:goal/id :craft/stick :goal/act :craft}))
+        "a craft fetches nothing: its own window makes room")))
+
 (def sky-shaft
   "Air from a pocket at [2 50 8] up a stair to [8 56 8], that column open to the sky. A log at
    [14 70 14] is sealed in stone, past the near band, and no route reaches it."

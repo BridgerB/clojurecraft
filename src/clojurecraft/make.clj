@@ -26,6 +26,7 @@
             [clojurecraft.recipe :as recipe]
             [clojurecraft.smelt :as smelt]
             [clojurecraft.stairs :as stairs]
+            [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
@@ -412,16 +413,30 @@
   [world row]
   (when (fetch? row) (take-table-along world)))
 
+(defn make-room
+  "A :toss of junk (window/tossable) before row goes out for something (fetch?) with every slot
+   of the inventory full and no container open: what it fetches is picked up on contact, and with
+   no slot free it is never picked up. nil otherwise. Sim race 38806318231 (issue #161, world
+   R3/7): at the portal kit, three planks short of a table for the bucket, 36 slots full of
+   cobblestone, stones, sand, lapis and copper, the bot dug log after log and every collect timed
+   out :not-picked-up, for the run's last half hour."
+  [world row]
+  (when (and (fetch? row)
+             (nil? (:window/open world))
+             (window/tossable world (window/view world :inventory)))
+    {:intent/kind :toss}))
+
 (defn decide
   "The next intent toward goal: continue a log chain or a table pick-up in flight, else take the
-   table along (take-table) or act on the row the needs planner reaches through table."
+   table along (take-table), make room (make-room) or act on the row the needs planner reaches
+   through table."
   [world goal table]
   (or (wood/continue-gather world)
       (intent/chain-next (:plan/last world) :take-table table-drops {})
       (let [row (next-row world goal table)]
         (cond (nil? row) nil
               (= :stuck row) {:plan/wait :stuck}
-              :else (or (take-table world row) (plan/act world row))))))
+              :else (or (take-table world row) (make-room world row) (plan/act world row))))))
 
 (defmethod plan/next-intent :needs [world goal table] (decide world goal table))
 
