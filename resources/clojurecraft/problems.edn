@@ -415,6 +415,6 @@
   :problem/done
   "RCON: clear <bot> minecraft:ender_eye 0 finds twelve or more after seven rods and twelve pearls are given on a surface landing (gym eyes)."
   :problem/last-failure
-  "clojurecraft has never crafted an eye. First proof against the model: sim_test eyes-of-ender-from-rods-and-pearls."
+  "clojurecraft has never crafted an eye. First proof against the model: sim_test eyes-of-ender-from-rods-and-pearls. Gym batch eyes-264a (plan run 38920108562): 6/6 passed, twelve eyes held 20 to 30 s after landing."
   :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/eyes-of-ender.md"
                     "brain/bot/crafting/make-goals.md"]}]
