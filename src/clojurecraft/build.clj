@@ -847,19 +847,20 @@
           :else (or (to-height world (second stand)) walk))))
 
 (defn sight-block
-  "The first block on the eyes' line to the surface of lava source src (scoop/aim-point) that the
-   bucket's ray would stop at (not air, not a fluid): the rock between the stand and a pool sealed
-   in it, the cell over the source last. nil when the line is clear."
+  "The first loaded block on the eyes' ray to the surface of lava source src (scoop/aim-point)
+   that the bucket's ray would stop at (scoop/ray-walls: not air, not a fluid, the ray as wide as
+   the game's edge test): the rock between the stand and a pool sealed in it, the cell over the
+   source last. nil when the line is clear."
   [world src]
-  (let [eye (game/eye world)
-        aim (scoop/aim-point src)
-        d (physics/distance eye aim)
-        dir (mapv #(/ (- %2 %1) d) eye aim)]
-    (->> (physics/cells-along eye dir d scoop/ray-step)
-         (take-while #(not= src %))
-         (filter #(when-let [id (terrain/block-at world %)]
-                    (not (or (blocks/air? id) (terrain/fluid-at world %)))))
-         first)))
+  (first (filter #(terrain/block-at world %) (scoop/ray-walls world (scoop/aim-point src)))))
+
+(defn lava-aim
+  "Where on the surface of lava source src the eyes can aim with nothing on the ray
+   (scoop/surface-points, scoop/ray-walls), or nil. Issue #225: the refill's line to the
+   surface's centre grazed a block's edge the samples stepped past, and three scoops filled
+   nothing."
+  [world src]
+  (first (filter #(empty? (scoop/ray-walls world %)) (scoop/surface-points src))))
 
 (defn source-in-sight
   "[src block] for the first of sources (nearest first) the eyes can be given a clear line to:
@@ -867,7 +868,7 @@
    and never one a dig may not take (obsidian). nil when no source has such a line."
   [world sources]
   (some (fn [src]
-          (let [block (sight-block world src)]
+          (let [block (when-not (lava-aim world src) (sight-block world src))]
             (when (or (nil? block)
                       (not (contains? intent/never-dug
                                       (blocks/name-of (terrain/block-at world block)))))
@@ -889,11 +890,13 @@
    half full (refill-scoops-a-source-under-flowing-lava)."
   [world sources]
   (let [[src block] (source-in-sight world sources)]
-    (cond
-      (nil? src) :no-station
-      (nil? block)
-      {:intent/kind :scoop :intent/target src :intent/fluid :lava :intent/aim (scoop/aim-point src)}
-      :else (assoc (way-dig block) :intent/for :lava))))
+    (cond (nil? src) :no-station
+          (nil? block)
+          {:intent/kind :scoop
+           :intent/target src
+           :intent/fluid :lava
+           :intent/aim (or (lava-aim world src) (scoop/aim-point src))}
+          :else (assoc (way-dig block) :intent/for :lava))))
 
 (defn refill
   "The child that refills lava, or the reason it cannot (:no-station, :no-bucket): the feet to the
