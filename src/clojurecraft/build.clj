@@ -465,6 +465,11 @@
   [cell]
   (map #(mapv + cell %) [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]]))
 
+(defn lava-touching?
+  "Does lava lie in cell or beside it (its six neighbours)? A way dug there lets it in."
+  [world cell]
+  (boolean (some #(= :lava (terrain/fluid-kind world %)) (cons cell (touching cell)))))
+
 (defn dry?
   "Does no cell of cells hold a fluid?"
   [world cells]
@@ -618,12 +623,14 @@
 
 (defn diggable?
   "Is pos a solid or awkward block a clear may dig: not unloaded, not obsidian, not the frame's
-   rock (kept?: the rock the holes are cut into, whatever it is made of), and not cobblestone the
+   rock (kept?: the rock the holes are cut into, whatever it is made of), not beside lava
+   (lava-touching?: issue #231, a way dug along the lava sea's edge let it in), and not cobblestone the
    plan places. Stone or dirt where a floor will go later is still dug: the place is satisfied by
    whatever is solid, and the hill would stay in the way."
   [world pos placed? kept?]
   (when-let [id (terrain/block-at world pos)]
     (and (not (kept? pos))
+         (not (lava-touching? world pos))
          (not (and (placed? pos) (= :cobblestone (blocks/name-of id))))
          (not (contains? intent/never-dug (blocks/name-of id)))
          (contains? #{:solid :awkward} (path/classify-id id)))))
@@ -769,6 +776,15 @@
   [kept? a b]
   (not-any? #(or (kept? %) (kept? (update % 1 inc))) (stance-line a b)))
 
+(defn barred
+  "The cells a way to a stand never opens: the frame's rock (kept) and any cell lava lies in or
+   beside (lava-touching?). Sim race 38843557186 runner 3 (issue #231, world R1/31): the way to a
+   landing 72 blocks off at the lava sea's height was dug along the sea's edge, a cell beside a
+   source opened (a build's dig may expose fluid), the lava flowed in, and no footing was in
+   reach: :no-footing three times in a tick."
+  [world origin facing]
+  (let [kept? (kept origin facing)] (fn [c] (or (kept? c) (lava-touching? world c)))))
+
 (defn round-corner
   "Where a way at the stand's height turns to go round the frame's rock (kept) when the straight
    way from the feet to stand crosses it: a loaded cell within round-reach of stand from which both
@@ -777,7 +793,7 @@
    the landing straight ahead through the frame's rock, which a way never digs; the cells past the
    rock were dug, the landing itself was out of reach, and three walks at it failed :no-path."
   [world stand origin facing]
-  (let [kept? (kept origin facing)
+  (let [kept? (barred world origin facing)
         feet (intent/feet world)
         [fx _ fz] feet
         [sx sy sz] stand]

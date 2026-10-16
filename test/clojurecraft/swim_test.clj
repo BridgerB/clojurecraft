@@ -160,3 +160,38 @@
       (is (= :done
              (:intent/status (:plan/intent (intent/run (assoc w :plan/intent ashore) ashore tick))))
           "on the bank: the crossing is over"))))
+
+(deftest a-flee-never-ends-in-the-lava-it-flees
+  ;; sim race 38844683780 runner 7 (issue #230, world R2/9): lava from a source ten over flowed
+  ;; into the pocket the bot smelted in; it fled to a cell the flow covered and timed out
+  ;; :no-footing, three times
+  (let [feet [5 64 5]
+        flow (inc blocks/lava-base)
+        lava (into {} (for [dx (range -2 3) dz (range -2 3)] [[(+ 5 dx) 64 (+ 5 dz)] flow]))
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 64.0 5.5]
+                 :player/loaded? true
+                 :player/in-lava? true
+                 :world/chunks {[0 0] (world/column lava)})
+        cell (swim/footing w feet)]
+    (is (some? cell))
+    (is (swim/lava-free? w cell) "out of the flow")
+    (is (not (swim/lava-beside? w cell)) "and clear of its edge when such a cell is in reach")))
+
+(deftest a-flee-lands-on-its-footing-instead-of-bouncing
+  ;; sim races 38844683780 runner 7 and 38843557186 runner 3 (issues #230, #231): out of the
+  ;; lava, jump still held bounced the body off the footing every tick, the trap never cleared
+  ;; and the flee timed out :no-footing
+  (let [target [6 64 5]
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 64.0 5.5]
+                 :player/loaded? true
+                 :world/chunks {[0 0] (world/column {})})]
+    (is (:control/jump? (swim/flee-controls (assoc w :player/in-lava? true) target))
+        "in the lava: jump")
+    (is (:control/forward? (swim/flee-controls w target)) "out of it: on toward the footing")
+    (is (not (:control/jump? (swim/flee-controls w target))) "without jumping")
+    (is (= {} (swim/flee-controls (assoc w :player/pos [6.5 64.0 5.5]) target))
+        "centred on it: still, so the body lands")))

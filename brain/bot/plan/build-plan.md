@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, build, portal]
 aliases: [build.clj, portal-plan, cast-one-plan, build/holds?, satisfied?, op, :build/done, choose-site, station, refill, blocks-needed, lava-hunt, uncap, no-site]
 status: verified
-lastUpdated: 2026-10-16
+lastUpdated: 2026-10-15
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/build.clj#defmulti holds?
@@ -40,6 +40,9 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn way-refilled?
   - test/clojurecraft/build_test.clj#a-way-filled-by-falling-gravel-is-cleared-again
   - src/clojurecraft/build.clj#defn clear-of?
+  - src/clojurecraft/build.clj#defn lava-touching?
+  - src/clojurecraft/build.clj#defn barred
+  - test/clojurecraft/build_test.clj#a-way-never-opens-a-cell-beside-lava
   - test/clojurecraft/build_test.clj#a-landing-behind-the-frame-is-gone-round-to
   - test/clojurecraft/build_test.clj#a-way-to-the-site-boxed-in-is-left-by-the-way-out
   - src/clojurecraft/build.clj#defn way-dig
@@ -149,6 +152,7 @@ In solid rock the cast places four blocks: the walls its own digging opened (the
 - **Water above, never beside.** The model ([[server-model]]) turns a lava source with water above or beside it to obsidian, as vanilla does; the bot puts the water above because on a server the source's open side flows first.
 - **The landing is reached at the lava's height**: a way dug toward a stand starts at the feet's column at the stand's height, so `clear-stand` only digs toward a stand at the feet's height; another height is stairs first (`to-height`). A staircase or tunnel child that dies `:boxed` (`boxed-way?`) puts the feet's cell in `:plan/boxed-at` and is dropped, not failed, and from that pocket `to-height` takes the way out the mine takes (`stone/retreat`, `stone/climb`) for the next descent from elsewhere: sim race 38806318231 (issue #130, world R3/11) met an aquifer at y 11 on the way down to a landing at y -22 and was sent down the same refused stairs from the same cell three times, `:boxed` (`a-way-to-the-site-boxed-in-is-left-by-the-way-out`). The landing's ops go through `toward-stand` alone: as a room cell, out of reach 23 over the sea, it had no stand and the cast failed `:no-stand`.
 - **The footprint is every cell the plan works** (`every-cell-the-plan-works-is-in-its-footprint`), so the site's fluid check covers them all.
+- **No way opens a cell beside lava**: `diggable?` refuses a cell lava lies in or beside (`lava-touching?`), and `round-corner` goes round such cells as round the frame's rock (`barred`). Sim race 38843557186 runner 3 (issue #231, world R1/31) dug its way to a landing at the lava sea's height along the sea's edge; a cell beside a source opened, the lava flowed in, and no footing was in reach (`a-way-never-opens-a-cell-beside-lava`).
 - **The frame's rock is gone round, not through**: when the straight way at a stand's height from the feet to it crosses the frame's rock (`kept`, never dug), `toward-stand` goes first to a corner from which both legs keep off it (`round-corner`, `clear-of?`, within `round-reach` of the stand). The sim race at 76010d2 (issue #45, world R4/33) stood behind its own frame with the landing straight ahead through the rock; the cells past it were dug, the landing was out of reach and three walks at it failed `:no-path` (`a-landing-behind-the-frame-is-gone-round-to`). A walk along the way that fails `:no-path` with gravel or sand fallen onto it since (`way-refilled?`) is dropped, not failed, and the next clear digs it out: sim race 38837004562 (issue #45, world R1/6) cut its level way to the landing under a bed of gravel that refilled it, and three walks failed (`a-way-filled-by-falling-gravel-is-cleared-again`).
 - **A stand inside the ground is dug, not walked** (`a-stand-inside-a-hill-is-dug`), and the frame's rock in the way is kept.
 - **A stand over water is not walked onto**: the place is made from a cell that already reaches the block (`a-pad-stand-over-water-is-placed-from-the-shore`, `a-stand-up-a-bank-is-passed-over-for-one-a-route-reaches`, issue #45).
