@@ -201,11 +201,20 @@
 
 (defn finish-intent
   "An intent that succeeds ends any failure streak: attempts and unwalkable walks count
-   consecutive failures, so a long goal is not killed by three unrelated hiccups an hour apart."
+   consecutive failures, so a long goal is not killed by three unrelated hiccups an hour apart.
+   A log picked up (a :collect for :log) ends :plan/surfaced: the climb out it came after found
+   a tree, so a later climb from near there for a spare's wood is worth it again
+   (stairs/surfaced-near?, make/spare-worth?). Without it, sim world R4/30 seed 1 (the full run
+   behind issue #161's second round, 74fa27b against 2736e27) came out of the ground for its
+   first logs near the landing, took them, and two minutes later, its stone pickaxe made at y 60,
+   declined the short climb back to those trees for the spare's sticks; it went down without
+   them, climbed out again from y 14 at seven minutes, made its ingots at 22 minutes instead of 9,
+   and timed out at the water bucket."
   [world i]
   (-> world
       (memory/remember-intention i :done)
       (assoc :plan/last i :plan/attempts 0 :plan/unwalkable 0)
+      (cond-> (and (= :collect (:intent/kind i)) (= :log (:intent/for i))) (dissoc :plan/surfaced))
       (dissoc :plan/intent)))
 
 (def placing-kinds #{:place :redig})  ; intents whose target is a cell they chose to put a block in, not a place they failed to reach
