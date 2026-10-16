@@ -35,6 +35,7 @@
 (def default-seeds 8)                 ; runs of each world
 (def default-until "nether")          ; the target a run plays every step up to
 (def default-max-minutes 330)         ; simulated minutes a run may take: a real bot's horizon, a lane's job (#252)
+(def difficulty :normal)              ; the model's difficulty, as every real server's since #257: hunger (issue #260)
 
 (def step "The bot's reducer, as a live run composes it." (game/compose game/step plan/step))
 
@@ -66,7 +67,8 @@
   "One run: the bot from empty hands on world w's landing, playing every step up to until,
    against the model, at most max-ms of simulated time, rolling from seed. Returns its RESULT
    (main/result) with :run/world (its set and landing), :run/seed, :run/ms (simulated time),
-   :run/violations (what a real server would have punished), :run/end (the world it stopped
+   :run/violations (what a real server would have punished), :run/respawns and :run/eaten (the
+   lives the model gave after deaths and the foods it let the player eat), :run/end (the world it stopped
    in), :run/last (the moment of the
    stopping tick) and :run/moments (the moments sim/play-from kept, every half minute, the
    last six minutes), from which a failure's snapshot is chosen (dropped from the lines written). Its
@@ -74,7 +76,8 @@
    landing-relative choices (the climb home from deep, a climb's level steps toward the landing,
    how far they may go) are the real race's. Without it, sim race 38659291345 world R4/38 (issue
    #37) climbed under a lake with 32 level steps where a real bot has 32 and the way home, and
-   was :boxed five columns short of the shore."
+   was :boxed five columns short of the shore. The model runs at difficulty, as the real servers
+   do (issue #260: before it the sim lanes had no hunger and were easier than the real ones)."
   [w seed until max-ms]
   (let [opts {:host "sim" :port 0 :name "Clj_sim"}
         {:keys [world sim last moments crashed]} (sim/run+ step
@@ -83,7 +86,8 @@
                                                                       :decoded (:capture/decoded w)
                                                                       :spawn (spawn-of w)
                                                                       :seed seed
-                                                                      :tick-seed seed})
+                                                                      :tick-seed seed
+                                                                      :difficulty difficulty})
                                                            #(or (plan/done? %) (plan/failed? %))
                                                            max-ms
                                                            (go-of w until))
@@ -94,6 +98,8 @@
            :run/seed seed
            :run/ms (:time/now world)
            :run/violations (:sim/violations sim)
+           :run/respawns (:sim/respawns sim 0)
+           :run/eaten (:sim/eaten sim 0)
            :run/end world
            :run/last last
            :run/moments moments)))

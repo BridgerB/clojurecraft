@@ -264,6 +264,28 @@
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
                     "brain/bot/plan/roadmap-issues.md" "brain/siblings/sib-775-attack-packet.md"
                     "brain/siblings/sib-blaze-combat.md" "brain/siblings/sib-end-and-dragon.md"]}
+ {:problem/stage :sim-mobs-and-end
+  :problem/issue 260
+  :problem/goals []
+  :problem/statement
+  "The server model has no hunger, no mobs, no eye of ender and no End, so the sim lanes play an easier game than the real races at Normal, and nothing past the Nether can be played against the model; every stage after the fortress needs the model to play it first."
+  :problem/needs
+  ["Hunger as FoodData keeps it: exhaustion from jumps, digs, hits and heals, saturation first, regeneration at 18, starvation to 1 health on Normal, eating a held food for 32 ticks"
+   "The server's difficulty as an input, absent for snapshots kept before it, so they play as they did"
+   "Mobs that spawn by a seeded rule (night, dark cells, a cap), walk straight at the player and hurt it; creepers that fuse and blast; skeletons that shoot at range; an attack that hurts them by the held item and kills them with their loot"
+   "Mob fixtures (:sim/mobs given) for every combat stage's sim tests"
+   "An eye of ender thrown with use-item that flies toward the stronghold as a real eye does"
+   "The End: arrival on the obsidian platform, end portal frames that take eyes and light the portal, a perched dragon with 200 health and crystals on their pillars"]
+  :problem/risks
+  ["A model that sends a packet shape the bot's specs reject, once the mob model's specs land (#258)"
+   "Hunger or mobs in the unit tests' worlds changing what every older test sees"
+   "Mob ticks slowing the 2,000-world property or the sim lanes"
+   "A model easier than the server (no blast, no arrows) hiding real deaths, or harder (mobs through walls) making false failures"]
+  :problem/done
+  "sim tests for each mechanic pass against the model, and the sim lanes' runs show deaths and foods eaten (:run/respawns, :run/eaten)."
+  :problem/last-failure
+  "Not played yet: the sim lanes ran without hunger or mobs while the real races ran at Normal (#257), so a death or an empty bar was a real-only failure."
+  :problem/sources ["brain/bot/tooling/server-model.md" "docs/RICH-HICKEY.md"]}
  {:problem/stage :mob-model
   :problem/issue 258
   :problem/goals [:entities]

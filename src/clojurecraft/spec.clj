@@ -595,6 +595,22 @@
 (s/def :sim/next-eid int?)
 (s/def :sim/next-keep-alive int?)
 (s/def :sim/keep-alives-pending set?)
+;; hunger in the model (issue #260): the server's FoodData, its difficulty, eating, hurts
+(s/def :sim/difficulty #{:peaceful :easy :normal :hard})
+(s/def :sim/food (s/int-in 0 21))                         ; the hunger bar (#259)
+(s/def :sim/saturation (s/double-in :min 0.0 :max 20.0 :NaN? false)) ; spent before the bar
+(s/def :sim/exhaustion (s/double-in :min 0.0 :max 40.0 :NaN? false)) ; four of it cost a point
+(s/def :sim/food-timer nat-int?)                         ; ticks on the heal or starve clock
+(s/def :sim/sent-health (s/tuple number? int? boolean?)) ; health, food, saturation zero? last told
+(s/def :sim/on-ground? boolean?)                         ; the last movement packet's flag
+(s/def :sim/eaten nat-int?)                              ; foods the player finished eating
+(s/def :sim.eating/slot int?)
+(s/def :sim.eating/item int?)
+(s/def :sim.eating/at int?)
+(s/def :sim/eating (s/keys :req-un [:sim.eating/slot :sim.eating/item :sim.eating/at]))
+(s/def :sim.hurt/at int?)
+(s/def :sim.hurt/last number?)
+(s/def :sim/hurt (s/keys :req-un [:sim.hurt/at :sim.hurt/last])) ; the last hurt: when, how hard
 (s/def ::sim (s/keys :req [:sim/phase :sim/now :sim/out]))
 (s/fdef sim/step
   :args
