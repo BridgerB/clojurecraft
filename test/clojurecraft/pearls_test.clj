@@ -172,7 +172,14 @@
                                        {7 (assoc (enderman [3.5 64.0 0.5]) :entity/creepy? true)})
                              row
                              plan/goals))
-        "provoked, it is coming: back to the burrow's end")))
+        "provoked, it is coming: back to the burrow's end")
+    (is
+     (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+        (plan/next-intent
+         (assoc (burrowed [3.5 64.0 8.5] {7 (enderman [5.5 64.0 8.5])}) :player/health 6.0)
+         row
+         plan/goals))
+     "hurt with one at hand: into the burrow, not backing away in the open (gym batch pearls-263b)")))
 
 (deftest a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
   (let [kill {:intent/kind :fight

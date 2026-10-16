@@ -170,13 +170,19 @@
    "minecraft:iron_chestplate 1" "minecraft:cooked_beef 16"])
 
 (def pearl-arena
-  "The live pearl row's arena (issue #263): stone eight deep under a floor 25 square open to the
-   midnight sky, so the burrow is cut in stone and the endermen stand ten blocks off, far enough
-   to be provoked by a stare (pearls/stare-from) and never by accident. The sealed Nether room
-   is seven square: every enderman in it is within reach, and gym batch pearls-263a's live
-   trials fought all three at once in the open."
-  ["time set midnight" "fill {x-12} {y-8} {z-12} {x+12} {y-1} {z+12} minecraft:stone"
-   "fill {x-12} {y} {z-12} {x+12} {y+6} {z+12} minecraft:air"])
+  "The live pearl row's arena (issue #263): stone eight deep under a floor 25 square, open to a
+   clear midnight sky, light blocks five over the floor: the burrow is cut in stone, the
+   endermen stand ten blocks off, far enough to be provoked by a stare (pearls/stare-from) and
+   never by accident, no sun or rain on them (either sends an enderman off), and no dark for a
+   zombie to spawn in (a monster spawns only at block light 0). The sealed Nether room is seven
+   square: every enderman in it is within reach, and gym batch pearls-263a's live trials fought
+   all three at once in the open; batch pearls-263b's unlit arena spawned a zombie that the
+   :defend row backed away from, turn about with the hunt, until the bot died. No roof: a
+   surface landing teleports onto the highest motion-blocking block, which a light block is not."
+  ["time set midnight" "weather clear"
+   "fill {x-12} {y-8} {z-12} {x+12} {y-1} {z+12} minecraft:stone"
+   "fill {x-12} {y} {z-12} {x+12} {y+6} {z+12} minecraft:air"
+   "fill {x-12} {y+5} {z-12} {x+12} {y+5} {z+12} minecraft:light[level=15]"])
 
 (defn pearls-held
   "A truth that the bot holds n or more ender pearls (re, a pattern of the count: \"[1-9]\")."
