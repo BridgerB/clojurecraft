@@ -25,6 +25,8 @@ sourceRefs:
   - src/clojurecraft/sim.clj#defn anger
   - src/clojurecraft/pearls.clj#defn endermen
   - src/clojurecraft/pearls.clj#defn provokable?
+  - src/clojurecraft/pearls.clj#defn quarry
+  - test/clojurecraft/pearls_test.clj#the-stare-is-for-the-nearest-one-in-sight-not-only-the-nearest
   - src/clojurecraft/pearls.clj#defn fresh-kill
   - src/clojurecraft/pearls.clj#defn drop-of
   - src/clojurecraft/pearls.clj#defn body?
@@ -78,7 +80,7 @@ In order:
    - with no burrow, one at hand is fought, or backed away from under 10 health (the open fight, the fallback);
    - no burrow and a pickaxe held (`pickaxe?`): `:burrow`, heading `away` from the nearest enderman, so the stairs open toward it;
    - in the burrow with none coming: a walk to its mouth (`:pearls/mouth`) to look round;
-   - one not yet coming and `provokable?` (its head within `stare-range` 24 of the eye and no nearer than `stare-from` 6, with a clear line): `:provoke`. Never one already coming: its provoke ends at once, and batch pearls-263b's bot, its pickaxe lost to a death, provoked one 26 times in a row;
+   - the nearest enderman within `stare-range` 64 (its follow range) not yet coming and `provokable?` from here (`quarry`: its head no nearer than `stare-from` 6, with a clear line): `:provoke`. Not only the nearest: batch pearls-263d (plan run 38899294690, probe 38904622614) tracked seventeen endermen 30 to 80 blocks round each landing, none routable and the nearest behind a ledge, and looked round for forty minutes. One stared at from past 16 blocks teleports toward the bot. Never one already coming: its provoke ends at once, and batch pearls-263b's bot, its pickaxe lost to a death, provoked one 26 times in a row;
    - one coming and no burrow to meet it in: fought;
    - else a walk to the first of the three nearest within `seek-radius` 64 a route reaches; else a `:lookout`: standing for `lookout-ms` 5 s, the eyes level and turning, then done. Waiting as an intent, not a planner wait (whose 400 ticks fail the plan): batch pearls-263c's warped forest landings failed `:no-enderman` and `:no-route` 40 s in, before any enderman had come. With no enderman at all the burrow is still dug first, heading east.
 
