@@ -135,8 +135,8 @@
   ;; middle is followed two seconds, the line it flew kept as a throw, and the intent is done
   ;; when the server removes it, knowing where it ended
   (let [flight (mapcat (fn [k]
-                         (cons (eye-moved 90 [0.6 0.1 0.8])
-                               (fx/ticks (+ 450 (* k 250)) (+ 700 (* k 250)))))
+                         (concat (fx/ticks (+ 450 (* k 250)) (+ 700 (* k 250)))
+                                 [(eye-moved 90 [0.6 0.1 0.8])]))
                 (range 10))
         [w fx] (fx/fold intent-step
                         throwing

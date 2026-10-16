@@ -587,7 +587,7 @@
                  "execute positioned {x} {y} {z} run locate structure minecraft:stronghold"
                  :truth/re "\\[(-?\\d+), (?:~|-?\\d+), (-?\\d+)\\]"
                  :truth/check :bearing
-                 :truth/result [:throws 0]}]}])
+                 :truth/result [:throws]}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
@@ -689,11 +689,12 @@
 
 (defmethod verdict :bearing
   ;; the row's pattern captures the located [x z] in the reply (locate structure); its
-  ;; :truth/result names the throw in the RESULT ({:throw/from :throw/dir}): its line within
-  ;; bearing-within degrees of the way from where it was thrown to what the server located
+  ;; :truth/result names the throws in the RESULT ({:throw/from :throw/dir} each): the first's
+  ;; line within bearing-within degrees of the way from where it was thrown to what the server
+  ;; located
   [row reply result]
   (let [[_ x z] (re-find (re-pattern (:truth/re row)) (str reply))
-        {:throw/keys [from dir]} (get-in result (:truth/result row))]
+        {:throw/keys [from dir]} (first (get-in result (:truth/result row)))]
     (boolean
      (and x from dir (<= (bearing-off from dir [(parse-long x) (parse-long z)]) bearing-within)))))
 
