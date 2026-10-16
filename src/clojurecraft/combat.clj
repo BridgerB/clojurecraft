@@ -41,6 +41,7 @@
 (def retreat-distance 6.0)            ; blocks a broken-off fight puts between the bot and the target
 (def approach-timeout-ms 20000)       ; an approach that never reaches the target fails :unreachable
 (def stall-ticks 20)                  ; ticks an approach straight at the target may go without coming 0.1 nearer before it takes a route
+(def route-range 2.0)                 ; blocks on the plane from the target's cell a route walk ends within: nearer than approach-range, where the straight approach stalled
 (def walk-drift 3.0)                  ; blocks the target may move from the cell a route walk heads for before the walk is dropped
 (def press-within 0.8)                ; blocks on the plane under which an engage out of reach stops pressing in (it is under the target)
 (def back-off-timeout-ms 10000)       ; a walk away ends after this, however far it got
@@ -130,14 +131,17 @@
   "A walk to the end of a route to within approach-range of entity e's cell on the plane (path's
    :near goal), stood in (intent/standing-walks: a walk near a cell ends within reach of it in a
    straight line, through a wall), for an approach the straight way does not bring nearer; nil
-   when no route reaches it or it ends where the feet are."
+   when no route reaches it, or :here when the feet already stand within route-range of it (a
+   fence between keeps the straight approach just past approach-range: gym blaze-fortress-j run 3,
+   run 38911617612, failed three fights :unreachable there)."
   [world e]
   (let [r (path/plan world
                      (path/feet-cell (:player/pos world))
-                     {:goal/kind :near :goal/pos (cell (:entity/pos e)) :goal/range approach-range})
+                     {:goal/kind :near :goal/pos (cell (:entity/pos e)) :goal/range route-range})
         to (last (:path/waypoints r))]
-    (when (and (= :found (:path/status r)) to (not= to (intent/feet world)))
-      {:intent/kind :walk :intent/target to :intent/for :fight})))
+    (cond (not= :found (:path/status r)) nil
+          (or (nil? to) (= to (intent/feet world))) :here
+          :else {:intent/kind :walk :intent/target to :intent/for :fight})))
 
 (defmethod fight-stage :approach
   ;; toward the target until approach-range: straight at it while that brings it nearer, and once
@@ -159,15 +163,21 @@
           (-> world
               (assoc :player/controls (face world e))
               (intent/dissoc-intent :intent/best-dist :intent/best-tick)
-              (intent/assoc-intent :intent/stage :engage))
+              (intent/assoc-intent :intent/stage :engage :intent/since now))
           (> (- now since) approach-timeout-ms) (intent/fail world :unreachable)
           hold? (assoc world :player/controls (face world e))
           (> (- tick best-tick) stall-ticks)
-          (if-let [w (route-walk world e)]
-            (-> world
-                (assoc :player/controls {})
-                (intent/assoc-intent :intent/child (assoc w :intent/status :active)))
-            (intent/fail world :unreachable))
+          (let [w (route-walk world e)]
+            (cond (= :here w)
+                  (-> world
+                      (assoc :player/controls (face world e))
+                      (intent/dissoc-intent :intent/best-dist :intent/best-tick)
+                      (intent/assoc-intent :intent/stage :engage :intent/since now))
+                  w
+                  (-> world
+                      (assoc :player/controls {})
+                      (intent/assoc-intent :intent/child (assoc w :intent/status :active)))
+                  :else (intent/fail world :unreachable)))
           :else (assoc world :player/controls (intent/toward world (aim e) 0.0)))))
 
 (defn walk-on
@@ -199,8 +209,9 @@
 (defmethod fight-stage :engage
   ;; face the target every tick, walking on toward it while it is out of reach (pressing?);
   ;; attack when the deadline has passed, the eyes face it (the look went out a tick before, with
-  ;; the movement packet) and it is in reach
-  [world {:intent/keys [target next-swing swings hold?] :or {next-swing 0 swings 0}} e]
+  ;; the movement packet) and it is in reach; failed :unreachable when no attack has gone out for
+  ;; approach-timeout-ms (a fight that holds its ground waits as long as it is not broken off)
+  [world {:intent/keys [target next-swing swings hold? since] :or {next-swing 0 swings 0}} e]
   (let [now (:time/now world)
         eye (game/eye world)
         [yaw _ :as look] (physics/look-at eye (aim e))
@@ -212,6 +223,11 @@
     (cond (> (horizontal world e) (inc approach-range))
           (intent/assoc-intent world :intent/stage :approach :intent/since now)
           (>= swings max-swings) (intent/fail world :ghost)
+          (and (not hold?)
+               since
+               (> (- now (if (pos? next-swing) (- next-swing swing-every) since))
+                  approach-timeout-ms))
+          (intent/fail world :unreachable)
           (and (>= now next-swing)
                (<= (physics/distance eye (aim e)) attack-reach)
                (<= (yaw-off yaw (first (:player/look world))) aimed-within))
