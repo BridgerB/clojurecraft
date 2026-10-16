@@ -215,7 +215,18 @@
     :gym/prereqs ["minecraft:bread 4"]
     :gym/timeout-ms 60000
     :gym/truth [{:truth/cmd "data get entity {name} foodLevel" :truth/re "data: (1[4-9]|20)$"}
-                {:truth/cmd "clear {name} minecraft:bread 0" :truth/re "Found [1-3] |No items"}]}])
+                {:truth/cmd "clear {name} minecraft:bread 0" :truth/re "Found [1-3] |No items"}]}
+   ;; issue #259: the portal's iron held and thirteen ingots spare, a helmet and a chestplate made
+   ;; at a placed table and worn, judged by what the server has in the armour slots
+   {:gym/goal :armour
+    :gym/until "armour"
+    :gym/prereqs ["minecraft:flint_and_steel 1" "minecraft:water_bucket 1" "minecraft:bucket 1"
+                  "minecraft:crafting_table 1" "minecraft:iron_ingot 13"]
+    :gym/timeout-ms 180000
+    :gym/truth [{:truth/cmd "execute if items entity {name} armor.head minecraft:iron_helmet"
+                 :truth/re "Test passed"}
+                {:truth/cmd "execute if items entity {name} armor.chest minecraft:iron_chestplate"
+                 :truth/re "Test passed"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."

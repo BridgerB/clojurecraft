@@ -1,9 +1,9 @@
 ---
 title: Survival
-description: How the bot lives through Normal difficulty (issue #259) - the food from set-health, the :eat always row and its executor (food in hand, one use-item, done when the server's food rises), the game's food as data, the sim's eating, and the eat gym row's hungry landing.
+description: How the bot lives through Normal difficulty (issue #259) - the food from set-health, the :eat always row and its executor (food in hand, one use-item, done when the server's food rises), the game's food as data, the sim's eating, the eat gym row's hungry landing, and armour (worn by two window-0 clicks, made from spare ingots).
 type: reference
 tags: [bot, plan, survival, food, intents, goals]
-aliases: [:eat, :fed?, :player/food, :player/saturation, hungry-below, edible, food-held, :not-eaten, food/nutrition, :sim/food, :hungry landing]
+aliases: [:wear, :wear-armour, :armour, :dressed?, :armoured?, spare-ingots, :eat, :fed?, :player/food, :player/saturation, hungry-below, edible, food-held, :not-eaten, food/nutrition, :sim/food, :hungry landing]
 status: verified
 lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
@@ -28,6 +28,18 @@ sourceRefs:
   - test/clojurecraft/eat_test.clj#the-meal-is-the-food-in-hand-one-use-and-the-servers-word
   - test/clojurecraft/eat_test.clj#a-meal-the-server-never-gives-fails-not-eaten
   - test/clojurecraft/eat_test.clj#a-hungry-bot-eats-its-bread-against-the-model
+  - src/clojurecraft/armour.clj#defn unworn
+  - src/clojurecraft/armour.clj#defn spare-ingots
+  - src/clojurecraft/armour.clj#defn table-at-hand?
+  - src/clojurecraft/armour.clj#defn wanted
+  - src/clojurecraft/armour.clj#defmethod intent/run :wear
+  - src/clojurecraft/armour.clj#defmethod wear-stage :check
+  - "resources/clojurecraft/goals.edn#{:goal/id :wear-armour"
+  - "resources/clojurecraft/goals.edn#{:goal/id :armour"
+  - test/clojurecraft/armour_test.clj#a-piece-goes-in-by-hand-two-answered-clicks
+  - test/clojurecraft/armour_test.clj#a-refused-piece-goes-back-before-the-wear-fails
+  - test/clojurecraft/armour_test.clj#only-spare-ingots-make-armour
+  - test/clojurecraft/armour_test.clj#a-helmet-and-chestplate-are-made-and-worn-against-the-model
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[water-escape]]"
@@ -58,6 +70,15 @@ The server finishes eating on its own clock once a use starts; the client sends 
 
 ## The gym row
 `eat`: four breads given, landed by `land! :hungry` (the surface landing, then `effect give <bot> minecraft:hunger 30 255` until RCON's `foodLevel` reads under `hungry-food` 10, at most 30 s, then the effect cleared). The wait is the point: hunger takes at best one point every three ticks, and a bot told to go while still fed is done at once. Judged by `data get entity <bot> foodLevel` at 14 or more and one to three breads left.
+
+## Armour (armour.clj)
+Two always rows. `:wear-armour` (priority 0, after the meal) is done by `:dressed?`: no piece held in the hotbar or the main inventory whose armour slot is empty (`unworn`; the slot comes from the name's end, `_helmet` to `_boots`). It is planned by `:wear` into a `:wear` intent: two clicks in window 0, as a hand does it, each predicting nothing and waiting for the server's slots ([[window-zero-model]]). `:pick` closes an open container first (the server ignores window-0 clicks while one is its menu), then picks the piece up; `:put` puts the cursor's piece in `inventory/slot [:armour n]`; `:check` is done when the server shows it there. A refused piece goes back into a free slot before the intent fails `:not-worn`, so nothing is left on the cursor. The inventory keeps the armour at player slots 36-39 (feet to head), so a worn piece still counts as held.
+
+`:armour` (`--until armour`) sits at the portal kit's priority, 13, after it in the table: in a chained run it comes up the moment the iron the portal needs is in hand. Done by `:armoured?`: nothing `wanted`. `wanted` is the first of an iron helmet (5 ingots) and an iron chestplate (8) not held whose cost the `spare-ingots` pay, and only with a table at hand (`table-at-hand?`: one remembered near or held, or the planks or a log for one). Spare means every ingot once flint and steel, a water bucket and an empty bucket are all held; before that none is, so armour never takes the portal's iron and never sends the bot mining. The table rule keeps an always row from sending the bot after a tree it cannot find (in the Nether it would wait `:no-log` and fail the run). Planned by `:armour` through the needs planner (`make/decide` with the piece as the row's provides), so the table is placed and the craft laid as for any other item; the new piece is then worn by `:wear-armour`.
+
+The issue's note that `inventory/left-click` "sends quick-move while claiming pickup" did not hold: it is mode 0 (`:pickup`) with button 0, and the sim classifies it `:left`.
+
+Gym row `armour`: the portal's iron, a table and 13 ingots given; judged by `execute if items entity <bot> armor.head minecraft:iron_helmet` and the same for the chest.
 
 ## See also
 - [[water-escape]] - the other always rows, and the preemption they share.
