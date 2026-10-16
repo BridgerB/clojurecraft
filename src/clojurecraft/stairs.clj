@@ -926,15 +926,46 @@
                       directions))
        (nil? (pit-rim world feet))))
 
+(def surfaced-window 600000)            ; ms a climb out stays a fact about its place for a spare's sake
+(def surfaced-radius 16)               ; blocks on the plane round where a climb came out that count as the same place
+
+(defn surfaced
+  "world with :plan/surfaced, [feet now], when the running intent is a climb out to the surface
+   (:intent/for :surface) that ends out of the ground (out?) at the feet; world otherwise. What
+   the climb found up there is the act's to judge again; that it came out here, and when, is a
+   fact (surfaced-near?)."
+  [world]
+  (let [{:intent/keys [for to-height?]} (:plan/intent world)
+        feet (intent/feet world)]
+    (cond-> world
+      (and (= :surface for) (not to-height?) (out? world feet))
+      (assoc :plan/surfaced [feet (:time/now world)]))))
+
+(defn surfaced-near?
+  "Did a climb out to the surface come out within surfaced-radius on the plane of the feet in the
+   last surfaced-window ms (:plan/surfaced), the feet now below where it came out: the bot climbed
+   out here and went back down. Sim race 38806318231 (issue #161, 206 runs in 73 rounds) cut stairs
+   up from an iron mine for a spare pickaxe's wood, came out where no tree was in reach, went back
+   down for the iron, and climbed again, every twenty seconds for ninety minutes."
+  [world]
+  (let [[[x y z] at] (:plan/surfaced world)
+        [fx fy fz] (intent/feet world)]
+    (boolean (and at
+                  (< fy y)
+                  (<= (- (:time/now world) at) surfaced-window)
+                  (<= (physics/horizontal-distance [x 0 z] [fx 0 fz]) surfaced-radius)))))
+
 (defmethod intent/run :stairs-up
   ;; done standing at to-y, or out of the ground (out?), whichever comes first; one that is
-  ;; :intent/to-height? ends at to-y alone: the open sky over a pit's floor is not out
+  ;; :intent/to-height? ends at to-y alone: the open sky over a pit's floor is not out. A climb
+  ;; out that comes out is remembered (surfaced)
   [world {:intent/keys [to-y to-height?] :as i} event]
   (if (and (:player/on-ground? world)
            (or (>= (physics/y-of (intent/feet world)) to-y)
                (and (not to-height?) (out? world (intent/feet world)))))
     (-> world
         (assoc :player/controls {})
+        surfaced
         intent/done)
     (stairs-stage world i event)))
 
