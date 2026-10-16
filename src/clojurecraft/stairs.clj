@@ -583,6 +583,23 @@
   {:arglists '([world intent event])}
   (fn [_world i _event] (:intent/stage i :plan)))
 
+(defn rock-heading
+  "For a stair down the heading would have to lay a floor for, the first other heading, a quarter
+   turn at a time, whose stair is cut into the rock as it stands (safe?, given the heading): a
+   stair into rock spends no filler, a floor laid over a cave or a cliff's air spends one or two a
+   stair. nil for a climb, a level way, or a cut toward a bank's water (:intent/for :bank), whose
+   heading is the point. Race 38842339863 runner 4 (issue #37) bots Clj_r01 and Clj_r08: the mine's
+   stairs down ran east along a cliff's face and the wall of a cave, a floor laid before every
+   stair, the rock a turn away west, until the few cobblestone the furnace had left were spent and
+   every stair was :boxed."
+  [{:intent/keys [kind for dir]} safe-toward?]
+  (when (and (= :stairs-down kind) (not= :bank for))
+    (->> (iterate turn (or dir (first directions)))
+         rest
+         (take 3)
+         (filter safe-toward?)
+         first)))
+
 (defmethod stairs-stage :plan
   [world {:intent/keys [kind dir turns visited] :or {turns 0 visited #{}} :as i} _]
   (let [dir (or dir (first directions))
@@ -591,7 +608,8 @@
         safe? (fn [world cells] (and (fresh? cells) (shape-safe? world cells)))
         feet (intent/feet world)
         cells (cells-of feet dir)
-        to-lay (when (and lay (fresh? cells) (not (safe? world cells))) (lay world feet cells))]
+        to-lay (when (and lay (fresh? cells) (not (safe? world cells))) (lay world feet cells))
+        rock (when to-lay (rock-heading i #(safe? world (cells-of feet %))))]
     (cond (airborne? world) (assoc world :player/controls {}) ; land first
           (safe? world cells)
           (intent/assoc-intent world
@@ -600,6 +618,15 @@
                                :intent/stage :open
                                :intent/started-y (physics/y-of (:player/pos world))
                                :intent/started-tick (:time/tick world))
+          rock
+          (-> world
+              (intent/assoc-intent :intent/dir rock
+                                   :intent/cells (cells-of feet rock)
+                                   :intent/stage :open
+                                   :intent/started-y (physics/y-of (:player/pos world))
+                                   :intent/started-tick (:time/tick world))
+              (game/say (str "stairs: into the rock toward " rock
+                             " rather than a floor laid toward " dir)))
           to-lay
           (-> world
               (intent/assoc-intent :intent/dir dir
