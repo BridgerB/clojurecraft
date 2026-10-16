@@ -62,22 +62,40 @@
       :result (fn [r] (async/>!! ch {:record/result r}))
       :close (fn [] (async/close! ch) (async/<!! done))})))
 
+(defn input-of
+  "The bytes of the recording at path: a path ending in .gz read through gzip (the size
+   recordings are kept at in git), one ending in .zst through the zstd command (a race
+   artifact's recordings are packed with it at the job's end, issue #299), any other as it is."
+  ^java.io.InputStream [path]
+  (cond (str/ends-with? (str path) ".gz") (GZIPInputStream. (io/input-stream path))
+        (str/ends-with? (str path) ".zst")
+        (.getInputStream (.start (ProcessBuilder. ^java.util.List (mapv str ["zstd" "-dcq" path]))))
+        :else (io/input-stream path)))
+
 (defn entries
   "Every line of a recording, in order: event maps, {:record/effects ...} and {:record/result
-   ...} maps. A path ending in .gz is read through gzip (the size recordings are kept at in git)."
+   ...} maps (input-of: .gz and .zst too)."
   [path]
-  (with-open [r (PushbackReader. (io/reader (if (str/ends-with? (str path) ".gz")
-                                              (GZIPInputStream. (io/input-stream path))
-                                              path)))]
+  (with-open [r (PushbackReader. (io/reader (input-of path)))]
     (vec (take-while some? (repeatedly #(edn/read {:readers readers :eof nil} r))))))
+
+(defn reduce-entries
+  "f folded over every line of a recording from init, in order, one line read at a time: a race's
+   recording is hundreds of thousands of lines, more than entries should hold at once (issue
+   #299 folds whole ones on the race's runner). Stops early when f returns a reduced value."
+  [f init path]
+  (with-open [r (PushbackReader. (io/reader (input-of path)))]
+    (loop [acc init]
+      (let [e (edn/read {:readers readers :eof nil} r)]
+        (cond (reduced? acc) @acc
+              (nil? e) acc
+              :else (recur (f acc e)))))))
 
 (defn header
   "The recording's header, {:record/commit sha} when the run named its code, else {}: its first
    line when that is no event, read without reading the rest."
   [path]
-  (with-open [r (PushbackReader. (io/reader (if (str/ends-with? (str path) ".gz")
-                                              (GZIPInputStream. (io/input-stream path))
-                                              path)))]
+  (with-open [r (PushbackReader. (io/reader (input-of path)))]
     (let [first-line (edn/read {:readers readers :eof nil} r)]
       (if (contains? first-line :record/commit) first-line {}))))
 

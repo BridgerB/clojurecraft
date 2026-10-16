@@ -85,10 +85,18 @@
          eye-under?
          with-mobs
          frame-takes-eye
-         perch)
+         perch
+         told)
 
 (def player-eid 1)                    ; the player's entity id, as the model's login gives it
 (def mob-salt 0x2545F4914F6CDD1D)     ; the mobs' rolls start from :seed mixed with this, apart from the loot's (mob-roll)
+
+(defn player-eid-of
+  "The player's entity id: the real server's for a model joined to a real bot mid-play
+   (:sim/player-eid, joined: the bot counts a pickup only when the collector is its own id), else
+   player-eid, the one the model's own login gives."
+  [sim]
+  (:sim/player-eid sim player-eid))
 
 (defn food-value
   "The player's food as hunger's rules take it ({:food/level :food/saturation :food/exhaustion
@@ -217,7 +225,7 @@
    player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
    there), :food (the hunger bar the player joins with, told at login; absent, no food is
    modelled and none is told), :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
-   and where the player arrives) and :difficulty (:peaceful, :easy, :normal or :hard, as the
+   and where the player arrives; :columns {[cx cz] bytes} in place of :column, a whole Nether, arrive) and :difficulty (:peaceful, :easy, :normal or :hard, as the
    server's setting: hunger drains the bar, a full one when :food is absent, and heals and
    starves by it, issue #260; absent, nothing drains the bar, as before, so a snapshot from then
    plays the same; given, the day turns from :day-time (game ticks, 0 when absent), hostiles
@@ -284,6 +292,57 @@
            :sim/sent-health [max-health (or food food/max-food) false])))
 
 (defn send "Queue pkt for the client in :sim/out." [sim pkt] (update sim :sim/out conj pkt))
+
+(defn joined
+  "A server already in play with a player it never saw join (issue #299: a real race's moment,
+   real/model): init's world from opts (:columns and :decoded the columns it holds, :spawn,
+   :respawn, :seed, :tick-seed, :difficulty, :day-time, :dimension, :food, :inventory as
+   window-0 slots), then what the real server held at that moment, given as data in play: the
+   time (:now, ms, the bot's clock), the player's :pos, :look, :on-ground?, :held hotbar place,
+   window 0's :state-id, :health, :saturation and :air, its entity id (:player-eid), the blocks
+   changed since their columns were sent (:placed {pos state}), the items lying about (:items
+   {eid {:pos :item}}, ready to pick up) and the mobs (:mobs {eid {:type :pos :health}}), under
+   the ids the client tracks them by, and the columns the client holds (:view, every one within
+   :view-distance chunks of the player, a square as stream counts it). Nothing is sent: the
+   client has it all already, but for the entities it tracks that this model does not carry
+   (:gone ids), told removed (remove-entities) with its first tick's packets. Every column the
+   model holds is taken as populated: the animals the real server placed are the mobs given, so
+   the model adds none. The keep-alive clock starts at :now, and with hunger what it last told
+   is what the client knows (sync-health tells only a change)."
+  [opts
+   {:keys [now pos look on-ground? held state-id health saturation air player-eid placed items mobs
+           view view-distance gone]}]
+  (let [fresh (init opts)
+        here (column-key pos)
+        sim (cond->
+              (assoc fresh
+                     :sim/phase :play
+                     :sim/now now
+                     :sim/player-pos pos
+                     :sim/player-look look
+                     :sim/on-ground? (boolean on-ground?)
+                     :sim/held held
+                     :sim/state-id state-id
+                     :sim/health health
+                     :sim/air air
+                     :sim/placed placed
+                     :sim/items (update-vals items #(assoc % :spawned (- now pickup-delay)))
+                     :sim/mobs mobs
+                     :sim/next-eid
+                     (inc (reduce max
+                                  (dec (:sim/next-eid fresh))
+                                  (concat (keys items) (keys mobs) gone)))
+                     :sim/next-keep-alive (+ now (:sim/keep-alive-every fresh))
+                     :sim/view view
+                     :sim/view-at here
+                     :sim/view-distance view-distance
+                     :sim/populated (set (keys (:sim/columns fresh)))
+                     :sim/populated-at here)
+              player-eid (assoc :sim/player-eid player-eid)
+              saturation (assoc :sim/saturation saturation))]
+    (cond-> sim
+      (:sim/difficulty sim) (assoc :sim/sent-health (told sim))
+      (seq gone) (send {:packet/name :remove-entities :ids (vec (sort gone))}))))
 
 (defn in-view
   "The world's columns the client holds with the player where it stands: every one (the whole
@@ -1218,17 +1277,35 @@
 (defn arrive
   "The model in the Nether: with a :sim/nether, its column becomes the world (the overworld's
    placed and broken blocks were the other dimension's) and the player stands at its :at; without
-   one, the same column where the player stood (a one-column model of the portal alone)."
+   one, the same column where the player stood (a one-column model of the portal alone). A
+   :sim/nether with :columns ({[cx cz] bytes}, a real Nether as a real race's recording holds it,
+   issue #299) is that whole Nether instead, decoded once on arrival, and the overworld's items,
+   mobs, fluids and falling blocks stay behind, as the client drops their entities."
   [sim]
-  (if-let [{:keys [column at]} (:sim/nether sim)]
-    (-> sim
-        (assoc :sim/columns {[0 0] column}
-               :sim/placed {}
-               :sim/broken #{}
-               :sim/player-pos at
-               :sim/view #{}) ; a dimension change drops every chunk the client held
-        (dissoc :sim/view-at))
-    (dissoc sim :sim/view-at)))
+  (let [{:keys [column columns at]} (:sim/nether sim)]
+    (cond columns
+          (-> sim
+              (assoc :sim/columns columns
+                     :sim/decoded (update-vals columns chunk/decode)
+                     :sim/placed {}
+                     :sim/broken #{}
+                     :sim/items {}
+                     :sim/mobs {}
+                     :sim/fluids {}
+                     :sim/falls {}
+                     :sim/falling {}
+                     :sim/player-pos at
+                     :sim/view #{})
+              (dissoc :sim/view-at))
+          column
+          (-> sim
+              (assoc :sim/columns {[0 0] column}
+                     :sim/placed {}
+                     :sim/broken #{}
+                     :sim/player-pos at
+                     :sim/view #{}) ; a dimension change drops every chunk the client held
+              (dissoc :sim/view-at))
+          :else (dissoc sim :sim/view-at))))
 
 (defn through-portal
   "The model a tick on: a player whose feet stand in a nether portal portal-ms on end changes
@@ -1702,7 +1779,8 @@
                         (ate n))]
             (-> sim
                 (sync-window :inventory before (:sim/cursor sim) false)
-                (send {:packet/name :entity-event :entity-id player-eid :status use-finished})
+                (send
+                 {:packet/name :entity-event :entity-id (player-eid-of sim) :status use-finished})
                 tell-health)))))
 
 (defn kill
@@ -1756,7 +1834,7 @@
                       (update :sim/items dissoc eid)
                       (send {:packet/name :take-item-entity
                              :collected eid
-                             :collector player-eid
+                             :collector (player-eid-of sim)
                              :count (:count stack)})
                       (send {:packet/name :remove-entities :ids [eid]})
                       (give stack)))

@@ -609,8 +609,11 @@
 (s/def :sim/dimension string?)
 (s/def :sim/portal-since int?)
 (s/def :sim/kill-at int?)
-(s/def :sim/nether (s/keys :req-un [:sim.nether/column :sim.nether/at])) ; the Nether a portal leads to
+(s/def :sim/nether ; the Nether a portal leads to: one column, or a real one's columns (issue #299)
+  (s/and (s/keys :req-un [:sim.nether/at] :opt-un [:sim.nether/column :sim.nether/columns])
+         #(or (:column %) (:columns %))))
 (s/def :sim.nether/column bytes?)
+(s/def :sim.nether/columns (s/map-of ::column-key bytes?))
 (s/def :sim.nether/at ::vec3)
 (s/def :sim/falling (s/map-of ::block-pos map?))
 (s/def :sim/next-window int?)
@@ -627,6 +630,7 @@
 (s/def :sim/view (s/coll-of ::column-key :kind set?)) ; the columns the client holds now
 (s/def :sim/view-at ::column-key)                     ; the column the player was streamed from
 (s/def :sim/view-distance pos-int?)
+(s/def :sim/player-eid int?)                          ; a joined model's player: the real server's id (sim/joined)
 (s/def :sim/tick-seed int?)                           ; where a run's tick randomness starts
 (s/def :sim/spawn ::vec3)
 (s/def :sim/broken (s/coll-of ::block-pos :kind set?))
