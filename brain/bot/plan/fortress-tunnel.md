@@ -20,6 +20,7 @@ sourceRefs:
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-cell-beside-lava
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-spawner
   - src/clojurecraft/fortress.clj#defn arrived?
+  - src/clojurecraft/fortress.clj#def aside
   - test/clojurecraft/sim_test.clj#the-fortress-from-a-nether-landing-and-its-recording-replays
 related:
   - "[[bot/plan/_moc|Plan]]"
@@ -41,8 +42,8 @@ The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) i
 ## The planner across dimensions
 A row with `:goal/dimension` is chosen only there (`plan/here?`). When no row can be chosen here but one is undone elsewhere (`elsewhere?`), the plan waits `:other-dimension` instead of ending, so `--until fortress` in the overworld does not report done, and a run toward `[:nether :fortress]` works the portal, then the fortress.
 
-## Reach
-A `:tunnel-to` is done at its target from `reach` 6 (`arrived?`, from the feet cell's centre), or from `:intent/reach` when the intent gives one: the blaze rods' tunnel to a spawner ends within 2 of it, in its room at its blazes' floor ([[blaze-rods]]); from 6 off, gym blaze-fortress-b stood in the wall four over the spawner, out of reach of every blaze it made.
+## Reach and climb
+A `:tunnel-to` is done at its target from `reach` 6 (`arrived?`, from the feet cell's centre), or from `:intent/reach` when the intent gives one; its steps go up or down first only past `climb-past` 3 blocks off, or past `:intent/climb` when given. The blaze rods' tunnel to a spawner goes into the open cell beside it on its floor (reach 0.5, climb 0), or to within 2 of it when none is known ([[blaze-rods]]): from 6 off, gym blaze-fortress-b stood in the wall four over the spawner, and with climb 3 blaze-fortress-c run 3 came up three under its floor, out of reach of every blaze and rod. A target straight over or under the feet used to leave no move at all; `moves` then tries every direction (`aside`).
 
 ## Gotchas
 - The sightings are passive: a brick is remembered when its chunk loads (`memory/landmark-kinds`), in the dimension it was seen in, so no scan and no line of sight.

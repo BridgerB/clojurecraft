@@ -116,14 +116,31 @@
 
 (deftest a-spawner-under-the-feet-is-tunnelled-to-its-floor
   ;; gym blaze-fortress-b (run 38893941350): a tunnel ended within 6 of the spawner, four over it
-  ;; in the wall, and the bot camped there out of reach of its blazes for ten minutes
+  ;; in the wall, and the bot camped there out of reach of its blazes for ten minutes;
+  ;; blaze-fortress-c (run 38895759229) run 3 came up three under the spawner's floor and every
+  ;; rod lay out of reach over it
   (let [w (memory/observe (standing {}) [8 60 11] blaze/spawner)]
     (is (= {:intent/kind :tunnel-to
             :intent/target [8 60 11]
             :intent/steps fortress/steps-per-tunnel
-            :intent/reach blaze/spawner-reach}
+            :intent/reach blaze/spawner-reach
+            :intent/climb 0}
            (next-intent w))
-        "within 8 of the eye, but four under the feet: a tunnel down beside it, not a camp")))
+        "within 8 of the eye, four under the feet, nothing open beside it: a tunnel down to it")
+    (let [room (assoc w
+                      :world/chunks
+                      {[0 0] (world/column {[9 60 11] blocks/air [9 61 11] blocks/air})})]
+      (is (= [9 60 11] (blaze/stand room [8 60 11])))
+      (is (= {:intent/kind :tunnel-to
+              :intent/target [9 60 11]
+              :intent/steps fortress/steps-per-tunnel
+              :intent/reach 0.5
+              :intent/climb 0}
+             (next-intent room))
+          "with room beside it on its floor, into that cell")
+      (is (= {:intent/kind :camp :intent/spawner [8 60 11]}
+             (next-intent (assoc room :player/pos [9.5 60.0 11.5])))
+          "standing there, a camp"))))
 
 (deftest by-the-spawner-the-bot-camps
   (let [w (memory/observe (standing {}) [11 64 10] blaze/spawner)]
