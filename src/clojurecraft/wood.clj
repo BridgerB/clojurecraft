@@ -90,13 +90,48 @@
    :intent/for :log
    :intent/trunk bottom})
 
+(defn trees-climb
+  "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk above
+  the eye: stairs up toward it, to-height only (the open sky over the feet is not the trees),
+  in lengths the planner looks again between. Being out is not being at the trees: race
+  38674091115 runner 4 (issue #87) left the iron mine at the mouth of its shaft under the open
+  sky at y 70 with 999 trunks remembered and the nearest thirty blocks above on the mountain;
+  the near band stops twelve over the eye, no walk climbs the cliff, the hunt's targets stop
+  sixteen over the eye and never come nearer the landing, and the climb would not cut because
+  out? said out, so the plan waited :no-log with the trees in reach of a staircase. Only a
+  trunk within search-radius on the plane: sim race 38811417241 runner 2 (issue #87, world R3/4)
+  stood on a sand island with the nearest trunks a hundred blocks off across a lake, one five
+  over the eye, and cut stairs up on the island toward it until one was not taken."
+  [world trunks]
+  (let [feet (intent/feet world)]
+    (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
+      (when-let [above (first (filter (fn [[tx ty tz]]
+                                        (and (< (physics/y-of (game/eye world)) ty)
+                                             (<= (physics/horizontal-distance (:player/pos world)
+                                                                              [tx 0 tz])
+                                                 search-radius)))
+                                      trunks))]
+        (let [[fx _ fz] feet
+              [tx _ tz] above
+              dir (if (>= (abs (- tx fx)) (abs (- tz fz)))
+                    [(if (< fx tx) 1 -1) 0]
+                    [0 (if (< fz tz) 1 -1)])]
+          {:intent/kind :stairs-up
+           :intent/to-y (stairs/climb-to world (nth above 1))
+           :intent/to-height? true
+           :intent/dir dir
+           :intent/for :surface})))))
+
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
    a route reaches (intent/routable?), under the open sky or not. Not out of the ground
    (stairs/out?: the open sky over the feet and a level step onto open ground beside them), with
    none of those a route reaches: walk up the air already dug (intent/opening) and cut stairs only
    when that mouth cannot be walked to (stairs/out? ends them; terrain/top-y is the top of the
-   world; stairs/climb-to cuts the climb in lengths the planner looks again between). A pit under
+   world; stairs/climb-to cuts the climb in lengths the planner looks again between). Out of the
+   ground but not at the trees, a trunk remembered above the eye no walk reaches: stairs up
+   toward it (trees-climb), where the old guard stopped at the sky and the plan waited :no-log.
+   A pit under
    the open sky is not out: race 38477665442's stone mines dug the bot two deep beside a cliff
    (Clj_r20), into a notch under an overhang by a pond (Clj_r09), onto a ledge of its own quarry
    (Clj_r01) and onto a lakeshore under a cliff (Clj_r12); every trunk was up the wall no jump
@@ -113,9 +148,9 @@
   [world]
   (let [feet (intent/feet world)
         trunks (->> (memory/positions-now world blocks/log-states)
+                    (memory/nearest-first (game/eye world) far-radius)
                     (remove (skipped world))
                     (filter #(standing-trunk? world %))
-                    (memory/nearest-first (game/eye world) far-radius)
                     (take far-candidates))]
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
@@ -124,7 +159,8 @@
             (or (intent/opening world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
-                 :intent/for :surface}))))))
+                 :intent/for :surface}))
+          (trees-climb world trunks)))))
 
 (defn near-walk
   "A walk to the nearest standing trunk in the near band (search-radius, no more than 12 above or

@@ -6,6 +6,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -201,6 +202,49 @@
     (is (stairs/out? ground (intent/feet ground)))
     (is (= :walk (:intent/kind (wood/gather-next ground)))
         "on open ground the trunk is walked to")))
+
+(deftest a-trunk-up-the-cliff-is-climbed-toward-when-out
+  ;; race 38674091115 runner 4 (issue #87): the iron mine left the bot at the mouth of its
+  ;; shaft under the open sky at y 70 with 999 trunks remembered and the nearest thirty blocks
+  ;; above on the mountain; the near band stops twelve over the eye, no walk climbs the cliff,
+  ;; the hunt's targets stop sixteen over the eye and never come nearer the landing, and the
+  ;; climb would not cut because out? said out. The plan waited :no-log. Out is not at the
+  ;; trees: stairs up toward the trunk, to-height only
+  (let [w (remembered {[12 69 8] 1 [12 70 8] 136} [8.5 64.0 8.5])]
+    (is (stairs/out? w (intent/feet w)) "on open ground under the sky")
+    (is (memory/nearest-log w (game/eye w) wood/search-radius #{} wood/standing-trunk?)
+        "the trunk on its ledge is remembered")
+    (is (nil? (wood/near-walk w))
+        "six up, past the walk's range and the dig's reach: no walk reaches it")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y 70
+            :intent/to-height? true
+            :intent/dir [1 0]
+            :intent/for :surface}
+           (wood/trees-climb
+            w
+            [(memory/nearest-log w (game/eye w) wood/far-radius #{} wood/standing-trunk?)]))
+        "climbed toward, to-height only")
+    (is (= :stairs-up (:intent/kind (wood/gather-next w)))))
+  (let [level (remembered {[12 64 8] 136 [12 65 8] 136} [8.5 64.0 8.5])
+        bottoms [(memory/nearest-log level (game/eye level) 48 #{} wood/standing-trunk?)]]
+    (is (nil? (wood/trees-climb level bottoms))
+        "a trunk at the eye's height is hunted for, not climbed toward")
+    ;; sim race 38811417241 runner 2 (issue #87, world R3/4): on an island, the trunk five over
+    ;; the eye a hundred blocks off across a lake was climbed toward, a stair at a time
+    (is (nil? (wood/trees-climb level [[108 69 8]])) "a trunk past the near band is no climb")))
+
+(deftest a-trunk-across-powder-snow-is-walked-to
+  ;; sim race 38811417241 runner 2 (issue #87, world R2/20): out of the mine on one cobblestone
+  ;; block in a powder-snow field, a spruce eight blocks off; powder snow was neither floor nor
+  ;; clear to a route, so no route had a move, and the plan waited :no-log. A player sinks
+  ;; through it: the route goes through it to the floor below
+  (let [snow (blocks/default-state :powder_snow)
+        field (into {}
+                    (for [x (range 4 13) z (range 4 13) :when (not= [x z] [8 8])] [[x 63 z] snow]))
+        w (remembered (merge field {[14 64 8] 136 [14 65 8] 136}) [8.5 64.0 8.5])]
+    (is (= :clear (path/classify w [9 63 8])) "powder snow: no collision for a player")
+    (is (= :walk (:intent/kind (wood/near-walk w))) "the trunk is walked to through the snow")))
 
 (def quarry
   "A quarry two wide and two deep in the stone, open to the sky, as the stone mine digs round its

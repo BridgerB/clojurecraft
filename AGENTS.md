@@ -647,7 +647,7 @@ A build is a vector of ops with done-predicates as data (`build/holds?`); `next-
 ### 19.12 Pathfinder (`path/plan`)
 
 `(path/plan world from goal opts)` → `{:path/waypoints :path/cost :path/status :found|:partial|:none :path/from}`. Pure A*, budget in node expansions (`default-max-nodes` 6000) so replays match; `:partial` when spent, `:none` when the open set empties, both return the route to the nearest node seen.
-- Classes (`classify-id`): `:water :lava :awkward` (shape taller than 0.125, or slime, ice, magma, cobweb) `:solid :clear :unknown`. One snow layer is `:clear` (#38: 39 bots froze). `:unknown` is never floor nor clear: routes stop at the loaded edge.
+- Classes (`classify-id`): `:water :lava :awkward` (shape taller than 0.125, or slime, ice, magma, cobweb) `:solid :clear :unknown`. One snow layer is `:clear` (#38: 39 bots froze). Powder snow is `:clear` and not solid: a player sinks through it (#87). `:unknown` is never floor nor clear: routes stop at the loaded edge.
 - Moves: `:walk` 1, `:jump-up` 2, `:diagonal` √2 (both corners clear), `:drop` 1 + 0.5/block up to `max-fall` 3; `landing` refuses water, lava, awkward, unknown. `clear?` refuses lava in the four sides or below. Water is a wall, never a floor.
 - `start-cell`: feet cell if standable, else nearest within one block (block-edge starts).
 - Goals (`goal-done?`, `heuristic`): `:near` (3) `:block :xz :away :pickup` (`:goal/rise`, `:goal/step-down?`) `:sky` (`sky-weight` 4, not admissible).
