@@ -6,6 +6,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.hunt :as hunt]
+            [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -86,6 +87,11 @@
                          {:event/kind :go :go/goals [:eat]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (empty? (:sim/mobs sim)) "the cow was killed")
-    (is (= 13 (:sim/food sim) (:player/food w)) "its beef eaten")
+    (is (= 13 (:sim/food sim) (:player/food w))
+        (pr-str {:story (mapv (juxt :intention/kind :intention/event
+                                    :intention/reason :intention/target)
+                              (memory/intentions w))
+                 :held (recipe/counts (:player/inventory w))
+                 :items (:sim/items sim)}))
     (is (zero? (:beef (recipe/counts (:player/inventory w)) 0)))
     (is (= [] (:sim/violations sim)))))

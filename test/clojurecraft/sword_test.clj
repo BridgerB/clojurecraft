@@ -60,7 +60,8 @@
                                            38 (item :iron_chestplate 1)})))))))
 
 (deftest the-sword-row-is-a-needs-plan-for-the-piece
-  (let [w (standing {3 (item :cobblestone 5) 4 (item :stick 1)})
+  (let [w (assoc (standing {3 (item :cobblestone 5) 4 (item :stick 1)}) :plan/chain? true)
         row (first (filter #(= :sword (:goal/id %)) plan/goals))]
     (is (not (plan/done-by w row)))
+    (is (plan/done-by (dissoc w :plan/chain?) row) "a gym stage never makes one")
     (is (= :place (:intent/kind (plan/next-intent w row plan/goals))) "the table goes down first")))

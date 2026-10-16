@@ -4,7 +4,8 @@
 
    Requiring this namespace registers the :sword row's rules: an always row at the portal kit's
    priority, after the armour in the table, so a chained run comes to it once the iron the portal
-   needs is in hand and the wood-hungry mining is behind it. Done by :armed? (nothing wanted),
+   needs is in hand and the wood-hungry mining is behind it, and only in a chained run. Done by
+   :armed? (nothing wanted, or no chain),
    planned by :sword through the needs planner into the craft. Until then a fight is fought with
    the hand: :defend never stops to make a sword with a zombie at hand."
   (:require [clojurecraft.armour :as armour]
@@ -56,7 +57,13 @@
                 made)]
     (when (and k (handle? c) (armour/table-at-hand? world)) k)))
 
-(defmethod plan/done-by :armed? [world _] (nil? (wanted world)))
+(defmethod plan/done-by :armed?
+  ;; only a chained run makes a sword: a gym stage measures its own target, and with the row in
+  ;; play the kit stage (sim_test crafts-a-table-and-sticks-from-a-tree on a9a9b98) placed its
+  ;; held table for a wooden sword, which undid the kit, which dug the table back, until the
+  ;; run timed out
+  [world _]
+  (or (not (:plan/chain? world)) (nil? (wanted world))))
 
 (defmethod plan/next-intent :sword
   [world goal table]
