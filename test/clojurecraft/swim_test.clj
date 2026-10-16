@@ -52,7 +52,7 @@
         swim {:intent/kind :swim-out :intent/status :active}
         w (assoc (game/init fx/opts)
                  :bot/phase :play
-                 :player/pos [8.5 58.0 8.5]
+                 :player/pos [8.5 62.0 8.5]
                  :player/loaded? true
                  :player/in-water? true
                  :player/eye-in-water? true

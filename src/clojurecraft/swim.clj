@@ -43,6 +43,7 @@
 (def escape-timeout-ticks 2400)       ; 120 s: an escape longer than this has failed
 (def search-every-ticks 20)           ; with no bank in reach yet, look again this often while rising
 (def notch-radius 4)                  ; how far on the plane a wall is notched into for a bank when there is none (a dig's reach)
+(def centre-slack 0.15)               ; how far off its column's centre a body rising up a shaft may drift
 (def shore-reach 64)                  ; how far along eight bearings a swim with no bank in reach looks for dry ground
 (def flee-radius 6)                   ; how far a lava flee looks for footing
 (def flee-timeout-ticks 200)          ; 10 s
@@ -250,12 +251,21 @@
         [(long (math/floor hx)) surface (long (math/floor hz))])))
 
 (defn shore-controls
-  "Rising with jump held, and toward shore (far-shore) when there is one and the feet are not
-   still under to-y (a :rise goes straight up its shaft first)."
-  [world shore to-y]
-  (if (and shore (not (and to-y (< (physics/y-of (intent/feet world)) (- to-y 2)))))
-    (assoc (intent/toward world (physics/centre shore) 0.0) :control/jump? true)
-    {:control/jump? true}))
+  "Rising with jump held: while the feet are more than two under top (the water's top), drawn to
+   the centre of their column when off it by more than centre-slack, so a body in a shaft one
+   wide rises clear of its rim; nearer the top, toward shore (far-shore) when there is one.
+   Issue #89 (world R1/32): a rise begun 0.3 off its shaft's centre caught the sea floor's edge
+   with its head and drowned there."
+  [world shore top]
+  (let [[px _ pz] (:player/pos world)
+        [fx fy fz] (intent/feet world)
+        centre [(+ fx 0.5) (+ fy 1.0) (+ fz 0.5)]
+        deep? (< fy (- top 2))]
+    (cond (and deep? (> (physics/horizontal-distance [px 0 pz] centre) centre-slack))
+          (assoc (intent/toward world centre 0.0) :control/jump? true)
+          (and shore (not deep?))
+          (assoc (intent/toward world (physics/centre shore) 0.0) :control/jump? true)
+          :else {:control/jump? true})))
 
 (defn swim-controls
   "Toward the bank's centre: in the water, forward with jump held (the swim-up and, pressed
@@ -306,7 +316,11 @@
               (intent/dissoc-intent :intent/bank :intent/target :intent/best-dist :intent/best-tick)
               (game/say (str "swim-out: bank " bank " flooded, looking again")))
           (and (nil? bank) next-search (< tick next-search))
-          (assoc world :player/controls (shore-controls world shore to-y)) ; rise until the next look
+          (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)]
+            ;; rise until the next look
+            (assoc world
+                   :player/controls
+                   (shore-controls world shore (or to-y (inc (float-top world feet surface))))))
           (nil? bank)
           (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
                 b (banks world feet surface (:plan/blacklist world #{}))
@@ -326,7 +340,10 @@
                         shore (when-not (solid-cell? world [fx surface fz])
                                 (far-shore world feet surface))]
                     (-> world
-                        (assoc :player/controls (shore-controls world shore to-y))
+                        (assoc :player/controls
+                               (shore-controls world
+                                               shore
+                                               (or to-y (inc (float-top world feet surface)))))
                         (intent/assoc-intent :intent/next-search (+ tick search-every-ticks))
                         (cond-> shore (intent/assoc-intent :intent/shore shore))
                         (cond-> (nil? shore) (intent/dissoc-intent :intent/shore))))))
