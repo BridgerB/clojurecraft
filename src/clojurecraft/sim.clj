@@ -225,7 +225,7 @@
    player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
    there), :food (the hunger bar the player joins with, told at login; absent, no food is
    modelled and none is told), :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
-   and where the player arrives) and :difficulty (:peaceful, :easy, :normal or :hard, as the
+   and where the player arrives; :columns {[cx cz] bytes} in place of :column, a whole Nether, arrive) and :difficulty (:peaceful, :easy, :normal or :hard, as the
    server's setting: hunger drains the bar, a full one when :food is absent, and heals and
    starves by it, issue #260; absent, nothing drains the bar, as before, so a snapshot from then
    plays the same; given, the day turns from :day-time (game ticks, 0 when absent), hostiles
@@ -1277,17 +1277,35 @@
 (defn arrive
   "The model in the Nether: with a :sim/nether, its column becomes the world (the overworld's
    placed and broken blocks were the other dimension's) and the player stands at its :at; without
-   one, the same column where the player stood (a one-column model of the portal alone)."
+   one, the same column where the player stood (a one-column model of the portal alone). A
+   :sim/nether with :columns ({[cx cz] bytes}, a real Nether as a real race's recording holds it,
+   issue #299) is that whole Nether instead, decoded once on arrival, and the overworld's items,
+   mobs, fluids and falling blocks stay behind, as the client drops their entities."
   [sim]
-  (if-let [{:keys [column at]} (:sim/nether sim)]
-    (-> sim
-        (assoc :sim/columns {[0 0] column}
-               :sim/placed {}
-               :sim/broken #{}
-               :sim/player-pos at
-               :sim/view #{}) ; a dimension change drops every chunk the client held
-        (dissoc :sim/view-at))
-    (dissoc sim :sim/view-at)))
+  (let [{:keys [column columns at]} (:sim/nether sim)]
+    (cond columns
+          (-> sim
+              (assoc :sim/columns columns
+                     :sim/decoded (update-vals columns chunk/decode)
+                     :sim/placed {}
+                     :sim/broken #{}
+                     :sim/items {}
+                     :sim/mobs {}
+                     :sim/fluids {}
+                     :sim/falls {}
+                     :sim/falling {}
+                     :sim/player-pos at
+                     :sim/view #{})
+              (dissoc :sim/view-at))
+          column
+          (-> sim
+              (assoc :sim/columns {[0 0] column}
+                     :sim/placed {}
+                     :sim/broken #{}
+                     :sim/player-pos at
+                     :sim/view #{}) ; a dimension change drops every chunk the client held
+              (dissoc :sim/view-at))
+          :else (dissoc sim :sim/view-at))))
 
 (defn through-portal
   "The model a tick on: a player whose feet stand in a nether portal portal-ms on end changes

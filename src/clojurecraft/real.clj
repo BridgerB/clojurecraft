@@ -73,7 +73,8 @@
    column the server sent since the bot came into its dimension, the latest of each (a dimension
    change drops them, as it drops the bot's columns); after a tick the bot is joinable? at, a
    moment {:t :world :columns} kept every sim/moment-every-ms, the last sim/moment-keep of them
-   (sim/kept, six minutes, as a sim run keeps its moments), :t the next tick's time; the
+   (sim/kept, six minutes, as a sim run keeps its moments), :t the next tick's time; where the
+   bot last arrived in the Nether (:nether-at, its position once the server placed it there); the
    recording's header commit as :commit and its RESULT as :result."
   [{:keys [world columns moments] :as acc} line]
   (cond (:record/commit line) (assoc acc :commit (:record/commit line))
@@ -87,15 +88,19 @@
                             (assoc columns [(:x p) (:z p)] (:data p))
                             :else columns)
               m (when (and (= :tick (:event/kind line)) (joinable? w))
-                  {:t (+ (:time/now w) physics/tick-ms) :world w :columns columns})]
-          (assoc acc
-                 :world w
-                 :columns columns
-                 :moments (cond-> moments m (sim/kept m sim/moment-every-ms))))))
+                  {:t (+ (:time/now w) physics/tick-ms) :world w :columns columns})
+              arrived? (and (= dimension/nether (dimension/of w))
+                            (:player/loaded? w)
+                            (not (:player/loaded? world)))]
+          (cond-> (assoc acc
+                         :world w
+                         :columns columns
+                         :moments (cond-> moments m (sim/kept m sim/moment-every-ms)))
+            arrived? (assoc :nether-at (:player/pos w))))))
 
 (defn fold
   "A recording's lines (events, effects lines, the header and the RESULT) folded from start
-   (fold-step): {:world the last :columns :moments :commit :result}."
+   (fold-step): {:world the last :columns :moments :nether-at :commit :result}."
   [lines]
   (reduce fold-step (start) lines))
 
@@ -193,8 +198,9 @@
    and air, the held place and the state id as last told, the mobs and items it carries under the
    bot's own ids and the rest of what the bot tracks told gone, in the bot's dimension at
    difficulty, the time of day guessed (day-time-of), rolling from seed, a death respawning on the
-   landing (the real spawn is not in the recording)."
-  [{:keys [world columns]} {:keys [seed difficulty]}]
+   landing (the real spawn is not in the recording); and, given one, the Nether a portal leads to
+   (nether: the real one, sim/arrive)."
+  [{:keys [world columns]} {:keys [seed difficulty nether]}]
   (let [pos (mapv double (:player/pos world))
         [x _ z] (cell-of pos)
         cols (capture/within columns [x z] radius)
@@ -216,7 +222,8 @@
               :day-time (day-time-of world)
               :dimension (dimension/of world)
               :inventory (window-0 world)}
-       (:player/food world) (assoc :food (long (:player/food world))))
+       (:player/food world) (assoc :food (long (:player/food world)))
+       nether (assoc :nether nether))
      {:now (:time/now world)
       :pos pos
       :look (mapv double (:player/look world))
@@ -269,18 +276,34 @@
     bot (assoc :snapshot/bot bot)
     round (assoc :snapshot/round round)))
 
+(defn nether-of
+  "The real Nether a moment's portal leads to, {:columns :at} as sim/arrive takes it, when the
+   moment is in the overworld and the run ended in the Nether: the Nether columns the recording
+   holds by its end within radius chunks of where the bot last arrived there (:nether-at), and that
+   place. Race 38929353563 (issue #299): Clj_r17 and Clj_r05 failed in the Nether three seconds
+   after arriving, so their moments, half a minute earlier, stood at the portal, and a model with
+   no Nether to send them to failed them :rejected instead. nil otherwise."
+  [{:keys [world columns nether-at]} m]
+  (when (and nether-at
+             (= dimension/nether (dimension/of world))
+             (= dimension/overworld (dimension/of (:world m))))
+    (let [[x _ z] (cell-of nether-at)]
+      {:columns (capture/within columns [x z] radius) :at (mapv double nether-at)})))
+
 (defn convert
   "A folded recording (fold) as a real snapshot of the failure with signature in opts: its moment
    chosen as a sim run's is (simrace/decision over the last world, simrace/chosen-moment over the
    moments kept: the newest at least decision-lead-ms before the choice that failed), the model
-   joined there (model). nil when no moment was kept (the bot was never joinable)."
-  [{:keys [world moments]} {:keys [signature] :as opts}]
+   joined there (model), with the real Nether when its portal leads there (nether-of). nil when no
+   moment was kept (the bot was never joinable)."
+  [{:keys [world moments] :as folded} {:keys [signature] :as opts}]
   (when (seq moments)
     (let [m (simrace/chosen-moment moments
                                    (peek moments)
                                    (simrace/decision world signature)
-                                   (:time/now world))]
-      (snapshot m (model m opts) opts))))
+                                   (:time/now world))
+          nether (nether-of folded m)]
+      (snapshot m (model m (cond-> opts nether (assoc :nether nether))) opts))))
 
 (defn gap
   "How a real snapshot that does not recur (simrace/recurs?) got past its failure against the

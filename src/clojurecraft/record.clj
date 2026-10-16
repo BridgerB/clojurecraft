@@ -69,7 +69,7 @@
   ^java.io.InputStream [path]
   (cond (str/ends-with? (str path) ".gz") (GZIPInputStream. (io/input-stream path))
         (str/ends-with? (str path) ".zst")
-        (.getInputStream (.start (ProcessBuilder. ^java.util.List ["zstd" "-dcq" (str path)])))
+        (.getInputStream (.start (ProcessBuilder. ^java.util.List (mapv str ["zstd" "-dcq" path]))))
         :else (io/input-stream path)))
 
 (defn entries

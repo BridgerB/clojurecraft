@@ -229,3 +229,23 @@
                                                        :z 0
                                                        :heightmaps []
                                                        :data (world/column-bytes {})}))))))))
+
+(deftest a-portal-at-the-moment-leads-to-the-real-nether
+  ;; race 38929353563 (issue #299): Clj_r17 and Clj_r05 failed in the Nether three seconds after
+  ;; arriving, so their moments stood at the portal; the model joined there sends the bot to the
+  ;; Nether the recording holds (near where the bot arrived), never to a copy of the overworld
+  (let [nether-column (world/column-bytes {} dimension/nether)
+        folded {:world (assoc (bot-world) :player/dimension dimension/nether)
+                :columns {[0 0] nether-column [40 40] nether-column}
+                :nether-at [8.5 64.0 8.5]}
+        m {:world (assoc (bot-world) :player/dimension dimension/overworld)
+           :columns {[0 0] (world/column-bytes {})}}
+        nether (real/nether-of folded m)
+        s (sim/arrive (real/model m {:seed 1 :nether nether}))]
+    (is (= #{[0 0]} (set (keys (:columns nether)))) "the Nether near the arrival")
+    (is (= [8.5 64.0 8.5] (:sim/player-pos s)))
+    (is (= 0 (:chunk/min-y (get (:sim/decoded s) [0 0]))) "the Nether's column, decoded on arrival")
+    (is (= :stone (blocks/name-of (sim/block-at s [8 10 8]))))
+    (is (empty? (:sim/mobs s)) "the overworld's zombie stays behind")
+    (is (nil? (real/nether-of folded (assoc-in m [:world :player/dimension] dimension/nether)))
+        "a moment already in the Nether goes nowhere new")))
