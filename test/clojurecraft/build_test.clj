@@ -592,3 +592,26 @@
         "open with a floor: walked to")
     (is (build/beside-stand? w [6 64 5]) "a block up beside the feet: the way is to its height")
     (is (not (build/beside-stand? w [9 64 5])) "four off: by the landing, as before")))
+
+(deftest the-way-out-is-not-taken-across-lava-nor-from-beside-the-stand
+  ;; sim race 38855091523 (issue #178, world R1/34 seed 2): the next lava stand lay past the pool,
+  ;; the way out along it crossed the lava, round-corner sent the feet back toward the frame and
+  ;; the refill out again, and from beside the stand itself out again, until the time ran out
+  (let [origin [2 63 2]
+        stand [12 63 9]
+        out [5 63 9]
+        at (fn [blocks feet] (standing-at (open-ground blocks) feet))]
+    (is (build/out-first? (at {} [5.5 63.0 5.5]) origin :south stand out 1 4)
+        "nearer the frame, the way out clear: out first")
+    (is (not (build/out-first? (at {[8 62 9] blocks/lava-base} [5.5 63.0 5.5])
+                               origin
+                               :south
+                               stand
+                               out
+                               1
+                               4))
+        "lava under the way out: straight for the stand instead")
+    (is (not (build/out-first? (at {} [11.5 63.0 9.5]) origin :south stand out 1 4))
+        "beside the stand: no way out first")
+    (is (not (build/out-first? (at {} [5.5 63.0 5.5]) origin :south stand out 4 4))
+        "already as far out as the stand")))
