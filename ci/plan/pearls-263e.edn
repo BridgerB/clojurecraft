@@ -1,0 +1,8 @@
+;; Issue #263's pearls-12 row, run as a plan from branch gym/263 (gym.yml's goal dropdown cannot
+;; name it yet): twelve pearls in the warped forest nearest each landing's Nether coordinates,
+;; the stare for the nearest enderman in sight within 64. One bot a server.
+{:plans/label "pearls-263e"
+ :plans/jobs 3
+ :plans/issue 263
+ :plans/experiments
+ [{:exp/name "pearls-12" :exp/kind :gym :exp/goal "pearls-12" :exp/runs 3 :exp/est-s 2700}]}
