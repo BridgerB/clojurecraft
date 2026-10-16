@@ -1481,12 +1481,17 @@
    stair-depth at a time) while the feet are above the cell over it, else a tunnel of level
    steps toward it, as many as the plane distance less one (the step onto the cell over the
    source is refused for the lava under it, and the roof is then in reach: uncap). With no such
-   source loaded, stairs down to lava-depth. nil when nothing can be cut from here."
+   source loaded, stairs down to lava-depth. From a feet cell in :plan/boxed-at no stair is cut
+   (stone/stairs): the way out the mine takes (stone/retreat, stone/climb), as the build's own
+   descent does (to-height). Sim race 38515210080 (issue #41, world R4/36, at the iron mine's
+   y 16 with the lava sea forty blocks under, the feet boxed by an earlier descent): nothing was
+   cut and :no-site was waited out. nil when nothing can be cut from here."
   [world]
   (let [feet (intent/feet world)
         [sx sy sz :as src] (hunt-target world)
         to (if src (inc sy) lava-depth)]
-    (cond (> (physics/y-of feet) to) (stone/stairs world {:goal/depth to})
+    (cond (> (physics/y-of feet) to)
+          (or (stone/stairs world {:goal/depth to}) (stone/retreat world) (stone/climb world))
           (nil? src) nil
           :else
           (let [steps (dec (long (max (abs (- sx (first feet))) (abs (- sz (nth feet 2))))))]

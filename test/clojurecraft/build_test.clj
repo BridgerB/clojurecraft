@@ -329,6 +329,15 @@
     (is (= down (hunt {[12 40 4] blocks/lava-base})) "a lone source: on down toward the sea")
     (is (= down (hunt (pool-at 50))) "a pool over the head: on down toward the sea")))
 
+(deftest the-lava-hunt-leaves-a-boxed-pocket-by-the-way-out
+  ;; sim race 38515210080 (issue #41, world R4/36): at y 16 in the iron mine, the feet cell
+  ;; boxed by an earlier descent, the lava sea forty blocks under: no stair was cut and the
+  ;; plan waited :no-site out
+  (let [pos [10.5 41.0 10.5]
+        w (-> (standing-at (open-ground {[10 41 10] blocks/air [10 42 10] blocks/air}) pos)
+              (assoc :plan/boxed-at #{[10 41 10]}))]
+    (is (some? (build/toward-lava w)) "no stair from the pocket: the way out")))
+
 (deftest a-way-to-the-site-boxed-in-is-left-by-the-way-out
   ;; sim race 38806318231 (issue #130, world R3/11): the stairs down to the cast's landing met an
   ;; aquifer, every stair refused, and the build was sent down the same stairs from the same cell
