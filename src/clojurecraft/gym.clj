@@ -603,6 +603,24 @@
     :gym/timeout-ms 1200000
     :gym/truth [{:truth/cmd "execute if block {at} minecraft:end_portal_frame"
                  :truth/re "Test passed"
+                 :truth/at [:frame]}]}
+   ;; then down to it: the same landing and kit, cobblestone for the tunnel's floors, judged by a
+   ;; frame at the cell the bot names and the bot within 7 of it (at the frame's corner), asked at
+   ;; the frame's coordinates, never as the bot: execute as the bot answered RCON with nothing in
+   ;; gym defend-259a
+   {:gym/goal :portal-room
+    :gym/until "portal-room"
+    :gym/land :near-stronghold
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:ender_eye 6" "minecraft:iron_sword 1" "minecraft:iron_pickaxe 2"
+                  "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1" "minecraft:cooked_beef 16"
+                  "minecraft:cobblestone 64"]
+    :gym/timeout-ms 1800000
+    :gym/truth [{:truth/cmd "execute if block {at} minecraft:end_portal_frame"
+                 :truth/re "Test passed"
+                 :truth/at [:frame]}
+                {:truth/cmd "execute positioned {at} if entity @a[name={name},distance=..7]"
+                 :truth/re "Test passed"
                  :truth/at [:frame]}]}])
 
 (def counted

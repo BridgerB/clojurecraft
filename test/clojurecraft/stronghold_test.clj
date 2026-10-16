@@ -311,3 +311,45 @@
     (is (= [88 30 88] (stronghold/nearest-frame w)))
     (is (<= 2 (count (:stronghold/throws w))) "two lines at least")
     (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- the portal room
+
+(def room-row (first (filter #(= :portal-room (:goal/id %)) plan/goals)))
+
+(deftest the-portal-room-is-tunnelled-to-once-a-frame-is-remembered
+  (let [frame (blocks/default-state :end_portal_frame)
+        w (searching [8.5 8.5] [])
+        seen (memory/observe w [40 20 60] frame)]
+    (testing "no frame yet: the search"
+      (is (= {:intent/kind :throw-eye :intent/for :stronghold}
+             (plan/next-intent w room-row plan/goals))))
+    (testing "a frame remembered: a dry tunnel to it"
+      (is (= {:intent/kind :tunnel-to :intent/target [40 20 60] :intent/steps 32 :intent/dry? true}
+             (plan/next-intent seen room-row plan/goals)))
+      (is (not (plan/done-by seen room-row))))
+    (testing "within 6 of it: there"
+      (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))))
+
+(deftest the-portal-room-is-reached-against-the-model
+  ;; a frame 24 blocks under the feet in stone: the tunnel down to within 6 of it, an iron pickaxe
+  ;; for the digs, its cobblestone for the floors
+  (let [frame (blocks/default-state :end_portal_frame)
+        plain (world/column-bytes {})
+        columns (into {}
+                      (for [cx (range -1 2)
+                            cz (range -1 2)]
+                        [[cx cz]
+                         (if (= [cx cz] [0 0]) (world/column-bytes {[8 40 8] frame}) plain)]))
+        [w sim] (sim/run main/step
+                         (game/init fx/opts)
+                         (sim/init {:columns columns
+                                    :spawn [8.5 64.0 8.5]
+                                    :inventory {[:hotbar 0] {:item (recipe/item-id :iron_pickaxe)
+                                                             :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         600000
+                         {:event/kind :go :go/goals [:portal-room]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (< (second (:player/pos w)) 48.0) "down by the frame")
+    (is (= frame (sim/block-at sim [8 40 8])) "the frame never dug")
+    (is (empty? (:sim/violations sim)))))

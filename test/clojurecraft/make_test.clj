@@ -124,15 +124,15 @@
             are an item target, done by :provided?, planned by the hunt rather than the needs planner; the
             blaze rods (issue #262), done by the rods held, planned by their own rule; and the eyes (issue #264),
             done by :provided?, planned by the needs planner with its :stuck named for the stage that is short;
-            the throw trial (issue #265), done by a throw kept, and the stronghold, done by a frame remembered"
+            the throw trial (issue #265), done by a throw kept, the stronghold, done by a frame remembered, and its portal room, by a frame near"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
     (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :fed? :dressed?
                               :armoured? :health-seen? :safe? :cleared? :provisioned? :armed?
-                              :rods-held? :thrown? :frames-seen?}
+                              :rods-held? :thrown? :frames-seen? :in-portal-room?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
     (is (= #{:needs :escape :wade :build :fortress :eat :wear :armour :watch :defend :attack :hunt
-             :sword :pearls :blaze-rods :eyes :throw :stronghold}
+             :sword :pearls :blaze-rods :eyes :throw :stronghold :portal-room}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))

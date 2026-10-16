@@ -3,7 +3,7 @@ title: Stronghold
 description: How the bot finds the stronghold (issue #265) - an eye of ender's flight read from the entity it becomes, a throw as a fact, and two throws' lines crossed on the plane by a pure function that answers nothing when they are parallel or cross behind a throw.
 type: reference
 tags: [bot, plan, stronghold, eyes, goals]
-aliases: [stronghold.clj, triangulate, :stronghold/throws, :throw/from, :throw/dir, min-crossing, :throw-eye, :eye-throw, :thrown?, :no-eye, :eye-unmoved, throw, bearing, :stronghold, :frames-seen?, stronghold-next, second-spot, crossing, hop, explore, :near-stronghold, :no-way, :no-frame, :truth/at, :frame]
+aliases: [stronghold.clj, triangulate, :stronghold/throws, :throw/from, :throw/dir, min-crossing, :throw-eye, :eye-throw, :thrown?, :no-eye, :eye-unmoved, throw, bearing, :stronghold, :frames-seen?, stronghold-next, second-spot, crossing, hop, explore, :near-stronghold, :no-way, :no-frame, :truth/at, :frame, :portal-room, :in-portal-room?, :intent/dry?, dry?, portal-room]
 status: verified
 lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
@@ -45,11 +45,20 @@ sourceRefs:
   - test/clojurecraft/stronghold_test.clj#the-search-throws-walks-off-the-line-and-throws-again
   - test/clojurecraft/stronghold_test.clj#two-crossing-throws-walk-to-the-crossing-and-look-round-it
   - test/clojurecraft/stronghold_test.clj#a-remembered-frame-is-the-stronghold-found
+  - test/clojurecraft/stronghold_test.clj#the-stronghold-is-found-by-throws-and-walks-against-the-model
+  - src/clojurecraft/stronghold.clj#defmethod plan/done-by :in-portal-room?
+  - src/clojurecraft/stronghold.clj#defmethod plan/next-intent :portal-room
+  - src/clojurecraft/fortress.clj#defn dry?
+  - "resources/clojurecraft/goals.edn#{:goal/id :portal-room"
+  - test/clojurecraft/fortress_test.clj#an-overworld-step-opens-no-cell-by-water
+  - test/clojurecraft/stronghold_test.clj#the-portal-room-is-tunnelled-to-once-a-frame-is-remembered
+  - test/clojurecraft/stronghold_test.clj#the-portal-room-is-reached-against-the-model
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[sib-end-and-dragon]]"
   - "[[entities]]"
   - "[[roadmap-issues]]"
+  - "[[fortress-tunnel]]"
 ---
 
 # Stronghold
@@ -95,3 +104,8 @@ The `:stronghold` row (`--until stronghold`, priority 22, an aside, overworld on
 Every long walk goes in hops (`hop`): a `:walk` to a cell a body stands in (`stand-in`, within 12 of the feet's height) 32 blocks along the way, or turned by 30, 60 or 90 degrees either side when straight on has no route (`intent/routable?`); none waits `:no-way`. A walk to somewhere hundreds of blocks off is beyond a route's node budget.
 
 The gym row `stronghold` lands the bot 250 blocks (`gym/stronghold-off`) from the stronghold the server locates from the landing, on the line through it, on dry ground (`land! :near-stronghold`, `fixture/land-at!`), with six eyes, an iron sword, pickaxe, helmet, chestplate and food; it is judged by `execute if block {at} minecraft:end_portal_frame`, where a truth row's `:truth/at` names a path into the RESULT whose `[x y z]` fills `{at}` (`gym/truth-cmd`): the RESULT names the nearest frame remembered as `:frame`.
+
+Against the model (#260's eyes, `sim/init :stronghold`), `the-stronghold-is-found-by-throws-and-walks-against-the-model` plays the whole search: a frame deep in stone 113 blocks off, columns streamed two chunks round the player, six eyes; a throw, the walk off the line, a second throw, the walk to the crossing, the frame seen as its chunk loads.
+
+## The portal room
+The `:portal-room` row (`--until portal-room`, priority 23, an aside, overworld only) is done by `:in-portal-room?`: the feet cell's centre within `fortress/reach` (6) of the nearest remembered frame. Its plan: with a frame remembered, the fortress's `:tunnel-to` to it ([[fortress-tunnel]]: one step at a time, each a plan of ops, never opening a cell beside lava, never digging a frame, which `fortress/unbreakable` holds) with `:intent/dry? true`: `fortress/dry?` refuses a step that opens a cell that is water or has water beside it, since the overworld's way down runs through aquifers and under oceans. With none remembered, the search above. No corridor is walked: the frame is the tunnel's target from wherever the bot stands, down through the ground and the stronghold's walls. The gym row `portal-room` lands as `stronghold` does, with two pickaxes and cobblestone for the floors, and is judged by the frame at the RESULT's `:frame` and the bot within 7 of it, asked at the frame's coordinates (`execute positioned {at} if entity @a[name=...]`), never as the bot. Against the model, `the-portal-room-is-reached-against-the-model` tunnels from the surface to a frame 24 blocks down.

@@ -130,3 +130,13 @@
         w (intent/run w (:plan/intent w) {:event/kind :tick :event/now 0})]
     (is (nil? (:intent/move (:plan/intent w))) "the step dropped, chosen again next tick")
     (is (= :active (:intent/status (:plan/intent w))))))
+
+(deftest an-overworld-step-opens-no-cell-by-water
+  ;; issue #265: the way to a stronghold's portal room runs through aquifers; a :tunnel-to with
+  ;; :intent/dry? takes no step whose opened cells touch water, the Nether's rule (safe?) aside
+  (let [w (rock {[1 65 1] blocks/water-base})]
+    (is (fortress/safe? w [0 64 0] [1 0 0]) "the Nether's rule takes no account of water")
+    (is (not (fortress/dry? w [0 64 0] [1 0 0])))
+    (is (fortress/dry? w [0 64 0] [-1 0 0]))
+    (is (= [1 0 0] (fortress/choose-move w [0 64 0] [4 64 0])))
+    (is (not= [1 0 0] (fortress/choose-move w [0 64 0] [4 64 0] fortress/climb-past true)))))

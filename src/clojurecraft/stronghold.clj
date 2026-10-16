@@ -32,6 +32,7 @@
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.drops :as drops]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -399,3 +400,24 @@
 (defmethod plan/done-by :frames-seen? [world _] (boolean (seq (frames world))))
 
 (defmethod plan/next-intent :stronghold [world _ _] (stronghold-next world))
+
+;; ---------------------------------------------------------------- the portal room
+
+(defmethod plan/done-by :in-portal-room?
+  ;; within fortress/reach (6) of a remembered frame, from the feet cell's centre
+  [world _]
+  (boolean (some->> (nearest-frame world)
+                    (fortress/arrived? world))))
+
+(defmethod plan/next-intent :portal-room
+  ;; a frame remembered: the fortress's tunnel to it, its steps opening no cell by water
+  ;; (fortress/dry?), from wherever the bot stands (down through the ground, through the
+  ;; stronghold's walls, never into its frames: fortress/unbreakable); none yet: the search
+  ;; (stronghold-next)
+  [world _ _]
+  (if-let [f (nearest-frame world)]
+    {:intent/kind :tunnel-to
+     :intent/target f
+     :intent/steps fortress/steps-per-tunnel
+     :intent/dry? true}
+    (stronghold-next world)))
