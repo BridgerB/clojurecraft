@@ -831,12 +831,28 @@
          (sort-by #(physics/distance (physics/centre %) (physics/centre pos)))
          first)))
 
+(def site-reach 8) ; feet this far or nearer the room's landing are at the site: nothing to go back by
+
+(defn way-back
+  "The way back to the build's site from far off: toward the room's landing (landing for the
+   build's access h) as a landing op goes (toward-stand: a walk, else stairs to its height and a
+   level way dug), or nil when the feet are within site-reach of it, where no stand is a missing
+   stand, not a missing way. Sim race 38806318231 (issue #196, 75 runs in 37 rounds, world R2/3):
+   the cast's room at y 23, the bot climbed out to y 64 for the wood of a pickaxe, made it, and
+   the build's next op, a room cell 41 below and 34 away, found no stand and no cut at the feet's
+   height and failed :no-stand three times in three ticks."
+  [world {:intent/keys [build origin facing access]}]
+  (let [to (cell origin facing (landing (or access 0)))]
+    (when (> (physics/distance (physics/centre (intent/feet world)) (physics/centre to)) site-reach)
+      (toward-stand world to build origin facing))))
+
 (defn approach-stand
   "The child that gets the feet where op is worked from, or nil when they are there: the room's
    landing is gone to at its height (toward-stand: stairs to it first, then a level way dug); a
-   room cell (its stand the cell itself) is dug from anywhere that reaches it, the nearest such cell a route
-   reaches (reachable-stand); any other op from its designated stand (toward), or, for a place or
-   a dig whose stand cannot be occupied, a cell that already reaches the block. A keyword is why
+   room cell (its stand the cell itself) is dug from anywhere that reaches it, the nearest such
+   cell a route reaches (reachable-stand), or from far off the way back to the site (way-back);
+   any other op from its designated stand (toward), or, for a place or a dig whose stand cannot
+   be occupied, a cell that already reaches the block. A keyword is why
    no such cell exists. Ground in the way is dug only for a :build, whose plan says which rock to
    keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
   [world i {:build/keys [op stand pos step]}]
@@ -846,10 +862,13 @@
           (cond (within-reach? world pos) nil
                 :else
                 (let [alt (or (reachable-stand world pos pos) (when build (room-stand world i pos)))
-                      cut (when (and (nil? alt) build) (nearest-stand-cell world i pos))]
+                      cut (when (and (nil? alt) build) (nearest-stand-cell world i pos))
+                      home (when (and (nil? alt) (nil? cut) build) (way-back world i))]
                   (cond alt {:intent/kind :walk :intent/target alt :intent/for :build}
                         ;; no route into the room: cut the way to the stand nearest the feet
                         cut (toward-stand world cut build origin facing)
+                        ;; far from the site (out for a pickaxe's wood): the way back to it
+                        home home
                         :else :no-stand)))
           (intent/centred? world stand) nil
           :else
