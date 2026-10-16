@@ -12,7 +12,8 @@
         session never started or died before its first push);
      3. its pull request has a session running, or checks still pending: wait;
      4. ready (not a draft), `unit / unit` and `check` green: merge. The merge closes the issue
-        by its Fixes line;
+        by its Fixes line. A pull request that changes a guarded path (the workflows, this
+        dispatcher) is never merged here: the issue is labelled needs-review for a person;
      5. otherwise (a red check, a draft left by a session that ended, a Refs-only body): ask
         Copilot to go on, in a pull request comment that says what is wrong, at most once every
         nudge-every-ms and max-nudges times; after that the issue is labelled agent-stuck and
@@ -32,7 +33,12 @@
 (def max-nudges 8)                            ; continue comments before the issue is left for a person
 (def required-checks #{"unit / unit" "check"}) ; the checks a fix must pass (issue.yml)
 (def marker "<!-- copilot-dispatch -->")      ; in every comment this namespace writes, so it can count its own
-(def hands-off #{"no-agent" "agent-stuck"})   ; labels that keep an issue away from Copilot
+(def hands-off #{"no-agent" "agent-stuck" "needs-review"}) ; labels that keep an issue away from Copilot
+(def guarded
+  "Paths a Copilot pull request may not change and still be merged here: the workflows and this
+   dispatcher. COPILOT_TOKEN lives in an environment only main can read, so a merged change to
+   them is the one way a session's code could reach it; a person merges those."
+  [".github/" "bb/clojurecraft/copilot.clj" "bb.edn"])
 
 ;; ---------------------------------------------------------------- the state as values
 
@@ -72,6 +78,8 @@
     (cond
       (some hands-off labels) {:move :leave :issue n :why "hands-off label"}
       (and pr (live (:branch pr))) {:move :wait :issue n :pr (:number pr) :why "session running"}
+      (and pr (not (:draft? pr)) (= :green (:checks pr)) (:guarded? pr))
+      {:move :review :issue n :pr (:number pr)}
       (and pr (not (:draft? pr)) (= :green (:checks pr))) {:move :merge :issue n :pr (:number pr)}
       (and pr (= :pending (:checks pr)) (not (:draft? pr)))
       {:move :wait :issue n :pr (:number pr) :why "checks running"}
@@ -150,7 +158,8 @@
                           "--repo" repo
                           "--state" "open"
                           "--limit" "100"
-                          "--json" "number,headRefName,isDraft,body,statusCheckRollup,comments")
+                          "--json"
+                          "number,headRefName,isDraft,body,statusCheckRollup,comments,files")
               :when (str/starts-with? (:headRefName pr) "copilot/")
               :let [ours (filter #(str/includes? (str (:body %)) marker) (:comments pr))]
               n (fixes (:body pr))]
@@ -158,6 +167,8 @@
            {:number (:number pr)
             :branch (:headRefName pr)
             :draft? (:isDraft pr)
+            :guarded? (boolean (some (fn [{:keys [path]}] (some #(str/starts-with? path %) guarded))
+                                     (:files pr)))
             :checks (check-state (:statusCheckRollup pr))
             :nudges (count ours)
             :last-nudge-ms (some->> ours
@@ -222,6 +233,15 @@
       :assign (assign! issue)
       :reassign (do (unassign! issue) (assign! issue))
       :merge (gh "pr" "merge" (str pr) "--repo" repo "--merge")
+      :review
+      (do (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "needs-review")
+          (gh "pr"
+              "comment" (str pr)
+              "--repo" repo
+              "--body"
+              (str
+               "Green, but it changes a workflow or the dispatcher, which only a person merges.\n\n"
+               marker)))
       :nudge (gh "pr" "comment" (str pr) "--repo" repo "--body" (nudge-text m))
       :stuck
       (do (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "agent-stuck")
