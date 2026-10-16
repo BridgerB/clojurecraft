@@ -434,9 +434,10 @@
                  [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)]])))
 
 (defn footing
-  "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand in
-   out of the lava (lava-free?: none in it, over it or under it), those with no lava beside them
-   first (lava-beside?), or nil. A cell the flowing lava covers is standable to a route, and a
+  "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand in,
+   those out of the lava first (lava-free?: none in it, over it or under it), then those with no
+   lava beside them (lava-beside?); a cell the flow covers only when there is no other; nil when
+   none is standable. A cell the flowing lava covers is standable to a route, and a
    flee to it ends still in the lava: sim race 38844683780 runner 7 (issue #230, world R2/9)
    smelted in a pocket at y 38 when lava from a source ten over flowed in, fled to a cell the
    flow covered, and timed out :no-footing, three times."
@@ -445,9 +446,10 @@
              dz (range (- flee-radius) (inc flee-radius))
              dy [0 -1 1]
              :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]]
-             :when (and (not= cell feet) (path/standable? world cell) (lava-free? world cell))]
+             :when (and (not= cell feet) (path/standable? world cell))]
          cell)
-       (sort-by (juxt #(if (lava-beside? world %) 1 0)
+       (sort-by (juxt #(if (lava-free? world %) 0 1)
+                      #(if (lava-beside? world %) 1 0)
                       #(physics/horizontal-distance (physics/centre feet) (physics/centre %))))
        first))
 
