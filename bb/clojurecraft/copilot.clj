@@ -1,6 +1,6 @@
 (ns clojurecraft.copilot
   "Copilot cloud agent sessions on the bot-failure issues, kept going until each issue closes
-   (copilot.yml, every few minutes and on every issue or check event).
+   (copilot.yml, the orchestrator: once a minute on one runner).
 
      bb copilot dispatch [--dry-run]
 
@@ -32,7 +32,7 @@
 (def custom-agent "bot-fixer")                ; .github/agents/bot-fixer.agent.md
 (def default-cap 1)                           ; issues assigned at once (COPILOT_CAP): sessions and their checks take runners from the lanes
 (def start-grace-ms (* 20 60 1000))           ; an assignment with no pull request and no session this long is retried
-(def nudge-every-ms (* 30 60 1000))           ; the least time between two continue comments on one pull request
+(def nudge-every-ms (* 5 60 1000))            ; the least time between two continue comments on one pull request (a live session already holds them off)
 (def max-nudges 8)                            ; continue comments before the issue is left for a person
 (def required-checks #{"unit / unit" "check"}) ; the checks a fix must pass (issue.yml)
 (def nudge-lead "@copilot Go on with #")      ; how every continue comment begins, so the dispatcher counts its own

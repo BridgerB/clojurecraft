@@ -1,30 +1,31 @@
 name: copilot
 
-# Copilot cloud agent sessions on the bot-failure issues, kept going until each closes (bb copilot
-# dispatch, bb/clojurecraft/copilot.clj): an unassigned issue is given to Copilot's bot-fixer agent
-# (.github/agents/bot-fixer.agent.md) while fewer than COPILOT_CAP (default 1: one at a time, no conflicts between fixes) are held, a green ready pull
-# request is merged (its Fixes line closes the issue), a red or abandoned one gets a continue
-# comment, a session that never started is retried. It runs when an issue is filed or reopened,
-# when a fix's checks finish, and every fifteen minutes. GitHub assigns Copilot and hears @copilot
-# only from a user, so it needs the secret COPILOT_TOKEN in the environment copilot-dispatch
-# (deployment branches: main only, so no other branch's workflow can read it): a user token with
-# repo scope (gh's own OAuth token), or a fine-grained one with read and write on actions,
+# The orchestrator: one runner that keeps Copilot cloud agent on the bot-failure issues until each
+# closes. It runs bb copilot dispatch (bb/clojurecraft/copilot.clj) once a minute for most of a
+# job's six hours: an unassigned issue goes to Copilot's bot-fixer agent
+# (.github/agents/bot-fixer.agent.md) while fewer than COPILOT_CAP (default 1: one fix at a time,
+# no conflicts between fixes) are held; runs held for approval are released, an ended session's
+# draft is marked ready, a green pull request is merged (its Fixes line closes the issue), a red one
+# gets a continue comment, a session that never started is retried. The hourly schedule is its
+# watchdog: while a loop runs, the next run waits behind it in the concurrency group and starts
+# the moment it ends, so one loop is always running and never two. A dispatch with dry-run makes
+# one pass that only prints.
+#
+# GitHub assigns Copilot and hears @copilot only from a user, so it needs the secret COPILOT_TOKEN
+# in the environment copilot-dispatch (deployment branches: main only, so no other branch's
+# workflow can read it): a fine-grained token on this repository with read and write on actions,
 # contents, issues and pull requests. The dispatcher never merges a change to the workflows or
-# itself (copilot/guarded), the one way a session's code could reach the token. Without the
-# secret the job says so and does nothing. RACE-style off switch: the variable COPILOT_DISPATCH=false.
+# itself (copilot/guarded), the one way a session's code could reach the token. Without the secret
+# the job says so and stops. To stop the orchestrator: set the variable COPILOT_DISPATCH=false and
+# cancel the running loop.
 
 on:
-  issues:
-    types: [opened, reopened, labeled]
-  workflow_run:
-    workflows: [issue, test]
-    types: [completed]
   schedule:
-    - cron: '7,22,37,52 * * * *'
+    - cron: '7 * * * *'
   workflow_dispatch:
     inputs:
       dry-run:
-        description: only print the moves
+        description: one pass that only prints the moves
         type: boolean
         default: false
 
@@ -36,10 +37,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  dispatch:
-    if: vars.COPILOT_DISPATCH != 'false' && (github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'bot-failure'))
+  orchestrate:
+    if: vars.COPILOT_DISPATCH != 'false'
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 355
     environment: copilot-dispatch    # COPILOT_TOKEN lives here, readable only from main
     steps:
       - uses: actions/checkout@v7
@@ -47,7 +48,7 @@ jobs:
         run: |
           curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
           sudo bash /tmp/bb.sh --version 1.13.225
-      - name: Dispatch
+      - name: Dispatch once a minute
         env:
           GH_TOKEN: ${{ secrets.COPILOT_TOKEN }}
           COPILOT_CAP: ${{ vars.COPILOT_CAP }}
@@ -57,4 +58,10 @@ jobs:
             echo "::notice::no COPILOT_TOKEN secret: nothing dispatched (see the comment at the top of copilot.yml)"
             exit 0
           fi
-          if [ "$DRY_RUN" = true ]; then bb copilot dispatch --dry-run; else bb copilot dispatch; fi
+          if [ "$DRY_RUN" = true ]; then bb copilot dispatch --dry-run; exit 0; fi
+          end=$(( $(date +%s) + 345 * 60 ))      # the job's six hours less a margin; the watchdog run takes over
+          while [ "$(date +%s)" -lt "$end" ]; do
+            echo "== $(date -u +%H:%M:%SZ)"
+            bb copilot dispatch || echo "dispatch failed; the next pass tries again"
+            sleep 60
+          done
