@@ -329,6 +329,22 @@
     (is (= :gather-log
            (:goal/id (make/next-row w {:goal/provides {:item/iron_ingot 4}} plan/goals))))))
 
+(deftest a-climb-that-came-out-here-is-not-cut-again-for-a-spare
+  ;; sim race 38806318231 (issue #161, 206 runs in 73 rounds, world R1/37): the spare pickaxe's
+  ;; gather climbed from the iron mine to the surface, found no tree in reach there, the mine cut
+  ;; stairs back down, and the gather climbed again, every twenty seconds for ninety minutes.
+  ;; Once a climb came out near here a while ago, the spare's climb is not worth it; the ore is
+  (let [col (world/column {[8 69 8] 1 [8 70 8] 136})
+        w (-> (with-furnace (world-holding {:stone_pickaxe 1 :coal 1} false))
+              (assoc :player/pos [5.5 50.0 5.5] :world/chunks {[0 0] col} :time/now 1000000)
+              (memory/remember-column [0 0] col))
+        row #(:goal/id (make/next-row (assoc w :plan/surfaced %)
+                                      {:goal/provides {:item/iron_ingot 4}}
+                                      plan/goals))]
+    (is (= :mine-iron (row [[6 66 6] 990000])) "came out over here ten seconds ago: the ore")
+    (is (= :gather-log (row [[6 66 6] 300000])) "came out long ago: the climb again")
+    (is (= :gather-log (row [[60 66 60] 990000])) "came out far off: a climb from here")))
+
 (def sky-shaft
   "Air from a pocket at [2 50 8] up a stair to [8 56 8], that column open to the sky. A log at
    [14 70 14] is sealed in stone, past the near band, and no route reaches it."

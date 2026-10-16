@@ -171,6 +171,9 @@
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
     "after a :boxed staircase or tunnel"]
+   [:plan/surfaced
+    "[feet ms] where and when the last climb out to the surface came out: a spare's climb is not cut again from below near it for a while"
+    "after a climb out comes out"]
    [:plan/intents "intents started so far; the next one's :intent/id" "after the first intent"]
    [:plan/intent "the intent being executed" "while one runs"]
    [:plan/last "the last intent that ended, with its outcome" "after one ends"]
