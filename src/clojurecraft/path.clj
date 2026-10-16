@@ -37,13 +37,14 @@
 
 (def awkward-types
   "Block definition types the physics cannot simulate though their collision shape is a full cube
-   or nothing (slime and honey bounce and stick, ice slides, a web or powder snow slows, a berry
+   or nothing (slime and honey bounce and stick, ice slides, a web slows, a berry
    bush or magma hurts), and the shapes listed before the game's own were read
    (blocks/partial-shapes, but for those no taller than flat-shape): a route treats them as
-   neither floor nor clear."
+   neither floor nor clear. Not powder snow: no collision for a player, it is clear (blocks/
+   passable-types), and a route goes through it to the floor below (issue #87)."
   #{:slab :stair :fence :wall :fence_gate :trapdoor :door :iron_bars :stained_glass_pane :chain
-    :lantern :snow_layer :farmland :dirt_path :cactus :magma :powder_snow :sweet_berry_bush :bed
-    :candle :candle_cake :cake :skull :wall_skull :player_head :player_wall_head :wither_skull
+    :lantern :snow_layer :farmland :dirt_path :cactus :magma :sweet_berry_bush :bed :candle
+    :candle_cake :cake :skull :wall_skull :player_head :player_wall_head :wither_skull
     :wither_wall_skull :piglinwallskull :flower_pot :end_rod :lightning_rod :pointed_dripstone
     :amethyst_cluster :big_dripleaf :big_dripleaf_stem :scaffolding :anvil :bell :brewing_stand
     :campfire :cauldron :layered_cauldron :lava_cauldron :chest :copper_chest :trapped_chest

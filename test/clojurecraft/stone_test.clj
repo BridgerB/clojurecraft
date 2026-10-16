@@ -180,6 +180,15 @@
            (stone/mine-next pocket (row :dig-gravel)))
         "a climb, eight stairs at a time")
     (is (nil? (stone/climb (standing 64 :stone_pickaxe))) "out of the ground there is none"))
+  (testing
+    "never back under the stairs just cut: sim race 38839665459 runner 3 (issue #71, world R1/19) cut stairs west to y 1, tunnelled east under them and undermined its only way back up"
+    (let [w (standing 16 :stone_pickaxe)
+          down
+          (assoc w :plan/last {:intent/kind :stairs-down :intent/dir [-1 0] :intent/status :done})]
+      (is (= [1 0] (stone/tunnel-heading w)) "plain rock: east first")
+      (is (some? (stone/tunnel-heading down)))
+      (is (not= [1 0] (stone/tunnel-heading down))
+          "the stairs came down westward: not east under them")))
   (testing "a tunnel that died :boxed is not started again from its pocket"
     (let [w (standing 16 :stone_pickaxe)
           died (plan/fail-intent
