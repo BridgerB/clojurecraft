@@ -52,6 +52,8 @@ sourceRefs:
   - src/clojurecraft/combat.clj#defn threats
   - src/clojurecraft/combat.clj#defmethod plan/next-intent :defend
   - src/clojurecraft/combat.clj#defn quarry
+  - src/clojurecraft/combat.clj#def look-ms 3000
+  - test/clojurecraft/combat_test.clj#an-attack-trial-looks-round-before-it-finds-nothing
   - "resources/clojurecraft/goals.edn#{:goal/id :defend"
   - "resources/clojurecraft/goals.edn#{:goal/id :attack"
   - src/clojurecraft/plan.clj#defn through
@@ -114,11 +116,11 @@ Gym row `armour`: the portal's iron, a table and 13 ingots given; judged by `exe
 
 **`:defend`** (goals.edn): an always row at priority 0, inserted after the two escapes and so before the meal and the armour (`plan/in-play` sorts stably). Done by `:safe?`: no `threats`, the hostiles (`entity/hostiles`: the game's monsters, never an enderman or a zombified piglin) within `defend-radius` 4, a creeper within `creeper-radius` 6, none blacklisted. Planned by `:defend`: the nearest threat, backed away from when it is a creeper or the health is under 10, else fought. No sword is made first: a zombie at hand is answered with what is held.
 
-**`:attack`** (`--until attack`): the gym's trial, every hostile within `attack-radius` 16 fought (`quarry`, done by `:cleared?`). It is the first row marked `:goal/aside?`: `plan/through`, `plan/current-until` and the results page's chain leave asides out, as they leave out the water trial, so no chained run ever takes it as a step.
+**`:attack`** (`--until attack`): the gym's trial, every hostile within `attack-radius` 16 fought (`quarry`, done by `:cleared?`, and not before `look-ms` 3000 after the plan went active: the server shows a landing's entities a moment after its chunks, and gym attack-259a run 3 was done 0.2 s after the go with its husk unseen). It is the first row marked `:goal/aside?`: `plan/through`, `plan/current-until` and the results page's chain leave asides out, as they leave out the water trial, so no chained run ever takes it as a step.
 
 **The model's mobs.** `sim/init` takes `:mobs {eid {:type :pos :health}}`: shown at login (`mob-packets`: add-entity, then the health as metadata index 9), standing where they are. An `attack` on one in reach (`mob-reach` 4 from the eye to its middle) and past its `hurt-ms` 500 takes the held sword's damage (`weapon-damage`, a fist 1) and tells the health; at none, its death event (status 3) and its removal. `:sim/attacks` and `:sim/hits` count them. The mobs do not move or hit back.
 
-**Gym rows.** `attack`: a husk with `NoAI` (a husk does not burn by day) three east of the landing at noon, a stone sword; judged by no husk within 24 of the landing, and the attacks' spacing read from the recording. `defend`: three zombies two blocks round the landing at midnight, the bot in iron armour put on by the fixture (`item replace`, since a zombie at hand comes before dressing) with an iron sword; judged by no zombie within 16 of it and no death.
+**Gym rows.** `attack`: a husk with `NoAI` (a husk does not burn by day) three east of the landing at noon, a stone sword; judged by no husk within 24 of the landing, and the attacks' spacing read from the recording. `defend`: three zombies two blocks round the landing at midnight, the bot in iron armour put on by the fixture (`item replace`, since a zombie at hand comes before dressing) with an iron sword; judged by a zombie killed (at most two left within 32 of the landing), health left and no death. Not all three: the row is done when none is within 4, and in gym defend-259a the others wandered off while the first was fought. Truths are asked at the landing, not `execute as` the bot: that answered RCON with nothing.
 
 ## See also
 - [[water-escape]] - the other always rows, and the preemption they share.

@@ -185,3 +185,13 @@
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (empty? (:sim/mobs sim)))
     (is (= 4 (:sim/hits sim)) "the sword was taken into the hand first")))
+
+(deftest an-attack-trial-looks-round-before-it-finds-nothing
+  ;; gym attack-259a run 3 (run 38881958899): done 0.2 s after the go, the husk still unseen
+  (let [w (assoc (standing {}) :time/now 5000)]
+    (is (not (plan/done-by (assoc w :plan/since 4000) (row :attack))) "a second in: still looking")
+    (is (plan/done-by (assoc w :plan/since 1000) (row :attack))
+        "four seconds in, nothing near: done")
+    (is (not (plan/done-by
+              (assoc w :plan/since 1000 :world/entities {7 (mob :husk [14.5 64.0 8.5] 20.0)})
+              (row :attack))))))

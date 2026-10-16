@@ -233,7 +233,15 @@
                          (<= (physics/distance pos (:entity/pos e)) attack-radius))))
           (entity/hostiles world))))
 
-(defmethod plan/done-by :cleared? [world _] (or (nil? (:player/pos world)) (empty? (quarry world))))
+(def look-ms 3000)                    ; ms an :attack trial looks round before it may find nothing to kill
+
+(defmethod plan/done-by :cleared?
+  ;; nothing to kill, once look-ms have passed since the plan went active: the server shows the
+  ;; entities round a landing a moment after its chunks, and gym attack-259a run 3 (run
+  ;; 38881958899) was done 0.2 s after the go with the husk three blocks off still unseen
+  [world _]
+  (or (nil? (:player/pos world))
+      (and (empty? (quarry world)) (>= (- (:time/now world) (:plan/since world 0)) look-ms))))
 
 (defmethod plan/next-intent :attack
   [world _ _]

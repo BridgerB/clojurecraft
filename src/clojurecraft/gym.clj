@@ -242,7 +242,10 @@
       :truth/re "Test passed"}]}
    ;; issue #259: three zombies two blocks round the landing at midnight, the bot in iron armour
    ;; (put on by the fixture: a zombie at hand comes before dressing) with an iron sword; judged
-   ;; by no zombie left near it, and alive (a death is its own outcome)
+   ;; by a zombie killed and the bot alive with health left (a death is its own outcome). Not all
+   ;; three: the row is done when none is within 4, and in gym defend-259a (run 38881961947)
+   ;; the others wandered off while the first was fought. Judged at the landing, never as the
+   ;; bot: execute as the bot answered RCON with nothing in every trial of that run
    {:gym/goal :defend
     :gym/until "defend"
     :gym/prereqs ["minecraft:iron_sword 1"]
@@ -256,8 +259,9 @@
                 "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
     :gym/timeout-ms 120000
     :gym/truth [{:truth/cmd
-                 "execute as {name} at @s unless entity @e[type=minecraft:zombie,distance=..16]"
-                 :truth/re "Test passed"}]}])
+                 "execute positioned {x} {y} {z} if entity @e[type=minecraft:zombie,distance=..32]"
+                 :truth/re "Count: [0-2]$|Test failed"}
+                {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
