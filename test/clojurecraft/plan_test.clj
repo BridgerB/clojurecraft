@@ -6,6 +6,7 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -205,6 +206,18 @@
         bottoms [(memory/nearest-log level (game/eye level) 48 #{} wood/standing-trunk?)]]
     (is (nil? (wood/trees-climb level bottoms))
         "a trunk at the eye's height is hunted for, not climbed toward")))
+
+(deftest a-trunk-across-powder-snow-is-walked-to
+  ;; sim race 38811417241 runner 2 (issue #87, world R2/20): out of the mine on one cobblestone
+  ;; block in a powder-snow field, a spruce eight blocks off; powder snow was neither floor nor
+  ;; clear to a route, so no route had a move, and the plan waited :no-log. A player sinks
+  ;; through it: the route goes through it to the floor below
+  (let [snow (blocks/default-state :powder_snow)
+        field (into {}
+                    (for [x (range 4 13) z (range 4 13) :when (not= [x z] [8 8])] [[x 63 z] snow]))
+        w (remembered (merge field {[14 64 8] 136 [14 65 8] 136}) [8.5 64.0 8.5])]
+    (is (= :clear (path/classify w [9 63 8])) "powder snow: no collision for a player")
+    (is (= :walk (:intent/kind (wood/near-walk w))) "the trunk is walked to through the snow")))
 
 (def quarry
   "A quarry two wide and two deep in the stone, open to the sky, as the stone mine digs round its

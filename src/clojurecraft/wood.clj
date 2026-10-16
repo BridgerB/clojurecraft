@@ -139,9 +139,9 @@
   [world]
   (let [feet (intent/feet world)
         trunks (->> (memory/positions-now world blocks/log-states)
+                    (memory/nearest-first (game/eye world) far-radius)
                     (remove (skipped world))
                     (filter #(standing-trunk? world %))
-                    (memory/nearest-first (game/eye world) far-radius)
                     (take far-candidates))]
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
