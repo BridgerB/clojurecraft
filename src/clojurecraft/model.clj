@@ -245,6 +245,9 @@
     ":pour, :use-on, :await"]
    [:intent/fluid "what a :scoop takes: :water (when absent) or :lava" "a :scoop for lava"]
    [:intent/steps "how many steps a :tunnel-to takes before the planner looks again" ":tunnel-to"]
+   [:intent/reach
+    "how near a :tunnel-to's target counts as there, from the feet cell's centre (fortress/reach, 6, when absent)"
+    "a :tunnel-to to a spawner"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
     ":tunnel-to, during a step"]

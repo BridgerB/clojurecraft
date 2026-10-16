@@ -21,6 +21,9 @@ sourceRefs:
   - src/clojurecraft/blaze.clj#defn meal
   - src/clojurecraft/blaze.clj#defn wary?
   - src/clojurecraft/blaze.clj#defn to-spawner
+  - src/clojurecraft/blaze.clj#defn walkable?
+  - src/clojurecraft/blaze.clj#defn at-spawner?
+  - test/clojurecraft/blaze_test.clj#a-spawner-under-the-feet-is-tunnelled-to-its-floor
   - src/clojurecraft/blaze.clj#defmethod plan/next-intent :blaze-rods
   - src/clojurecraft/blaze.clj#defmethod intent/run :camp
   - "resources/clojurecraft/goals.edn#{:goal/id :blaze-rods"
@@ -61,7 +64,7 @@ Issue #262, the first stage past the fortress and a child of the roadmap #10. Se
 3. Wary (`wary?`: the health under `eat-under` 14) with the food under the healing level: the `meal` first. Gym blaze-7b run 2 fought on at 12.7 with the food at 17, and one blaze's volley took it to nothing in two seconds, under 10 only on the way down.
 4. A rod lying near (`rod-lying`: a drop that may be a rod within `drops/drop-radius` 8 of the feet, its cell not blacklisted by a failed pickup): `:collect-drops` of `:blaze_rod` at its cell. First, because it lies there now and the blazes stay.
 5. The blaze to fight (`quarry`): of the `candidates` 3 nearest within `fight-radius` 12 (`blazes`: alive, not a blacklisted ghost), the first `reachable?`: its feet no more than `over-feet` 3 over the bot's nor `under-feet` 2 under, and a route within a walk's range of its cell on the plane (`intent/routable?` judges the plane only). Gym blaze-fortress-a tunnelled to its spawner and failed three fights in a row `:unreachable` on blazes seen through the fortress's walls, every run. The engage walks on toward a blaze hovering out of reach (`combat/pressing?`).
-6. The spawner on record nearest the eye within 256, not blacklisted: when the eye is more than `camp-range` 8 from it, `to-spawner` walks there (`intent/routable?`) or tunnels by the fortress's steps (`:tunnel-to`, never opening a cell beside lava); within 8, a `:camp` by it.
+6. The spawner on record nearest the eye within 256, not blacklisted: unless the bot is `at-spawner?` (the feet within `spawner-reach` 2 of it, or the eye within `camp-range` 8 and the spawner `walkable?`: the feet within a block of its height, its blazes' floor, and a route to it), `to-spawner` walks there when it is walkable, else tunnels by the fortress's steps (`:tunnel-to` with `:intent/reach` 2, never opening a cell beside lava nor the spawner itself); at it, a `:camp`. Gym blaze-fortress-b tunnelled to within 6 (the fortress tunnel's own reach), four over the spawner in the wall, and camped there out of reach of every blaze it made for ten minutes, every run.
 7. Nothing: a wait `:no-blaze` (the plan fails after `plan/wait-ticks`).
 
 The `:defend` row (priority 0) still answers anything hostile within 4 first, a blaze too, and a wither skeleton beside the spawner.

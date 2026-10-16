@@ -34,8 +34,9 @@
   #{:nether_bricks :nether_brick_fence :nether_brick_stairs})
 
 (def unbreakable
-  "Blocks a tunnel never opens: what cannot be dug, and the portal home."
-  #{:bedrock :obsidian :crying_obsidian :barrier :nether_portal :end_portal_frame})
+  "Blocks a tunnel never opens: what cannot be dug, the portal home, and a spawner (the blaze
+   rods come from it, issue #262: a tunnel to it stops beside it)."
+  #{:bedrock :obsidian :crying_obsidian :barrier :nether_portal :end_portal_frame :spawner})
 
 (defn brick? "Is state id a fortress block?" [id] (contains? fortress-kinds (blocks/name-of id)))
 
@@ -118,19 +119,22 @@
   (first (filter #(safe? world feet %) (moves feet target))))
 
 (defn arrived?
-  "Is the bot within reach of target?"
-  [world target]
-  (<= (physics/distance (physics/centre (intent/feet world)) (physics/centre target)) reach))
+  "Is the bot within reach of target (from the feet cell's centre), or within r when given?"
+  ([world target] (arrived? world target reach))
+  ([world target r]
+   (<= (physics/distance (physics/centre (intent/feet world)) (physics/centre target)) r)))
 
 ;; ---------------------------------------------------------------- the :tunnel-to intent
 
 (defmethod intent/run :tunnel-to
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
-  ;; worked until the bot stands in the cell stepped into; done at the target or after
-  ;; :intent/steps steps, failed :blocked when no step is safe
-  [world {:intent/keys [target steps taken move from] :or {taken 0} :as i} event]
+  ;; worked until the bot stands in the cell stepped into; done at the target (within
+  ;; :intent/reach, reach when absent) or after :intent/steps steps, failed :blocked when no step
+  ;; is safe
+  [world {:intent/keys [target steps taken move from] r :intent/reach :or {taken 0 r reach} :as i}
+   event]
   (let [feet (intent/feet world)]
-    (cond (or (arrived? world target) (>= taken steps))
+    (cond (or (arrived? world target r) (>= taken steps))
           (-> world
               (assoc :player/controls {})
               intent/done)
