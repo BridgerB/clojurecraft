@@ -7,7 +7,8 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
-            [clojurecraft.fortress :as fortress]))
+            [clojurecraft.fortress :as fortress]
+            [clojurecraft.intent :as intent]))
 
 (def netherrack (blocks/default-state :netherrack))
 (def air (blocks/default-state :air))
@@ -94,3 +95,38 @@
     (is (fortress/safe? (rock {}) [0 64 0] [1 0 0]) "the same step through netherrack is safe")
     (is (not (fortress/safe? w [0 64 0] [1 0 0])) "the spawner is the cell stepped into")
     (is (contains? fortress/unbreakable :spawner))))
+
+(deftest a-step-the-feet-left-is-chosen-again
+  ;; gym blaze-fortress-h (run 38905665758) run 1: the tunnel into the spawner's room failed
+  ;; :no-path twice, its step's walk back to where the step began behind the feet
+  (is (not (fortress/off-step? [0 64 0] [0 64 0] [1 0 0])) "where it began")
+  (is (not (fortress/off-step? [1 64 0] [0 64 0] [1 0 0])) "where it steps into")
+  (is (not (fortress/off-step? [0 65 0] [0 64 0] [1 0 0])) "a jump on the way")
+  (is (fortress/off-step? [-2 64 0] [0 64 0] [1 0 0]) "knocked two back")
+  (is (fortress/lost-way? {:intent/from [0 64 0]
+                           :intent/child {:intent/kind :walk
+                                          :intent/target [0 64 0]
+                                          :intent/status :failed
+                                          :intent/reason :no-path}}))
+  (is (not (fortress/lost-way? {:intent/from [0 64 0]
+                                :intent/child {:intent/kind :walk
+                                               :intent/target [1 64 0]
+                                               :intent/status :failed
+                                               :intent/reason :no-path}}))
+      "the walk into the cell stepped into is the step itself")
+  (let [w (assoc (rock {})
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/pos [-1.5 64.0 0.5]
+                 :plan/intent
+                 {:intent/kind :tunnel-to
+                  :intent/target [4 64 0]
+                  :intent/steps 8
+                  :intent/move [1 0 0]
+                  :intent/from [1 64 0]
+                  :intent/status :active})
+        w (intent/run w (:plan/intent w) {:event/kind :tick :event/now 0})]
+    (is (nil? (:intent/move (:plan/intent w))) "the step dropped, chosen again next tick")
+    (is (= :active (:intent/status (:plan/intent w))))))
