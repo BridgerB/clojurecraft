@@ -69,19 +69,30 @@
 (defn banks
   "Cells the feet could stand in, nearest first, within bank-radius of feet on the plane and
    between bank-drop under the float-top and bank-rise over it (a ledge higher than that is
-   out of the impulse's lift); blacklist removes cells that failed."
-  [world [fx _ fz :as feet] surface blacklist]
-  (->> (for [dx (range (- bank-radius) (inc bank-radius))
-             dz (range (- bank-radius) (inc bank-radius))
-             :let [top (float-top world feet surface)]
-             y (range (- top bank-drop) (+ top bank-rise 1))
-             :let [cell [(+ fx dx) y (+ fz dz)]]
-             :when (and (not (blacklist cell)) (path/standable? world cell))]
-         cell)
-       (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
-                                                         (physics/centre cell))
-                            (- (physics/y-of cell))]))
-       first))
+   out of the impulse's lift); blacklist removes cells that failed. Under the open sky (the feet
+   with nothing over them but water and air, terrain/under-sky?), only banks under it too: a
+   pocket under the rock beside the water is no way out of the sea over it. Issue #89 (sim race
+   38811426215 runner 8, worlds R4/21 and R1/32): a bot that dug up into the sea from its tunnel
+   under the sea floor swam back into the tunnel's dry end, the trap cleared, and it climbed and
+   dug again, until its run's time ran out."
+  ([world feet surface blacklist]
+   (banks world
+          feet
+          surface
+          blacklist
+          (if (terrain/under-sky? world feet) #(terrain/under-sky? world %) any?)))
+  ([world [fx _ fz :as feet] surface blacklist keep?]
+   (->> (for [dx (range (- bank-radius) (inc bank-radius))
+              dz (range (- bank-radius) (inc bank-radius))
+              :let [top (float-top world feet surface)]
+              y (range (- top bank-drop) (+ top bank-rise 1))
+              :let [cell [(+ fx dx) y (+ fz dz)]]
+              :when (and (not (blacklist cell)) (path/standable? world cell) (keep? cell))]
+          cell)
+        (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
+                                                          (physics/centre cell))
+                             (- (physics/y-of cell))]))
+        first)))
 
 (defn ahead
   "The cell one step from feet toward bank on the plane, along the larger axis of the way."
@@ -208,24 +219,28 @@
 (defn far-shore
   "With no bank in reach and the water open to the sky over the feet: the nearest column, along
    eight bearings from bank-radius out to shore-reach, whose top is dry ground (stairs/dry-top?),
-   as the point at the water's surface to swim toward; nil when none is loaded there. Each pass
+   as the point at the water's surface to swim toward. Each pass
    that looks for a bank looks again, so the bank found near the shore takes over. Before it, an
    escape at sea rose to the surface and floated there until it timed out: sim race
    38811426215 runner 8 (issue #89, worlds R4/21 and R1/32 at 76010d2) had bots under the sea floor
-   with land 33 and 40 blocks off, the only way out up through the water."
+   with land 33 and 40 blocks off, the only way out up through the water. With none, the point
+   over the landing (:plan/go-at), which is land: world R4/30's bot stood under the sea 180
+   blocks from it, no shore within reach. nil with neither."
   [world [fx _ fz] surface]
-  (->> (range 8)
-       (keep (fn [k]
-               (let [a (* k (/ math/PI 4))
-                     [dx dz] [(math/cos a) (math/sin a)]]
-                 (some (fn [d]
-                         (let [x (long (math/floor (+ fx 0.5 (* d dx))))
-                               z (long (math/floor (+ fz 0.5 (* d dz))))]
-                           (when (stairs/dry-top? world [x z]) [d [x surface z]])))
-                       (range bank-radius (inc shore-reach))))))
-       (sort-by first)
-       (map second)
-       first))
+  (or (->> (range 8)
+           (keep (fn [k]
+                   (let [a (* k (/ math/PI 4))
+                         [dx dz] [(math/cos a) (math/sin a)]]
+                     (some (fn [d]
+                             (let [x (long (math/floor (+ fx 0.5 (* d dx))))
+                                   z (long (math/floor (+ fz 0.5 (* d dz))))]
+                               (when (stairs/dry-top? world [x z]) [d [x surface z]])))
+                           (range bank-radius (inc shore-reach))))))
+           (sort-by first)
+           (map second)
+           first)
+      (when-let [[hx _ hz] (:plan/go-at world)]
+        [(long (math/floor hx)) surface (long (math/floor hz))])))
 
 (defn shore-controls
   "Rising with jump held, and toward shore (far-shore) when there is one."
