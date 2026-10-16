@@ -401,14 +401,16 @@
              (:snapshot/file snap))))
 
 (def judge-wall-ms 240000)            ; a judge's wall-clock budget a snapshot: four minutes, inside issue.yml's 15
+(def slow-ms (quot judge-wall-ms 2))  ; a judge slower than this is no evidence: on a slower runner it would halt (issue #299)
 
 (defn judge!
   "Judge the snapshot at path as the issue check does (judged, halted after judge-wall-ms of wall
    time: a snapshot whose code plays too slowly to pass the moment recurs, never outlasts the
    check; PR #197's base planner took 862 s on one), its captured world read and prepared: print
-   one JUDGE line (the signature, why and when its moment was kept, the window,
-   whether it recurs, how it ended, simulated and wall ms) and the STORY of what the bot did over
-   the window, one line an intention fact. Returns {:path :recurs? :played}."
+   one JUDGE line (the signature, why and when its moment was kept, the window, whether it
+   recurs, how it ended, simulated and wall ms, and :slow? past slow-ms: a verdict that took half
+   the budget could halt on a slower runner, so the churn files no such snapshot) and the STORY of
+   what the bot did over the window, one line an intention fact. Returns {:path :recurs? :played}."
   [path]
   (let [t0 (System/currentTimeMillis)
         snap (capture/read-world path)
@@ -425,7 +427,8 @@
                       :run/signature (:run/signature r)
                       :plan/status (get-in r [:plan :plan/status])
                       :sim-ms (- (:run/ms r) (:run/from r))
-                      :wall-ms (- (System/currentTimeMillis) t0)}))
+                      :wall-ms (- (System/currentTimeMillis) t0)
+                      :slow? (> (- (System/currentTimeMillis) t0) slow-ms)}))
     (doseq [line (:run/story r)] (println "STORY" path (pr-str line)))
     {:path path :recurs? recurs :played r}))
 
