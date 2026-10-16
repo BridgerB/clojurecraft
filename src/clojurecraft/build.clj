@@ -1515,6 +1515,30 @@
        (nil? (make/take-table-along world))
        (table-at-hand? world)))
 
+(def kit-sticks 2)                    ; sticks a build carries: one pickaxe's worth, made again where the cast wore the last out
+
+(defn sticks-at-hand?
+  "Could kit-sticks be made without going out for anything: the needs planner's next step toward
+   them a craft from planks or logs held, not a gather (make/fetch?)?"
+  [world]
+  (let [row (make/next-row world
+                           {:goal/id :kit-sticks :goal/provides {:item/stick kit-sticks}}
+                           plan/goals)]
+    (boolean (and (map? row) (not (make/fetch? row))))))
+
+(defn carry-sticks?
+  "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or placed
+   within reach already (the table first: carry-table?, so the planks a table needs are never
+   spent on sticks), and they can be made from what is held (sticks-at-hand?). A table and
+   cobblestone make no pickaxe without sticks: a probe of world R3/12 seed 1 from spawn on main
+   (Refs #178) wore out its pickaxes in the cast holding a table, 684 cobblestone and one plank,
+   no sticks, and cut stairs up through deepslate by hand for a log, fifteen seconds a block,
+   until its ninety minutes ran out."
+  [world]
+  (and (< (get (make/counts world) :stick 0) kit-sticks)
+       (or (pos? (get (make/counts world) :crafting_table 0)) (some? (make/take-table-along world)))
+       (sticks-at-hand? world)))
+
 (defn held-first
   "What the needs planner does for what a build row holds before it starts: the tools of
    :goal/holds (a pickaxe for the way down to lava and the digs: sim race 38477665389, issue #70,
@@ -1526,7 +1550,8 @@
   (let [n (if plan (blocks-needed world plan) 0)
         holds (cond-> (or (:goal/holds goal) {})
                 (pos? n) (assoc :item/cobblestone n)
-                (carry-table? world) (assoc :item/crafting_table 1))]
+                (carry-table? world) (assoc :item/crafting_table 1)
+                (carry-sticks? world) (assoc :item/stick kit-sticks))]
     (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))))
 
 (defmethod plan/next-intent :build
