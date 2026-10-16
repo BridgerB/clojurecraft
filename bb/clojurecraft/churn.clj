@@ -113,7 +113,7 @@
   "Report a batch's runs: the issues, the job summary's wall, the page's batch, a win."
   [{:keys [kind run sha code-at runner data-dir]} n dir runs counts]
   (let [head (title kind run runner n sha)
-        milestones (page/chain (page/goals))
+        milestones (page/chain (page/goals) (page/race-end))
         round (page/round runs
                           (page/marks-under dir)
                           milestones

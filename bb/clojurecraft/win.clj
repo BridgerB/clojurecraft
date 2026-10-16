@@ -12,25 +12,33 @@
             [clojure.string :as str]
             [clojurecraft.failures :as failures]))
 
-(def tag-prefix "nether-")             ; a release a winning run: nether-<run id>
-
 ;; ---------------------------------------------------------------- the winners as values
 
 (defn winners
-  "The real runs that reached the goal: [{:bot name :runner n} ...], from the RESULT lines under
-   dir (a racelog artifact is racelog-<sha>-<runner>, a churn batch's race-<sha>-<runner>)."
+  "The real runs that reached the goal: [{:bot name :runner n :until target} ...], from the
+   RESULT lines under dir (a racelog artifact is racelog-<sha>-<runner>, a churn batch's
+   race-<sha>-<runner>); :until is the RESULT's own, the target the run was won at (the Nether
+   until issue #261 raised the race to the fortress)."
   [runs]
   (vec (for [r runs
              :when (and (:ok r) (= :real (failures/source r)))
              :let [[_ n] (re-matches #"(?:racelog|race)-[0-9a-f]+-(\d+)" (str (:run/artifact r)))]]
          {:bot (:run/bot r)
+          :until (:until r "nether") ; RESULTs have carried :until since the race began
           :runner (some-> n
                           parse-long)})))
+
+(defn goal-name
+  "The target the winners reached, as a release names it (\"the fortress\")."
+  [ws]
+  (str "the " (:until (first ws))))
 
 (defn notes
   "The release's notes: who won, where, and how to see it again."
   [run sha ws]
-  (str "A bot reached the Nether in race run "
+  (str "A bot reached "
+       (goal-name ws)
+       " in race run "
        run
        " at "
        (subs (str sha) 0 7)
@@ -66,30 +74,37 @@
          (str f))))
 
 (defn release-runs!
-  "Tag sha nether-<run>-<first winner> and create the release with the winners among runs and
-   their recordings (from rec-dir when given, the churn's own files; else downloaded from the
-   run's race artifacts); nothing when no run won. Prints what it did."
+  "Tag sha <until>-<run>-<first winner> (nether-... before issue #261) and create the release
+   with the winners among runs and their recordings (from rec-dir when given, the churn's own
+   files; else downloaded from the run's race artifacts); nothing when no run won. Prints what
+   it did."
   [runs run sha rec-dir]
   (let [ws (winners runs)]
     (cond (empty? ws) (println "no winner")
           :else
-          (let [tag (str tag-prefix run "-" (:bot (first ws)))
+          (let [tag (str (:until (first ws)) "-" run "-" (:bot (first ws)))
                 files (if rec-dir
                         (local-recordings rec-dir ws)
                         (recordings! run sha ws (fs/create-dirs (str "win-" run))))]
-            (apply
-             p/shell
-             "gh"
-             "release"
-             "create"
-             tag
-             "--target"
-             sha
-             "--title"
-             (str (count ws) " bot" (when (> (count ws) 1) "s") " reached the Nether (run " run ")")
-             "--notes"
-             (notes run sha ws)
-             files)
+            (apply p/shell
+                   "gh"
+                   "release"
+                   "create"
+                   tag
+                   "--target"
+                   sha
+                   "--title"
+                   (str (count ws)
+                        " bot"
+                        (when (> (count ws) 1) "s")
+                        " reached "
+                        (goal-name ws)
+                        " (run "
+                        run
+                        ")")
+                   "--notes"
+                   (notes run sha ws)
+                   files)
             (println "released" tag
                      "with" (count files)
                      "recordings:" (str/join ", " (map :bot ws)))))))

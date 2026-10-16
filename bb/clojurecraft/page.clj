@@ -19,8 +19,8 @@
    is filed as. Every instant is an ISO-8601 string in UTC; durations are seconds. rounds.edn
    holds one such map a line, oldest first, so the page can always be
    rebuilt from the data and the data read without the page. The chain is goals.edn's targets in
-   priority order up to the Nether, read from the file, so the page and the bot agree on what a
-   milestone is.
+   priority order up to the race's target (ci/race.edn's :race/until: the fortress since issue
+   #261), both read from their files, so the page and the bot agree on what a milestone is.
 
    The page borrows from steve's and ruststeve's dashboards what serves a static page: a numbered
    ladder with a tick per milestone ever reached and split times, the funnel of how many get how
@@ -40,7 +40,7 @@
 (def branch "gh-pages")                ; the page's branch: index.html and rounds.edn, nothing else
 (def rounds-file "rounds.edn")
 (def goals-file "resources/clojurecraft/goals.edn")
-(def race-end "nether")                ; the --until the races play to: the chain ends there
+(def race-file "ci/race.edn")          ; the race's settings: its :race/until is where the chain ends
 (def strip-rounds 30)                  ; rounds shown in each milestone's strip, newest last
 (def table-rounds 40)                  ; rounds listed in the table, newest first
 
@@ -60,22 +60,24 @@
    :portal-kit :portal
    :cast-one :portal
    :portal :portal
-   :nether :nether})
+   :nether :nether
+   :fortress :nether})
 
 ;; ---------------------------------------------------------------- the chain
 
 (defn chain
   "The milestones in order, from the goal table: every target with a --until name that is not an
-   escape or an aside, by priority, up to and with the one whose until is race-end."
-  [goals]
+   escape or an aside, by priority, up to and with the one whose until is end (the race's
+   :race/until, race-end)."
+  [goals end]
   (let [targets (->> goals
                      (filter #(and (:goal/target? %)
                                    (:goal/until %)
                                    (not (:goal/always? %))
                                    (not= :wade (:goal/plan %))))
                      (sort-by :goal/priority))
-        [before end] (split-with #(not= race-end (:goal/until %)) targets)]
-    (mapv :goal/id (concat before (take 1 end)))))
+        [before from] (split-with #(not= end (:goal/until %)) targets)]
+    (mapv :goal/id (concat before (take 1 from)))))
 
 ;; ---------------------------------------------------------------- a round from its runs
 
@@ -565,6 +567,13 @@
   []
   (edn/read-string {:default (fn [_ v] v)} (slurp goals-file)))
 
+(defn race-end
+  "The --until the races play to (ci/race.edn's :race/until): the chain ends there. Issue #261
+   raised it from the Nether to the fortress; the page follows the file, never a constant of its
+   own."
+  []
+  (:race/until (edn/read-string (slurp race-file))))
+
 (defn read-rounds
   "The rounds in a rounds.edn, oldest first."
   [path]
@@ -621,7 +630,8 @@
   [rounds-path out-dir]
   (fs/create-dirs out-dir)
   (let [rounds (read-rounds rounds-path)]
-    (spit (str (fs/path out-dir "index.html")) (html (rows rounds) (chain (goals)) (repo)))
+    (spit (str (fs/path out-dir "index.html"))
+          (html (rows rounds) (chain (goals) (race-end)) (repo)))
     (println "built" (str (fs/path out-dir "index.html")) "from" (count rounds) "rounds")))
 
 (defn git!
@@ -703,7 +713,7 @@
     (let [runs (failures/runs-under a)]
       (prn (round runs
                   (marks-under a)
-                  (chain (goals))
+                  (chain (goals) (race-end))
                   (merge {:kind (keyword b)
                           :run (parse-long c)
                           :commit d
@@ -713,7 +723,7 @@
     "wall"
     (doseq [[stage total sigs] (wall (mapv (fn [[sig rs]] [sig (count rs)])
                                            (failures/grouped (failures/runs-under a)))
-                                     (chain (goals)))]
+                                     (chain (goals) (race-end)))]
       (println (name stage)
                total
                (str/join ", " (for [[sig n] (take 3 sigs)] (str (pr-str sig) " " n)))))
