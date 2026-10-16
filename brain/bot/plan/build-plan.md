@@ -29,6 +29,9 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn way-back
   - test/clojurecraft/build_test.clj#a-site-left-for-a-pickaxe-is-gone-back-to
   - src/clojurecraft/build.clj#defn work-op
+  - src/clojurecraft/build.clj#defn boxed-way?
+  - src/clojurecraft/build.clj#defn to-height
+  - test/clojurecraft/build_test.clj#a-way-to-the-site-boxed-in-is-left-by-the-way-out
   - src/clojurecraft/build.clj#defn way-dig
   - src/clojurecraft/build.clj#defn tool-first
   - test/clojurecraft/build_test.clj#a-build-dig-puts-the-stowed-pickaxe-in-hand-first
@@ -117,7 +120,7 @@ In solid rock the cast places four blocks: the walls its own digging opened (the
 ## Gotchas
 - **A dig never takes obsidian**: `dig-op`'s done holds when its cell is obsidian (`no-dig-can-take-obsidian`).
 - **Water above, never beside.** The model ([[server-model]]) turns a lava source with water above or beside it to obsidian, as vanilla does; the bot puts the water above because on a server the source's open side flows first.
-- **The landing is reached at the lava's height**: a way dug toward a stand starts at the feet's column at the stand's height, so `clear-stand` only digs toward a stand at the feet's height; another height is stairs first (`to-height`). The landing's ops go through `toward-stand` alone: as a room cell, out of reach 23 over the sea, it had no stand and the cast failed `:no-stand`.
+- **The landing is reached at the lava's height**: a way dug toward a stand starts at the feet's column at the stand's height, so `clear-stand` only digs toward a stand at the feet's height; another height is stairs first (`to-height`). A staircase or tunnel child that dies `:boxed` (`boxed-way?`) puts the feet's cell in `:plan/boxed-at` and is dropped, not failed, and from that pocket `to-height` takes the way out the mine takes (`stone/retreat`, `stone/climb`) for the next descent from elsewhere: sim race 38806318231 (issue #130, world R3/11) met an aquifer at y 11 on the way down to a landing at y -22 and was sent down the same refused stairs from the same cell three times, `:boxed` (`a-way-to-the-site-boxed-in-is-left-by-the-way-out`). The landing's ops go through `toward-stand` alone: as a room cell, out of reach 23 over the sea, it had no stand and the cast failed `:no-stand`.
 - **The footprint is every cell the plan works** (`every-cell-the-plan-works-is-in-its-footprint`), so the site's fluid check covers them all.
 - **A stand inside the ground is dug, not walked** (`a-stand-inside-a-hill-is-dug`), and the frame's rock in the way is kept.
 - **A stand over water is not walked onto**: the place is made from a cell that already reaches the block (`a-pad-stand-over-water-is-placed-from-the-shore`, `a-stand-up-a-bank-is-passed-over-for-one-a-route-reaches`, issue #45).
