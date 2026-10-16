@@ -3,13 +3,13 @@ title: Stronghold
 description: How the bot finds the stronghold (issue #265) - an eye of ender's flight read from the entity it becomes, a throw as a fact, and two throws' lines crossed on the plane by a pure function that answers nothing when they are parallel or cross behind a throw.
 type: reference
 tags: [bot, plan, stronghold, eyes, goals]
-aliases: [stronghold.clj, triangulate, :stronghold/throws, :throw/from, :throw/dir, min-crossing, :throw-eye, :eye-throw, :thrown?, :no-eye, :eye-unmoved, throw, bearing]
+aliases: [stronghold.clj, triangulate, :stronghold/throws, :throw/from, :throw/dir, min-crossing, :throw-eye, :eye-throw, :thrown?, :no-eye, :eye-unmoved, throw, bearing, :stronghold, :frames-seen?, stronghold-next, second-spot, crossing, hop, explore, :near-stronghold, :no-way, :no-frame, :truth/at, :frame, :portal-room, :in-portal-room?, :intent/dry?, dry?, portal-room]
 status: verified
 lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/stronghold.clj#def min-crossing 0.035
-  - src/clojurecraft/stronghold.clj#defn cross
+  - src/clojurecraft/stronghold.clj#The 2-D cross product
   - src/clojurecraft/stronghold.clj#defn triangulate
   - test/clojurecraft/stronghold_test.clj#two-throws-from-apart-cross-at-the-stronghold
   - test/clojurecraft/stronghold_test.clj#parallel-throws-say-nothing
@@ -28,11 +28,44 @@ sourceRefs:
   - test/clojurecraft/stronghold_test.clj#an-eye-is-thrown-followed-and-its-line-kept
   - test/clojurecraft/stronghold_test.clj#no-eye-seen-fails-the-throw
   - test/clojurecraft/gym_test.clj#the-throw-trial-holds-the-throws-line-to-the-located-stronghold
+  - src/clojurecraft/stronghold.clj#def drop-grace-ms 1000
+  - src/clojurecraft/stronghold.clj#defn eye-drop
+  - src/clojurecraft/stronghold.clj#defn frames
+  - src/clojurecraft/stronghold.clj#defn second-spot
+  - src/clojurecraft/stronghold.clj#defn crossing
+  - src/clojurecraft/stronghold.clj#defn hop
+  - src/clojurecraft/stronghold.clj#defn picked-up
+  - src/clojurecraft/stronghold.clj#defn explore
+  - src/clojurecraft/stronghold.clj#defn way
+  - src/clojurecraft/stronghold.clj#defn off-line
+  - src/clojurecraft/stronghold.clj#defn spots
+  - src/clojurecraft/stronghold.clj#defn side
+  - src/clojurecraft/stronghold.clj#defn to-room
+  - test/clojurecraft/stronghold_test.clj#the-next-throws-spot-is-on-the-side-the-feet-are-on
+  - test/clojurecraft/stronghold_test.clj#a-way-swims-what-no-walk-crosses-and-tunnels-where-no-route-goes
+  - src/clojurecraft/stronghold.clj#defn stronghold-next
+  - src/clojurecraft/memory.clj#def landmark-kinds
+  - "resources/clojurecraft/goals.edn#{:goal/id :stronghold"
+  - src/clojurecraft/gym.clj#defmethod land! :near-stronghold
+  - src/clojurecraft/gym.clj#defn truth-cmd
+  - test/clojurecraft/stronghold_test.clj#a-throw-waits-for-the-eyes-drop-after-the-removal
+  - test/clojurecraft/stronghold_test.clj#the-search-throws-walks-off-the-line-and-throws-again
+  - test/clojurecraft/stronghold_test.clj#two-crossing-throws-walk-to-the-crossing-and-look-round-it
+  - test/clojurecraft/stronghold_test.clj#a-remembered-frame-is-the-stronghold-found
+  - test/clojurecraft/stronghold_test.clj#the-stronghold-is-found-by-throws-and-walks-against-the-model
+  - src/clojurecraft/stronghold.clj#defmethod plan/done-by :in-portal-room?
+  - src/clojurecraft/stronghold.clj#defmethod plan/next-intent :portal-room
+  - src/clojurecraft/fortress.clj#defn dry?
+  - "resources/clojurecraft/goals.edn#{:goal/id :portal-room"
+  - test/clojurecraft/fortress_test.clj#an-overworld-step-opens-no-cell-by-water
+  - test/clojurecraft/stronghold_test.clj#the-portal-room-is-tunnelled-to-once-a-frame-is-remembered
+  - test/clojurecraft/stronghold_test.clj#the-portal-room-is-reached-against-the-model
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[sib-end-and-dragon]]"
   - "[[entities]]"
   - "[[roadmap-issues]]"
+  - "[[fortress-tunnel]]"
 ---
 
 # Stronghold
@@ -52,7 +85,7 @@ A throw is kept on the world as `{:throw/from [x y z] :throw/dir [dx dz] :throw/
 2. `:look` looks up to `throw-pitch` (-20 degrees) along the yaw it has and stands `look-ms` (300 ms), so the pose reaches the server before the use. Never down: a use-item looking at an end portal frame fills the frame instead of throwing.
 3. `:use` sends one `use-item` carrying the look.
 4. `:seek` waits for the eye: the next `eye_of_ender` entity added at or after the use within `seen-within` (3 blocks) of the bot's middle (`own-eye`). None within `answer-ms` (3000 ms, stretched by the server's slowdown) fails `:no-eye`: in the Nether or the End the server throws nothing.
-5. `:follow` keeps the eye's last place in `:intent/eye-pos` each tick; `follow-ms` (2000 ms) after it was seen, or at once if the server removes it sooner, the line from `:intent/eye-from` to there is recorded as a throw (`record-throw`; under `min-flight`, one block, it fails `:eye-unmoved`). The intent is done when the server removes the eye (it drops as an item or shatters at 80 ticks), so the planner after it knows where it ended.
+5. `:follow` keeps the eye's last place in `:intent/eye-pos` each tick; `follow-ms` (2000 ms) after it was seen, or at once if the server removes it sooner, the line from `:intent/eye-from` to there is recorded as a throw (`record-throw`; under `min-flight`, one block, it fails `:eye-unmoved`). Once the server removes the eye (it drops as an item four throws in five, or shatters, at 80 ticks) the intent keeps `:intent/gone-at` and is done when the dropped eye lies where it ended (`eye-drop`: within the drop radius of its last place brought down to the feet's height, since it flew up) or `drop-grace-ms` (1000 ms) later: the removal and the item's add need not come in one tick, and the planner picks the item up only if it is there when the intent ends.
 
 ## The throw trial
 The `:eye-throw` row (`--until throw`, priority 21, an aside, overworld only) is done by `:thrown?` (a throw on record) and planned by `:throw`: a `:throw-eye` with an eye held, else wait `:no-eye`. The gym row `throw` gives two eyes on a surface landing at noon and judges with a new kind of truth: a `:truth/check` keyword picks a `gym/verdict` method instead of the pattern, and `:bearing` reads the located stronghold out of `locate structure minecraft:stronghold` run at the landing and passes when the RESULT's first throw (`:throws`, added to the RESULT once a throw is kept) is within `gym/bearing-within` (10 degrees) of the way there.
@@ -64,3 +97,22 @@ The `:eye-throw` row (`--until throw`, priority 21, an aside, overworld only) is
 - the crossing is behind either throw: an eye never flies away from its stronghold.
 
 Tests: a crossing found from either throw first, parallel and one-degree lines answering nothing, a crossing behind one or both throws answering nothing, and a property over 300 generated strongholds and throw points that every pair of exact throws far enough from parallel names the stronghold.
+
+## The search
+The `:stronghold` row (`--until stronghold`, priority 22, an aside, overworld only) is done by `:frames-seen?`: an end portal frame on record (`frames`, `memory/positions-now` of every frame state). `end_portal_frame` is one of `memory/landmark-kinds` now, and a column's chunk data holds every block in it, so the portal room is remembered the moment its chunk loads, however deep it lies: no corridor needs walking to find it. Its plan, `stronghold-next`, in order:
+
+1. the eye the last throw dropped (`picked-up`: the last intent a `:throw-eye` done, an eye lying where it ended) picked up with a `:collect-drops`;
+2. no throw yet: a throw (`throw-now`; with no eye held, wait `:no-eye`);
+3. a crossing (`crossing`: the latest throw crossed with each earlier one, the widest kept) the feet are not within `there` (16 blocks) of: a way toward it (`way`, below) at `tunnel-y` (30);
+4. at the crossing with the last throw made more than `rethrow-beyond` (48 blocks) off: a throw from here, whose line crosses the first at a wide angle;
+5. at the crossing, thrown from near it already: walks round it (`explore`: hops toward eight points `explore-reach`, 64 blocks, round it, from a heading the clock picks), each loading chunks further out; none reachable waits `:no-frame`;
+6. throws that do not cross (one, or parallel): a throw once the feet are `min-offset` (32 blocks) off the latest's line (`off-line`), wherever the way got to; else a way toward one of its two `spots` (`second-spot`: `travel`, 64, blocks from it along its line turned `travel-turn`, 60 degrees, either side; the one on the side of the line the feet are on first once they are `on-line`, 4 blocks, off it, so a way that turned back from one spot does not swing to the other and back, as batch stronghold-265b run 2 did twelve times across a lake), at the feet's height.
+
+A way (`way`) toward a far point is, in order: a hop (`hop`: a `:walk` to a cell a body stands in, `stand-in`, within 12 of the feet's height, 32 blocks along the way, or turned by 30, 60 or 90 degrees either side when straight on has no route, `intent/routable?`, never a cell a walk failed at, `:plan/blacklist`); with open water toward the point (`wood/water-toward?`), a swim across it (swim's `:cross`, done on the far side's dry land); else a dry tunnel toward it at the height asked (the fortress's `:tunnel-to` with `:intent/dry?`) when its first step can be taken; none waits `:no-way`. A walk to somewhere hundreds of blocks off is beyond a route's node budget. Gym batch stronghold-265a (plan run 38927120252, probe 38929010443) had only hops 150 blocks off at 45 degrees: two landings stood on a lake's shore with the stronghold across it, every hop ending in the water, and one on a mountainside walked at one cell twelve times, each walk failing :no-path; all three waited :no-way. The throw row passed 5/5 in the same batch.
+
+The gym row `stronghold` lands the bot 250 blocks (`gym/stronghold-off`) from the stronghold the server locates from the landing, on the line through it, on dry ground (`land! :near-stronghold`, `fixture/land-at!`), with six eyes, an iron sword, pickaxe, helmet, chestplate and food; it is judged by `execute if block {at} minecraft:end_portal_frame`, where a truth row's `:truth/at` names a path into the RESULT whose `[x y z]` fills `{at}` (`gym/truth-cmd`): the RESULT names the nearest frame remembered as `:frame`.
+
+Against the model (#260's eyes, `sim/init :stronghold`), `the-stronghold-is-found-by-throws-and-walks-against-the-model` plays the whole search: a frame deep in stone 113 blocks off, columns streamed two chunks round the player, six eyes; a throw, the walk off the line, a second throw, the walk to the crossing, the frame seen as its chunk loads.
+
+## The portal room
+The `:portal-room` row (`--until portal-room`, priority 23, an aside, overworld only) is done by `:in-portal-room?`: the feet cell's centre within `fortress/reach` (6) of the nearest remembered frame. Its plan (`to-room`): in water, out to the nearest bank first (swim's `:swim-out :retreat`); with a frame remembered, the fortress's `:tunnel-to` to it ([[fortress-tunnel]]: one step at a time, each a plan of ops, never opening a cell beside lava, never digging a frame, which `fortress/unbreakable` holds) with `:intent/dry? true`: `fortress/dry?` refuses a step that opens a cell that is water or has water beside it, since the overworld's way down runs through aquifers and under oceans. When no first step of that tunnel can be taken from the feet and they are more than `room-over` (4) over the frame, a staircase down toward it (`:stairs-down` to that height, which turns where water is): batch stronghold-265b's portal-room run 2 saw the frame at y 0 under a lake while swimming it and failed `:blocked` twice from the water. With none remembered, the search above. No corridor is walked: the frame is the tunnel's target from wherever the bot stands, down through the ground and the stronghold's walls. The gym row `portal-room` lands as `stronghold` does, with two pickaxes and cobblestone for the floors, and is judged by the frame at the RESULT's `:frame` and the bot within 7 of it, asked at the frame's coordinates (`execute positioned {at} if entity @a[name=...]`), never as the bot. Against the model, `the-portal-room-is-reached-against-the-model` tunnels from the surface to a frame 24 blocks down.

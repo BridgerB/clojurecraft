@@ -92,6 +92,17 @@
          (or (build/holds? world [:solid floor])
              (and (lava? floor) (= floor (build/foundation world floor)))))))
 
+(defn dry?
+  "Does the step from feet by move open no cell that is water or has water beside it (other than
+   the cells it opens)? The overworld's way to a stronghold's portal room runs through aquifers
+   and under oceans (issue #265), where one opened cell floods the tunnel; the Nether has no
+   water, so the fortress's steps never ask."
+  [world feet move]
+  (let [cells (opens feet move)
+        own (set cells)
+        water? #(contains? blocks/water-states (terrain/block-at world %))]
+    (and (not-any? water? cells) (not-any? water? (remove own (mapcat neighbours cells))))))
+
 (defn toward "The sign of d: -1, 0 or 1." [d] (long (math/signum (double d))))
 
 (def aside
@@ -124,9 +135,12 @@
 
 (defn choose-move
   "The first of moves from feet toward target (climbing past climb, climb-past when not given)
-   that is safe?, or nil."
+   that is safe?, and dry? too when dry-only? is true, or nil."
   ([world feet target] (choose-move world feet target climb-past))
-  ([world feet target climb] (first (filter #(safe? world feet %) (moves feet target climb)))))
+  ([world feet target climb] (choose-move world feet target climb false))
+  ([world feet target climb dry-only?]
+   (first (filter #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
+                  (moves feet target climb)))))
 
 (defn arrived?
   "Is the bot within reach of target (from the feet cell's centre), or within r when given?"
@@ -164,9 +178,10 @@
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
   ;; :intent/reach, reach when absent) or after :intent/steps steps, failed :blocked when no step
-  ;; is safe. Steps go up or down first past :intent/climb blocks off (climb-past when absent)
+  ;; is safe. Steps go up or down first past :intent/climb blocks off (climb-past when absent);
+  ;; with :intent/dry? only steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
-   {:intent/keys [target steps taken move from climb]
+   {:intent/keys [target steps taken move from climb dry?]
     r :intent/reach
     :or {taken 0 r reach climb climb-past}
     :as i} event]
@@ -178,7 +193,7 @@
           (and move (or (off-step? feet from move) (lost-way? i)))
           (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
           (nil? move)
-          (if-let [m (choose-move world feet target climb)]
+          (if-let [m (choose-move world feet target climb (boolean dry?))]
             (intent/assoc-intent world :intent/move m :intent/from feet)
             (-> world
                 (assoc :player/controls {})

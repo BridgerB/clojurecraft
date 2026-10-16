@@ -266,6 +266,9 @@
    [:intent/reach
     "how near a :tunnel-to's target counts as there, from the feet cell's centre (fortress/reach, 6, when absent)"
     "a :tunnel-to to a spawner"]
+   [:intent/dry?
+    "a :tunnel-to that takes only steps opening no cell by water (fortress/dry?): the overworld's way toward the stronghold and down to its portal room (issue #265)"
+    "a :tunnel-to to a stronghold's frame"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
     ":tunnel-to, during a step"]
@@ -295,6 +298,8 @@
     ":throw-eye, once its eye is seen"]
    [:intent/eye-pos "where the eye a :throw-eye follows was last seen [x y z]; it drops there"
     ":throw-eye, once its eye is seen"]
+   [:intent/gone-at "ms the server removed the eye a :throw-eye follows; its drop may come after"
+    ":throw-eye, once its eye is removed"]
    [:intent/swings
     "attacks a :fight has sent in reach of its target; combat/max-swings make it a ghost"
     "fight, after its first attack"] [:intent/finish-at "ms after which FINISH may be sent" "dig"]

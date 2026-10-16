@@ -11,6 +11,7 @@ sourceRefs:
   - src/clojurecraft/fortress.clj#defn step-plan
   - src/clojurecraft/fortress.clj#defn opens
   - src/clojurecraft/fortress.clj#defn safe?
+  - src/clojurecraft/fortress.clj#defn dry?
   - src/clojurecraft/fortress.clj#defn moves
   - src/clojurecraft/fortress.clj#defmethod intent/run :tunnel-to
   - src/clojurecraft/fortress.clj#defmethod plan/next-intent :fortress
@@ -53,3 +54,6 @@ A step's move and the cell it started from are kept on the intent until the step
 ## Gotchas
 - The sightings are passive: a brick is remembered when its chunk loads (`memory/landmark-kinds`), in the dimension it was seen in, so no scan and no line of sight.
 - The gym row (`fortress`, `:gym/land :nether-fortress`) carves a pocket of netherrack 48 blocks west of `locate structure minecraft:fortress` at y 72 and judges with `execute as {name} at @s if dimension minecraft:the_nether` and a filtered clone that counts bricks within 6.
+
+## In the overworld
+The stronghold's portal room (issue #265, [[stronghold]]) is reached by the same tunnel with `:intent/dry? true`: `choose-move` then also wants `dry?`, no opened cell water or beside water, since the way down runs through aquifers; the Nether's steps never ask.

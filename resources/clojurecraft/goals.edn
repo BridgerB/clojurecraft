@@ -368,4 +368,24 @@
   "one eye of ender thrown and followed (issue #265, the gym's throw trial): the eye in hand, a look a little up (never down at an end portal frame, which a use-item fills), one use-item, the eye the server adds at the bot's middle followed for two seconds, the line it flew on the plane kept as a throw in :stronghold/throws; done when one is kept. In the overworld only: the eye finds no stronghold anywhere else. An aside: a trial of the throw alone, never a step of a chained run"
   :goal/dimension "minecraft:overworld"
   :goal/done? :thrown?
-  :goal/plan :throw}]
+  :goal/plan :throw}
+ {:goal/id :stronghold
+  :goal/priority 22
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "stronghold"
+  :goal/doc
+  "the stronghold found by eyes of ender (issue #265): an eye thrown and followed, the eye it drops picked up; a way 64 blocks off its line at 60 degrees (hops a route reaches, a swim over water, else a dry tunnel) and a second throw once 32 off the line; the way to where the two lines cross (stronghold/triangulate), a tunnel there going down to y 30, and there with nothing seen a throw from there and walks round it; done when an end portal frame is remembered: the portal room is in the chunk data the moment its chunk loads, however deep. In the overworld only. An aside until the eyes (#264) are proven and the chain is raised to it"
+  :goal/dimension "minecraft:overworld"
+  :goal/done? :frames-seen?
+  :goal/plan :stronghold}
+ {:goal/id :portal-room
+  :goal/priority 23
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "portal-room"
+  :goal/doc
+  "the stronghold's portal room reached (issue #265): with an end portal frame remembered, the fortress's tunnel to it, one step at a time, each a plan of ops, down through the ground and the stronghold's walls, no step opening a cell beside lava or water, the frames never dug; with none remembered yet, the stronghold's search first (throws, walks, the crossing). Done within 6 blocks of a frame. In the overworld only. An aside until the eyes (#264) are proven and the chain is raised to it"
+  :goal/dimension "minecraft:overworld"
+  :goal/done? :in-portal-room?
+  :goal/plan :portal-room}]
