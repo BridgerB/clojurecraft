@@ -8,7 +8,8 @@
 
    Requiring this namespace registers the :pearls plan and the :provoke intent. A row planned by
    :pearls (the :ender-pearls stage, the gym's :ender-pearl trial) takes, in order: the pearl of a
-   kill just made (an item lying where the enderman died, collected); the drop still to come while
+   kill just made (a pearl lying where the enderman died, picked up by #262's :collect-drops, which
+   reads what a drop holds, so a carried block's drop is left); the drop still to come while
    the body lies there (a wait); an enderman within strike-range, fought (combat's :fight, the
    sword, 650 ms apart, a break-off under 10 health), or backed away from when the health is
    already under 10; one in sight within stare-range, provoked (:provoke) so it comes to the bot
@@ -23,19 +24,18 @@
    rain and water: the trap rows already keep the bot from fighting while it stands in water."
   (:require [clojure.math :as math]
             [clojurecraft.combat :as combat]
+            [clojurecraft.drops :as drops]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.mob :as mob]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
-            [clojurecraft.recipe :as recipe]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
 
-(def pearl (recipe/item-id :ender_pearl)) ; the item a kill may drop
-(def drops "What a pearl collect waits for." #{pearl})
+(def pearl :ender_pearl)               ; the item a kill may drop
 
 (def hunt-radius 32.0)                ; blocks from the feet an enderman is hunted within
 (def strike-range 4.5)                ; blocks on the plane within which the hunt fights (hunt/strike-range: past a walk's reach)
@@ -43,7 +43,6 @@
 (def stare-from 6.0)                  ; never stare nearer: an angry enderman stared at within 4 teleports away
 (def stare-ms 1000)                   ; ms a provoke stares: past the goal's 5-tick aggro delay with the server's lag to spare
 (def come-ms 12000)                   ; ms after the stare a provoked enderman has to come within strike-range
-(def drop-reach 3.0)                  ; blocks from where the kill was seen last that an item counts as its drop
 (def candidates 3)                    ; nearest endermen asked for a route, as the other acts ask
 
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
@@ -112,19 +111,10 @@
       l)))
 
 (defn drop-of
-  "The item entity lying within drop-reach of where kill k last saw its target, nearest it, or
-   nil. The bot cannot tell a pearl from another item (an item's stack is in metadata the skim
-   does not read), so any item there is taken for the drop."
+  "[eid entity] of a pearl lying round where kill k last saw its target (drops/nearest: within
+   its drop-radius, holding a pearl or not yet saying what it holds), nearest the feet, or nil."
   [world k]
-  (let [at (:intent/target-pos k)]
-    (->> (:world/entities world)
-         vals
-         (filter entity/item?)
-         (map (fn [e] [(physics/distance at (:entity/pos e)) e]))
-         (filter (fn [[d _]] (<= d drop-reach)))
-         (sort-by first)
-         first
-         second)))
+  (drops/nearest world pearl (:intent/target-pos k)))
 
 (defn body?
   "Does the body of kill k still lie in the world (dead, not yet removed)? The server drops the
@@ -195,11 +185,11 @@
 (defmethod plan/next-intent :pearls
   [world _ _]
   (let [k (fresh-kill world)
-        d (when k (drop-of world k))]
+        [_ d] (when k (drop-of world k))]
     (cond d
-          {:intent/kind :collect
+          {:intent/kind :collect-drops
+           :intent/item pearl
            :intent/target (cell (:entity/pos d))
-           :intent/drops drops
            :intent/for :pearls}
           (and k (body? world k)) {:plan/wait :drop}
           :else (hunt world))))

@@ -11,7 +11,7 @@
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
-            [clojurecraft.pearls :as pearls]
+            [clojurecraft.pearls]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -128,12 +128,23 @@
               :intent/target-pos [11.7 64.0 8.2]
               :intent/status :done}
         drop {:entity/type blocks/item-entity-type :entity/pos [11.6 64.2 8.4] :entity/seen-at 0}
+        block (assoc drop :entity/item (recipe/item-id :warped_nylium))
         body (assoc (enderman [11.7 64.0 8.2]) :entity/died-at 0)]
-    (is (= {:intent/kind :collect
+    (is (= {:intent/kind :collect-drops
+            :intent/item :ender_pearl
             :intent/target [11 64 8]
-            :intent/drops pearls/drops
             :intent/for :pearls}
-           (plan/next-intent (assoc (standing {9 drop}) :plan/last kill) row plan/goals)))
+           (plan/next-intent (assoc (standing {9 drop}) :plan/last kill) row plan/goals)
+           (plan/next-intent (assoc (standing
+                                     {9 (assoc drop :entity/item (recipe/item-id :ender_pearl))})
+                                    :plan/last
+                                    kill)
+                             row
+                             plan/goals))
+        "a drop that holds a pearl, or has not said what it holds, is picked up")
+    (is (= {:plan/wait :no-enderman}
+           (plan/next-intent (assoc (standing {9 block}) :plan/last kill) row plan/goals))
+        "the block an enderman carried is left (#262: a drop says what it holds)")
     (is (= {:plan/wait :drop}
            (plan/next-intent (assoc (standing {7 body}) :plan/last kill) row plan/goals))
         "the body still lies there: its drop may still come")

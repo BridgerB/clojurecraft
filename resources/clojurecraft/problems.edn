@@ -386,7 +386,7 @@
   :problem/risks
   ["Seven a hit on Normal, one hit a second, against forty health: an iron sword needs seven hits, so a fight in the open costs most of the bot's health even in iron"
    "The bot staring at an enderman's face by accident (a look at its head from within 4 blocks) sends it away mid-fight"
-   "An enderman carrying a block drops the block too, and the bot cannot tell an item's kind: the collect may pick up the block and wait for a pearl that never fell"
+   "An enderman carrying a block drops the block beside its pearl: only a drop that says it holds a pearl (#262's :entity/item), or has not said yet, may be picked up"
    "No warped forest near where the bot comes out of the portal"
    "Endermen teleporting out of reach"]
   :problem/done
