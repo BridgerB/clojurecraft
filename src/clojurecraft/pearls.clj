@@ -50,7 +50,7 @@
 (def lookout-ms 5000)                 ; ms a :lookout stands turning before the plan looks again
 (def lookout-turn 0.09)               ; degrees of yaw a :lookout turns a ms: a full turn in four seconds
 (def strike-range 4.5)                ; blocks on the plane within which the hunt fights (hunt/strike-range: past a walk's reach)
-(def stare-range 24.0)                ; blocks to the head within which a provoke stares, with a clear line
+(def stare-range 64.0)                ; blocks to the head within which a provoke stares, with a clear line: the enderman's follow range
 (def stare-from 6.0)                  ; never stare nearer: an angry enderman stared at within 4 teleports away
 (def stare-ms 3000)                   ; ms a provoke stares at most before the enderman says it has a target (creepy)
 (def burrow-depth 3)                  ; stairs down a burrow cuts: from the third, the ground roofs a tunnel two high
@@ -96,6 +96,21 @@
   (let [eye (game/eye world)
         d (physics/distance eye (head e))]
     (and (<= stare-from d stare-range) (mob/sight? (sight-fn world) eye (head e)))))
+
+(defn quarry
+  "[eid entity] of the enderman a stare is for: the nearest within stare-range not yet coming
+   (entity/creepy?) that is provokable? from where the bot stands, or nil. Not only the nearest:
+   gym batch pearls-263d (plan run 38899294690, probe 38904622614) tracked seventeen endermen 30
+   to 80 blocks round each warped forest landing, none within a route's reach, and stood looking
+   round for forty minutes while the nearest, behind a ledge, could not be stared at. One stared
+   at from past 16 blocks teleports toward the bot (EndermanLookForPlayerGoal): it need not be
+   walked to."
+  [world]
+  (let [pos (:player/pos world)]
+    (->> (endermen world stare-range)
+         (remove (comp entity/creepy? val))
+         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
+         (some (fn [[_ e :as ee]] (when (provokable? world e) ee))))))
 
 (defn routable
   "[eid entity] of the first of the candidates nearest endermen a route reaches
@@ -288,7 +303,7 @@
    fought where the bot stands (:fight :intent/hold?); with no burrow, one at hand fought, or
    backed away from under 10 health; no burrow near, one dug (:burrow, a pickaxe held) away from
    the nearest enderman; in the burrow with none coming, out to its mouth to look round; one not
-   yet coming and provokable? from here, provoked (never one already coming: a provoke of it
+   yet coming and provokable? from here within stare-range (quarry), provoked (never one already coming: a provoke of it
    ends at once, and batch pearls-263b's bot, its pickaxe lost, provoked one 26 times in a row);
    one coming and no burrow to meet it in, fought; else a walk to the nearest within seek-radius a
    route reaches; else a :lookout, standing where it is: no enderman yet is no failure (batch
@@ -297,11 +312,14 @@
   (let [pos (:player/pos world)
         ms (endermen world)
         [eid e] (entity/nearest ms pos)
-        [ceid ce] (entity/nearest (into {} (filter (comp entity/creepy? val)) ms) pos)
+        [ceid ce] (entity/nearest
+                   (into {} (filter (comp entity/creepy? val)) (endermen world stare-range))
+                   pos)
         near? (and e (<= (combat/horizontal world e) strike-range))
         hurt? (< (:player/health world 20.0) combat/retreat-health)
         home (shelter world)
-        in? (and home (= home (intent/feet world)))]
+        in? (and home (= home (intent/feet world)))
+        [qid] (quarry world)]
     (cond
       (and home (not in?) (or ce near? hurt?))
       {:intent/kind :walk :intent/target home :intent/for :shelter}
@@ -313,8 +331,7 @@
       {:intent/kind :burrow :intent/dir (if e (away world e) [1 0]) :intent/for :pearls}
       (and in? (:pearls/mouth world))
       {:intent/kind :walk :intent/target (:pearls/mouth world) :intent/for :shelter}
-      (and e (not (entity/creepy? e)) (provokable? world e))
-      {:intent/kind :provoke :intent/target eid :intent/for :pearls}
+      qid {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       :else
       (if-let [[_ far] (routable world (endermen world seek-radius))]
