@@ -423,6 +423,7 @@
 (s/def :intent/swings pos-int?)
 (s/def :intent/target-pos ::vec3)
 (s/def :intent/spawner ::block-pos)
+(s/def :intent/blazes (s/coll-of int? :kind set?))
 (s/def :intent/finish-at number?)
 (s/def :intent/slot (s/int-in 0 9))
 (s/def :intent/tool (s/nilable int?))
