@@ -21,6 +21,7 @@
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojurecraft.cli :as cli]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.fixture :as fixture]
             [clojurecraft.landings :as landings]
             [clojurecraft.rcon :as rcon])
@@ -40,9 +41,12 @@
 (s/def :gym/truth (s/coll-of (s/keys :req [:truth/cmd :truth/re]) :kind vector? :min-count 1))
 (s/def :gym/setup (s/coll-of string? :kind vector?)) ; RCON commands that build the row's arena round the landing (fill-in)
 (s/def :gym/land keyword?)               ; how the bot is landed (land!): :surface when absent
+(s/def :gym/summon (s/coll-of string? :kind vector?)) ; RCON commands run in the row's dimension once the bot stands there with its kit (fill-in): the mobs it meets
+(s/def :gym/difficulty #{"peaceful" "easy" "normal" "hard"}) ; set before the bot is landed
+(s/def :gym/fixture? true?)              ; a row that judges the landing alone: its --until puts no goal in play
 (s/def ::row
   (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]
-          :opt [:gym/setup :gym/land]))
+          :opt [:gym/setup :gym/land :gym/summon :gym/difficulty :gym/fixture?]))
 (s/def :gym/run pos-int?)
 (s/def :gym/landing (s/coll-of int? :kind vector? :count 3))
 (s/def :gym/landed? boolean?)
@@ -59,6 +63,87 @@
 (def arena-reach 16)                  ; blocks round the landing an arena's setup is forceloaded over
 (def fortress-offset 48)              ; blocks west of a located fortress the Nether pad is carved
 (def pad-y 72)                        ; the Nether pad's feet height: over the lava sea (y 31), under the roof
+(def arena-half 5)                    ; the nether arena's half-width: rock two thick round a room seven square
+(def end-at [8 0])                    ; [x z] of the End landing: the main island's end stone 8 east of the fountain, as ruststeve's End gyms start
+(def end-reach 64)                    ; blocks round the fountain loaded for the End landing: the towers stand at radius 42
+(def dimension-wait-ms 30000)         ; how long the kit waits for the server to say the bot is in its row's dimension
+
+(def dimensions
+  "The dimension each kind of landing (:gym/land) leaves the bot in; any other is the overworld.
+   The kit is given only once the server says the bot stands there (landing!)."
+  {:nether-fortress dimension/nether :nether-arena dimension/nether :end dimension/end})
+
+(def fortress-pad
+  "The fortress row's start: a hollow box of netherrack round three cells of air at the pad."
+  ["fill {x-2} {y-1} {z-2} {x+2} {y+3} {z+2} minecraft:netherrack hollow"])
+
+(def nether-arena
+  "A sealed room in the Nether (issue #261), ruststeve's arena-run.sh recipe: netherrack two
+   thick on every side round a room seven square and four high (an enderman stands in it, a
+   blaze hovers), its floor at the landing's feet. Nothing outside reaches in: no lava, no
+   ghast, no fall, so a row measures the fight and not the Nether. ruststeve built its blaze
+   arena in the overworld because its SDK streamed Nether chunks too slowly after the
+   cross-dimension teleport; ours reads the dimension's columns as they come (issue #11)."
+  ["fill {x-5} {y-2} {z-5} {x+5} {y+5} {z+5} minecraft:netherrack"
+   "fill {x-3} {y} {z-3} {x+3} {y+3} {z+3} minecraft:air"])
+
+(defn offset
+  "A fill-in placeholder for axis (\"x\") at d blocks from the landing: {x}, {x+3}, {x-3}."
+  [axis d]
+  (str "{"
+       axis
+       (cond (pos? d) (str "+" d)
+             (neg? d) d
+             :else "")
+       "}"))
+
+(defn at-offset
+  "The three fill-in placeholders for the landing moved by [dx dy dz]."
+  [[dx dy dz]]
+  (str/join " " [(offset "x" dx) (offset "y" dy) (offset "z" dz)]))
+
+(defn summon
+  "The command that summons entity (a name: \"zombie\") at the landing moved by d [dx dy dz],
+   with nbt (SNBT) when given: a row's :gym/summon entry."
+  ([entity d] (summon entity d nil))
+  ([entity d nbt] (str "summon minecraft:" entity " " (at-offset d) (when nbt (str " " nbt)))))
+
+(defn no-ai-zombie
+  "A zombie that never moves or attacks (NoAI) and never despawns, at d: the first thing a
+   fight row kills (issue #259's attack row)."
+  [d]
+  (summon "zombie" d "{NoAI:1b,PersistenceRequired:1b}"))
+
+(defn blaze-spawner
+  "A blaze spawner at d, ruststeve's arena-run.sh numbers: two at a time, six at most near it,
+   while a player is within 16, every two to four seconds."
+  [d]
+  (str
+   "setblock "
+   (at-offset d)
+   " minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}},SpawnCount:2,MaxNearbyEntities:6,RequiredPlayerRange:16,SpawnRange:2,MinSpawnDelay:40,MaxSpawnDelay:80}"))
+
+(defn endermen
+  "n endermen at d that never despawn: the pearls' other source, the End's crowd."
+  [n d]
+  (vec (repeat n (summon "enderman" d "{PersistenceRequired:1b}"))))
+
+(def dragon
+  "A dragon of known state at the fountain: any other gone first, then one summoned with full
+   health and DragonPhase 0 (circling). A summoned dragon has no fight manager and starts in
+   phase 10, hovering, so the siblings set both (ruststeve gym.rs, steve gym/registry.ts)."
+  ["kill @e[type=minecraft:ender_dragon]"
+   "summon minecraft:ender_dragon 0 80 0 {DragonPhase:0,Health:200f}"])
+
+(defn crystals
+  "End crystals at each of ds (offsets from the landing), every other crystal gone first: a
+   crystal row knows exactly what it must break."
+  [ds]
+  (into ["kill @e[type=minecraft:end_crystal]"]
+        (map #(summon "end_crystal" % "{ShowBottom:0b}"))
+        ds))
+
+(def night "time set midnight")       ; a :gym/summon entry: the hostiles' hour, for a row that defends
 
 (def portal-arena
   "The portal rows' arena round the landing: stone ten deep under air, and a trench of lava
@@ -196,6 +281,42 @@
      {:truth/cmd
       "execute as {name} at @s run clone ~-6 ~-6 ~-6 ~6 ~6 ~6 ~-6 ~20 ~-6 filtered minecraft:nether_bricks"
       :truth/re "cloned [1-9]"}]}
+   ;; issue #261: the arenas themselves, judged with no goal in play: the bot in the dimension,
+   ;; the kit held (given only after the server said so), the room and what was summoned in it.
+   ;; The rows that fight in them (#258, #259, #10) copy these starts.
+   {:gym/goal :arena-nether
+    :gym/until "arena-nether"
+    :gym/fixture? true
+    :gym/land :nether-arena
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 8"]
+    :gym/summon [(no-ai-zombie [2 0 2])]
+    :gym/timeout-ms 120000
+    :gym/truth [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_nether"
+                 :truth/re "Test passed"}
+                {:truth/cmd "clear {name} minecraft:iron_sword 0" :truth/re "Found 1"}
+                {:truth/cmd "execute as {name} at @s if block ~ ~-1 ~ minecraft:netherrack"
+                 :truth/re "Test passed"}
+                {:truth/cmd
+                 "execute as {name} at @s if entity @e[type=minecraft:zombie,distance=..6]"
+                 :truth/re "Test passed"}]}
+   {:gym/goal :arena-end
+    :gym/until "arena-end"
+    :gym/fixture? true
+    :gym/land :end
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 8"]
+    :gym/summon (into dragon (crystals [[3 0 3]]))
+    :gym/timeout-ms 120000
+    :gym/truth
+    [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_end" :truth/re "Test passed"}
+     {:truth/cmd "clear {name} minecraft:iron_sword 0" :truth/re "Found 1"}
+     {:truth/cmd "execute as {name} at @s if block ~ ~-1 ~ minecraft:end_stone"
+      :truth/re "Test passed"}
+     {:truth/cmd "execute as {name} at @s if entity @e[type=minecraft:end_crystal,distance=..8]"
+      :truth/re "Test passed"}
+     {:truth/cmd "execute in minecraft:the_end if entity @e[type=minecraft:ender_dragon]"
+      :truth/re "Test passed"}]}
    {:gym/goal :shore
     :gym/until "shore"
     :gym/prereqs []
@@ -233,6 +354,35 @@
       (str/replace #"\{([xyz])([+-]\d+)?\}"
                    (fn [[_ axis off]]
                      (str (+ ({"x" x "y" y "z" z} axis) (if off (parse-long off) 0)))))))
+
+(defn in-dimension
+  "cmd run in the dimension named dim."
+  [dim cmd]
+  (str "execute in " dim " run " cmd))
+
+(defn dimension-of
+  "The dimension row's landing leaves the bot in (dimensions; the overworld for the rest)."
+  [row]
+  (get dimensions (:gym/land row) dimension/overworld))
+
+(defn dimension-test
+  "The test the server passes once the bot named bot stands in the dimension named dim."
+  [bot dim]
+  (str "execute as " bot " at @s if dimension " dim))
+
+(defn kit
+  "The commands that give row's prerequisites to bot: run only once the server says the bot is
+   in the row's dimension. steve gave its End kit before the cross-dimension teleport and the
+   server held none of it while the client counted six beds (issue #10's memory note); so the
+   gym lands, waits for the dimension, then gives (issue #261)."
+  [row bot]
+  (mapv #(str "give " bot " " %) (:gym/prereqs row)))
+
+(defn summons
+  "The row's :gym/summon commands for bot at landing, filled in and run in its dimension: after
+   the kit, so a mob never meets a bot with empty hands."
+  [row bot landing]
+  (mapv #(in-dimension (dimension-of row) (fill-in % bot landing)) (:gym/summon row)))
 
 (defn truth-cmd
   "A row's truth command for the bot's name and the run's landing (fill-in)."
@@ -392,12 +542,41 @@
   (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
   landing)
 
-(defn in-nether "cmd run in the Nether." [cmd] (str "execute in minecraft:the_nether run " cmd))
+(defn wait-loaded-in!
+  "Block until the server reports every column of the square [x0 z0 x1 z1] loaded in dim (its
+   corners), polling every 200 ms, up to 30 s; true when they loaded."
+  [rc dim [x0 z0 x1 z1]]
+  (let [corners [[x0 z0] [x0 z1] [x1 z0] [x1 z1]]]
+    (loop [i 0]
+      (cond (every? (fn [[x z]]
+                      (fixture/passed?
+                       (rcon/command! rc (in-dimension dim (str "execute if loaded " x " 0 " z)))))
+                    corners)
+            true
+            (>= i 150) false
+            :else (do (Thread/sleep 200) (recur (inc i)))))))
+
+(defn place!
+  "Build cmds (fill-in templates) round at [x z y] in the dimension dim and stand the bot named
+   name on at: the square r round it forceloaded and waited for (a box that crosses a chunk
+   edge fills nothing in an unloaded chunk), the commands run, the bot teleported to the middle
+   of at's cell, the forceload released after (the bot holds its chunks itself then). Returns at."
+  [rc dim name [x z y :as at] r cmds]
+  (let [square [(- x r) (- z r) (+ x r) (+ z r)]
+        where (str/join " " square)]
+    (rcon/command! rc (in-dimension dim (str "forceload add " where)))
+    (try (when-not (wait-loaded-in! rc dim square)
+           (throw (ex-info "the arena's chunks never loaded" {:dimension dim :at at})))
+         (doseq [c cmds] (rcon/command! rc (in-dimension dim (fill-in c name at))))
+         (cli/log "tp:"
+                  (rcon/command! rc (in-dimension dim (str "tp " name " " x ".5 " y " " z ".5"))))
+         (finally (rcon/command! rc (in-dimension dim (str "forceload remove " where)))))
+    at))
 
 (defmethod land! :nether-fortress
   ;; the fortress nearest the landing's Nether coordinates (an eighth of the overworld's, so each
   ;; landing has its own), a pocket of netherrack fortress-offset blocks west of it at pad-y
-  ;; (a hollow box: rock round three cells of air), and the bot in it
+  ;; (fortress-pad), and the bot in it
   [rc _row name [x z _]]
   (let [reply (rcon/command! rc
                              (str "execute in minecraft:the_nether positioned "
@@ -406,62 +585,87 @@
                                   (quot z 8)
                                   " run locate structure minecraft:fortress"))
         [fx fz] (or (fixture/parse-located reply)
-                    (throw (ex-info "no fortress located" {:reply reply})))
-        [px pz] [(- fx fortress-offset) fz]
-        where (str px " " pz)]
-    (rcon/command! rc (in-nether (str "forceload add " where)))
-    (try (loop [i 0]
-           (when (and (< i 150)
-                      (not (fixture/passed? (rcon/command!
-                                             rc
-                                             (str "execute in minecraft:the_nether if loaded " px
-                                                  " 0 " pz)))))
-             (Thread/sleep 200)
-             (recur (inc i))))
-         (rcon/command! rc
-                        (in-nether (str "fill "
-                                        (- px 2)
-                                        " "
-                                        (dec pad-y)
-                                        " "
-                                        (- pz 2)
-                                        " "
-                                        (+ px 2)
-                                        " "
-                                        (+ pad-y 3)
-                                        " "
-                                        (+ pz 2)
-                                        " minecraft:netherrack hollow")))
+                    (throw (ex-info "no fortress located" {:reply reply})))]
+    (place! rc dimension/nether name [(- fx fortress-offset) fz pad-y] 2 fortress-pad)))
+
+(defmethod land! :nether-arena
+  ;; a sealed room (nether-arena) over the landing's Nether coordinates (an eighth of the
+  ;; overworld's, so each landing has its own) at pad-y, the row's setup built in it, the bot on
+  ;; its floor
+  [rc row name [x z _]]
+  (place! rc
+          dimension/nether
+          name
+          [(quot x 8) (quot z 8) pad-y]
+          arena-half
+          (into nether-arena (:gym/setup row))))
+
+(defmethod land! :end
+  ;; the main island (issue #261), ruststeve's End start: the island round the fountain loaded,
+  ;; the bot on the surface at end-at (its first arrival starts the dragon fight, crystals and
+  ;; all), then the row's setup round where it stands. Every landing of the set starts here: the
+  ;; End has one main island. No portal and no stronghold: the rows past them start in the End
+  [rc row name _]
+  (let [dim dimension/end
+        [x z] end-at
+        square [(- end-reach) (- end-reach) end-reach end-reach]
+        where (str/join " " square)]
+    (rcon/command! rc (in-dimension dim (str "forceload add " where)))
+    (try (when-not (wait-loaded-in! rc dim square)
+           (throw (ex-info "the End's chunks never loaded" {:square square})))
          (cli/log "tp:"
-                  (rcon/command! rc (in-nether (str "tp " name " " px ".5 " pad-y " " pz ".5"))))
-         (finally (rcon/command! rc (in-nether (str "forceload remove " where)))))
-    [px pz pad-y]))
+                  (rcon/command!
+                   rc
+                   (in-dimension dim (fixture/on-surface x z (str "tp " name " ~0.5 ~ ~0.5")))))
+         (let [[_ y _] (or (fixture/position rc name)
+                           (throw (ex-info "the bot left the world" {:name name})))
+               at [x z (long (math/floor y))]]
+           (doseq [c (:gym/setup row)] (rcon/command! rc (in-dimension dim (fill-in c name at))))
+           at)
+         (finally (rcon/command! rc (in-dimension dim (str "forceload remove " where)))))))
+
+(defn wait-in!
+  "Block until the server says the bot named name stands in the dimension dim (dimension-test),
+   polling every 250 ms, up to dimension-wait-ms; true when it does."
+  [rc name dim]
+  (let [until (+ (System/currentTimeMillis) dimension-wait-ms)]
+    (loop []
+      (cond (fixture/passed? (rcon/command! rc (dimension-test name dim))) true
+            (> (System/currentTimeMillis) until) false
+            :else (do (Thread/sleep 250) (recur))))))
 
 (defn landing!
-  "The fixture's work for one run: wait for the bot, reset it (survival, empty inventory), give
-   the goal's prerequisites and land it (land!: on this run's landing of the set, or where the
-   row starts from it). Returns what happened: {:gym/landed? true :gym/landing :gym/at
-   :gym/started}, or {:gym/landed? false :gym/error ...}; never throws."
+  "The fixture's work for one run: wait for the bot, set the row's difficulty, reset it
+   (survival, empty inventory), land it (land!: on this run's landing of the set, or where the
+   row starts from it), and only once the server says it stands in the row's dimension give
+   its prerequisites (kit) and summon what it meets (summons). Returns what happened:
+   {:gym/landed? true :gym/landing :gym/at :gym/started}, or {:gym/landed? false :gym/error
+   ...}; never throws. A bot that never reaches the dimension is a failed landing, never a
+   kit given in the wrong world (issue #261)."
   [{:keys [goal run name host rcon-port rcon-pass landings]}]
   (let [row (gym goal)
         landing (landings/landing-for (landings/read-landings landings) (parse-long (str run)))
         started (System/currentTimeMillis)]
-    (try (rcon/with-rcon (or host "127.0.0.1")
-                         (parse-long (str rcon-port))
-                         rcon-pass
-                         (fn [rc]
-                           (when-not (fixture/wait-online! rc name fixture/online-timeout)
-                             (throw (ex-info "bot never came online" {:name name})))
-                           (rcon/command! rc (str "gamemode survival " name))
-                           (rcon/command! rc (str "clear " name))
-                           (doseq [p (:gym/prereqs row)]
-                             (rcon/command! rc (str "give " name " " p)))
-                           (let [landing (land! rc row name landing)]
-                             (Thread/sleep (long fixture/settle-ms))
-                             {:gym/landed? true
-                              :gym/landing landing
-                              :gym/at (fixture/position rc name)
-                              :gym/started started})))
+    (try (rcon/with-rcon
+          (or host "127.0.0.1")
+          (parse-long (str rcon-port))
+          rcon-pass
+          (fn [rc]
+            (when-not (fixture/wait-online! rc name fixture/online-timeout)
+              (throw (ex-info "bot never came online" {:name name})))
+            (when-let [d (:gym/difficulty row)] (rcon/command! rc (str "difficulty " d)))
+            (rcon/command! rc (str "gamemode survival " name))
+            (rcon/command! rc (str "clear " name))
+            (let [landing (land! rc row name landing)
+                  dim (dimension-of row)]
+              (when-not (wait-in! rc name dim)
+                (throw (ex-info "the bot never reached its dimension" {:name name :dimension dim})))
+              (doseq [c (concat (kit row name) (summons row name landing))] (rcon/command! rc c))
+              (Thread/sleep (long fixture/settle-ms))
+              {:gym/landed? true
+               :gym/landing landing
+               :gym/at (fixture/position rc name)
+               :gym/started started})))
          (catch Exception e
            (cli/log "landing failed:" e)
            {:gym/landed? false :gym/landing landing :gym/error (str e) :gym/started started}))))
