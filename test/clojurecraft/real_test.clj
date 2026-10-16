@@ -249,3 +249,19 @@
     (is (empty? (:sim/mobs s)) "the overworld's zombie stays behind")
     (is (nil? (real/nether-of folded (assoc-in m [:world :player/dimension] dimension/nether)))
         "a moment already in the Nether goes nowhere new")))
+
+(deftest one-recording-converts-to-one-snapshot-and-one-verdict
+  ;; a fix's check judges a real snapshot on two codes: its verdict must hang on the code alone.
+  ;; Converting one recording twice gives the same snapshot, and judging it twice the same play
+  ;; (the wall-clock budget aside: real/gap's :slow keeps a verdict near it from being evidence;
+  ;; s2/Clj_r13 recurred in 220 s in one probe and halted at 240 s in the next, issue #299)
+  (let [run (recorded-run (bare 3 11 dimension/overworld) 9 "nether" 300000 {})
+        a (real-snapshot run nil)
+        b (real-snapshot run nil)
+        play #(simrace/judged % (simrace/own-world %))]
+    (is (= (dissoc a :snapshot/columns) (dissoc b :snapshot/columns)))
+    (is (= (update-vals (:snapshot/columns a) vec) (update-vals (:snapshot/columns b) vec))
+        "the same columns, byte for byte")
+    (is (= (play a) (play b)) "the same play, so the same verdict")
+    (is (nil? (real/gap a (play a) 0)))
+    (is (= :slow (real/gap a (play a) (inc simrace/slow-ms))) "a slow judge is no evidence")))

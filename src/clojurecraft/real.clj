@@ -310,17 +310,22 @@
    model, a kind: :halted (the judge ran out of wall time: the check counts that as recurring,
    but it is no sight of the failure); :crashed; :reached (the plan done, or the signature's
    stage reached); :other (it failed, with another signature: the model answered otherwise);
-   :active (still playing when the window ended); nil when it recurs."
-  [snap played]
-  (cond (:run/halted? played) :halted
-        (simrace/recurs? snap played) nil
-        (= :crashed (:reason played)) :crashed
-        (or (:ok played)
-            (= :done (get-in played [:plan :plan/status]))
-            (contains? (set (get-in played [:plan :plan/reached])) (simrace/stage-of snap)))
-        :reached
-        (= :failed (get-in played [:plan :plan/status])) :other
-        :else :active))
+   :active (still playing when the window ended); nil when it recurs, or :slow when it recurs
+   but its judge took more than simrace/slow-ms of wall time (judge-ms): its verdict hangs on the
+   runner's speed. s2/Clj_r13 [:water-bucket :no-water] recurred in 220 s in probe 38940300595
+   and halted at 240 s in probe 38942963330, the same snapshot to the byte: a check judging it
+   would pass or fail by the machine."
+  ([snap played] (gap snap played 0))
+  ([snap played judge-ms]
+   (cond (:run/halted? played) :halted
+         (simrace/recurs? snap played) (when (> judge-ms simrace/slow-ms) :slow)
+         (= :crashed (:reason played)) :crashed
+         (or (:ok played)
+             (= :done (get-in played [:plan :plan/status]))
+             (contains? (set (get-in played [:plan :plan/reached])) (simrace/stage-of snap)))
+         :reached
+         (= :failed (get-in played [:plan :plan/status])) :other
+         :else :active)))
 
 ;;;; I/O: the recording, the snapshot file, the lines ;;;;
 
@@ -376,7 +381,7 @@
                 r (simrace/judged back
                                   (simrace/own-world back)
                                   #(> (- (System/currentTimeMillis) t1) simrace/judge-wall-ms))
-                kind (gap back r)
+                kind (gap back r (- (System/currentTimeMillis) t1))
                 kept (if kind (str (io/file out "gaps" file-name)) file)]
             (when kind (io/make-parents kept) (.renameTo (io/file file) (io/file kept)))
             (println (if kind "GAP" "REAL")
