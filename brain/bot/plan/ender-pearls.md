@@ -26,6 +26,8 @@ sourceRefs:
   - src/clojurecraft/pearls.clj#defn endermen
   - src/clojurecraft/pearls.clj#defn provokable?
   - src/clojurecraft/pearls.clj#defn quarry
+  - src/clojurecraft/pearls.clj#defn roam
+  - test/clojurecraft/pearls_test.clj#a-lookout-that-found-nothing-roams-somewhere-else
   - test/clojurecraft/pearls_test.clj#the-stare-is-for-the-nearest-one-in-sight-not-only-the-nearest
   - src/clojurecraft/pearls.clj#defn fresh-kill
   - src/clojurecraft/pearls.clj#defn drop-of
@@ -78,11 +80,11 @@ In order:
    - out of the burrow (`shelter`: `:pearls/shelter` within `shelter-reach` 16 and still a `shelter?`) with one coming, one within `strike-range` 4.5, or under 10 health: a walk back to its end (`:intent/for :shelter`: the walk ends in that very cell, as a build's stand does). Batch pearls-263b: one bot met an enderman in the open after a provoke that ended by its coming near, and another backed away hurt; both died;
    - in it, the one coming, or one at hand, is fought where the bot stands: `:fight` with `:intent/hold?` (combat.clj: it never walks, never presses after the target and never breaks off; the approach stands facing it until it comes within 3, at most `hold-timeout-ms` 60 s);
    - with no burrow, one at hand is fought, or backed away from under 10 health (the open fight, the fallback);
-   - no burrow and a pickaxe held (`pickaxe?`): `:burrow`, heading `away` from the nearest enderman, so the stairs open toward it;
+   - no burrow, a pickaxe held (`pickaxe?`), and one to provoke or one coming: `:burrow` where the bot stands, heading `away` from it, so the stairs open toward it and the stare goes from the mouth;
    - in the burrow with none coming: a walk to its mouth (`:pearls/mouth`) to look round;
    - the nearest enderman within `stare-range` 64 (its follow range) not yet coming and `provokable?` from here (`quarry`: its head no nearer than `stare-from` 6, with a clear line): `:provoke`. Not only the nearest: batch pearls-263d (plan run 38899294690, probe 38904622614) tracked seventeen endermen 30 to 80 blocks round each landing, none routable and the nearest behind a ledge, and looked round for forty minutes. One stared at from past 16 blocks teleports toward the bot. Never one already coming: its provoke ends at once, and batch pearls-263b's bot, its pickaxe lost to a death, provoked one 26 times in a row;
    - one coming and no burrow to meet it in: fought;
-   - else a walk to the first of the three nearest within `seek-radius` 64 a route reaches; else a `:lookout`: standing for `lookout-ms` 5 s, the eyes level and turning, then done. Waiting as an intent, not a planner wait (whose 400 ticks fail the plan): batch pearls-263c's warped forest landings failed `:no-enderman` and `:no-route` 40 s in, before any enderman had come. With no enderman at all the burrow is still dug first, heading east.
+   - else a walk to the first of the three nearest within `seek-radius` 64 a route reaches; else a `:lookout`: standing for `lookout-ms` 5 s, the eyes level and turning, then done. Waiting as an intent, not a planner wait (whose 400 ticks fail the plan): batch pearls-263c's warped forest landings failed `:no-enderman` and `:no-route` 40 s in, before any enderman had come. After a lookout that found nothing, a `roam`: a walk `roam-reach` 16 blocks along the first of eight headings (the clock picks where to start, `roam-turn-ms` 10 s a heading) to a cell a body stands in within `roam-rise` 8 of the feet's height that a route reaches. Batch pearls-263e (plan run 38905343997): with the stare reaching 64, a landing still looked round from one place for forty minutes, every enderman out of its sight.
 
 ## The burrow
 Gym batch pearls-263a (plan run 38892130785) put three live endermen round the bot in iron helmet and chestplate: five trials, five deaths. A replay of one (probe 38893413043) showed the hits landing at 5.74 a second, the sword's sweep pulling a second enderman in, and a break-off with nowhere to go. A sword needs seven hits against forty health; the open fight loses. The game says where it cannot lose: a mob's melee is its box grown 0.83 sideways and not at all up or down (`Mob.getAttackBoundingBox`, `isWithinMeleeAttackRange`, probe 38893918055), and an enderman needs three free cells to stand. `shelter?` is that rule over the terrain: the bot's own two cells open, and no cell an enderman could stand in (`stand?`: a floor, three open cells) in the nine columns round it, at the heights whose body would overlap the bot's (feet two under to one over).
