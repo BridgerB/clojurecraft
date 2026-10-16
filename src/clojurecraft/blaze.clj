@@ -39,8 +39,6 @@
 (def camp-range 8.0)                  ; blocks from the spawner's centre to the eye where the bot waits for its blazes (a spawner wakes for a player within 16)
 (def camp-ms 60000)                   ; a camp with no blaze this long fails :no-blaze (a natural spawner waits 10 to 40 s between spawns)
 (def spawner-radius 256)              ; how far off a remembered spawner may be and still be gone to
-(def over-feet 3.0)                   ; blocks a blaze's feet may hover over the bot's and be fought (its body, aim-height up, comes within reach)
-(def under-feet 2.0)                  ; blocks under the bot's feet a blaze may be and be fought
 (def candidates 3)                    ; nearest blazes asked for a route, as the hunt asks of its animals
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def eat-under 14.0)                  ; health under which a meal comes before the next fight, the food under the healing level: one volley takes 9
@@ -64,15 +62,14 @@
           (:world/entities world))))
 
 (defn reachable?
-  "Can blaze e be fought from where the bot can walk: its feet no more than over-feet over the
-   bot's nor under-feet under them, and a route reaching within a walk's range of its cell on the
-   plane (intent/routable?, which judges the plane only). Gym blaze-fortress-a (run 38892386220)
-   tunnelled to its spawner and failed three fights in a row :unreachable on blazes seen through
-   the fortress's walls, every run."
+  "Can blaze e be fought from where the bot can walk: hittable from here (combat/hittable?: in
+   sight, its feet no more than three over the bot's nor two under), and a route reaching within
+   a walk's range of its cell on the plane (intent/routable?, which judges the plane only). Gym
+   blaze-fortress-a (run 38892386220) tunnelled to its spawner and failed three fights in a row
+   :unreachable on blazes seen through the fortress's walls, every run."
   [world e]
-  (let [dy (- (physics/y-of (:entity/pos e)) (physics/y-of (:player/pos world)))]
-    (and (<= (- under-feet) dy over-feet)
-         (intent/routable? world {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e))}))))
+  (and (combat/hittable? world e)
+       (intent/routable? world {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e))})))
 
 (defn quarry
   "[eid entity] of the blaze to fight: the first of the candidates nearest (blazes) that is
