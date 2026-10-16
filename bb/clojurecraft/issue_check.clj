@@ -5,7 +5,8 @@
      bb issue-check fetch <n>     the issue's snapshots into test/issues/<n>/
 
    The issue is the data: bb failures writes each sim reproduction into the issue's comments as
-   its snapshot's file name and the artifact that holds it. fetch reads the comments newest
+   its snapshot's file name and the artifact that holds it, and each real one the model
+   reproduces the same way (issue #299: a real race's snapshot, real-<runner>-<s>-<bot>.edn.gz). fetch reads the comments newest
    first, then the body, and takes at most max-snapshots of them, never two of one world (a
    snapshot is named <set>-<world>-<seed>: two seeds of one world are the same moment), only
    snapshots that carry a kept moment (:snapshot/moment, a moment from before the choice that
@@ -42,9 +43,11 @@
 
 (defn world-of
   "The world a snapshot's file name names: R4-35-2.edn.gz is world R4-35 (its seed, 2, does not
-   change the moment)."
+   change the moment); a real failure's (real-4-s2-Clj_r17.edn.gz, issue #299: one bot of one
+   race, on a landing of its own) is its own world."
   [file]
-  (second (re-find #"^(.+)-\d+\.edn\.gz$" file)))
+  (cond (str/starts-with? file "real-") (str/replace file #"\.edn\.gz$" "")
+        :else (second (re-find #"^(.+)-\d+\.edn\.gz$" file))))
 
 ;;;; I/O: the GitHub API, the files ;;;;
 

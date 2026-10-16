@@ -89,9 +89,13 @@
                name)))
 
 (defn labels
-  "An issue's labels for runs: bot-failure, and sim and/or real by where they came from."
+  "An issue's labels for runs: bot-failure, and sim and/or real by where they came from; sim too
+   when a real run's failure was kept as a snapshot (:run/snapshot, issue #299): the model
+   reproduces it, so the fix's check can judge it and requires one."
   [runs]
-  (into [label] (map name) (sort (distinct (map source runs)))))
+  (into [label]
+        (map name)
+        (sort (distinct (concat (map source runs) (when (some :run/snapshot runs) [:sim]))))))
 
 (defn clock
   "Simulated ms as m:ss."
@@ -111,30 +115,41 @@
          (clock window-ms)
          ")")))
 
+(defn snapshot-note
+  "A kept snapshot in a reproduction's words, \"snapshot `f` in artifact `a` (moment ...); or \",
+   the shape bb issue-check fetch looks for; nil when the run kept none."
+  [r]
+  (when (:run/snapshot r)
+    (str "snapshot `"
+         (last (str/split (str (:run/snapshot r)) #"/"))
+         "` in artifact `"
+         (:run/artifact r)
+         "`"
+         (moment-note (:run/moment r))
+         "; or ")))
+
 (defn repro
   "One line that reproduces a run: for a sim run its snapshot (a moment kept from before the
    choice that failed, in the runner's artifact: bb issue-check fetch brings it down, and the
-   fix's check judges it) and the sim race's command that made it; the recording's replay for a
-   real one."
+   fix's check judges it) and the sim race's command that made it; for a real one its snapshot
+   when the model reproduced it (issue #299, the same words: fetch takes either), and the
+   recording's replay, under its server's directory (:run/dir, s1 or s2: each server's bots have
+   the same names)."
   [r]
   (cond (:run/file r)
-        (str "- "
-             (when (:run/snapshot r)
-               (str "snapshot `"
-                    (last (str/split (str (:run/snapshot r)) #"/"))
-                    "` in artifact `"
-                    (:run/artifact r)
-                    "`"
-                    (moment-note (:run/moment r))
-                    "; or "))
+        (str "- " (snapshot-note r)
              "`clojure -M:simrace --world " (:run/file r)
              " --seed " (:run/seed r)
              " --seeds 1` at " (:run/commit r)
              ", landing " (pr-str (get-in r [:run/world :capture/landing])))
         :else
-        (str "- real race: bot "
+        (str "- "
+             (snapshot-note r)
+             "real race: bot "
              (:run/bot r)
              ", replay its recording with `clojure -M:replay <artifact>/"
+             (some-> (:run/dir r)
+                     (str "/"))
              (:run/bot r)
              ".edn`")))
 
@@ -248,14 +263,17 @@
 (defn runs-under
   "Every run under dir: the lines of each runs.edn and race.log, each run saying which artifact
    it came from (:run/artifact, the directory under dir the file sits in: what the report job
-   downloaded each artifact into)."
+   downloaded each artifact into) and, when the file sits deeper, the directory inside the
+   artifact (:run/dir: a real race's s1 or s2, where its bot's recording is)."
   [dir]
   (into []
         (comp (filter #(#{"runs.edn" "race.log"} (fs/file-name %)))
               (mapcat (fn [f]
-                        (let [artifact (first (fs/components (fs/relativize dir f)))]
+                        (let [[artifact & inner] (map str (fs/components (fs/relativize dir f)))
+                              sub (str/join "/" (butlast inner))]
                           (map #(some-> (run-of-line %)
-                                        (assoc :run/artifact (str artifact)))
+                                        (assoc :run/artifact artifact)
+                                        (cond-> (seq sub) (assoc :run/dir sub)))
                                (str/split-lines (slurp (fs/file f)))))))
               (remove nil?))
         (fs/glob dir "**")))
