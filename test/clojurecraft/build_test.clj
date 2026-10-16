@@ -571,3 +571,15 @@
       (let [near (run (physics/centre (build/cell site :south (build/landing 1))))]
         (is (= :no-path (get-in near [:plan/intent :intent/reason])))
         (is (empty? (memory/given-up-sites near)))))))
+
+(deftest a-stand-still-in-the-rock-is-cut-to-not-walked-near
+  ;; sim race 38855091523 (issue #178, world R1/34 seed 2): the lava's stand was stone, a route
+  ;; led beside it, the walk ended a block under it, and the refill went back to the landing and
+  ;; out again, three walks every five seconds until the run's time ran out
+  (let [w (standing-at (open-ground {[8 63 5] 1 [8 64 5] 1}) [5.5 63.0 5.5])]
+    (is (nil? (build/stand-walk w [8 63 5])) "stone where the feet would stand: no walk")
+    (is (= {:intent/kind :walk :intent/target [7 63 5] :intent/for :build}
+           (build/stand-walk w [7 63 5]))
+        "open with a floor: walked to")
+    (is (build/beside-stand? w [6 64 5]) "a block up beside the feet: the way is to its height")
+    (is (not (build/beside-stand? w [9 64 5])) "four off: by the landing, as before")))
