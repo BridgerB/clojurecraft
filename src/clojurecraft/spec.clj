@@ -8,6 +8,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.claims :as claims]
             [clojurecraft.combat]
+            [clojurecraft.drops :as drops]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.fortress :as fortress]
@@ -156,6 +157,7 @@
 (s/def :entity/health double?)
 (s/def :entity/flags (s/int-in 0 256))
 (s/def :entity/died-at int?)
+(s/def :entity/item int?)
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
@@ -746,6 +748,12 @@
 (s/fdef eat/food-held
   :args
   (s/cat :world (requires :player/inventory)))
+(s/fdef drops/lying
+  :args
+  (s/cat :world (requires :world/entities)
+         :id int?
+         :at ::vec3
+         :radius number?))
 (s/fdef window/view
   :args
   (s/cat :world (requires :window/grid)
@@ -756,5 +764,6 @@
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
-   `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held])
+   `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held
+   `drops/lying])
 (s/def :stats/deaths pos-int?)

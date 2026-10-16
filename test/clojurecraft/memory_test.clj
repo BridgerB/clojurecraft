@@ -55,6 +55,18 @@
         (is (nil? (memory/remembered (assoc old :player/dimension "minecraft:the_nether")
                                      [9 64 9])))))))
 
+(deftest a-spawner-is-remembered-in-the-nether-only
+  ;; issue #262: a Nether spawner is a fortress's, where the blaze rods come from; an overworld
+  ;; one is a dungeon's, and the forest runs' memory stays as it was
+  (let [spawner (blocks/default-state :spawner)
+        load-in (fn [dim]
+                  (terrain/put-column (assoc (game/init fx/opts) :time/now 3 :player/dimension dim)
+                                      [0 0]
+                                      (world/column {[3 70 3] spawner})))]
+    (is (= [[3 70 3]] (memory/positions-now (load-in "minecraft:the_nether") [spawner])))
+    (is (empty? (memory/positions-now (load-in "minecraft:overworld") [spawner])))
+    (is (not (memory/watched? spawner)) "nor is it watched with no dimension said")))
+
 ;; ---------------------------------------------------------------- pools (issue #5)
 
 (def pond-and-lava

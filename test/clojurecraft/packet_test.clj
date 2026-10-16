@@ -284,4 +284,41 @@
                                        (entry o 0 0 #(b/write-u8 % 0))
                                        (entry o 2 6 #(b/write-bool % true)) ; a custom name: a component
                                        (b/write-bytes o (byte-array 12))))))
-          "a custom name ends the skim before the health"))))
+          "a custom name ends the skim before the health")
+      (testing "a dropped item's stack (issue #262): a slot at index 8, read on to the end"
+        (is
+         (= {:packet/name :set-entity-data :entity-id 62 :metadata {0 0 8 {:item 1117 :count 1}}}
+            (p/decode :play
+                      :s2c
+                      (entity-frame :set-entity-data
+                                    (fn [o]
+                                      (b/write-varint o 62)
+                                      (entry o 0 0 #(b/write-u8 % 0))
+                                      (entry o
+                                             8
+                                             7
+                                             (fn [o]
+                                               (b/write-varint o 1)    ; count
+                                               (b/write-varint o 1117) ; blaze_rod
+                                               (b/write-varint o 0)    ; components added
+                                               (b/write-varint o 0)))  ; and removed
+                                      (b/write-u8 o 255))))))
+        (is (= {:packet/name :set-entity-data
+                :entity-id 63
+                :metadata {8 {:item 1117 :count 1 :components? true}}}
+               (p/decode :play
+                         :s2c
+                         (entity-frame :set-entity-data
+                                       (fn [o]
+                                         (b/write-varint o 63)
+                                         (entry o
+                                                8
+                                                7
+                                                (fn [o]
+                                                  (b/write-varint o 1)
+                                                  (b/write-varint o 1117)
+                                                  (b/write-varint o 1) ; one component added
+                                                  (b/write-varint o 0)
+                                                  (b/write-varint o 9999))) ; of a type not read
+                                         (b/write-bytes o (byte-array 12))))))
+            "a stack whose components cannot be stepped over ends the skim, kept")))))

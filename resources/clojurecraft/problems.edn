@@ -268,6 +268,30 @@
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
                     "brain/bot/plan/roadmap-issues.md" "brain/siblings/sib-775-attack-packet.md"
                     "brain/siblings/sib-blaze-combat.md" "brain/siblings/sib-end-and-dragon.md"]}
+ {:problem/stage :blaze-rods
+  :problem/issue 262
+  :problem/goals [:blaze-rods]
+  :problem/statement
+  "Split from :end-and-dragon. Seven blaze rods (six for the twelve blaze powder the eyes of ender take, one spare), from blazes a fortress's spawner makes, without dying to their fireballs: the first stage past the fortress, and the first whose loot may not come (a rod one kill in two)."
+  :problem/needs
+  ["Where a blaze spawner is: a spawner seen in the Nether is a fortress's, remembered after its chunk unloads (memory/nether-landmark-kinds)"
+   "Which blazes are near and alive, and how hurt the bot is (entity.clj, set-health)"
+   "Which drop on the ground is a rod: a dropped item's stack from its metadata (index 8)"
+   "A pickup that is done when nothing lies there to pick up, since a kill may drop nothing (:collect-drops)"
+   "A fight that reaches a target hovering over the floor (combat/pressing?)"]
+  :problem/risks
+  ["Fireballs: five a hit on Normal, and fire; a bot that fights on under 10 health dies with the blaze (ruststeve)"
+   "A blaze hovering out of reach, never attacked"
+   "A spawner's delay (natural ones 10 to 40 s) longer than a planner wait, failing a plan that only had to stand there"
+   "A rod lying where no walk reaches it: on the spawner, in lava"
+   "Wither skeletons beside the spawner" "Peaceful: no blazes at all"]
+  :problem/done
+  "RCON: seven or more blaze rods in the bot's inventory (clear <bot> minecraft:blaze_rod 0), from the nether arena's spawner and from a fortress pad."
+  :problem/last-failure
+  "Not played yet: the parts land first (issue #262): a drop's stack is read from its metadata, :collect-drops is done when nothing of the item lies near, a Nether spawner is remembered, and an engaged fight walks on toward a target hovering out of reach."
+  :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
+                    "brain/siblings/sib-blaze-combat.md" "brain/bot/plan/survival.md"
+                    "brain/bot/plan/collect-intent.md"]}
  {:problem/stage :sim-mobs-and-end
   :problem/issue 260
   :problem/goals []

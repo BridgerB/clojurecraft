@@ -1,7 +1,8 @@
 (ns clojurecraft.entity
   "The entities the server shows the bot, as values: every one it adds is kept in
    :world/entities by id ({:entity/type :entity/pos :entity/seen-at}, with :entity/vel once the
-   server gives one, and for a living one :entity/health and :entity/flags from its metadata),
+   server gives one, for a living one :entity/health and :entity/flags from its metadata, and for
+   a dropped item :entity/item, what it holds),
    until the server removes it. A death is a fact the server states (entity-event status 3,
    :entity/died-at) before it removes the body. Then the questions a fight asks of them: which
    are hostile, which is nearest, whether one is gone. Items, mobs and other players are all
@@ -14,6 +15,7 @@
 
 (def health-index 9)                  ; LivingEntity.DATA_HEALTH_ID, a float (probe run 38876275250)
 (def flags-index 0)                   ; Entity.DATA_SHARED_FLAGS_ID, a byte: 0x01 on fire, 0x02 crouching, 0x20 invisible
+(def item-index 8)                    ; ItemEntity.DATA_ITEM, an item stack: what a drop holds
 (def death-status 3)                  ; an entity-event's status for a living entity's death (EntityEvent.DEATH)
 (def on-fire-bit 0x01)                ; in the shared flags: burning (a blaze's state, a mob in lava)
 
@@ -60,18 +62,23 @@
 
 (defn metadata-facts
   "The attributes an entity of type type-id gets from a skimmed metadata map ({index value},
-   packet/read-metadata): its shared flags at flags-index, and, for a living type only, its
-   health at health-index; a value of another shape there (no server sends one) is left out. The
-   same index is an interaction's height and a boat's hurt
-   direction, so health is never read off a type the game gives no health. An index the skim
-   did not reach is simply absent: what was known stays."
+   packet/read-metadata): its shared flags at flags-index, for a living type only its health at
+   health-index, and for a dropped item only the item id of the stack at item-index; a value of
+   another shape there (no server sends one) is left out. The same health index is an
+   interaction's height and a boat's hurt direction, so health is never read off a type the game
+   gives no health; the same item index is a fireball's look (issue #262: a drop is told apart by
+   what it holds, a blaze rod from cobblestone). An index the skim did not reach is simply absent:
+   what was known stays."
   [type-id metadata]
   (let [flags (get metadata flags-index)
-        health (get metadata health-index)]
+        health (get metadata health-index)
+        stack (get metadata item-index)]
     (cond-> {}
       (and (int? flags) (<= 0 flags 255)) (assoc :entity/flags flags)
       (and (number? health) (contains? blocks/mobs (blocks/entity-names type-id)))
-      (assoc :entity/health (double health)))))
+      (assoc :entity/health (double health))
+      (and (= blocks/item-entity-type type-id) (map? stack) (int? (:item stack)))
+      (assoc :entity/item (:item stack)))))
 
 ;; ---------------------------------------------------------------- the questions a fight asks
 

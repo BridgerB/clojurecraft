@@ -13,8 +13,9 @@
    is never the overworld's (ruststeve read Nether brick 64 blocks off through overworld columns).
    Pools likewise carry :pool/dimension.
 
-   Only block kinds that `watched?` accepts start a record (logs, tables and furnaces); a
-   position already on record is followed through every change, so a dug log becomes air.
+   Only block kinds that `watched?` accepts start a record (logs, tables and furnaces, a
+   fortress's bricks, and in the Nether a spawner); a position already on record is followed
+   through every change, so a dug log becomes air.
 
    The bot's own intentions are facts in the same store: {:intention/id n :intention/event
    :started|:done|:failed|:abandoned :intention/kind k :intention/at ms} plus the target, recipe
@@ -67,15 +68,26 @@
    sightings became 1121)."
   #{:nether_bricks :nether_brick_fence :nether_brick_stairs :nether_portal})
 
+(def nether-landmark-kinds
+  "Blocks that say where something is only in the Nether: a spawner there is a fortress's, a blaze
+   spawner (issue #262: the rods come from it), or a bastion's rare magma cube one. In the
+   overworld a spawner is a dungeon's or a mineshaft's, and watching it there would change what
+   a forest run remembers (landmark-kinds: the wood recording's sightings)."
+  #{:spawner})
+
 (defn watched?
   "Does seeing this state start a record? Logs, the placed-kinds and the landmark-kinds: things
    rare enough to remember after their chunk is gone. Stone is not: ten chunks hold 120,000 of it, and
    recording them made every chunk load and every planner tick take seconds (gym batch
    cobble-a1, 2026-10-10: eleven of twelve bots timed out). What is exposed now is the
-   terrain's question, not memory's."
-  [id]
-  (or (blocks/log? id)
-      (let [n (blocks/name-of id)] (or (contains? placed-kinds n) (contains? landmark-kinds n)))))
+   terrain's question, not memory's. Seen in the dimension dim, the nether-landmark-kinds too
+   when it is the Nether."
+  ([id]
+   (or (blocks/log? id)
+       (let [n (blocks/name-of id)] (or (contains? placed-kinds n) (contains? landmark-kinds n)))))
+  ([dim id]
+   (or (watched? id)
+       (and (= dimension/nether dim) (contains? nether-landmark-kinds (blocks/name-of id))))))
 
 ;; ---------------------------------------------------------------- reading
 
@@ -172,7 +184,7 @@
    the last there)."
   [db dim pos id now]
   (let [last (latest-entity db dim pos)]
-    (when (and (not= id (:sight/state last)) (or last (watched? id)))
+    (when (and (not= id (:sight/state last)) (or last (watched? dim id)))
       {:sight/pos pos :sight/state id :sight/at now :sight/dimension dim})))
 
 (defn remember-column
@@ -183,7 +195,7 @@
         now (:time/now world)
         dim (dimension/of world)
         tx (keep (fn [[x y z id]] (observation db dim [x y z] id now))
-                 (chunk/find-blocks {key column} watched?))]
+                 (chunk/find-blocks {key column} #(watched? dim %)))]
     (cond-> world (seq tx) (assoc :world/facts (d/db-with db tx)))))
 
 (def source-states "The states of a water or a lava source." #{blocks/water-base blocks/lava-base})
