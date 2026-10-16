@@ -615,3 +615,15 @@
         "beside the stand: no way out first")
     (is (not (build/out-first? (at {} [5.5 63.0 5.5]) origin :south stand out 4 4))
         "already as far out as the stand")))
+
+(deftest a-block-in-the-way-is-dug-from-a-hole-under-the-stands-height
+  ;; sim race 38855091523 (issue #178, world R1/34 seed 2, after #250): the walk to the block in
+  ;; the way of the lava's stand ended a block under it in a hole of the floor, and the refill
+  ;; sent the feet back to the landing, two walks every two seconds until the time ran out
+  (let [blocks {[5 62 5] blocks/air [6 63 5] 1 [6 64 5] 1}
+        stand [9 63 5]
+        dig #(build/dig-from-under % stand :portal [100 64 200] :south)]
+    (is (= [6 63 5] (:intent/target (dig (standing-at (open-ground blocks) [5.5 62.0 5.5]))))
+        "in the hole, the block in the way in reach: dug from there")
+    (is (nil? (dig (standing-at (open-ground blocks) [5.5 63.0 4.5])))
+        "at the stand's height it is clear-stand's, not this")))
