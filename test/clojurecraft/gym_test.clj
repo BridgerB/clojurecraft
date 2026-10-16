@@ -315,3 +315,18 @@
                                     "Pig has the following entity data: 715f"
                                     {:ok true :mobs {:pig 7.5}})))
         "the value is quoted, its dot no wildcard")))
+
+(deftest the-throw-trial-holds-the-throws-line-to-the-located-stronghold
+  ;; issue #265: the first throw's line within ten degrees of the way to what the server's locate
+  ;; finds; a pattern cannot say that, so the row's :truth/check is :bearing
+  (let [truth (first (:gym/truth (gym/gym "throw")))
+        result {:ok true :throws [{:throw/from [0.5 70.9 0.5] :throw/dir [0.6 0.8] :throw/at 1}]}
+        at (fn [x z]
+             (str "The nearest minecraft:stronghold is at [" x ", ~, " z "] (1000 blocks away)"))]
+    (is (= :bearing (:truth/check truth)))
+    (is (:truth/ok? (gym/truth truth "cmd" (at 600 800) result)))
+    (is (not (:truth/ok? (gym/truth truth "cmd" (at 800 600) result))) "sixteen degrees off")
+    (is (not (:truth/ok? (gym/truth truth "cmd" (at -600 -800) result))) "the other way")
+    (is (not (:truth/ok? (gym/truth truth "cmd" "Could not find a structure" result))))
+    (is (not (:truth/ok? (gym/truth truth "cmd" (at 600 800) {:ok true}))) "no throw kept")
+    (is (< (gym/bearing-off [0.0 0.0 0.0] [-1.0 0.0] [-100 1]) 1.0) "across the half turn")))

@@ -23,6 +23,7 @@
             [clojurecraft.smelt :as smelt]
             [clojurecraft.spec]
             [clojurecraft.stone]
+            [clojurecraft.stronghold]
             [clojurecraft.swim :as swim]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.wood :as wood]
@@ -77,10 +78,11 @@
       :wade (some? (swim/entry w (intent/feet w))) ; into water the bot remembers, from a bank it can stand on
       :burrow (pos? (get counts :wooden_pickaxe 0)) ; the pearl hunt's burrow, cut only with a pickaxe held (issue #263)
       :lookout true ; the pearl hunt standing until an enderman comes
+      :throw-eye (pos? (get counts :ender_eye 0)) ; an eye thrown only when one is held (issue #265)
       nil
       (contains? #{:no-log :no-water :in-water :no-site :other-dimension :no-mob :looking :no-pearls
-                   :no-rods}
-                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round, the eyes with no pearls or rods (issue #264, each its own stage): wait
+                   :no-rods :no-eye}
+                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round, the eyes with no pearls or rods (issue #264, each its own stage), a throw with no eye (issue #265): wait
       false)))
 
 (deftest the-planner-only-picks-executable-intents
