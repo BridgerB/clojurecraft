@@ -374,8 +374,12 @@
   ;; land jumping only when blocked, in the water with jump held, so the body swims at the
   ;; surface with the eye in air and the trap never calls the escape back to the near bank;
   ;; done on dry land once it has been in the water and come cross-gain nearer the trunk, so a
-  ;; wade along the near shore is not the far side
-  [world {:intent/keys [target started wet? from-dist best-dist best-tick]} _]
+  ;; wade along the near shore is not the far side. Stuck in the water (a far bank too high
+  ;; for the swim's lift), a child :swim-out for :retreat takes it to the nearest bank and the
+  ;; crossing ends on dry land: sim race 38844589684 runner 6 (issue #57, world R1/30 seed 4,
+  ;; probe 38853120299) swam forty blocks, stuck eight short against the far bank, and failed
+  ;; :stuck three times between other intents before a climb and an escape got it out
+  [world {:intent/keys [target started wet? from-dist best-dist best-tick child]} event]
   (let [tick (:time/tick world)
         started (or started tick)
         wet? (or wet? (boolean (:player/in-water? world)))
@@ -389,14 +393,31 @@
                                    :intent/from-dist from-dist
                                    :intent/best-dist (if nearer? dist best-dist)
                                    :intent/best-tick best-tick)]
-    (cond (and wet? (trap/dry-land? world) (<= dist (- from-dist cross-gain)))
+    (cond (and child (intent/done? child))
           (-> world
               (assoc :player/controls {})
+              (intent/dissoc-intent :intent/child)
               intent/done)
+          (and child (intent/failed? child))
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail (:intent/reason child)))
           (> (- tick started) cross-timeout-ticks)
           (-> world
               (assoc :player/controls {})
               (intent/fail :no-crossing))
+          child (intent/run-child world event)
+          (and wet? (trap/dry-land? world) (<= dist (- from-dist cross-gain)))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (and (> (- tick best-tick) cross-stuck-ticks) (:player/in-water? world))
+          (-> world
+              (intent/assoc-intent
+               :intent/child
+               {:intent/kind :swim-out :intent/for :retreat :intent/status :active})
+              (game/say "cross: stuck in the water, to the nearest bank")
+              (intent/run-child event))
           (> (- tick best-tick) cross-stuck-ticks)
           (-> world
               (assoc :player/controls {})

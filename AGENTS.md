@@ -570,7 +570,7 @@ Walk, dig, collect, each `:intent/for :log`, chained from `:plan/last`. `:wood` 
 2. `near-walk`: nearest standing trunk within `search-radius` 48, ±12 of the eye (`memory/nearest-log`), skipping blacklisted logs and failed trunks; first routable of 3 nearest. Target = `trunk-target` (log nearest feet height, up to `max-trunk` 8 up).
 3. `climb-out`: trunks within `far-radius` 256: walk to the first routable; else (not `stairs/out?`, feet not in `:plan/boxed-at`) `intent/opening`, else `:stairs-up` to top of world, `:intent/for :surface`.
 4. `hunt` (under open sky): a walk `:intent/for :log-hunt` via `scoop/hunt-targets`/`first-walk`. Logs remembered within `far-radius`: toward the ground nearest the nearest log, and may walk back toward the landing. None remembered: sets out anyway in the water hunt's order (#57). nil underground or with no routable ground.
-5. `crossing` (#87): under open sky, nothing else reaching a tree, the nearest trunk across open water → `:cross` (swum at the surface, jump held; done on dry land once wet and 8 nearer).
+5. `crossing` (#87): under open sky, nothing else reaching a tree, the nearest trunk across open water → `:cross` (swum at the surface, jump held; done on dry land once wet and 8 nearer; stuck in the water, a child `:swim-out :retreat` to the nearest bank, #57).
 6. `{:plan/wait :no-log}`.
 - The `:log` tag exists so a walk to a table is never continued as a dig. A trunk no route reaches is passed over, never walked at (#75). Stairs only once a trunk is remembered, unreachable, and the shaft cannot be walked up. `stairs/out?` is false in a pit (`stairs/pit-rim`; #54, #56, #58, #63, #102-#104).
 

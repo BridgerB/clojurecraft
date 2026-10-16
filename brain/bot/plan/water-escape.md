@@ -35,6 +35,7 @@ sourceRefs:
   - src/clojurecraft/swim.clj#defmethod intent/run :flee
   - src/clojurecraft/swim.clj#defmethod intent/run :cross
   - test/clojurecraft/swim_test.clj#a-crossing-swims-at-the-surface-and-ends-on-the-far-side
+  - test/clojurecraft/swim_test.clj#a-crossing-stuck-in-the-water-retreats-to-a-bank
   - src/clojurecraft/swim.clj#defmethod intent/run :wade
   - src/clojurecraft/swim.clj#defn entry
   - src/clojurecraft/swim.clj#defn entries
@@ -101,7 +102,7 @@ Four model fixtures from the issue, the siblings' deaths and the sim race: a two
 - **A scooped pond's edge is a flooded cave to the escape.** The bucket filled from the edge, the bot stands in the one or two of water its source left, with the bank one over the water's top and so two over the float-top: outside the band, and no cap over the head. Sim race 38477665389 world R2/23 (issue #92, 48 runs at 1d31d21, before the notch): the mine for the portal's cobblestone retreated by a `:swim-out` that held jump until it timed out, three times, `:no-escape`. The notch takes the shore as it takes a cave wall (`a-retreat-from-a-scooped-ponds-edge-notches-the-bank`); the place acts get ashore the same way before they look for a spot ([[place-intent]]).
 
 ## A crossing (`:cross`)
-The gather's deliberate swim (`wood/crossing`, issue #87, world R3/4: a sand island with the trees across a lake): straight at the remembered trunk, jumping on land only when blocked and holding jump in the water, so the body swims at the surface with the eye in air and the trap never calls the escape back to the near bank. Done on dry land once the body has been in the water (`:intent/wet?`) and come `cross-gain` (8) nearer the trunk than it started (`:intent/from-dist`), so wading the near shore is not the far side; `:stuck` after `cross-stuck-ticks` (100) without coming nearer, `:no-crossing` after `cross-timeout-ticks` (2400).
+The gather's deliberate swim (`wood/crossing`, issue #87, world R3/4: a sand island with the trees across a lake): straight at the remembered trunk, jumping on land only when blocked and holding jump in the water, so the body swims at the surface with the eye in air and the trap never calls the escape back to the near bank. Done on dry land once the body has been in the water (`:intent/wet?`) and come `cross-gain` (8) nearer the trunk than it started (`:intent/from-dist`), so wading the near shore is not the far side; stuck `cross-stuck-ticks` (100) without coming nearer while in the water (a far bank too high for the lift), a child `:swim-out` for `:retreat` takes it to the nearest bank and the crossing ends there; stuck on land it fails `:stuck`; `:no-crossing` after `cross-timeout-ticks` (2400). Sim race 38844589684 runner 6 (issue #57, world R1/30 seed 4) swam forty blocks and stuck eight short against the far bank; it failed `:stuck` three times between other intents before a climb and an escape got it out (probe 38853120299; `a-crossing-stuck-in-the-water-retreats-to-a-bank`).
 
 ## See also
 - [[fluid-physics]] - the flags this reads.
