@@ -457,3 +457,24 @@
     (is (= :no-station
            (refill {[7 62 5] blocks/lava-base [7 63 5] (blocks/default-state :obsidian)}))
         "no source the eyes can be given a line to")))
+
+(deftest a-way-over-a-hole-gets-a-floor
+  ;; sim race 38665691522 (issue #162, world R3/37): the refill's way out from the landing ran
+  ;; over a cave's open cell, the line clear and nothing to dig, and the walk to the far side,
+  ;; with no floor to stand on, failed :no-path three times. Here the stand two ahead is walled
+  ;; in on three sides and the cell between is a hole two deep
+  (let [walls (into {} (for [[x z] [[4 6] [6 6] [4 7] [6 7] [5 8]] y [63 64]] [[x y z] 1]))
+        hole {[5 62 6] blocks/air [5 61 6] blocks/air}
+        cobble {0 {:item (recipe/item-id :cobblestone) :count 8}}
+        toward (fn [inv]
+                 (build/toward-stand (assoc (standing-at (open-ground (merge walls hole))
+                                                         [5.5 63.0 5.5])
+                                            :player/inventory
+                                            inv)
+                                     [5 63 7]
+                                     :portal
+                                     [100 64 200]
+                                     :south))]
+    (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [5 62 6]} (toward cobble))
+        "the hole's top cell is floored from the feet")
+    (is (= :walk (:intent/kind (toward {}))) "nothing to place: the walk, as before")))
