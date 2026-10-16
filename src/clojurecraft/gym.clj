@@ -725,9 +725,9 @@
 
 (defn attempt!
   "One bot on a running server: start it as its own JVM (classpath cp, in bot-dir), land it
-   (landing!) and send its :go through its stdin, judge it from its log and the server
-   (judge!), and leave result.edn, landed.edn, bot.log and run.edn in dir. Returns the result
-   row with tags merged in (the plan's experiment, arm and unit)."
+   (landing!) and send its :go through its stdin (none for a fixture row), judge it from its
+   log and the server (judge!), and leave result.edn, landed.edn, bot.log and run.edn in dir.
+   Returns the result row with tags merged in (the plan's experiment, arm and unit)."
   [{:keys [goal run name dir cp bot-dir port rcon-port pass landings commit tags]
     :or {bot-dir "." port 25565 rcon-port 25575}}]
   (.mkdirs (io/file dir))
@@ -749,7 +749,8 @@
     (spit landed-file (pr-str landed))
     (cli/log "landed" (pr-str landed))
     (with-open [w (io/writer (.getOutputStream p))]
-      (.write w (str (pr-str (fixture/go-event (:gym/until row) (:gym/at landed))) "\n")))
+      (when-not (:gym/fixture? row) ; a fixture row plays nothing: a :go with no goals is no event
+        (.write w (str (pr-str (fixture/go-event (:gym/until row) (:gym/at landed))) "\n"))))
     (let [tagged (merge (judge! {:goal goal
                                  :run run
                                  :name name
