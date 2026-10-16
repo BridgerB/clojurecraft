@@ -30,11 +30,13 @@
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.entity :as entity]
             [clojurecraft.fluid :as fluid]
             [clojurecraft.food :as food]
             [clojurecraft.hunger :as hunger]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.memo :as memo]
+            [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]))
@@ -73,9 +75,10 @@
         (let [k (column-key pos)]
           (when-let [column (column-of sim k)] (chunk/block-at {k column} pos)))))
 
-(declare disturb full sync-window stream-from set-cell ultrawarm? eye-under?)
+(declare disturb full sync-window stream-from set-cell ultrawarm? eye-under? with-mobs)
 
 (def player-eid 1)                    ; the player's entity id, as the model's login gives it
+(def mob-salt 0x2545F4914F6CDD1D)     ; the mobs' rolls start from :seed mixed with this, apart from the loot's (mob-roll)
 
 (defn food-value
   "The player's food as hunger's rules take it ({:food/level :food/saturation :food/exhaustion
@@ -207,10 +210,12 @@
    and where the player arrives) and :difficulty (:peaceful, :easy, :normal or :hard, as the
    server's setting: hunger drains the bar, a full one when :food is absent, and heals and
    starves by it, issue #260; absent, nothing drains the bar, as before, so a snapshot from then
-   plays the same)."
+   plays the same; given, the day turns from :day-time (game ticks, 0 when absent), hostiles
+   spawn at night and in the dark, and animals stand on newly loaded chunks), and :mobs
+   [{:type kind :pos [x y z]}] (a fixture's mobs, mob/kinds, sent at login and never despawned)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
            inventory lag-ticks slow-breaks respawn seed tick-seed kill-at dimension nether food
-           difficulty]
+           difficulty day-time mobs]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -254,9 +259,13 @@
     food (assoc :sim/food food)
     nether (assoc :sim/nether nether)
     difficulty
-    (-> (assoc :sim/difficulty difficulty)
+    (-> (assoc :sim/difficulty difficulty :sim/day-time (or day-time 0))
         (with-food-value (assoc hunger/fresh :food/level (or food food/max-food)))
-        (assoc :sim/sent-health [max-health (or food food/max-food) false]))))
+        (assoc :sim/sent-health [max-health (or food food/max-food) false]))
+    (or difficulty (seq mobs)) (assoc :sim/mob-rng (bit-xor (long (or seed 0)) mob-salt))
+    (seq mobs)
+    (assoc :sim/fixture-mobs (vec mobs)
+           :sim/sent-health [max-health (or food food/max-food) false])))
 
 (defn send "Queue pkt for the client in :sim/out." [sim pkt] (update sim :sim/out conj pkt))
 
@@ -384,10 +393,12 @@
 
 (defn sync-health
   "The model at the end of a tick, with a set-health when what it tells (told) changed since the
-   last one (ServerPlayer.doTick's rule). Only with hunger (:sim/difficulty): a model without it
-   tells health only where it always did."
+   last one (ServerPlayer.doTick's rule). Only with hunger (:sim/difficulty) or mobs that can hurt
+   the player (:sim/mobs): a model with neither tells health only where it always did."
   [sim]
-  (cond (or (nil? (:sim/difficulty sim)) (= (:sim/sent-health sim) (told sim))) sim
+  (cond (or (not (or (:sim/difficulty sim) (seq (:sim/mobs sim))))
+            (= (:sim/sent-health sim) (told sim)))
+        sim
         :else (tell-health sim)))
 
 (defmethod on-packet [:configuration :finish-configuration]
@@ -414,7 +425,9 @@
                             (range (inventory/slot-count (inventory/layouts :inventory))))
                :carried nil})
         (cond-> (:sim/food sim) tell-health)
-        stream)))
+        stream
+        (with-mobs (:sim/fixture-mobs sim))
+        (dissoc :sim/fixture-mobs))))
 
 (defn on-ground-flag?
   "Does a movement packet's flags byte say the player stands on the ground (bit 1)?"
@@ -438,15 +451,18 @@
         stream)))
 
 (defmethod on-packet [:play :move-player-pos-rot]
-  [sim {:keys [x y z flags]}]
-  (moved sim [x y z] flags))
+  ;; the look too, which an enderman reads (mob/stared?)
+  [sim {:keys [x y z yaw pitch flags]}]
+  (moved (assoc sim :sim/player-look [(double yaw) (double pitch)]) [x y z] flags))
 (defmethod on-packet [:play :move-player-pos] [sim {:keys [x y z flags]}] (moved sim [x y z] flags))
 (defmethod on-packet [:play :move-player-status-only]
   [sim {:keys [flags]}]
   (assoc sim :sim/on-ground? (on-ground-flag? flags)))
 (defmethod on-packet [:play :move-player-rot]
-  [sim {:keys [flags]}]
-  (assoc sim :sim/on-ground? (on-ground-flag? flags)))
+  [sim {:keys [yaw pitch flags]}]
+  (assoc sim
+         :sim/on-ground? (on-ground-flag? flags)
+         :sim/player-look [(double yaw) (double pitch)]))
 (defmethod on-packet [:play :keep-alive]
   [sim {:keys [id]}]
   (update sim :sim/keep-alives-pending disj id))
@@ -471,14 +487,30 @@
                       (some-> below
                               blocks/solid?))))))
 
+(defn spawn-item
+  "The model with stack {:item id :count n} lying at point [x y z] as an item entity: its own
+   entity id, handed over once its pickup delay has passed (pick-up), the client told
+   (add-entity)."
+  [sim [x y z :as at] stack]
+  (let [eid (:sim/next-eid sim)]
+    (-> sim
+        (assoc :sim/next-eid (inc eid))
+        (assoc-in [:sim/items eid] {:pos at :spawned (:sim/now sim) :item stack})
+        (send {:packet/name :add-entity
+               :entity-id eid
+               :uuid nil
+               :type blocks/item-entity-type
+               :x x
+               :y y
+               :z z}))))
+
 (defn break-block
   "Block id at pos is broken by the player holding held in slot: gone (placed or not), its
    block update, its drop as an item entity, the tool worn, the dig's exhaustion (with hunger),
    the neighbours disturbed; ice over water or a solid becomes a water source (melts?)."
   [sim pos id held slot]
-  (let [eid (:sim/next-eid sim)
-        [x y z] pos
-        [ix iy iz :as item-pos] [(+ x 0.5) (+ y drop-rise) (+ z 0.5)]
+  (let [[x y z] pos
+        item-pos [(+ x 0.5) (+ y drop-rise) (+ z 0.5)]
         [sim item] (loot sim id held)
         drop (when item {:item item :count 1})
         before (full (:sim/inv sim) (inventory/layouts :inventory))
@@ -491,18 +523,7 @@
                 (disturb pos)
                 (cond-> (melts? sim pos id) (set-cell pos blocks/water-base)))
         sim (sync-window sim :inventory before (:sim/cursor sim) false)]
-    (if drop
-      (-> sim
-          (assoc :sim/next-eid (inc eid))
-          (assoc-in [:sim/items eid] {:pos item-pos :spawned (:sim/now sim) :item drop})
-          (send {:packet/name :add-entity
-                 :entity-id eid
-                 :uuid nil
-                 :type blocks/item-entity-type
-                 :x ix
-                 :y iy
-                 :z iz}))
-      sim)))
+    (cond-> sim drop (spawn-item item-pos drop))))
 
 (defn finish-dig
   "The client says it finished breaking pos: broken, with its drop, when it started breaking
@@ -1707,24 +1728,487 @@
    of."
   [sim]
   (let [now (:sim/now sim)]
-    (reduce
-     (fn [sim [eid {:keys [pos spawned]}]]
-       (if (and (:sim/player-pos sim)
-                (>= (- now spawned) pickup-delay)
-                (within-pickup? (:sim/player-pos sim) pos))
-         (-> sim
-             (update :sim/items dissoc eid)
-             (send {:packet/name :take-item-entity :collected eid :collector player-eid :count 1})
-             (send {:packet/name :remove-entities :ids [eid]})
-             (give (get (get (:sim/items sim) eid) :item {:item (:oak_log blocks/items) :count 1})))
-         sim))
-     sim
-     (:sim/items sim))))
+    (reduce (fn [sim [eid {:keys [pos spawned item]}]]
+              (if (and (:sim/player-pos sim)
+                       (>= (- now spawned) pickup-delay)
+                       (within-pickup? (:sim/player-pos sim) pos))
+                (let [stack (or item {:item (:oak_log blocks/items) :count 1})]
+                  (-> sim
+                      (update :sim/items dissoc eid)
+                      (send {:packet/name :take-item-entity
+                             :collected eid
+                             :collector player-eid
+                             :count (:count stack)})
+                      (send {:packet/name :remove-entities :ids [eid]})
+                      (give stack)))
+                sim))
+            sim
+            (:sim/items sim))))
+
+;; ---------------------------------------------------------------- mobs (issue #260)
+
+(def unswell 7.0)                     ; a lit creeper's fuse goes out with the player farther than this (SwellGoal)
+(def populate-radius 3)               ; chunks round the player that have had their animals placed
+
+(defn mob-roll
+  "[sim' r]: the next roll of the mobs' own stream, r in [0, 1). Spawns, despawns and drops roll
+   from :sim/mob-rng (started at :seed mixed with mob-salt), never from the loot's :sim/rng, so
+   gravel's flint falls the same with mobs or without."
+  [sim]
+  (let [[{r :sim/rng} x] (roll {:sim/rng (:sim/mob-rng sim (bit-xor (:sim/rng sim) mob-salt))})]
+    [(assoc sim :sim/mob-rng r) x]))
+
+(defn overworld?
+  "Is the player in the overworld, where the day turns and the night rule spawns?"
+  [sim]
+  (= dimension/overworld (:sim/dimension sim dimension/overworld)))
+
+(defn column-top
+  "The height just over the highest block a column of the player's dimension holds."
+  [sim]
+  (let [{:dimension/keys [min-y height]} (dimension/by-name (:sim/dimension sim
+                                                                            dimension/overworld))]
+    (+ min-y height)))
+
+(defn free-fn
+  "A cell → may a mob's body be in it: loaded, not solid, not lava (a mob keeps out of lava)."
+  [sim]
+  (fn [c]
+    (let [id (block-at sim c)]
+      (boolean (and id (not (blocks/solid? id)) (not (contains? blocks/lava-states id)))))))
+
+(defn solid-fn
+  "A cell → does it block a line of sight: solid, or not loaded."
+  [sim]
+  (fn [c] (let [id (block-at sim c)] (or (nil? id) (blocks/solid? id)))))
+
+(defn health-data
+  "The set-entity-data that tells the client mob eid's health."
+  [eid health]
+  {:packet/name :set-entity-data :entity-id eid :metadata {entity/health-index (double health)}})
+
+(defn add-mob
+  "The model with a mob of kind standing at pos: its own entity id and the kind's full health,
+   the client told (add-entity, then its health). With :persistent? in opts it never despawns
+   (a fixture's, a chunk's animals)."
+  [sim kind [x y z :as pos] {:keys [persistent?]}]
+  (let [eid (:sim/next-eid sim)
+        health (:health (mob/kinds kind))]
+    (->
+      sim
+      (assoc :sim/next-eid (inc eid))
+      (assoc-in [:sim/mobs eid]
+                (cond-> {:type kind :pos pos :health health} persistent? (assoc :persistent? true)))
+      (send
+       {:packet/name :add-entity :entity-id eid :uuid nil :type (mob/type-id kind) :x x :y y :z z})
+      (send (health-data eid health)))))
+
+(defn with-mobs
+  "The model with each of mobs ({:type kind :pos [x y z]}, as a fixture gives them, init's :mobs)
+   standing where it says, persistent."
+  [sim mobs]
+  (reduce (fn [sim {:keys [type pos]}] (add-mob sim type pos {:persistent? true})) sim mobs))
+
+(defn remove-mob
+  "The model without mob eid, the client told (remove-entities)."
+  [sim eid]
+  (-> sim
+      (update :sim/mobs dissoc eid)
+      (send {:packet/name :remove-entities :ids [eid]})))
+
+(def max-delta 32767)                 ; the largest move move-entity-pos carries, in 1/4096 blocks
+
+(defn move-mob
+  "The model with mob eid at pos, the client told as the server tells it: move-entity-pos with the
+   change in 1/4096 blocks between the positions as sent (so the client's sum is the model's
+   position), or entity-position-sync for a move too long for it (a fall)."
+  [sim eid [x y z :as pos]]
+  (let [q #(math/round (* 4096.0 (double %)))
+        d (mapv #(- (q %2) (q %1)) (get-in sim [:sim/mobs eid :pos]) pos)
+        sim (assoc-in sim [:sim/mobs eid :pos] pos)]
+    (cond
+      (= [0 0 0] d) sim
+      (some #(> (abs %) max-delta) d)
+      (send sim {:packet/name :entity-position-sync :entity-id eid :x x :y y :z z})
+      :else
+      (let [[dx dy dz] d]
+        (send
+         sim
+         {:packet/name :move-entity-pos :entity-id eid :dx dx :dy dy :dz dz :on-ground true})))))
+
+(defn drop-loot
+  "The model with the loot of a mob of kind killed at [x y z]: each row's count rolled
+   (mob/loot-count), each lying where it fell as an item entity."
+  [sim kind [x y z]]
+  (reduce (fn [sim row]
+            (let [[sim r] (mob-roll sim)
+                  n (mob/loot-count row r)]
+              (cond-> sim
+                (pos? n) (spawn-item [x (+ y drop-rise) z] {:item (mob/loot-item row) :count n}))))
+          sim
+          (:loot (mob/kinds kind))))
+
+(defn blast
+  "Mob eid blows up with its kind's power (a creeper's fuse, a crystal hit): it is gone, and the
+   player is hurt by the blast (mob/blast-damage by its distance from the mob's feet, scaled by
+   the difficulty) when the line from the mob's head to the player's eye is clear. A blast
+   breaks no blocks here (not modelled)."
+  [sim eid]
+  (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
+        player (:sim/player-pos sim)
+        dmg
+        (if player (mob/blast-damage (:blast (mob/kinds type)) (physics/distance pos player)) 0.0)]
+    (-> sim
+        (remove-mob eid)
+        (cond-> (and (pos? dmg)
+                     (mob/sight? (solid-fn sim) (mob/head type pos) (physics/eye player)))
+                (hurt (mob/scaled dmg (:sim/difficulty sim)) true)))))
+
+(defn die-mob
+  "Mob eid at zero health: a crystal blasts (blast); any other dies, the client told
+   (entity-event entity/death-status), its loot dropped when the player killed it (drop-loot), and it is
+   removed once its death is over (act-mob)."
+  [sim eid by-player?]
+  (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])]
+    (cond (:crystal (mob/kinds type)) (blast sim eid)
+          :else
+          (-> sim
+              (assoc-in [:sim/mobs eid :dead-at] (:sim/now sim))
+              (send {:packet/name :entity-event :entity-id eid :status entity/death-status})
+              (cond-> by-player? (drop-loot type pos))))))
+
+(defn hurt-mob
+  "The model after mob eid takes amount of damage, by-player? when the player dealt it: within
+   mob/hurt-window-ms of its last hurt only a harder one lands, for its excess (a swing inside
+   the window does nothing, the siblings' 40 swings in 66 ms); its health told (set-entity-data);
+   hurt by the player it turns on the player (:angry?); at zero it dies (die-mob)."
+  [sim eid amount by-player?]
+  (let [{:keys [hit-at last-hit health]} (get-in sim [:sim/mobs eid])
+        now (:sim/now sim)
+        window? (and hit-at (< (- now hit-at) mob/hurt-window-ms))
+        left (max 0.0 (- health (if window? (- amount last-hit) amount)))]
+    (cond (and window? (<= amount last-hit)) sim
+          :else
+          (-> sim
+              (update-in [:sim/mobs eid]
+                         assoc
+                         :health left
+                         :hit-at (if window? hit-at now)
+                         :last-hit amount)
+              (cond-> by-player? (assoc-in [:sim/mobs eid :angry?] true))
+              (send (health-data eid left))
+              (cond-> (<= left 0.0) (die-mob eid by-player?))))))
+
+(defn wear-weapon
+  "The model after a hit with the held item: a sword wears one, any other tool two (the game's
+   weapon and tool components), the client told what window 0 holds; anything else untouched."
+  [sim]
+  (let [slot (held-slot sim)
+        kind (:kind (blocks/tool (held-item sim)))
+        before (full (:sim/inv sim) (inventory/layouts :inventory))]
+    (cond (nil? kind) sim
+          :else
+          (-> sim
+              (update :sim/inv wear slot)
+              (cond-> (not= kind :sword) (update :sim/inv wear slot))
+              (sync-window :inventory before (:sim/cursor sim) false)))))
+
+(defmethod on-packet [:play :attack]
+  ;; the player's hit (775's attack packet): a living mob whose box is in reach of the eye
+  ;; (mob/attack-reach) is hurt by the held item (mob/weapon-damage), the item worn, the hit's
+  ;; exhaustion spent; out of reach, dead or unknown, nothing, as the server ignores it
+  [sim {:keys [entity-id]}]
+  (let [m (get-in sim [:sim/mobs entity-id])
+        player (:sim/player-pos sim)]
+    (cond (or (nil? m)
+              (:dead-at m)
+              (nil? player)
+              (> (mob/box-distance (physics/eye player) (:type m) (:pos m)) mob/attack-reach))
+          sim
+          :else
+          (let [dmg (mob/weapon-damage (held-item sim))]
+            (-> sim
+                (add-exhaustion (hunger/exhaustion :attack))
+                wear-weapon
+                (hurt-mob entity-id dmg true))))))
+
+(defn burn
+  "An undead mob in the overworld's daylight with no roof over its head (mob/roofed?) burns:
+   mob/burn-damage every mob/burn-every ticks, no loot (the player did not kill it). Only in a
+   model that keeps the day (:sim/day-time)."
+  [sim eid]
+  (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
+        day (:sim/day-time sim)]
+    (cond (not (and day
+                    (:undead (mob/kinds type))
+                    (overworld? sim)
+                    (zero? (mod (quot (:sim/now sim) physics/tick-ms) mob/burn-every))
+                    (not (mob/night? day))
+                    (not (mob/roofed? #(block-at sim %)
+                                      (mob/cell-of (mob/head type pos))
+                                      (column-top sim)))))
+          sim
+          :else (hurt-mob sim eid mob/burn-damage false))))
+
+(defn provoke
+  "An enderman the player stares at (mob/stared?, from the look the client last reported) turns
+   on the player."
+  [sim eid]
+  (let [{:keys [type pos angry?]} (get-in sim [:sim/mobs eid])
+        look (:sim/player-look sim)]
+    (cond (or angry? (not (:neutral (mob/kinds type))) (nil? look)) sim
+          (mob/stared? (solid-fn sim) (physics/eye (:sim/player-pos sim)) look pos)
+          (assoc-in sim [:sim/mobs eid :angry?] true)
+          :else sim)))
+
+(defn targets?
+  "Does mob m have the player as its target: the player in its follow range, and, for a neutral
+   kind, only once hurt or stared at (:angry?)?"
+  [sim {:keys [type pos angry?]}]
+  (let [k (mob/kinds type)]
+    (and (<= (physics/distance pos (:sim/player-pos sim)) (:follow k))
+         (or (not (:neutral k)) angry?))))
+
+(defn walk
+  "Mob eid a tick on toward the player (mob/step-toward), stopping where its kind fights from: a
+   melee mob inside its reach, a shooter at :keep, a creeper a block off; one that does not walk
+   (a blaze hovers) stays."
+  [sim eid]
+  (let [{:keys [type pos]} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        stop (cond (:melee k) (* 0.8 (:reach k))
+                   (:shoot k) (:keep k)
+                   :else 1.0)]
+    (cond (not (pos? (:speed k 0.0))) sim
+          :else
+          (move-mob sim
+                    eid
+                    (mob/step-toward (free-fn sim) pos (:sim/player-pos sim) (:speed k) stop)))))
+
+(defn strike
+  "A melee mob with the player in reach (on the plane within its :reach, feet within 1.5 in
+   height) hits it every :every ticks for its damage scaled by the difficulty."
+  [sim eid]
+  (let [{:keys [type pos attack-at]} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        player (:sim/player-pos sim)
+        now (:sim/now sim)]
+    (cond (not (and (:melee k)
+                    (<= (mob/flat-distance pos player) (:reach k))
+                    (< (abs (- (second pos) (second player))) 1.5)
+                    (>= now (or attack-at 0))))
+          sim
+          :else
+          (-> sim
+              (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
+              (hurt (mob/scaled (:melee k) (:sim/difficulty sim)) true)))))
+
+(defn shoot
+  "A shooter (a skeleton's arrow, a blaze's fireball) within its :range of the player, with a
+   clear line from its head to the player's eye, hits every :every ticks for its damage scaled by
+   the difficulty; the shot's flight is not modelled, it lands as it is fired."
+  [sim eid]
+  (let [{:keys [type pos attack-at]} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        eye (physics/eye (:sim/player-pos sim))
+        now (:sim/now sim)]
+    (cond (not (and (:shoot k)
+                    (>= now (or attack-at 0))
+                    (<= (physics/distance (mob/head type pos) eye) (:range k))
+                    (mob/sight? (solid-fn sim) (mob/head type pos) eye)))
+          sim
+          :else
+          (-> sim
+              (assoc-in [:sim/mobs eid :attack-at] (+ now (* (:every k) physics/tick-ms)))
+              (hurt (mob/scaled (:shoot k) (:sim/difficulty sim)) true)))))
+
+(defn swell
+  "A creeper within :swell of the player lights its fuse; with the player past unswell the fuse
+   goes out; :fuse ticks after it was lit, it blasts (blast)."
+  [sim eid]
+  (let [{:keys [type pos fuse-at]} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        d (physics/distance pos (:sim/player-pos sim))
+        now (:sim/now sim)]
+    (cond (not (:fuse k)) sim
+          (and fuse-at (> d unswell)) (update-in sim [:sim/mobs eid] dissoc :fuse-at)
+          (and fuse-at (>= (- now fuse-at) (* (:fuse k) physics/tick-ms))) (blast sim eid)
+          (and (nil? fuse-at) (<= d (:swell k))) (assoc-in sim [:sim/mobs eid :fuse-at] now)
+          :else sim)))
+
+(defn chase
+  "A hostile's turn at a living player: an enderman stared at turns (provoke); with the player as
+   its target (targets?) it walks, then hits, shoots or swells by its kind."
+  [sim eid]
+  (let [player (:sim/player-pos sim)
+        sim (if player (provoke sim eid) sim)
+        m (get-in sim [:sim/mobs eid])]
+    (cond (or (nil? player) (<= (:sim/health sim) 0.0) (not (targets? sim m))) sim
+          :else
+          (reduce (fn [sim f] (if (get-in sim [:sim/mobs eid]) (f sim eid) sim))
+                  sim
+                  [walk strike shoot swell]))))
+
+(defn act-mob
+  "One game tick of mob eid: a dead one is removed once its death is over (mob/death-ticks, the
+   dragon's mob/dragon-death-ticks); an animal, a perched dragon and a crystal stand; any other
+   burns in daylight when undead (burn) and goes after the player (chase)."
+  [sim eid]
+  (let [{:keys [type dead-at] :as m} (get-in sim [:sim/mobs eid])
+        k (mob/kinds type)
+        over (* physics/tick-ms (if (= :ender_dragon type) mob/dragon-death-ticks mob/death-ticks))]
+    (cond (nil? m) sim
+          dead-at (cond-> sim (>= (- (:sim/now sim) dead-at) over) (remove-mob eid))
+          (or (:passive k) (:perched k) (:crystal k)) sim
+          :else (let [sim (burn sim eid)] (cond-> sim (get-in sim [:sim/mobs eid]) (chase eid))))))
+
+(defn spawning?
+  "Does the night rule spawn hostiles: a difficulty above peaceful, in the overworld?"
+  [sim]
+  (boolean (and (#{:easy :normal :hard} (:sim/difficulty sim)) (overworld? sim))))
+
+(defn hostiles-near
+  "How many living hostiles are within mob/despawn-far of the player (the cap's count)."
+  [sim]
+  (let [player (:sim/player-pos sim)]
+    (count (filter (fn [[_ {:keys [type pos dead-at]}]]
+                     (and (:hostile (mob/kinds type))
+                          (not dead-at)
+                          (<= (physics/distance pos player) mob/despawn-far)))
+                   (:sim/mobs sim)))))
+
+(defn try-spawn
+  "Every mob/spawn-every ticks, one try at a hostile (spawning?, under mob/hostile-cap): a column
+   rolled in the ring mob/spawn-near to mob/spawn-far round the player, its dark spots within
+   mob/spawn-band of the player's feet (mob/spawn-spots: roofed, or any at night), one of them
+   rolled, and a kind rolled by weight (mob/hostile-kinds)."
+  [sim]
+  (let [player (:sim/player-pos sim)]
+    (cond (not (and player
+                    (spawning? sim)
+                    (zero? (mod (quot (:sim/now sim) physics/tick-ms) mob/spawn-every))
+                    (< (hostiles-near sim) mob/hostile-cap)))
+          sim
+          :else
+          (let [[sim r1] (mob-roll sim)
+                [sim r2] (mob-roll sim)
+                angle (* 2.0 math/PI r1)
+                dist (+ mob/spawn-near (* r2 (- mob/spawn-far mob/spawn-near)))
+                [px py pz] player
+                x (long (math/floor (+ px (* dist (math/cos angle)))))
+                z (long (math/floor (+ pz (* dist (math/sin angle)))))
+                fy (long (math/floor py))
+                spots (vec (mob/spawn-spots #(block-at sim %)
+                                            (free-fn sim)
+                                            x
+                                            z
+                                            (- fy mob/spawn-band)
+                                            (+ fy mob/spawn-band)
+                                            (column-top sim)
+                                            (mob/night? (:sim/day-time sim 0))))]
+            (cond (empty? spots) sim
+                  :else
+                  (let [[sim r3] (mob-roll sim)
+                        [sim r4] (mob-roll sim)
+                        [sx sy sz] (spots (min (dec (count spots)) (long (* r3 (count spots)))))]
+                    (add-mob sim
+                             (mob/pick mob/hostile-kinds r4)
+                             [(+ sx 0.5) (double sy) (+ sz 0.5)]
+                             {})))))))
+
+(defn despawn
+  "Hostiles not persistent: removed at once beyond mob/despawn-far of the player, and beyond
+   mob/despawn-near by a roll of mob/despawn-chance each tick (Mob.checkDespawn)."
+  [sim]
+  (let [player (:sim/player-pos sim)]
+    (reduce (fn [sim eid]
+              (let [{:keys [type pos persistent? dead-at]} (get-in sim [:sim/mobs eid])
+                    d (physics/distance pos player)]
+                (cond (or persistent? dead-at (not (:hostile (mob/kinds type)))) sim
+                      (> d mob/despawn-far) (remove-mob sim eid)
+                      (> d mob/despawn-near)
+                      (let [[sim r] (mob-roll sim)]
+                        (cond-> sim (< r mob/despawn-chance) (remove-mob eid)))
+                      :else sim)))
+            sim
+            (if player (sort (keys (:sim/mobs sim))) []))))
+
+(defn grass-top
+  "The feet height on the highest grass block of column x z with room to stand over it, from 32
+   over y down to 32 under it; nil when there is none."
+  [sim x z y]
+  (let [free? (free-fn sim)]
+    (first (filter #(and (= :grass_block (blocks/name-of (block-at sim [x (dec %) z])))
+                         (mob/stands? free? [x % z]))
+                   (range (+ y 32) (- y 32) -1)))))
+
+(defn populate-column
+  "Chunk [cx cz] has its animals placed, once (:sim/populated): one time in ten (mob/animal-chance)
+   a herd of one rolled kind on the grass at its middle (grass-top), as a server populates a
+   chunk it generates."
+  [sim [cx cz]]
+  (let [sim (update sim :sim/populated (fnil conj #{}) [cx cz])
+        [sim r] (mob-roll sim)]
+    (cond (>= r mob/animal-chance) sim
+          :else
+          (let [[sim r2] (mob-roll sim)
+                kind (nth mob/passive-kinds
+                          (min (dec (count mob/passive-kinds))
+                               (long (* r2 (count mob/passive-kinds)))))
+                x (+ (* 16 cx) 8)
+                z (+ (* 16 cz) 8)
+                y (grass-top sim x z (long (math/floor (second (:sim/player-pos sim)))))]
+            (cond (nil? y) sim
+                  :else
+                  (reduce
+                   (fn [sim dx]
+                     (cond-> sim
+                       (mob/stands? (free-fn sim) [(+ x dx) y z])
+                       (add-mob kind [(+ x dx 0.5) (double y) (+ z 0.5)] {:persistent? true})))
+                   sim
+                   (range mob/herd)))))))
+
+(defn populate
+  "The chunks within populate-radius of the player that never had their animals placed get them
+   (populate-column), nearest the player's column first; only in the overworld of a model with a
+   difficulty, and only when the player came into another column."
+  [sim]
+  (let [player (:sim/player-pos sim)
+        [hx hz :as here] (when player (column-key player))]
+    (cond (or (nil? player)
+              (nil? (:sim/difficulty sim))
+              (not (overworld? sim))
+              (= here (:sim/populated-at sim)))
+          sim
+          :else
+          (reduce populate-column
+                  (assoc sim :sim/populated-at here)
+                  (sort-by (fn [[x z]] [(+ (abs (- x hx)) (abs (- z hz))) x z])
+                           (for [x (range (- hx populate-radius) (inc (+ hx populate-radius)))
+                                 z (range (- hz populate-radius) (inc (+ hz populate-radius)))
+                                 :when (and (contains? (:sim/columns sim) [x z])
+                                            (not (contains? (:sim/populated sim) [x z])))]
+                             [x z]))))))
+
+(defn tick-mobs
+  "One game tick of the mobs: the day moves on (:sim/day-time), chunks coming near get their
+   animals (populate), a hostile is tried for (try-spawn), every mob acts in id order (act-mob),
+   and far hostiles despawn (despawn). A model with no difficulty and no mobs only keeps its day."
+  [sim]
+  (let [sim (cond-> sim (:sim/day-time sim) (update :sim/day-time inc))]
+    (cond (not (or (:sim/difficulty sim) (seq (:sim/mobs sim)))) sim
+          :else
+          (let [sim (-> sim
+                        populate
+                        try-spawn)]
+            (despawn (reduce act-mob sim (sort (keys (:sim/mobs sim)))))))))
+
 
 (defn tick
   "Advance the server clock to now, one game tick: the scheduled death, breath or drowning,
    hunger (feed) and eating, a delayed destroy, every furnace, falling gravel and sand, flowing
-   water and lava, a player carried through a portal, a keep-alive when one is due, every item
+   water and lava, a player carried through a portal, the mobs (tick-mobs), a keep-alive when one
+   is due, every item
    handed over whose pickup delay has passed and that the player stands within reach of, and,
    with hunger, the health and food told when they changed (sync-health)."
   [sim now]
@@ -1738,6 +2222,7 @@
       tick-falls
       tick-fluids
       (through-portal now)
+      tick-mobs
       keep-alive
       pick-up
       sync-health))

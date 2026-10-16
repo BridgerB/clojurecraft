@@ -51,7 +51,7 @@ Every real server runs at Normal since #257, so a real bot gets hungry. #259 gav
 - Foods eaten count in `:sim/eaten`; `simrace/run` puts `:run/eaten` and `:run/respawns` on each run, which is how the sim lanes show eating and deaths.
 
 ## Limits
-Not modelled: sprinting (the bot never sprints), the hunger effect of raw chicken and rotten flesh, the `natural_health_regeneration` rule (always on), and hurts from anything but starvation and drowning until the mob model lands.
+Not modelled: sprinting (the bot never sprints), the hunger effect of raw chicken and rotten flesh, and the `natural_health_regeneration` rule (always on). Mobs hurt the player through the same `hurt` ([[sim-mobs]]).
 
 ## See also
 - [[server-model]] - the model this extends.
