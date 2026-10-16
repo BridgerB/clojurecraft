@@ -313,7 +313,7 @@ When the snapshot is too late to show the cause (9.2): `bb probe run <n>-spawn '
 2. What did the world look like there? Position, inventory, the cells round it (8.3), what it remembered (`:plan/boxed-at`, `:plan/blacklist`, memory).
 3. Which function returned the value that led to the stop? Call each candidate at the moment and print its answer. For a wait, find which branch of the act's `or` chain produced it and why every earlier branch was nil.
 4. Why did it answer so? Usually one condition: a filter that excludes everything, a budget too small, a block read wrongly, a missing case.
-5. The bot or the model? Sim-only may be the model's limit (16.7); real-only may be load (16.8).
+5. The bot or the model? Sim-only may be the model's limit (16.7); real-only may be load (16.9).
 
 ### 9.2 The moment problem
 
@@ -330,7 +330,7 @@ Most walls have been hit before. Grep the brain and the code for the reason and 
 - **Style** (`docs/RICH-HICKEY.md`, section 25). Functions of the world value: an act returns an intent or a wait and never mutates; state a rule needs lives on the world or in memory, added through an intent's own reducer. Nothing predicted: the world changes when the server says so. Time is an input: deadlines are `(:time/now world)` plus a constant. Accretion: add keys and arities, never rename or change a meaning.
 - **Docstrings carry the evidence:** what the rule does and the run that taught it ("Sim race 38664661309 (issue #142, 89 runs in 18 rounds): ..."). Keep the existing evidence when you change a function; add yours.
 - **A test of the decision:** the smallest world with the situation (builders in the test namespaces: `standing`, `open-ground`, `standing-at`, `deep-in`, `world/column` with `{[x y z] state}`), call the function, assert. Name it for the behaviour (`a-lone-lava-source-is-no-site`), issue and run in a comment. It must fail without the fix: you cannot run it, so reason it through, or push the test first and let `test.yml` show it red. Grep `test/` for the function's name: tests asserting the old behaviour must be updated deliberately. Section 23 has more.
-- **New keys and packets:** a world or intent key gets a row in `model.clj` and a spec in `spec.clj`. A newly decoded packet: its spec in `packet.clj`, the same entry in `test/clojurecraft/packet_specs_ever.edn`, and check `packet_test` does not use it as its unmodelled example (16.9).
+- **New keys and packets:** a world or intent key gets a row in `model.clj` and a spec in `spec.clj`. A newly decoded packet: its spec in `packet.clj`, the same entry in `test/clojurecraft/packet_specs_ever.edn`, and check `packet_test` does not use it as its unmodelled example (16.10).
 - **The brain note, in the same change:** find it (`grep -rln '<fn>' brain/`), add the new function and test to its `sourceRefs` (`src/clojurecraft/<ns>.clj#defn <name>`; when one name prefixes another, anchor on a unique phrase of the docstring), and the rule to its prose with the run that taught it. `bb check` runs the brain checker: `broken 0`, `ambiguous 0`, `unresolved 0`.
 - **`problems.edn`, in the same change:** append one sentence to the stage row's `:problem/last-failure` (find the row by `:problem/goals`): the round, the issue, what the bot did, what it does now. One line.
 
@@ -453,9 +453,10 @@ A failure that will not reproduce is almost always a context difference, not fla
 5. **`:timeout` snapshots are stalls.** The moment is the run's last five simulated minutes; the check judges whether the stage is reached in that window (no new stage and no end: it recurs). Nothing replays a run from its landing in the check.
 6. **The sim race knows its landing.** Sim runs get `:go/at` like real bots; snapshots from before that are played with their captured world's landing (`simrace/moment`). An old snapshot behaving oddly: check `:plan/go-at`.
 7. **The captured world has an edge.** 625 chunks; past them every cell is `:unknown` where a real server would load more. A failure there is the model's limit: say so in the PR.
-8. **Server load is real.** 25 bots a server dropped it to 7 or 8 ticks a second (now 15 a server, #252) (`:sample/server-tick`, `server.log`). Anything the bot times by its own clock against something the server times in ticks breaks under load: digs, window answers. A real-only signature with load: look there first.
-9. **"The unmodelled packet."** `packet_test` decodes an id with no spec and expects `:unknown`; adding a spec for that packet breaks it: switch its example.
-10. **Give exact numbers.** Run ids, commits, counts, before and after lines. "Seems fixed" is not evidence.
+8. **Difficulty is Normal** (issue #10): night mobs and hunger on every real server and gym; keep_inventory stays on. The sim has no mobs or hunger until its mob model lands, so sim runs are easier than real ones until then.
+9. **Server load is real.** 25 bots a server dropped it to 7 or 8 ticks a second (now 15 a server, #252) (`:sample/server-tick`, `server.log`). Anything the bot times by its own clock against something the server times in ticks breaks under load: digs, window answers. A real-only signature with load: look there first.
+10. **"The unmodelled packet."** `packet_test` decodes an id with no spec and expects `:unknown`; adding a spec for that packet breaks it: switch its example.
+11. **Give exact numbers.** Run ids, commits, counts, before and after lines. "Seems fixed" is not evidence.
 
 ---
 

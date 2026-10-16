@@ -86,7 +86,7 @@ jobs:
       BOTS: ${{ needs.plan.outputs.bots }}
       RCON_PASS: race
       HEAP_MB: ${{ needs.plan.outputs.server-heap }}
-      DIFFICULTY: peaceful
+      DIFFICULTY: normal
       MAX_TICK_TIME: '-1'                # no watchdog: a slow locate biome stalls the race, it does not end it
       MAX_PLAYERS: '80'                  # vanilla seats 20; the race seats its bots with room to reconnect
       COMPRESSION_THRESHOLD: '-1'        # bots on the same machine: zlib would be only CPU, both ends
