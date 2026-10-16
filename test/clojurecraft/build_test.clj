@@ -406,6 +406,22 @@
     (is (= :build (:intent/kind (plan/next-intent bare cast-one-row plan/goals)))
         "nothing to make one from: no trip out for it, the build")))
 
+(deftest a-build-carries-sticks-beside-its-table
+  ;; world R3/12 seed 1 from spawn (Refs #178): the cast wore out the pickaxes, a table, 684
+  ;; cobblestone and one plank in hand and no sticks, and the bot cut stairs up through deepslate
+  ;; by hand for a log until its time ran out
+  (let [kit {0 {:item (recipe/item-id :stone_pickaxe) :count 1}
+             1 {:item (recipe/item-id :cobblestone) :count 8}
+             2 {:item (recipe/item-id :crafting_table) :count 1}}
+        bare (assoc (standing-at (open-ground trench) feet-pos) :player/inventory kit)
+        planks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :oak_planks) :count 2})
+        sticks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :stick) :count 2})]
+    (is (build/carry-sticks? planks) "a table held and planks for sticks: sticks for the kit")
+    (is (not= :build (:intent/kind (plan/next-intent planks cast-one-row plan/goals)))
+        "made before the build")
+    (is (not (build/carry-sticks? sticks)) "sticks held already")
+    (is (not (build/carry-sticks? bare)) "nothing to make them from: no trip out for them")))
+
 (deftest a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
   ;; sim race 38843552659 (issue #186, world R1/18): on a ravine's floor sixty under the landing,
   ;; the sky open and no hunt target in its band, the bot waited :no-log
@@ -615,3 +631,15 @@
         "beside the stand: no way out first")
     (is (not (build/out-first? (at {} [5.5 63.0 5.5]) origin :south stand out 4 4))
         "already as far out as the stand")))
+
+(deftest a-block-in-the-way-is-dug-from-a-hole-under-the-stands-height
+  ;; sim race 38855091523 (issue #178, world R1/34 seed 2, after #250): the walk to the block in
+  ;; the way of the lava's stand ended a block under it in a hole of the floor, and the refill
+  ;; sent the feet back to the landing, two walks every two seconds until the time ran out
+  (let [blocks {[5 62 5] blocks/air [6 63 5] 1 [6 64 5] 1}
+        stand [9 63 5]
+        dig #(build/dig-from-under % stand :portal [100 64 200] :south)]
+    (is (= [6 63 5] (:intent/target (dig (standing-at (open-ground blocks) [5.5 62.0 5.5]))))
+        "in the hole, the block in the way in reach: dug from there")
+    (is (nil? (dig (standing-at (open-ground blocks) [5.5 63.0 4.5])))
+        "at the stand's height it is clear-stand's, not this")))

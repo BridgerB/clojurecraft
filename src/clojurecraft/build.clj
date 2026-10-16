@@ -695,6 +695,19 @@
                     (stance-block world stand build origin facing))]
     (if (within-reach? world b) (way-dig b) (approach world b))))
 
+(defn dig-from-under
+  "The dig of the first block in the way to stand (stance-block, at the stand's height) when the
+   feet stand a block under that height, in a hole of the floor, and the block is in reach: the
+   same block clear-stand digs from the stand's height, dug from where the walk to it ended. nil
+   otherwise. Sim race 38855091523 (issue #178, world R1/34 seed 2, after #250): the walk to the
+   block in the way of the lava's stand ended a block under it, in a hole of the floor round the
+   pool; off the stand's height the refill sent the feet back to the landing, and the walk went
+   again, two walks every two seconds until the run's time ran out."
+  [world stand build origin facing]
+  (when-let [b (and (= (second stand) (inc (long (physics/y-of (intent/feet world)))))
+                    (stance-block world stand build origin facing))]
+    (when (within-reach? world b) (way-dig b))))
+
 (defn reaches-from?
   "Would the eye, standing in cell, be within reach of pos? The feet use the real eye; any
    other cell, the eye at its middle."
@@ -965,6 +978,8 @@
           (intent/centred? world stand) (scoop-at-station world sources)
           :else
           (or (stand-walk world stand)
+              ;; a block under the stand's height, the block in the way in reach: dig it from here
+              (dig-from-under world stand build origin facing)
               (cond (= (long (physics/y-of (intent/feet world))) (second stand))
                     (let [[lx _ _] (landing h)
                           [_ _ sz] (relative origin facing stand)
@@ -1515,6 +1530,30 @@
        (nil? (make/take-table-along world))
        (table-at-hand? world)))
 
+(def kit-sticks 2)                    ; sticks a build carries: one pickaxe's worth, made again where the cast wore the last out
+
+(defn sticks-at-hand?
+  "Could kit-sticks be made without going out for anything: the needs planner's next step toward
+   them a craft from planks or logs held, not a gather (make/fetch?)?"
+  [world]
+  (let [row (make/next-row world
+                           {:goal/id :kit-sticks :goal/provides {:item/stick kit-sticks}}
+                           plan/goals)]
+    (boolean (and (map? row) (not (make/fetch? row))))))
+
+(defn carry-sticks?
+  "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or placed
+   within reach already (the table first: carry-table?, so the planks a table needs are never
+   spent on sticks), and they can be made from what is held (sticks-at-hand?). A table and
+   cobblestone make no pickaxe without sticks: a probe of world R3/12 seed 1 from spawn on main
+   (Refs #178) wore out its pickaxes in the cast holding a table, 684 cobblestone and one plank,
+   no sticks, and cut stairs up through deepslate by hand for a log, fifteen seconds a block,
+   until its ninety minutes ran out."
+  [world]
+  (and (< (get (make/counts world) :stick 0) kit-sticks)
+       (or (pos? (get (make/counts world) :crafting_table 0)) (some? (make/take-table-along world)))
+       (sticks-at-hand? world)))
+
 (defn held-first
   "What the needs planner does for what a build row holds before it starts: the tools of
    :goal/holds (a pickaxe for the way down to lava and the digs: sim race 38477665389, issue #70,
@@ -1526,7 +1565,8 @@
   (let [n (if plan (blocks-needed world plan) 0)
         holds (cond-> (or (:goal/holds goal) {})
                 (pos? n) (assoc :item/cobblestone n)
-                (carry-table? world) (assoc :item/crafting_table 1))]
+                (carry-table? world) (assoc :item/crafting_table 1)
+                (carry-sticks? world) (assoc :item/stick kit-sticks))]
     (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))))
 
 (defmethod plan/next-intent :build
