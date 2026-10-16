@@ -39,10 +39,11 @@
 (s/def :truth/re string?)
 (s/def :truth/result (s/coll-of keyword? :kind vector?)) ; a path into the bot's RESULT whose value {result} in :truth/re stands for
 (s/def :truth/check keyword?)           ; how a reply is judged when a pattern cannot say (verdict): :re when absent
+(s/def :truth/at (s/coll-of keyword? :kind vector?)) ; a path into the bot's RESULT to an [x y z] that {at} in :truth/cmd stands for
 (s/def :truth/reply string?)
 (s/def :truth/ok? boolean?)
 (s/def :gym/truth
-  (s/coll-of (s/keys :req [:truth/cmd :truth/re] :opt [:truth/result :truth/check])
+  (s/coll-of (s/keys :req [:truth/cmd :truth/re] :opt [:truth/result :truth/check :truth/at])
              :kind vector?
              :min-count 1))
 (s/def :gym/setup (s/coll-of string? :kind vector?)) ; RCON commands that build the row's arena round the landing (fill-in)
@@ -587,7 +588,22 @@
                  "execute positioned {x} {y} {z} run locate structure minecraft:stronghold"
                  :truth/re "\\[(-?\\d+), (?:~|-?\\d+), (-?\\d+)\\]"
                  :truth/check :bearing
-                 :truth/result [:throws]}]}])
+                 :truth/result [:throws]}]}
+   ;; issue #265: from 250 blocks off the located stronghold (:near-stronghold), two throws or
+   ;; more, the walks, an end portal frame remembered: the server must have one at the cell the
+   ;; bot names (its RESULT's :frame). Eyes to spare for the throws a shatter costs; a sword, armour
+   ;; and food for the night the walks may run into at Normal
+   {:gym/goal :stronghold
+    :gym/until "stronghold"
+    :gym/land :near-stronghold
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:ender_eye 6" "minecraft:iron_sword 1" "minecraft:iron_pickaxe 1"
+                  "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
+                  "minecraft:cooked_beef 16"]
+    :gym/timeout-ms 1200000
+    :gym/truth [{:truth/cmd "execute if block {at} minecraft:end_portal_frame"
+                 :truth/re "Test passed"
+                 :truth/at [:frame]}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
@@ -597,6 +613,7 @@
 (def bot-heap "-Xmx1g")                 ; each bot is its own JVM; one fits several on a runner
 (def hold-ms 60000)                     ; how long an ok bot stays online for the judge's truth commands
 
+(def stronghold-off 250)                ; blocks from the located stronghold a stronghold row lands the bot (issue #265)
 (def bearing-within 10.0)                ; degrees a throw's line may be off the way to the located stronghold (issue #265)
 (def z95 1.959964)                      ; the normal quantile for a two-sided 95% interval
 (def judge-grace-ms 120000)             ; past the goal's timeout, how long the judge waits for RESULT
@@ -652,9 +669,16 @@
   (mapv #(in-dimension (dimension-of row) (fill-in % bot landing)) (:gym/summon row)))
 
 (defn truth-cmd
-  "A row's truth command for the bot's name and the run's landing (fill-in)."
-  [{:truth/keys [cmd]} bot landing]
-  (fill-in cmd bot landing))
+  "A row's truth command for the bot's name and the run's landing (fill-in), and, given the bot's
+   RESULT, {at} the block [x y z] at the row's :truth/at path in it written \"x y z\" (the
+   stronghold trials ask the server about the frame the bot names, issue #265); left as written
+   when the RESULT has none, which no server takes."
+  ([row bot landing] (truth-cmd row bot landing nil))
+  ([{:truth/keys [cmd at]} bot landing result]
+   (let [p (when at (get-in result at))]
+     (cond-> (fill-in cmd bot landing)
+       (and p (= 3 (count p)))
+       (str/replace "{at}" (str/join " " (map #(long (math/floor %)) p)))))))
 
 (defn truth-re
   "A truth row's pattern for the bot's RESULT: the row's :truth/re, or, when the row names a
@@ -960,6 +984,27 @@
   [[x y z]]
   (str "execute in " dimension/nether " if biome " x " " y " " z " minecraft:warped_forest"))
 
+(defmethod land! :near-stronghold
+  ;; issue #265: stronghold-off blocks from the stronghold the server locates from the landing,
+  ;; on the line from it through the landing, on dry ground (fixture/land-at!, which tries spots
+  ;; round it), the spawn pinned there: the row measures the throws, the walks and the way down,
+  ;; not a crossing of the whole world (the nearest stronghold is often a thousand blocks off)
+  [rc _row name [x z _]]
+  (let [reply (rcon/command!
+               rc
+               (str "execute positioned " x " 64 " z " run locate structure minecraft:stronghold"))
+        [sx sz] (or (fixture/parse-located reply)
+                    (throw (ex-info "no stronghold located" {:reply reply})))
+        d (max 1.0 (math/hypot (- x sx) (- z sz)))
+        at [(long (+ sx (* stronghold-off (/ (- x sx) d))))
+            (long (+ sz (* stronghold-off (/ (- z sz) d))))]
+        [px py pz] (or (fixture/land-at! rc name at)
+                       (throw (ex-info "no landing near the stronghold" {:at at})))
+        [lx ly lz] (mapv #(long (math/floor %)) [px py pz])]
+    (cli/log "stronghold:" [sx sz] "landing:" [lx ly lz])
+    (rcon/command! rc (str "spawnpoint " name " " lx " " ly " " lz))
+    [lx lz ly]))
+
 (defmethod land! :warped-forest
   ;; the warped forest nearest the landing's Nether coordinates (an eighth of the overworld's, so
   ;; each landing has its own; issue #263's hunting ground, where endermen are the only hostile
@@ -1099,7 +1144,8 @@
                                       (parse-long (str rcon-port))
                                       rcon-pass
                                       (fn [rc]
-                                        (mapv #(let [c (truth-cmd % name (:gym/landing left))]
+                                        (mapv #(let [c
+                                                     (truth-cmd % name (:gym/landing left) result)]
                                                  (truth % c (rcon/command! rc c) result))
                                               (:gym/truth row))))
                       (catch Exception e (cli/log "truth failed:" e) [])))

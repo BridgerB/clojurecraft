@@ -62,11 +62,13 @@
   #{:crafting_table :furnace})
 
 (def landmark-kinds
-  "Blocks that say where something is: a fortress (its bricks, fences and stairs) and a lit
-   portal, the way back (issue #11). Only blocks the overworld never generates, so watching them
-   changes nothing a forest run remembers (obsidian and spawners do: the wood recording's 1098
-   sightings became 1121)."
-  #{:nether_bricks :nether_brick_fence :nether_brick_stairs :nether_portal})
+  "Blocks that say where something is: a fortress (its bricks, fences and stairs), a lit portal,
+   the way back (issue #11), and an end portal frame, the stronghold's portal room (issue #265:
+   the room is found in the chunk data as its chunk loads, however deep). Only blocks a forest
+   never generates, so watching them changes nothing a forest run remembers (obsidian and
+   spawners do: the wood recording's 1098 sightings became 1121); a frame is only ever in a
+   stronghold."
+  #{:nether_bricks :nether_brick_fence :nether_brick_stairs :nether_portal :end_portal_frame})
 
 (def nether-landmark-kinds
   "Blocks that say where something is only in the Nether: a spawner there is a fortress's, a blaze

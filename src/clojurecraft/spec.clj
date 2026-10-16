@@ -446,6 +446,7 @@
 (s/def :intent/mouth ::block-pos)
 (s/def :intent/eye-from ::vec3)
 (s/def :intent/eye-pos ::vec3)
+(s/def :intent/gone-at int?)
 (s/def :intent/finish-at number?)
 (s/def :intent/slot (s/int-in 0 9))
 (s/def :intent/tool (s/nilable int?))

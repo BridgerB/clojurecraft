@@ -19,13 +19,25 @@
    middle is followed for follow-ms, and the line from where it was first seen to where it is
    then is the throw's. The intent stays on until the server removes the eye (its life is 80
    ticks), so the planner after it knows where it ended and can pick up the eye it drops four
-   throws in five."
+   throws in five.
+
+   The :stronghold row's plan (stronghold-next) is the whole search: the eye just thrown picked
+   up where it fell; a first throw; then a walk off the first line at an angle (travel blocks at
+   travel-turn degrees) and a second throw there; then the walk to where the lines cross; near
+   the crossing with nothing seen, a throw from there, whose line crosses the first at a wide
+   angle; then walks round it. The row is done when an end portal frame is remembered: a column's
+   chunk data holds every block in it, so the portal room is seen the moment its chunk loads
+   (memory/landmark-kinds), however deep it lies. Every long walk goes in hops a route reaches
+   (hop), as the pearl hunt's roam does."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.drops :as drops]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.memory :as memory]
             [clojurecraft.packet :as packet]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
@@ -43,7 +55,17 @@
 (def answer-ms 3000)                  ; ms after the use-item, by the server's clock, the eye must be seen within
 (def follow-ms 2000)                  ; ms after it is seen, by the server's clock, its line is read: half its life, several blocks of flight
 (def life-ms 4000)                    ; ms an eye flies before it drops or shatters (EyeOfEnder: 80 ticks), by the server's clock
+(def drop-grace-ms 1000)              ; ms after the eye is removed its dropped item may take to be added, by the server's clock
 (def min-flight 1.0)                  ; blocks on the plane an eye must have flown for its line to count
+(def travel 150)                      ; blocks from the first throw the second is made, off its line
+(def travel-turn 45.0)                ; degrees off the first line the way to the second throw turns: ahead and aside at once
+(def hop-reach 32)                    ; blocks a walk toward somewhere far goes at a time
+(def hop-rise 12)                     ; blocks over and under the feet a hop's end is looked for in its column
+(def hop-turns [0.0 30.0 -30.0 60.0 -60.0 90.0 -90.0]) ; degrees off the way a hop may turn when straight on has no route
+(def there 16.0)                      ; blocks on the plane from a point that count as there
+(def rethrow-beyond 48.0)             ; at the crossing with no frame seen, a throw from there when the last was made farther off
+(def explore-reach 64)                ; blocks from the crossing the walks round it go, each loading chunks further out
+(def frame-radius 512.0)              ; blocks a remembered end portal frame is the stronghold's within
 (def min-crossing 0.035)              ; the sine of the least angle two throws' lines may cross at (2 degrees): nearer parallel, a sliver of error moves the crossing hundreds of blocks
 
 ;; ---------------------------------------------------------------- the plane
@@ -184,20 +206,34 @@
             (fnil conj [])
             {:throw/from (mapv double from) :throw/dir dir :throw/at at})))
 
+(defn eye-drop
+  "[eid entity] of an eye lying within drops/drop-radius of pos, where a thrown eye ended, brought
+   down to the feet's height (it flew up, and its item fell to the ground), or nil."
+  [world [ex _ ez]]
+  (let [[_ fy _] (:player/pos world)] (drops/nearest world eye [ex fy ez])))
+
 (defmethod throw-stage :follow
   ;; the eye's last place kept each tick; its line read follow-ms after it was seen (or at once
-  ;; when the server removes it sooner), recorded as a throw; done when the server removes it
-  ;; (dropped as an item or shattered), or life-ms and answer-ms past with it still there.
-  ;; Failed :eye-unmoved when it had not flown min-flight by then
-  [world {:intent/keys [since target eye-from eye-pos]}]
+  ;; when the server removes it sooner), recorded as a throw. Once the server removes it
+  ;; (:intent/gone-at), done when its dropped item lies there (eye-drop) or drop-grace-ms later
+  ;; (it shattered): the removal and the item's add need not come in one tick, and the planner
+  ;; picks the item up only if it is there when the intent ends. Done too past life-ms,
+  ;; answer-ms and drop-grace-ms with the eye still there. Failed :eye-unmoved when it had not
+  ;; flown min-flight when its line was read
+  [world {:intent/keys [since target eye-from eye-pos gone-at]}]
   (let [now (:time/now world)
         e (get-in world [:world/entities target])
         pos (or (:entity/pos e) eye-pos)
-        world (intent/assoc-intent world :intent/eye-pos pos)
-        due? (or (nil? e) (>= (- now since) (by-server world follow-ms)))
+        gone-at (or gone-at (when (nil? e) now))
+        world (cond-> (intent/assoc-intent world :intent/eye-pos pos)
+                gone-at (intent/assoc-intent :intent/gone-at gone-at))
+        due? (or gone-at (>= (- now since) (by-server world follow-ms)))
         world'
         (if (and due? (not (recorded? world since))) (record-throw world eye-from pos since) world)
-        over? (or (nil? e) (> (- now since) (by-server world (+ life-ms answer-ms))))]
+        over? (or (and gone-at
+                       (or (eye-drop world pos)
+                           (>= (- now gone-at) (by-server world drop-grace-ms))))
+                  (> (- now since) (by-server world (+ life-ms answer-ms drop-grace-ms))))]
     (cond (nil? world') (intent/fail world :eye-unmoved)
           over? (intent/done world')
           :else world')))
@@ -224,9 +260,142 @@
 
 (defmethod plan/done-by :thrown? [world _] (boolean (seq (throws world))))
 
-(defmethod plan/next-intent :throw
-  ;; the gym's throw trial: one throw, an eye held; none held waits :no-eye
-  [world _ _]
+(defn throw-now
+  "A throw, an eye held; else the wait :no-eye."
+  [world]
   (if (pos? (eyes-held world))
     {:intent/kind :throw-eye :intent/for :stronghold}
     {:plan/wait :no-eye}))
+
+(defmethod plan/next-intent :throw [world _ _] (throw-now world)) ; the gym's throw trial: one throw
+
+;; ---------------------------------------------------------------- the search
+
+(def frame-states
+  "Every state of an end portal frame, with an eye or without."
+  (set (blocks/states-of :end_portal_frame)))
+
+(defn frames
+  "The end portal frames on record in the bot's dimension that nothing seen since has replaced
+   (memory/positions-now)."
+  [world]
+  (memory/positions-now world frame-states))
+
+(defn nearest-frame
+  "The end portal frame on record nearest the feet within frame-radius, or nil."
+  [world]
+  (memory/nearest-of (physics/centre (intent/feet world)) frame-radius (frames world)))
+
+(defn rotate
+  "The 2-D vector [dx dz] turned by deg degrees."
+  [[dx dz] deg]
+  (let [a (math/to-radians deg)
+        c (math/cos a)
+        s (math/sin a)]
+    [(- (* dx c) (* dz s)) (+ (* dx s) (* dz c))]))
+
+(defn second-spot
+  "[x z] where the throw after throw t is made: travel blocks from it along its line turned
+   travel-turn degrees, so the second line crosses the first ahead of both at an angle. Thrown
+   from along the line it would be the same line (triangulate's parallel case)."
+  [{:throw/keys [from dir]}]
+  (let [[x z] (plane from)
+        [dx dz] (rotate dir travel-turn)]
+    [(+ x (* travel dx)) (+ z (* travel dz))]))
+
+(defn crossing
+  "[x z] of the stronghold by the throws on record: the latest throw crossed with each earlier
+   one (triangulate), the widest crossing (the largest sine of the angle) kept; nil when none
+   crosses."
+  [world]
+  (let [ts (throws world)
+        t (peek ts)]
+    (some->> (butlast ts)
+             (keep (fn [u]
+                     (when-let [c (triangulate u t)]
+                       [(abs (cross (:throw/dir u) (:throw/dir t))) c])))
+             seq
+             (apply max-key first)
+             second)))
+
+(defn at?
+  "Are the feet within there blocks of [x z] on the plane?"
+  [world [x z]]
+  (<= (physics/horizontal-distance (:player/pos world) [x 0.0 z]) there))
+
+(defn stand-in
+  "A cell in column x z a body can stand in (path/standable?), within hop-rise over or under
+   height y, the highest first; nil when none is."
+  [world x z y]
+  (some #(when (path/standable? world [x % z]) [x % z]) (range (+ y hop-rise) (- y hop-rise 1) -1)))
+
+(defn hop
+  "A walk toward the far point [x z]: to a cell (stand-in) hop-reach blocks along the way, or
+   nearer when the point is, that a route reaches (intent/routable?); straight on first, then
+   turned by each of hop-turns. nil when none is, or when the feet are there already. A walk to
+   somewhere hundreds of blocks off is beyond a route's node budget, so it goes a hop at a time,
+   the planner choosing the next from where the last ended."
+  [world [x z]]
+  (let [[fx fy fz] (intent/feet world)
+        v [(- x fx) (- z fz)]
+        d (norm v)]
+    (when-not (at? world [x z])
+      (some (fn [turn]
+              (let [[ux uz] (rotate [(/ (first v) d) (/ (second v) d)] turn)
+                    r (min hop-reach d)
+                    c (stand-in world
+                                (long (math/floor (+ fx 0.5 (* r ux))))
+                                (long (math/floor (+ fz 0.5 (* r uz))))
+                                fy)
+                    i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
+                (when (and i (not= c [fx fy fz]) (intent/routable? world i)) i)))
+            hop-turns))))
+
+(defn picked-up
+  "The pickup of the eye the last throw dropped: when the last intent was a :throw-eye that ended
+   done and an eye lies where it fell (eye-drop), a :collect-drops of it; else nil."
+  [world]
+  (let [l (:plan/last world)
+        [_ d] (when (and (= :throw-eye (:intent/kind l)) (intent/done? l) (:intent/eye-pos l))
+                (eye-drop world (:intent/eye-pos l)))]
+    (when d
+      {:intent/kind :collect-drops
+       :intent/item eye
+       :intent/target (mapv #(long (math/floor %)) (:entity/pos d))
+       :intent/for :stronghold})))
+
+
+(defn explore
+  "A hop toward the first of the eight points explore-reach round the crossing c that the feet are
+   not at and a hop reaches, from a heading the clock picks (a minute each), so the walks load
+   the chunks round it; nil when none."
+  [world [cx cz]]
+  (let [start (quot (:time/now world 0) 60000)]
+    (some (fn [k]
+            (let [[dx dz] (rotate [1.0 0.0] (* 45.0 (+ start k)))]
+              (hop world [(+ cx (* explore-reach dx)) (+ cz (* explore-reach dz))])))
+          (range 8))))
+
+(defn stronghold-next
+  "The search's next step, in order: the eye just thrown picked up (picked-up); with no throw,
+   one; with a crossing, a hop toward it, and there with nothing seen, a throw from there when the
+   last was made more than rethrow-beyond off, else walks round it (explore); with throws that do
+   not cross, a hop to the next throw's spot (second-spot of the latest) and a throw there. A hop
+   none reaches waits :no-way."
+  [world]
+  (let [ts (throws world)
+        c (crossing world)
+        last-from (some-> (peek ts)
+                          :throw/from)]
+    (or (picked-up world)
+        (cond (empty? ts) (throw-now world)
+              (and c (not (at? world c))) (or (hop world c) {:plan/wait :no-way})
+              (and c (> (physics/horizontal-distance (:player/pos world) last-from) rethrow-beyond))
+              (throw-now world)
+              c (or (explore world c) {:plan/wait :no-frame})
+              (at? world (second-spot (peek ts))) (throw-now world)
+              :else (or (hop world (second-spot (peek ts))) {:plan/wait :no-way})))))
+
+(defmethod plan/done-by :frames-seen? [world _] (boolean (seq (frames world))))
+
+(defmethod plan/next-intent :stronghold [world _ _] (stronghold-next world))
