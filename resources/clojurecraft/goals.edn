@@ -348,4 +348,14 @@
   "one ender pearl from a hunted enderman (issue #263, the gym's first pearl trial): the :ender-pearls hunt, done at the first pearl held"
   :goal/provides {:item/ender_pearl 1}
   :goal/done? :provided?
-  :goal/plan :pearls}]
+  :goal/plan :pearls}
+ {:goal/id :eyes-of-ender
+  :goal/priority 20
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "eyes"
+  :goal/doc
+  "twelve eyes of ender, one for each frame of the end portal (issue #264): blaze powder crafted from the rods (two a rod, six of the seven), then each eye from a powder and a pearl, both in the 2x2 grid, no table and no trip; the needs planner finds the way through the generated craft rows. Twelve, not fourteen for the throws: the pearl stage makes twelve, and the throws that find the stronghold are the stronghold stage's to count. Short of pearls or rods it waits :no-pearls or :no-rods, the stage to look at. An aside until the stages before it (the blaze rods, the pearls) are proven and the chain is raised to it"
+  :goal/provides {:item/ender_eye 12}
+  :goal/done? :provided?
+  :goal/plan :eyes}]

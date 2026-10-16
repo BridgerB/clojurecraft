@@ -78,8 +78,9 @@
       :burrow (pos? (get counts :wooden_pickaxe 0)) ; the pearl hunt's burrow, cut only with a pickaxe held (issue #263)
       :lookout true ; the pearl hunt standing until an enderman comes
       nil
-      (contains? #{:no-log :no-water :in-water :no-site :other-dimension :no-mob :looking}
-                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round: wait
+      (contains? #{:no-log :no-water :in-water :no-site :other-dimension :no-mob :looking :no-pearls
+                   :no-rods}
+                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round, the eyes with no pearls or rods (issue #264, each its own stage): wait
       false)))
 
 (deftest the-planner-only-picks-executable-intents
@@ -118,8 +119,9 @@
             the escapes and the shore trial (issue #5) are the other rules, done by the planner's trap and its escapes,
             the meal, the armour and the fights (issue #259), done by the server's food, slots and mobs, and the
             entities trial (issue #258), done by a living entity's health the server sent; the pearls (issue #263)
-            are an item target, done by :provided?, planned by the hunt rather than the needs planner; and the
-            blaze rods (issue #262), done by the rods held, planned by their own rule"
+            are an item target, done by :provided?, planned by the hunt rather than the needs planner; the
+            blaze rods (issue #262), done by the rods held, planned by their own rule; and the eyes (issue #264),
+            done by :provided?, planned by the needs planner with its :stuck named for the stage that is short"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
     (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :fed? :dressed?
                               :armoured? :health-seen? :safe? :cleared? :provisioned? :armed?
@@ -127,7 +129,7 @@
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
     (is (= #{:needs :escape :wade :build :fortress :eat :wear :armour :watch :defend :attack :hunt
-             :sword :pearls :blaze-rods}
+             :sword :pearls :blaze-rods :eyes}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
