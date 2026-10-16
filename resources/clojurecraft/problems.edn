@@ -213,6 +213,32 @@
   "clojurecraft has never attempted this. ruststeve: after entering the Nether its overworld columns answered Nether lookups (fortress brick reported 64 blocks too low) and the parser panicked on the shorter Nether chunk; finding the fortress was solved, but reaching it alive was not, with 9+ falls into the lava sea at one spot."
   :problem/sources ["docs/issues/09-nether-and-fortress.md" "brain/bot/plan/roadmap-issues.md"
                     "brain/siblings/sib-dimension-change.md"]}
+ {:problem/stage :survival
+  :problem/issue 259
+  :problem/goals [:eat]
+  :problem/statement
+  "Normal difficulty brings hunger and night mobs to every stage. Food drains with every dig and jump, an empty bar stops healing and starves the bot to one heart, and zombies, skeletons and creepers find a bot that cannot hit back. The world value read the health from set-health and threw the food away; the bot could not eat, wear armour or attack."
+  :problem/needs
+  ["The food level from set-health (decoded since the packet was specced, never kept)"
+   "Which food is safe to eat and how long eating takes: the game's food properties"
+   "The 775 attack packet and every mob tracked with its health (issue #258)"
+   "A sword in hand for every fight, and armour worn through window-0 clicks into the armour slots"]
+  :problem/decisions
+  ["Eating is an always row at priority 0 after the escapes, done when fed (food 14 or more) or when nothing edible is held, so a hungry bot with no food goes on with the run"
+   "The meal is the server's food rising; a deadline from the food's eating time, stretched by the server's slowdown, fails it :not-eaten"
+   "Never eat what poisons or makes hungry, chorus fruit, suspicious stew or golden apples"]
+  :problem/risks
+  ["A meal preempts work mid-intent: a smelt abandoned leaves its input in the furnace"
+   "Another slot selected mid-meal stops the eating (set-carried-item)"
+   "Nothing edible held: the bar stays empty until a food producer (passive animals killed) exists"
+   "Swings inside a mob's 10-tick hurt invulnerability do nothing"
+   "A creeper fought instead of fled"]
+  :problem/done
+  "RCON: the bot's foodLevel at 14 or more after landing hungry with bread, and fewer breads held; a NoAI zombie gone with the attacks 650 ms apart; three zombies at night survived."
+  :problem/last-failure
+  "clojurecraft has never eaten or fought: every server ran Peaceful until #257 set Normal. ruststeve spent sessions dealing no damage (interact instead of attack, 40 swings in 66 ms) before its blaze kills."
+  :problem/sources ["docs/RICH-HICKEY.md" "brain/siblings/sib-775-attack-packet.md"
+                    "brain/siblings/sib-blaze-combat.md"]}
  {:problem/stage :end-and-dragon
   :problem/issue 10
   :problem/statement

@@ -46,6 +46,8 @@ src/clojurecraft/intent.clj   open executors (multimethod on :intent/kind): :wal
 src/clojurecraft/stairs.clj   the :stairs-down executor: a staircase of child :dig intents, refusing water, lava and drops
 src/clojurecraft/stone.clj    the :mine act: a row's blocks (stone, ore, gravel) walk → dig → collect, or stairs down to its depth
 src/clojurecraft/swim.clj     the escape goals' rules and executors: :swim-out, :flee, and :wade (the shore trial)
+src/clojurecraft/eat.clj      the :eat always row and executor: hungry under 14 with safe food held, one use-item, done when the server's food rises
+src/clojurecraft/food.clj     the game's food as data: nutrition and eating time per item, for the bot and the server model
 src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with clicks, verify, take
 src/clojurecraft/smelt.clj    the :smelt executor: settle, lay the fuel and the input, cook, take, close; fuel in burn order
 src/clojurecraft/place.clj    the :place and :open-container executors: a spot, use-item-on, the server's answer

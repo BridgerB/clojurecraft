@@ -6,6 +6,7 @@
             [clojure.string :as str]
             [clojurecraft.build :as build]
             [clojurecraft.claims :as claims]
+            [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
@@ -353,6 +354,10 @@
 (s/def :server/time-at int?)
 (s/def :server/tick-ms number?)
 (s/def :player/health number?)
+(s/def :player/food int?)               ; 0-20 from a server; the wire allows any varint, and step is total over it
+(s/def :player/saturation number?)
+(s/def :intent/food-before int?)
+(s/def :intent/eat-by number?)
 (s/def :entity/seen-at int?)
 (s/def :sight/pos ::block-pos)
 (s/def :sight/state int?)
@@ -689,6 +694,9 @@
   :args
   (s/cat :world (requires :world/entities)
          :eid int?))
+(s/fdef eat/food-held
+  :args
+  (s/cat :world (requires :player/inventory)))
 (s/fdef window/view
   :args
   (s/cat :world (requires :window/grid)
@@ -699,5 +707,5 @@
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
-   `window/view `path/plan `path/classify `entity/hostiles `entity/gone?])
+   `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held])
 (s/def :stats/deaths pos-int?)
