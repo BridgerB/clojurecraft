@@ -741,16 +741,53 @@
           (< fy y) {:intent/kind :stairs-up :intent/to-y y :intent/for :build}
           :else nil)))
 
+(defn way-columns
+  "The columns [x z] of the straight way from the feet's column to stand's, as stance-block
+   walks it: along x first, then along z, both ends included."
+  [[fx _ fz] [sx _ sz]]
+  (let [step (fn [a b] (if (> a b) -1 1))]
+    (concat (for [x (range fx (+ sx (step fx sx)) (step fx sx))] [x fz])
+            (for [z (range (+ fz (step fz sz)) (+ sz (step fz sz)) (step fz sz))] [sx z]))))
+
+(defn floor-gap
+  "The cell under the first cell of the straight way to stand, at the stand's height and past
+   the feet's own column, that nothing holds the feet up over: no solid under it, it and the
+   head open (stance-block found the way clear), no lava in it. nil when every cell of the way
+   has a floor."
+  [world stand]
+  (let [y (second stand)]
+    (->> (rest (way-columns (intent/feet world) stand))
+         (map (fn [[x z]] [x (dec y) z]))
+         (filter #(and (some? (terrain/block-at world %))
+                       (not (holds? world [:solid %]))
+                       (not (contains? blocks/lava-states (terrain/block-at world %)))))
+         first)))
+
+(defn bridge
+  "The child that lays the missing floor on the way to stand at the feet's height (floor-gap): a
+   cobblestone placed in it, or in the lowest cell under it that is held up (foundation), when
+   it is in reach and a block is held; nil otherwise. Sim race 38665691522 and a probe at
+   8356e28 (issue #162, world R3/37): the refill's way out from the landing ran over a cave's
+   open cell beside the room, the line clear and nothing to dig, and the walk there, with no
+   floor to stand on, failed :no-path three times."
+  [world stand]
+  (when-let [gap (and (held? world :cobblestone) (floor-gap world stand))]
+    (when-let [c (and (<= (physics/distance (game/eye world) (physics/centre gap))
+                          place/place-reach)
+                      (foundation world gap))]
+      {:intent/kind :place :intent/item :cobblestone :intent/cell c})))
+
 (defn toward-stand
   "The child that brings the feet to stand, a cell of the build's way (a landing, the lava's
    stand): a walk when a route reaches it, else at its height the first block in the way dug
-   (clear-stand), else the way to its height (to-height); nil when the feet are there."
+   (clear-stand) or the missing floor laid (bridge), else the way to its height (to-height); nil
+   when the feet are there."
   [world stand build origin facing]
   (let [walk {:intent/kind :walk :intent/target stand :intent/for :build}]
     (cond (intent/centred? world stand) nil
           (intent/routable? world walk) walk
           (= (long (physics/y-of (intent/feet world))) (second stand))
-          (or (clear-stand world stand build origin facing) walk)
+          (or (clear-stand world stand build origin facing) (bridge world stand) walk)
           :else (or (to-height world (second stand)) walk))))
 
 (defn sight-block
