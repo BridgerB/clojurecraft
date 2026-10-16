@@ -1,0 +1,11 @@
+;; Issue #265's gym rows, run as a plan from branch gym/265 (gym.yml's goal dropdown cannot name
+;; them yet): one eye thrown and judged against locate structure; the stronghold found from 250
+;; blocks off it; and its portal room reached. One bot a server.
+{:plans/label "stronghold-265a"
+ :plans/jobs 11
+ :plans/max-parallel 8
+ :plans/issue 265
+ :plans/experiments
+ [{:exp/name "throw" :exp/kind :gym :exp/goal "throw" :exp/runs 5 :exp/est-s 180}
+  {:exp/name "stronghold" :exp/kind :gym :exp/goal "stronghold" :exp/runs 3 :exp/est-s 1500}
+  {:exp/name "portal-room" :exp/kind :gym :exp/goal "portal-room" :exp/runs 3 :exp/est-s 2100}]}
