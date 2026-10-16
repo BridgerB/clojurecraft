@@ -198,6 +198,13 @@
     "after the hunt dug one"]
    [:pearls/mouth "where the pearl hunt's burrow began, on the surface its stairs go down from"
     "after the hunt dug one"]
+   [:stronghold/throws
+    "every eye of ender thrown and followed, oldest first: {:throw/from :throw/dir :throw/at}; two from places apart cross at the stronghold (stronghold/triangulate, issue #265)"
+    "after the first throw"]
+   [:throw/from "where a thrown eye was first seen: the thrower's middle [x y z]"
+    "inside :stronghold/throws"]
+   [:throw/dir "the unit [dx dz] on the plane the eye flew, toward the stronghold"
+    "inside :stronghold/throws"] [:throw/at "ms the eye was first seen" "inside :stronghold/throws"]
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
     "after a :boxed staircase or tunnel"]

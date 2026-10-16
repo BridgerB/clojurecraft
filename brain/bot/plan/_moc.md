@@ -27,6 +27,7 @@ related:
 - [[build-plan]] - a build as data: ops with done-predicates, the first not satisfied is worked; portal-plan, the portal cut into the rock beside a lava pool.
 - [[fortress-tunnel]] - the Nether leg: bricks as sightings, a tunnel whose steps are plans of ops, never opening a cell beside lava.
 - [[blaze-rods]] - seven rods in the Nether: hurt first, a rod lying near, the nearest blaze, the remembered spawner walked or tunnelled to and camped by; the blaze gym rows.
+- [[stronghold]] - the stronghold by eyes of ender (issue #265): a throw as a fact, two throws' lines crossed on the plane, nothing when parallel or behind.
 - [[roadmap-issues]] - which GitHub issue number is which roadmap step and draft.
 
 - [[intentions-as-facts]] - every intent's story in memory; what the bot was doing at any moment is a query.
