@@ -18,6 +18,7 @@
 (def far-radius 256)                  ; a trunk remembered on the way in, past the near band
 (def far-candidates 3)                ; routes planned on the way back to the surface
 (def max-trunk 8)                     ; logs followed up one trunk column
+(def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
 
 (defn ground?
   "Can a drop come to rest on this block where a player stands beside it: solid, and neither a log
@@ -181,16 +182,52 @@
                                    (scoop/hunt-targets world true)))
         (scoop/first-walk world :log-hunt (scoop/hunt-targets world))))))
 
+(defn into-water
+  "Boxed under water with no other way to the trees (the feet in :plan/boxed-at, where a climb
+   out was boxed): dig up into it, the lowest solid cell over the head
+   first (:intent/exposes-ok?: the dig lets the water in), when water lies within bed-reach over
+   the head and nothing between would fall on the bot (blocks/falls?), is lava, is not loaded or
+   is never dug; once nothing but air and water is over the head, a :swim-out for :rise up to the
+   water's top (:intent/to-y), then to the shore (swim/far-shore), ending on dry land in the open;
+   the water poured in is the trap too, and the escape it starts swims the same way. Sim race 38806318231 runner 1 and 38811426215 runner 8 (issue #89, worlds
+   R4/30, R4/21 and R1/32 at 76010d2, 146 runs) had bots mine under the sea floor until the last
+   pickaxe broke: for a new one they needed a log, every climb out was :boxed under the water,
+   no route led home, and each waited :no-log. nil otherwise."
+  [world]
+  (let [[x y z :as feet] (intent/feet world)
+        cells (map (fn [dy] [x (+ y dy) z]) (range 2 (+ 2 bed-reach)))
+        [dry more] (split-with #(not= :water (terrain/fluid-kind world %)) cells)
+        ids (map #(terrain/block-at world %) dry)
+        rock (first (filter #(some-> (terrain/block-at world %)
+                                     blocks/solid?)
+                            dry))
+        water? #(= :water (terrain/fluid-kind world [x % z]))
+        top (->> (range (+ y 2) (+ y 34))
+                 (drop-while (complement water?))
+                 (drop-while water?)
+                 first)]
+    (cond (not (and (contains? (:plan/boxed-at world #{}) feet)
+                    (seq more)
+                    (every? some? ids)
+                    (not-any? #(or (blocks/falls? %)
+                                   (= :lava (:fluid/kind (blocks/fluid %)))
+                                   (contains? intent/never-dug (blocks/name-of %)))
+                              ids)))
+          nil
+          rock (assoc (intent/child-dig rock) :intent/exposes-ok? true :intent/for :into-water)
+          :else {:intent/kind :swim-out :intent/for :rise :intent/to-y (or top (+ y 34))})))
+
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
    trunk a route reaches (near-walk). Any goal that needs a log uses this. With none in the near
-   band a route reaches, climb out to the trees, or walk toward them (hunt), instead of waiting
-   :no-log."
+   band a route reaches, climb out to the trees, or walk toward them (hunt), or boxed under water
+   dig up into it (into-water), instead of waiting :no-log."
   [world]
   (or (continue-gather world)
       (near-walk world)
       (climb-out world)
       (hunt world)
+      (into-water world)
       {:plan/wait :no-log}))
 
 

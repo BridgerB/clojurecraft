@@ -95,6 +95,7 @@
 (s/def :world/traps (s/coll-of ::trap :kind vector?))
 (s/def :intent/bank ::block-pos)
 (s/def :intent/next-search int?)
+(s/def :intent/shore ::block-pos)
 (s/def :intent/dig-when-down ::block-pos)
 (s/def :intent/water ::block-pos)
 (s/def :intent/wet? boolean?)
