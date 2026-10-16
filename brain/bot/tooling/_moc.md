@@ -16,6 +16,8 @@ related:
 - [[race]] - many bots on one server, each its own atom and loop, one claims channel for landing cells; race.yml on every runner.
 - [[record-replay]] - every run is a file; replay it with no server.
 - [[server-model]] - the pure vanilla-server model tests run the whole bot against.
+- [[sim-hunger]] - hunger in the model: FoodData drained, healed, starved and fed at the difficulty given.
+- [[sim-mobs]] - mobs in the model: the night rule, straight approach, melee, arrows, fuses, the attack, loot, fixtures.
 - [[sim-race]] - real worlds captured once, the whole bot played in them against the model, thousands of runs a runner.
 - [[datagen]] - six EDN tables: four from --reports, recipes and tags from the inner jar.
 - [[specs-and-instrumentation]] - what is specced, what is instrumented, what is not.

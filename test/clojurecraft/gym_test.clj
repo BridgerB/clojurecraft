@@ -7,13 +7,18 @@
             [clojurecraft.gym :as gym]
             [clojurecraft.landings :as landings]
             [clojurecraft.plan :as plan]
+            [clojurecraft.rcon :as rcon]
             [clojurecraft.spec]))
 
 (deftest the-registry-is-data-and-agrees-with-the-goal-table
   (is (every? #(s/valid? :clojurecraft.gym/row %) gym/gyms))
   (is (= gym/gyms (edn/read-string (pr-str gym/gyms))) "printable and readable back")
   (testing "every row's --until puts exactly its goal in play"
-    (is (every? #(= [(:gym/goal %)] (plan/goals-for (:gym/until %))) gym/gyms)))
+    (is (every? #(= [(:gym/goal %)] (plan/goals-for (:gym/until %)))
+                (remove :gym/fixture? gym/gyms))))
+  (testing "a fixture row's puts none: it judges the landing alone (issue #261)"
+    (is (seq (filter :gym/fixture? gym/gyms)))
+    (is (every? #(nil? (plan/goals-for (:gym/until %))) (filter :gym/fixture? gym/gyms))))
   (is (= :kit (:gym/goal (gym/gym "table"))) "a row is found by its --until name")
   (is (= :kit (:gym/goal (gym/gym :kit))) "or by its goal"))
 
@@ -53,6 +58,86 @@
                       [100 200 64])))
   (is (= "data get entity Clj_g1 Dimension"
          (gym/fill-in "data get entity {name} Dimension" "Clj_g1" [0 0 0]))))
+
+(deftest the-summons-are-commands-round-the-landing
+  ;; issue #261: what the fight rows meet, written as fill-in templates and run in the row's
+  ;; dimension
+  (is (= "summon minecraft:zombie {x+2} {y} {z-2} {NoAI:1b,PersistenceRequired:1b}"
+         (gym/no-ai-zombie [2 0 -2])))
+  (is (= "summon minecraft:zombie 102 72 198 {NoAI:1b,PersistenceRequired:1b}"
+         (gym/fill-in (gym/no-ai-zombie [2 0 -2]) "Clj_g1" [100 200 72])))
+  (is (= "summon minecraft:pig {x} {y+1} {z}" (gym/summon "pig" [0 1 0])))
+  (is (str/starts-with?
+       (gym/fill-in (gym/blaze-spawner [3 0 3]) "Clj_g1" [0 0 72])
+       "setblock 3 72 3 minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}}"))
+  (is (= 3 (count (gym/endermen 3 [0 0 2]))))
+  (is (every? #(str/starts-with? % "summon minecraft:enderman {x} {y} {z+2}")
+              (gym/endermen 3 [0 0 2])))
+  (is (= ["kill @e[type=minecraft:end_crystal]"
+          "summon minecraft:end_crystal {x+3} {y} {z+3} {ShowBottom:0b}"]
+         (gym/crystals [[3 0 3]])))
+  (is (str/includes? (peek gym/dragon) "{DragonPhase:0,Health:200f}")
+      "a summoned dragon circles with full health, not hovering in phase 10")
+  (is (= "time set midnight" gym/night))
+  (is
+   (=
+    ["execute in minecraft:the_nether run summon minecraft:zombie 12 72 22 {NoAI:1b,PersistenceRequired:1b}"]
+    (gym/summons (gym/gym :arena-nether) "Clj_g1" [10 20 72])))
+  (is (= ["give Clj_g1 minecraft:iron_sword 1" "give Clj_g1 minecraft:cooked_beef 8"]
+         (gym/kit (gym/gym :arena-nether) "Clj_g1"))))
+
+(deftest each-landing-names-its-dimension
+  (is (= "minecraft:the_nether" (gym/dimension-of (gym/gym :fortress))))
+  (is (= "minecraft:the_nether" (gym/dimension-of (gym/gym :arena-nether))))
+  (is (= "minecraft:the_end" (gym/dimension-of (gym/gym :arena-end))))
+  (is (= "minecraft:overworld" (gym/dimension-of (gym/gym :wood))))
+  (is (= "execute as Clj_g1 at @s if dimension minecraft:the_end"
+         (gym/dimension-test "Clj_g1" "minecraft:the_end"))))
+
+(defn landing-commands
+  "The RCON commands landing! sends for goal, against a server that answers every test with
+   reply-for and every position with one in the arena; [result commands]."
+  [goal reply-for]
+  (let [sent (atom [])
+        landings (java.io.File/createTempFile "landings" ".edn")]
+    (spit landings (pr-str [[800 1600 70]]))
+    (with-redefs [rcon/with-rcon (fn [_ _ _ f] (f {}))
+                  rcon/command! (fn [_ c]
+                                  (swap! sent conj c)
+                                  (if (str/includes? c " Pos")
+                                    "Clj_g1 has the following entity data: [100.5d, 72.0d, 200.5d]"
+                                    (reply-for c)))
+                  gym/dimension-wait-ms 300]
+      (let [r (gym/landing! {:goal goal
+                             :run 1
+                             :name "Clj_g1"
+                             :rcon-port 1
+                             :rcon-pass "p"
+                             :landings (str landings)})]
+        (.delete landings)
+        [r @sent]))))
+
+(deftest the-kit-is-given-only-in-the-rows-dimension
+  ;; steve gave its End kit before the cross-dimension teleport and the server held none of it
+  ;; (issue #10): the gym lands, asks the server which dimension the bot is in, then gives
+  (let [[r sent] (landing-commands :arena-nether (constantly "Test passed"))
+        at (fn [pred] (first (keep-indexed (fn [i c] (when (pred c) i)) sent)))
+        tp (at #(str/includes? % "run tp Clj_g1"))
+        asked (at #{"execute as Clj_g1 at @s if dimension minecraft:the_nether"})
+        give (at #(str/starts-with? % "give "))
+        summoned (at #(str/includes? % "summon minecraft:zombie"))]
+    (is (:gym/landed? r))
+    (is (= [100 200 72] (:gym/landing r)) "the arena over the landing's Nether coordinates")
+    (is (some #{"difficulty normal"} sent))
+    (is (< tp asked give summoned)
+        "teleported, then the dimension confirmed, then the kit, then the mobs")
+    (is (some #(str/includes? % "fill 95 70 195 105 77 205 minecraft:netherrack") sent)
+        "the room's shell"))
+  (let [[r sent] (landing-commands
+                  :arena-nether
+                  #(if (str/includes? % "if dimension") "Test failed" "Test passed"))]
+    (is (not (:gym/landed? r)) "a bot that never reaches the dimension is a failed landing")
+    (is (not-any? #(str/starts-with? % "give ") sent) "and never gets its kit in the wrong world")))
 
 (deftest a-truth-reads-the-servers-reply
   (let [row {:truth/cmd "clear {name} minecraft:stick 0" :truth/re "Found ([4-9]|[1-9][0-9])"}]
@@ -142,3 +227,19 @@
     (is (landings/fit? [0 70 0] [[:water "Test failed"] [:tree "Test failed"]]))
     (is (not (landings/fit? [0 50 0] [[:water "Test failed"]])) "too low")
     (is (not (landings/fit? [0 70 0] [[:water "Test passed"]])) "water")))
+
+(deftest a-truth-can-hold-the-server-to-what-the-bot-saw
+  ;; issue #258: the entities trial passes only when the server reports the pig's health the bot
+  ;; read from its metadata; a RESULT with no such value never passes
+  (let [row (:truth/re (first (:gym/truth (gym/gym :entities))))
+        truth (first (:gym/truth (gym/gym :entities)))
+        reply "Pig has the following entity data: 7.5f"]
+    (is (= "entity data: {result}f" row))
+    (is (:truth/ok? (gym/truth truth "cmd" reply {:ok true :mobs {:pig 7.5}})))
+    (is (not (:truth/ok? (gym/truth truth "cmd" reply {:ok true :mobs {:pig 10.0}}))))
+    (is (not (:truth/ok? (gym/truth truth "cmd" reply {:ok true}))) "the bot saw no pig")
+    (is (not (:truth/ok? (gym/truth truth
+                                    "cmd"
+                                    "Pig has the following entity data: 715f"
+                                    {:ok true :mobs {:pig 7.5}})))
+        "the value is quoted, its dot no wildcard")))

@@ -155,37 +155,40 @@
                              (every? (fn [[a b]] (>= (- b a) 600)) (partition 2 1 at)))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
 
+(defn zombies-alive
+  "The model's zombies that are not dead."
+  [sim]
+  (filter (fn [[_ m]] (and (= :zombie (:type m)) (not (:dead-at m)))) (:sim/mobs sim)))
+
 (deftest a-zombie-at-hand-is-killed-against-the-model
+  ;; the model's zombie (mob.clj, issue #258) walks at the bot and hits it; the bot fights back
   (let [[w sim] (sim/run step
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes {})
                                     :spawn [8.5 64.0 8.5]
                                     :inventory {[:hotbar 0] (item :stone_sword 1)}
-                                    :mobs {50 {:type :zombie :pos [10.5 64.0 8.5] :health 20.0}}})
+                                    :mobs [{:type :zombie :pos [11.5 64.0 8.5]}]})
                          #(or (plan/done? %) (plan/failed? %))
                          30000
                          {:event/kind :go :go/goals [:defend]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
-    (is (= 4 (:sim/hits sim)) "a stone sword takes five of the zombie's twenty a hit")
-    (is (= (:sim/hits sim) (:sim/attacks sim))
-        "no attack fell inside the hurt time or out of reach")
-    (is (empty? (:sim/mobs sim)))
-    (is (nil? (get-in w [:world/entities 50])))
+    (is (empty? (zombies-alive sim)) "the zombie is dead")
+    (is (pos? (:sim/health sim)) "and the bot alive")
     (is (= [] (:sim/violations sim)))))
 
-(deftest the-attack-trial-walks-to-a-husk-and-kills-it-against-the-model
+(deftest the-attack-trial-kills-a-zombie-coming-from-afar-against-the-model
   (let [[w sim] (sim/run step
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes {})
                                     :spawn [8.5 64.0 1.5]
                                     :inventory {[:hotbar 2] (item :stone_sword 1)}
-                                    :mobs {51 {:type :husk :pos [8.5 64.0 12.5] :health 20.0}}})
+                                    :mobs [{:type :zombie :pos [8.5 64.0 13.5]}]})
                          #(or (plan/done? %) (plan/failed? %))
                          60000
                          {:event/kind :go :go/goals [:attack]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
-    (is (empty? (:sim/mobs sim)))
-    (is (= 4 (:sim/hits sim)) "the sword was taken into the hand first")))
+    (is (empty? (zombies-alive sim)))
+    (is (= 2 (:player/held-slot w)) "the sword was taken into the hand first")))
 
 (deftest an-attack-trial-looks-round-before-it-finds-nothing
   ;; gym attack-259a run 3 (run 38881958899): done 0.2 s after the go, the husk still unseen

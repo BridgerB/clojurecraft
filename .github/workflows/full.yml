@@ -43,6 +43,7 @@ jobs:
           RCON_PASS: full
           WORLD: ${{ runner.temp }}/world
           HEAP_MB: '4096'
+          DIFFICULTY: normal              # issue #10
         run: |
           set -euo pipefail
           until=$(clojure -M -e "(require '[clojurecraft.plan :as plan]) (println (plan/current-until))")

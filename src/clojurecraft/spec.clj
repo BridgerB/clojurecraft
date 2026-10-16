@@ -17,6 +17,7 @@
             [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.mob :as mob]
             [clojurecraft.packet :as p]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
@@ -259,7 +260,7 @@
 (s/def :goal/target? boolean?)
 (s/def :goal/until string?)                ; the --until name that selects a target row
 (s/def :goal/always? boolean?)
-(s/def :goal/aside? boolean?)             ; a gym-only target: never a step of a chained run (plan/through)
+(s/def :goal/aside? boolean?)              ; a trial of its own, never a step of a run (plan/aside?)
 (s/def :goal/trap #{:water :lava})
 (s/def :goal/plan keyword?)                ; which next-intent planner the row uses (default :needs)
 (s/def :goal/superseded-by keyword?)       ; the row that replaced this one; this one is kept, not chosen
@@ -604,6 +605,45 @@
 (s/def :sim/next-eid int?)
 (s/def :sim/next-keep-alive int?)
 (s/def :sim/keep-alives-pending set?)
+;; hunger in the model (issue #260): the server's FoodData, its difficulty, eating, hurts
+(s/def :sim/difficulty #{:peaceful :easy :normal :hard})
+(s/def :sim/food (s/int-in 0 21))                         ; the hunger bar (#259)
+(s/def :sim/saturation (s/double-in :min 0.0 :max 20.0 :NaN? false)) ; spent before the bar
+(s/def :sim/exhaustion (s/double-in :min 0.0 :max 40.0 :NaN? false)) ; four of it cost a point
+(s/def :sim/food-timer nat-int?)                         ; ticks on the heal or starve clock
+(s/def :sim/sent-health (s/tuple number? int? boolean?)) ; health, food, saturation zero? last told
+(s/def :sim/on-ground? boolean?)                         ; the last movement packet's flag
+(s/def :sim/eaten nat-int?)                              ; foods the player finished eating
+(s/def :sim.eating/slot int?)
+(s/def :sim.eating/item int?)
+(s/def :sim.eating/at int?)
+(s/def :sim/eating (s/keys :req-un [:sim.eating/slot :sim.eating/item :sim.eating/at]))
+(s/def :sim.hurt/at int?)
+(s/def :sim.hurt/last number?)
+(s/def :sim/hurt (s/keys :req-un [:sim.hurt/at :sim.hurt/last])) ; the last hurt: when, how hard
+;; mobs in the model (issue #260): each one's kind, place, health and clocks (mob.clj, sim/tick-mobs)
+(s/def :sim.mob/type (set (keys mob/kinds)))
+(s/def :sim.mob/pos ::vec3)
+(s/def :sim.mob/health (s/double-in :min 0.0 :NaN? false :infinite? false))
+(s/def :sim.mob/hit-at int?)                   ; when it was last hurt (the hurt window)
+(s/def :sim.mob/last-hit number?)              ; how hard
+(s/def :sim.mob/attack-at int?)                ; when it may hit or shoot again
+(s/def :sim.mob/fuse-at int?)                  ; when a creeper lit its fuse
+(s/def :sim.mob/dead-at int?)                  ; when it died; removed once its death is over
+(s/def :sim.mob/angry? boolean?)               ; a neutral one has turned on the player
+(s/def :sim.mob/persistent? boolean?)          ; never despawned: a fixture's, an animal
+(s/def ::sim-mob
+  (s/keys :req-un [:sim.mob/type :sim.mob/pos :sim.mob/health]
+          :opt-un
+          [:sim.mob/hit-at :sim.mob/last-hit :sim.mob/attack-at :sim.mob/fuse-at :sim.mob/dead-at
+           :sim.mob/angry? :sim.mob/persistent?]))
+(s/def :sim/mobs (s/map-of int? ::sim-mob))
+(s/def :sim/fixture-mobs (s/coll-of (s/keys :req-un [:sim.mob/type :sim.mob/pos]) :kind vector?))
+(s/def :sim/mob-rng int?)                      ; the mobs' own roll stream (sim/mob-roll)
+(s/def :sim/day-time int?)                     ; game ticks into the days, night from 13000 of each 24000
+(s/def :sim/populated (s/coll-of (s/tuple int? int?) :kind set?)) ; chunks whose animals were placed
+(s/def :sim/populated-at (s/tuple int? int?))  ; the column the player was in when they last were
+(s/def :sim/player-look (s/tuple double? double?)) ; [yaw pitch] the client last reported
 (s/def ::sim (s/keys :req [:sim/phase :sim/now :sim/out]))
 (s/fdef sim/step
   :args

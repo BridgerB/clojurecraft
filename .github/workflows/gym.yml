@@ -10,7 +10,7 @@ on:
     inputs:
       goal:
         type: choice
-        options: [wood, table, pickaxe, cobblestone, stone-pickaxe, furnace, ingots, bucket, water-bucket, flint-and-steel, iron-kit, cast-one, portal, nether, fortress, shore, eat, armour, attack, defend]
+        options: [wood, table, pickaxe, cobblestone, stone-pickaxe, furnace, ingots, bucket, water-bucket, flint-and-steel, iron-kit, cast-one, portal, nether, fortress, arena-nether, arena-end, shore, eat, armour, attack, defend]
         default: wood
       runs:
         default: '6'
@@ -33,6 +33,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
+  DIFFICULTY: normal                    # issue #10: mobs and hunger (the default in server.clj stays peaceful: it is part of the world cache key)
   SET: ${{ inputs.landing-set || 'A' }}
   LABEL: ${{ inputs.label || format('push{0}', github.run_number) }}
 

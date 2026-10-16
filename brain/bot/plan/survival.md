@@ -3,7 +3,7 @@ title: Survival
 description: How the bot lives through Normal difficulty (issue #259) - the food from set-health, the :eat always row and its executor (food in hand, one use-item, done when the server's food rises), the game's food as data, the sim's eating, the eat gym row's hungry landing, armour (worn by two window-0 clicks, made from spare ingots), the food producer (:hunt) and the sword (:sword), and fighting (the 775 attack packet, :fight paced by the clock, :defend, :back-off, the gym's :attack, the sim's mobs).
 type: reference
 tags: [bot, plan, survival, food, intents, goals]
-aliases: [:hunt, :provisioned?, :sword, :armed?, :intent/target-pos, :fight, :back-off, :defend, :attack, :safe?, :cleared?, attack packet, :intent/swings, ghost, :sim/mobs, :wear, :wear-armour, :armour, :dressed?, :armoured?, spare-ingots, :eat, :fed?, :player/food, :player/saturation, hungry-below, edible, food-held, :not-eaten, food/nutrition, :sim/food, :hungry landing]
+aliases: [:hunt, :provisioned?, :sword, :armed?, :intent/target-pos, :fight, :back-off, :defend, :attack, :safe?, :cleared?, attack packet, :intent/swings, ghost, :wear, :wear-armour, :armour, :dressed?, :armoured?, spare-ingots, :eat, :fed?, :player/food, :player/saturation, hungry-below, edible, food-held, :not-eaten, food/nutrition, :sim/food, :hungry landing]
 status: verified
 lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
@@ -62,7 +62,6 @@ sourceRefs:
   - src/clojurecraft/sword.clj#defn blade?
   - "resources/clojurecraft/goals.edn#{:goal/id :hunt"
   - "resources/clojurecraft/goals.edn#{:goal/id :sword"
-  - src/clojurecraft/sim.clj#defn drop-item
   - test/clojurecraft/hunt_test.clj#hungry-with-nothing-to-eat-the-nearest-cow-is-walked-to-then-fought
   - test/clojurecraft/hunt_test.clj#a-kill-just-made-is-collected-where-it-fell
   - test/clojurecraft/hunt_test.clj#a-hungry-bot-kills-a-cow-picks-up-its-beef-and-eats-it-against-the-model
@@ -72,7 +71,6 @@ sourceRefs:
   - "resources/clojurecraft/goals.edn#{:goal/id :attack"
   - src/clojurecraft/plan.clj#defn through
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :attack]
-  - src/clojurecraft/sim.clj#defn mob-packets
   - test/clojurecraft/combat_test.clj#an-attack-is-its-own-packet-the-entity-id-alone
   - test/clojurecraft/combat_test.clj#a-fight-faces-its-target-then-attacks-650-ms-apart
   - test/clojurecraft/combat_test.clj#a-target-that-takes-25-swings-is-a-ghost
@@ -80,7 +78,7 @@ sourceRefs:
   - test/clojurecraft/combat_test.clj#a-zombie-at-hand-is-fought-a-creeper-backed-away-from
   - test/clojurecraft/combat_test.clj#no-two-attacks-within-600-ms
   - test/clojurecraft/combat_test.clj#a-zombie-at-hand-is-killed-against-the-model
-  - test/clojurecraft/combat_test.clj#the-attack-trial-walks-to-a-husk-and-kills-it-against-the-model
+  - test/clojurecraft/combat_test.clj#the-attack-trial-kills-a-zombie-coming-from-afar-against-the-model
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[water-escape]]"
@@ -132,12 +130,12 @@ Gym row `armour`: the portal's iron, a table and 13 ingots given; judged by `exe
 
 **`:attack`** (`--until attack`): the gym's trial, every hostile within `attack-radius` 16 fought (`quarry`, done by `:cleared?`, and not before `look-ms` 3000 after the plan went active: the server shows a landing's entities a moment after its chunks, and gym attack-259a run 3 was done 0.2 s after the go with its husk unseen). It is the first row marked `:goal/aside?`: `plan/through`, `plan/current-until` and the results page's chain leave asides out, as they leave out the water trial, so no chained run ever takes it as a step.
 
-**The model's mobs.** `sim/init` takes `:mobs {eid {:type :pos :health}}`: shown at login (`mob-packets`: add-entity, then the health as metadata index 9), standing where they are. An `attack` on one in reach (`mob-reach` 4 from the eye to its middle) and past its `hurt-ms` 500 takes the held sword's damage (`weapon-damage`, a fist 1) and tells the health; at none, its death event (status 3) and its removal. `:sim/attacks` and `:sim/hits` count them. The mobs do not move or hit back.
+**The model's mobs** are issue #258's ([[sim-mobs]]): `sim/init` takes `:mobs [{:type :pos}]`, zombies walk at the bot and hit it, and an `attack` in reach hurts by the held item. The fight tests kill a zombie at hand with `:defend` and one coming from afar with the `:attack` trial against it.
 
 **Gym rows.** `attack`: a husk with `NoAI` (a husk does not burn by day) three east of the landing at noon, a stone sword; judged by no husk within 24 of the landing, and the attacks' spacing read from the recording. `defend`: three zombies two blocks round the landing at midnight, the bot in iron armour put on by the fixture (`item replace`, since a zombie at hand comes before dressing) with an iron sword; judged by a zombie killed (a kill counter the setup adds, `minecraft.killed:minecraft.zombie`: counting zombies round the landing counted the night's new ones too), health left and no death. Not all three: the row is done when none is within 4, and in gym defend-259a the others wandered off while the first was fought. Truths are asked at the landing, not `execute as` the bot: that answered RCON with nothing.
 
 ## The food producer (hunt.clj)
-`:hunt` is an always row at priority 0 after the meal: done by `:provisioned?`, not hungry, or food held (the meal comes first), or no `game` and no `fresh-kill`. `game` is the nearest cow, mooshroom, pig, sheep or rabbit (`game-kinds`, never a chicken: raw chicken may make the eater hungry), alive, not blacklisted, within `hunt-radius` 24, the first of the three nearest a route reaches (`intent/routable?`). Planned by `:hunt`: a kill just made (the last intent a `:fight` for `:hunt`, done, with `:intent/target-pos`, where the fight last saw its target) is a `:collect` of the meat there; else a `:walk` to the animal's cell, and once within `strike-range` 4.5 on the plane (past a walk's reach, so a walk that arrived is never asked again) a `:fight` for `:hunt`. The meat is eaten raw by `:eat`. The model's mobs take an optional `:drop`, an item left where one dies (`drop-item`, shared with a broken block's drop).
+`:hunt` is an always row at priority 0 after the meal: done by `:provisioned?`, not hungry, or food held (the meal comes first), or no `game` and no `fresh-kill`. `game` is the nearest cow, mooshroom, pig, sheep or rabbit (`game-kinds`, never a chicken: raw chicken may make the eater hungry), alive, not blacklisted, within `hunt-radius` 24, the first of the three nearest a route reaches (`intent/routable?`). Planned by `:hunt`: a kill just made (the last intent a `:fight` for `:hunt`, done, with `:intent/target-pos`, where the fight last saw its target) is a `:collect` of the meat there; else a `:walk` to the animal's cell, and once within `strike-range` 4.5 on the plane (past a walk's reach, so a walk that arrived is never asked again) a `:fight` for `:hunt`. The meat is eaten raw by `:eat`. Against the model a cow drops one to three beef by its loot table ([[sim-mobs]]).
 
 ## The sword (sword.clj)
 `:sword` is an always row at the portal kit's priority after the armour, so a chained run comes to it once the portal's iron is in hand and the wood-hungry mining is behind it; only a chained run makes one (a gym stage measures its own target: with the row in play the kit stage placed its held table for a wooden sword, undid the kit, and dug the table back until it timed out). Done by `:armed?`: nothing `wanted`, the first of an iron, stone and wooden sword better than the best held (`combat/swords` order) whose blade the held items pay for (`blade?`: iron only from ingots spare once the armour wants nothing, cobblestone, planks; never a log) with a handle (a stick, or two planks for sticks) and a table at hand. Planned through the needs planner. Until it is made, fights are by hand: `:defend` never stops to make a sword with a zombie at hand.

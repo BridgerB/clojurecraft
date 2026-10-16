@@ -173,6 +173,15 @@
   "wade into the nearest water on purpose until trapped, and be out of it again (the gym's water trial)"
   :goal/done? :escaped-water?
   :goal/plan :wade}
+ {:goal/id :entities
+  :goal/priority 1
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "entities"
+  :goal/doc
+  "see a living entity's health in the metadata the server sends for it (the gym's mob-model trial, issue #258): nothing to do but stand where landed until a living entity within reach of the bot's senses has :entity/health; the gym compares it with the server's own word"
+  :goal/done? :health-seen?
+  :goal/plan :watch}
  {:goal/id :gather-log
   :goal/priority 10
   :goal/doc "chop the nearest remembered trunk and pick the log up"

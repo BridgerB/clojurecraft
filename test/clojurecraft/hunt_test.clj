@@ -74,24 +74,24 @@
          (plan/next-intent w hunt-row plan/goals)))))
 
 (deftest a-hungry-bot-kills-a-cow-picks-up-its-beef-and-eats-it-against-the-model
-  ;; food 10 + raw beef 3 is 13, still hungry, but nothing is left to eat or hunt: done
+  ;; food 10: the model's cow (mob.clj, issue #258) drops one to three beef, three each; the bot
+  ;; eats until it is fed or has none left
   (let [[w sim] (sim/run step
                          (game/init fx/opts)
-                         (sim/init
-                          {:column (world/column-bytes {})
-                           :spawn [8.5 64.0 4.5]
-                           :food 10
-                           :mobs {52 {:type :cow :pos [8.5 64.0 11.5] :health 10.0 :drop :beef}}})
+                         (sim/init {:column (world/column-bytes {})
+                                    :spawn [8.5 64.0 4.5]
+                                    :food 10
+                                    :mobs [{:type :cow :pos [8.5 64.0 11.5]}]})
                          #(or (plan/done? %) (plan/failed? %))
                          60000
                          {:event/kind :go :go/goals [:eat]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
-    (is (empty? (:sim/mobs sim)) "the cow was killed")
-    (is (= 13 (:sim/food sim) (:player/food w))
+    (is (not-any? (fn [[_ m]] (and (= :cow (:type m)) (not (:dead-at m)))) (:sim/mobs sim))
+        "the cow was killed")
+    (is (>= (:player/food w) 13)
         (pr-str {:story (mapv (juxt :intention/kind :intention/event
                                     :intention/reason :intention/target)
                               (memory/intentions w))
-                 :held (recipe/counts (:player/inventory w))
-                 :items (:sim/items sim)}))
-    (is (zero? (:beef (recipe/counts (:player/inventory w)) 0)))
+                 :held (recipe/counts (:player/inventory w))}))
+    (is (= (:sim/food sim) (:player/food w)) "the bot's food is the server's")
     (is (= [] (:sim/violations sim)))))
