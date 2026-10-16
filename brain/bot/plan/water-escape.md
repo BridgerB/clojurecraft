@@ -33,6 +33,8 @@ sourceRefs:
   - src/clojurecraft/swim.clj#defmethod intent/run :swim-out
   - src/clojurecraft/swim.clj#defmethod intent/run :flee
   - src/clojurecraft/swim.clj#defn footing
+  - src/clojurecraft/swim.clj#defn flee-controls
+  - test/clojurecraft/swim_test.clj#a-flee-lands-on-its-footing-instead-of-bouncing
   - src/clojurecraft/swim.clj#defn lava-free?
   - src/clojurecraft/swim.clj#defn lava-beside?
   - test/clojurecraft/swim_test.clj#a-flee-never-ends-in-the-lava-it-flees
@@ -84,7 +86,7 @@ Survival is two goal rows, a trap rule the planner applies every tick, and the e
 A `:swim-out` started by the mine act's retreat (`:intent/for :retreat`, out of a flooded tunnel the bot is wading in) ends itself on dry land (`trap/dry-land?`); one started by the gather's `into-water` (`:intent/for :rise`, up a shaft dug into the sea, [[gather-chain]]) on dry land in the open, cap and notch skipped; an escape's is ended by its goal when the trap clears ([[mine-act]]).
 
 ## :flee
-The lava half: `footing` is the nearest standable cell within `flee-radius` 6, at most one up or down, with no lava in it, over it or under it (`lava-free?`), those with no lava beside them first (`lava-beside?`): a cell flowing lava covers is standable to a route, and sim race 38844683780 runner 7 (issue #230, world R2/9) fled to one three times and timed out (`a-flee-never-ends-in-the-lava-it-flees`); forward and jump toward it; `flee-timeout-ticks` (200) fails it `:no-footing`. The planner ends it the moment the trap clears.
+The lava half: `footing` is the nearest standable cell within `flee-radius` 6, at most one up or down, with no lava in it, over it or under it (`lava-free?`), those with no lava beside them first (`lava-beside?`): a cell flowing lava covers is standable to a route, and sim race 38844683780 runner 7 (issue #230, world R2/9) fled to one three times and timed out (`a-flee-never-ends-in-the-lava-it-flees`); forward toward it, jumping only in the lava or against a step and still once centred in it (`flee-controls`: jump held over dry ground bounced the body off its footing until the flee timed out, issues #230 and #231, `a-flee-lands-on-its-footing-instead-of-bouncing`); `flee-timeout-ticks` (200) fails it `:no-footing`. The planner ends it the moment the trap clears.
 
 ## :wade and :shore
 The gym's water trial. `:shore` (priority 5, `--until shore`) is done by `:escaped-water?` (a water trap in `:world/traps`) and planned by `:wade`. `entry` finds the way in: over the remembered pools within `wade-radius` 64 and no more than `wade-below` 16 under the eye (the bucket's 5 is for scooping; a dune over the sea is a fine start), nearest first, the first chunk whose column holds a surface water source with a standable cell beside it gives `[bank water]` (`entries`, nearest the feet). A child `:walk` goes to the bank; then the wade heads `wade-beyond` 8 blocks past the water cell with jump off, sinking as it deepens, until the trap preempts it. With no entry, `{:plan/wait :no-water}`. RESULT carries `:escaped true` once a trap was escaped. Gym batch shore-w1 (set W, 0/10) taught all three rules: from a dune the sea was "more than 5 under the eye"; a pool fact (the chunk's centre-most source) sat mid-sea with no route within 3 of it; a one-deep shelf at the first water cell never put the eye under.
