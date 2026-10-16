@@ -32,7 +32,7 @@ pre-commit:
       # plans.clj that was not there (the whole-repo run was right every time).
       priority: 3
       glob: "*.{clj,cljc,cljs}"
-      run: scripts/clj-kondo --lint src dev test repl bb --parallel
+      run: scripts/clj-kondo --lint src dev test repl bb test-bb --parallel
     idioms:
       # Splint: the idiomatic form of what was written ((mapv f xs), not (vec (map f xs)); inc,
       # not (+ x 1); clojure.math, not Math interop). Rules that fight the code are off in

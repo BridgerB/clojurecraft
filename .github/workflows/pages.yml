@@ -1,15 +1,22 @@
 name: pages
 
-# The results page (bb page, issue #116) is the gh-pages branch, deployed by this workflow rather
-# than GitHub's built-in branch build, whose actions are on the deprecated Node.js 20. Each batch a
-# race runner publishes (bb churn, page/publish-round!) dispatches it after its push; a dispatch by
-# hand deploys the branch as it is.
+# The results site (issue #116), built and deployed here: main's code (bb site, site/) over the
+# gh-pages branch's data (data/, written by each race lane's batch, bb page; orchestrator.json,
+# written by the copilot workflow). Each batch a lane publishes dispatches this after its push; a
+# dispatch by hand builds and deploys the branch as it is. On the way it adds the gym runs not yet
+# recorded to data/gyms.ndjson on the branch (bb site gyms) and asks GitHub for the bot-failure
+# issues and the pull requests that fix them (bb site agents, the Agents tab's history); either may
+# fail without stopping the deploy. GitHub's built-in branch build is not used: its actions are on
+# the deprecated Node.js 20.
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write                       # bb site gyms adds its lines to the gh-pages branch
+  actions: read                         # the gym runs' summary artifacts
+  issues: read
+  pull-requests: read
   pages: write                          # deploy-pages
   id-token: write                       # deploy-pages proves where the deployment comes from
 
@@ -20,17 +27,35 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          ref: gh-pages
+      - name: Install Babashka (the flake's version, as bb.edn's :min-bb-version)
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+      - name: The gym runs not yet on the branch (bb site gyms)
+        continue-on-error: true
+        timeout-minutes: 6
+        run: bb site gyms
+      - name: The branch's data
+        run: |
+          git fetch --depth 1 origin gh-pages
+          git worktree add --detach pages origin/gh-pages
+      - name: Build the site (bb site build)
+        run: bb site build pages _site
+      - name: The agents' history (bb site agents)
+        continue-on-error: true
+        timeout-minutes: 3
+        run: bb site agents _site
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
-          path: .
+          path: _site
       - id: deploy
         uses: actions/deploy-pages@v5

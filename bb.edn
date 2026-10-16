@@ -9,15 +9,23 @@
   ;; ---------------------------------------------------------------- checks, as CI runs them
   test {:doc "Every test, in parallel; args select: -n ns, -v ns/var, -x ns"
         :task (apply clojure "-M:test" *command-line-args*)}
+  test:bb {:doc "The Babashka tooling's tests (test-bb/): the results' writers and the site"
+           :extra-paths ["test-bb"]
+           :requires ([clojure.test :as ct] [clojurecraft.page-test] [clojurecraft.site-test])
+           :task (let [{:keys [fail error]} (ct/run-tests 'clojurecraft.page-test
+                                                          'clojurecraft.site-test)]
+                   (when (pos? (+ fail error)) (System/exit 1)))}
   fmt {:doc "Format with zprint (.zprint.edn); args: files, else the whole repo"
        :task (apply clojure "-M:fmt" "fix" *command-line-args*)}
   fmt:check {:doc "Fail when a file is not as zprint lays it out" :task (clojure "-M:fmt" "check")}
   lint {:doc "clj-kondo, held at zero findings"
         :task (apply t/tool! "clj-kondo" "lint" "--lint" t/source-paths)}
-  idioms
-  {:doc "Splint, held at zero findings (.splint.edn)"
-   :task
-   (apply clojure "-M:splint" "src" "dev" "test/clojurecraft" "repl" "bb" *command-line-args*)}
+  idioms {:doc "Splint, held at zero findings (.splint.edn)"
+          :task (apply clojure
+                       "-M:splint" "src"
+                       "dev" "test/clojurecraft"
+                       "repl" "bb"
+                       "test-bb" *command-line-args*)}
   ns {:doc "Sort and prune every ns form (clojure-lsp clean-ns, .lsp/config.edn)"
       :task (t/tool! "clojure-lsp" "lsp" "clean-ns")}
   ns:check {:doc "Fail when an ns form is not as clean-ns leaves it"
@@ -29,7 +37,7 @@
   check {:doc "Every static check CI runs, in its order"
          :depends [fmt:check lint idioms ns:check unused brain]}
   ci {:doc "What test.yml's unit job runs: the tests, then every static check"
-      :depends [test check]}
+      :depends [test test:bb check]}
   ;; ---------------------------------------------------------------- running things
   bot {:doc "The bot: clojure -M:run with these args (--port, --name, --until, --record ...)"
        :task (apply clojure "-M:run" *command-line-args*)}
@@ -59,9 +67,12 @@
             :task (apply capacity/-main *command-line-args*)}
   page
   {:doc
-   "The results page (issue #116): round <dir> <kind> <run> <commit> <at> | wall <dir> | build <rounds.edn> <out-dir> | publish <round.edn>"
+   "The results' data (issue #116): round <dir> <kind> <run> <commit> <at> | wall <dir> | publish <round.edn>"
    :requires ([clojurecraft.page :as page])
    :task (apply page/-main *command-line-args*)}
+  site {:doc "The results site (pages.yml): build <pages-dir> <out-dir> | gyms | agents <out-dir>"
+        :requires ([clojurecraft.site :as site])
+        :task (apply site/-main *command-line-args*)}
   win
   {:doc
    "A win is a release (race.yml, issue #116): release <dir> <run> <sha> tags the commit and attaches the winners' recordings"
