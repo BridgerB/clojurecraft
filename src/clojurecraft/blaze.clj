@@ -42,6 +42,7 @@
 (def over-feet 3.0)                   ; blocks a blaze's feet may hover over the bot's and be fought (its body, aim-height up, comes within reach)
 (def under-feet 2.0)                  ; blocks under the bot's feet a blaze may be and be fought
 (def candidates 3)                    ; nearest blazes asked for a route, as the hunt asks of its animals
+(def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def eat-under 14.0)                  ; health under which a meal comes before the next fight, the food under the healing level: one volley takes 9
 
 (def rod (recipe/item-id :blaze_rod))
@@ -102,10 +103,23 @@
                        spawner-radius
                        (remove bl (memory/positions-now world [spawner])))))
 
-(defn at-spawner?
-  "Is the eye within camp-range of the spawner's centre?"
+(defn walkable?
+  "Can the bot walk to spawner sp: its feet within a block of the spawner's height (its blazes'
+   floor; a route judges the plane only, intent/routable?) and a route to it."
   [world sp]
-  (<= (physics/distance (game/eye world) (physics/centre sp)) camp-range))
+  (and (<= (abs (- (physics/y-of (intent/feet world)) (physics/y-of sp))) 1)
+       (intent/routable? world {:intent/kind :walk :intent/target sp})))
+
+(defn at-spawner?
+  "Is the bot where it camps by spawner sp: the feet within spawner-reach of it (where a tunnel
+   to it ends), or the eye within camp-range and the spawner walkable? (on its floor, not in a
+   tunnel beside its room). Gym blaze-fortress-b (run 38893941350) tunnelled to within 6 of its
+   spawner, four blocks over it in the wall, and camped there ten minutes: the blazes the spawner
+   made in its room below were out of reach, every run."
+  [world sp]
+  (or (fortress/arrived? world sp spawner-reach)
+      (and (<= (physics/distance (game/eye world) (physics/centre sp)) camp-range)
+           (walkable? world sp))))
 
 (defn hurt?
   "Is the health the server last told under combat/retreat-health?"
@@ -140,13 +154,16 @@
   (< (:player/health world 20.0) eat-under))
 
 (defn to-spawner
-  "The way to spawner sp: a walk when a route reaches it (intent/routable?), else a tunnel by
-   the fortress's steps, which never open a cell beside lava."
+  "The way to spawner sp: a walk when it is walkable?, else a tunnel by the fortress's steps
+   (which never open a cell beside lava nor the spawner itself) to within spawner-reach of it."
   [world sp]
   (let [walk {:intent/kind :walk :intent/target sp}]
-    (if (intent/routable? world walk)
+    (if (walkable? world sp)
       walk
-      {:intent/kind :tunnel-to :intent/target sp :intent/steps fortress/steps-per-tunnel})))
+      {:intent/kind :tunnel-to
+       :intent/target sp
+       :intent/steps fortress/steps-per-tunnel
+       :intent/reach spawner-reach})))
 
 (defmethod plan/done-by :rods-held? [world _] (>= (rods world) rods-wanted))
 

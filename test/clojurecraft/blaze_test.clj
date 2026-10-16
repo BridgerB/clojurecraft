@@ -6,6 +6,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.fixtures :as fx]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -112,6 +113,17 @@
             w (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})]
         (is (= #{7} (:intent/blazes (:plan/intent w))))
         (is (= :active (:intent/status (:plan/intent w))))))))
+
+(deftest a-spawner-under-the-feet-is-tunnelled-to-its-floor
+  ;; gym blaze-fortress-b (run 38893941350): a tunnel ended within 6 of the spawner, four over it
+  ;; in the wall, and the bot camped there out of reach of its blazes for ten minutes
+  (let [w (memory/observe (standing {}) [8 60 11] blaze/spawner)]
+    (is (= {:intent/kind :tunnel-to
+            :intent/target [8 60 11]
+            :intent/steps fortress/steps-per-tunnel
+            :intent/reach blaze/spawner-reach}
+           (next-intent w))
+        "within 8 of the eye, but four under the feet: a tunnel down beside it, not a camp")))
 
 (deftest by-the-spawner-the-bot-camps
   (let [w (memory/observe (standing {}) [11 64 10] blaze/spawner)]
