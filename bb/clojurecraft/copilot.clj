@@ -17,7 +17,9 @@
      4. ready (not a draft), `unit / unit` and `check` green: merge. The merge closes the issue
         by its Fixes line. A pull request that changes a guarded path (the workflows, this
         dispatcher) is never merged here: the issue is labelled needs-review for a person;
-     5. otherwise (a red check, a draft left by a session that ended, a Refs-only body): ask
+     5. a pull request that only says Refs #n (Copilot could not prove a fix and handed off):
+        the issue is labelled agent-stuck for a person, never reassigned;
+     6. otherwise (a red check, a draft left by a session that ended, a Refs-only body): ask
         Copilot to go on, in a pull request comment that says what is wrong, at most once every
         nudge-every-ms and max-nudges times; after that the issue is labelled agent-stuck and
         left for a person.
@@ -46,6 +48,12 @@
   [".github/" "bb/clojurecraft/copilot.clj" "bb.edn"])
 
 ;; ---------------------------------------------------------------- the state as values
+
+(defn refs
+  "The issue numbers a pull request body only refers to (Refs #n): what Copilot writes when it
+   gives up on an issue it cannot prove a fix for (the bot-fixer profile's hand-off)."
+  [body]
+  (set (map (comp parse-long second) (re-seq #"(?i)\brefs #(\d+)" (or body "")))))
 
 (defn fixes
   "The issue numbers a pull request body says it fixes (Fixes, Closes or Resolves #n)."
@@ -87,6 +95,7 @@
     (cond
       (some hands-off labels) {:move :leave :issue n :why "hands-off label"}
       (and pr (live (:branch pr))) {:move :wait :issue n :pr (:number pr) :why "session running"}
+      (and pr (:gave-up? pr)) {:move :gave-up :issue n :pr (:number pr)}
       (and pr (seq (:held pr))) {:move :release :issue n :pr (:number pr) :runs (:held pr)}
       (and pr (:draft? pr)) {:move :ready :issue n :pr (:number pr)}
       (and pr (= :approval (:checks pr)))
@@ -237,11 +246,13 @@
             "number,headRefName,headRefOid,isDraft,body,statusCheckRollup,comments,files,updatedAt")
            :when (str/starts-with? (:headRefName pr) "copilot/")
            :let [ours (filter #(str/starts-with? (str (:body %)) nudge-lead) (:comments pr))]
-           n (fixes (:body pr))]
+           :let [fixed (fixes (:body pr))]
+           n (if (seq fixed) fixed (refs (:body pr)))]
           [n
            {:number (:number pr)
             :branch (:headRefName pr)
             :draft? (:isDraft pr)
+            :gave-up? (empty? fixed)
             :updated-ms (ms (:updatedAt pr))
             :held (held-runs (:headRefOid pr))
             :guarded? (boolean (some (fn [{:keys [path]}] (some #(str/starts-with? path %) guarded))
@@ -352,6 +363,7 @@
       :nudge (gh "pr" "comment" (str pr) "--repo" repo "--body" (nudge-text m))
       :release (run! #(gh "run" "rerun" (str %) "--repo" repo) (:runs m))
       :ready (gh "pr" "ready" (str pr) "--repo" repo)
+      :gave-up (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "agent-stuck")
       :stuck
       (do (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "agent-stuck")
           (gh "pr"
