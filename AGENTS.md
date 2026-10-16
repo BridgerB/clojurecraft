@@ -55,8 +55,8 @@ Absolute. The reason is not an invitation to argue an exception.
 
 ### 2.2 The rounds
 
-- `race.yml`, the real race: up to eight lanes (a lane is one run, one runner), each with 26.1.2 servers on a pregenerated landing set (R1 to R4), 25 bot slots a server, a slot refilled the moment its bot ends. Servers lag under that load (15.4, 17.1).
-- `simrace.yml`, the sim race: up to eight lanes playing the bot against the model in captured worlds (`cache/sim-worlds/R1..R4/<n>.edn.gz`), seed after seed.
+- `race.yml`, the real race: up to eight lanes (a lane is one run, one runner), each with 26.1.2 servers at Normal difficulty on a pregenerated landing set (R1 to R4), 15 bot slots a server (#252), a slot refilled the moment its bot ends. Every run plays the chain to `:fortress` (`:race/until`); a real bot has no time limit of its own but its lane's job (about 5.5 h).
+- `simrace.yml`, the sim race: up to eight lanes playing the bot against the model in captured worlds (`cache/sim-worlds/R1..R4/<n>.edn.gz`), seed after seed, at Normal (mobs and hunger), to `:fortress`, 330 simulated minutes a run (#252). The model's Nether is a single column, so no sim run finds a fortress: a sim failure there is the model's limit.
 - The fleet (`fleet.yml`, `ci/fleet.edn`) keeps the runners full of lanes and gives one back the moment any other job has waited 90 s for a runner (GitHub has no preemption of its own), never fewer than two lanes a kind; a merge that touches code cancels and replaces every lane, docs-only merges (`brain/`, `docs/`, `*.md`) do not. So a check, a probe or a gym waits about two minutes at most, never hours.
 - Every 20 minutes per runner (`bb churn batch`, then `bb failures report`), the runs that ended since the last report are filed: one issue per signature (infrastructure stops such as a closed socket are counted, not filed; a signature with fewer than 3 runs in a report is a one-off, not filed). Labels: `bot-failure` plus `sim`, `real` or both. The body holds a hidden marker with the signature and a tally (rounds, runs, first and last seen). Each report adds one comment: run count, last intents, landings, up to five reproductions, the run link.
 - A closed issue whose signature comes back in runs of code committed after it closed is reopened, its comment saying "(regressed: this issue was closed)". Runs of older code only comment.
@@ -456,7 +456,10 @@ A failure that will not reproduce is almost always a context difference, not fla
 8. **Difficulty is Normal** (issue #10): night mobs and hunger on every real server and gym; keep_inventory stays on. The sim lanes run the model at Normal too (`simrace/difficulty`): hunger drains, heals and starves by vanilla's rules (#260, `hunger.clj`, `brain/bot/tooling/sim-hunger.md`); and mobs spawn at night and in the dark, walk at the bot, hit, shoot and blast, and die to its `attack` with their loot (`mob.clj`, `brain/bot/tooling/sim-mobs.md`); a run starts at one of eight times of day by its seed.
 9. **Server load is real.** 25 bots a server dropped it to 7 or 8 ticks a second (now 15 a server, #252) (`:sample/server-tick`, `server.log`). Anything the bot times by its own clock against something the server times in ticks breaks under load: digs, window answers. A real-only signature with load: look there first.
 10. **"The unmodelled packet."** `packet_test` decodes an id with no spec and expects `:unknown`; adding a spec for that packet breaks it: switch its example.
-11. **Give exact numbers.** Run ids, commits, counts, before and after lines. "Seems fixed" is not evidence.
+12. **Stages past the Nether are asides for now.** `:blaze-rods`, `:ender-pearls`, `:eyes-of-ender` and the stronghold rows are `:goal/aside? true` (issue #10's children #262-#267): in the goal table, never in a race's chain, so `plan/current-until` stays `fortress` (`plan_test` asserts it). The race's `:until` goes up one stage only when that stage's gym row passes; a bot-failure at those stages comes only from gyms until then.
+13. **Combat facts already paid for.** Vanilla wants `attack` then `swing` (swing first made every hit about 1 damage, #259). A fight's swings are 650 ms apart by the clock (`:intent/next-swing`). An enderman never teleports from a melee hit but teleports away when stared at within 4 blocks; the bot fights it from a burrow (#263). Blaze rows pass in the gym only with Fire Resistance: fire handling is an open gap (#262).
+14. **World cache keys.** `bb/clojurecraft/server.clj`, `ci/gym.edn`, `worlds.clj`, `landings.clj`, `fixture.clj` and `capture.clj` are hashed into the world and simworld cache keys: a change to any of them makes every lane miss its cache and fail in 20 s until the worlds are rebuilt (#257 did, #275 undid it). That is tooling: never yours in a bot fix.
+15. **Give exact numbers.** Run ids, commits, counts, before and after lines. "Seems fixed" is not evidence.
 
 ---
 
@@ -663,6 +666,22 @@ A build is a vector of ops with done-predicates as data (`build/holds?`); `next-
 
 `plan/start-intent` numbers the intent (`:intent/id` from `:plan/intents`) and appends `:started`; then `:done`, `:failed` (with `:intention/reason`), or `:abandoned`. `memory/intentions` (oldest first); `memory/intention-as-of world t`: what it was doing at t (the tick before a death). Answers: `:ack` (`:answer/sequence`), `:pickup` (`:answer/entity :answer/count`), `:death`; read with `memory/answers`. Intents without `:intent/id` (hand-built in tests) are not recorded.
 
+### 19.15 Survival and combat (`combat.clj`, `eat.clj`, `hunt.clj`, `armour.clj`, `sword.clj`, `entity.clj`; issues #258, #259)
+
+- Entities (`entity.clj`): every `add-entity` is kept in `:world/entities` with `:entity/vel` (blocks/tick), `:entity/health` (metadata index 9), `:entity/flags` (index 0), `:entity/died-at`; death is `entity-event` status 3 or removal. `entity/hostiles` (monster category from the generated `mobs.edn`, minus enderman and zombified piglin), `entity/nearest`, `entity/gone?`. `:intent/target` may be an eid.
+- `:fight` (intent): approach straight while it closes 0.1; after 20 ticks without progress a route to a cell within 2 (`combat/route-walk`, a child `:walk`); no route → `:unreachable`. Engage: look at the target (y+0.9 for a hoverer), `attack` then `swing` when `:time/now ≥ :intent/next-swing` (650 ms); below 10 health break off; `:ghost` after 25 swings in reach; 20 s with no attack → `:unreachable` (hold fights excepted); done when `entity/gone?`. Only targets in sight and within reach of the floor are fought (`combat/hittable?`).
+- `:defend` (always row, priority 0 after the escapes): a hostile within 4 or a creeper within 6 preempts any plan; creepers are backed away from (`:back-off`), never fought.
+- `:eat` (always row): below food 14, `use-item` held for the food's eating ticks (`food/eating-ticks`), done when food rises (`:not-eaten` otherwise). `:hunt` (always row): hungry with no food, kill the nearest animal a route reaches within 24 and pick up the meat.
+- `:wear-armour` puts on anything wearable held (window-0 click into an armour slot); `:armour` (priority 13) makes an iron helmet and chestplate from ingots left after the portal kit; `:sword` (priority 13, chained runs only) makes the best sword without a trip.
+- The planner never abandons an intent while one of its clicks is unanswered (`plan/can-abandon?`): a helmet left on the cursor once lost 8 ingots.
+
+### 19.16 Past the Nether (`blaze.clj`, `pearls.clj`, `eyes.clj`, `stronghold.clj`, `drops.clj`; issues #262-#265)
+
+- `:blaze-rods` (aside, 18): 7 rods; defend, fight the nearest blaze in sight, `:collect-drops` (done when one more is held or none is lying there), else `:camp` by or tunnel to the remembered spawner (spawners are watched landmarks, per dimension); hurt: eat, hide out of a blaze's sight (`path` `:unseen`), back off. Waits `:no-blaze`.
+- `:ender-pearls` (aside, 19): 12 pearls by hunting endermen, never bartering (a kill drops 0-1: about 24 kills). `:lookout` stares at the nearest enderman in sight within 64; `:provoke` from beyond 4 blocks; `:burrow` (3 stairs down, a 2-high tunnel: an enderman stopped at the last stair cannot reach) then `:fight` holding. Waits `:no-enderman`, `:no-shelter`; fails `:unprovoked`. Open: reaching endermen on ledges 30-80 blocks off in a warped forest.
+- `:eyes-of-ender` (aside, 20): 12 eyes through the 2x2 craft rows (blaze powder, then eyes); waits `:no-pearls` / `:no-rods`.
+- Stronghold (#265, in progress): `stronghold/triangulate` (pure), `:throw-eye`, travel, the portal room.
+
 ---
 
 ## 20. World, protocol, game
@@ -812,6 +831,7 @@ Most are stated where they apply above (grass type, resting vy, `:name` collisio
 | 15 | `:portal` | `:built?` | `:build :portal`, holds a pickaxe |
 | 16 | `:nether` | `:built?` (stood in until the Nether) | `:build :nether`, holds a pickaxe |
 | 17 | `:fortress` | `:at-fortress?` | `:fortress` |
+| 18 | `:blaze-rods` (aside for now; `blaze-rods`) | 7 blaze rods (Nether) | `:blaze-rods` → `:fight`, `:collect-drops`, `:camp`, `:tunnel-to` the spawner (issue #262) |
 | 19 | `:ender-pearls` (aside for now; `pearls-12`) | 12 ender pearls | `:pearls` → `:collect` the drop, `:fight`, `:provoke` by a stare from range, `:walk` (issue #263) |
 | 19 | `:ender-pearl` (aside: gym only; `pearls-1`) | 1 ender pearl | `:pearls`, as above |
 | 20 | `:eyes-of-ender` (aside for now; `eyes`) | 12 eyes of ender | `:eyes` → needs planner (craft blaze powder, then eyes, 2x2), waits `:no-pearls` / `:no-rods` (issue #264) |
@@ -868,6 +888,16 @@ Signature = `[target reason]`. Meaning is the common case; read the raising code
 | `:inventory-full` | no free slot to put the cursor down, and no junk to throw | `craft` `:settle`, `smelt/put-down`, `window/resync` | RESULT `:held`: what filled the inventory; `window/junk` (#172, #192) |
 | `:crashed` | the run threw; RESULT has `:error` | `race/play-one!`, `simrace/play!` | read `:error` first |
 | `:ledge` | no longer raised (collect over a ledge is done now) | none | closing PR of #93 |
+| `:unreachable` | a fight's target has no route, or 20 s without an attack | `combat` `:fight` | fences, walls, hovering blazes; `combat/route-walk` (#262) |
+| `:ghost` | 25 swings in reach and the target lives | `combat` `:fight` | stale entity, out-of-sight target |
+| `:no-footing` | lava flee found no footing | `swim` `:flee` | lava sea beside the bot (#231, #230) |
+| `:not-eaten` | food did not rise after eating | `eat` `:eat` | held slot changed, inedible item |
+| `:not-worn` | the armour click left nothing in the slot | `armour` `:wear` | window answers, cursor |
+| `:no-blaze` | no blaze in sight and no spawner remembered | `blaze` | fortress not found, spawner not seen |
+| `:no-enderman` | no enderman in sight within 64 | `pearls` | wrong biome, endermen out of reach (#263) |
+| `:no-shelter` | nowhere to burrow | `pearls` | soft or fluid ground |
+| `:unprovoked` | a stare did not turn the enderman | `pearls` `:provoke` | line of sight, distance ≤ 4 |
+| `:no-pearls` / `:no-rods` | eyes wanted with an input short | `eyes` | the stage before it |
 
 Other build/fortress reasons: `:stray-lava`, `:no-effect`, `:not-yet`, `:unverified`, `:no-support`, `:blocked`, `:no-footing`, `:shallow`, `:tool-broke`, `:out-of-reach`, `:not-held`, `:no-answer`, `:no-window`, `:no-table-window`, `:wrong-result`, `:no-result`, `:not-taken`, `:not-loaded`, `:out-of-fuel`, `:not-cooked` (see section 19 and 20.7).
 
