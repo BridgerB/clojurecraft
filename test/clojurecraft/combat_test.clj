@@ -103,6 +103,18 @@
   (testing "one overhead is not walked under"
     (is (not (combat/pressing? (standing {}) (mob :blaze [8.5 70.0 8.5] 20.0))))))
 
+(deftest a-target-behind-a-wall-is-reached-along-a-route
+  ;; gym blaze-fortress-h (run 38905665758): fights walked straight into the fortress's fences for
+  ;; twenty seconds and failed :unreachable three in a row; a straight approach that comes no
+  ;; nearer takes a route round
+  (let [wall (into {} (for [z (range 6 11) y [64 65]] [[10 y z] (blocks/default-state :stone)]))
+        w (assoc (standing {7 (mob :zombie [13.5 64.0 8.5] 20.0)})
+                 :world/chunks {[0 0] (world/column wall)}
+                 :plan/intent {:intent/kind :fight :intent/target 7 :intent/status :active})
+        [w fx] (fx/fold intent-step w (map tick (range 50 12050 50)))]
+    (is (not= :failed (:intent/status (:plan/intent w))) (pr-str (:intent/reason (:plan/intent w))))
+    (is (seq (attacks fx)) "round the wall, and hit")))
+
 (deftest a-target-gone-is-a-kill
   (let [[w _] (fx/fold intent-step
                        (fighting 2.0)

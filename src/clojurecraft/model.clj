@@ -334,8 +334,8 @@
    [:intent/started-y "feet height when the current stair began; a step is judged by going below it"
     "stairs-down, per stair"]
    [:intent/started-tick "tick the current stair or its step began" "stairs-down, per stair"]
-   [:intent/best-dist "closest it has come to the target" "walk and collect"]
-   [:intent/best-tick "tick of the last progress" "walk and collect"]
+   [:intent/best-dist "closest it has come to the target" "walk, collect, a :fight's approach"]
+   [:intent/best-tick "tick of the last progress" "walk, collect, a :fight's approach"]
    [:intent/detour-until "tick a detour ends" "walk, while detouring"]
    [:intent/detour-yaw "heading offset of the detour" "walk, while detouring"]
    [:intent/detours "detours taken" "walk"]
