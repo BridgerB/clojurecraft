@@ -43,7 +43,8 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.window :as window]))
+            [clojurecraft.window :as window]
+            [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
 
@@ -58,8 +59,10 @@
 (def life-ms 4000)                    ; ms an eye flies before it drops or shatters (EyeOfEnder: 80 ticks), by the server's clock
 (def drop-grace-ms 1000)              ; ms after the eye is removed its dropped item may take to be added, by the server's clock
 (def min-flight 1.0)                  ; blocks on the plane an eye must have flown for its line to count
-(def travel 150)                      ; blocks from the first throw the second is made, off its line
-(def travel-turn 45.0)                ; degrees off the first line the way to the second throw turns: ahead and aside at once
+(def travel 64)                       ; blocks from a throw the next is made, off its line
+(def travel-turn 60.0)                ; degrees off a throw's line the way to the next turns, either side: ahead and well aside
+(def min-offset 32.0)                 ; blocks off the last throw's line from which the next throw is made, wherever the way got to
+(def tunnel-y 30)                     ; feet height a tunnel toward the crossing goes down to: under lakes and seas, where strongholds lie
 (def hop-reach 32)                    ; blocks a walk toward somewhere far goes at a time
 (def hop-rise 12)                     ; blocks over and under the feet a hop's end is looked for in its column
 (def hop-turns [0.0 30.0 -30.0 60.0 -60.0 90.0 -90.0]) ; degrees off the way a hop may turn when straight on has no route
@@ -296,13 +299,24 @@
     [(- (* dx c) (* dz s)) (+ (* dx s) (* dz c))]))
 
 (defn second-spot
-  "[x z] where the throw after throw t is made: travel blocks from it along its line turned
-   travel-turn degrees, so the second line crosses the first ahead of both at an angle. Thrown
-   from along the line it would be the same line (triangulate's parallel case)."
-  [{:throw/keys [from dir]}]
-  (let [[x z] (plane from)
-        [dx dz] (rotate dir travel-turn)]
-    [(+ x (* travel dx)) (+ z (* travel dz))]))
+  "[x z] where the throw after throw t is made: travel blocks from it along its line turned turn
+   degrees (travel-turn when not given), so the next line crosses it ahead of both at an angle.
+   Thrown from along the line it would be the same line (triangulate's parallel case)."
+  ([t] (second-spot t travel-turn))
+  ([{:throw/keys [from dir]} turn]
+   (let [[x z] (plane from) [dx dz] (rotate dir turn)] [(+ x (* travel dx)) (+ z (* travel dz))])))
+
+(defn spots
+  "The two places the throw after t may be made from: second-spot turned either way."
+  [t]
+  [(second-spot t travel-turn) (second-spot t (- travel-turn))])
+
+(defn off-line
+  "Blocks on the plane from the feet to the line of throw t."
+  [world {:throw/keys [from dir]}]
+  (let [[fx fz] (plane from)
+        [px _ pz] (:player/pos world)]
+    (abs (cross dir [(- px fx) (- pz fz)]))))
 
 (defn crossing
   "[x z] of the stronghold by the throws on record: the latest throw crossed with each earlier
@@ -333,9 +347,11 @@
 (defn hop
   "A walk toward the far point [x z]: to a cell (stand-in) hop-reach blocks along the way, or
    nearer when the point is, that a route reaches (intent/routable?); straight on first, then
-   turned by each of hop-turns. nil when none is, or when the feet are there already. A walk to
-   somewhere hundreds of blocks off is beyond a route's node budget, so it goes a hop at a time,
-   the planner choosing the next from where the last ended."
+   turned by each of hop-turns, never to a cell a walk failed at (:plan/blacklist). nil when none
+   is, or when the feet are there already. A walk to somewhere hundreds of blocks off is beyond a
+   route's node budget, so it goes a hop at a time, the planner choosing the next from where the
+   last ended. Gym batch stronghold-265a (plan run 38927120252) run 3 walked at one cell twelve
+   times, each walk failing :no-path, the same hop chosen again after each."
   [world [x z]]
   (let [[fx fy fz] (intent/feet world)
         v [(- x fx) (- z fz)]
@@ -349,8 +365,32 @@
                                 (long (math/floor (+ fz 0.5 (* r uz))))
                                 fy)
                     i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
-                (when (and i (not= c [fx fy fz]) (intent/routable? world i)) i)))
+                (when (and i
+                           (not= c [fx fy fz])
+                           (not (contains? (:plan/blacklist world #{}) c))
+                           (intent/routable? world i))
+                  i)))
             hop-turns))))
+
+(defn way
+  "A way toward the far point [x z]: a hop; else, with open water toward it, a swim across it
+   (swim's :cross, done on the far side's dry land); else a dry tunnel toward it at height y
+   (the fortress's :tunnel-to with :intent/dry?, fortress/steps-per-tunnel steps) when its first
+   step can be taken; nil when none is. Gym batch stronghold-265a (plan run 38927120252, probe
+   38929010443): two landings stood on a lake's shore with the stronghold across it and every hop
+   ending in the water, one on a mountainside whose hops had no route; each waited :no-way."
+  [world [x z] y]
+  (let [feet (intent/feet world)
+        target [(long (math/floor x)) y (long (math/floor z))]]
+    (or (hop world [x z])
+        (when (wood/water-toward? world feet target (physics/y-of (game/eye world)))
+          {:intent/kind :cross :intent/target target :intent/for :stronghold})
+        (when (fortress/choose-move world feet target fortress/climb-past true)
+          {:intent/kind :tunnel-to
+           :intent/target target
+           :intent/steps fortress/steps-per-tunnel
+           :intent/dry? true
+           :intent/for :stronghold}))))
 
 (defn picked-up
   "The pickup of the eye the last throw dropped: when the last intent was a :throw-eye that ended
@@ -367,35 +407,40 @@
 
 
 (defn explore
-  "A hop toward the first of the eight points explore-reach round the crossing c that the feet are
-   not at and a hop reaches, from a heading the clock picks (a minute each), so the walks load
-   the chunks round it; nil when none."
+  "A way (way, at the feet's height) toward the first of the eight points explore-reach round the
+   crossing c that the feet are not at and a way reaches, from a heading the clock picks (a minute
+   each), so the walks load the chunks round it; nil when none."
   [world [cx cz]]
-  (let [start (quot (:time/now world 0) 60000)]
+  (let [start (quot (:time/now world 0) 60000)
+        [_ fy _] (intent/feet world)]
     (some (fn [k]
-            (let [[dx dz] (rotate [1.0 0.0] (* 45.0 (+ start k)))]
-              (hop world [(+ cx (* explore-reach dx)) (+ cz (* explore-reach dz))])))
+            (let [[dx dz] (rotate [1.0 0.0] (* 45.0 (+ start k)))
+                  p [(+ cx (* explore-reach dx)) (+ cz (* explore-reach dz))]]
+              (when-not (at? world p) (way world p fy))))
           (range 8))))
 
 (defn stronghold-next
   "The search's next step, in order: the eye just thrown picked up (picked-up); with no throw,
-   one; with a crossing, a hop toward it, and there with nothing seen, a throw from there when the
-   last was made more than rethrow-beyond off, else walks round it (explore); with throws that do
-   not cross, a hop to the next throw's spot (second-spot of the latest) and a throw there. A hop
-   none reaches waits :no-way."
+   one; with a crossing, a way toward it (way: a hop, a swim, or a tunnel at tunnel-y), and there
+   with nothing seen, a throw from there when the last was made more than rethrow-beyond off,
+   else walks round it (explore); with throws that do not cross, a throw once the feet are
+   min-offset off the latest's line, else a way toward one of its spots (spots) and a throw
+   there. Nothing reaching waits :no-way."
   [world]
   (let [ts (throws world)
+        t (peek ts)
         c (crossing world)
-        last-from (some-> (peek ts)
-                          :throw/from)]
+        [_ fy _] (when (:player/pos world) (intent/feet world))]
     (or (picked-up world)
         (cond (empty? ts) (throw-now world)
-              (and c (not (at? world c))) (or (hop world c) {:plan/wait :no-way})
-              (and c (> (physics/horizontal-distance (:player/pos world) last-from) rethrow-beyond))
+              (and c (not (at? world c))) (or (way world c tunnel-y) {:plan/wait :no-way})
+              (and c
+                   (> (physics/horizontal-distance (:player/pos world) (:throw/from t))
+                      rethrow-beyond))
               (throw-now world)
               c (or (explore world c) {:plan/wait :no-frame})
-              (at? world (second-spot (peek ts))) (throw-now world)
-              :else (or (hop world (second-spot (peek ts))) {:plan/wait :no-way})))))
+              (>= (off-line world t) min-offset) (throw-now world)
+              :else (or (some #(way world % fy) (spots t)) {:plan/wait :no-way})))))
 
 (defmethod plan/done-by :frames-seen? [world _] (boolean (seq (frames world))))
 

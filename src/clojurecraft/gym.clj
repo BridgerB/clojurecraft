@@ -591,13 +591,14 @@
                  :truth/result [:throws]}]}
    ;; issue #265: from 250 blocks off the located stronghold (:near-stronghold), two throws or
    ;; more, the walks, an end portal frame remembered: the server must have one at the cell the
-   ;; bot names (its RESULT's :frame). Eyes to spare for the throws a shatter costs; a sword, armour
-   ;; and food for the night the walks may run into at Normal
+   ;; bot names (its RESULT's :frame). Eyes to spare for the throws a shatter costs; pickaxes for
+   ;; the tunnels where no walk goes; a sword, armour and food for the night the walks may run into
+   ;; at Normal
    {:gym/goal :stronghold
     :gym/until "stronghold"
     :gym/land :near-stronghold
     :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:ender_eye 6" "minecraft:iron_sword 1" "minecraft:iron_pickaxe 1"
+    :gym/prereqs ["minecraft:ender_eye 6" "minecraft:iron_sword 1" "minecraft:iron_pickaxe 3"
                   "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
                   "minecraft:cooked_beef 16"]
     :gym/timeout-ms 1200000
@@ -612,7 +613,7 @@
     :gym/until "portal-room"
     :gym/land :near-stronghold
     :gym/difficulty "normal"
-    :gym/prereqs ["minecraft:ender_eye 6" "minecraft:iron_sword 1" "minecraft:iron_pickaxe 2"
+    :gym/prereqs ["minecraft:ender_eye 6" "minecraft:iron_sword 1" "minecraft:iron_pickaxe 3"
                   "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1" "minecraft:cooked_beef 16"
                   "minecraft:cobblestone 64"]
     :gym/timeout-ms 1800000

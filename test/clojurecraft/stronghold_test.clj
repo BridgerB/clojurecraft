@@ -157,7 +157,8 @@
     (is (= [8.5 64.9 8.5] (:throw/from t)) "from where the eye was first seen")
     (is (near? [0.6 0.8] (:throw/dir t) 1e-3) "the way it flew on the plane")
     (is (= :done (:intent/status i)))
-    (is (near? [14.5 16.5] (stronghold/plane (:intent/eye-pos i)) 1e-2) "where it ended")))
+    (is (near? [13.9 15.7] (stronghold/plane (:intent/eye-pos i)) 1e-2)
+        "where it was last seen on a tick before the server removed it")))
 
 (deftest no-eye-seen-fails-the-throw
   ;; a use-item the server does nothing with (no stronghold: the Nether) is :no-eye
@@ -236,11 +237,11 @@
   (testing "no throw yet: one"
     (is (= {:intent/kind :throw-eye :intent/for :stronghold}
            (stronghold/stronghold-next (searching [8.5 8.5] [])))))
-  (testing "one throw: a hop toward the second throw's spot, 150 blocks off at 45 degrees"
+  (testing "one throw: a hop toward the second throw's spot, 64 blocks off at 60 degrees"
     (let [t (throw-fact [8.5 64.9 8.5] [0 1] 0)
           spot (stronghold/second-spot t)
           i (stronghold/stronghold-next (searching [8.5 8.5] [t]))]
-      (is (near? [-97.57 114.57] spot 0.01))
+      (is (near? [-46.93 40.5] spot 0.01))
       (is (= [:walk :stronghold] [(:intent/kind i) (:intent/for i)]))
       (is (< 28 (plane-distance (:intent/target i) [8.5 8.5]) 36) "a hop of 32")
       (is (< (plane-distance (:intent/target i) spot) (- (plane-distance [8.5 0 8.5] spot) 28))
@@ -276,6 +277,46 @@
           b (throw-fact [40.5 64.9 8.5] [-1 0] 1)
           i (stronghold/stronghold-next (searching [8.5 8.5] [a b]))]
       (is (= [:walk :stronghold] [(:intent/kind i) (:intent/for i)])))))
+
+(def lake
+  "Water six deep over the stone floor's top, a whole chunk column of it."
+  (world/column
+   (into {} (for [x (range 16) z (range 16) y (range 58 64)] [[x y z] blocks/water-base]))))
+
+(def rock
+  "Stone from the floor up to y 80, a whole chunk column of it."
+  (world/column (into {} (for [x (range 16) z (range 16) y (range 64 81)] [[x y z] 1]))))
+
+(deftest a-way-swims-what-no-walk-crosses-and-tunnels-where-no-route-goes
+  ;; gym batch stronghold-265a (plan run 38927120252, probe 38929010443): two landings on a lake's
+  ;; shore, the stronghold across it, one on a mountainside with no routes; each waited :no-way
+  (testing "on an island: a swim toward the far point"
+    (let [w (assoc (searching [8.5 8.5] [])
+                   :world/chunks
+                   (assoc (into {} (for [cx (range -4 5) cz (range -4 5)] [[cx cz] lake]))
+                          [0 0]
+                          (world/column {})))]
+      (is (nil? (stronghold/hop w [-200.0 8.5])) "no walk off the island")
+      (is (= {:intent/kind :cross :intent/target [-200 64 8] :intent/for :stronghold}
+             (stronghold/way w [-200.0 8.5] 64)))))
+  (testing "shut in rock: a dry tunnel toward it, down to the height asked"
+    (let [w (assoc (searching [8.5 8.5] [])
+                   :world/chunks
+                   (assoc (into {} (for [cx (range -4 5) cz (range -4 5)] [[cx cz] rock]))
+                          [0 0]
+                          (world/column (into {}
+                                              (for [x (range 16)
+                                                    z (range 16)
+                                                    y (range 64 81)
+                                                    :when (not (and (= [x z] [8 8]) (<= y 65)))]
+                                                [[x y z] 1])))))]
+      (is (nil? (stronghold/hop w [-200.0 8.5])))
+      (is (= {:intent/kind :tunnel-to
+              :intent/target [-200 30 8]
+              :intent/steps 32
+              :intent/dry? true
+              :intent/for :stronghold}
+             (stronghold/way w [-200.0 8.5] 30))))))
 
 (deftest a-remembered-frame-is-the-stronghold-found
   (let [frame (blocks/default-state :end_portal_frame)

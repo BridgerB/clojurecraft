@@ -36,6 +36,10 @@ sourceRefs:
   - src/clojurecraft/stronghold.clj#defn hop
   - src/clojurecraft/stronghold.clj#defn picked-up
   - src/clojurecraft/stronghold.clj#defn explore
+  - src/clojurecraft/stronghold.clj#defn way
+  - src/clojurecraft/stronghold.clj#defn off-line
+  - src/clojurecraft/stronghold.clj#defn spots
+  - test/clojurecraft/stronghold_test.clj#a-way-swims-what-no-walk-crosses-and-tunnels-where-no-route-goes
   - src/clojurecraft/stronghold.clj#defn stronghold-next
   - src/clojurecraft/memory.clj#def landmark-kinds
   - "resources/clojurecraft/goals.edn#{:goal/id :stronghold"
@@ -96,12 +100,12 @@ The `:stronghold` row (`--until stronghold`, priority 22, an aside, overworld on
 
 1. the eye the last throw dropped (`picked-up`: the last intent a `:throw-eye` done, an eye lying where it ended) picked up with a `:collect-drops`;
 2. no throw yet: a throw (`throw-now`; with no eye held, wait `:no-eye`);
-3. a crossing (`crossing`: the latest throw crossed with each earlier one, the widest kept) the feet are not within `there` (16 blocks) of: a hop toward it;
+3. a crossing (`crossing`: the latest throw crossed with each earlier one, the widest kept) the feet are not within `there` (16 blocks) of: a way toward it (`way`, below) at `tunnel-y` (30);
 4. at the crossing with the last throw made more than `rethrow-beyond` (48 blocks) off: a throw from here, whose line crosses the first at a wide angle;
 5. at the crossing, thrown from near it already: walks round it (`explore`: hops toward eight points `explore-reach`, 64 blocks, round it, from a heading the clock picks), each loading chunks further out; none reachable waits `:no-frame`;
-6. throws that do not cross (one, or parallel): a hop toward `second-spot` of the latest, `travel` (150) blocks from it along its line turned `travel-turn` (45 degrees), ahead and aside at once, and a throw there.
+6. throws that do not cross (one, or parallel): a throw once the feet are `min-offset` (32 blocks) off the latest's line (`off-line`), wherever the way got to; else a way toward one of its two `spots` (`second-spot`: `travel`, 64, blocks from it along its line turned `travel-turn`, 60 degrees, either side), at the feet's height.
 
-Every long walk goes in hops (`hop`): a `:walk` to a cell a body stands in (`stand-in`, within 12 of the feet's height) 32 blocks along the way, or turned by 30, 60 or 90 degrees either side when straight on has no route (`intent/routable?`); none waits `:no-way`. A walk to somewhere hundreds of blocks off is beyond a route's node budget.
+A way (`way`) toward a far point is, in order: a hop (`hop`: a `:walk` to a cell a body stands in, `stand-in`, within 12 of the feet's height, 32 blocks along the way, or turned by 30, 60 or 90 degrees either side when straight on has no route, `intent/routable?`, never a cell a walk failed at, `:plan/blacklist`); with open water toward the point (`wood/water-toward?`), a swim across it (swim's `:cross`, done on the far side's dry land); else a dry tunnel toward it at the height asked (the fortress's `:tunnel-to` with `:intent/dry?`) when its first step can be taken; none waits `:no-way`. A walk to somewhere hundreds of blocks off is beyond a route's node budget. Gym batch stronghold-265a (plan run 38927120252, probe 38929010443) had only hops 150 blocks off at 45 degrees: two landings stood on a lake's shore with the stronghold across it, every hop ending in the water, and one on a mountainside walked at one cell twelve times, each walk failing :no-path; all three waited :no-way. The throw row passed 5/5 in the same batch.
 
 The gym row `stronghold` lands the bot 250 blocks (`gym/stronghold-off`) from the stronghold the server locates from the landing, on the line through it, on dry ground (`land! :near-stronghold`, `fixture/land-at!`), with six eyes, an iron sword, pickaxe, helmet, chestplate and food; it is judged by `execute if block {at} minecraft:end_portal_frame`, where a truth row's `:truth/at` names a path into the RESULT whose `[x y z]` fills `{at}` (`gym/truth-cmd`): the RESULT names the nearest frame remembered as `:frame`.
 

@@ -267,7 +267,7 @@
     "how near a :tunnel-to's target counts as there, from the feet cell's centre (fortress/reach, 6, when absent)"
     "a :tunnel-to to a spawner"]
    [:intent/dry?
-    "a :tunnel-to that takes only steps opening no cell by water (fortress/dry?): the overworld's way to the portal room (issue #265)"
+    "a :tunnel-to that takes only steps opening no cell by water (fortress/dry?): the overworld's way toward the stronghold and down to its portal room (issue #265)"
     "a :tunnel-to to a stronghold's frame"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
