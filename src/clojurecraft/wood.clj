@@ -11,6 +11,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.scoop :as scoop]
             [clojurecraft.stairs :as stairs]
+            [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -313,4 +314,24 @@
       (crossing world)
       {:plan/wait :no-log}))
 
+(defn way-out
+  "With no log to set out for (gather-next waits :no-log), the way out the water hunt takes from
+   where the feet are, never in water (the escape owns it): out of a pit under the open sky deep
+   under the landing (scoop/pit-climb), else from a cell under rock where a climb out died :boxed
+   (scoop/boxed-here?) a retreat to new rock (stone/retreat), the next climb from there; nil when
+   neither. Sim race 38843552659 (issue #186): world R1/18 stood at y 6 on a ravine's floor
+   sixty under its landing, the sky open and no hunt target in its band, and world R4/39 under
+   rock at y 47 where its climb out had died :boxed, and both waited :no-log with trees
+   remembered sixty blocks off."
+  [world]
+  (when-not (:player/in-water? world)
+    (or (scoop/pit-climb world)
+        (when (and (scoop/boxed-here? world) (not (terrain/under-sky? world (intent/feet world))))
+          (stone/retreat world)))))
 
+(defn gather-or-out
+  "The :gather act: gather-next, or when it waits :no-log the way out (way-out) before the wait.
+   Kept apart from gather-next, which make/spare-worth? asks whether a log can be started now: a
+   spare never sends the bot out of a pit for wood."
+  [world]
+  (let [n (gather-next world)] (or (when (= {:plan/wait :no-log} n) (way-out world)) n)))

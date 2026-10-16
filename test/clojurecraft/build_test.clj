@@ -17,6 +17,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.wood :as wood]
             [clojurecraft.world :as world]))
 
 (def origin [100 64 200])
@@ -382,6 +383,36 @@
     (is (build/way-refilled? (at gravel) walk) "gravel in the way: dropped, cleared again")
     (is (not (build/way-refilled? (at 1) walk)) "stone in the way: a failure as before")
     (is (not (build/way-refilled? (at gravel) (assoc walk :intent/reason :stuck))))))
+
+(deftest a-build-carries-a-crafting-table
+  ;; sim races 38806318231 and 38843552659 (issue #186): the cast wore out every pickaxe, sticks
+  ;; and cobblestone in hand and the table left at the furnace, and the bot climbed out for a log
+  ;; and waited :no-log on treeless ground
+  (let [kit {0 {:item (recipe/item-id :stone_pickaxe) :count 1}
+             1 {:item (recipe/item-id :cobblestone) :count 8}}
+        placed (let [w (standing-at (open-ground (assoc trench
+                                                        [11 63 10]
+                                                        (blocks/default-state :crafting_table)))
+                                    feet-pos)]
+                 (assoc (memory/remember-column w [0 0] (get-in w [:world/chunks [0 0]]))
+                        :player/inventory
+                        kit))
+        bare (assoc (standing-at (open-ground trench) feet-pos) :player/inventory kit)
+        planks (assoc-in bare [:player/inventory 2] {:item (recipe/item-id :oak_planks) :count 4})]
+    (is (= :take-table (:intent/for (plan/next-intent placed cast-one-row plan/goals)))
+        "the placed table within reach is taken along")
+    (is (not= :build (:intent/kind (plan/next-intent planks cast-one-row plan/goals)))
+        "planks enough and no table: one is made for the kit first")
+    (is (= :build (:intent/kind (plan/next-intent bare cast-one-row plan/goals)))
+        "nothing to make one from: no trip out for it, the build")))
+
+(deftest a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
+  ;; sim race 38843552659 (issue #186, world R1/18): on a ravine's floor sixty under the landing,
+  ;; the sky open and no hunt target in its band, the bot waited :no-log
+  (let [w (assoc (standing-at (open-ground {}) feet-pos) :plan/go-at [10.5 80.0 10.5])]
+    (is (= {:plan/wait :no-log} (wood/gather-next w)) "nothing to set out for")
+    (is (= (scoop/pit-climb w) (wood/gather-or-out w)) "the way out of the pit first")
+    (is (some? (scoop/pit-climb w)))))
 
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
