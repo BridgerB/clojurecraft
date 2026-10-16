@@ -403,7 +403,13 @@
         eye (game/eye w)]
     (is (nil? (memory/nearest-log w eye wood/search-radius (wood/skipped w) wood/standing-trunk?))
         "more than 12 above the eye: the near search misses it")
-    (is (= {:intent/kind :walk :intent/target [14 56 9] :intent/for :log :intent/trunk [14 56 9]}
+    ;; sixteen over the feet: the walk ends where the drop lies in the pickup box (wood/log-walk,
+    ;; the forest property at FOREST_SEED 388575908371)
+    (is (= {:intent/kind :walk
+            :intent/target [14 56 9]
+            :intent/for :log
+            :intent/trunk [14 56 9]
+            :intent/pickup? true}
            (wood/gather-next w)))))
 
 (deftest a-failed-intent-is-blacklisted-and-retried
