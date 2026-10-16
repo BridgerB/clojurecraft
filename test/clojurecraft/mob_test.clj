@@ -63,6 +63,18 @@
     (is (= [1.5 64.0 0.5] (mob/step-toward free? [1.5 64.0 0.5] [0.5 64.0 0.5] 0.115 1.0))
         "already at its stop")))
 
+(deftest an-enderman-stays-out-of-a-tunnel-two-high
+  ;; issue #263: 2.9 tall, an enderman needs three free cells (mob/tall); a roof at y 66 over x 3
+  ;; and on keeps it out where a zombie walks in
+  (let [free? (floor-free? (set (for [x (range 3 10)] [x 66 0])))]
+    (is (= 3 (mob/tall :enderman)))
+    (is (= 2 (mob/tall :zombie)) "every other walker as before")
+    (is (= [2.95 64.0 0.5]
+           (mob/step-toward free? [2.95 64.0 0.5] [8.5 64.0 0.5] 0.197 1.12 (mob/tall :enderman))))
+    (is (near?
+         [3.065 64.0 0.5]
+         (mob/step-toward free? [2.95 64.0 0.5] [8.5 64.0 0.5] 0.115 1.12 (mob/tall :zombie))))))
+
 ;; ---------------------------------------------------------------- on the model
 
 (defn arena

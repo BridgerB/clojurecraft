@@ -11,7 +11,7 @@
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
-            [clojurecraft.pearls]
+            [clojurecraft.pearls :as pearls]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
@@ -87,15 +87,16 @@
      (= {:intent/kind :walk :intent/target [8 64 13] :intent/for :pearls}
         (plan/next-intent close row plan/goals))
      "five blocks off is too near to stare (within 4 an angry one teleports away), too far to hit")
-    (is (= {:plan/wait :no-enderman} (plan/next-intent (standing {}) row plan/goals)))
-    (is (= {:plan/wait :no-enderman}
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (standing {}) row plan/goals)))
+    (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc near :plan/blacklist #{7}) row plan/goals))
         "a ghost or one that would not come is left")
-    (is (= {:plan/wait :no-enderman}
+    (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc-in near [:world/entities 7 :entity/died-at] 0) row plan/goals))
         "a dead one is no quarry")))
 
-(deftest the-provoke-stares-at-the-head-then-looks-at-the-legs-until-it-comes
+(deftest the-provoke-stares-at-the-head-until-the-server-says-it-has-a-target
   (let [pos [8.5 64.0 15.5]
         w (assoc (standing {7 (enderman pos)})
                  :plan/intent
@@ -104,22 +105,82 @@
         (fn [w]
           (mob/stared? (constantly false) (game/eye w) (:control/look (:player/controls w)) pos))
         [staring _] (fx/fold intent-step w (map tick (range 50 600 50)))
-        [waiting _] (fx/fold intent-step staring (map tick (range 600 1500 50)))
-        [came _] (fx/fold intent-step
-                          (assoc-in waiting [:world/entities 7 :entity/pos] [8.5 64.0 12.0])
-                          [(tick 1500)])
-        [left _] (fx/fold intent-step waiting (map tick (range 1500 15000 50)))]
+        [turned _] (fx/fold intent-step
+                            (assoc-in staring [:world/entities 7 :entity/creepy?] true)
+                            [(tick 600)])
+        [ignored _] (fx/fold intent-step staring (map tick (range 600 4000 50)))]
     (testing "the stare is vanilla's (EnderMan.isBeingStaredBy, mob/stared?)"
-      (is (= :stare (:intent/stage (:plan/intent staring))))
+      (is (= :active (:intent/status (:plan/intent staring))))
       (is (stared? staring)))
-    (testing "then the look is at its legs, which provokes nothing and holds it nowhere"
-      (is (= :wait (:intent/stage (:plan/intent waiting))))
-      (is (= (physics/look-at (game/eye waiting) (combat/aim (enderman pos)))
-             (:control/look (:player/controls waiting))))
-      (is (not (stared? waiting))))
-    (is (= :done (:intent/status (:plan/intent came))) "within strike range: the fight comes next")
-    (is (= [:failed :unprovoked] ((juxt :intent/status :intent/reason) (:plan/intent left)))
-        "one that never comes is given up")))
+    (testing "creepy, it is coming: done, the look off its face at once"
+      (is (= :done (:intent/status (:plan/intent turned))))
+      (is (= (physics/look-at (game/eye turned) (combat/aim (enderman pos)))
+             (:control/look (:player/controls turned))))
+      (is (not (stared? turned))))
+    (is (= [:failed :unprovoked] ((juxt :intent/status :intent/reason) (:plan/intent ignored)))
+        "one that never turns is given up")))
+
+(def air 0)
+
+(def burrow
+  "A burrow cut east from [3 64 8], as :burrow cuts one: three stairs, each three cells high
+   (x 4 to 6, down to feet 61), then two tunnel steps two high (x 7 and 8, the ground over them)."
+  (into {}
+        (for [c [[4 63 8] [5 63 8] [5 62 8] [6 63 8] [6 62 8] [6 61 8] [7 62 8] [7 61 8] [8 62 8]
+                 [8 61 8]]]
+          [c air])))
+
+(defn burrowed
+  "standing at feet with the burrow dug and remembered, holding a pickaxe too, with entities."
+  [feet entities]
+  (-> (standing entities burrow)
+      (assoc :player/pos feet :pearls/shelter [8 61 8] :pearls/mouth [3 64 8])
+      (assoc-in [:player/inventory 1] (item :iron_pickaxe 1))))
+
+(deftest the-burrow-end-is-out-of-an-endermans-reach
+  ;; a mob's melee is its box grown 0.83 sideways, never up or down (Mob.getAttackBoundingBox,
+  ;; probe 38893918055): one cell off, an enderman reaches; two off, or roofed out, it cannot
+  (let [w (standing {} burrow)]
+    (is (pearls/shelter? w [8 61 8])
+        "the tunnel's end: the last stair, where one can stand, is two off")
+    (is (not (pearls/shelter? w [7 61 8])) "the tunnel's first step is beside the last stair")
+    (is (not (pearls/shelter? w [6 61 8])) "a stair is three high: an enderman stands in it")
+    (is (not (pearls/shelter? w [3 64 8])) "open ground")
+    (is (not (pearls/shelter? w [9 61 8])) "inside the rock")))
+
+(deftest the-hunt-digs-a-burrow-provokes-from-its-mouth-and-fights-from-its-end
+  (let [far (enderman [0.5 64.0 8.5])
+        coming (assoc far :entity/creepy? true)]
+    (is (= {:intent/kind :burrow :intent/dir [0 -1] :intent/for :pearls}
+           (plan/next-intent (assoc-in (standing {7 (enderman [8.5 64.0 15.5])})
+                              [:player/inventory 1]
+                              (item :iron_pickaxe 1))
+                             row
+                             plan/goals))
+        "no burrow, a pickaxe held: one dug away from the enderman, its stairs opening toward it")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
+           (plan/next-intent (burrowed [8.5 61.0 8.5] {7 coming}) row plan/goals))
+        "in the burrow, the one coming is fought where the bot stands")
+    (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+           (plan/next-intent (burrowed [8.5 61.0 8.5] {7 far}) row plan/goals))
+        "none coming: out to the mouth to look round")
+    (is (=
+         {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
+         (plan/next-intent (burrowed [3.5 64.0 8.5] {7 (enderman [3.5 64.0 0.5])}) row plan/goals))
+        "from the mouth, one in sight is provoked")
+    (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+           (plan/next-intent (burrowed [3.5 64.0 8.5]
+                                       {7 (assoc (enderman [3.5 64.0 0.5]) :entity/creepy? true)})
+                             row
+                             plan/goals))
+        "provoked, it is coming: back to the burrow's end")
+    (is
+     (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+        (plan/next-intent
+         (assoc (burrowed [3.5 64.0 8.5] {7 (enderman [5.5 64.0 8.5])}) :player/health 6.0)
+         row
+         plan/goals))
+     "hurt with one at hand: into the burrow, not backing away in the open (gym batch pearls-263b)")))
 
 (deftest a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
   (let [kill {:intent/kind :fight
@@ -142,13 +203,13 @@
                              row
                              plan/goals))
         "a drop that holds a pearl, or has not said what it holds, is picked up")
-    (is (= {:plan/wait :no-enderman}
+    (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc (standing {9 block}) :plan/last kill) row plan/goals))
         "the block an enderman carried is left (#262: a drop says what it holds)")
     (is (= {:plan/wait :drop}
            (plan/next-intent (assoc (standing {7 body}) :plan/last kill) row plan/goals))
         "the body still lies there: its drop may still come")
-    (is (= {:plan/wait :no-enderman}
+    (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc (standing {}) :plan/last kill) row plan/goals))
         "body gone and nothing dropped: no pearl this time")
     (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
@@ -163,16 +224,17 @@
   (is (not (plan/done-by (assoc (standing {}) :player/inventory {3 (item :ender_pearl 11)}) row))))
 
 (def arena
-  "The model's world for the hunt: one stone column, an enderman ten blocks south of the spawn."
-  {:column (world/column-bytes {})
-   :spawn [8.5 64.0 2.5]
+  "The model's world for the hunt: two stone columns side by side, an enderman eleven blocks west
+   of the spawn, the kit a chained run carries: an iron sword and pickaxe, the iron helmet and
+   chestplate (#259's armour row), eleven pearls."
+  {:columns {[0 0] (world/column-bytes {}) [1 0] (world/column-bytes {})}
+   :spawn [12.5 64.0 8.5]
    :inventory {[:hotbar 0] (item :iron_sword 1)
-               [:armour 0] (item :diamond_helmet 1)
-               [:armour 1] (item :diamond_chestplate 1)
-               [:armour 2] (item :diamond_leggings 1)
-               [:armour 3] (item :diamond_boots 1)
+               [:hotbar 1] (item :iron_pickaxe 1)
+               [:armour 0] (item :iron_helmet 1)
+               [:armour 1] (item :iron_chestplate 1)
                [:main 0] (item :ender_pearl 11)}
-   :mobs [{:type :enderman :pos [8.5 64.0 12.5]}]})
+   :mobs [{:type :enderman :pos [1.5 64.0 8.5]}]})
 
 (defn pearl-seed
   "The first seed whose model drops the enderman's pearl: the loot is the first roll of the
@@ -182,15 +244,17 @@
                                         (second (sim/mob-roll (sim/init (assoc arena :seed %))))))
                  (range 64))))
 
-(deftest an-enderman-is-provoked-killed-and-its-pearl-picked-up-against-the-model
+(deftest an-enderman-is-provoked-and-killed-from-a-burrow-against-the-model
   ;; the model's enderman (mob.clj, issue #260) is neutral until stared at, then walks at the bot
-  ;; and hits for 7 a second; in diamond (sim/armoured, 1.89 a hit) with an iron sword the bot
-  ;; kills it in seven hits and picks the pearl up: the twelfth
+  ;; and hits for 7 a second (5.74 through the iron): in the open it beat the bot (gym batch
+  ;; pearls-263a: five deaths in five). The bot digs a burrow east, stairs then a tunnel two high,
+  ;; provokes it from the mouth, goes back to the end, and kills it where it stops, at the last
+  ;; stair (three cells tall, mob/tall), out of its reach; then picks the pearl up: the twelfth
   (let [[w sim] (sim/run step
                          (game/init fx/opts)
                          (sim/init (assoc arena :seed (pearl-seed)))
                          #(or (plan/done? %) (plan/failed? %))
-                         60000
+                         120000
                          {:event/kind :go :go/goals [:ender-pearls]})
         story (mapv (juxt :intention/kind :intention/event :intention/reason)
                     (memory/intentions w))]
@@ -198,6 +262,8 @@
     (is (not-any? (fn [[_ m]] (and (= :enderman (:type m)) (not (:dead-at m)))) (:sim/mobs sim))
         "the enderman was killed")
     (is (>= (get (recipe/counts (:player/inventory w)) :ender_pearl 0) 12))
+    (is (some #(= [:burrow :done nil] %) story) "it dug a burrow")
     (is (some #(= [:provoke :done nil] %) story) "it came to a stare")
+    (is (pearls/shelter? w (:pearls/shelter w)) (pr-str (:pearls/shelter w)))
     (is (pos? (:sim/health sim)) "and the bot lived")
     (is (= [] (:sim/violations sim)))))

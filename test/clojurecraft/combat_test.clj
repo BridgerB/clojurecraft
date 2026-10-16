@@ -211,3 +211,13 @@
     (is (not (plan/done-by
               (assoc w :plan/since 1000 :world/entities {7 (mob :husk [14.5 64.0 8.5] 20.0)})
               (row :attack))))))
+
+(deftest a-fight-that-holds-its-ground-never-walks
+  ;; issue #263: the pearl hunt fights from a burrow, where a step out is the one way to be hit
+  (let [w (assoc-in (fighting 5.0) [:plan/intent :intent/hold?] true)
+        [waited _] (fx/fold intent-step w (map tick (range 50 2000 50)))
+        [hurt _] (fx/fold intent-step (assoc w :player/health 8.0) (map tick (range 50 600 50)))]
+    (is (= [8.5 64.0 8.5] (:player/pos waited)) "it waits for the zombie five blocks off")
+    (is (= :approach (:intent/stage (:plan/intent waited))))
+    (is (= :active (:intent/status (:plan/intent waited))))
+    (is (not= :retreat (:intent/stage (:plan/intent hurt))) "and never breaks off under 10")))

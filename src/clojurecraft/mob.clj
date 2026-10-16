@@ -279,6 +279,18 @@
   [free? [x y z]]
   (and (free? [x y z]) (free? [x (inc y) z])))
 
+(defn tall
+  "How many cells a body of kind fills upward to walk: its box's height rounded up, two at the
+   least, as every walking mob was modelled before (issue #263: an enderman, 2.9 tall, takes
+   three, so a tunnel two high keeps it out, as the server's pathfinder does)."
+  [kind]
+  (max 2 (long (math/ceil (second (:box (kinds kind) [0.6 1.8]))))))
+
+(defn stands-in?
+  "May a body n cells tall stand with its feet in cell [x y z]: those n cells free?"
+  [free? [x y z] n]
+  (every? #(free? [x (+ y %) z]) (range n)))
+
 (defn fall
   "pos come down onto what is under it: the feet on the top of the first cell below that is not
    free (free? of a cell), at most 32 blocks, as a falling body ends a tick's fall."
@@ -291,20 +303,22 @@
 (defn step-toward
   "A mob at pos one tick on toward target at speed blocks a tick, stopping stop short of it on
    the plane: the straight step when the body stands there, one block up when a single block is
-   in the way and the head clears it (a mob jumps it), else it stays; then it falls (fall)."
-  [free? pos target speed stop]
-  (let [[x y z] pos
-        d (flat-distance pos target)
-        k (min speed (max 0.0 (- d stop)))
-        [tx _ tz] target
-        nx (if (pos? d) (+ x (* k (/ (- tx x) d))) x)
-        nz (if (pos? d) (+ z (* k (/ (- tz z) d))) z)
-        [cx cy cz] (cell-of [nx y nz])]
-    (cond (zero? k) pos
-          (stands? free? [cx cy cz]) (fall free? [nx y nz])
-          (and (stands? free? [cx (inc cy) cz]) (free? (update (cell-of pos) 1 + 2)))
-          [nx (double (inc cy)) nz]
-          :else pos)))
+   in the way and the head clears it (a mob jumps it), else it stays; then it falls (fall). A
+   body n cells tall (tall; two when not given) stands and jumps only where its n cells are free."
+  ([free? pos target speed stop] (step-toward free? pos target speed stop 2))
+  ([free? pos target speed stop n]
+   (let [[x y z] pos
+         d (flat-distance pos target)
+         k (min speed (max 0.0 (- d stop)))
+         [tx _ tz] target
+         nx (if (pos? d) (+ x (* k (/ (- tx x) d))) x)
+         nz (if (pos? d) (+ z (* k (/ (- tz z) d))) z)
+         [cx cy cz] (cell-of [nx y nz])]
+     (cond (zero? k) pos
+           (stands-in? free? [cx cy cz] n) (fall free? [nx y nz])
+           (and (stands-in? free? [cx (inc cy) cz] n) (free? (update (cell-of pos) 1 + n)))
+           [nx (double (inc cy)) nz]
+           :else pos))))
 
 ;; ---------------------------------------------------------------- spawning
 
