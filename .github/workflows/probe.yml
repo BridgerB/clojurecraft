@@ -28,7 +28,7 @@ on:
 run-name: probe ${{ inputs.label || inputs.run }}
 
 permissions:
-  contents: read
+  contents: write                       # probe/evidence: a throwaway release
   actions: read                         # probe/evidence: a race artifact's recordings
 
 jobs:
