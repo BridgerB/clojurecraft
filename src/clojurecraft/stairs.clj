@@ -835,12 +835,44 @@
             (game/say (str "tunnel: refused toward " dir ", a step toward " d))))
       (box world))))
 
+(def nearer-by 1.0)                   ; blocks on the plane a tunnel toward a bank must close on its water
+(def pond-reach 6)                    ; how far round its water a tunnel that came no nearer gives the sources up
+
+(defn pond-sources
+  "The plain water sources within pond-reach of target on the plane and a block above or below
+   it: the water one tunnel toward a bank was cutting for, which the next would cut for the
+   same way."
+  [world [tx ty tz]]
+  (for [x (range (- tx pond-reach) (inc (+ tx pond-reach)))
+        z (range (- tz pond-reach) (inc (+ tz pond-reach)))
+        y [(dec ty) ty (inc ty)]
+        :let [c [x y z]]
+        :when (= blocks/water-base (terrain/block-at world c))]
+    c))
+
+(defn no-nearer?
+  "Did a tunnel toward a bank (:intent/for :bank, scoop/to-bank) end no nearer the water it
+   heads for (:intent/target) on the plane than it began (:intent/from-feet), by nearer-by? Then
+   it gives that water up, and the pond round it (pond-sources), into :plan/blacklist.
+   Sim race 38839767273 runner 6 (issue #69, worlds R3/8 and R4/35 at 3f836ff): the tunnel
+   walked an open corridor past its water, its heading turning as it passed, eight steps east,
+   eight back west, two thousand tunnels until the run's ninety minutes were spent."
+  [world {:intent/keys [for target from-feet]}]
+  (boolean (and (= :bank for)
+                target
+                from-feet
+                (> (+ (physics/horizontal-distance (intent/feet world) target) nearer-by)
+                   (physics/horizontal-distance from-feet target)))))
+
 (defmethod intent/run :tunnel
-  [world {:intent/keys [length level-steps stage] :or {level-steps 0} :as i} event]
+  [world {:intent/keys [length level-steps stage target] :or {level-steps 0} :as i} event]
   (cond (and (>= level-steps length) (not= :level stage))
-        (-> world
-            (assoc :player/controls {})
-            intent/done)
+        (cond-> (-> world
+                    (assoc :player/controls {})
+                    intent/done)
+          (no-nearer? world i)
+          (-> (update :plan/blacklist (fnil into #{}) (cons target (pond-sources world target)))
+              (game/say (str "tunnel: no nearer the bank of " target ", other water next"))))
         (= :level stage) (stairs-stage world i event)
         :else (tunnel-plan world i)))
 

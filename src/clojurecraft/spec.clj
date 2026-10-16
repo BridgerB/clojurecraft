@@ -386,6 +386,7 @@
 (s/def :intent/fluid #{:water :lava})
 (s/def :intent/move (s/coll-of #{-1 0 1} :kind vector? :count 3)) ; a :tunnel step's [dx dy dz]
 (s/def :intent/from ::block-pos)
+(s/def :intent/from-feet ::block-pos)
 (s/def :intent/taken nat-int?)
 (s/def :intent/steps pos-int?)
 (s/def :intent/trunk ::block-pos)
