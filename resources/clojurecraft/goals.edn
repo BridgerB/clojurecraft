@@ -358,4 +358,14 @@
   "twelve eyes of ender, one for each frame of the end portal (issue #264): blaze powder crafted from the rods (two a rod, six of the seven), then each eye from a powder and a pearl, both in the 2x2 grid, no table and no trip; the needs planner finds the way through the generated craft rows. Twelve, not fourteen for the throws: the pearl stage makes twelve, and the throws that find the stronghold are the stronghold stage's to count. Short of pearls or rods it waits :no-pearls or :no-rods, the stage to look at. An aside until the stages before it (the blaze rods, the pearls) are proven and the chain is raised to it"
   :goal/provides {:item/ender_eye 12}
   :goal/done? :provided?
-  :goal/plan :eyes}]
+  :goal/plan :eyes}
+ {:goal/id :eye-throw
+  :goal/priority 21
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "throw"
+  :goal/doc
+  "one eye of ender thrown and followed (issue #265, the gym's throw trial): the eye in hand, a look a little up (never down at an end portal frame, which a use-item fills), one use-item, the eye the server adds at the bot's middle followed for two seconds, the line it flew on the plane kept as a throw in :stronghold/throws; done when one is kept. In the overworld only: the eye finds no stronghold anywhere else. An aside: a trial of the throw alone, never a step of a chained run"
+  :goal/dimension "minecraft:overworld"
+  :goal/done? :thrown?
+  :goal/plan :throw}]

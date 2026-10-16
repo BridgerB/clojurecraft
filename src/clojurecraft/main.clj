@@ -42,6 +42,7 @@
             [clojurecraft.spec]
             [clojurecraft.stairs]
             [clojurecraft.stone]
+            [clojurecraft.stronghold]
             [clojurecraft.swim]
             [clojurecraft.sword]
             [clojurecraft.watch :as watch]
@@ -81,7 +82,8 @@
   "The RESULT map: :ok, :until, the reason, the game summary, held items, the nearest
    remembered table, the health of the nearest living entity of each kind whose health is known
    (:mobs, only when there is one, so older recordings' RESULTs are unchanged; the gym's entities
-   trial reads it) and the plan summary (once a plan began)."
+   trial reads it), the eyes of ender thrown (:throws, only once one is kept: the gym's throw
+   trial reads the first) and the plan summary (once a plan began)."
   [world until ok]
   (merge {:ok ok
           :until until
@@ -102,6 +104,7 @@
          (when-let [h (and (:player/pos world)
                            (not-empty (entity/healths world (:player/pos world))))]
            {:mobs h})
+         (when (seq (:stronghold/throws world)) {:throws (:stronghold/throws world)}) ; the eyes' lines (issue #265: the gym's throw trial reads the first)
          (when (seq (:world/traps world)) {:escaped true}) ; only once a trap was escaped, so older recordings' RESULTs are unchanged
          (when (:plan/status world) {:plan (plan/summary world)})))
 

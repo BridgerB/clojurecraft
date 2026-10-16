@@ -38,10 +38,13 @@
 (s/def :truth/cmd string?)
 (s/def :truth/re string?)
 (s/def :truth/result (s/coll-of keyword? :kind vector?)) ; a path into the bot's RESULT whose value {result} in :truth/re stands for
+(s/def :truth/check keyword?)           ; how a reply is judged when a pattern cannot say (verdict): :re when absent
 (s/def :truth/reply string?)
 (s/def :truth/ok? boolean?)
 (s/def :gym/truth
-  (s/coll-of (s/keys :req [:truth/cmd :truth/re] :opt [:truth/result]) :kind vector? :min-count 1))
+  (s/coll-of (s/keys :req [:truth/cmd :truth/re] :opt [:truth/result :truth/check])
+             :kind vector?
+             :min-count 1))
 (s/def :gym/setup (s/coll-of string? :kind vector?)) ; RCON commands that build the row's arena round the landing (fill-in)
 (s/def :gym/land keyword?)               ; how the bot is landed (land!): :surface when absent
 (s/def :gym/summon (s/coll-of string? :kind vector?)) ; RCON commands run in the row's dimension once the bot stands there with its kit (fill-in): the mobs it meets
@@ -569,7 +572,22 @@
     :gym/prereqs ["minecraft:blaze_rod 7" "minecraft:ender_pearl 12"]
     :gym/timeout-ms 180000
     :gym/truth [{:truth/cmd "clear {name} minecraft:ender_eye 0"
-                 :truth/re "Found (1[2-9]|[2-9][0-9]) "}]}])
+                 :truth/re "Found (1[2-9]|[2-9][0-9]) "}]}
+   ;; issue #265: one eye thrown on a surface landing at noon (no night mobs on the bot), its line
+   ;; within bearing-within degrees of the way to the stronghold the server locates from the
+   ;; landing (the bot throws where it stands; a stronghold is hundreds of blocks off, so the
+   ;; block between is nothing)
+   {:gym/goal :eye-throw
+    :gym/until "throw"
+    :gym/difficulty "normal"
+    :gym/setup ["time set noon"]
+    :gym/prereqs ["minecraft:ender_eye 2"]
+    :gym/timeout-ms 60000
+    :gym/truth [{:truth/cmd
+                 "execute positioned {x} {y} {z} run locate structure minecraft:stronghold"
+                 :truth/re "\\[(-?\\d+), (?:~|-?\\d+), (-?\\d+)\\]"
+                 :truth/check :bearing
+                 :truth/result [:throws]}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
@@ -579,6 +597,7 @@
 (def bot-heap "-Xmx1g")                 ; each bot is its own JVM; one fits several on a runner
 (def hold-ms 60000)                     ; how long an ok bot stays online for the judge's truth commands
 
+(def bearing-within 10.0)                ; degrees a throw's line may be off the way to the located stronghold (issue #265)
 (def z95 1.959964)                      ; the normal quantile for a two-sided 95% interval
 (def judge-grace-ms 120000)             ; past the goal's timeout, how long the judge waits for RESULT
 (def trial-overhead-minutes 8)          ; setup, server start and judging, on top of a goal's timeout
@@ -648,15 +667,43 @@
           (some? v) (str/replace re "{result}" (java.util.regex.Pattern/quote (str v)))
           :else nil)))
 
+(defmulti verdict
+  "Does the server's reply pass truth row, given the bot's RESULT? Keyed by the row's :truth/check,
+   :re when absent: a check a pattern cannot state is a defmethod (the throw trial's bearing,
+   issue #265)."
+  {:arglists '([row reply result])}
+  (fn [row _reply _result] (:truth/check row :re)))
+
+(defmethod verdict :re
+  ;; the row's pattern (truth-re, the RESULT's value in it when the row names one) found in the reply
+  [row reply result]
+  (let [re (truth-re row result)] (boolean (and re (re-find (re-pattern re) (str reply))))))
+
+(defn bearing-off
+  "Degrees between the way dir [dx dz] on the plane and the way from point from [x y z] to [sx sz]."
+  [[fx _ fz] [dx dz] [sx sz]]
+  (let [a (math/atan2 dz dx)
+        b (math/atan2 (- sz fz) (- sx fx))
+        d (abs (math/to-degrees (- a b)))]
+    (min d (- 360.0 d))))
+
+(defmethod verdict :bearing
+  ;; the row's pattern captures the located [x z] in the reply (locate structure); its
+  ;; :truth/result names the throws in the RESULT ({:throw/from :throw/dir} each): the first's
+  ;; line within bearing-within degrees of the way from where it was thrown to what the server
+  ;; located
+  [row reply result]
+  (let [[_ x z] (re-find (re-pattern (:truth/re row)) (str reply))
+        {:throw/keys [from dir]} (first (get-in result (:truth/result row)))]
+    (boolean
+     (and x from dir (<= (bearing-off from dir [(parse-long x) (parse-long z)]) bearing-within)))))
+
 (defn truth
   "A truth row's verdict on the server's reply to cmd (the row's command, filled in), given the
-   bot's RESULT when the row compares with it (truth-re): {:truth/cmd :truth/reply :truth/ok?}."
+   bot's RESULT when the row compares with it (verdict): {:truth/cmd :truth/reply :truth/ok?}."
   ([row cmd reply] (truth row cmd reply nil))
   ([row cmd reply result]
-   (let [re (truth-re row result)]
-     {:truth/cmd cmd
-      :truth/reply (str reply)
-      :truth/ok? (boolean (and re (re-find (re-pattern re) (str reply))))})))
+   {:truth/cmd cmd :truth/reply (str reply) :truth/ok? (verdict row reply result)}))
 
 (defn result-line
   "The RESULT map a whole line of the bot's output carries, or nil for any other line."

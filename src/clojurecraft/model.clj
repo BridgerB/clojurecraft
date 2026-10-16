@@ -222,7 +222,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -230,7 +230,7 @@
     "intents the planner starts"]
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
    [:intent/target
-    "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after (issue #259: a widening, a position is still one)"
+    "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265) (issue #259: a widening, a position is still one)"
     "most intents"]
    [:intent/for
     "what the intent serves (:log, :log-hunt, a mining row's id), so chains continue only their own"
@@ -291,6 +291,10 @@
     "a :fight from the hunt's burrow"]
    [:intent/mouth "where a :burrow began: the stairs go down from it"
     ":burrow, from its first tick"]
+   [:intent/eye-from "where the eye a :throw-eye follows was first seen [x y z]"
+    ":throw-eye, once its eye is seen"]
+   [:intent/eye-pos "where the eye a :throw-eye follows was last seen [x y z]; it drops there"
+    ":throw-eye, once its eye is seen"]
    [:intent/swings
     "attacks a :fight has sent in reach of its target; combat/max-swings make it a ghost"
     "fight, after its first attack"] [:intent/finish-at "ms after which FINISH may be sent" "dig"]

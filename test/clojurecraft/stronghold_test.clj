@@ -1,12 +1,20 @@
 (ns clojurecraft.stronghold-test
   "Finding the stronghold (issue #265): two throws' lines crossed on the plane, nothing when they
-   are parallel or cross behind a throw."
+   are parallel or cross behind a throw; a throw followed tick by tick over canned packets."
   (:require [clojure.math :as math]
-            [clojure.test :refer [deftest is testing]]
+            [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
-            [clojurecraft.stronghold :as stronghold]))
+            [clojurecraft.fixtures :as fx]
+            [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
+            [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.stronghold :as stronghold]
+            [clojurecraft.world :as world]))
+
+(use-fixtures :once fx/instrumented)
 
 (defn toward
   "The throw an eye makes from [x y z] at the stronghold [sx sz]: the unit way to it on the plane,
@@ -71,3 +79,99 @@
                                    (nil? c) true
                                    :else (near? s c 1.0)))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
+
+;; ---------------------------------------------------------------- the throw
+
+(defn standing
+  "A bot in play at [8.5 64 8.5] on one column's stone floor, two eyes of ender in hotbar slot 0."
+  []
+  (-> (game/init fx/opts)
+      (assoc :bot/phase :play
+             :player/pos [8.5 64.0 8.5]
+             :player/loaded? true
+             :player/on-ground? true
+             :world/chunks {[0 0] (world/column {})}
+             :window/state-id 5
+             :player/inventory {0 {:item (recipe/item-id :ender_eye) :count 2}})))
+
+(defn intent-step
+  "The world reducer plus one run of the current intent per tick while it is active."
+  [w e]
+  (let [w (game/step w e)]
+    (if (and (= :tick (:event/kind e)) (= :active (:intent/status (:plan/intent w))))
+      (intent/run w (:plan/intent w) e)
+      w)))
+
+(defn eye-added
+  "The server adding eye of ender eid at [x y z]."
+  [eid [x y z]]
+  (fx/packet {:packet/name :add-entity
+              :entity-id eid
+              :uuid nil
+              :type stronghold/eye-type
+              :x x
+              :y y
+              :z z
+              :vel [0.0 0.0 0.0]
+              :pitch 0
+              :yaw 0
+              :head-yaw 0
+              :data 0}))
+
+(defn eye-moved
+  "The server moving entity eid by [dx dy dz] blocks, in its 1/4096 steps."
+  [eid [dx dy dz]]
+  (fx/packet {:packet/name :move-entity-pos
+              :entity-id eid
+              :dx (long (* 4096 dx))
+              :dy (long (* 4096 dy))
+              :dz (long (* 4096 dz))
+              :on-ground false}))
+
+(def throwing (assoc (standing) :plan/intent {:intent/kind :throw-eye :intent/status :active}))
+
+(deftest an-eye-is-thrown-followed-and-its-line-kept
+  ;; issue #265: the eye in hand, the eyes up, one use-item; the eye the server adds at the bot's
+  ;; middle is followed two seconds, the line it flew kept as a throw, and the intent is done
+  ;; when the server removes it, knowing where it ended
+  (let [flight (mapcat (fn [k]
+                         (concat (fx/ticks (+ 450 (* k 250)) (+ 700 (* k 250)))
+                                 [(eye-moved 90 [0.6 0.1 0.8])]))
+                (range 10))
+        [w fx] (fx/fold intent-step
+                        throwing
+                        (concat (fx/ticks 0 450)
+                                [(eye-added 90 [8.5 64.9 8.5])]
+                                flight
+                                [(fx/packet {:packet/name :remove-entities :ids [90]})]
+                                (fx/ticks 2950 3050)))
+        use (first (filter #(= :use-item (:packet/name %)) (fx/packets fx)))
+        [t :as ts] (:stronghold/throws w)
+        i (:plan/intent w)]
+    (is (= -20.0 (:x-rot use)) "thrown looking a little up, never down at a frame")
+    (is (= 1 (count ts)))
+    (is (= [8.5 64.9 8.5] (:throw/from t)) "from where the eye was first seen")
+    (is (near? [0.6 0.8] (:throw/dir t) 1e-3) "the way it flew on the plane")
+    (is (= :done (:intent/status i)))
+    (is (near? [13.9 15.7] (stronghold/plane (:intent/eye-pos i)) 1e-2)
+        "where it was last seen on a tick before the server removed it")))
+
+(deftest no-eye-seen-fails-the-throw
+  ;; a use-item the server does nothing with (no stronghold: the Nether) is :no-eye
+  (let [[w _] (fx/fold intent-step throwing (fx/ticks 0 4000))]
+    (is (= :failed (:intent/status (:plan/intent w))))
+    (is (= :no-eye (:intent/reason (:plan/intent w))))
+    (is (empty? (:stronghold/throws w)))))
+
+(def throw-row (first (filter #(= :eye-throw (:goal/id %)) plan/goals)))
+
+(deftest the-throw-trial-throws-once-with-an-eye-held
+  (is (= {:intent/kind :throw-eye :intent/for :stronghold}
+         (plan/next-intent (standing) throw-row plan/goals)))
+  (is (= {:plan/wait :no-eye}
+         (plan/next-intent (assoc (standing) :player/inventory {}) throw-row plan/goals)))
+  (is (not (plan/done-by (standing) throw-row)))
+  (is (plan/done-by (assoc (standing)
+                           :stronghold/throws
+                           [{:throw/from [0.0 64.0 0.0] :throw/dir [1.0 0.0] :throw/at 0}])
+                    throw-row)))
