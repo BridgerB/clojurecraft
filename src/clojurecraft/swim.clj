@@ -421,17 +421,34 @@
                  (cond-> (intent/toward world (physics/centre target) 0.0)
                    (:player/in-water? world) (assoc :control/jump? true))))))
 
+(defn lava-free?
+  "Is there no lava in cell, in the head's cell over it, nor in the cell under it: a place the body
+   is out of lava once it stands there?"
+  [world [x y z]]
+  (not-any? #(= :lava (terrain/fluid-kind world %)) [[x (dec y) z] [x y z] [x (inc y) z]]))
+
+(defn lava-beside?
+  "Does lava touch cell on any of its four sides?"
+  [world [x y z]]
+  (boolean (some #(= :lava (terrain/fluid-kind world %))
+                 [[(inc x) y z] [(dec x) y z] [x y (inc z)] [x y (dec z)]])))
+
 (defn footing
-  "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand
-   in with no lava beside or under it, or nil."
+  "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand in
+   out of the lava (lava-free?: none in it, over it or under it), those with no lava beside them
+   first (lava-beside?), or nil. A cell the flowing lava covers is standable to a route, and a
+   flee to it ends still in the lava: sim race 38844683780 runner 7 (issue #230, world R2/9)
+   smelted in a pocket at y 38 when lava from a source ten over flowed in, fled to a cell the
+   flow covered, and timed out :no-footing, three times."
   [world [fx fy fz :as feet]]
   (->> (for [dx (range (- flee-radius) (inc flee-radius))
              dz (range (- flee-radius) (inc flee-radius))
              dy [0 -1 1]
              :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]]
-             :when (and (not= cell feet) (path/standable? world cell))]
+             :when (and (not= cell feet) (path/standable? world cell) (lava-free? world cell))]
          cell)
-       (sort-by #(physics/horizontal-distance (physics/centre feet) (physics/centre %)))
+       (sort-by (juxt #(if (lava-beside? world %) 1 0)
+                      #(physics/horizontal-distance (physics/centre feet) (physics/centre %))))
        first))
 
 (defmethod intent/run :flee
