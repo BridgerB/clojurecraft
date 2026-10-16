@@ -155,7 +155,11 @@
   "One step toward holding item (a name) in the hand, for an intent whose next stage is then:
    already held, go on; in the hotbar, select it and go on; in the main inventory, swap it into
    the held slot with a window-0 click and stay (the answer moves it); held nowhere, fail
-   :not-held."
+   :not-held. With a container open, the swap waits a tick for it to close: the server ignores a
+   window-0 click while a container is its open menu, as a craft in window 0 closes one first.
+   Race 38805920624 runner 5 (issues #131, #132): 20 bots whose smelt failed :not-cooked left
+   the furnace open, and every swap into the hand after it went unanswered until :stale-window
+   ended the plan."
   [world item then]
   (let [p (held-slot-of world (recipe/item-id item))
         held (:player/held-slot world)]
@@ -166,6 +170,11 @@
               (game/emit {:packet/name :set-carried-item :slot p})
               (assoc :player/held-slot p)
               (intent/assoc-intent :intent/stage then))
+          (:window/open world)
+          (-> world
+              (game/emit {:packet/name :container-close
+                          :window-id (get-in world [:window/open :window/id])})
+              (dissoc :window/open))
           :else
           (window/click world
                         (window/view world :inventory) ; swap into the held slot
