@@ -281,16 +281,22 @@
   "How the metadata values the bot steps over are written, by serializer id: the game's
    EntityDataSerializers in registration order, read in the 26.1.2 jar (probe run 38876275250,
    issue #258). A byte (0) is read unsigned, since the one the bot reads is a bitfield (index 0,
-   the shared flags: on fire, sneaking ...). Direction (12) and pose (20) are varint enums. The
-   rest (components, item stacks, particles, block positions, variants) are not here: a skim stops
-   at the first of them."
+   the shared flags: on fire, sneaking ...). Direction (12) and pose (20) are varint enums. An item
+   stack (7) is read as a slot (read-slot): a dropped item's stack is its index 8, and a drop is
+   known by what it holds (issue #262: a blaze rod picked out from the cobblestone). An optional
+   block state (15) is one varint, 0 for none: an enderman's carried block (index 16) comes just
+   before its creepy flag (17), which the pearl hunt reads (issue #263). The rest
+   (components, particles, block positions, variants) are not here: a skim stops at the first of
+   them."
   {0 b/read-u8      ; BYTE
    1 b/read-varint  ; INT
    2 b/read-varlong ; LONG
    3 b/read-f32     ; FLOAT: a living entity's health is one (index 9)
    4 b/read-string  ; STRING
+   7 read-slot      ; ITEM_STACK: a dropped item's (index 8)
    8 b/read-bool    ; BOOLEAN
    12 b/read-varint ; DIRECTION
+   15 b/read-varint ; OPTIONAL_BLOCK_STATE: 0, or a block state id
    20 b/read-varint}) ; POSE
 
 (defn read-metadata
@@ -298,22 +304,30 @@
    the index metadata-end. Only serializers in metadata-readers are read; at the first other one
    the skim stops and keeps what it has, as a frame's unread tail is ignored. A living entity's
    health (index 9) comes after its flags, air, pose and frozen ticks, all readable, so only a
-   custom name (index 2, a component) hides it."
+   custom name (index 2, a component) hides it. An item stack whose components could not be
+   stepped over (read-slot's :components?) is kept and ends the skim: where the next entry starts
+   is unknown."
   [buf]
   (loop [m {}]
     (let [i (b/read-u8 buf)
-          read (when (not= i metadata-end) (metadata-readers (b/read-varint buf)))]
+          read (when (not= i metadata-end) (metadata-readers (b/read-varint buf)))
+          v (when read (read buf))]
       (cond (nil? read) m
-            :else (recur (assoc m i (read buf)))))))
+            (:components? v) (assoc m i v)
+            :else (recur (assoc m i v))))))
 
 (defn int-in? "Is x an integer in [lo, hi]?" [lo hi x] (and (int? x) (<= lo x hi)))
 
+(declare slot?)
+
 (defn metadata?
-  "A skimmed metadata map: {index value}, each index 0-254, each value a number, a boolean or a
-   string."
+  "A skimmed metadata map: {index value}, each index 0-254, each value a number, a boolean, a
+   string or a slot (an item stack, nil when empty: issue #262)."
   [x]
   (and (map? x)
-       (every? (fn [[k v]] (and (int-in? 0 254 k) (or (number? v) (boolean? v) (string? v)))) x)))
+       (every? (fn [[k v]]
+                 (and (int-in? 0 254 k) (or (number? v) (boolean? v) (string? v) (slot? v))))
+               x)))
 
 (defn vec3? "Three numbers in a vector." [x] (and (vector? x) (= 3 (count x)) (every? number? x)))
 

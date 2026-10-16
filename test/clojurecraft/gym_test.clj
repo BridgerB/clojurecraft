@@ -96,7 +96,9 @@
 
 (defn landing-commands
   "The RCON commands landing! sends for goal, against a server that answers every test with
-   reply-for and every position with one in the arena; [result commands]."
+   reply-for and every position with one in the arena; [result commands]. It redefines the RCON
+   client for the whole JVM, so every test that calls it is :eftest/synchronized: two at once
+   (the warped forest landing beside the kit test, issue #263) swapped each other's answers."
   [goal reply-for]
   (let [sent (atom [])
         landings (java.io.File/createTempFile "landings" ".edn")]
@@ -117,7 +119,7 @@
         (.delete landings)
         [r @sent]))))
 
-(deftest the-kit-is-given-only-in-the-rows-dimension
+(deftest ^:eftest/synchronized the-kit-is-given-only-in-the-rows-dimension
   ;; steve gave its End kit before the cross-dimension teleport and the server held none of it
   ;; (issue #10): the gym lands, asks the server which dimension the bot is in, then gives
   (let [[r sent] (landing-commands :arena-nether (constantly "Test passed"))
@@ -161,7 +163,7 @@
                                     "c"
                                     "Found 1 matching item(s) on player"))))))
 
-(deftest a-warped-forest-landing-stands-on-its-nylium
+(deftest ^:eftest/synchronized a-warped-forest-landing-stands-on-its-nylium
   ;; issue #263: the forest nearest the landing's Nether coordinates, a floor found cell by cell
   (let [[r sent] (landing-commands
                   :ender-pearls

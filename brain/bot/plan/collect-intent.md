@@ -1,11 +1,11 @@
 ---
 title: Collect intent
-description: How :collect walks onto the drop until the bot holds one more of what it is for (:intent/drops: any log, or what a mined block's loot table drops) than when it began, how it detects a stall against leaves and ends naming the blocker (:intent/blocked-by) so the gather chain can dig it, and its 10 s timeout.
+description: How :collect walks onto the drop until the bot holds one more of what it is for (:intent/drops: any log, or what a mined block's loot table drops) than when it began, how it detects a stall against leaves and ends naming the blocker (:intent/blocked-by) so the gather chain can dig it, and its 10 s timeout; and :collect-drops, the general pickup of a named item lying near a place (a kill's loot), done when one more is held or none lies there.
 type: reference
 tags: [bot, plan, intents, pickup]
-aliases: [:collect, pickup intent, not-picked-up, nearest-item, blocked-by, blocker]
+aliases: [:collect, :collect-drops, pickup intent, not-picked-up, nearest-item, blocked-by, blocker, drop-radius]
 status: verified
-lastUpdated: 2026-10-14
+lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/intent.clj#defn ledge-ahead?
@@ -15,6 +15,14 @@ sourceRefs:
   - src/clojurecraft/intent.clj#def collect-stall-ticks 20
   - src/clojurecraft/intent.clj#defn nearest-item
   - src/clojurecraft/game.clj#defmethod on-packet [:play :add-entity]
+  - src/clojurecraft/drops.clj#defmethod intent/run :collect-drops
+  - src/clojurecraft/drops.clj#defn holds?
+  - src/clojurecraft/drops.clj#defn lying
+  - src/clojurecraft/drops.clj#def drop-radius 8.0
+  - test/clojurecraft/drops_test.clj#a-drop-is-walked-to-until-one-more-is-held
+  - test/clojurecraft/drops_test.clj#nothing-of-it-lying-there-is-done-not-failed
+  - test/clojurecraft/drops_test.clj#a-drop-that-has-not-said-what-it-holds-may-be-it
+  - test/clojurecraft/drops_test.clj#a-drop-never-handed-over-fails-not-picked-up
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[mc-dig-and-pickup]]"
@@ -43,6 +51,9 @@ related:
 - **Never off a ledge.** The collect walks straight at its drop, not along a route, so before each step it looks `ledge-look` (0.6) ahead: an open cell with no floor within `path/max-fall` under it (`ledge-ahead?`, `path/landing`) ends it, done with nothing: the drop is left. Gym batch iron-a9 run 3 dug gravel for flint at a ravine's edge at y -7, walked after a drop and fell from a high place (`a-collect-stops-at-a-ledge`). It failed `:ledge` at first, which counted an attempt and blacklisted the block: sim race 38477665389 (issue #93, 45 runs at one landing) dug gravel at a ledge three times in a row and the plan failed with it; a drop over a ledge is lost, not a failure, and the row digs on.
 - A blocked collect is reported as done, not failed, so it never counts an attempt or blacklists the trunk.
 - The 10 s timeout counts from the first collect; a resumed collect is a new intent with a fresh clock.
+
+## :collect-drops (drops.clj, issue #262)
+`{:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [x y z]}` is `:collect` made general, for loot that may not come: a blaze drops a rod one time in two, so a collect that waited for one more would fail every other kill. Each tick it takes the nearest drop that `holds?` the item (alive, and its `:entity/item` the item or not said yet: the server model sends no item metadata) within `drop-radius` 8 of the target cell's centre, none blacklisted (`lying`), and walks at it (`intent/toward`) until within 0.4 on the plane. Done when `inventory/item-count` of the item is above `:intent/before` (the count on its first tick), or when no such drop lies there: nothing to pick up is not a failure. `:not-picked-up` after `intent/collect-timeout` (10 s); a step over a ledge (`intent/ledge-ahead?`) leaves the drop, done, as `:collect` does. A drop knows what it holds from its metadata, the item stack at index 8 ([[entities]]), so cobblestone beside a rod is passed over.
 
 ## See also
 - [[walk-intent]] - the same steering, with detours.

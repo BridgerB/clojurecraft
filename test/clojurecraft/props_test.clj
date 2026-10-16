@@ -30,15 +30,19 @@
                    (fx/packet {:packet/name :login :entity-id 7})])))
 
 (def metadata-value
-  "A value a metadata skim can give: a byte or varint, a float, a boolean, a string."
+  "A value a metadata skim can give: a byte or varint, a float, a boolean, a string, an item stack
+   (a slot, nil when empty: issue #262)."
   (gen/one-of [(gen/choose 0 255) (gen/choose -2147483648 2147483647)
                (gen/double* {:infinite? false :NaN? false :min -1e6 :max 1e6}) gen/boolean
-               gen/string]))
+               gen/string (gen/return nil)
+               (gen/hash-map :item (gen/choose 0 2000) :count (gen/choose 1 64))]))
 
 (def metadata-gen
-  "A skimmed metadata map, {index value}, as packet/read-metadata gives one; the health and flags
-   indexes are drawn often."
-  (gen/map (gen/one-of [(gen/elements [0 9]) (gen/choose 0 254)]) metadata-value {:max-elements 6}))
+  "A skimmed metadata map, {index value}, as packet/read-metadata gives one; the health, flags and
+   item indexes are drawn often."
+  (gen/map (gen/one-of [(gen/elements [0 8 9]) (gen/choose 0 254)])
+           metadata-value
+           {:max-elements 6}))
 
 (defn field-gen
   [t]
@@ -107,11 +111,14 @@
                 [{:packet/name :add-entity :entity-id 60 :uuid nil :type type :x 0.5 :y 64.0 :z 0.5}
                  {:packet/name :set-entity-data :entity-id 60 :metadata metadata}]))
           e (get-in w [:world/entities 60])
-          h (get metadata 9)]
+          h (get metadata 9)
+          stack (get metadata 8)]
       (and (s/valid? :clojurecraft.spec/world w)
            (= (:entity/health e)
               (when (and (number? h) (contains? blocks/mobs (blocks/entity-names type)))
-                (double h))))))))
+                (double h)))
+           (= (:entity/item e)
+              (when (and (= blocks/item-entity-type type) (map? stack)) (:item stack))))))))
 
 (deftest the-phase-only-moves-along-the-transition-table
   (check (prop/for-all [pkts (gen/vector s2c-play-packet 1 20)]

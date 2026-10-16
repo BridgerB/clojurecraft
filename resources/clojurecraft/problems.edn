@@ -268,6 +268,30 @@
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
                     "brain/bot/plan/roadmap-issues.md" "brain/siblings/sib-775-attack-packet.md"
                     "brain/siblings/sib-blaze-combat.md" "brain/siblings/sib-end-and-dragon.md"]}
+ {:problem/stage :blaze-rods
+  :problem/issue 262
+  :problem/goals [:blaze-rods]
+  :problem/statement
+  "Split from :end-and-dragon. Seven blaze rods (six for the twelve blaze powder the eyes of ender take, one spare), from blazes a fortress's spawner makes, without dying to their fireballs: the first stage past the fortress, and the first whose loot may not come (a rod one kill in two)."
+  :problem/needs
+  ["Where a blaze spawner is: a spawner seen in the Nether is a fortress's, remembered after its chunk unloads (memory/nether-landmark-kinds)"
+   "Which blazes are near and alive, and how hurt the bot is (entity.clj, set-health)"
+   "Which drop on the ground is a rod: a dropped item's stack from its metadata (index 8)"
+   "A pickup that is done when nothing lies there to pick up, since a kill may drop nothing (:collect-drops)"
+   "A fight that reaches a target hovering over the floor (combat/pressing?)"]
+  :problem/risks
+  ["Fireballs: five a hit on Normal, and fire; a bot that fights on under 10 health dies with the blaze (ruststeve)"
+   "A blaze hovering out of reach, never attacked"
+   "A spawner's delay (natural ones 10 to 40 s) longer than a planner wait, failing a plan that only had to stand there"
+   "A rod lying where no walk reaches it: on the spawner, in lava"
+   "Wither skeletons beside the spawner" "Peaceful: no blazes at all"]
+  :problem/done
+  "RCON: seven or more blaze rods in the bot's inventory (clear <bot> minecraft:blaze_rod 0), from the nether arena's spawner and from a fortress pad."
+  :problem/last-failure
+  "Not played yet: the parts land first (issue #262): a drop's stack is read from its metadata, :collect-drops is done when nothing of the item lies near, a Nether spawner is remembered, and an engaged fight walks on toward a target hovering out of reach."
+  :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
+                    "brain/siblings/sib-blaze-combat.md" "brain/bot/plan/survival.md"
+                    "brain/bot/plan/collect-intent.md"]}
  {:problem/stage :sim-mobs-and-end
   :problem/issue 260
   :problem/goals []
@@ -357,17 +381,17 @@
    "The loot table is one roll of ender_pearl, count uniform 0 to 1, plus 0 to 1 a level of looting (probe run 38889277228): a pearl a kill one time in two"
    "A warped forest is the hunting ground: its only monster spawner is the enderman, four at a time (the same probe)"
    "Provoke by a stare at the head from 6 blocks or more, then look at its legs: an angry enderman stared at within 4 teleports away, one stared at within 16 stands frozen, and a melee hit by the bot never teleports it (EnderMan.hurtServer, EndermanLookForPlayerGoal)"
-   "Fight in the open with combat's :fight (650 ms apart, a break-off under 10 health); never from water, which the escapes already forbid"
+   "Fight from a burrow, not in the open: three stairs down and a tunnel two high, the enderman stopped at the last stair two cells off, out of its reach (a mob's melee is its box grown 0.83 sideways, never up or down: Mob.getAttackBoundingBox, probe run 38893918055) and inside the sword's; the open fight is only the fallback where no burrow can be cut. Never from water, which the escapes already forbid"
    "The rows stay asides until the stages before them are proven; raising the chain to them is its own change"]
   :problem/risks
   ["Seven a hit on Normal, one hit a second, against forty health: an iron sword needs seven hits, so a fight in the open costs most of the bot's health even in iron"
    "The bot staring at an enderman's face by accident (a look at its head from within 4 blocks) sends it away mid-fight"
-   "An enderman carrying a block drops the block too, and the bot cannot tell an item's kind: the collect may pick up the block and wait for a pearl that never fell"
+   "An enderman carrying a block drops the block beside its pearl: only a drop that says it holds a pearl (#262's :entity/item), or has not said yet, may be picked up"
    "No warped forest near where the bot comes out of the portal"
    "Endermen teleporting out of reach"]
   :problem/done
   "RCON: clear <bot> minecraft:ender_pearl 0 finds twelve or more after a warped forest landing at Normal (gym pearls-12), and one or more from summoned endermen (gym pearls-1)."
   :problem/last-failure
-  "clojurecraft has never hunted an enderman. steve hunted them (tasks/combat huntEndermen: do not look at its eyes before attacking) and its End attempts f7 dragon-1/3/5 were all slain by endermen; ruststeve bartered with piglins and never fought one."
+  "clojurecraft has never hunted an enderman. steve hunted them (tasks/combat huntEndermen: do not look at its eyes before attacking) and its End attempts f7 dragon-1/3/5 were all slain by endermen; ruststeve bartered with piglins and never fought one. Gym batch pearls-263a (plan run 38892130785): five NoAI trials passed, five live trials died fighting three endermen at once in the open in iron (5.74 a hit, the sweep pulling the next one in), and every warped forest landing failed to find a floor under the roots; the hunt now fights from a burrow, provoking from its mouth."
   :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/ender-pearls.md"
                     "brain/bot/plan/survival.md"]}]

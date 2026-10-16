@@ -133,6 +133,12 @@
    [:entity/died-at
     "ms the server said the entity died (entity-event status 3); the body is removed after"
     "inside :world/entities, after a death"]
+   [:entity/item
+    "the item id a dropped item entity holds, from its metadata (index 8, its stack): a blaze rod told from cobblestone (issue #262)"
+    "inside :world/entities, a dropped item, once its metadata said"]
+   [:entity/creepy?
+    "an enderman's creepy flag, from its metadata (index 17): true while it has a target, the pearl hunt's sign one is coming (issue #263)"
+    "inside :world/entities, an enderman, once its metadata said"]
    [:sight/pos "an observation's block position" "a fact in :world/facts"]
    [:sight/state "the state id observed there" "a fact in :world/facts"]
    [:sight/at "ms of the observation" "a fact in :world/facts"]
@@ -187,6 +193,11 @@
     "from the :go event"]
    [:plan/unwalkable "walks in a row that failed :no-path; max-unwalkable of them fail the plan"
     "from the :go event"]
+   [:pearls/shelter
+    "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
+    "after the hunt dug one"]
+   [:pearls/mouth "where the pearl hunt's burrow began, on the surface its stairs go down from"
+    "after the hunt dug one"]
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
     "after a :boxed staircase or tunnel"]
@@ -204,7 +215,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -260,6 +271,11 @@
    [:intent/next-swing "ms of the next arm swing, or of a :fight's next attack" "dig, fight"]
    [:intent/target-pos "where a :fight last saw its target; a hunt picks the drop up there"
     "fight, while its target is seen"]
+   [:intent/hold?
+    "a :fight that never walks: it waits for the target to come, never presses after it and never breaks off (the pearl hunt's burrow, issue #263)"
+    "a :fight from the hunt's burrow"]
+   [:intent/mouth "where a :burrow began: the stairs go down from it"
+    ":burrow, from its first tick"]
    [:intent/swings
     "attacks a :fight has sent in reach of its target; combat/max-swings make it a ghost"
     "fight, after its first attack"] [:intent/finish-at "ms after which FINISH may be sent" "dig"]
@@ -336,7 +352,9 @@
    [:intent/clicks "clicks still to send" "craft, :click stage; smelt, :load stage"]
    [:intent/result "result item id" "craft, smelt"]
    [:intent/makes "items one craft yields; for a smelt, the batch" "craft, smelt"]
-   [:intent/before "result items held before crafting, smelting or scooping" "craft, smelt, scoop"]
+   [:intent/before
+    "result items held before crafting, smelting or scooping, or of a :collect-drops's item"
+    "craft, smelt, scoop, collect-drops"]
    [:intent/smelt "furnace recipe id to cook (smelting.edn)" "smelt"]
    [:intent/count "how many of the input the batch cooks" "smelt"]
    [:intent/lost "clicks the server lost in this intent; the intent resumed from its slots"
@@ -349,7 +367,8 @@
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
-   [:intent/item "item to place, put in the hand, eat or wear" "place, redig, equip, eat, wear"]
+   [:intent/item "item to place, put in the hand, eat or wear, or to pick up off the ground"
+    "place, redig, equip, eat, wear, collect-drops"]
    [:intent/food-before "the food level when an :eat sent its use-item; a higher one is the meal"
     "eat, :eating stage"]
    [:intent/eat-by "ms past which an :eat whose food has not risen fails :not-eaten"
