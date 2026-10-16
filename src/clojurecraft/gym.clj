@@ -150,12 +150,15 @@
 
 (def night "time set midnight")       ; a :gym/summon entry: the hostiles' hour, for a row that defends
 
+(def fire-resistance
+  "A :gym/summon entry: the bot never burns (a fireball's hit still hurts)."
+  "effect give {name} minecraft:fire_resistance 1000000 0 true")
+
 (def invulnerable
   "What makes the bot take no harm, as :gym/summon entries: Resistance V (every hurt cut to
    nothing) and Fire Resistance, for a row that measures a fight and not the bot's survival
    (ruststeve's arena gave its bot Invulnerable:1b, which no command can set on a player)."
-  ["effect give {name} minecraft:resistance 1000000 4 true"
-   "effect give {name} minecraft:fire_resistance 1000000 0 true"])
+  ["effect give {name} minecraft:resistance 1000000 4 true" fire-resistance])
 
 (def iron-armour
   "Iron armour put on the bot, as :gym/summon entries: given after the dimension change with the
@@ -164,6 +167,14 @@
    "item replace entity {name} armor.chest with minecraft:iron_chestplate"
    "item replace entity {name} armor.legs with minecraft:iron_leggings"
    "item replace entity {name} armor.feet with minecraft:iron_boots"])
+
+(def no-fire
+  "A :gym/summon entry: the blazes' fireballs set no blocks alight (SmallFireball places fire only
+   when mob griefing is on). A fire lights the cells round it past 11, and a spawner's blaze
+   spawns only where the light is 11 or less: gym blaze-7a run 3 (run 38891910129) had the floor
+   by the spawner lit after its first fireballs, and the spawner made no blaze in the three
+   minutes after. The bot itself still burns when hit."
+  "gamerule mob_griefing false")
 
 (defn rods-held
   "A truth that the bot holds n blaze rods or more (n under 10)."
@@ -431,12 +442,15 @@
     :gym/difficulty "normal"
     :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 8" "minecraft:blaze_rod 6"]
     :gym/summon (into invulnerable
-                      [(blaze-spawner [3 0 3])
+                      [no-fire (blaze-spawner [3 0 3])
                        (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
     :gym/timeout-ms 300000
     :gym/truth [(rods-held 7)]}
    ;; blaze-7: the same room, all seven rods from its blazes, the bot in iron armour and hurt by
-   ;; their fireballs, so the break-off under 10 health and the meal after it are played
+   ;; their fireballs, so the break-off under 10 health and the meal after it are played. Fire
+   ;; Resistance, as ruststeve's arena gave ("fire resistance only stops the burn"): a burning bot
+   ;; in the Nether has no water to put it out, and blaze-7a runs 1 and 2 (run 38891910129) burned
+   ;; to death inside a minute
    {:gym/goal :blaze-rods
     :gym/name "blaze-7"
     :gym/until "blaze-rods"
@@ -444,7 +458,7 @@
     :gym/difficulty "normal"
     :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 16"]
     :gym/summon (into iron-armour
-                      [(blaze-spawner [3 0 3])
+                      [fire-resistance no-fire (blaze-spawner [3 0 3])
                        (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
     :gym/timeout-ms 900000
     :gym/truth [(rods-held 7)]}

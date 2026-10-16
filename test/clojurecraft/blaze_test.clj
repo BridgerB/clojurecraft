@@ -108,8 +108,9 @@
         hurt (fn [w] (assoc w :player/health 8.0))]
     (is (= {:intent/kind :back-off :intent/target 7} (next-intent (hurt (standing {7 near})))))
     (is (= {:intent/kind :eat :intent/item :cooked_beef}
-           (next-intent (assoc (hurt (standing {1 (item :cooked_beef 4)} {})) :player/food 15)))
-        "the food under the healing level: a meal")
+           (next-intent
+            (assoc (hurt (standing {1 (item :cooked_beef 4)} {7 near})) :player/food 15)))
+        "the food under the healing level: a meal, even with a blaze at hand (gym blaze-7 run 1)")
     (is (= {:plan/wait :healing} (next-intent (hurt (standing {1 (item :cooked_beef 4)} {}))))
         "fed: the health comes back by itself")
     (is (= {:plan/wait :other-dimension}
