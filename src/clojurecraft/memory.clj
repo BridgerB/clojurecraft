@@ -284,6 +284,12 @@
           d/db-with
           [{:site/origin origin :site/facing facing :site/at (:time/now world)}]))
 
+(defn give-up-site
+  "Append that the build site whose frame origin is origin is given up, stamped with now: no way
+   to it was found, and the next site is chosen elsewhere (build/given-up?)."
+  [world origin]
+  (update world :world/facts d/db-with [{:site/given-up origin :site/at (:time/now world)}]))
+
 ;; ---------------------------------------------------------------- questions
 
 (defn site
@@ -293,6 +299,13 @@
     (when-let [datoms (seq (d/datoms db :aevt :site/origin))]
       (select-keys (d/entity db (apply max (map :e datoms))) [:site/origin :site/facing]))))
 
+
+(defn given-up-sites
+  "The frame origins of every build site given up (give-up-site), as a set; empty with no facts."
+  [world]
+  (if-let [db (:world/facts world)]
+    (set (d/q '[:find [?o ...] :where [_ :site/given-up ?o]] db))
+    #{}))
 
 (defn answers
   "The server's answers of a kind (:ack, :pickup), oldest first."
