@@ -126,15 +126,21 @@ jobs:
           abs=$(for f in $(echo "$FILES" | tr ',' ' '); do echo "$PWD/$f"; done | paste -sd, -)
           git worktree add -q ../base "$BASE_SHA"
           ln -s "$PWD/cache" ../base/cache
+          here=$PWD
           base=skip
-          if grep -q 'defn judge!' ../base/src/clojurecraft/simrace.clj; then
-            (cd ../base && clojure -M:simrace --judge "$abs" --expect recur > "$OLDPWD/base.txt" 2>&1; echo $? > "$OLDPWD/base.code") &
-            base=run
-          else
-            echo "::notice::the base commit has no judge (this pull request brings it): only the fix is judged"
+          if grep -q 'defn judge!' ../base/src/clojurecraft/simrace.clj; then base=run; fi
+          if [ "$base" = skip ]; then echo "::notice::the base commit has no judge (this pull request brings it): only the fix is judged"; fi
+          # the Clojure CLI writes its user config on first use: once, here, before two processes race on it
+          # (two at once: "cp: cannot create regular file ~/.config/clojure/deps.edn: File exists")
+          clojure -P -M:simrace
+          if [ "$base" = run ]; then (cd ../base && clojure -P -M:simrace); fi
+          # each judge's exit code goes to a file and never ends the step: the summary shows both either way
+          if [ "$base" = run ]; then
+            (cd ../base && if clojure -M:simrace --judge "$abs" --expect recur > "$here/base.txt" 2>&1; then echo 0; else echo 1; fi > "$here/base.code") &
           fi
-          clojure -M:simrace --judge "$abs" --expect pass > head.txt 2>&1; echo $? > head.code
+          if clojure -M:simrace --judge "$abs" --expect pass > head.txt 2>&1; then echo 0 > head.code; else echo 1 > head.code; fi
           wait
+          if [ "$base" = run ] && [ ! -f base.code ]; then echo 1 > base.code; fi
           {
             echo '### issue check'
             echo

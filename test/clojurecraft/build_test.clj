@@ -133,10 +133,13 @@
            (:path/status
             (path/plan hill (path/feet-cell pos) {:goal/kind :block :goal/pos hill-stand})))
         "the stand is inside the hill, so a walk at it has no route")
-    (is (=
-         {:intent/kind :dig :intent/target [3 63 8] :intent/status :active :intent/exposes-ok? true}
-         (build/op-child hill hill-intent hill-op))
-        "the first solid on the way, in reach")
+    (is (= {:intent/kind :dig
+            :intent/target [3 63 8]
+            :intent/status :active
+            :intent/exposes-ok? true
+            :intent/drop-ok? true}
+           (build/op-child hill hill-intent hill-op))
+        "the first solid on the way, in reach, its drop not wanted (issue #70)")
     (let [opened (assoc-in hill [:world/blocks [3 63 8]] blocks/air)]
       (is (= [3 64 8] (:intent/target (build/op-child opened hill-intent hill-op)))
           "then the head over it"))
@@ -292,6 +295,58 @@
     (is (nil? (site-at nine)) "nine: one short of the frame")
     (is (some? (site-at ten)) "ten: a site")))
 
+(deftest a-build-dig-puts-the-stowed-pickaxe-in-hand-first
+  ;; sim race 38806318231 (issue #70): the pickaxe in the hotbar broke on the way to the landing,
+  ;; the spare was in slot 35, the way was dug by hand and iron ore in it failed :needs-tool
+  (let [ore (first (blocks/states-where (fn [[n]] (= n :iron_ore))))
+        w (assoc (standing-at (open-ground {[3 63 8] ore}) [2.5 63.0 8.5])
+                 :player/inventory
+                 {35 {:item (recipe/item-id :stone_pickaxe) :count 1}})
+        dig (build/way-dig [3 63 8])]
+    (is (= {:intent/kind :equip :intent/item :stone_pickaxe} (build/tool-first w dig))
+        "the spare to hand before the dig")
+    (is (= dig
+           (build/tool-first
+            (assoc w :player/inventory {0 {:item (recipe/item-id :stone_pickaxe) :count 1}})
+            dig))
+        "in the hotbar already: the dig")))
+
+(deftest the-lava-hunt-goes-down-past-lava-it-cannot-cast-from
+  ;; sim race 38811561269 (issue #41): the hunt tunnelled toward a lone source and toward a
+  ;; pool over the head, stopped under them with nothing left to cut, and waited :no-site with
+  ;; the lava sea below
+  (let [pos [10.5 41.0 10.5]
+        room {[10 41 10] blocks/air [10 42 10] blocks/air}
+        hunt #(build/toward-lava (standing-at (open-ground (merge room %)) pos))
+        pool-at (fn [y] (into {} (for [x [11 12 13] z [2 3 4 5]] [[x y z] blocks/lava-base])))
+        down {:intent/kind :stairs-down :intent/to-y 35}]
+    (is (= :tunnel (:intent/kind (hunt (pool-at 40)))) "a pool level with the feet: a tunnel to it")
+    (is (= down (hunt {[12 40 4] blocks/lava-base})) "a lone source: on down toward the sea")
+    (is (= down (hunt (pool-at 50))) "a pool over the head: on down toward the sea")))
+
+(deftest a-way-to-the-site-boxed-in-is-left-by-the-way-out
+  ;; sim race 38806318231 (issue #130, world R3/11): the stairs down to the cast's landing met an
+  ;; aquifer, every stair refused, and the build was sent down the same stairs from the same cell
+  ;; three times, :boxed
+  (let [w (standing-at (open-ground {}) feet-pos)
+        feet [10 63 10]
+        i {:intent/kind :build
+           :intent/build :cast-one
+           :intent/origin [8 40 4]
+           :intent/facing :south
+           :intent/access 1
+           :intent/status :active
+           :intent/child {:intent/kind :stairs-down :intent/status :failed :intent/reason :boxed}}
+        op (first (build/plan-for :cast-one [8 40 4] :south 1))
+        i (assoc i :intent/op op)
+        w' (build/work-op (assoc w :plan/intent i) i op {:event/kind :tick :event/now 0})]
+    (is (contains? (:plan/boxed-at w') feet) "the pocket remembered")
+    (is (nil? (:intent/child (:plan/intent w'))) "the child dropped")
+    (is (= :active (:intent/status (:plan/intent w'))) "the build goes on")
+    (is (= :stairs-down (:intent/kind (build/to-height w 41))) "from elsewhere: stairs")
+    (is (= :retreat (:intent/for (build/to-height w' 41)))
+        "from the pocket: the way out, not the same stairs")))
+
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
   ;; server refusing it three times, :rejected
@@ -358,3 +413,20 @@
     (is (nil? (build/reachable-stand w [14 63 5] [14 63 5])) "walled in: no route reaches a stand")
     (is (= [13 63 5] (build/nearest-stand-cell w i [14 63 5]))
         "the stand nearest the cell, at the feet's height, the wall in the way to dig")))
+
+(deftest a-site-left-for-a-pickaxe-is-gone-back-to
+  ;; sim race 38806318231 (issue #196, 75 runs in 37 rounds, world R2/3): the cast's room at y 23,
+  ;; the bot climbed to y 64 for a pickaxe's wood and made it; the next op, a room cell 41 below,
+  ;; had no stand and no cut at the feet's height, and the build failed :no-stand three times
+  (let [i {:intent/kind :build
+           :intent/build :portal
+           :intent/origin [6 30 12]
+           :intent/facing :south
+           :intent/access 1}
+        pos (build/cell [6 30 12] :south [1 0 1])
+        op {:build/op :dig :build/pos pos :build/stand pos :build/step :room}
+        far (standing-at (open-ground {}) [5.5 63.0 5.5])]
+    (is (= {:intent/kind :stairs-down :intent/to-y 57} (build/approach-stand far i op))
+        "far above the room: stairs down toward the landing's height")
+    (is (nil? (build/way-back (standing-at (open-ground {}) [6.5 31.0 15.5]) i))
+        "at the landing already: nothing to go back by")))

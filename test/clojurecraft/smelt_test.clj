@@ -1,7 +1,11 @@
 (ns clojurecraft.smelt-test
   "The :smelt intent's pure parts: what it burns, in what order, how big a batch the held fuel
-   cooks, and the clicks that lay a stack into a furnace slot."
-  (:require [clojure.test :refer [deftest is]]
+   cooks, and the clicks that lay a stack into a furnace slot; and its cook stage, a tick at a
+   time against a furnace window as the server shows it."
+  (:require [clojure.test :refer [deftest is testing]]
+            [clojurecraft.fixtures :as fx]
+            [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.smelt :as smelt]))
@@ -38,3 +42,48 @@
             (inventory/right-click smelt/fuel-slot) (inventory/left-click (in-furnace [:main 0]))]
            (smelt/lay v 9 5 smelt/fuel-slot 2))
         "two of five: two right clicks, then the rest back where it was")))
+
+(defn cooking
+  "A smelt of three raw iron in its :cook stage at ms now, its deadline at 35000, against an open
+   furnace whose own slots are slots and whose fire has lit ticks left."
+  [now slots lit]
+  (-> (game/init fx/opts)
+      (assoc :bot/phase :play
+             :time/now now
+             :window/open
+             {:window/id 11
+              :window/menu-type (:menu-type (inventory/layouts :furnace))
+              :window/state-id 12
+              :window/slots slots
+              :window/data {(get-in (inventory/layouts :furnace) [:properties :lit]) lit}}
+             :plan/intent
+             {:intent/kind :smelt
+              :intent/status :active
+              :intent/smelt :iron_ingot_from_smelting_raw_iron
+              :intent/count 3
+              :intent/stage :cook
+              :intent/since 0
+              :intent/makes 3
+              :intent/result (recipe/item-id :iron_ingot)
+              :intent/before 0
+              :intent/cook-by 35000})))
+
+(defn cooked
+  "The smelt intent after one tick of it."
+  [w]
+  (:plan/intent (intent/run w (:plan/intent w) {:event/kind :tick :event/now (:time/now w)})))
+
+(deftest a-furnace-still-cooking-past-the-deadline-is-waited-on
+  ;; race 38805920624 runner 5 (issues #199, #200): a server at 11 ticks a second cooked three
+  ;; raw iron in 53 s; the 35 s deadline failed the smelt :not-cooked 1.2 s before the second
+  ;; ingot, and the furnace it left open failed the next swaps into the hand (issues #131, #132)
+  (let [raw (recipe/item-id :raw_iron)
+        ingot (recipe/item-id :iron_ingot)
+        half-done {smelt/input-slot {:item raw :count 2} smelt/output-slot {:item ingot :count 1}}]
+    (is (= :active (:intent/status (cooked (cooking 36200 half-done 300))))
+        "the fire burns and the input is in it: the cook goes on past the deadline")
+    (is (= :active (:intent/status (cooked (cooking 20000 half-done 300)))) "before it, as ever")
+    (testing "a furnace that stopped cooking still fails the smelt past the deadline"
+      (let [i (cooked (cooking 36200 {smelt/output-slot {:item ingot :count 1}} 300))]
+        (is (intent/failed? i) "the input is gone")
+        (is (= :not-cooked (:intent/reason i)))))))

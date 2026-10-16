@@ -58,6 +58,9 @@
    [:intent/exposes-ok?
     "a :dig that may open a cell beside water or lava (an escape digs beside the water it is in)"
     "on an escape's child dig"]
+   [:intent/drop-ok?
+    "a :dig whose drop is not wanted: a block no held tool harvests is broken for nothing, not refused :needs-tool"
+    "on a build's child dig (build/way-dig)"]
    [:intent/passage-ok?
     "a :place that may put its block in a passage, since it is dug again at once (a gravel for flint)"
     "on a redig's child place"]
@@ -309,7 +312,8 @@
     "craft, smelt, place, equip, scoop, pour, after a lost click"]
    [:intent/resync "the next click is a resync: the cursor after a lost click is unknown"
     "craft, smelt, place, equip, scoop, pour, from a lost click until the resync is sent"]
-   [:intent/cook-by "ms by which the batch must be cooked; the cook stage fails after it"
+   [:intent/cook-by
+    "ms by which the batch must be cooked; past it the cook stage fails once the furnace stops cooking"
     "smelt, :cook stage, once the furnace is loaded"]
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]

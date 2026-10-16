@@ -463,7 +463,7 @@ A failure that will not reproduce is almost always a context difference, not fla
 
 Patterns, not recipes.
 
-1. **`stale-window` at ingots and portal-kit (#131, #132): a loaded server answers late.** Crafts, equips and pours failed on the first click left unanswered for 3 s; smelting already recovered (resync, restart, fail at the third loss). Moved into `window/lost` and `window/resync` for every window intent. Proven with the sim's `:lag-ticks` 65 (3.25 s).
+1. **`stale-window` at ingots and portal-kit (#131, #132): a loaded server answers late.** Crafts, equips and pours failed on the first click left unanswered for 3 s; smelting already recovered (resync, restart, fail at the third loss). Moved into `window/lost` and `window/resync` for every window intent. Proven with the sim's `:lag-ticks` 65 (3.25 s). They came back with `not-cooked` (#199, #200): a server far behind cooked past the smelt's deadline, the failed smelt left the furnace open, and the server ignored every window-0 swap after it. `smelt/cooking?` waits past the deadline while the furnace cooks; `place/equip` closes an open container before a swap.
 2. **`no-water` at water-bucket (#60): water seen with no route.** `scoop/to-bank` cuts stairs or a tunnel toward the nearest water's bank.
 3. **`boxed` at ingots (#37): a climb under water.** `stairs/duck` (one stair down toward the soonest dry head, the pocket recorded in `:plan/boxed-at`), `:intent/visited` (revisited level steps last), `stairs/dry-top?` (ice is the lake's top).
 4. **`no-station` at portal (#142):** below.
@@ -472,6 +472,7 @@ Patterns, not recipes.
 7. **`wood: no-log` (#57): a hunt that only set out toward known trees.** The same slots failed every round without moving; the planner now waits in ticks (`plan/wait-ticks`) and the hunt walks back toward remembered trees.
 8. **`rejected` at ingots, cobblestone, stone-pickaxe (#88, #144, #64): a slow server.** Digs answered with the block standing; the server ran 130 ms a tick. The bot reads the server's tick length from `set-time` spacing (`game/clocked`, `:server/tick-ms`) and stretches a dig's FINISH and confirm window (`intent/slowdown`).
 9. **`rejected` at cast-one (#44): a block into the bot's own body.** `build/reachable-stand` refuses a stand whose feet or head is the cell worked; `build/refused-for-the-body?` approaches again.
+10. **`inventory-full` at ingots and portal-kit (#172, #192): 36 full slots.** Mining fills the inventory with cobblestone and stone nothing needs; a craft's result had nowhere to go, no answer came, and the resync found no slot. `window/tossable` throws a `junk` stack first.
 
 **Worked example, #142 `[:portal :no-station]`** (PR #160). The issue: 89 runs in 18 rounds, every last intent `nil`. `grep -rn ':no-station' src/` pointed at `build/refill`. The run maps (`gh run download 38664661309 -n simrace-8ddbb1a...-6`) showed seven runs on five landings, each holding the whole portal kit after 25 to 65 minutes. One probe from `main` over three snapshots printed the build intent, the lava near the origin, `build/station` and `build/refill`: in every world one obsidian cast, two scoops in memory, no lava within 12 blocks. Cause: `build/site-ok?` accepted a site when some stand reached some source, so a lone source passed. Fix, cause half: `build/pool` and `build/spent?` refuse a site whose pool is smaller than the cells left. Moment half: a refill with no station at a spent site ends the build so the planner picks a new site. A third finding came free: `choose-site` filtered 30 000 lava sources per candidate (40 s a call), now only the nearby ones (3 s). Test: `build_test/a-lone-lava-source-is-no-site`. Brain note `brain/bot/plan/build-plan.md`, one `problems.edn` sentence, one snapshot under `test/issues/142/`, the before/after table in the body (`[:portal :no-station]` on main, "left the spent site, stairs down toward lava" on the branch). Green in nine minutes, merged.
 
@@ -579,7 +580,7 @@ Walk, dig, collect, each `:intent/for :log`, chained from `:plan/last`. `:wood` 
 2. `:lay`: child `:place` of a `filler` per cell; refused or no filler → `refuse`.
 3. `:open`: child dig of the topmost solid cell (`dig-next` equips a stowed tool or fails via `tool-missing`). Child `:target-gone` counts done (`fell?`); child in `refusals` `#{:needs-tool :unsafe}` → turn; `:rejected` → dig again up to `max-rejections` 3, then `:rejected`; any other child reason fails the staircase.
 4. `:step`: walk `onto` the new feet cell. `taken?`: half a block past start in the stair's direction, `centred?`, on ground going up. Stair cell solid again (gravel) → `:open`. `step-timeout-ticks` 200 (10 s) → `:stair-not-taken`.
-5. `:level`: child digs of level cells, walk until feet in the cell; 200-tick clock restarts per dig.
+5. `:level`: child digs of level cells, walk until feet in the cell; 200-tick clock restarts per dig. A child in `refusals` (gravel fallen in under water after the step was chosen, #171) is `level-refused`: a tunnel plans again, a staircase turns.
 6. Done: down at/below `to-y`; up on ground at `to-y`, or `out?` unless `:intent/to-height?`.
 - Cells: `stair-cells` head-up, head, new feet one down; `up-cells` over head, new head, new feet one up; `level-cells` head and feet one along.
 - `clear-way?`: no opened cell water, lava or unloaded; no lava in any `exposed` cell; new feet not in `:plan/boxed-at`. `safe?` adds a solid floor. Water beside a stair is allowed, lava is not; a cell that itself borders water is refused by the dig (`:unsafe`) and the stair turns.
@@ -614,7 +615,7 @@ Order: (1) `continue-mine` (`chain-next` tagged with the row id, drops `drops-of
 ### 19.9 Place, equip, open-container (`place.clj`)
 
 Success only when the server shows the block. Given `:intent/cell` (build, stairs) is used; else a spot is found.
-1. `:equip`: held → on; hotbar → `set-carried-item`; main → window-0 swap click; none → `:not-held`.
+1. `:equip`: held → on; hotbar → `set-carried-item`; main → window-0 swap click (an open container closed first: the server ignores window-0 clicks while one is open); none → `:not-held`.
 2. `:spot`: given cell with a `support` neighbour, else `:no-support`. Else `spot`, else `niche` (dug first, stowed tool equipped), else with `:intent/passage-ok?` a passage spot, else once `fresh-rock` (walk `fresh-rock-distance` 12 away via an `:away` route, or with no route `fresh-rock-climb` 4 stairs up; never in water; `:intent/retreated?`; #94, #148), else `:no-spot`.
 3. `:settle`: target no longer replaceable → back to `:spot`; 3 still ticks + 300 ms → `use-item-on`.
 4. `:sent`: block name at target → done. Acked (500 ms passed) with cell still replaceable and < `max-refusals` 3 → `give-up` (another spot; #106). Acked otherwise → `:rejected`. 3000 ms no answer → `:no-answer`.
@@ -639,7 +640,7 @@ A build is a vector of ops with done-predicates as data (`build/holds?`); `next-
 ### 19.11 Escape (`trap.clj`, `swim.clj`)
 
 - Trap (`trap/trapped-tick`): lava on any contact (`:player/in-lava?`); water when `:plan/wet-ticks` (eye under) reaches `trap-after-ticks` 20. Wading never preempts. Clears after `dry-land?` (on ground, body dry, eye in air, solid non-lily-pad below) for `dry-ticks-to-clear` 6. On clearing, `{:trap/pos :trap/kind :trap/at}` joins `:world/traps`; `path/trap-factor` costs routes within 2 columns 10× for 600000 ms.
-- `:swim-out`: `banks` within `bank-radius` 16, from 3 under to 1 over `float-top` (1.03 under an open surface), kept once picked. No bank: dig the cap (`obstacle`), else `notch` a wall within 4 (never under a roofed surface), else hold jump and look again every 20 ticks. Stuck 40 ticks without 0.05 progress: dig `obstacle` (lily pad, head-height ahead, over the head; never feet-height ahead); none → `:stuck`. Child digs via `dig-afloat` (jump held, #73) or `dig-or-sink` (sneak to the floor, `:intent/dig-when-down`: 5.75 s instead of 28 s). > `escape-timeout-ticks` 2400 → `:no-escape`. A `:retreat` swim-out ends itself on `dry-land?`.
+- `:swim-out`: `banks` within `bank-radius` 16, from 3 under to 1 over `float-top` (1.03 under an open surface), kept once picked. No bank: dig the cap (`obstacle`), else `notch` a wall within 4 (never under a roofed surface), else hold jump and look again every 20 ticks. A kept bank no longer standable (`flooded?`, water flowed in; #156, #157) is dropped and another picked. Stuck 40 ticks without 0.05 progress: dig `obstacle` (lily pad, head-height ahead, over the head; never feet-height ahead); none → `:stuck`. Child digs via `dig-afloat` (jump held, #73) or `dig-or-sink` (sneak to the floor, `:intent/dig-when-down`: 5.75 s instead of 28 s). > `escape-timeout-ticks` 2400 → `:no-escape`. A `:retreat` swim-out ends itself on `dry-land?`.
 - `:flee`: footing within 6, one up or down, no lava beside or under; none or > 200 ticks → `:no-footing`.
 - `:wade` (gym `:shore`): entry over pools within 64 and 16 below; walk to bank, then head `wade-beyond` 4 ahead of the feet once wet. Fails `:no-water` (no entry, or 2400 ticks), `:shallow`.
 
@@ -738,13 +739,14 @@ Every attribute, its meaning and lifetime is in `src/clojurecraft/model.clj` (`m
 
 - Name slots with `inventory/slot-in` (`[:hotbar n] [:main n] [:result] [:grid n] [:input] [:fuel] [:output]` ...).
 - A current-state-id click is answered per changed slot; a stale one by `container-set-content` + real cursor. **A click that changes nothing gets no packet.** A click for a closed window is silently ignored.
-- `window/click` emits, drops `:window/cursor`, records `:intent/awaiting`; intent-only. `window/waiting` → nil, `:waiting`, or `:overdue` after `answer-timeout` 3000. On overdue `window/lost` resyncs (`resync-click`, state id -1, cursor put in a free slot); the `max-lost` 3rd loss fails `:stale-window` (#131, #132: loaded servers answer late, not never).
+- `window/click` emits, drops `:window/cursor`, records `:intent/awaiting`; intent-only. `window/waiting` → nil, `:waiting`, or `:overdue` after `answer-timeout` 3000. On overdue `window/lost` resyncs (`resync-click`, state id -1, cursor put in a free slot, or with none a `junk` stack thrown); the `max-lost` 3rd loss fails `:stale-window` (#131, #132: loaded servers answer late, not never).
+- **A full inventory:** a result or output moved into 36 full slots stays put and gets no answer. The craft's and smelt's `:settle` throw a `window/junk` stack first when no slot is free (`window/tossable`, `toss`: look up to `toss-pitch`, then mode 4; cobblestone only above `cobblestone-keep`; #172, #192).
 - **Phantom cursor:** the server adopts the click's claimed cursor, so `window/click` forgets the cursor as it sends; never claim a non-empty cursor.
 - **A furnace moves the state id by itself:** judge a click by the slot clicked.
 - `recipe/recipes` 1030 recipes, tags resolved; `datagen/shrink` trims padding. `recipe/clicks` lays one craft; nil when not coverable.
 - `:craft`: `:settle` (`:unknown-recipe`; close any container for `:inventory`; 5 s for a state id `:no-window`; cursor down `:inventory-full`; shift-click grid empty; plan `:no-ingredient`) → `:click` (one per round trip) → `:verify` (slot 0 exactly expected else `:wrong-result`; 5 s `:no-result`) → `:take` (5 s `:not-taken`; table craft then closes). Junk crafts (two planks → pressure plate, one → button) are why the grid is emptied and slot 0 verified.
 - Table: `make/craft-row` adds `{:block/crafting_table :near}` to recipes over 2×2; `make/at-container` uses an open table, opens one in reach (4.5), or walks; menu type must be 12 else `:no-table-window`.
-- Smelting: `make/smelt-row` needs input, `{:fuel/ticks t}`, `{:block/furnace :near}`. `smelt/burn-order` coal/charcoal then planks; never logs, never sticks (#36); charcoal never made. `fuel-clicks` loads `ceil(ticks/burn)` from one stack. `:smelt`: `:settle` → `:load` (fuel then input) → `:cook` (`loaded?` 5 s `:not-loaded`; `cook-by` = now + n × cook ticks × 50 + 5 s; next fuel stack or `:out-of-fuel`; past it `:not-cooked`) → `:take` (5 s) → `:close`. 200 ticks/item; plank burns 300. An abandoned mid-cook smelt leaves input in the furnace, invisible to the planner.
+- Smelting: `make/smelt-row` needs input, `{:fuel/ticks t}`, `{:block/furnace :near}`. `smelt/burn-order` coal/charcoal then planks; never logs, never sticks (#36); charcoal never made. `fuel-clicks` loads `ceil(ticks/burn)` from one stack. `:smelt`: `:settle` → `:load` (fuel then input) → `:cook` (`loaded?` 5 s `:not-loaded`; `cook-by` = now + n × cook ticks × 50 + 5 s; next fuel stack or `:out-of-fuel`; past it `:not-cooked` once the furnace stops cooking, `cooking?`) → `:take` (5 s) → `:close`. 200 ticks/item; plank burns 300. An abandoned mid-cook smelt leaves input in the furnace, invisible to the planner.
 
 ### 20.8 Vanilla 26.1.2 mechanics
 
@@ -851,7 +853,7 @@ Signature = `[target reason]`. Meaning is the common case; read the raising code
 | `:no-landing` | not standing at the landing within 30 s | `plan/landing-tick` | fixture or server load, not bot logic |
 | `:no-ingredient` | craft/smelt could not plan clicks from the inventory | `craft` `:settle`, `smelt` `:settle`, `recipe/sources` | split stacks (#86) |
 | `:no-bucket` | lava pour has no empty bucket | `build/refill` | `:portal-kit` counting (#49) |
-| `:inventory-full` | no free slot to put the cursor down | `craft` `:settle`, `smelt/put-down`, `window/resync` | RESULT `:held`: what filled the inventory |
+| `:inventory-full` | no free slot to put the cursor down, and no junk to throw | `craft` `:settle`, `smelt/put-down`, `window/resync` | RESULT `:held`: what filled the inventory; `window/junk` (#172, #192) |
 | `:crashed` | the run threw; RESULT has `:error` | `race/play-one!`, `simrace/play!` | read `:error` first |
 | `:ledge` | no longer raised (collect over a ledge is done now) | none | closing PR of #93 |
 
