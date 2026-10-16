@@ -319,6 +319,16 @@
   "the best sword the held items make without a trip, better than the best held: iron from ingots the armour leaves spare, else stone from cobblestone, else wood from planks, never from a log (issue #259); an always row at the portal kit's priority after the armour in this table, so a chained run makes it once the portal's iron is in hand"
   :goal/done? :armed?
   :goal/plan :sword}
+ {:goal/id :blaze-rods
+  :goal/priority 18
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "blaze-rods"
+  :goal/doc
+  "seven blaze rods (six for the twelve blaze powder twelve eyes of ender take, one spare), from the blazes a fortress's spawner makes (issue #262): a rod lying near picked up, the nearest blaze in sight and in reach of the floor fought, else the remembered spawner walked to on its floor or tunnelled to, into the open cell beside it, and camped by; hurt under 10, food eaten, then into a cell out of a watching blaze's sight, then backed away; under 14 a meal before the next fight, a rest out of sight; in the Nether only. An aside until the stages before it are proven from the fortress pad and the chain is raised to it"
+  :goal/dimension "minecraft:the_nether"
+  :goal/done? :rods-held?
+  :goal/plan :blaze-rods}
  {:goal/id :ender-pearls
   :goal/priority 19
   :goal/target? true

@@ -52,6 +52,9 @@ sourceRefs:
   - src/clojurecraft/combat.clj#defmethod intent/run :fight
   - src/clojurecraft/combat.clj#defmethod intent/run :back-off
   - src/clojurecraft/combat.clj#defn threats
+  - src/clojurecraft/combat.clj#defn seen?
+  - src/clojurecraft/combat.clj#defn hittable?
+  - test/clojurecraft/combat_test.clj#only-a-hostile-in-sight-and-in-reach-of-the-floor-is-a-threat
   - src/clojurecraft/combat.clj#defmethod plan/next-intent :defend
   - src/clojurecraft/combat.clj#defn quarry
   - src/clojurecraft/combat.clj#def look-ms 3000
@@ -130,7 +133,7 @@ Gym row `armour`: the portal's iron, a table and 13 ingots given; judged by `exe
 
 **`:back-off`**: straight away from the target until `back-off-to` 8 is between them, it is gone, or 10 s have passed (a cornered bot plans again).
 
-**`:defend`** (goals.edn): an always row at priority 0, inserted after the two escapes and so before the meal and the armour (`plan/in-play` sorts stably). Done by `:safe?`: no `threats`, the hostiles (`entity/hostiles`: the game's monsters, never an enderman or a zombified piglin) within `defend-radius` 4, a creeper within `creeper-radius` 6, none blacklisted. Planned by `:defend`: the nearest threat, backed away from when it is a creeper or the health is under 10, else fought. No sword is made first: a zombie at hand is answered with what is held.
+**`:defend`** (goals.edn): an always row at priority 0, inserted after the two escapes and so before the meal and the armour (`plan/in-play` sorts stably). Done by `:safe?`: no `threats`, the hostiles (`entity/hostiles`: the game's monsters, never an enderman or a zombified piglin) within `defend-radius` 4, a creeper within `creeper-radius` 6, none blacklisted, and each `hittable?`: in sight (`seen?`, the line from the eye to its aim clear of solid cells, an unloaded one solid) with its feet no more than `over-feet` 3 over the bot's nor `under-feet` 2 under. Gym blaze-fortress-c, from a tunnel beside a fortress, went after blazes through the walls and hovering over it, failed `:unreachable`, and switched every half second between one of them and the blaze the blaze-rods row was fighting until the plan failed (issue #262). Planned by `:defend`: the nearest threat, backed away from when it is a creeper or the health is under 10, else fought. No sword is made first: a zombie at hand is answered with what is held.
 
 **`:attack`** (`--until attack`): the gym's trial, every hostile within `attack-radius` 16 fought (`quarry`, done by `:cleared?`, and not before `look-ms` 3000 after the plan went active: the server shows a landing's entities a moment after its chunks, and gym attack-259a run 3 was done 0.2 s after the go with its husk unseen). It is the first row marked `:goal/aside?`: `plan/through`, `plan/current-until` and the results page's chain leave asides out, as they leave out the water trial, so no chained run ever takes it as a step.
 

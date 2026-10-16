@@ -82,5 +82,15 @@
   (is (= [1 0 0] (first (fortress/moves [0 64 0] [10 64 2]))) "the farther axis, level")
   (is (= [0 -1 1] (first (fortress/moves [0 64 0] [1 50 10]))) "down when far below")
   (is (= [0 1 -1] (first (fortress/moves [0 64 0] [0 80 -10]))) "up when far above")
+  (is (seq (fortress/moves [0 64 0] [0 67 0]))
+      "straight under the target: a way aside (issue #262)")
+  (is (= [1 1 0] (first (fortress/moves [0 64 0] [0 67 0] 0))) "climbing at once when asked")
   (is (every? (fn [[dx _ dz]] (= 1 (+ (abs dx) (abs dz)))) (fortress/moves [0 64 0] [5 64 5]))
       "one block along one axis"))
+
+(deftest no-step-opens-a-spawner
+  ;; issue #262: the blaze rods come from a fortress's spawner; a tunnel to it stops beside it
+  (let [w (rock {[1 64 0] (blocks/default-state :spawner)})]
+    (is (fortress/safe? (rock {}) [0 64 0] [1 0 0]) "the same step through netherrack is safe")
+    (is (not (fortress/safe? w [0 64 0] [1 0 0])) "the spawner is the cell stepped into")
+    (is (contains? fortress/unbreakable :spawner))))

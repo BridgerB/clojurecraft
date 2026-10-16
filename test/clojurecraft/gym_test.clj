@@ -20,7 +20,12 @@
     (is (seq (filter :gym/fixture? gym/gyms)))
     (is (every? #(nil? (plan/goals-for (:gym/until %))) (filter :gym/fixture? gym/gyms))))
   (is (= :kit (:gym/goal (gym/gym "table"))) "a row is found by its --until name")
-  (is (= :kit (:gym/goal (gym/gym :kit))) "or by its goal"))
+  (is (= :kit (:gym/goal (gym/gym :kit))) "or by its goal")
+  (testing "several rows of one goal are found by their own names (issue #262)"
+    (is (= "blaze-7" (:gym/name (gym/gym "blaze-7"))))
+    (is (= :blaze-rods (:gym/goal (gym/gym "blaze-fortress"))))
+    (is (str/includes? (gym/plan-matrix ["blaze-7"] 1) "{\"goal\":\"blaze-7\",\"run\":1,"))
+    (is (apply distinct? (keep :gym/name gym/gyms)))))
 
 (def ok-result {:ok true :reason :goal :stats {}})
 
@@ -70,6 +75,11 @@
   (is (str/starts-with?
        (gym/fill-in (gym/blaze-spawner [3 0 3]) "Clj_g1" [0 0 72])
        "setblock 3 72 3 minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}}"))
+  (is (str/includes? (gym/fill-in (gym/slow-blaze-spawner [3 0 3]) "Clj_g1" [0 0 72])
+                     "setblock 3 72 3 minecraft:spawner{")
+      "issue #262: the slower one, one blaze at a time")
+  (is (= "effect give Clj_g1 minecraft:fire_resistance 1000000 0 true"
+         (gym/fill-in gym/fire-resistance "Clj_g1" [0 0 72])))
   (is (= 3 (count (gym/endermen 3 [0 0 2]))))
   (is (every? #(str/starts-with? % "summon minecraft:enderman {x} {y} {z+2}")
               (gym/endermen 3 [0 0 2])))

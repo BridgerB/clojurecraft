@@ -47,7 +47,7 @@
 (s/def :gym/summon (s/coll-of string? :kind vector?)) ; RCON commands run in the row's dimension once the bot stands there with its kit (fill-in): the mobs it meets
 (s/def :gym/difficulty #{"peaceful" "easy" "normal" "hard"}) ; set before the bot is landed
 (s/def :gym/fixture? true?)              ; a row that judges the landing alone: its --until puts no goal in play
-(s/def :gym/name string?)                ; a row's own name, for a row that shares its goal and --until with another (issue #263)
+(s/def :gym/name string?)                ; a row's own name, for a row that shares its goal and --until with another (issues #262, #263)
 (s/def ::row
   (s/keys :req [:gym/goal :gym/until :gym/prereqs :gym/timeout-ms :gym/truth]
           :opt [:gym/setup :gym/land :gym/summon :gym/difficulty :gym/fixture? :gym/name]))
@@ -134,6 +134,17 @@
    (at-offset d)
    " minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}},SpawnCount:2,MaxNearbyEntities:6,RequiredPlayerRange:16,SpawnRange:2,MinSpawnDelay:40,MaxSpawnDelay:80}"))
 
+(defn slow-blaze-spawner
+  "A blaze spawner at d that makes one blaze at a time, every three to six seconds, two at most
+   near it: blaze-spawner's two every two to four seconds put three blazes' volleys on the bot at
+   once, and gym blaze-7c runs 1 and 2 (run 38894258652) went from 16 health to nothing in two
+   seconds, five hits in a row, before any break-off could act."
+  [d]
+  (str
+   "setblock "
+   (at-offset d)
+   " minecraft:spawner{SpawnData:{entity:{id:\"minecraft:blaze\"}},SpawnCount:1,MaxNearbyEntities:2,RequiredPlayerRange:16,SpawnRange:2,MinSpawnDelay:60,MaxSpawnDelay:120}"))
+
 (defn endermen
   "n endermen at d that never despawn: the pearls' other source, the End's crowd."
   [n d]
@@ -156,6 +167,36 @@
 
 (def night "time set midnight")       ; a :gym/summon entry: the hostiles' hour, for a row that defends
 
+(def fire-resistance
+  "A :gym/summon entry: the bot never burns (a fireball's hit still hurts)."
+  "effect give {name} minecraft:fire_resistance 1000000 0 true")
+
+(def invulnerable
+  "What makes the bot take no harm, as :gym/summon entries: Resistance V (every hurt cut to
+   nothing) and Fire Resistance, for a row that measures a fight and not the bot's survival
+   (ruststeve's arena gave its bot Invulnerable:1b, which no command can set on a player)."
+  ["effect give {name} minecraft:resistance 1000000 4 true" fire-resistance])
+
+(def iron-armour
+  "Iron armour put on the bot, as :gym/summon entries: given after the dimension change with the
+   kit (item replace, since a mob at hand comes before dressing)."
+  ["item replace entity {name} armor.head with minecraft:iron_helmet"
+   "item replace entity {name} armor.chest with minecraft:iron_chestplate"
+   "item replace entity {name} armor.legs with minecraft:iron_leggings"
+   "item replace entity {name} armor.feet with minecraft:iron_boots"])
+
+(def no-fire
+  "A :gym/summon entry: the blazes' fireballs set no blocks alight (SmallFireball places fire only
+   when mob griefing is on). A fire lights the cells round it past 11, and a spawner's blaze
+   spawns only where the light is 11 or less: gym blaze-7a run 3 (run 38891910129) had the floor
+   by the spawner lit after its first fireballs, and the spawner made no blaze in the three
+   minutes after. The bot itself still burns when hit."
+  "gamerule mob_griefing false")
+
+(defn rods-held
+  "A truth that the bot holds n blaze rods or more (n under 10)."
+  [n]
+  {:truth/cmd "clear {name} minecraft:blaze_rod 0" :truth/re (str "Found ([" n "-9]|[1-9][0-9]) ")})
 (defn no-ai-enderman
   "An enderman that never moves, attacks or teleports (NoAI) and never despawns, at d: the first
    thing the pearl rows kill (issue #263)."
@@ -440,6 +481,51 @@
     :gym/timeout-ms 120000
     :gym/truth [{:truth/cmd "scoreboard players get {name} zkills" :truth/re "has [1-9]"}
                 {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}
+   ;; issue #262: blaze rods. blaze-1: the nether arena with a blaze spawner in its corner and a
+   ;; blaze summoned, the bot unharmed (invulnerable) with six rods given, so one more is the
+   ;; goal's seventh: the fight, the pickup of a drop that may not come, the spawner camped by
+   {:gym/goal :blaze-rods
+    :gym/name "blaze-1"
+    :gym/until "blaze-rods"
+    :gym/land :nether-arena
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 8" "minecraft:blaze_rod 6"]
+    :gym/summon (into invulnerable
+                      [no-fire (blaze-spawner [3 0 3])
+                       (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
+    :gym/timeout-ms 300000
+    :gym/truth [(rods-held 7)]}
+   ;; blaze-7: the same room, all seven rods from its blazes, the bot in iron armour and hurt by
+   ;; their fireballs, so the break-off under 10 health and the meal after it are played. Fire
+   ;; Resistance, as ruststeve's arena gave ("fire resistance only stops the burn"): a burning bot
+   ;; in the Nether has no water to put it out, and blaze-7a runs 1 and 2 (run 38891910129) burned
+   ;; to death inside a minute. The spawner is the slow one (slow-blaze-spawner): blaze-7c died to
+   ;; volleys of three blazes at once
+   {:gym/goal :blaze-rods
+    :gym/name "blaze-7"
+    :gym/until "blaze-rods"
+    :gym/land :nether-arena
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_sword 1" "minecraft:cooked_beef 16"]
+    :gym/summon (into iron-armour
+                      [fire-resistance no-fire (slow-blaze-spawner [3 0 3])
+                       (summon "blaze" [-2 1 -2] "{PersistenceRequired:1b}")])
+    :gym/timeout-ms 900000
+    :gym/truth [(rods-held 7)]}
+   ;; blaze-fortress: from the fortress row's pad 48 west of a located fortress, the spawner found
+   ;; in the chunks loaded round it, tunnelled to, camped by, seven rods from its blazes. Fire
+   ;; Resistance as blaze-7 has it: blaze-fortress-f and -g (runs 38902306126, 38904048480) burned
+   ;; to death by the spawner in four runs of six, its blazes' fire all round it
+   {:gym/goal :blaze-rods
+    :gym/name "blaze-fortress"
+    :gym/until "blaze-rods"
+    :gym/land :nether-fortress
+    :gym/difficulty "normal"
+    :gym/prereqs ["minecraft:iron_pickaxe 1" "minecraft:cobblestone 64" "minecraft:iron_sword 1"
+                  "minecraft:cooked_beef 16"]
+    :gym/summon (conj iron-armour fire-resistance)
+    :gym/timeout-ms 1800000
+    :gym/truth [(rods-held 7)]}
    ;; issue #263: endermen in the sealed Nether room (#261's arena), the pearl kit given there;
    ;; judged by a pearl held. Five that never move or teleport (NoAI), each within the hunt's
    ;; strike range of the landing, since a kill drops a pearl only one time in two (the loot
@@ -676,8 +762,8 @@
 
 (defn plan-matrix
   "The trial matrix for goals x runs as JSON, {\"include\": [{\"goal\", \"run\", \"minutes\"}]}.
-   Only goals, run numbers and the job's minutes cross the job boundary; each trial recomputes
-   the rest from the registry."
+   Only goals (a row's :gym/name, else its --until name), run numbers and the job's minutes cross
+   the job boundary; each trial recomputes the rest from the registry."
   [goals runs]
   (str "{\"include\":["
        (str/join ","
