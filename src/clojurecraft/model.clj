@@ -312,7 +312,8 @@
     "craft, smelt, place, equip, scoop, pour, after a lost click"]
    [:intent/resync "the next click is a resync: the cursor after a lost click is unknown"
     "craft, smelt, place, equip, scoop, pour, from a lost click until the resync is sent"]
-   [:intent/cook-by "ms by which the batch must be cooked; the cook stage fails after it"
+   [:intent/cook-by
+    "ms by which the batch must be cooked; past it the cook stage fails once the furnace stops cooking"
     "smelt, :cook stage, once the furnace is loaded"]
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
