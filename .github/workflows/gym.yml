@@ -33,6 +33,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
+  DIFFICULTY: normal                    # issue #10: mobs and hunger (the default in server.clj stays peaceful: it is part of the world cache key)
   SET: ${{ inputs.landing-set || 'A' }}
   LABEL: ${{ inputs.label || format('push{0}', github.run_number) }}
 
