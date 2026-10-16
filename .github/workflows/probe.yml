@@ -29,6 +29,7 @@ run-name: probe ${{ inputs.label || inputs.run }}
 
 permissions:
   contents: read
+  actions: read                         # probe/evidence: a race artifact's recordings
 
 jobs:
   probe:
@@ -83,6 +84,7 @@ jobs:
           key: clj-${{ hashFiles('deps.edn') }}
       - name: Run
         env:
+          GH_TOKEN: ${{ github.token }}
           RUN: ${{ inputs.run }}        # through the environment, never pasted into the script
         run: |
           mkdir -p out
