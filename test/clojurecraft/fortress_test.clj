@@ -82,6 +82,9 @@
   (is (= [1 0 0] (first (fortress/moves [0 64 0] [10 64 2]))) "the farther axis, level")
   (is (= [0 -1 1] (first (fortress/moves [0 64 0] [1 50 10]))) "down when far below")
   (is (= [0 1 -1] (first (fortress/moves [0 64 0] [0 80 -10]))) "up when far above")
+  (is (seq (fortress/moves [0 64 0] [0 67 0]))
+      "straight under the target: a way aside (issue #262)")
+  (is (= [1 1 0] (first (fortress/moves [0 64 0] [0 67 0] 0))) "climbing at once when asked")
   (is (every? (fn [[dx _ dz]] (= 1 (+ (abs dx) (abs dz)))) (fortress/moves [0 64 0] [5 64 5]))
       "one block along one axis"))
 

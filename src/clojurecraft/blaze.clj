@@ -30,7 +30,8 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
-            [clojurecraft.recipe :as recipe]))
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
 
@@ -40,6 +41,7 @@
 (def camp-ms 60000)                   ; a camp with no blaze this long fails :no-blaze (a natural spawner waits 10 to 40 s between spawns)
 (def spawner-radius 256)              ; how far off a remembered spawner may be and still be gone to
 (def candidates 3)                    ; nearest blazes asked for a route, as the hunt asks of its animals
+(def side-steps [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) ; the cells beside a spawner a stand is looked for in
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def eat-under 14.0)                  ; health under which a meal comes before the next fight, the food under the healing level: one volley takes 9
 
@@ -100,23 +102,45 @@
                        spawner-radius
                        (remove bl (memory/positions-now world [spawner])))))
 
-(defn walkable?
-  "Can the bot walk to spawner sp: its feet within a block of the spawner's height (its blazes'
-   floor; a route judges the plane only, intent/routable?) and a route to it."
+(defn level-with?
+  "Are the feet within a block of spawner sp's height: its blazes' floor?"
   [world sp]
-  (and (<= (abs (- (physics/y-of (intent/feet world)) (physics/y-of sp))) 1)
-       (intent/routable? world {:intent/kind :walk :intent/target sp})))
+  (<= (abs (- (physics/y-of (intent/feet world)) (physics/y-of sp))) 1))
+
+(defn walkable?
+  "Can the bot walk to spawner sp: level-with? it (a route judges the plane only,
+   intent/routable?) and a route to it."
+  [world sp]
+  (and (level-with? world sp) (intent/routable? world {:intent/kind :walk :intent/target sp})))
 
 (defn at-spawner?
-  "Is the bot where it camps by spawner sp: the feet within spawner-reach of it (where a tunnel
-   to it ends), or the eye within camp-range and the spawner walkable? (on its floor, not in a
-   tunnel beside its room). Gym blaze-fortress-b (run 38893941350) tunnelled to within 6 of its
-   spawner, four blocks over it in the wall, and camped there ten minutes: the blazes the spawner
-   made in its room below were out of reach, every run."
+  "Is the bot where it camps by spawner sp: the feet within spawner-reach of it and level-with?
+   it (where a tunnel to it ends), or the eye within camp-range and the spawner walkable? (on its
+   floor, not in a tunnel beside its room). Gym blaze-fortress-b (run 38893941350) tunnelled to
+   within 6 of its spawner, four blocks over it in the wall, and camped there ten minutes: the
+   blazes the spawner made in its room below were out of reach, every run; blaze-fortress-c
+   (run 38895759229) run 3 came up under its spawner, three below its floor, killed eight blazes
+   from there and every rod lay on the floor over it."
   [world sp]
-  (or (fortress/arrived? world sp spawner-reach)
+  (or (and (fortress/arrived? world sp spawner-reach) (level-with? world sp))
       (and (<= (physics/distance (game/eye world) (physics/centre sp)) camp-range)
            (walkable? world sp))))
+
+(defn open?
+  "Are cell c and the one over it loaded and not solid: room for the body?"
+  [world [x y z :as c]]
+  (every? #(some-> (terrain/block-at world %)
+                   blocks/solid?
+                   not)
+          [c [x (inc y) z]]))
+
+(defn stand
+  "The cell beside spawner sp, at its height, with room for the body (open?), nearest the feet:
+   where a tunnel to it ends, on its blazes' floor; nil when none is."
+  [world sp]
+  (memory/nearest-of (physics/centre (intent/feet world))
+                     Double/POSITIVE_INFINITY
+                     (filter #(open? world %) (map #(fortress/plus sp %) side-steps))))
 
 (defn hurt?
   "Is the health the server last told under combat/retreat-health?"
@@ -152,15 +176,24 @@
 
 (defn to-spawner
   "The way to spawner sp: a walk when it is walkable?, else a tunnel by the fortress's steps
-   (which never open a cell beside lava nor the spawner itself) to within spawner-reach of it."
+   (which never open a cell beside lava nor the spawner itself), climbing first, to its stand
+   (into it), or with no stand known to within spawner-reach of it."
   [world sp]
-  (let [walk {:intent/kind :walk :intent/target sp}]
-    (if (walkable? world sp)
-      walk
-      {:intent/kind :tunnel-to
-       :intent/target sp
-       :intent/steps fortress/steps-per-tunnel
-       :intent/reach spawner-reach})))
+  (let [walk {:intent/kind :walk :intent/target sp}
+        at (stand world sp)]
+    (cond (walkable? world sp) walk
+          at
+          {:intent/kind :tunnel-to
+           :intent/target at
+           :intent/steps fortress/steps-per-tunnel
+           :intent/reach 0.5
+           :intent/climb 0}
+          :else
+          {:intent/kind :tunnel-to
+           :intent/target sp
+           :intent/steps fortress/steps-per-tunnel
+           :intent/reach spawner-reach
+           :intent/climb 0})))
 
 (defmethod plan/done-by :rods-held? [world _] (>= (rods world) rods-wanted))
 

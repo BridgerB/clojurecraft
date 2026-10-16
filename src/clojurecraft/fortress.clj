@@ -94,29 +94,39 @@
 
 (defn toward "The sign of d: -1, 0 or 1." [d] (long (math/signum (double d))))
 
+(def aside
+  "The directions a step takes when target is straight over or under the feet: every one, since
+   no step goes straight up or down (a target three over the feet, a spawner's, left the tunnel
+   with no move at all, issue #262)."
+  [[1 0] [0 1] [-1 0] [0 -1]])
+
 (defn moves
   "The steps to try from feet toward target, best first: along the axis with the farther way to go,
-   then the other, then sideways; each up or down first when target is more than climb-past
-   above or below, then level, then the other way."
-  [[fx fy fz] [tx ty tz]]
-  (let [ddx (- tx fx)
-        ddz (- tz fz)
-        ddy (- ty fy)
-        dy (cond (< ddy (- climb-past)) -1
-                 (> ddy climb-past) 1
-                 :else 0)
-        ys (distinct [dy 0 (- dy) (if (zero? dy) -1 dy) 1])
-        x [(toward ddx) 0]
-        z [0 (toward ddz)]
-        [a b] (if (>= (abs ddx) (abs ddz)) [x z] [z x])
-        side (fn [[p q]] [[q p] [(- q) (- p)]])
-        dirs (distinct (remove #(= [0 0] %) (concat [a b] (side (if (= [0 0] a) b a)))))]
-    (for [[dx dz] dirs dy ys] [dx dy dz])))
+   then the other, then sideways (aside, when target is straight over or under); each up or down
+   first when target is more than climb (climb-past when not given) above or below, then level,
+   then the other way."
+  ([feet target] (moves feet target climb-past))
+  ([[fx fy fz] [tx ty tz] climb]
+   (let [ddx (- tx fx)
+         ddz (- tz fz)
+         ddy (- ty fy)
+         dy (cond (< ddy (- climb)) -1
+                  (> ddy climb) 1
+                  :else 0)
+         ys (distinct [dy 0 (- dy) (if (zero? dy) -1 dy) 1])
+         x [(toward ddx) 0]
+         z [0 (toward ddz)]
+         [a b] (if (>= (abs ddx) (abs ddz)) [x z] [z x])
+         side (fn [[p q]] [[q p] [(- q) (- p)]])
+         dirs (distinct (remove #(= [0 0] %) (concat [a b] (side (if (= [0 0] a) b a)))))
+         dirs (if (seq dirs) dirs aside)]
+     (for [[dx dz] dirs dy ys] [dx dy dz]))))
 
 (defn choose-move
-  "The first of moves from feet toward target that is safe?, or nil."
-  [world feet target]
-  (first (filter #(safe? world feet %) (moves feet target))))
+  "The first of moves from feet toward target (climbing past climb, climb-past when not given)
+   that is safe?, or nil."
+  ([world feet target] (choose-move world feet target climb-past))
+  ([world feet target climb] (first (filter #(safe? world feet %) (moves feet target climb)))))
 
 (defn arrived?
   "Is the bot within reach of target (from the feet cell's centre), or within r when given?"
@@ -130,16 +140,19 @@
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
   ;; :intent/reach, reach when absent) or after :intent/steps steps, failed :blocked when no step
-  ;; is safe
-  [world {:intent/keys [target steps taken move from] r :intent/reach :or {taken 0 r reach} :as i}
-   event]
+  ;; is safe. Steps go up or down first past :intent/climb blocks off (climb-past when absent)
+  [world
+   {:intent/keys [target steps taken move from climb]
+    r :intent/reach
+    :or {taken 0 r reach climb climb-past}
+    :as i} event]
   (let [feet (intent/feet world)]
     (cond (or (arrived? world target r) (>= taken steps))
           (-> world
               (assoc :player/controls {})
               intent/done)
           (nil? move)
-          (if-let [m (choose-move world feet target)]
+          (if-let [m (choose-move world feet target climb)]
             (intent/assoc-intent world :intent/move m :intent/from feet)
             (-> world
                 (assoc :player/controls {})
