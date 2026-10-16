@@ -5,8 +5,8 @@
    there (sim/joined), so a real failure is the same :snapshot/* value a sim run's is and a fix's
    check judges it the same way (simrace/judged, simrace/recurs?).
 
-     clojure -M:simrace --from-recording s2/Clj_r17.edn[.gz|.zst] [--signature '[:fortress :no-path]']
-       [--out data/real] [--name real-Clj_r17.edn.gz] [--seed 1] [--round 38929353563]
+     clojure -M:simrace --from-recording s2/Clj_r17.edn[.gz|.zst][,...] [--signature '[:fortress :no-path]']
+       [--out data/real] [--name real-Clj_r17.edn.gz[,...]] [--seed 1] [--round 38929353563]
 
    The recording is the evidence: every event the bot folded, and so every column the server
    sent it, byte for byte (a captured world is nothing more, capture.clj), and every block that
@@ -370,3 +370,21 @@
             (doseq [s (:run/story r)] (println "STORY" kept (pr-str s)))
             (flush)
             {:path kept :recurs? (nil? kind) :gap kind}))))
+
+(defn from-recordings!
+  "from-recording! for each recording --from-recording names (comma-separated), in order, in one
+   process (the race's churn converts a batch's failures at once, issue #299): --name, when given,
+   names their snapshots in the same order. One that throws prints a GAP line with :gap :error and
+   its message, and the rest go on. Returns their answers."
+  [o]
+  (let [paths (str/split (:from-recording o) #",")
+        names (some-> (:name o)
+                      (str/split #","))]
+    (mapv (fn [i path]
+            (try (from-recording! path (cond-> (dissoc o :name) names (assoc :name (nth names i))))
+                 (catch Exception e
+                   (println "GAP" (pr-str {:recording path :gap :error :error (str e)}))
+                   (flush)
+                   {:path nil :recurs? false :gap :error})))
+          (range)
+          paths)))

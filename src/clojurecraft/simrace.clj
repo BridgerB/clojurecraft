@@ -504,8 +504,9 @@
    moment must reproduce the failure); with --expect pass, unless none does (the fix).
    --from-landing f replays a snapshot's run from its landing to its stage (from-landing!): a
    probe's tool for the whole road, up to default-max-minutes, never the check's.
-   --from-recording f turns a real race's recording into a snapshot of its failure
-   (real/from-recording!: --signature, --out, --name, --seed, --round), kept only when it recurs."
+   --from-recording f1,f2 turns real races' recordings into snapshots of their failures
+   (real/from-recordings!: --signature, --out, --name n1,n2, --seed, --round), each kept only when
+   it recurs."
   [& args]
   (let [o (cli/options args)]
     (cond (get o :judge)
@@ -522,6 +523,5 @@
           ;; real.clj builds on this namespace (decision, chosen-moment, judged), so its entry
           ;; is resolved here rather than required: one command line, no cycle
           (get o :from-recording)
-          (do ((requiring-resolve 'clojurecraft.real/from-recording!) (get o :from-recording) o)
-              (shutdown-agents))
+          (do ((requiring-resolve 'clojurecraft.real/from-recordings!) o) (shutdown-agents))
           :else (race! o))))
