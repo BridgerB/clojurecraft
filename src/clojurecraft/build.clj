@@ -845,7 +845,9 @@
           (if-let [alt (or (reachable-stand world stand pos) (room-stand world i pos))]
             (when-not (intent/centred? world alt)
               {:intent/kind :walk :intent/target alt :intent/for :build})
-            (toward-stand world stand build origin facing))
+            (if (= (long (physics/y-of (intent/feet world))) (second stand))
+              :no-stand
+              (toward-stand world stand build origin facing)))
           (and (= :dig op) (= stand pos))
           (cond (within-reach? world pos) nil
                 :else
