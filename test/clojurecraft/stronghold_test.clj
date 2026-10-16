@@ -153,7 +153,8 @@
     (is (= [8.5 64.9 8.5] (:throw/from t)) "from where the eye was first seen")
     (is (near? [0.6 0.8] (:throw/dir t) 1e-3) "the way it flew on the plane")
     (is (= :done (:intent/status i)))
-    (is (near? [14.5 16.5] (stronghold/plane (:intent/eye-pos i)) 1e-2) "where it ended")))
+    (is (near? [13.9 15.7] (stronghold/plane (:intent/eye-pos i)) 1e-2)
+        "where it was last seen on a tick before the server removed it")))
 
 (deftest no-eye-seen-fails-the-throw
   ;; a use-item the server does nothing with (no stronghold: the Nether) is :no-eye
