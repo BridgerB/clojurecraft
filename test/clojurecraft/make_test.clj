@@ -117,10 +117,11 @@
             entities trial (issue #258), done by a living entity's health the server sent"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
     (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :fed? :dressed?
-                              :armoured? :health-seen? :safe? :cleared?}
+                              :armoured? :health-seen? :safe? :cleared? :provisioned? :armed?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
-    (is (= #{:needs :escape :wade :build :fortress :eat :wear :armour :watch :defend :attack}
+    (is (= #{:needs :escape :wade :build :fortress :eat :wear :armour :watch :defend :attack :hunt
+             :sword}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))

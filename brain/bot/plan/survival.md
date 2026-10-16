@@ -1,9 +1,9 @@
 ---
 title: Survival
-description: How the bot lives through Normal difficulty (issue #259) - the food from set-health, the :eat always row and its executor (food in hand, one use-item, done when the server's food rises), the game's food as data, the sim's eating, the eat gym row's hungry landing, armour (worn by two window-0 clicks, made from spare ingots), and fighting (the 775 attack packet, :fight paced by the clock, :defend, :back-off, the gym's :attack, the sim's mobs).
+description: How the bot lives through Normal difficulty (issue #259) - the food from set-health, the :eat always row and its executor (food in hand, one use-item, done when the server's food rises), the game's food as data, the sim's eating, the eat gym row's hungry landing, armour (worn by two window-0 clicks, made from spare ingots), the food producer (:hunt) and the sword (:sword), and fighting (the 775 attack packet, :fight paced by the clock, :defend, :back-off, the gym's :attack, the sim's mobs).
 type: reference
 tags: [bot, plan, survival, food, intents, goals]
-aliases: [:fight, :back-off, :defend, :attack, :safe?, :cleared?, attack packet, :intent/swings, ghost, :wear, :wear-armour, :armour, :dressed?, :armoured?, spare-ingots, :eat, :fed?, :player/food, :player/saturation, hungry-below, edible, food-held, :not-eaten, food/nutrition, :sim/food, :hungry landing]
+aliases: [:hunt, :provisioned?, :sword, :armed?, :intent/target-pos, :fight, :back-off, :defend, :attack, :safe?, :cleared?, attack packet, :intent/swings, ghost, :wear, :wear-armour, :armour, :dressed?, :armoured?, spare-ingots, :eat, :fed?, :player/food, :player/saturation, hungry-below, edible, food-held, :not-eaten, food/nutrition, :sim/food, :hungry landing]
 status: verified
 lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
@@ -54,6 +54,21 @@ sourceRefs:
   - src/clojurecraft/combat.clj#defn quarry
   - src/clojurecraft/combat.clj#def look-ms 3000
   - test/clojurecraft/combat_test.clj#an-attack-trial-looks-round-before-it-finds-nothing
+  - src/clojurecraft/hunt.clj#defn game
+  - src/clojurecraft/hunt.clj#defn fresh-kill
+  - src/clojurecraft/hunt.clj#defn hunting?
+  - test/clojurecraft/hunt_test.clj#a-hunt-running-is-never-done-under-it
+  - src/clojurecraft/hunt.clj#defmethod plan/next-intent :hunt
+  - src/clojurecraft/hunt.clj#def strike-range 4.5
+  - src/clojurecraft/sword.clj#defn wanted
+  - src/clojurecraft/sword.clj#defn blade?
+  - "resources/clojurecraft/goals.edn#{:goal/id :hunt"
+  - "resources/clojurecraft/goals.edn#{:goal/id :sword"
+  - test/clojurecraft/hunt_test.clj#hungry-with-nothing-to-eat-the-nearest-cow-is-walked-to-then-fought
+  - test/clojurecraft/hunt_test.clj#a-kill-just-made-is-collected-where-it-fell
+  - test/clojurecraft/hunt_test.clj#a-hungry-bot-kills-a-cow-picks-up-its-beef-and-eats-it-against-the-model
+  - test/clojurecraft/sword_test.clj#the-best-sword-the-held-items-make-better-than-the-one-held
+  - test/clojurecraft/sword_test.clj#iron-only-from-ingots-the-armour-leaves
   - "resources/clojurecraft/goals.edn#{:goal/id :defend"
   - "resources/clojurecraft/goals.edn#{:goal/id :attack"
   - src/clojurecraft/plan.clj#defn through
@@ -120,6 +135,12 @@ Gym row `armour`: the portal's iron, a table and 13 ingots given; judged by `exe
 **The model's mobs** are issue #258's ([[sim-mobs]]): `sim/init` takes `:mobs [{:type :pos}]`, zombies walk at the bot and hit it, and an `attack` in reach hurts by the held item. The fight tests kill a zombie at hand with `:defend` and one coming from afar with the `:attack` trial against it.
 
 **Gym rows.** `attack`: a husk with `NoAI` (a husk does not burn by day) three east of the landing at noon, a stone sword; judged by no husk within 24 of the landing, and the attacks' spacing read from the recording. `defend`: three zombies two blocks round the landing at midnight, the bot in iron armour put on by the fixture (`item replace`, since a zombie at hand comes before dressing) with an iron sword; judged by a zombie killed (a kill counter the setup adds, `minecraft.killed:minecraft.zombie`: counting zombies round the landing counted the night's new ones too), health left and no death. Not all three: the row is done when none is within 4, and in gym defend-259a the others wandered off while the first was fought. Truths are asked at the landing, not `execute as` the bot: that answered RCON with nothing.
+
+## The food producer (hunt.clj)
+`:hunt` is an always row at priority 0 after the meal: done by `:provisioned?`, not hungry, or food held (the meal comes first), or no `game` and no `fresh-kill` while no hunt intent runs (`hunting?`: the first run against the model killed its cow, the row found nothing left, and the planner abandoned the fight `:goal-met` the tick the cow died, before it was done, so its beef was never collected). `game` is the nearest cow, mooshroom, pig, sheep or rabbit (`game-kinds`, never a chicken: raw chicken may make the eater hungry), alive, not blacklisted, within `hunt-radius` 24, the first of the three nearest a route reaches (`intent/routable?`). Planned by `:hunt`: a kill just made (the last intent a `:fight` for `:hunt`, done, with `:intent/target-pos`, where the fight last saw its target) is a `:collect` of the meat there; else a `:walk` to the animal's cell, and once within `strike-range` 4.5 on the plane (past a walk's reach, so a walk that arrived is never asked again) a `:fight` for `:hunt`. The meat is eaten raw by `:eat`. Against the model a cow drops one to three beef by its loot table ([[sim-mobs]]).
+
+## The sword (sword.clj)
+`:sword` is an always row at the portal kit's priority after the armour, so a chained run comes to it once the portal's iron is in hand and the wood-hungry mining is behind it; only a chained run makes one (a gym stage measures its own target: with the row in play the kit stage placed its held table for a wooden sword, undid the kit, and dug the table back until it timed out). Done by `:armed?`: nothing `wanted`, the first of an iron, stone and wooden sword better than the best held (`combat/swords` order) whose blade the held items pay for (`blade?`: iron only from ingots spare once the armour wants nothing, cobblestone, planks; never a log) with a handle (a stick, or two planks for sticks) and a table at hand. Planned through the needs planner. Until it is made, fights are by hand: `:defend` never stops to make a sword with a zombie at hand.
 
 ## See also
 - [[water-escape]] - the other always rows, and the preemption they share.
