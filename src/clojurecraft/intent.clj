@@ -58,13 +58,36 @@
                           over)]
     (boolean (and (seq stack) (terrain/fluid-at world (nth over (count stack)))))))
 
+(defn bed-over-fluid?
+  "Is a horizontal neighbour of pos gravel or sand resting, through any stack of such under it,
+   on water or lava? Breaking pos updates its neighbours (vanilla's neighbour update), so that
+   bed drops into the fluid, and what lies over and beside it follows into the cut. Race
+   38842339863 runner 4 (issue #37) bot Clj_r26 cut stairs down a gravel beach between a lake
+   and a cave lake under the gravel at y 55-59: the dig beside a gravel column standing on the
+   cave's water dropped the beach into it, the lake poured into the pit, and the bot stood with
+   water over its head and beside every next cell, every stair :unsafe and the climb :boxed."
+  [world [x y z]]
+  (boolean (some (fn [[dx dz]]
+                   (let [[nx _ nz :as n] [(+ x dx) y (+ z dz)]]
+                     (when (some-> (terrain/block-at world n)
+                                   blocks/falls?)
+                       (let [under (->> (range 1 (inc falling-reach))
+                                        (map (fn [d] [nx (- y d) nz]))
+                                        (drop-while #(some-> (terrain/block-at world %)
+                                                             blocks/falls?))
+                                        first)]
+                         (and under (terrain/fluid-at world under))))))
+                 [[1 0] [-1 0] [0 1] [0 -1]])))
+
 (defn exposes-fluid?
   "Would breaking target let water or lava in: is any of its six neighbours a fluid (steve's
-   digExposesWater), or does a fluid rest on gravel or sand over it (fluid-over-falling?)?"
+   digExposesWater), does a fluid rest on gravel or sand over it (fluid-over-falling?), or does
+   gravel or sand beside it rest on a fluid (bed-over-fluid?)?"
   [world [x y z :as target]]
   (boolean (or (some (fn [[dx dy dz]] (terrain/fluid-at world [(+ x dx) (+ y dy) (+ z dz)]))
                      [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
-               (fluid-over-falling? world target))))
+               (fluid-over-falling? world target)
+               (bed-over-fluid? world target))))
 
 (defn dig-time
   "ms to break block id with held (an item id, or nil for the hand) under the world's penalties:

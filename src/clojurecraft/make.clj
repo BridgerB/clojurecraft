@@ -165,7 +165,8 @@
    bucket, and spent five hours walking out for the spare and cutting back down. A gather that
    would wait :no-log is not either, which is the open sky with no tree remembered. Gym batch
    iron-a7 runs 1-3, deep in the mine with a working pickaxe and no wood, waited :no-log for a
-   second pickaxe. Full run 068485c kept mining on its last stone pickaxe until it broke at y 16,
+   second pickaxe. Nor is a swim across open water to the trees (wood/crossing, issue #87): a
+   spare is not worth a lake. Full run 068485c kept mining on its last stone pickaxe until it broke at y 16,
    then the wooden one broke on the stairs and three :no-pickaxe failures ended the plan. A climb
    out (:intent/for :surface) is worth it once from a place, not again from below where a climb
    came out within the window (stairs/surfaced-near?): it came out where the gather found nothing
@@ -178,6 +179,7 @@
         (let [n (wood/gather-next world)]
           (and (:intent/kind n)
                (not= :opening (:intent/for n))
+               (not= :cross (:intent/kind n))
                (not (and (= :surface (:intent/for n)) (stairs/surfaced-near? world)))))
         :else true))
 

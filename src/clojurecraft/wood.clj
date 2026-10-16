@@ -7,6 +7,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.scoop :as scoop]
             [clojurecraft.stairs :as stairs]
@@ -19,6 +20,8 @@
 (def far-radius 256)                  ; a trunk remembered on the way in, past the near band
 (def far-candidates 3)                ; routes planned on the way back to the surface
 (def max-trunk 8)                     ; logs followed up one trunk column
+(def cross-reach 48)                  ; blocks along the way to a trunk a crossing looks for open water
+(def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
 (def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
 
 (defn ground?
@@ -91,13 +94,48 @@
    :intent/for :log
    :intent/trunk bottom})
 
+(defn trees-climb
+  "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk above
+  the eye: stairs up toward it, to-height only (the open sky over the feet is not the trees),
+  in lengths the planner looks again between. Being out is not being at the trees: race
+  38674091115 runner 4 (issue #87) left the iron mine at the mouth of its shaft under the open
+  sky at y 70 with 999 trunks remembered and the nearest thirty blocks above on the mountain;
+  the near band stops twelve over the eye, no walk climbs the cliff, the hunt's targets stop
+  sixteen over the eye and never come nearer the landing, and the climb would not cut because
+  out? said out, so the plan waited :no-log with the trees in reach of a staircase. Only a
+  trunk within search-radius on the plane: sim race 38811417241 runner 2 (issue #87, world R3/4)
+  stood on a sand island with the nearest trunks a hundred blocks off across a lake, one five
+  over the eye, and cut stairs up on the island toward it until one was not taken."
+  [world trunks]
+  (let [feet (intent/feet world)]
+    (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
+      (when-let [above (first (filter (fn [[tx ty tz]]
+                                        (and (< (physics/y-of (game/eye world)) ty)
+                                             (<= (physics/horizontal-distance (:player/pos world)
+                                                                              [tx 0 tz])
+                                                 search-radius)))
+                                      trunks))]
+        (let [[fx _ fz] feet
+              [tx _ tz] above
+              dir (if (>= (abs (- tx fx)) (abs (- tz fz)))
+                    [(if (< fx tx) 1 -1) 0]
+                    [0 (if (< fz tz) 1 -1)])]
+          {:intent/kind :stairs-up
+           :intent/to-y (stairs/climb-to world (nth above 1))
+           :intent/to-height? true
+           :intent/dir dir
+           :intent/for :surface})))))
+
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
    a route reaches (intent/routable?), under the open sky or not. Not out of the ground
    (stairs/out?: the open sky over the feet and a level step onto open ground beside them), with
    none of those a route reaches: walk up the air already dug (intent/opening) and cut stairs only
    when that mouth cannot be walked to (stairs/out? ends them; terrain/top-y is the top of the
-   world; stairs/climb-to cuts the climb in lengths the planner looks again between). A pit under
+   world; stairs/climb-to cuts the climb in lengths the planner looks again between). Out of the
+   ground but not at the trees, a trunk remembered above the eye no walk reaches: stairs up
+   toward it (trees-climb), where the old guard stopped at the sky and the plan waited :no-log.
+   A pit under
    the open sky is not out: race 38477665442's stone mines dug the bot two deep beside a cliff
    (Clj_r20), into a notch under an overhang by a pond (Clj_r09), onto a ledge of its own quarry
    (Clj_r01) and onto a lakeshore under a cliff (Clj_r12); every trunk was up the wall no jump
@@ -114,9 +152,9 @@
   [world]
   (let [feet (intent/feet world)
         trunks (->> (memory/positions-now world blocks/log-states)
+                    (memory/nearest-first (game/eye world) far-radius)
                     (remove (skipped world))
                     (filter #(standing-trunk? world %))
-                    (memory/nearest-first (game/eye world) far-radius)
                     (take far-candidates))]
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
@@ -125,7 +163,8 @@
             (or (intent/opening world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
-                 :intent/for :surface}))))))
+                 :intent/for :surface}))
+          (trees-climb world trunks)))))
 
 (defn near-walk
   "A walk to the nearest standing trunk in the near band (search-radius, no more than 12 above or
@@ -218,17 +257,61 @@
           rock (assoc (intent/child-dig rock) :intent/exposes-ok? true :intent/for :into-water)
           :else {:intent/kind :swim-out :intent/for :rise :intent/to-y (or top (+ y 34))})))
 
+(defn open-water?
+  "Is the top of column [x z] near the eye (from 8 over it down to surface-span under) water:
+   a lake's or the sea's surface, the first cell down that is not clear to a route?"
+  [world [x z] eye-y]
+  (= :water
+     (first (remove #{:clear}
+                    (map #(path/classify world [x % z])
+                         (range (long (+ eye-y 8)) (long (- eye-y surface-span)) -1))))))
+
+(defn water-toward?
+  "Does the way on the plane from feet to pos meet open water within cross-reach?"
+  [world [fx _ fz] [tx _ tz] eye-y]
+  (let [d (physics/horizontal-distance [fx 0 fz] [tx 0 tz])]
+    (boolean (and (pos? d)
+                  (some (fn [k]
+                          (open-water? world
+                                       [(long (math/floor (+ fx 0.5 (* k (/ (- tx fx) d)))))
+                                        (long (math/floor (+ fz 0.5 (* k (/ (- tz fz) d)))))]
+                                       eye-y))
+                        (range 1 (inc (min cross-reach (long d)))))))))
+
+(defn crossing
+  "Under the open sky, nothing before it in gather-next reaching a tree (no walk, climb or hunt
+   a route reaches), and the nearest remembered standing trunk across open water
+   (water-toward?): a :cross toward it, swimming the water (swim's :cross), so the gather goes
+   on from the far side; a crossing that lands short (an inlet waded) is followed by the next.
+   Sim race 38811417241 runner 2 (issue #87, world R3/4): the stone pickaxe broke on the stairs,
+   a new one wanted a log, and the bot stood on a sand island at its landing with every trunk a
+   hundred blocks off across a lake; routes ended at the island's shore, all eight hunt
+   bearings forty out were water, and the plan waited :no-log until it failed. nil otherwise."
+  [world]
+  (let [feet (intent/feet world)
+        eye (game/eye world)]
+    (when (terrain/under-sky? world feet)
+      (when-let [trunk (->> (memory/positions-now world blocks/log-states)
+                            (memory/nearest-first eye far-radius)
+                            (remove (skipped world))
+                            (filter #(standing-trunk? world %))
+                            first)]
+        (when (water-toward? world feet trunk (physics/y-of eye))
+          {:intent/kind :cross :intent/target trunk})))))
+
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
    trunk a route reaches (near-walk). Any goal that needs a log uses this. With none in the near
    band a route reaches, climb out to the trees, or walk toward them (hunt), or boxed under water
-   dig up into it (into-water), instead of waiting :no-log."
+   dig up into it (into-water), or across open water swim for them (crossing), instead of
+   waiting :no-log."
   [world]
   (or (continue-gather world)
       (near-walk world)
       (climb-out world)
       (hunt world)
       (into-water world)
+      (crossing world)
       {:plan/wait :no-log}))
 
 (defn way-out

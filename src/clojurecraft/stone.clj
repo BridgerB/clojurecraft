@@ -174,9 +174,16 @@
    and one started again from the pocket dies the same way, since each heading's first step is
    all this looks at. Race 38515209959 runner 3 bot Clj_r13 (issue #105): at y 34 between two
    sheets of water, three tunnels in a row were started from the same pocket, each refused a
-   step or two on and :boxed, and the plan failed in 25 seconds with 511 cobblestone in hand."
+   step or two on and :boxed, and the plan failed in 25 seconds with 511 cobblestone in hand.
+   Never back under the staircase just cut (:plan/last a :stairs-down, its heading turned round):
+   its first steps dig the floors of the stairs, the only way back up. Sim race 38839665459
+   runner 3 (issue #71, every seed of world R1/19 at 3f836ff) cut stairs west down to y 1, then
+   tunnelled east under them; boxed beside an aquifer under gravel, its retreat found no route
+   up the stairs it had undermined, every climb was :boxed, and the plan failed."
   [world]
   (let [[x _ z] (:player/pos world)
+        {:intent/keys [kind dir]} (:plan/last world)
+        back (when (and (= :stairs-down kind) dir) (mapv - dir))
         [fx _ fz :as feet] (intent/feet world)
         home (:plan/go-at world)
         dry? (fn [[dx dz]]
@@ -190,7 +197,8 @@
     (when-not (contains? (:plan/boxed-at world #{}) feet)
       (first (filter (fn [d]
                        (let [cells (stairs/level-cells feet d)]
-                         (and (stairs/level-safe? world cells)
+                         (and (not= back d)
+                              (stairs/level-safe? world cells)
                               (some #(some-> (terrain/block-at world %)
                                              blocks/solid?)
                                     cells))))

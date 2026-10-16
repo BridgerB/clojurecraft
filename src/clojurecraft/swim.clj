@@ -45,6 +45,9 @@
 (def notch-radius 4)                  ; how far on the plane a wall is notched into for a bank when there is none (a dig's reach)
 (def centre-slack 0.15)               ; how far off its column's centre a body rising up a shaft may drift
 (def shore-reach 64)                  ; how far along eight bearings a swim with no bank in reach looks for dry ground
+(def cross-timeout-ticks 2400)        ; 120 s to swim a crossing to the trees
+(def cross-stuck-ticks 100)           ; 5 s without coming nearer the far side: a crossing is :stuck
+(def cross-gain 8)                    ; blocks nearer the trunk than at the start before land ends a crossing
 (def flee-radius 6)                   ; how far a lava flee looks for footing
 (def flee-timeout-ticks 200)          ; 10 s
 
@@ -358,6 +361,44 @@
               (assoc :player/controls (swim-controls world bank))
               (intent/assoc-intent :intent/best-dist (if nearer? dist (or best-dist dist))
                                    :intent/best-tick best-tick)))))
+
+(defmethod intent/run :cross
+  ;; over open water toward a remembered trunk across it (wood/crossing): straight at it, on
+  ;; land jumping only when blocked, in the water with jump held, so the body swims at the
+  ;; surface with the eye in air and the trap never calls the escape back to the near bank;
+  ;; done on dry land once it has been in the water and come cross-gain nearer the trunk, so a
+  ;; wade along the near shore is not the far side
+  [world {:intent/keys [target started wet? from-dist best-dist best-tick]} _]
+  (let [tick (:time/tick world)
+        started (or started tick)
+        wet? (or wet? (boolean (:player/in-water? world)))
+        dist (physics/horizontal-distance (:player/pos world) (physics/centre target))
+        from-dist (or from-dist dist)
+        nearer? (< dist (- (or best-dist Double/MAX_VALUE) progress))
+        best-tick (if (or nearer? (nil? best-tick)) tick best-tick)
+        world (intent/assoc-intent world
+                                   :intent/started started
+                                   :intent/wet? wet?
+                                   :intent/from-dist from-dist
+                                   :intent/best-dist (if nearer? dist best-dist)
+                                   :intent/best-tick best-tick)]
+    (cond (and wet? (trap/dry-land? world) (<= dist (- from-dist cross-gain)))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (> (- tick started) cross-timeout-ticks)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :no-crossing))
+          (> (- tick best-tick) cross-stuck-ticks)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :stuck))
+          :else
+          (assoc world
+                 :player/controls
+                 (cond-> (intent/toward world (physics/centre target) 0.0)
+                   (:player/in-water? world) (assoc :control/jump? true))))))
 
 (defn footing
   "The nearest cell within flee-radius of feet, at most one up or down, the feet could stand
