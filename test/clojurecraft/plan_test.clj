@@ -141,6 +141,30 @@
     (is (= {:intent/kind :stairs-up :intent/to-y (+ 50 stairs/climb-stairs) :intent/for :surface}
            (wood/gather-next w)))))
 
+(deftest boxed-under-the-sea-the-bot-digs-up-into-it
+  ;; sim race 38806318231 runner 1 and 38811426215 runner 8 (issue #89): bots under the sea floor
+  ;; with no pickaxe needed a log; every climb out was :boxed under the water and no route led
+  ;; home, and each waited :no-log
+  (let [sea (into
+             {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [8 69 8] 1 [8 70 8] 136}
+             (for [y (range 54 64)] [[8 y 8] blocks/water-base]))
+        boxed #(assoc % :plan/boxed-at #{[8 50 8]})
+        bed (fn [b] (remembered (assoc sea [8 53 8] (blocks/default-state b)) [8.5 50.0 8.5]))]
+    (is (= :stairs-up (:intent/kind (wood/gather-next (bed :dirt)))) "not yet boxed: climb out")
+    (is (= {:intent/kind :dig
+            :intent/target [8 53 8]
+            :intent/status :active
+            :intent/exposes-ok? true
+            :intent/for :into-water}
+           (wood/gather-next (boxed (bed :dirt))))
+        "boxed: dig the bed over the head, letting the sea in")
+    (is (= {:intent/kind :swim-out :intent/for :rise :intent/to-y 64}
+           (wood/gather-next (boxed (remembered (assoc sea [8 53 8] blocks/water-base)
+                                                [8.5 50.0 8.5]))))
+        "the bed dug and the sea in: up the shaft to the top of the water")
+    (is (= {:plan/wait :no-log} (wood/gather-next (boxed (bed :gravel))))
+        "never under gravel, which would fall on the bot")))
+
 (deftest a-near-trunk-with-no-route-is-climbed-for-too
   ;; sim race 38395033917, world R3/24 (issue #75): at the bottom of two staircases that met, the
   ;; second having dug out the first's riser, no route led up, and every walk to a trunk within
