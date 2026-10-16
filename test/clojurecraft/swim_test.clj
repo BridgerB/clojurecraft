@@ -103,3 +103,41 @@
           landed (assoc (at [13.5 64.0 8.5] false) :plan/intent i)]
       (is (= :done (:intent/status (:plan/intent (intent/run landed i tick))))
           "wet, then on dry land ten nearer the trunk: across"))))
+
+(deftest a-crossing-stuck-in-the-water-retreats-to-a-bank
+  ;; sim race 38844589684 runner 6 (issue #57, world R1/30 seed 4): forty blocks over, the swim
+  ;; met a far bank too high to climb out onto and failed :stuck three times; now it swims for
+  ;; the nearest bank and the crossing ends there
+  (let [lake (into {}
+                   (for [x (range 16)
+                         z (range 16)
+                         y (range 60 64)
+                         :when (< 3 x 13)]
+                     [[x y z] blocks/water-base]))
+        cross {:intent/kind :cross
+               :intent/target [14 64 8]
+               :intent/status :active
+               :intent/started 0
+               :intent/wet? true
+               :intent/from-dist 40.0
+               :intent/best-dist 6.0
+               :intent/best-tick 0}
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [8.5 63.0 8.5]
+                 :player/loaded? true
+                 :player/on-ground? false
+                 :player/in-water? true
+                 :time/tick 200
+                 :world/chunks {[0 0] (world/column lake)}
+                 :plan/intent cross)
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        i (:plan/intent (intent/run w cross tick))]
+    (is (= :active (:intent/status i)) "not failed :stuck")
+    (is (= [:swim-out :retreat] ((juxt :intent/kind :intent/for) (:intent/child i))))
+    (let [ashore (assoc cross
+                        :intent/child
+                        {:intent/kind :swim-out :intent/for :retreat :intent/status :done})]
+      (is (= :done
+             (:intent/status (:plan/intent (intent/run (assoc w :plan/intent ashore) ashore tick))))
+          "on the bank: the crossing is over"))))
