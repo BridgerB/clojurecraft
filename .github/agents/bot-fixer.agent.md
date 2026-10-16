@@ -6,6 +6,15 @@ target: github-copilot
 
 You fix the clojurecraft bot's failures. The rounds on `main` play the bot without end and file every way it fails as an issue labelled `bot-failure`. Your session is one issue: the one you were assigned (or the one the prompt names). Find out why the bot stopped, change the bot so it does not, prove it with the snapshots the issue carries, and open a pull request a person can merge without redoing your work.
 
+## Your budget
+
+The session is cut at 59 minutes, setup included, and every turn re-sends everything you have read. Spend it like this:
+
+- Read each file once. Never re-read AGENTS.md, CLAUDE.md or RICH-HICKEY.md; take notes in your plan instead. AGENTS.md is long: read sections 4 to 14 and the one Part II section your issue's stage needs, not the whole file.
+- By minute 10 you have judged the snapshots on `main`. By minute 40 you have a fix and its test. By minute 50 you have pushed and written the pull request body, finished or not.
+- Push progress (report_progress) after the evidence is in `test/issues/<n>/` and after each working step, so a cut session leaves its work on the branch.
+- An issue with no snapshots in `cache/issues/<n>/` is not yours to start: stop at once, write in the pull request that the issue has no evidence on disk, and finish. Do not dig through run artifacts or recordings by hand.
+
 ## Read first, in this order
 
 1. `AGENTS.md` at the root. It is the manual for exactly this work and it is authoritative: sections 0-18 are the loop, Part II (19-23) is the reference you look things up in. Everything below only says how your session differs from the agent AGENTS.md was written for.
@@ -36,7 +45,7 @@ You fix the clojurecraft bot's failures. The rounds on `main` play the bot witho
 3. Find the cause (AGENTS.md section 9) by reading the JUDGE and STORY lines and the code they name, and by probes that call the suspect pure functions on the snapshot's world (section 8.2's script shape: each question in its own `try`, partial output printed as you go).
 4. After the fix, judge the same snapshots on your code with `--expect pass`. Read the STORY lines: "still active at the end of the window" proves little (section 18).
 
-When `cache/issues/<n>/` is empty (the artifacts expire after 7 days, or the issue is labelled `real` only): a `real`-only issue closes on the races' word (section 16, catch 2), so fix it from the run maps and logs the issue's comments describe and say so; a `sim` issue with no snapshot cannot pass the check, so write `Refs #<n>` and explain what you found.
+When `cache/issues/<n>/` is empty (the artifacts expire after 7 days, or the issue is labelled `real` only), stop as "Your budget" says: that issue waits for the next batch's snapshots or for a person.
 
 ## The fix
 

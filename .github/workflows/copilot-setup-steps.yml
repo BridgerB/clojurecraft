@@ -23,7 +23,7 @@ permissions:
 jobs:
   copilot-setup-steps:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 59                 # the whole Copilot session, setup included (59 is the most it allows; 30 cut the first one off)
     steps:
       - uses: actions/checkout@v7
       - name: R1's captured worlds
