@@ -508,7 +508,7 @@ Consult on demand. Spot-checked against `src/clojurecraft/` at 51505a9; when the
 **One tick (`plan/plan-tick`), in order.**
 1. `trap/trapped-tick` re-derives `:plan/trap` (only with `:player/pos`); `plan/reach` adds milestones on a chained run.
 2. `plan/choose`: highest-priority target in play (`:plan/goals` or every target, plus `:goal/always?` rows), not in `:plan/reached`, `done-by` false, worked in this dimension (`here?`).
-3. Running intent whose cursor holds an item (`can-abandon?` false): run it anyway (it puts the item down).
+3. Running intent whose cursor holds an item, or with a click unanswered (`can-abandon?` false): run it anyway (it puts the item down, the answer comes).
 4. No goal here but one undone elsewhere (`elsewhere?`): abandon `:goal-met`, wait `:other-dimension`.
 5. No goal: abandon `:goal-met`, `:plan/status :done`.
 6. Running intent for another goal than the chosen one: abandon `:preempted`, plan again this tick.
@@ -789,6 +789,8 @@ Most are stated where they apply above (grass type, resting vy, `:name` collisio
 | 0 | `:escape-water` (always) | `:not-trapped-in` | `:escape` → `:swim-out` |
 | 0 | `:escape-lava` (always) | `:not-trapped-in` | `:escape` → `:flee` |
 | 0 | `:eat` (always, after the escapes; `eat`) | `:fed?`: food ≥ 14, unknown, or nothing safe to eat held | `:eat` → `:eat` (issue #259) |
+| 0 | `:wear-armour` (always, after `:eat`) | `:dressed?`: no piece held over an empty armour slot | `:wear` → `:wear` |
+| 13 | `:armour` (always, after `:portal-kit`; `armour`) | `:armoured?`: no iron helmet or chestplate the spare ingots pay for, table at hand | `:armour` → needs planner (craft) |
 | 1 | `:wood` | `{:tag/logs 1}` | needs |
 | 2 | `:kit` (`table`) | `{:item/crafting_table 1 :item/stick 4}` | needs |
 | 3 | `:pickaxe` | wooden pickaxe | needs |

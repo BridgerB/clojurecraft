@@ -215,7 +215,7 @@
                     "brain/siblings/sib-dimension-change.md"]}
  {:problem/stage :survival
   :problem/issue 259
-  :problem/goals [:eat]
+  :problem/goals [:eat :wear-armour :armour]
   :problem/statement
   "Normal difficulty brings hunger and night mobs to every stage. Food drains with every dig and jump, an empty bar stops healing and starves the bot to one heart, and zombies, skeletons and creepers find a bot that cannot hit back. The world value read the health from set-health and threw the food away; the bot could not eat, wear armour or attack."
   :problem/needs
@@ -226,7 +226,8 @@
   :problem/decisions
   ["Eating is an always row at priority 0 after the escapes, done when fed (food 14 or more) or when nothing edible is held, so a hungry bot with no food goes on with the run"
    "The meal is the server's food rising; a deadline from the food's eating time, stretched by the server's slowdown, fails it :not-eaten"
-   "Never eat what poisons or makes hungry, chorus fruit, suspicious stew or golden apples"]
+   "Never eat what poisons or makes hungry, chorus fruit, suspicious stew or golden apples"
+   "Armour is put on by two window-0 clicks (pick up, put down in the armour slot) and made only from ingots spare once the portal's iron is held, with a table at hand: it never sends the bot mining or after a tree"]
   :problem/risks
   ["A meal preempts work mid-intent: a smelt abandoned leaves its input in the furnace"
    "Another slot selected mid-meal stops the eating (set-carried-item)"
