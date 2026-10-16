@@ -126,18 +126,31 @@
              (or (blocks/air? id) (contains? blocks/water-states id)))
           (ray-cells world point)))
 
+(defn surface-points
+  "The points on the surface of the source at [x y z] the eyes may aim at: its aim-point, then
+   the points aim-offset off it along x, z and the diagonals."
+  [[x y z]]
+  (for [[dx dz] [[0 0] [aim-offset 0] [(- aim-offset) 0] [0 aim-offset] [0 (- aim-offset)]
+                 [aim-offset aim-offset] [aim-offset (- aim-offset)] [(- aim-offset) aim-offset]
+                 [(- aim-offset) (- aim-offset)]]]
+    [(+ x 0.5 dx) (+ y surface-height) (+ z 0.5 dz)]))
+
 (defn surface-aim
-  "Where on the surface of the source at [x y z] the eyes can aim (clear?): its aim-point, else
-   the first of the points aim-offset off it along x, z and the diagonals; nil when none is
-   clear. Issue #83: a bot standing at a corner of its cell looked at the surface's centre along
-   a line through block edges."
-  [world [x y z]]
-  (first (filter #(clear? world %)
-                 (for [[dx dz] [[0 0] [aim-offset 0] [(- aim-offset) 0] [0 aim-offset]
-                                [0 (- aim-offset)] [aim-offset aim-offset]
-                                [aim-offset (- aim-offset)] [(- aim-offset) aim-offset]
-                                [(- aim-offset) (- aim-offset)]]]
-                   [(+ x 0.5 dx) (+ y surface-height) (+ z 0.5 dz)]))))
+  "Where on the surface of the water source at src the eyes can aim (clear?): the first of
+   surface-points; nil when none is clear. Issue #83: a bot standing at a corner of its cell
+   looked at the surface's centre along a line through block edges."
+  [world src]
+  (first (filter #(clear? world %) (surface-points src))))
+
+(defn ray-walls
+  "The cells of the ray from the eye to point (ray-cells) a bucket's ray stops at: not loaded, or
+   neither air nor a fluid (the ray passes every fluid that is not a source), nearest first. The
+   lava refill's line: race 38839564087 runner 1 (issue #225, at 3f836ff) had bots Clj_r12, Clj_r19
+   and Clj_r21 send nine scoops each at a lava source from the station, every line within 0.03 of
+   an edge of deepslate or granite that its samples stepped past, and the build failed :no-scoop."
+  [world point]
+  (remove #(when-let [id (terrain/block-at world %)] (or (blocks/air? id) (blocks/fluid id)))
+          (ray-cells world point)))
 
 (defn sees?
   "Would the eyes reach the surface of the water source at src: some point of it aimed at
