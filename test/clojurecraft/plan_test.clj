@@ -803,6 +803,18 @@
         "a stone pickaxe reaches it")
     (is (= 1150 (:intent/dig-ms (:plan/intent w))))))
 
+(deftest a-dig-whose-drop-is-not-wanted-breaks-ore-the-pickaxe-cannot-harvest
+  ;; sim race 38806318231 (issue #70, 1065 runs): the cast's room met deepslate redstone ore with
+  ;; a wooden pickaxe, and the dig refused it :needs-tool three times; a build only needs the cell
+  (let [[w fx] (run (assoc-in (digging iron-ore {3 {:item wooden-pickaxe :count 1}})
+                     [:plan/intent :intent/drop-ok?]
+                     true)
+                    (ticks 50 1000))]
+    (is (seq (filter #(= :player-action (:packet/name (second %))) (sent fx)))
+        "START: the ore is broken for nothing")
+    (is (= 3 (:player/held-slot w)) "with the pickaxe, the fastest of its kind")
+    (is (= 7500 (:intent/dig-ms (:plan/intent w))) "at a hundredth of the wooden pickaxe's speed")))
+
 (deftest a-tool-that-vanishes-mid-dig-fails-tool-broke
   (let [[w _] (run (digging 1 {3 {:item wooden-pickaxe :count 1}}) (ticks 50 1200))]
     (is (= :digging (:intent/stage (:plan/intent w))))

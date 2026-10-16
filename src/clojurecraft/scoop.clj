@@ -43,6 +43,8 @@
 (def max-tries 3)                     ; scoops sent at one source before it fails :no-scoop
 (def surface-height 0.85)             ; where a source's surface is aimed at: a source stands 8/9 of a block
 (def ray-step 0.05)                   ; the length of one step along the eyes' ray to a source
+(def ray-margin 0.03)                 ; how near a block's edge the game's exact ray counts as touching it
+(def aim-offset 0.25)                 ; how far off a source's centre the eyes may aim when the centre's ray is not clear
 (def hunt-distance 40)                ; blocks a water hunt walks along a bearing before looking again
 (def surface-above 16)                ; how far above the eye a hunt looks for the ground to stand on
 (def surface-below 24)                ; and how far below it
@@ -91,19 +93,57 @@
   [[x y z]]
   [(+ x 0.5) (+ y surface-height) (+ z 0.5)])
 
-(defn sees?
-  "Would the eyes reach the surface of the water source at src: every cell on the ray from the
-   eye to its aim-point before the source itself loaded, and air or water (the game's ray stops
-   at any block with an outline, a grass tuft on the bank as much as a wall; a water cell it
-   passes, or fills the bucket from, which is as good)?"
-  [world src]
+(defn ray-cells
+  "The cells the ray from the eye to point passes through or within ray-margin of, sampled every
+   ray-step, but the cell point is in. The game casts a bucket's ray exactly, so a ray that grazes
+   a block's edge stops on it where samples of the line alone step past it: race 38759618225
+   runner 4 (issue #83, at 76010d2) had bots Clj_r15, Clj_r38, Clj_r61 and Clj_r78 hold the
+   bucket and send nine scoops each whose line passed within 0.03 of a block's edge (sand by a
+   pond, dirt and sand under a lake, stone and granite in a cave); the server's ray stopped on
+   it and filled nothing, while the model's sampled ray filled the bucket, so only real runs
+   failed."
+  [world point]
   (let [eye (game/eye world)
-        aim (aim-point src)
-        d (physics/distance eye aim)
-        dir (mapv #(/ (- %2 %1) d) eye aim)]
-    (every? #(when-let [id (terrain/block-at world %)]
-               (or (blocks/air? id) (contains? blocks/water-states id)))
-            (take-while #(not= src %) (physics/cells-along eye dir d ray-step)))))
+        d (physics/distance eye point)
+        dir (mapv #(/ (- %2 %1) d) eye point)
+        end (mapv #(long (math/floor %)) point)
+        m ray-margin]
+    (->> (for [k (range 0 (/ d ray-step))
+               :let [p (mapv #(+ %1 (* k ray-step %2)) eye dir)]
+               dx [(- m) m]
+               dy [(- m) m]
+               dz [(- m) m]]
+           (mapv #(long (math/floor (+ %1 %2))) p [dx dy dz]))
+         (remove #(= end %))
+         distinct)))
+
+(defn clear?
+  "Is every cell of the ray from the eye to point (ray-cells) loaded and air or water (the
+   game's ray stops at any block with an outline, a grass tuft on the bank as much as a wall; a
+   water cell it passes, or fills the bucket from, which is as good)?"
+  [world point]
+  (every? #(when-let [id (terrain/block-at world %)]
+             (or (blocks/air? id) (contains? blocks/water-states id)))
+          (ray-cells world point)))
+
+(defn surface-aim
+  "Where on the surface of the source at [x y z] the eyes can aim (clear?): its aim-point, else
+   the first of the points aim-offset off it along x, z and the diagonals; nil when none is
+   clear. Issue #83: a bot standing at a corner of its cell looked at the surface's centre along
+   a line through block edges."
+  [world [x y z]]
+  (first (filter #(clear? world %)
+                 (for [[dx dz] [[0 0] [aim-offset 0] [(- aim-offset) 0] [0 aim-offset]
+                                [0 (- aim-offset)] [aim-offset aim-offset]
+                                [aim-offset (- aim-offset)] [(- aim-offset) aim-offset]
+                                [(- aim-offset) (- aim-offset)]]]
+                   [(+ x 0.5 dx) (+ y surface-height) (+ z 0.5 dz)]))))
+
+(defn sees?
+  "Would the eyes reach the surface of the water source at src: some point of it aimed at
+   (surface-aim) with a clear ray?"
+  [world src]
+  (some? (surface-aim world src)))
 
 (defn in-reach?
   "Is src within the eyes' reach, eye to centre?"
@@ -296,42 +336,42 @@
   (let [[fx _ fz] (intent/feet world)]
     (apply max-key (fn [[dx dz]] (+ (* dx (- x fx)) (* dz (- z fz)))) stairs/directions)))
 
-(defn sees-centre?
-  "Would the eyes reach the centre of the source at src: every cell on the ray from the eye to it
-   before src loaded, and air or water?"
+(defn centre-aim
+  "Where in the source at src the eyes can aim through its open side (clear?): its centre, else
+   the first point aim-offset off it along an axis; nil when none is clear (issue #83)."
   [world src]
-  (let [eye (game/eye world)
-        aim (physics/centre src)
-        d (physics/distance eye aim)
-        dir (mapv #(/ (- %2 %1) d) eye aim)]
-    (every? #(when-let [id (terrain/block-at world %)]
-               (or (blocks/air? id) (contains? blocks/water-states id)))
-            (take-while #(not= src %) (physics/cells-along eye dir d ray-step)))))
+  (let [c (physics/centre src)]
+    (first (filter #(clear? world %)
+                   (cons c
+                         (for [axis [0 1 2] o [aim-offset (- aim-offset)]] (update c axis + o)))))))
 
 (defn seen-source
-  "A scoop of the nearest water source in reach whose centre the eyes see (sees-centre?), what
-   is over it notwithstanding, aimed at its centre (:intent/aim, as the cast scoops its water from
-   the side): deep under the landing, where no surface water is, the water of a flooded pocket or
-   a cave beside the feet. nil when none."
+  "A scoop of the nearest water source in reach, not blacklisted, that the eyes see into
+   (centre-aim), what is over it notwithstanding, aimed there (:intent/aim, as the cast scoops
+   its water from the side): deep under the landing, where no surface water is, the water of a
+   flooded pocket or a cave beside the feet. nil when none. It read no blacklist: race
+   38759618225 runner 4 (issue #83) had three of its bots scoop at one source three intents in a
+   row, each failing :no-scoop and blacklisting it, until the plan failed."
   [world]
   (when (deep? world)
     (let [eye (game/eye world)]
       (->> (chunk/find-blocks (stone/near-chunks (:world/chunks world) (stone/feet-chunk world))
                               #{blocks/water-base})
            (map (fn [[x y z _]] [x y z]))
+           (remove (:plan/blacklist world #{}))
            (filter #(and (in-reach? world %) (source? world % :water)))
            (sort-by #(physics/distance eye (physics/centre %)))
-           (filter #(sees-centre? world %))
-           (map (fn [src]
-                  {:intent/kind :scoop :intent/target src :intent/aim (physics/centre src)}))
+           (keep (fn [src]
+                   (when-let [aim (centre-aim world src)]
+                     {:intent/kind :scoop :intent/target src :intent/aim aim})))
            first))))
 
 (def bed-depth 2)                      ; rock over the head a scoop from below digs through at most
 
 (defn overhead
   "The water source over the feet's column, under at most bed-depth blocks of rock over the head
-   and within the eyes' reach, flowing water between the rock and it passed: {:source :rock},
-   the rock bottom first. nil when there is none."
+   and within the eyes' reach, flowing water between the rock and it passed, not blacklisted:
+   {:source :rock}, the rock bottom first. nil when there is none."
   [world]
   (let [[x y z] (intent/feet world)
         cells (map (fn [dy] [x (+ y dy) z]) (range 2 8))
@@ -341,6 +381,7 @@
                                more))]
     (when (and src
                (source? world src :water)
+               (not (contains? (:plan/blacklist world #{}) src))
                (<= (count rock) bed-depth)
                (in-reach? world src)
                (not-any? #(contains? intent/never-dug (blocks/name-of (terrain/block-at world %)))
@@ -486,7 +527,8 @@
   ;; an explicit :intent/aim is a scoop through the cell's open side: the source must still be
   ;; there, with anything over it; else the surface from above, air over it (scoopable?)
   [world {:intent/keys [target since still fluid aim] :or {still 0 fluid :water}}]
-  (let [look (physics/look-at (game/eye world) (or aim (aim-point target)))
+  (let [look (physics/look-at (game/eye world)
+                              (or aim (surface-aim world target) (aim-point target)))
         still (if (intent/still? world) (inc still) 0)
         world (assoc world :player/controls {:control/look look})
         there? (if aim (source? world target fluid) (scoopable? world target fluid))]
