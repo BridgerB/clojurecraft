@@ -10,7 +10,8 @@
    :window/cursor on every click and the server corrects it only when it is not empty."
   (:require [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
-            [clojurecraft.inventory :as inventory]))
+            [clojurecraft.inventory :as inventory]
+            [clojurecraft.recipe :as recipe]))
 
 (set! *warn-on-reflection* true)
 
@@ -112,14 +113,73 @@
   (some (fn [p] (when-not (get-in world [:player/inventory p]) (slot-of p)))
         inventory/main-then-hotbar))
 
+(def junk
+  "What a full inventory throws away to make room: what mining and walking pick up that no stage
+   asks for, no recipe the goals reach takes and no floor is laid from (stairs/fillers). Race
+   38805920624 runner 5 (issues #172, #192): eight bots stopped at 36 full slots, 450 to 830
+   cobblestone, the stones that drop themselves, raw copper, lapis, sand and clay among them;
+   a craft's result or a furnace's output shift-clicked into the inventory had nowhere to go, the
+   server answered nothing, and the resync after it found no free slot: :inventory-full."
+  #{:sand :red_sand :sandstone :red_sandstone :clay_ball :raw_copper :lapis_lazuli :redstone
+    :calcite :tuff_bricks :dripstone_block :pointed_dripstone :amethyst_shard :leaf_litter
+    :moss_block :moss_carpet :big_dripleaf :small_dripleaf :wildflowers :wheat_seeds :oak_sapling
+    :birch_sapling :spruce_sapling :jungle_sapling :acacia_sapling :dark_oak_sapling :cherry_sapling
+    :mangrove_propagule})
+
+(def cobblestone-keep 128)            ; cobblestone a full inventory never throws below: a cast's walls, floors and seals
+
+(defn junk-slot
+  "The player slot (main inventory first) of the stack a full inventory throws away: the first
+   holding junk, else a stack of cobblestone whose loss still leaves cobblestone-keep; nil when
+   there is neither."
+  [world]
+  (let [inv (:player/inventory world)
+        cobblestone (get (recipe/counts inv) :cobblestone 0)
+        held (for [p inventory/main-then-hotbar
+                   :let [s (get inv p)]
+                   :when s]
+               [p (recipe/item-name (:item s)) (:count s)])]
+    (or (some (fn [[p n]] (when (junk n) p)) held)
+        (some (fn [[p n c]]
+                (when (and (= n :cobblestone) (>= (- cobblestone c) cobblestone-keep)) p))
+              held))))
+
+(defn tossable
+  "The player slot to throw a stack from so that view v has a free slot: junk-slot when no slot
+   is free, else nil. A window intent asks it before it moves anything into the inventory."
+  [world v]
+  (when-not (free-slot world v) (junk-slot world)))
+
+(def toss-pitch -30.0)                 ; degrees up the eyes look before a throw (negative is up)
+
+(defn toss
+  "Throw the whole stack at player slot p out of view v, to make room (tossable). First the eyes
+   look up to toss-pitch (a tick, so the server has the look before the click): a stack thrown
+   along the look flies about 0.3 blocks a tick from the eyes, so looking down at a table it lands
+   a block off, inside the pickup box, and comes back once its two seconds are up; thrown upward
+   it lands about three blocks off, out of it."
+  [world {:view/keys [slot-of] :as v} p]
+  (let [[yaw pitch] (:player/look world)]
+    (if (> pitch toss-pitch)
+      (assoc world :player/controls {:control/look [yaw toss-pitch]})
+      (click world v (inventory/toss-click (slot-of p))))))
+
 (defn resync
   "Learn the server's cursor after a lost click: put it down into a free slot of view v with a
    click the server answers in full (resync-click). A loaded cursor is put down, an empty one
    leaves everything as it was, and either way the whole window and the real cursor come back.
-   Fails :inventory-full when no slot is free."
-  [world v]
-  (if-let [s (free-slot world v)]
-    (-> world
-        (resync-click v (inventory/left-click s))
-        (intent/dissoc-intent :intent/resync))
-    (intent/fail world :inventory-full)))
+   With no slot free, the resync click throws a junk stack out instead (junk-slot; vanilla throws
+   only with nothing on the cursor, and answers in full either way). Fails :inventory-full when
+   no slot is free and nothing is junk."
+  [world {:view/keys [slot-of] :as v}]
+  (let [s (free-slot world v)
+        p (junk-slot world)]
+    (cond s
+          (-> world
+              (resync-click v (inventory/left-click s))
+              (intent/dissoc-intent :intent/resync))
+          p
+          (-> world
+              (resync-click v (inventory/toss-click (slot-of p)))
+              (intent/dissoc-intent :intent/resync))
+          :else (intent/fail world :inventory-full))))

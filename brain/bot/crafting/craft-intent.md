@@ -5,7 +5,7 @@ type: reference
 tags: [bot, crafting, intents]
 aliases: [:craft, craft.clj, craft stages, settle click verify take, stale-window, intent/window]
 status: verified
-lastUpdated: 2026-10-09
+lastUpdated: 2026-10-15
 verifiedAgainst: 5c7d6c1
 sourceRefs:
   - src/clojurecraft/craft.clj#defmethod intent/run :craft
@@ -35,7 +35,7 @@ related:
 - `window.clj`, `click` - sends a click into a view; see [[phantom-cursor-stale-window]].
 
 ## Stages
-1. **`:settle`** (one action per tick, in order): unknown recipe fails `:unknown-recipe`; for `:inventory` only, an open container is closed first (`container-close`, `:window/open` dropped); no state id yet waits up to `stage-timeout` (5000 ms) then fails `:no-window`; a loaded `:window/cursor` is put down in a free inventory slot of the view (fails `:inventory-full`); any item left in the view's grid (slots 1..size²) is shift-clicked out; finally `recipe/clicks` plans the craft with the view's size and slot map (nil fails `:no-ingredient`) and records `:intent/result`, `:intent/makes` and `:intent/before` (held count of the result).
+1. **`:settle`** (one action per tick, in order): unknown recipe fails `:unknown-recipe`; for `:inventory` only, an open container is closed first (`container-close`, `:window/open` dropped); no state id yet waits up to `stage-timeout` (5000 ms) then fails `:no-window`; a loaded `:window/cursor` is put down in a free inventory slot of the view (fails `:inventory-full`); with no slot free, a junk stack is thrown out (`window/tossable`, `window/toss`, [[window-views]]; issues #172, #192); any item left in the view's grid (slots 1..size²) is shift-clicked out; finally `recipe/clicks` plans the craft with the view's size and slot map (nil fails `:no-ingredient`) and records `:intent/result`, `:intent/makes` and `:intent/before` (held count of the result).
 2. **`:click`**: sends the next planned click; when none remain, moves to `:verify`.
 3. **`:verify`**: only when the view's slot 0 is exactly `{:item result :count makes}` does it shift-click slot 0 and move to `:take`. Any other item there fails `:wrong-result`; nothing for 5 s fails `:no-result`.
 4. **`:take`**: done when the held count of the result reaches `before + makes`; a `:table` craft then emits `container-close` for the table window and drops `:window/open`. 5 s without fails `:not-taken`.

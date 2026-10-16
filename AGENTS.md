@@ -472,6 +472,7 @@ Patterns, not recipes.
 7. **`wood: no-log` (#57): a hunt that only set out toward known trees.** The same slots failed every round without moving; the planner now waits in ticks (`plan/wait-ticks`) and the hunt walks back toward remembered trees.
 8. **`rejected` at ingots, cobblestone, stone-pickaxe (#88, #144, #64): a slow server.** Digs answered with the block standing; the server ran 130 ms a tick. The bot reads the server's tick length from `set-time` spacing (`game/clocked`, `:server/tick-ms`) and stretches a dig's FINISH and confirm window (`intent/slowdown`).
 9. **`rejected` at cast-one (#44): a block into the bot's own body.** `build/reachable-stand` refuses a stand whose feet or head is the cell worked; `build/refused-for-the-body?` approaches again.
+10. **`inventory-full` at ingots and portal-kit (#172, #192): 36 full slots.** Mining fills the inventory with cobblestone and stone nothing needs; a craft's result had nowhere to go, no answer came, and the resync found no slot. `window/tossable` throws a `junk` stack first.
 
 **Worked example, #142 `[:portal :no-station]`** (PR #160). The issue: 89 runs in 18 rounds, every last intent `nil`. `grep -rn ':no-station' src/` pointed at `build/refill`. The run maps (`gh run download 38664661309 -n simrace-8ddbb1a...-6`) showed seven runs on five landings, each holding the whole portal kit after 25 to 65 minutes. One probe from `main` over three snapshots printed the build intent, the lava near the origin, `build/station` and `build/refill`: in every world one obsidian cast, two scoops in memory, no lava within 12 blocks. Cause: `build/site-ok?` accepted a site when some stand reached some source, so a lone source passed. Fix, cause half: `build/pool` and `build/spent?` refuse a site whose pool is smaller than the cells left. Moment half: a refill with no station at a spent site ends the build so the planner picks a new site. A third finding came free: `choose-site` filtered 30 000 lava sources per candidate (40 s a call), now only the nearby ones (3 s). Test: `build_test/a-lone-lava-source-is-no-site`. Brain note `brain/bot/plan/build-plan.md`, one `problems.edn` sentence, one snapshot under `test/issues/142/`, the before/after table in the body (`[:portal :no-station]` on main, "left the spent site, stairs down toward lava" on the branch). Green in nine minutes, merged.
 
@@ -738,7 +739,8 @@ Every attribute, its meaning and lifetime is in `src/clojurecraft/model.clj` (`m
 
 - Name slots with `inventory/slot-in` (`[:hotbar n] [:main n] [:result] [:grid n] [:input] [:fuel] [:output]` ...).
 - A current-state-id click is answered per changed slot; a stale one by `container-set-content` + real cursor. **A click that changes nothing gets no packet.** A click for a closed window is silently ignored.
-- `window/click` emits, drops `:window/cursor`, records `:intent/awaiting`; intent-only. `window/waiting` → nil, `:waiting`, or `:overdue` after `answer-timeout` 3000. On overdue `window/lost` resyncs (`resync-click`, state id -1, cursor put in a free slot); the `max-lost` 3rd loss fails `:stale-window` (#131, #132: loaded servers answer late, not never).
+- `window/click` emits, drops `:window/cursor`, records `:intent/awaiting`; intent-only. `window/waiting` → nil, `:waiting`, or `:overdue` after `answer-timeout` 3000. On overdue `window/lost` resyncs (`resync-click`, state id -1, cursor put in a free slot, or with none a `junk` stack thrown); the `max-lost` 3rd loss fails `:stale-window` (#131, #132: loaded servers answer late, not never).
+- **A full inventory:** a result or output moved into 36 full slots stays put and gets no answer. The craft's and smelt's `:settle` throw a `window/junk` stack first when no slot is free (`window/tossable`, `toss`: look up to `toss-pitch`, then mode 4; cobblestone only above `cobblestone-keep`; #172, #192).
 - **Phantom cursor:** the server adopts the click's claimed cursor, so `window/click` forgets the cursor as it sends; never claim a non-empty cursor.
 - **A furnace moves the state id by itself:** judge a click by the slot clicked.
 - `recipe/recipes` 1030 recipes, tags resolved; `datagen/shrink` trims padding. `recipe/clicks` lays one craft; nil when not coverable.
@@ -851,7 +853,7 @@ Signature = `[target reason]`. Meaning is the common case; read the raising code
 | `:no-landing` | not standing at the landing within 30 s | `plan/landing-tick` | fixture or server load, not bot logic |
 | `:no-ingredient` | craft/smelt could not plan clicks from the inventory | `craft` `:settle`, `smelt` `:settle`, `recipe/sources` | split stacks (#86) |
 | `:no-bucket` | lava pour has no empty bucket | `build/refill` | `:portal-kit` counting (#49) |
-| `:inventory-full` | no free slot to put the cursor down | `craft` `:settle`, `smelt/put-down`, `window/resync` | RESULT `:held`: what filled the inventory |
+| `:inventory-full` | no free slot to put the cursor down, and no junk to throw | `craft` `:settle`, `smelt/put-down`, `window/resync` | RESULT `:held`: what filled the inventory; `window/junk` (#172, #192) |
 | `:crashed` | the run threw; RESULT has `:error` | `race/play-one!`, `simrace/play!` | read `:error` first |
 | `:ledge` | no longer raised (collect over a ledge is done now) | none | closing PR of #93 |
 
