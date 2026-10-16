@@ -22,6 +22,7 @@
             [clojure.string :as str]
             [clojurecraft.cli :as cli]
             [clojurecraft.fixture :as fixture]
+            [clojurecraft.food :as food]
             [clojurecraft.landings :as landings]
             [clojurecraft.rcon :as rcon])
   (:gen-class))
@@ -59,6 +60,7 @@
 (def arena-reach 16)                  ; blocks round the landing an arena's setup is forceloaded over
 (def fortress-offset 48)              ; blocks west of a located fortress the Nether pad is carved
 (def pad-y 72)                        ; the Nether pad's feet height: over the lava sea (y 31), under the roof
+(def hungry-food 10)                  ; the food a :hungry landing waits for before the bot is told to go
 
 (def portal-arena
   "The portal rows' arena round the landing: stone ten deep under air, and a trench of lava
@@ -203,7 +205,17 @@
     :gym/truth
     [{:truth/cmd
       "execute as {name} at @s unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water"
-      :truth/re "Test passed"} {:truth/cmd "data get entity {name} OnGround" :truth/re "1b"}]}])
+      :truth/re "Test passed"} {:truth/cmd "data get entity {name} OnGround" :truth/re "1b"}]}
+   ;; issue #259: landed hungry (the :hungry landing waits for the food to fall under
+   ;; hungry-food) with four breads, the bot eats until the bar is at 14 or more; judged by the
+   ;; server's food and the breads gone
+   {:gym/goal :eat
+    :gym/until "eat"
+    :gym/land :hungry
+    :gym/prereqs ["minecraft:bread 4"]
+    :gym/timeout-ms 60000
+    :gym/truth [{:truth/cmd "data get entity {name} foodLevel" :truth/re "data: (1[4-9]|20)$"}
+                {:truth/cmd "clear {name} minecraft:bread 0" :truth/re "Found [1-3] |No items"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
@@ -391,6 +403,29 @@
   (fixture/teleport! rc name [x z])
   (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
   landing)
+
+(defn food-level
+  "The bot's food as the server holds it (data get entity <name> foodLevel), or nil when the
+   reply says none."
+  [rc name]
+  (some->> (rcon/command! rc (str "data get entity " name " foodLevel"))
+           (re-find #"data: (\d+)")
+           second
+           parse-long))
+
+(defmethod land! :hungry
+  ;; the surface landing, then hunger at its strongest until the server says the food is under
+  ;; hungry-food (at most 30 s), then no more: a bot told to go while still fed is done at once,
+  ;; and the effect takes a point every three ticks at best, slower than the go comes
+  [rc row name landing]
+  (let [landing ((get-method land! :surface) rc row name landing)]
+    (rcon/command! rc (str "effect give " name " minecraft:hunger 30 255"))
+    (try (loop [i 0]
+           (when (and (< i 150) (>= (or (food-level rc name) food/max-food) hungry-food))
+             (Thread/sleep 200)
+             (recur (inc i))))
+         (finally (rcon/command! rc (str "effect clear " name " minecraft:hunger"))))
+    landing))
 
 (defn in-nether "cmd run in the Nether." [cmd] (str "execute in minecraft:the_nether run " cmd))
 

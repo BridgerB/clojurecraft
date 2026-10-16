@@ -90,7 +90,10 @@
     "how long the server's ticks take now, from the set-time packets' spacing; digs stretch by it (intent/slowdown)"
     "after the second set-time"]
    [:player/health "health from set_health" "after the first set_health"]
-   [:control/forward? "walk forward" "inside :player/controls"]
+   [:player/food "food level, 0-20, from set_health; the :eat row eats under eat/hungry-below"
+    "after the first set_health"]
+   [:player/saturation "food saturation from set_health: what drains before the food does"
+    "after the first set_health"] [:control/forward? "walk forward" "inside :player/controls"]
    [:control/jump? "jump when allowed" "inside :player/controls"]
    [:control/yaw "heading to walk on" "inside :player/controls"]
    [:control/look "[yaw pitch] to face" "inside :player/controls"]
@@ -328,8 +331,11 @@
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
-   [:intent/item "item to place" "place, redig"]
-   [:intent/against "block the placement is against" "place"]
+   [:intent/item "item to place, put in the hand, or eat" "place, redig, equip, eat"]
+   [:intent/food-before "the food level when an :eat sent its use-item; a higher one is the meal"
+    "eat, :eating stage"]
+   [:intent/eat-by "ms past which an :eat whose food has not risen fails :not-eaten"
+    "eat, :eating stage"] [:intent/against "block the placement is against" "place"]
    [:intent/refused
     "cells the server refused a placement into with nothing in them (a body stood there); the next spot is another, place/max-refusals of them fail :rejected"
     "place, after such a refusal"]
