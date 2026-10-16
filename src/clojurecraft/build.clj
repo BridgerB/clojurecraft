@@ -831,12 +831,28 @@
          (sort-by #(physics/distance (physics/centre %) (physics/centre pos)))
          first)))
 
+(def site-reach 8) ; feet this far or nearer the room's landing are at the site: nothing to go back by
+
+(defn way-back
+  "The way back to the build's site from far off: toward the room's landing (landing for the
+   build's access h) as a landing op goes (toward-stand: a walk, else stairs to its height and a
+   level way dug), or nil when the feet are within site-reach of it, where no stand is a missing
+   stand, not a missing way. Sim race 38806318231 (issue #196, 75 runs in 37 rounds, world R2/3):
+   the cast's room at y 23, the bot climbed out to y 64 for the wood of a pickaxe, made it, and
+   the build's next op, a room cell 41 below and 34 away, found no stand and no cut at the feet's
+   height and failed :no-stand three times in three ticks."
+  [world {:intent/keys [build origin facing access]}]
+  (let [to (cell origin facing (landing (or access 0)))]
+    (when (> (physics/distance (physics/centre (intent/feet world)) (physics/centre to)) site-reach)
+      (toward-stand world to build origin facing))))
+
 (defn approach-stand
   "The child that gets the feet where op is worked from, or nil when they are there: the room's
    landing is gone to at its height (toward-stand: stairs to it first, then a level way dug); a
-   room cell (its stand the cell itself) is dug from anywhere that reaches it, the nearest such cell a route
-   reaches (reachable-stand); any other op from its designated stand (toward), or, for a place or
-   a dig whose stand cannot be occupied, a cell that already reaches the block. A keyword is why
+   room cell (its stand the cell itself) is dug from anywhere that reaches it, the nearest such
+   cell a route reaches (reachable-stand), or from far off the way back to the site (way-back);
+   any other op from its designated stand (toward), or, for a place or a dig whose stand cannot
+   be occupied, a cell that already reaches the block. A keyword is why
    no such cell exists. Ground in the way is dug only for a :build, whose plan says which rock to
    keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
   [world i {:build/keys [op stand pos step]}]
@@ -846,10 +862,13 @@
           (cond (within-reach? world pos) nil
                 :else
                 (let [alt (or (reachable-stand world pos pos) (when build (room-stand world i pos)))
-                      cut (when (and (nil? alt) build) (nearest-stand-cell world i pos))]
+                      cut (when (and (nil? alt) build) (nearest-stand-cell world i pos))
+                      home (when (and (nil? alt) (nil? cut) build) (way-back world i))]
                   (cond alt {:intent/kind :walk :intent/target alt :intent/for :build}
                         ;; no route into the room: cut the way to the stand nearest the feet
                         cut (toward-stand world cut build origin facing)
+                        ;; far from the site (out for a pickaxe's wood): the way back to it
+                        home home
                         :else :no-stand)))
           (intent/centred? world stand) nil
           :else
@@ -1152,15 +1171,37 @@
       [(long (math/signum (double dx))) 0]
       [0 (long (math/signum (double dz)))])))
 
+(defn castable?
+  "Could a frame be cast from the lava round source src: at least as many sources of sources
+   within pool-radius of it as the frame has cells (spent? asks the same of a site's stands)?
+   A lone source never is."
+  [sources src]
+  (>= (count (near sources src pool-radius)) (count frame-cells)))
+
+(defn hunt-target
+  "The lava source the hunt cuts toward (toward-lava): the nearest loaded within hunt-radius
+   (sources-near) whose cell over it is not above the feet, since the hunt's stairs go down and
+   its tunnel goes level, and round which a frame could be cast (castable?); nil when none.
+   Sim race 38811561269 runner 6 (issue #41, worlds R1/38, R2/8 and R2/32 round after round,
+   R2/26 on runner 8): the hunt took the nearest source whatever its height, tunnelled under a
+   lone source six blocks over the feet (R1/38) and under a small pool eleven over (R2/26),
+   stopped a block short of the column with nothing to cut, the roof out of reach, and waited
+   :no-site with fifteen thousand sources of the lava sea loaded below."
+  [world]
+  (let [fy (physics/y-of (intent/feet world))
+        sources (lava-sources world)]
+    (first (filter #(and (<= (inc (physics/y-of %)) fy) (castable? sources %))
+                   (sources-near world)))))
+
 (defn toward-lava
-  "The way toward the nearest lava source loaded: stairs down (stone/stairs, stair-depth at a
-   time) while the feet are above the cell over it, else a tunnel of level steps toward it, as
-   many as the plane distance less one (the step onto the cell over the source is refused for
-   the lava under it, and the roof is then in reach: uncap). With no source loaded, stairs down
-   to lava-depth. nil when nothing can be cut from here."
+  "The way toward lava a frame can be cast from (hunt-target): stairs down (stone/stairs,
+   stair-depth at a time) while the feet are above the cell over it, else a tunnel of level
+   steps toward it, as many as the plane distance less one (the step onto the cell over the
+   source is refused for the lava under it, and the roof is then in reach: uncap). With no such
+   source loaded, stairs down to lava-depth. nil when nothing can be cut from here."
   [world]
   (let [feet (intent/feet world)
-        [sx sy sz :as src] (first (sources-near world))
+        [sx sy sz :as src] (hunt-target world)
         to (if src (inc sy) lava-depth)]
     (cond (> (physics/y-of feet) to) (stone/stairs world {:goal/depth to})
           (nil? src) nil
@@ -1179,7 +1220,8 @@
    nil when none can be taken. Issue #41, the wall before the Nether: race 38477665442's 47
    real bots and 950 of the sim race's runs stood at the surface with the kit, no lava within
    sixteen of any origin, and waited :no-site out. Lava is not on the surface of a 1.18+ world:
-   it is the sea under y -54, roofed, and cave springs."
+   it is the sea under y -54, roofed, and cave springs; the stairs and tunnel go only toward
+   lava a frame can be cast from, below or level with the feet (hunt-target)."
   [world]
   (or (lava-walk world) (uncap world) (toward-lava world)))
 

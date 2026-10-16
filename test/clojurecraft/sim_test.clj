@@ -2912,3 +2912,28 @@
     (is (some #(fortress/arrived? w %) (fortress/bricks w)))
     (is (empty? (:sim/violations sim)))))
 
+
+(deftest a-full-inventory-throws-junk-to-take-the-pickaxe
+  ;; race 38805920624 runner 5 (issues #172, #192): with every slot full, the craft's result had
+  ;; nowhere to go and the craft failed :inventory-full; a junk stack is thrown out first
+  (let [sand {:item (recipe/item-id :sand) :count 64}
+        junk (into {}
+                   (concat (for [n (range 3 9)] [[:hotbar n] sand])
+                           (for [n (range 27)] [[:main n] sand])))
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init
+                          {:column (world/column-bytes {})
+                           :spawn [0.5 64.0 0.5]
+                           :inventory
+                           (merge junk
+                                  {[:hotbar 0] {:item (recipe/item-id :oak_planks) :count 4}
+                                   [:hotbar 1] {:item (recipe/item-id :stick) :count 3}
+                                   [:hotbar 2] {:item (recipe/item-id :crafting_table) :count 2}})})
+                         #(or (plan/done? %) (plan/failed? %))
+                         60000
+                         {:event/kind :go :go/goals [:pickaxe]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (:wooden_pickaxe (held w))))
+    (is (= (* 32 64) (:sand (held w))) "one stack of sand thrown, no more")
+    (is (= [] (:sim/violations sim)))))

@@ -292,6 +292,19 @@
     (is (nil? (site-at nine)) "nine: one short of the frame")
     (is (some? (site-at ten)) "ten: a site")))
 
+(deftest the-lava-hunt-goes-down-past-lava-it-cannot-cast-from
+  ;; sim race 38811561269 (issue #41): the hunt tunnelled toward a lone source and toward a
+  ;; pool over the head, stopped under them with nothing left to cut, and waited :no-site with
+  ;; the lava sea below
+  (let [pos [10.5 41.0 10.5]
+        room {[10 41 10] blocks/air [10 42 10] blocks/air}
+        hunt #(build/toward-lava (standing-at (open-ground (merge room %)) pos))
+        pool-at (fn [y] (into {} (for [x [11 12 13] z [2 3 4 5]] [[x y z] blocks/lava-base])))
+        down {:intent/kind :stairs-down :intent/to-y 35}]
+    (is (= :tunnel (:intent/kind (hunt (pool-at 40)))) "a pool level with the feet: a tunnel to it")
+    (is (= down (hunt {[12 40 4] blocks/lava-base})) "a lone source: on down toward the sea")
+    (is (= down (hunt (pool-at 50))) "a pool over the head: on down toward the sea")))
+
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
   ;; server refusing it three times, :rejected
@@ -358,3 +371,20 @@
     (is (nil? (build/reachable-stand w [14 63 5] [14 63 5])) "walled in: no route reaches a stand")
     (is (= [13 63 5] (build/nearest-stand-cell w i [14 63 5]))
         "the stand nearest the cell, at the feet's height, the wall in the way to dig")))
+
+(deftest a-site-left-for-a-pickaxe-is-gone-back-to
+  ;; sim race 38806318231 (issue #196, 75 runs in 37 rounds, world R2/3): the cast's room at y 23,
+  ;; the bot climbed to y 64 for a pickaxe's wood and made it; the next op, a room cell 41 below,
+  ;; had no stand and no cut at the feet's height, and the build failed :no-stand three times
+  (let [i {:intent/kind :build
+           :intent/build :portal
+           :intent/origin [6 30 12]
+           :intent/facing :south
+           :intent/access 1}
+        pos (build/cell [6 30 12] :south [1 0 1])
+        op {:build/op :dig :build/pos pos :build/stand pos :build/step :room}
+        far (standing-at (open-ground {}) [5.5 63.0 5.5])]
+    (is (= {:intent/kind :stairs-down :intent/to-y 57} (build/approach-stand far i op))
+        "far above the room: stairs down toward the landing's height")
+    (is (nil? (build/way-back (standing-at (open-ground {}) [6.5 31.0 15.5]) i))
+        "at the landing already: nothing to go back by")))
