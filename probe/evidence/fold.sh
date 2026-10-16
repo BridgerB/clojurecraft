@@ -23,7 +23,7 @@ pids=""
 for _ in $(seq 1 "$busy"); do (while :; do :; done) & pids="$pids $!"; done
 echo "busy loops: $busy; conversion at nice $level"
 t0=$(date +%s)
-(cd ../at && nice -n "$level" clojure -J-Xmx3g -M:simrace --from-recording "${paths#,}" --name "${names#,}" --out "$OLDPWD/out/snaps" --round 38962774798) | grep -E '^(REAL|GAP)'
+(cd ../at && nice -n "$level" clojure -J-Xmx3g ${JOPTS:-} -M:simrace --from-recording "${paths#,}" --name "${names#,}" --out "$OLDPWD/out/snaps" --round 38962774798) | grep -E '^(REAL|GAP)'
 echo "WALL $(( $(date +%s) - t0 )) s at nice $level beside $busy busy loops"
 # shellcheck disable=SC2086
 kill $pids 2>/dev/null || true
