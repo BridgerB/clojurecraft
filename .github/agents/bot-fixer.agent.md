@@ -24,7 +24,7 @@ The session is cut at 59 minutes, setup included, and every turn re-sends everyt
 
 ## How your session differs from AGENTS.md
 
-**The claim.** Your assignment is the claim. Skip AGENTS.md sections 3 and 4.1-4.4 (the board, choosing, the `fix/<n>` push): you cannot push `fix/<n>` and you do not touch the project board, labels, assignees or other issues. Your branch is the `copilot/*` branch you were given. First check `git ls-remote --heads origin fix/<n>`: when it exists and has an open pull request, another agent already holds the issue; say so in your pull request body and stop.
+**The claim.** Your assignment is the claim: the orchestrator (AGENTS.md section 3) gave you this issue and gives out the next one, so you work this one only and never pick another. You cannot push `fix/<n>` and you do not touch labels, assignees or other issues. When you are done, stop: the orchestrator marks your draft ready, merges it when the checks are green, and asks you to go on when one is red. Your branch is the `copilot/*` branch you were given. First check `git ls-remote --heads origin fix/<n>`: when it exists and has an open pull request, another agent already holds the issue; say so in your pull request body and stop.
 
 **The pull request body names the issue.** Its first line is `Fixes #<n>`, one such line per issue the change fixes (one root cause, one PR: add another `Fixes` only for an issue that clearly shares it). `issue.yml` finds your issue from that line, because your branch name does not carry it. Without it the `check` job fails at once. When you cannot prove the fix, write `Refs #<n>` instead and say why.
 

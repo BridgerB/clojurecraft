@@ -21,6 +21,8 @@
         Copilot to go on, in a pull request comment that says what is wrong, at most once every
         nudge-every-ms and max-nudges times; after that the issue is labelled agent-stuck and
         left for a person.
+   Each pass also writes what it saw and did to orchestrator.json on the gh-pages branch (when it
+   changed, or every heartbeat-ms), which the results page's Agents tab reads.
    An issue labelled no-agent or agent-stuck is never touched. A user token (COPILOT_TOKEN) does
    all of it: GitHub assigns Copilot and hears @copilot only from a user."
   (:require [babashka.process :as p]
@@ -115,6 +117,51 @@
         given (set (map :issue assigns))]
     (vec (for [m issue-moves :when (or (not= :assign (:move m)) (given (:issue m)))] m))))
 
+(def status-file "orchestrator.json")          ; on the gh-pages branch, read by the page's Agents tab
+(def heartbeat-ms (* 10 60 1000))             ; an unchanged status is still rewritten this often, so the page sees the loop alive
+(def log-keep 300)                            ; actions kept in the status's log, newest last
+(def quiet-ms (* 2 60 60 1000))               ; a held pull request untouched this long is flagged on the page
+
+(defn iso "Epoch milliseconds as an ISO instant." [t] (str (java.time.Instant/ofEpochMilli t)))
+
+(defn status
+  "What the orchestrator saw and did in one pass, as the page reads it: when, the cap, the open
+   issues (with Copilot's pull request, its checks, whether a session runs, its continue
+   comments and whether it has gone quiet), this pass's moves, and prev's log with this pass's
+   actions (every move but :wait and :leave) added, the newest log-keep. Pure."
+  [{:keys [issues prs live moves cap now prev]}]
+  (let [acted (for [m moves
+                    :when (not (#{:wait :leave} (:move m)))]
+                (assoc (select-keys m [:issue :move :pr :why]) :at (iso now)))]
+    {:at (iso now)
+     :cap cap
+     :issues (vec (for [{n :number :keys [title labels assignees]} issues
+                        :let [pr (prs n)]]
+                    (cond-> {:number n
+                             :title title
+                             :labels (vec labels)
+                             :copilot (boolean (or pr
+                                                   (some #(str/starts-with? (str/lower-case %)
+                                                                            "copilot")
+                                                         assignees)))}
+                      pr
+                      (assoc :pr (:number pr)
+                             :checks (:checks pr)
+                             :draft (:draft? pr)
+                             :session (boolean (live (:branch pr)))
+                             :nudges (:nudges pr)
+                             :quiet (> (- now (:updated-ms pr now)) quiet-ms)))))
+     :moves (vec (for [m moves] (select-keys m [:issue :move :pr :why])))
+     :log (vec (take-last log-keep (concat (:log prev) acted)))}))
+
+(defn status-changed?
+  "Should next be written over prev: it says something new (its time aside), or prev is older
+   than heartbeat-ms, or there is no prev."
+  [prev next now]
+  (or (nil? prev)
+      (not= (dissoc prev :at) (dissoc (json/parse-string (json/generate-string next) true) :at))
+      (> (- now (.toEpochMilli (java.time.Instant/parse (:at prev)))) heartbeat-ms)))
+
 (defn nudge-text
   "The continue comment for a pull request in move m, saying what is left."
   [{:keys [issue checks draft?]}]
@@ -158,9 +205,10 @@
                 "--label" "bot-failure"
                 "--state" "open"
                 "--limit" "200"
-                "--json" "number,labels,assignees")
+                "--json" "number,title,labels,assignees")
        (map (fn [i]
               {:number (:number i)
+               :title (:title i)
                :labels (map :name (:labels i))
                :assignees (map :login (:assignees i))}))
        (sort-by :number)))
@@ -178,20 +226,23 @@
    {n {:number :branch :draft? :held :guarded? :checks :nudges :last-nudge-ms}}."
   []
   (into {}
-        (for [pr (gh-json
-                  "pr" "list"
-                  "--repo" repo
-                  "--state" "open"
-                  "--limit" "100"
-                  "--json"
-                  "number,headRefName,headRefOid,isDraft,body,statusCheckRollup,comments,files")
-              :when (str/starts-with? (:headRefName pr) "copilot/")
-              :let [ours (filter #(str/starts-with? (str (:body %)) nudge-lead) (:comments pr))]
-              n (fixes (:body pr))]
+        (for
+          [pr
+           (gh-json
+            "pr" "list"
+            "--repo" repo
+            "--state" "open"
+            "--limit" "100"
+            "--json"
+            "number,headRefName,headRefOid,isDraft,body,statusCheckRollup,comments,files,updatedAt")
+           :when (str/starts-with? (:headRefName pr) "copilot/")
+           :let [ours (filter #(str/starts-with? (str (:body %)) nudge-lead) (:comments pr))]
+           n (fixes (:body pr))]
           [n
            {:number (:number pr)
             :branch (:headRefName pr)
             :draft? (:isDraft pr)
+            :updated-ms (ms (:updatedAt pr))
             :held (held-runs (:headRefOid pr))
             :guarded? (boolean (some (fn [{:keys [path]}] (some #(str/starts-with? path %) guarded))
                                      (:files pr)))
@@ -221,6 +272,38 @@
            last
            :created_at
            ms))
+
+(defn read-status
+  "The status on gh-pages, {:value status :sha blob-sha}, or nil when there is none yet."
+  []
+  (let [r (p/shell {:out :string :err :string :continue true}
+                   "gh"
+                   "api"
+                   (str "repos/" repo "/contents/" status-file "?ref=gh-pages"))]
+    (when (zero? (:exit r))
+      (let [{:keys [content sha]} (json/parse-string (:out r) true)]
+        {:sha sha
+         :value (json/parse-string
+                 (String. (.decode (java.util.Base64/getMimeDecoder) (str content)) "UTF-8")
+                 true)}))))
+
+(defn write-status!
+  "Write status to gh-pages over the blob sha (nil for a first write); a failed write is printed,
+   never thrown: the next pass writes again."
+  [status sha]
+  (let [body (json/generate-string
+              (cond-> {:message "Orchestrator status"
+                       :branch "gh-pages"
+                       :content (.encodeToString
+                                 (java.util.Base64/getEncoder)
+                                 (.getBytes (json/generate-string status {:pretty true}) "UTF-8"))}
+                sha (assoc :sha sha)))
+        r (p/shell {:in body :out :string :err :string :continue true}
+                   "gh"
+                   "api" "-X"
+                   "PUT" (str "repos/" repo "/contents/" status-file)
+                   "--input" "-")]
+    (when-not (zero? (:exit r)) (println "status not written:" (str/trim (:err r))))))
 
 (defn assign!
   "Assign Copilot to issue n with the bot-fixer agent, which starts a session."
@@ -298,7 +381,13 @@
                              (assigned-ms (:number i)))
                            now))]
     (println (count issues) "open bot-failure issues," holding "held by Copilot, cap" cap)
-    (run! #(perform! dry? %) (moves each holding cap))))
+    (let [made (moves each holding cap)]
+      (run! #(perform! dry? %) made)
+      (when-not dry?
+        (let [{prev :value sha :sha} (read-status)
+              next (status
+                    {:issues issues :prs prs :live live :moves made :cap cap :now now :prev prev})]
+          (when (status-changed? prev next now) (write-status! next sha)))))))
 
 (defn -main
   "dispatch [--dry-run]: make every open bot-failure issue's move."

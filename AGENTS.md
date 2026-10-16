@@ -1,12 +1,12 @@
 # AGENTS.md: keeping the bot-failure issues down
 
-The working manual for fixing the bot's failures, for any agent or person who picks the work up cold. The rounds on GitHub's runners play the bot without end and file every way it fails as an issue labelled `bot-failure`. You take the oldest one off the board, find out why the bot stopped, change the bot so it does not, prove it with the evidence the issue carries, and merge. Then the next one.
+The working manual for fixing the bot's failures, for any agent or person who picks the work up cold. The rounds on GitHub's runners play the bot without end and file every way it fails as an issue labelled `bot-failure`. The orchestrator gives you one (section 3); you find out why the bot stopped, change the bot so it does not, prove it with the evidence the issue carries, and get it merged. Then you stop: the orchestrator gives out the next.
 
 Part I (sections 0 to 18) is how to work: read it every session. Part II (19 to 25) is the reference: consult it for the subsystem you are fixing. When the code and this file disagree, the code is right; fix this file in the same PR.
 
 ## Contents
 
-0. Before the first issue · 1. Hard rules · 2. The bot and how its failures become issues · 3. The board · 4. The loop · 5. Decisions already made · 6. Reading an issue · 7. Getting the evidence · 8. Probes · 9. Finding the cause · 10. Writing the fix · 11. Committing · 12. The pull request · 13. Merging and after · 14. Handing off · 15. Context traps · 16. Catches · 17. Failures seen, and one worked example · 18. When you are stuck
+0. Before the first issue · 1. Hard rules · 2. The bot and how its failures become issues · 3. Who works which issue · 4. The loop · 5. Decisions already made · 6. Reading an issue · 7. Getting the evidence · 8. Probes · 9. Finding the cause · 10. Writing the fix · 11. Committing · 12. The pull request · 13. Merging and after · 14. Handing off · 15. Context traps · 16. Catches · 17. Failures seen, and one worked example · 18. When you are stuck
 
 Part II: 19. Planner and intents · 20. World, protocol, game · 21. Stage chain · 22. Failure reasons · 23. Tests you cannot run · 24. CI map · 25. Hickey patterns
 
@@ -14,7 +14,7 @@ Part II: 19. Planner and intents · 20. World, protocol, game · 21. Stage chain
 
 ## 0. Before the first issue
 
-Once per session, before the board. A fix in the wrong style is a wrong fix here even when the tests pass.
+Once per session, before the first issue. A fix in the wrong style is a wrong fix here even when the tests pass.
 
 1. **The tree.** `tree -a --dirsfirst -I '.git|.cpcache|.clj-kondo|.lsp|.nix|.direnv|node_modules|cache|data|out|target|issues|recordings|churn-batches'` (without `tree`: `nix shell nixpkgs#tree -c tree ...`). About 360 lines; read it all. `src/clojurecraft/` is the bot, `test/clojurecraft/` its tests, `brain/` the notes, `resources/clojurecraft/` the goal table, problem statements and generated tables, `bb/clojurecraft/` and `.github/workflows/` the tooling (not yours to change).
 2. **`docs/RICH-HICKEY.md`, in full.** The design brief and the most important document here. Every review asks first: does the fix follow it? Section 25 says what it means in this code.
@@ -31,8 +31,8 @@ Then this file, Part I in full, and Part II's sections 19 to 22 once.
 Absolute. The reason is not an invitation to argue an exception.
 
 1. **No attribution, anywhere, ever.** No `Co-Authored-By`, no "Generated with", no agent, model, assistant, tool or provider name, no session links, in commits, PR titles and bodies, comments, branch names, code, docs and test names. The repository reads as one author's. The commit-msg hook (`scripts/check-commit-msg`) refuses some of it; the rule is wider. Reread every message and body before `git commit` and `gh pr create`; turn off or strip any trailer your tool adds.
-2. **No claims in comments.** Never comment that you took, are on, or are working on something. The board status and the branch are the whole claim (section 3). The one comment you write on an issue is a hand-off (section 14).
-3. **No compute on the local machine.** It is the owner's laptop. Locally only: edit files, `git`, `gh`, read files and downloaded artifacts, `bb fmt`, `bb check`, `bb board`, `bb probe`, the commit hooks. Never a test (not one var), a snapshot judged or played, a replay, a probe or scratch script that loads the bot (`clojure -M:dev|test|simrace|replay|run`, `bb test|ci|replay|gym`), a sim, gym, race or Minecraft server of any length. Code runs only in the branch's `test.yml` run, the PR's checks, or `probe.yml` (section 8).
+2. **No claims in comments.** Never comment that you took, are on, or are working on something. The assignment (Copilot's) or the owner naming the issue (anyone else's) is the whole claim (section 3). The one comment you write on an issue is a hand-off (section 14).
+3. **No compute on the local machine.** It is the owner's laptop. Locally only: edit files, `git`, `gh`, read files and downloaded artifacts, `bb fmt`, `bb check`, `bb probe`, the commit hooks. Never a test (not one var), a snapshot judged or played, a replay, a probe or scratch script that loads the bot (`clojure -M:dev|test|simrace|replay|run`, `bb test|ci|replay|gym`), a sim, gym, race or Minecraft server of any length. Code runs only in the branch's `test.yml` run, the PR's checks, or `probe.yml` (section 8).
 4. **Never touch the shared game box** `144.24.32.76`: no SSH, no RCON, no connection. It belongs to other projects; one reset destroys their work. The runners start their own servers.
 5. **main is protected.** Never push to `main`, force-push a branch someone else pushed, `--admin` merge, bypass or disable a required check, or weaken a test or the issue check to go green. Concurrent agents merge all day and every merge restarts the rounds.
 6. **Never merge what does not fix what it says.** `Fixes #n` only when the evidence shows the issue's reproductions no longer stop with that signature; otherwise `Refs #n` and say why. A false close hides a live failure until the rounds reopen it.
@@ -84,28 +84,11 @@ The artifact `race-<sha>-<runner>` holds `s1/` and `s2/` (one per server), each 
 
 ---
 
-## 3. The board
+## 3. Who works which issue
 
-https://github.com/users/BridgerB/projects/10: owner `BridgerB`, number 10, single-select `Status` with `Todo`, `In Progress`, `Done`. The token needs the `project` scope (`gh auth refresh -s project`; without it: `missing required scopes [read:project]`).
+No agent chooses. The orchestrator (`.github/workflows/copilot.yml` running `bb copilot dispatch`, one runner, once a minute) gives the open bot-failure issues to Copilot's bot-fixer agent (`.github/agents/bot-fixer.agent.md`) one at a time (`COPILOT_CAP`, default 1), oldest first. The assignment is the claim. The orchestrator also releases runs held for approval, marks a finished draft ready, merges a pull request whose `unit / unit` and `check` are green (never one that changes `.github/`, `bb.edn` or the dispatcher: that one gets `needs-review`), asks Copilot to go on when a check is red (at most eight times, then `agent-stuck`), and writes what it saw and did to the results page's Agents tab (https://bridgerb.github.io/clojurecraft/agents.html, from `orchestrator.json` on gh-pages).
 
-```sh
-bb board todo                    # the Todo bot-failure issues, oldest first: number, labels, item id
-bb board heal                    # make the board true; prints every move
-bb board move <n> progress       # todo | progress | done; prints what it reads after
-```
-
-`bb board` looks the ids up each run (never hard-code them). `heal` applies four rules: an open bot-failure issue not on the board is added as Todo; an open issue that is Done or unsorted goes to Todo (reopened); a closed issue that is Todo or In Progress goes to Done; an open issue In Progress over six hours with no `fix/<n>` or `fix/<n>-rK` branch on origin goes to Todo (no branch, no claim). It never touches a claim that has a branch.
-
-You may take only: status `Todo`, open, labelled `bot-failure`; never #10 (the roadmap), never an issue without `bot-failure`, never an item `In Progress` unless it is stale. Never an issue assigned to Copilot: a cloud agent session holds it (`.github/agents/bot-fixer.agent.md`), on a `copilot/*` branch whose PR says `Fixes #<n>`, and `issue.yml` checks that PR as it checks `fix/<n>`.
-
-**Stale claims.** An item with a branch is stale when all three hold: In Progress for over six hours (the Status value's `updatedAt`); its claim branch has no commit in six hours that is not on `main`; no open PR from it was updated in six hours. Any agent may return a stale item without asking: push its branch to `stale/fix/<n>-<YYYYMMDD>`, delete `fix/<n>`, close its PR (`gh pr close <pr>`, no comment), set it to Todo. Never return one that fails any of the three tests: an agent thinking for a long time still pushes.
-
-```sh
-gh api graphql -f query='query { user(login: "BridgerB") { projectV2(number: 10) { items(first: 100) { nodes {
-  id content { ... on Issue { number } }
-  fieldValueByName(name: "Status") { ... on ProjectV2ItemFieldSingleSelectValue { name updatedAt } } } } } } }' \
-  --jq '.data.user.projectV2.items.nodes[] | select(.fieldValueByName.name == "In Progress") | [.content.number, .id, .fieldValueByName.updatedAt] | @tsv'
-```
+Anyone else (a person, a Claude session) works an issue only when the owner names it: label it `no-agent` first, so the orchestrator leaves it alone. Never take an issue assigned to Copilot or one with an open `copilot/*` pull request. Labels: `no-agent` (never given to Copilot), `agent-stuck` and `needs-review` (a person's turn). Never #10 (the roadmap), never an issue without `bot-failure`. The project board (`bb board`) is no longer part of the loop.
 
 ---
 
@@ -114,21 +97,12 @@ gh api graphql -f query='query { user(login: "BridgerB") { projectV2(number: 10)
 The same way every time. Work in your own clone or worktree, one per task (`git worktree add ../clojurecraft-<n> origin/main`), never in another agent's.
 
 1. **Read.** Section 0 if not done this session; reread sections 15 and 16 at the start of each session.
-2. **Open the board.** `bb board heal`, then `bb board todo`.
-3. **Choose.** The oldest (lowest-numbered) Todo bot-failure issue: early stages first, so later work lands on stages the bot then reaches. Add any other Todo issue that clearly shares its root cause (the same reason family across stages, as `rejected` at ingots, cobblestone and stone-pickaxe was one slow server; or the same stage with a symptom of the same thing). When unsure, take one. One root cause, one PR.
-4. **Claim.** The branch name is fixed by the issue, never chosen: `fix/<n>`, `<n>` the lowest number in your group. Two agents that chose the same issue compute the same name and git lets only one create it: the push is the lock.
-
-   ```sh
-   git fetch origin
-   git ls-remote --exit-code --heads origin fix/<n> >/dev/null && echo taken
-   git switch -c fix/<n> origin/main && git push -u origin fix/<n>    # rejected: someone has it
-   bb board move <n> progress
-   ```
-
-   When `fix/<n>` exists, look at its PRs (`gh pr list --head fix/<n> --state all --json number,state`): an open PR or none means another agent has it, choose again; only merged or closed PRs mean it regressed and the name is spent, so claim `fix/<n>-r2`, then `-r3`, the first that does not exist. Never a slug in the name: two slugs would both succeed and the lock would be gone. If the board shows the item is no longer Todo after your push, delete your branch and choose again. No comment, assignee or label (rule 2).
+2. **Your issue.** The one you were assigned (Copilot) or named (anyone else). Nothing is chosen here.
+3. **Same root cause.** If another open bot-failure issue clearly shares your issue's cause (the same reason family across stages, or the same stage with a symptom of the same thing), fix it in the same change and give it its own `Fixes #<m>` line. When unsure, do not. One root cause, one PR.
+4. **Branch.** Copilot works on the `copilot/*` branch it was given; anyone else on `fix/<n>` from `origin/main` (`<n>` the lowest number fixed; `fix/<n>-r2` when `fix/<n>` is spent by an earlier merged fix). The pull request body's first line is `Fixes #<n>`; `issue.yml` reads the issues from it.
 5. **Work the fix.** Sections 6 to 10: the issue and every comment, the evidence, probes, the cause, the fix with its test, its brain note and its `problems.edn` sentence.
 6. **Check locally.** `bb fmt`, then `bb check` (format, lint, idioms, ns forms, unused vars, brain). Nothing else (rule 3).
-7. **Commit and push** to the claim branch (section 11). Every push runs `test.yml`: the unit suite, one forest shard, the workflow lint. That is your test run. It does not judge the issue snapshots (their worlds are not restored there).
+7. **Commit and push** to your branch (section 11). Every push runs `test.yml`: the unit suite, one forest shard, the workflow lint. That is your test run. It does not judge the issue snapshots (their worlds are not restored there).
 8. **Watch without blocking.** Find the run for your head and look at it between other work:
 
    ```sh
@@ -140,9 +114,9 @@ The same way every time. Work in your own clone or worktree, one per task (`git 
    Never sit in a sleep loop, never end a turn only because a run is going, never rerun anything locally to confirm.
 9. **Judge the snapshots** before the PR, the way the check will: `bb probe run <n>-judge 'clojure -M:simrace --judge test/issues/<n>/R4-35-2.edn.gz,test/issues/<n>/R1-7-1.edn.gz --expect pass' R1,R4` from the pushed fix branch (seconds a snapshot), and the same with `--expect recur` from `main` (each moment must reproduce its failure there, or it proves nothing: take another).
 10. **Open the PR when ready** (section 12): fix and test pushed, `test.yml` green, the snapshots under `test/issues/<n>/`, the before/after in hand. Never a draft.
-11. **Merge when green** (section 13), move the items to Done.
+11. **Merge when green** (section 13). For a Copilot pull request the orchestrator merges.
 12. **Stopping before the merge,** for any reason: hand off (section 14).
-13. **Next.** Back to step 2.
+13. **Stop.** One issue a session: the orchestrator gives out the next.
 
 ---
 
@@ -361,7 +335,7 @@ Start from a fresh `origin/main`. Never rebase or force-push a pushed branch; me
 
 ## 12. The pull request
 
-Open it when the change is ready (step 10), never as a draft, from the claim branch:
+Open it when the change is ready (step 10), never as a draft, from your branch:
 
 ```sh
 gh pr create --base main --head fix/<n> --title "<the commit subject>" --body-file /tmp/pr.md
@@ -408,7 +382,7 @@ git fetch origin && git merge --no-edit origin/main && git push      # when DIRT
 
 `DIRTY` runs no checks until resolved. The usual conflict is `problems.edn`, where two fixes appended to the same `:problem/last-failure` line: keep both sentences.
 
-Green and the body has the before/after: `gh pr merge <pr> --merge` (merge commits, never squash, never `--admin`). Confirm `gh issue view <n> --json state` reads CLOSED, then `bb board move <n> done` for each issue.
+Green and the body has the before/after: `gh pr merge <pr> --merge` (merge commits, never squash, never `--admin`). Confirm `gh issue view <n> --json state` reads CLOSED for each issue.
 
 The merge restarts the rounds on your code; their reports 20 to 30 minutes later are the real test (a recurrence on newer code reopens the issue as regressed). Delete your probe branches; keep the fix branch.
 
@@ -416,7 +390,7 @@ The merge restarts the rounds on your code; their reports 20 to 30 minutes later
 
 ## 14. Handing off
 
-Whenever you stop before the merge (your session ends, you are told to stop, the cause is in tooling, two probes in a row contradict each other), the next agent must be able to start cold. Commit and push everything worth keeping to the claim branch (`WIP:` at the start of the subject if `bb check` fails, saying what fails in the body; probe commits stay on probe branches), stop your watchers, and post one comment on the issue:
+Whenever you stop before the merge (your session ends, you are told to stop, the cause is in tooling, two probes in a row contradict each other), the next agent must be able to start cold. Commit and push everything worth keeping to your branch (`WIP:` at the start of the subject if `bb check` fails, saying what fails in the body; probe commits stay on probe branches), stop your watchers, and post one comment on the issue:
 
 ```
 Hand-off: issue #<n>, branch fix/<n> @ <sha>[, PR #<pr>]
@@ -428,7 +402,7 @@ Unproven or failing: <exactly what, with the exact error>.
 Next step: <the one you would have taken>.
 ```
 
-Leave the branch and any open PR as they are; never a draft. Leave the item In Progress if a named agent takes over now; otherwise move it to Todo with `bb board move <n> todo` (the branch stays, and the next claimant continues it, step 4's hand-off row in section 5). Return every other item you hold that has no branch of yours to Todo.
+Leave the branch and any open PR as they are; never a draft. The branch stays, and whoever is named next continues it (section 5's hand-off row). Take the `no-agent` label off an issue you were named for, so the orchestrator can give it to Copilot.
 
 ---
 
