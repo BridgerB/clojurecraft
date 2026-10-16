@@ -754,6 +754,44 @@
           (< fy y) {:intent/kind :stairs-up :intent/to-y y :intent/for :build}
           :else nil)))
 
+(def round-reach 8)                   ; blocks from a stand a corner round the frame's rock is looked for: the rock is six wide
+
+(defn stance-line
+  "The cells, at the height of stand b, that a way from the column of a to b passes as
+   stance-block walks it: along x first, then along z, both ends included."
+  [[ax _ az] [bx by bz]]
+  (concat (for [x (range ax bx (if (< ax bx) 1 -1))] [x by az])
+          (for [z (range az bz (if (< az bz) 1 -1))] [bx by z])
+          [[bx by bz]]))
+
+(defn clear-of?
+  "Does the way from a to b (stance-line), body and head, keep off every cell of kept?"
+  [kept? a b]
+  (not-any? #(or (kept? %) (kept? (update % 1 inc))) (stance-line a b)))
+
+(defn round-corner
+  "Where a way at the stand's height turns to go round the frame's rock (kept) when the straight
+   way from the feet to stand crosses it: a loaded cell within round-reach of stand from which both
+   legs keep off the rock, the shortest way first; nil when the straight way is clear, or no
+   corner is. The sim race at 76010d2 (issue #45, world R4/33): the bot stood behind its own frame,
+   the landing straight ahead through the frame's rock, which a way never digs; the cells past the
+   rock were dug, the landing itself was out of reach, and three walks at it failed :no-path."
+  [world stand origin facing]
+  (let [kept? (kept origin facing)
+        feet (intent/feet world)
+        [fx _ fz] feet
+        [sx sy sz] stand]
+    (when-not (clear-of? kept? feet stand)
+      (->> (for [dx (range (- round-reach) (inc round-reach))
+                 dz (range (- round-reach) (inc round-reach))
+                 :let [c [(+ sx dx) sy (+ sz dz)]]
+                 :when (and (some? (terrain/block-at world c))
+                            (clear-of? kept? feet c)
+                            (clear-of? kept? c stand))]
+             c)
+           (sort-by (fn [[cx _ cz]]
+                      (+ (abs (- cx fx)) (abs (- cz fz)) (abs (- sx cx)) (abs (- sz cz)))))
+           first))))
 (defn way-columns
   "The columns [x z] of the straight way from the feet's column to stand's, as stance-block
    walks it: along x first, then along z, both ends included."
@@ -793,14 +831,19 @@
 (defn toward-stand
   "The child that brings the feet to stand, a cell of the build's way (a landing, the lava's
    stand): a walk when a route reaches it, else at its height the first block in the way dug
-   (clear-stand) or the missing floor laid (bridge), else the way to its height (to-height); nil
-   when the feet are there."
+   (clear-stand), going round the frame's rock by a corner when the straight way crosses it
+   (round-corner), or the missing floor laid (bridge), else the way to its height (to-height);
+   nil when the feet are there."
   [world stand build origin facing]
   (let [walk {:intent/kind :walk :intent/target stand :intent/for :build}]
     (cond (intent/centred? world stand) nil
           (intent/routable? world walk) walk
           (= (long (physics/y-of (intent/feet world))) (second stand))
-          (or (clear-stand world stand build origin facing) (bridge world stand) walk)
+          (or (when-let [c (and origin (round-corner world stand origin facing))]
+                (toward-stand world c build origin facing))
+              (clear-stand world stand build origin facing)
+              (bridge world stand)
+              walk)
           :else (or (to-height world (second stand)) walk))))
 
 (defn sight-block
@@ -1056,6 +1099,23 @@
                                        (intent/stowed-breaker world)))]
     (if stowed {:intent/kind :equip :intent/item (recipe/item-name item)} c)))
 
+(defn way-refilled?
+  "Did child, a walk along the build's way, fail :no-path with a falling block (gravel, sand:
+   blocks/falls?) now on the straight way from the feet to its target (stance-line, body or
+   head)? What lay over the way fell into it after the route was planned; the next clear digs it
+   out, so the walk is dropped, not failed, and never sent again over the same cells while the
+   block stands there. Sim race 38837004562 (issue #45, world R1/6): the level way to the landing
+   at y 21 ran under a bed of gravel, each dug cell filled again, and three walks along it failed
+   :no-path."
+  [world {:intent/keys [kind reason target]}]
+  (boolean (and (= :walk kind)
+                (= :no-path reason)
+                target
+                (some #(some-> (terrain/block-at world %)
+                               blocks/falls?)
+                      (mapcat (fn [c] [c (update c 1 inc)])
+                       (stance-line (intent/feet world) target))))))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i (a dig that found
@@ -1077,6 +1137,12 @@
             (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
         (and child (intent/failed? child) (found-open? child))
         (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
+        (and child (intent/failed? child) (way-refilled? world child))
+        ;; gravel fell into the way after the walk was planned: clear it again
+        (-> world
+            (assoc :player/controls {})
+            (intent/dissoc-intent :intent/child)
+            (game/say "build: the way filled with what fell over it, clearing it again"))
         (and child (intent/failed? child) (boxed-way? child))
         ;; a way to the site boxed in: the pocket is remembered and the build looks again from it
         ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's
