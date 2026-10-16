@@ -704,6 +704,15 @@
           [w2 _] (run broken [{:event/kind :tick :event/now 1000 :event/rand 0.5}])]
       (is (= 2 (:intent/replans (:plan/intent w2))) "a waypoint ahead gone solid: plan again"))))
 
+(deftest a-long-route-gets-the-time-to-walk-it
+  ;; sim world R2/19 seed 12 (issue #87's second round): a route of 123 waypoints over a snowy
+  ;; mountain was at waypoint 116 when the walk's sixty seconds ran out, and three such walks
+  ;; failed :stuck
+  (let [route (fn [n] {:intent/kind :walk :intent/waypoints (vec (repeat n [0 64 0]))})]
+    (is (= intent/walk-timeout-ticks (intent/walk-deadline (route 0))) "no route yet: the base")
+    (is (< (* 116 10) (- (intent/walk-deadline (route 123)) intent/walk-timeout-ticks))
+        "123 waypoints: time for every one, at half a second each")))
+
 (deftest a-walk-with-no-way-on-fails-no-path
   ;; walled in on every side two blocks high: the search exhausts its frontier at once
   (let [cage (into {} (for [x [-1 1] y [64 65] z [-1 0 1]] [[(+ 2 x) y (+ 2 z)] 1]))
