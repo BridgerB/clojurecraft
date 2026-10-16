@@ -128,19 +128,20 @@
    (the live view), not memory: stone is most of the world and ore is in every chunk, and only
    what is exposed now is worth a route. The chunks are scanned as they arrived, so each
    candidate is asked again through the overlay of block updates and the bot's own breaks: a
-   block just dug is air."
+   block just dug is air. Never one beside a lava trap still in force (path/near-lava-trap?):
+   the lava that caught the bot there is still coming down."
   [world states]
   (let [eye (game/eye world)
         ey (physics/y-of eye)]
-    (memory/nearest-first eye
-                          search-radius
-                          (exposed-cells (:world/chunks world)
-                                         (:world/blocks world)
-                                         (feet-chunk world)
-                                         states
-                                         (:plan/blacklist world #{})
-                                         (long (math/ceil (- ey search-height)))
-                                         (long (math/floor (+ ey search-height)))))))
+    (->> (exposed-cells (:world/chunks world)
+                        (:world/blocks world)
+                        (feet-chunk world)
+                        states
+                        (:plan/blacklist world #{})
+                        (long (math/ceil (- ey search-height)))
+                        (long (math/floor (+ ey search-height))))
+         (remove #(path/near-lava-trap? world %))
+         (memory/nearest-first eye search-radius))))
 
 (defn continue-mine
   "The next intent of the row's chain in flight, or nil: walk → dig → collect, tagged
@@ -269,7 +270,9 @@
    the row's depth a tunnel (tunnel-heading), or deeper stairs when none can be cut, or a retreat
    when neither can, or a climb out when there is no way away either (climb); wait for the
    tool. The live runs that waited at the depth with nothing in sight failed there; a tunnel's
-   walls are where the ore shows."
+   walls are where the ore shows. Beside a lava trap still in force (path/near-lava-trap?) the
+   retreat comes before any stair or tunnel: sim race 38844683780 (issue #230) cut its stairs down
+   where the lava had just caught it, and the flow followed it down."
   [world row]
   (or (continue-mine world row)
       (let [missing (tool-missing world row)
@@ -291,7 +294,8 @@
               stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
               walk walk
               :else
-              (or (stairs world row)
+              (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
+                  (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
                   (deeper world)
