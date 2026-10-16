@@ -42,6 +42,7 @@
 (def over-feet 3.0)                   ; blocks a blaze's feet may hover over the bot's and be fought (its body, aim-height up, comes within reach)
 (def under-feet 2.0)                  ; blocks under the bot's feet a blaze may be and be fought
 (def candidates 3)                    ; nearest blazes asked for a route, as the hunt asks of its animals
+(def eat-under 14.0)                  ; health under which a meal comes before the next fight, the food under the healing level: one volley takes 9
 
 (def rod (recipe/item-id :blaze_rod))
 (def spawner (blocks/default-state :spawner))
@@ -111,20 +112,32 @@
   [world]
   (< (:player/health world 20.0) combat/retreat-health))
 
-(defn healing
-  "What a hurt bot does: eat when the food is under hunger/heal-level (health comes back only from
-   there, and fast while the meal's saturation lasts) and food is held; else back away from the
-   nearest blaze within combat/back-off-to; else wait :healing. The meal first: gym blaze-7 run 1
-   (run 38891910129) backed away three times round a room seven square with the food at 17, where
-   no back-off gets away, and burned to death without eating."
+(defn meal
+  "An :eat of the food held when the food is under hunger/heal-level (health comes back only from
+   there, and fast while the meal's saturation lasts), or nil."
   [world]
-  (let [[eid e] (quarry world)
-        food (eat/food-held world)]
-    (cond (and food (< (:player/food world hunger/heal-level) hunger/heal-level))
-          {:intent/kind :eat :intent/item food}
+  (when-let [food (and (< (:player/food world hunger/heal-level) hunger/heal-level)
+                       (eat/food-held world))]
+    {:intent/kind :eat :intent/item food}))
+
+(defn healing
+  "What a hurt bot does: the meal; else back away from the nearest blaze within
+   combat/back-off-to; else wait :healing. The meal first: gym blaze-7 run 1 (run 38891910129)
+   backed away three times round a room seven square with the food at 17, where no back-off gets
+   away, and burned to death without eating."
+  [world]
+  (let [[eid e] (quarry world)]
+    (cond (meal world) (meal world)
           (and e (< (physics/distance (:player/pos world) (:entity/pos e)) combat/back-off-to))
           {:intent/kind :back-off :intent/target eid}
           :else {:plan/wait :healing})))
+
+(defn wary?
+  "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run
+   38893157426) fought on at 12.7 with the food at 17 and a blaze's volley took it to nothing in
+   two seconds, under combat/retreat-health only on the way down."
+  [world]
+  (< (:player/health world 20.0) eat-under))
 
 (defn to-spawner
   "The way to spawner sp: a walk when a route reaches it (intent/routable?), else a tunnel by
@@ -144,6 +157,7 @@
         sp (nearest-spawner world)]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
           (hurt? world) (healing world)
+          (and (wary? world) (meal world)) (meal world)
           lying
           {:intent/kind :collect-drops
            :intent/item :blaze_rod
