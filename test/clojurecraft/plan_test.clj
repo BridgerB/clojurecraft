@@ -165,7 +165,27 @@
                                                 [8.5 50.0 8.5]))))
         "the bed dug and the sea in: up the shaft to the top of the water")
     (is (= {:plan/wait :no-log} (wood/gather-next (boxed (bed :gravel))))
-        "never under gravel, which would fall on the bot")))
+        "never under gravel, which would fall on the bot")
+    ;; the full sim run of world R4/30 seed 1 at a32dbb8: one stone and then gravel over the head,
+    ;; the sea over that, no pickaxe, an hour of level steps by hand under the sea floor
+    (let [gravel (blocks/default-state :gravel)
+          beside
+          (into
+           (assoc sea [8 53 8] gravel [9 50 8] blocks/air [9 51 8] blocks/air [9 52 8] blocks/air)
+           (for [y (range 54 64)] [[9 y 8] blocks/water-base]))]
+      (is (= {:intent/kind :dig
+              :intent/target [9 53 8]
+              :intent/status :active
+              :intent/exposes-ok? true
+              :intent/for :into-water}
+             (wood/gather-next (boxed (remembered beside [8.5 50.0 8.5]))))
+          "gravel over the head: the shaft dug beside, so what falls lands there")
+      (is (= {:intent/kind :swim-out :intent/for :rise :intent/to-y 64 :intent/column [9 8]}
+             (wood/gather-next (boxed (remembered (into (assoc beside [9 50 8] gravel)
+                                                        (for [y (range 51 54)]
+                                                          [[9 y 8] blocks/water-base]))
+                                                  [8.5 50.0 8.5]))))
+          "the gravel fallen into it and the sea in: up the shaft beside"))))
 
 (deftest a-near-trunk-with-no-route-is-climbed-for-too
   ;; sim race 38395033917, world R3/24 (issue #75): at the bottom of two staircases that met, the

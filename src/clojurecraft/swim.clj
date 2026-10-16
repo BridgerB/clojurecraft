@@ -265,17 +265,20 @@
    the centre of their column when off it by more than centre-slack, so a body in a shaft one
    wide rises clear of its rim; nearer the top, toward shore (far-shore) when there is one.
    Issue #89 (world R1/32): a rise begun 0.3 off its shaft's centre caught the sea floor's edge
-   with its head and drowned there."
-  [world shore top]
-  (let [[px _ pz] (:player/pos world)
-        [fx fy fz] (intent/feet world)
-        centre [(+ fx 0.5) (+ fy 1.0) (+ fz 0.5)]
-        deep? (< fy (- top 2))]
-    (cond (and deep? (> (physics/horizontal-distance [px 0 pz] centre) centre-slack))
-          (assoc (intent/toward world centre 0.0) :control/jump? true)
-          (and shore (not deep?))
-          (assoc (intent/toward world (physics/centre shore) 0.0) :control/jump? true)
-          :else {:control/jump? true})))
+   with its head and drowned there. With column, [x z], the centre is that column's: a :rise into
+   the shaft dug beside the feet (wood/into-water)."
+  ([world shore top] (shore-controls world shore top nil))
+  ([world shore top column]
+   (let [[px _ pz] (:player/pos world)
+         [fx fy fz] (intent/feet world)
+         [cx cz] (or column [fx fz])
+         centre [(+ cx 0.5) (+ fy 1.0) (+ cz 0.5)]
+         deep? (< fy (- top 2))]
+     (cond (and deep? (> (physics/horizontal-distance [px 0 pz] centre) centre-slack))
+           (assoc (intent/toward world centre 0.0) :control/jump? true)
+           (and shore (not deep?))
+           (assoc (intent/toward world (physics/centre shore) 0.0) :control/jump? true)
+           :else {:control/jump? true}))))
 
 (defn swim-controls
   "Toward the bank's centre: in the water, forward with jump held (the swim-up and, pressed
@@ -293,8 +296,8 @@
   ;; flooded tunnel) ends itself on dry land, and one for a :rise (up a shaft dug into the sea,
   ;; wood/into-water) on dry land in the open
   [world
-   {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for shore to-y]}
-   event]
+   {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for shore to-y
+                  column]} event]
   (let [tick (:time/tick world)
         started (or started tick)
         feet (intent/feet world)
@@ -302,72 +305,73 @@
         dist (when bank (physics/horizontal-distance (:player/pos world) (physics/centre bank)))
         nearer? (and dist (< dist (- (or best-dist Double/MAX_VALUE) progress)))
         best-tick (if (or nearer? (nil? best-tick)) tick best-tick)]
-    (cond (or (and (= :retreat for) (trap/dry-land? world))
-              (and (= :rise for) (trap/dry-land? world) (in-the-open? world feet)))
+    (cond
+      (or (and (= :retreat for) (trap/dry-land? world))
+          (and (= :rise for) (trap/dry-land? world) (in-the-open? world feet)))
+      (-> world
+          (assoc :player/controls {})
+          intent/done)
+      (> (- tick started) escape-timeout-ticks)
+      (-> world
+          (assoc :player/controls {})
+          (intent/fail :no-escape))
+      (and child (intent/done? child)) (intent/dissoc-intent world :intent/child :intent/best-tick)
+      (and child (intent/failed? child))
+      (-> world
+          (assoc :player/controls {})
+          (intent/fail (:intent/reason child)))
+      child (dig-afloat world event)
+      (and dig-when-down (or (:player/on-ground? world) (not (:player/in-water? world))))
+      (start-dig world dig-when-down "down")
+      dig-when-down (assoc world :player/controls {:control/sneak? true})
+      (and bank (flooded? world bank))
+      (-> world
+          (intent/dissoc-intent :intent/bank :intent/target :intent/best-dist :intent/best-tick)
+          (game/say (str "swim-out: bank " bank " flooded, looking again")))
+      (and (nil? bank) next-search (< tick next-search))
+      (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)]
+        ;; rise until the next look
+        (assoc world
+               :player/controls
+               (shore-controls world shore (or to-y (inc (float-top world feet surface))) column)))
+      (nil? bank)
+      (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
+            rise? (= :rise for)
+            b (if rise?
+                (banks world feet surface (:plan/blacklist world #{}) #(in-the-open? world %))
+                (banks world feet surface (:plan/blacklist world #{})))
+            cap (when-not (or b rise?) (obstacle world feet nil))
+            wall (when-not (or b cap rise?) (notch world feet surface))]
+        (cond
+          b
           (-> world
-              (assoc :player/controls {})
-              intent/done)
-          (> (- tick started) escape-timeout-ticks)
-          (-> world
-              (assoc :player/controls {})
-              (intent/fail :no-escape))
-          (and child (intent/done? child))
-          (intent/dissoc-intent world :intent/child :intent/best-tick)
-          (and child (intent/failed? child))
-          (-> world
-              (assoc :player/controls {})
-              (intent/fail (:intent/reason child)))
-          child (dig-afloat world event)
-          (and dig-when-down (or (:player/on-ground? world) (not (:player/in-water? world))))
-          (start-dig world dig-when-down "down")
-          dig-when-down (assoc world :player/controls {:control/sneak? true})
-          (and bank (flooded? world bank))
-          (-> world
-              (intent/dissoc-intent :intent/bank :intent/target :intent/best-dist :intent/best-tick)
-              (game/say (str "swim-out: bank " bank " flooded, looking again")))
-          (and (nil? bank) next-search (< tick next-search))
-          (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)]
-            ;; rise until the next look
-            (assoc world
-                   :player/controls
-                   (shore-controls world shore (or to-y (inc (float-top world feet surface))))))
-          (nil? bank)
-          (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
-                b (banks world feet surface (:plan/blacklist world #{}))
-                rise? (= :rise for)
-                cap (when-not (or b rise?) (obstacle world feet nil))
-                wall (when-not (or b cap rise?) (notch world feet surface))]
-            (cond b
-                  (-> world
-                      (intent/assoc-intent :intent/bank b :intent/target b)
-                      (game/say (str "swim-out: bank " b)))
-                  cap (dig-or-sink world feet cap "no bank")
-                  wall (start-dig world wall "no bank, notching the wall")
-                  ;; nothing in reach: rise, toward a shore when the water is open over the feet
-                  ;; (the roof or a bank comes into reach, or the timeout ends it)
-                  :else
-                  (let [[fx _ fz] feet
-                        shore (when-not (solid-cell? world [fx surface fz])
-                                (far-shore world feet surface))]
-                    (-> world
-                        (assoc :player/controls
-                               (shore-controls world
-                                               shore
-                                               (or to-y (inc (float-top world feet surface)))))
-                        (intent/assoc-intent :intent/next-search (+ tick search-every-ticks))
-                        (cond-> shore (intent/assoc-intent :intent/shore shore))
-                        (cond-> (nil? shore) (intent/dissoc-intent :intent/shore))))))
-          (> (- tick best-tick) stuck-ticks)
-          (if-let [cell (obstacle world feet bank)]
-            (dig-or-sink world feet cell "stuck")
-            (-> world
-                (assoc :player/controls {})
-                (intent/fail :stuck)))
+              (intent/assoc-intent :intent/bank b :intent/target b)
+              (game/say (str "swim-out: bank " b)))
+          cap (dig-or-sink world feet cap "no bank")
+          wall (start-dig world wall "no bank, notching the wall")
+          ;; nothing in reach: rise, toward a shore when the water is open over the feet
+          ;; (the roof or a bank comes into reach, or the timeout ends it)
           :else
-          (-> world
-              (assoc :player/controls (swim-controls world bank))
-              (intent/assoc-intent :intent/best-dist (if nearer? dist (or best-dist dist))
-                                   :intent/best-tick best-tick)))))
+          (let [[fx _ fz] feet
+                shore (when-not (solid-cell? world [fx surface fz]) (far-shore world feet surface))]
+            (-> world
+                (assoc
+                 :player/controls
+                 (shore-controls world shore (or to-y (inc (float-top world feet surface))) column))
+                (intent/assoc-intent :intent/next-search (+ tick search-every-ticks))
+                (cond-> shore (intent/assoc-intent :intent/shore shore))
+                (cond-> (nil? shore) (intent/dissoc-intent :intent/shore))))))
+      (> (- tick best-tick) stuck-ticks)
+      (if-let [cell (obstacle world feet bank)]
+        (dig-or-sink world feet cell "stuck")
+        (-> world
+            (assoc :player/controls {})
+            (intent/fail :stuck)))
+      :else
+      (-> world
+          (assoc :player/controls (swim-controls world bank))
+          (intent/assoc-intent :intent/best-dist (if nearer? dist (or best-dist dist))
+                               :intent/best-tick best-tick)))))
 
 (defmethod intent/run :cross
   ;; over open water toward a remembered trunk across it (wood/crossing): straight at it, on

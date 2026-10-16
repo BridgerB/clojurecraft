@@ -229,6 +229,26 @@
                                    (scoop/hunt-targets world true)))
         (scoop/first-walk world :log-hunt (scoop/hunt-targets world))))))
 
+(defn bed
+  "The way up column [cx cz] from y from, n cells: :dry, the cells up to the first water; :more,
+   those from it; :rock, the lowest solid among :dry; :ok?, water within the n cells, every dry
+   cell loaded and none lava or never dug; :falls?, a dry cell that falls (gravel, sand)."
+  [world [cx cz] from n]
+  (let [cells (map (fn [y] [cx y cz]) (range from (+ from n)))
+        [dry more] (split-with #(not= :water (terrain/fluid-kind world %)) cells)
+        ids (map #(terrain/block-at world %) dry)]
+    {:dry dry
+     :more more
+     :rock (first (filter #(some-> (terrain/block-at world %)
+                                   blocks/solid?)
+                          dry))
+     :ok? (boolean (and (seq more)
+                        (every? some? ids)
+                        (not-any? #(or (= :lava (:fluid/kind (blocks/fluid %)))
+                                       (contains? intent/never-dug (blocks/name-of %)))
+                                  ids)))
+     :falls? (boolean (some blocks/falls? ids))}))
+
 (defn into-water
   "Boxed under water with no other way to the trees (the feet in :plan/boxed-at, where a climb
    out was boxed): dig up into it, the lowest solid cell over the head
@@ -239,30 +259,44 @@
    the water poured in is the trap too, and the escape it starts swims the same way. Sim race 38806318231 runner 1 and 38811426215 runner 8 (issue #89, worlds
    R4/30, R4/21 and R1/32 at 76010d2, 146 runs) had bots mine under the sea floor until the last
    pickaxe broke: for a new one they needed a log, every climb out was :boxed under the water,
-   no route led home, and each waited :no-log. nil otherwise."
+   no route led home, and each waited :no-log. With gravel or sand over the head, the shaft is
+   dug beside it (bed: a neighbour column whose floor holds a body, the lowest solid in it from
+   the head's height up), so what falls lands in that column and not on the bot, and the rise
+   goes up it (:intent/column). The full sim run of world R4/30 seed 1 at a32dbb8 (a
+   [:portal-kit :timeout], issue #161's signature) stood under the sea at y 44 with one stone
+   and then gravel over the head and no pickaxe, and level-stepped under the sea floor by hand
+   for an hour. nil otherwise."
   [world]
   (let [[x y z :as feet] (intent/feet world)
-        cells (map (fn [dy] [x (+ y dy) z]) (range 2 (+ 2 bed-reach)))
-        [dry more] (split-with #(not= :water (terrain/fluid-kind world %)) cells)
-        ids (map #(terrain/block-at world %) dry)
-        rock (first (filter #(some-> (terrain/block-at world %)
-                                     blocks/solid?)
-                            dry))
-        water? #(= :water (terrain/fluid-kind world [x % z]))
-        top (->> (range (+ y 2) (+ y 34))
-                 (drop-while (complement water?))
-                 (drop-while water?)
-                 first)]
-    (cond (not (and (contains? (:plan/boxed-at world #{}) feet)
-                    (seq more)
-                    (every? some? ids)
-                    (not-any? #(or (blocks/falls? %)
-                                   (= :lava (:fluid/kind (blocks/fluid %)))
-                                   (contains? intent/never-dug (blocks/name-of %)))
-                              ids)))
-          nil
-          rock (assoc (intent/child-dig rock) :intent/exposes-ok? true :intent/for :into-water)
-          :else {:intent/kind :swim-out :intent/for :rise :intent/to-y (or top (+ y 34))})))
+        top-of (fn [[cx cz] from]
+                 (let [water? #(= :water (terrain/fluid-kind world [cx % cz]))]
+                   (or (->> (range from (+ from 32))
+                            (drop-while (complement water?))
+                            (drop-while water?)
+                            first)
+                       (+ from 32))))
+        dig #(assoc (intent/child-dig %) :intent/exposes-ok? true :intent/for :into-water)
+        own (bed world [x z] (+ y 2) (+ bed-reach 2))
+        floor? (fn [[cx cz]]
+                 (some #(some-> (terrain/block-at world [cx % cz])
+                                blocks/solid?)
+                       [y (dec y)]))
+        beside (fn [[dx dz]]
+                 (let [c [(+ x dx) (+ z dz)]
+                       b (bed world c (inc y) (+ bed-reach 3))]
+                   (when (and (:ok? b) (floor? c))
+                     (if-let [r (:rock b)]
+                       (dig r)
+                       {:intent/kind :swim-out
+                        :intent/for :rise
+                        :intent/to-y (top-of c (inc y))
+                        :intent/column c}))))]
+    (cond (not (contains? (:plan/boxed-at world #{}) feet)) nil
+          (and (:ok? own) (not (:falls? own)))
+          (if-let [r (:rock own)]
+            (dig r)
+            {:intent/kind :swim-out :intent/for :rise :intent/to-y (top-of [x z] (+ y 2))})
+          (:ok? own) (some beside stairs/directions))))
 
 (defn open-water?
   "Is the top of column [x z] near the eye (from 8 over it down to surface-span under) water:
