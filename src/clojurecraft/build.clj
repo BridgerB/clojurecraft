@@ -844,23 +844,35 @@
                       (foundation world gap))]
       {:intent/kind :place :intent/item :cobblestone :intent/cell c})))
 
+(defn stand-walk
+  "A walk to stand, a cell of the build's way, when the feet can stand in it as it is
+   (path/standable?: a floor, the body clear) and a route reaches it; nil otherwise. A stand
+   still in the rock is walked near, never into: the walk ends beside it, uncentred, and the
+   stand is no nearer. Sim race 38855091523 (issue #178, world R1/34 seed 2, at 5d78c91): the
+   lava's stand at y -53 was stone, a route led to beside it, and the refill walked from the
+   landing out to it and back, three walks every five seconds, for the run's last minutes."
+  [world stand]
+  (let [walk {:intent/kind :walk :intent/target stand :intent/for :build}]
+    (when (and (path/standable? world stand) (intent/routable? world walk)) walk)))
+
 (defn toward-stand
   "The child that brings the feet to stand, a cell of the build's way (a landing, the lava's
-   stand): a walk when a route reaches it, else at its height the first block in the way dug
+   stand): a walk when it can be stood in and a route reaches it (stand-walk), else at its height the first block in the way dug
    (clear-stand), going round the frame's rock by a corner when the straight way crosses it
    (round-corner), or the missing floor laid (bridge), else the way to its height (to-height);
    nil when the feet are there."
   [world stand build origin facing]
   (let [walk {:intent/kind :walk :intent/target stand :intent/for :build}]
     (cond (intent/centred? world stand) nil
-          (intent/routable? world walk) walk
-          (= (long (physics/y-of (intent/feet world))) (second stand))
-          (or (when-let [c (and origin (round-corner world stand origin facing))]
-                (toward-stand world c build origin facing))
-              (clear-stand world stand build origin facing)
-              (bridge world stand)
-              walk)
-          :else (or (to-height world (second stand)) walk))))
+          :else
+          (or (stand-walk world stand)
+              (if (= (long (physics/y-of (intent/feet world))) (second stand))
+                (or (when-let [c (and origin (round-corner world stand origin facing))]
+                      (toward-stand world c build origin facing))
+                    (clear-stand world stand build origin facing)
+                    (bridge world stand)
+                    walk)
+                (or (to-height world (second stand)) walk))))))
 
 (defn sight-block
   "The first loaded block on the eyes' ray to the surface of lava source src (scoop/aim-point)
@@ -914,6 +926,20 @@
            :intent/aim (or (lava-aim world src) (scoop/aim-point src))}
           :else (assoc (way-dig block) :intent/for :lava))))
 
+(def beside-reach 2.5)                ; blocks on the plane from a lava stand that count as beside it
+
+(defn beside-stand?
+  "Are the feet beside stand: within beside-reach of it on the plane, a block or so off its
+   height? The way from there is to the stand's height (toward-stand), not back out to the
+   landing. Sim race 38855091523 (issue #178, world R1/34 seed 2, at 5d78c91): a walk toward the
+   lava's stand, still stone, ended a block under it in the cell beside it, and the refill sent
+   the feet back to the landing, out again, and back, three walks every five seconds."
+  [world stand]
+  (let [feet (intent/feet world)]
+    (and (<= (abs (- (second feet) (second stand))) 2)
+         (<= (physics/horizontal-distance (physics/centre feet) (physics/centre stand))
+             beside-reach))))
+
 (defn refill
   "The child that refills lava, or the reason it cannot (:no-station, :no-bucket): the feet to the
    station's stand (toward-stand, from the room's landing at the lava's height when no route
@@ -923,17 +949,19 @@
     (cond (nil? stand) :no-station
           (not (held? world :bucket)) :no-bucket
           (intent/centred? world stand) (scoop-at-station world sources)
-          (intent/routable? world {:intent/kind :walk :intent/target stand :intent/for :build})
-          {:intent/kind :walk :intent/target stand :intent/for :build}
-          (= (long (physics/y-of (intent/feet world))) (second stand))
-          (let [[lx _ _] (landing h)
-                [_ _ sz] (relative origin facing stand)
-                [_ _ fz] (relative origin facing (intent/feet world))
-                out (cell origin facing [lx h sz])]
-            (toward-stand world (if (< fz sz) out stand) build origin facing))
           :else
-          (or (toward-stand world (cell origin facing (landing h)) build origin facing)
-              {:intent/kind :walk :intent/target stand :intent/for :build}))))
+          (or (stand-walk world stand)
+              (cond (= (long (physics/y-of (intent/feet world))) (second stand))
+                    (let [[lx _ _] (landing h)
+                          [_ _ sz] (relative origin facing stand)
+                          [_ _ fz] (relative origin facing (intent/feet world))
+                          out (cell origin facing [lx h sz])]
+                      (toward-stand world (if (< fz sz) out stand) build origin facing))
+                    ;; a block off the stand's height beside it: stairs to it, not the landing again
+                    (beside-stand? world stand) (toward-stand world stand build origin facing)
+                    :else
+                    (or (toward-stand world (cell origin facing (landing h)) build origin facing)
+                        {:intent/kind :walk :intent/target stand :intent/for :build}))))))
 
 (defn room-stand
   "A cell of the room (room-cells for the build's access h) the feet can stand in, that reaches
