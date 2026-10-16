@@ -33,7 +33,7 @@ related:
 - `allow-flight=true` - a stationary or slightly drifting bot is not kicked for flying.
 - `spawn-protection=0` - a non-op bot can break blocks near spawn; with the default 16 the server silently restores them.
 - `pause-when-empty-seconds=0` - 26.x pauses an empty server after 60 s, before a bot connects.
-- `level-seed=typecraft`, `difficulty=peaceful`, `view-distance=6`.
+- `level-seed=typecraft`, `difficulty=normal` (mobs and hunger since issue #10; peaceful before), `view-distance=6`.
 
 ## Gotchas
 - ruststeve uses 25567/25568 (RCON 25577/25578) and steve 25569/25570 (25579/25580) on this Mac; never point at those.

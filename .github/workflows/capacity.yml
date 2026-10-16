@@ -57,7 +57,7 @@ jobs:
       RCON_PASS: capacity
       WORLD: ${{ github.workspace }}/work/world
       HEAP_MB: ${{ needs.plan.outputs.server-heap }}
-      DIFFICULTY: peaceful
+      DIFFICULTY: normal
       MAX_TICK_TIME: '-1'
       MAX_PLAYERS: ${{ needs.plan.outputs.max-players }}
       COMPRESSION_THRESHOLD: '-1'        # as the race: bots on the same machine, zlib would be only CPU
