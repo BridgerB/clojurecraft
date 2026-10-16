@@ -285,7 +285,7 @@
   :problem/done
   "The gym's entities row: a summoned pig's health in the bot's world value equals RCON data get entity on it, RESULT :ok true."
   :problem/last-failure
-  "clojurecraft has never attempted this. typecraft decodes the whole metadata stream and one entry off in its type table desyncs every later one; a skimmer that stops at the first unknown type cannot."
+  "clojurecraft has never attempted this. typecraft decodes the whole metadata stream and one entry off in its type table desyncs every later one; a skimmer that stops at the first unknown type cannot. Gym batch entities-258a (run 38880450846) passed 4/5: run 4 ended 0.3 s after landing on a health known of a mob round the spawn it joined at and named a natural pig's 10.0; the trial now ends only on a living entity within 4 blocks, and batch entities-258b (run 38881512647) passed 10/10."
   :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/world/entities.md"]}
  {:problem/stage :race
   :problem/issue 17
