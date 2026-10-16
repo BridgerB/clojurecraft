@@ -201,13 +201,13 @@
                                              :type blocks/item-entity-type
                                              :x 14.5
                                              :y 64.0
-                                             :z 16.5})]
+                                             :z 14.5})]
                                 (fx/ticks 3100 3200)))]
     (is (= :active (:intent/status (:plan/intent w))) "the eye gone, its drop not yet come")
     (is (= :done (:intent/status (:plan/intent w2))) "done once the drop lies there")
     (is (= {:intent/kind :collect-drops
             :intent/item :ender_eye
-            :intent/target [14 64 16]
+            :intent/target [14 64 14]
             :intent/for :stronghold}
            (stronghold/stronghold-next (assoc w2 :plan/last (:plan/intent w2))))
         "the search picks it up first")))
@@ -368,7 +368,18 @@
              (plan/next-intent seen room-row plan/goals)))
       (is (not (plan/done-by seen room-row))))
     (testing "within 6 of it: there"
-      (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))))
+      (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
+    (testing "on a shore where every first step opens a cell by water: stairs down toward it"
+      (let [wet (assoc seen
+                       :world/chunks
+                       {[0 0] (world/column (into {}
+                                                  (for [x (range 16)
+                                                        z (range 16)
+                                                        y [64 65]
+                                                        :when (not= [x z] [8 8])]
+                                                    [[x y z] blocks/water-base])))})]
+        (is (= {:intent/kind :stairs-down :intent/to-y 24 :intent/dir [0 1] :intent/for :stronghold}
+               (plan/next-intent wet room-row plan/goals)))))))
 
 (deftest the-portal-room-is-reached-against-the-model
   ;; a frame 24 blocks under the feet in stone: the tunnel down to within 6 of it, an iron pickaxe
