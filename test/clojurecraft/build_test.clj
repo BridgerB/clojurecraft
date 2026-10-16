@@ -305,6 +305,29 @@
     (is (= down (hunt {[12 40 4] blocks/lava-base})) "a lone source: on down toward the sea")
     (is (= down (hunt (pool-at 50))) "a pool over the head: on down toward the sea")))
 
+(deftest a-way-to-the-site-boxed-in-is-left-by-the-way-out
+  ;; sim race 38806318231 (issue #130, world R3/11): the stairs down to the cast's landing met an
+  ;; aquifer, every stair refused, and the build was sent down the same stairs from the same cell
+  ;; three times, :boxed
+  (let [w (standing-at (open-ground {}) feet-pos)
+        feet [10 63 10]
+        i {:intent/kind :build
+           :intent/build :cast-one
+           :intent/origin [8 40 4]
+           :intent/facing :south
+           :intent/access 1
+           :intent/status :active
+           :intent/child {:intent/kind :stairs-down :intent/status :failed :intent/reason :boxed}}
+        op (first (build/plan-for :cast-one [8 40 4] :south 1))
+        i (assoc i :intent/op op)
+        w' (build/work-op (assoc w :plan/intent i) i op {:event/kind :tick :event/now 0})]
+    (is (contains? (:plan/boxed-at w') feet) "the pocket remembered")
+    (is (nil? (:intent/child (:plan/intent w'))) "the child dropped")
+    (is (= :active (:intent/status (:plan/intent w'))) "the build goes on")
+    (is (= :stairs-down (:intent/kind (build/to-height w 41))) "from elsewhere: stairs")
+    (is (= :retreat (:intent/for (build/to-height w' 41)))
+        "from the pocket: the way out, not the same stairs")))
+
 (deftest a-block-is-never-placed-into-the-bot
   ;; sim race 38665691522 (issue #44): a floor laid from a stand whose head was in its cell, the
   ;; server refusing it three times, :rejected

@@ -734,10 +734,16 @@
 
 (defn to-height
   "The way to y from the feet when no route reaches a stand there: stairs down (stone/stairs) or
-   stairs up, cut in the rock as the bot cuts them all day; nil at y already."
+   stairs up, cut in the rock as the bot cuts them all day; nil at y already. From a pocket a
+   descent died :boxed in (:plan/boxed-at, work-op records it), where stairs give nothing, the
+   way out the mine takes (stone/retreat, stone/climb), the next descent from elsewhere. Sim race
+   38806318231 (issue #130, world R3/11): the way down to the cast's landing at y -22 met an
+   aquifer at y 11, every stair refused, and the build was sent down the same stairs from the
+   same cell three times, :boxed."
   [world y]
   (let [fy (long (physics/y-of (intent/feet world)))]
-    (cond (> fy y) (stone/stairs world {:goal/depth y})
+    (cond (> fy y)
+          (or (stone/stairs world {:goal/depth y}) (stone/retreat world) (stone/climb world))
           (< fy y) {:intent/kind :stairs-up :intent/to-y y :intent/for :build}
           :else nil)))
 
@@ -947,6 +953,12 @@
   [{:intent/keys [kind reason]}]
   (and (= :dig kind) (= :target-gone reason)))
 
+(defn boxed-way?
+  "Did child, a staircase or a tunnel (plan/boxing-kinds), fail :boxed: no way on from where the
+   feet stand?"
+  [{:intent/keys [kind reason]}]
+  (and (contains? plan/boxing-kinds kind) (= :boxed reason)))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), a child that failed fails i (a dig that found
@@ -968,6 +980,14 @@
             (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
         (and child (intent/failed? child) (found-open? child))
         (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
+        (and child (intent/failed? child) (boxed-way? child))
+        ;; a way to the site boxed in: the pocket is remembered and the build looks again from it
+        ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's
+        (-> world
+            (assoc :player/controls {})
+            (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+            (intent/dissoc-intent :intent/child)
+            (game/say (str "build: " (:intent/kind child) " boxed in, the way out")))
         (and child (intent/failed? child))
         (-> world
             (assoc :player/controls {})
