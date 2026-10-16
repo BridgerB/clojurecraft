@@ -33,7 +33,7 @@ The session is cut at 59 minutes, setup included, and every turn re-sends everyt
 - yes: `clojure -M:simrace --judge <snapshots> --expect recur|pass` (seconds a snapshot), one test namespace or var (`clojure -M:test -n clojurecraft.build-test`, `-v clojurecraft.build-test/x`), a probe script under `probe/` as AGENTS.md section 8.2 writes it (`clojure -M:dev probe/<file>.clj <snapshots>`; probe scripts stay out of a fix's commits), `bb fmt`, `bb check`;
 - no: the whole suite (the pull request's `unit / unit` runs it), `--from-landing` or full simrace runs past ten minutes, anything that starts a Minecraft server, a gym, a race or a world build, and never `bb probe run` (you cannot dispatch workflows; you do not need to).
 
-**The evidence is already on disk.** Before your session started, `copilot-setup-steps.yml` restored the captured sim worlds to `cache/sim-worlds/R1..R4` and fetched the snapshots of every open sim-labelled bot-failure issue into `cache/issues/<n>/` (outside the tree, ignored by git). For your issue:
+**The evidence is already on disk.** Before your session started, `copilot-setup-steps.yml` restored the captured sim worlds to `cache/sim-worlds/R1..R4` and fetched the snapshots of every open sim-labelled bot-failure issue into `cache/issues/<n>/` (outside the tree, ignored by git). A snapshot named `real-<runner>-<s>-<bot>.edn.gz` is a real race's failure (AGENTS.md section 2.3): the same value as a sim one, built from the bot's recording, its terrain inside it; judge it and treat it exactly as a sim snapshot. A real issue the model reproduced is labelled `sim` for that reason. For your issue:
 
 1. `ls cache/issues/<n>/`. Copy at most two into `test/issues/<n>/` (AGENTS.md section 7: two at most, from two landings when there are two, at most one a world).
 2. Judge each on `main` first, where it must reproduce its failure, or it proves nothing:
@@ -45,7 +45,7 @@ The session is cut at 59 minutes, setup included, and every turn re-sends everyt
 3. Find the cause (AGENTS.md section 9) by reading the JUDGE and STORY lines and the code they name, and by probes that call the suspect pure functions on the snapshot's world (section 8.2's script shape: each question in its own `try`, partial output printed as you go).
 4. After the fix, judge the same snapshots on your code with `--expect pass`. Read the STORY lines: "still active at the end of the window" proves little (section 18).
 
-When `cache/issues/<n>/` is empty (the artifacts expire after 7 days, or the issue is labelled `real` only), stop as "Your budget" says: that issue waits for the next batch's snapshots or for a person.
+When `cache/issues/<n>/` is empty (the artifacts expire after 7 days, or the issue is labelled `real` only: no real snapshot of it recurred against the model, a model gap), stop as "Your budget" says: that issue waits for the next batch's snapshots or for a person.
 
 ## The fix
 

@@ -58,7 +58,7 @@ Absolute. The reason is not an invitation to argue an exception.
 - `race.yml`, the real race: up to eight lanes (a lane is one run, one runner), each with 26.1.2 servers at Normal difficulty on a pregenerated landing set (R1 to R4), 15 bot slots a server (#252), a slot refilled the moment its bot ends. Every run plays the chain to `:fortress` (`:race/until`); a real bot has no time limit of its own but its lane's job (about 5.5 h).
 - `simrace.yml`, the sim race: up to eight lanes playing the bot against the model in captured worlds (`cache/sim-worlds/R1..R4/<n>.edn.gz`), seed after seed, at Normal (mobs and hunger), to `:fortress`, 330 simulated minutes a run (#252). The model's Nether is a single column, so no sim run finds a fortress: a sim failure there is the model's limit.
 - The fleet (`fleet.yml`, `ci/fleet.edn`) keeps the runners full of lanes and gives one back the moment any other job has waited 90 s for a runner (GitHub has no preemption of its own), never fewer than two lanes a kind; a merge that touches code cancels and replaces every lane, docs-only merges (`brain/`, `docs/`, `*.md`) do not. So a check, a probe or a gym waits about two minutes at most, never hours.
-- Every 20 minutes per runner (`bb churn batch`, then `bb failures report`), the runs that ended since the last report are filed: one issue per signature (infrastructure stops such as a closed socket are counted, not filed; a signature with fewer than 3 runs in a report is a one-off, not filed). Labels: `bot-failure` plus `sim`, `real` or both. The body holds a hidden marker with the signature and a tally (rounds, runs, first and last seen). Each report adds one comment: run count, last intents, landings, up to five reproductions, the run link.
+- Every 20 minutes per runner (`bb churn batch`, then `bb failures report`), the runs that ended since the last report are filed: one issue per signature (infrastructure stops such as a closed socket are counted, not filed; a signature with fewer than 3 runs in a report is a one-off, not filed). Labels: `bot-failure` plus `sim`, `real` or both; a real failure the model reproduces from its recording (a real snapshot, 2.3) makes its issue `sim` too. The body holds a hidden marker with the signature and a tally (rounds, runs, first and last seen). Each report adds one comment: run count, last intents, landings, up to five reproductions, the run link.
 - A closed issue whose signature comes back in runs of code committed after it closed is reopened, its comment saying "(regressed: this issue was closed)". Runs of older code only comment.
 - Results also go to https://bridgerb.github.io/clojurecraft/.
 
@@ -75,10 +75,12 @@ The snapshot is a moment the run kept from before the choice that failed (an int
 Real:
 
 ```
-- real race: bot Clj_r08, replay its recording with `clojure -M:replay <artifact>/Clj_r08.edn`
+- snapshot `real-4-s2-Clj_r17.edn.gz` in artifact `race-<sha>-4` (moment 1:02 before the stop, :intent-failed, judged over 2:02); or real race: bot Clj_r17, replay its recording with `clojure -M:replay <artifact>/s2/Clj_r17.edn`
 ```
 
-The artifact `race-<sha>-<runner>` holds `s1/` and `s2/` (one per server), each with `race.log`, `server.log`, `samples.edn.zst`, `milestones.edn.zst` and one recording per slot, `Clj_rNN.edn.zst`. A name is a slot, not a bot: one name holds several bots a round, and a slot that fails round after round means its landing is the case. The runner number is in the comment's heading ("Race 38665691517 runner 1 batch 1 at 0d036cb").
+A real snapshot (issue #299, `real.clj`, brain `real-snapshots`) is the same value as a sim one: the batch folded the bot's recording on the race's runner, at the commit that played it, kept a moment from before the choice that failed exactly as a sim run does, and joined the server model to the bot's world there (its position, inventory, health, the blocks the server changed, the mobs and items it saw, the columns it held; a portal at the moment leads to the recording's own Nether). Its columns ride in it, so it needs no captured world: `--judge` and the check play it as they play a sim one. It is kept only when it recurs against the model with that code. A real failure the model does not reproduce (a model gap: a mob the model never spawned, a time of day it guessed wrong, a planner too slow for the judge's wall time) keeps the replay line alone; the round's `snapshots/convert-<n>.log` says how it got past (`GAP` lines, and `snapshots/gaps/` holds the snapshot for a look).
+
+The artifact `race-<sha>-<runner>` holds `s1/` and `s2/` (one per server), each with `race.log`, `server.log`, `samples.edn.zst`, `milestones.edn.zst` and one recording per bot, `Clj_rNN.edn.zst`, and `snapshots/` with the real snapshots. A name is one bot of one server's job (`race/bot-name`: a serial per server), so `s1/Clj_r08` and `s2/Clj_r08` are two bots; the line names the directory. The runner number is in the comment's heading ("Race 38665691517 runner 1 batch 1 at 0d036cb").
 
 ---
 
@@ -159,7 +161,8 @@ The forks where agents stop and reconsider. Take the answer and move on. A fork 
 | The check says a moment does not reproduce on the base commit | It proves nothing about the fix. Fetch another (`bb issue-check fetch`, the newest comment's), or ask the issue's next batch for one. Never weaken the check. |
 | Labelled `sim` but only old rounds reproduced it in the sim | Do not weaken the check or add unrelated snapshots. Ask the owner to drop the label, or `Refs #n`. |
 | A commit hook failed | Nothing was committed or pushed. Fix what it printed, commit again. |
-| The sim and a real run disagree | Real-only signature: the real run is the evidence. Sim-only: check the model's limits first (16.6, 16.7). |
+| The sim and a real run disagree | Real-only signature: the real run is the evidence, and its real snapshots (2.3) are judgeable evidence of it. Sim-only: check the model's limits first (16.6, 16.7). |
+| A real issue's comments list no snapshot | The model did not reproduce it (a gap: the round's `snapshots/convert-<n>.log`). Take a newer batch's, or work from the recording (8.5) and say `Refs #n` when nothing can judge the fix. |
 | A probe is still running | Do other work. Never dispatch the same probe twice. |
 | Another Todo issue looks like the same cause | Group it before the claim. After the claim, finish yours first and mention the other in the PR. |
 | A CI job fails and your probe of "the same thing" passes | Context difference, not flake (section 15). Reproduce with the job's exact command. |
@@ -193,7 +196,7 @@ Then the code that raises the reason and the notes that explain it: `grep -rn ':
 
 Reading artifacts is allowed locally; running code on them is not.
 
-**Snapshots (sim issues).** `bb issue-check fetch <n>` reads the issue's comments newest first, then its body, and copies at most two snapshots into `test/issues/<n>/`, one a world (two seeds of one world are one moment), only snapshots with a kept moment; it prints what it took and what it passed over. An expired artifact (7 days): wait for the next batch's comment, or take one by hand (`gh run download <run> -n simrace-<sha>-<runner> -D /tmp/ev/<n>/r<runner>`, then `ls .../snapshots/`).
+**Snapshots (sim issues, and real ones the model reproduces).** `bb issue-check fetch <n>` reads the issue's comments newest first, then its body, and copies at most two snapshots into `test/issues/<n>/`, one a world (two seeds of one world are one moment), only snapshots with a kept moment; it prints what it took and what it passed over. A real snapshot (`real-<runner>-<s>-<bot>.edn.gz`) comes from the race artifact's `snapshots/` and is its own world. An expired artifact (7 days): wait for the next batch's comment, or take one by hand (`gh run download <run> -n simrace-<sha>-<runner> -D /tmp/ev/<n>/r<runner>`, then `ls .../snapshots/`).
 
 **Run maps.** `runs.edn` is one run map a line; `:pos`, `:held`, `:plan` (`:plan/boxed-at`, `:plan/reached-after`, `:plan/last`, `:plan/intent`) say a lot before any code runs:
 
@@ -297,7 +300,7 @@ A recording replays exactly only with the code that made it. From a probe branch
 bb probe run <n>-replay 'git fetch -q --depth 1 origin <sha> && git checkout FETCH_HEAD -- src resources deps.edn && clojure -M:dev probe/p<n>.clj probe/<n>/Clj_r08.edn.gz'
 ```
 
-Convert before committing: `zstd -dc Clj_r08.edn.zst | gzip -c > probe/<n>/Clj_r08.edn.gz`. In the script, `(record/replay main/step (game/init {:host "replay" :port 0 :name "Clj_replay"}) path)` is the bot's final world; `clojurecraft.probe` (`dev/`) has `fold`, `at-ms`, `story` (every intent's start, end and reason) and `around`.
+Convert before committing: `zstd -dc Clj_r08.edn.zst | gzip -c > probe/<n>/Clj_r08.edn.gz` (or commit the `.zst`: the JVM reads it through `zstd`). To make a real snapshot of an older recording (the round's batch kept none, or its artifact expired), fold it at its commit the same way with `clojure -M:simrace --from-recording probe/<n>/Clj_r08.edn.zst --out out/real`, the conversion's files laid over that commit when it predates them (`git worktree add ../rec FETCH_HEAD`, copy `real.clj`, `sim.clj`, `simrace.clj` and `record.clj` from `main` into it, run there: none of them is the bot's reducer); a `REAL` line means it recurs there, a `GAP` line how it got past. In the script, `(record/replay main/step (game/init {:host "replay" :port 0 :name "Clj_replay"}) path)` is the bot's final world; `clojurecraft.probe` (`dev/`) has `fold`, `at-ms`, `story` (every intent's start, end and reason) and `around`.
 
 ### 8.6 A full run from spawn
 
@@ -388,7 +391,7 @@ Fixes #<n>
 **The checks** (both required):
 
 - `unit / unit`: every test but the forest property, then the static checks.
-- `check` (`issue.yml`): only the issues the PR names (its branch `fix/<n>` and its `Fixes #n` lines). Every issue the body fixes that is labelled `sim` must have snapshots under `test/issues/<n>/` or it fails at once (`issue <n> is reproduced in the sim (label sim) but test/issues/<n> holds no snapshot`); a real-only issue is only warned about. Only the snapshots the PR itself adds or changes are judged (a snapshot already on main proved an earlier fix; a fix/<n>-r2 for a regression brings its own or says Refs). Then, restoring only the captured worlds those snapshots name, `clojure -M:simrace --judge` judges them on the base commit (each must recur: a moment that does not reproduce its failure proves nothing) and on the PR's code (none may), in parallel, and writes both, JUDGE and STORY lines, to the step summary. Limit 15 minutes; a few minutes in practice. Older issues are not judged again: the races are the regression guard (the filer reopens an issue whose failure comes back).
+- `check` (`issue.yml`): only the issues the PR names (its branch `fix/<n>` and its `Fixes #n` lines). Every issue the body fixes that is labelled `sim` must have snapshots under `test/issues/<n>/` or it fails at once (`issue <n> is reproduced in the sim (label sim) but test/issues/<n> holds no snapshot`); a real-only issue (no real snapshot yet) is only warned about. Only the snapshots the PR itself adds or changes are judged (a snapshot already on main proved an earlier fix; a fix/<n>-r2 for a regression brings its own or says Refs). Then, restoring only the captured worlds those snapshots name, `clojure -M:simrace --judge` judges them on the base commit (each must recur: a moment that does not reproduce its failure proves nothing) and on the PR's code (none may), in parallel, and writes both, JUDGE and STORY lines, to the step summary. Limit 15 minutes; a few minutes in practice. Older issues are not judged again: the races are the regression guard (the filer reopens an issue whose failure comes back).
 
 Two snapshots an issue at most, from two landings when it has them, each under GitHub's 100 MiB file limit.
 
@@ -447,7 +450,7 @@ A failure that will not reproduce is almost always a context difference, not fla
 ## 16. Catches
 
 1. **The lanes never stop.** A code merge has the fleet cancel and replace every lane within a minute or two; `gh run list` lags behind. Docs-only merges do not restart them. A probe or check that waits gets a runner from the fleet. Never cancel a lane by hand.
-2. **Labels.** `sim` means the model produced the signature and the fix needs snapshots. `real` alone cannot be judged by the check and closes on the next race's word. A stale `sim` label blocks the check: ask the owner to drop it.
+2. **Labels.** `sim` means the model produced the signature and the fix needs snapshots. `real` alone means no real snapshot recurred for it yet (2.3): the check cannot judge it, and it closes on the next race's word. A stale `sim` label blocks the check: ask the owner to drop it.
 3. **One-offs and tallies.** Fewer than 3 runs in a report is not filed. A tally from one round after a merge may be that merge's regression.
 4. **The moment can still be late** (9.2): a run keeps six minutes. When the cause is far earlier and the moment hopeless, the evidence is a full run from spawn (8.6).
 5. **`:timeout` snapshots are stalls.** The moment is the run's last five simulated minutes; the check judges whether the stage is reached in that window (no new stage and no end: it recurs). Nothing replays a run from its landing in the check.
@@ -488,7 +491,7 @@ Patterns, not recipes.
 - **The snapshot recurs and the cause is fixed.** The moment (9.2): print what the bot does on the next tick there, and make that failure a re-plan.
 - **The snapshot passes but you doubt it.** "Still active at the end of the window" proves little: read its STORY lines, follow it longer (8.4's stepper) or run from spawn (8.6) and report the stage reached.
 - **Your fix makes another issue's snapshot recur.** The two rules conflict; read that issue's PR and notes; the right fix keeps both.
-- **Real-only and no cause in sight.** Download the round's race artifact (section 7), read the failed slots' RESULT lines, the server's tick time and the bot's log lines, and replay the recording on a runner at its commit (8.5).
+- **Real-only and no cause in sight.** Fetch its real snapshots first (section 7) and judge them like any other (8.4). Without one: download the round's race artifact (section 7), read the failed slots' RESULT lines, the server's tick time and the bot's log lines, and replay the recording on a runner at its commit (8.5).
 - **A CI job fails and the same thing passes in a probe.** Section 15.
 - **The cause is in tooling, or the issue is not a bug** (the model cannot represent it, the world's edge): hand off (section 14) and tell the owner. Never close issues by hand.
 
@@ -747,6 +750,7 @@ Every attribute, its meaning and lifetime is in `src/clojurecraft/model.clj` (`m
 - Recording: optional `{:record/commit sha}`, one EDN line per event (`record/wire` drops derived `:chunk/column`), `#:record{:effects ...}` after any event with effects (grep that form), `{:record/result ...}` last. Tap runs before the swap; `tap-buffer` 4096 blocks rather than drop. `.gz` reads directly.
 - Replay: `record/verify` compares `:send` effects (logs ignored): `:identical` or the first `:record/mismatch`. **Fold a recording at its own commit** (`bb replay`; `--here` for the working tree): newer code makes a whole file look truncated (#111).
 - `dev/clojurecraft/probe.clj`: `fold`, `at-ms`, `story` (every intent's start, end, reason), `around` (slice round the feet: `#` solid `.` clear `W` water `L` lava `~` awkward `g` falling).
+- Real snapshots `real-<runner>-<s>-<bot>.edn.gz` (`real.clj`): the same value built from a race's recording at its commit (`real/fold-step`, `convert`, `sim/joined`), its columns inside it (`:snapshot/columns`, `simrace/own-world`), `:snapshot/source :real`; `clojure -M:simrace --from-recording f` makes one and keeps it only when it recurs.
 - Sim snapshots `<set>-<n>-<seed>.edn.gz`: a moment kept from before the choice that failed (`simrace/decision`, `chosen-moment`; runs keep a moment every 30 s, the last 12, `sim/play-from`), with the next tick's inputs and `:snapshot/moment` (why, when, window). `simrace/judged` plays it over its window, never from the landing. `bb issue-check fetch <n>` → `test/issues/<n>/`; `clojure -M:simrace --judge f` judges one.
 - Telemetry (`watch.clj`) is a view: offered to a 1024 channel, drops rather than slow the loop, never recorded.
 
@@ -935,7 +939,7 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 | Workflow | Trigger | Does | Artifacts |
 |---|---|---|---|
 | `fleet.yml` | always on (hands over every 340 min), hourly backstop | keeps lanes in every free runner, cancels the newest when another job waits 90 s (floor 2+2), replaces lanes on replaced code | log lines `FLEET ...` |
-| `race.yml` | dispatched by the fleet, one lane a run (`race lane k`) | up to 8 lanes × 2 servers × 15 slots on pregenerated landings, refilled, 330 min; `bb churn batch` every 20 min | `race-<sha>-<runner>`: `s1/`,`s2/` with `race.log`, `server.log`, `samples.edn.zst`, `milestones.edn.zst`, a recording per slot |
+| `race.yml` | dispatched by the fleet, one lane a run (`race lane k`) | up to 8 lanes × 2 servers × 15 slots on pregenerated landings, refilled, 330 min; `bb churn batch` every 20 min | `race-<sha>-<runner>`: `s1/`,`s2/` with `race.log`, `server.log`, `samples.edn.zst`, `milestones.edn.zst`, a recording per bot; `snapshots/` with the real snapshots, `gaps/` and `convert-<n>.log` |
 | `simrace.yml` | same (`simrace lane k`) | up to 8 lanes, bot against the model in captured worlds, every core | `simrace-<sha>-<runner>`: `runs.edn`, `simrace.log`, `snapshots/` |
 | `test.yml` | every push, any branch | `unit` (via `unit.yml`), one forest shard of 250 (dispatch: 8), actionlint | none |
 | `unit.yml` | called by `test.yml`, `issue.yml` | every test but the forest property (`bb test`), then `bb check` | none |
