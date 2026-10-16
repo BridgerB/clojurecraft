@@ -8,6 +8,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -133,7 +134,11 @@
                          120000
                          {:event/kind :go :go/goals [:armour]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
-    (is (= [:iron_helmet :iron_chestplate] [(armour/worn w 0) (armour/worn w 1)]))
+    (is (= [:iron_helmet :iron_chestplate] [(armour/worn w 0) (armour/worn w 1)])
+        (pr-str {:inventory (:player/inventory w)
+                 :sim (:sim/inv sim)
+                 :story (mapv (juxt :intention/kind :intention/event :intention/reason)
+                              (memory/intentions w))}))
     (is (zero? (:iron_ingot (recipe/counts (:player/inventory w)) 0)))
     (is (nil? (:window/cursor w)))
     (is (= [] (:sim/violations sim)))))
