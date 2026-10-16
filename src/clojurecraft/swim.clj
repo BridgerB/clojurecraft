@@ -121,13 +121,20 @@
 
 (defn obstacle
   "The cell to dig when the swim makes no progress: a lid over the head, else the cell ahead at
-   head height, else the cell over the head (the cap of a roofed pool); never the cell ahead at
-   feet height, which is the bank. nil when none of them is solid."
+   head height, else the cell ahead at feet height when the bank is no higher than the feet (a
+   wall between them, not a bank to climb), else the cell over the head (the cap of a roofed
+   pool); never the cell ahead at feet height under a higher bank, which is the step the impulse
+   needs to collide with. nil when none of them is solid. Race 38805758078 runner 1 (issues
+   #156, #157) bot Clj_r44, in a flooded tunnel at y 16, had its bank two blocks off at its own
+   height with a block between at the feet; the swim dug the ceiling over its head again and
+   again, then nothing was named and it failed :stuck."
   [world [x y z :as feet] bank]
   (let [over [x (+ y 2) z]
-        head (when bank (update (ahead feet bank) 1 inc))]
+        level (when bank (ahead feet bank))
+        head (when level (update level 1 inc))]
     (cond (lid? world feet) over
           (and head (solid-cell? world head)) head
+          (and level (<= (second bank) y) (solid-cell? world level)) level
           (solid-cell? world over) over
           :else nil)))
 
