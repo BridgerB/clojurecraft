@@ -58,6 +58,9 @@
    [:intent/exposes-ok?
     "a :dig that may open a cell beside water or lava (an escape digs beside the water it is in)"
     "on an escape's child dig"]
+   [:intent/drop-ok?
+    "a :dig whose drop is not wanted: a block no held tool harvests is broken for nothing, not refused :needs-tool"
+    "on a build's child dig (build/way-dig)"]
    [:intent/passage-ok?
     "a :place that may put its block in a passage, since it is dug again at once (a gravel for flint)"
     "on a redig's child place"]

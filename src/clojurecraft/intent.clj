@@ -385,6 +385,47 @@
           (and (blocks/needs-tier id) (not (dig/harvest? id nil))) :needs-tool
           :else [0 nil])))
 
+(defn breaker
+  "[slot item-id] of the fastest tool of block id's own kind among slots ({slot item}), whether it
+   harvests the block or not (dig/ms: a tier too low breaks it at a hundredth of its speed, for
+   nothing); nil when none is of its kind. What breaks a block whose drop is not wanted
+   (:intent/drop-ok?) when no held tool harvests it."
+  [id slots penalties]
+  (let [kind (blocks/tool-of id)]
+    (when-let [[_ slot item] (first (sort (for [[slot {:keys [item]}] slots
+                                                :when (and kind (= kind (:kind (blocks/tool item))))
+                                                :let [m (dig/ms id item penalties)]
+                                                :when m]
+                                            [m slot item])))]
+      [slot item])))
+
+(defn breaking-tool
+  "[slot item-id] a dig of block id holds (choose-tool), or for a dig whose drop is not wanted
+   (drop-ok?) of a block no held tool harvests, the fastest of its kind in the hotbar (breaker),
+   else the hand, [0 nil]: the cell is what such a dig is for. :needs-tool otherwise, as
+   choose-tool. Sim race 38806318231 (issue #70, 1065 runs in 197 rounds): the cast's room and
+   way met deepslate redstone ore and iron ore the held pickaxe could not harvest, and every such
+   dig failed :needs-tool, three times."
+  [world id drop-ok?]
+  (let [t (choose-tool world id)]
+    (if (and drop-ok? (= :needs-tool t))
+      (or (breaker id (hotbar world) (penalties world)) [0 nil])
+      t)))
+
+(defn stowed-breaker
+  "[slot item-id] of the tool a dig of block id whose drop is not wanted should first put in hand
+   from the main inventory: stowed-tool's, or when no held tool harvests the block and the hotbar
+   has none of its kind, the fastest of its kind (breaker) stowed there; nil when the hotbar holds
+   it already or there is none. A broken pickaxe leaves its spare in the main inventory: sim race
+   38806318231 (issue #70) dug the cast's way at y 29 by hand, nine seconds a stone, with a stone
+   pickaxe in slot 35, and failed on iron ore :needs-tool."
+  [world id]
+  (or (stowed-tool world id)
+      (when (and (= :needs-tool (choose-tool world id))
+                 (nil? (breaker id (hotbar world) (penalties world))))
+        (when-let [[slot _ :as t] (breaker id (:player/inventory world) (penalties world))]
+          (when-not (inventory/hotbar? slot) t)))))
+
 (defn open?
   "Is block state id nothing a dig breaks, the cell already open: air, water or lava
    (path/classify-id)? Anything else is broken, solid or not: an awkward block (a wall, a slab,
@@ -402,21 +443,21 @@
   (fn [_world i] (:intent/stage i)))
 
 (defmethod dig-stage :settle
-  [world {:intent/keys [target since still exposes-ok?] :or {still 0}}]
+  [world {:intent/keys [target since still exposes-ok? drop-ok?] :or {still 0}}]
   (let [now (:time/now world)
         eye (game/eye world)
         at-target (terrain/block-at world target)]
     (cond (and at-target (open? at-target)) (fail world :target-gone)
           (> (physics/distance eye (physics/centre target)) (+ reach 0.5))
           (fail world :out-of-reach)
-          (= :needs-tool (choose-tool world at-target)) (fail world :needs-tool)
+          (= :needs-tool (breaking-tool world at-target drop-ok?)) (fail world :needs-tool)
           (or (contains? never-dug (blocks/name-of at-target))
               (and (not exposes-ok?) (exposes-fluid? world target)))
           (fail world :unsafe)
           (or (and (>= still 3) (> (- now since) settle-ms)) (> (- now since) settle-deadline))
           (let [seq (inc (:bot/sequence world))
                 face (face-toward eye target)
-                [slot tool] (choose-tool world at-target)
+                [slot tool] (breaking-tool world at-target drop-ok?)
                 ms (dig-time at-target tool (penalties world))]
             (-> world
                 (assoc :bot/sequence seq)
