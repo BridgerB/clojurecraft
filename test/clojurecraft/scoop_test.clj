@@ -280,3 +280,16 @@
       (is (= :done (get-in w [:plan/intent :intent/status])))
       (is (contains? (:plan/boxed-at w) [5 40 5]))
       (is (nil? (scoop/climb w))))))
+
+(deftest a-boxed-cut-toward-the-bank-gives-that-water-up
+  ;; race 38805762352 runner 2 (issue #61): bots Clj_r18 (in a cave at y 30) and Clj_r22 (on the
+  ;; steps its climb had laid in a cavern) tunnelled toward water no route reached, each tunnel
+  ;; :boxed three times in a row while the cut kept the climb out from being chosen
+  (let [w (deep-in {[12 40 5] water [12 41 5] blocks/air})
+        cut (scoop/scoop-next w)
+        boxed (stairs/box (assoc w :plan/intent (assoc cut :intent/status :active)))]
+    (is (= [:bank [12 40 5]] [(:intent/for cut) (:intent/target cut)])
+        "a cut toward the water seen, naming it")
+    (is (= :done (get-in boxed [:plan/intent :intent/status])) "boxed, it ends: no attempt counted")
+    (is (contains? (:plan/blacklist boxed) [12 40 5]) "and gives that water up")
+    (is (= :surface (:intent/for (scoop/scoop-next boxed))) "so the climb out is chosen next")))
