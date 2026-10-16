@@ -812,6 +812,8 @@ Most are stated where they apply above (grass type, resting vy, `:name` collisio
 | 15 | `:portal` | `:built?` | `:build :portal`, holds a pickaxe |
 | 16 | `:nether` | `:built?` (stood in until the Nether) | `:build :nether`, holds a pickaxe |
 | 17 | `:fortress` | `:at-fortress?` | `:fortress` |
+| 19 | `:ender-pearls` (aside for now; `pearls-12`) | 12 ender pearls | `:pearls` → `:collect` the drop, `:fight`, `:provoke` by a stare from range, `:walk` (issue #263) |
+| 19 | `:ender-pearl` (aside: gym only; `pearls-1`) | 1 ender pearl | `:pearls`, as above |
 
 - `:iron-kit` takes flint and steel first so all iron is mined in one trip down and the climb out ends at the water. The cast's few placed blocks are counted from the plan (`build/held-first`, `blocks-needed`), never a constant.
 

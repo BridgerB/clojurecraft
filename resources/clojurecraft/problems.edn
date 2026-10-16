@@ -288,7 +288,7 @@
   :problem/done
   "RCON: seven or more blaze rods in the bot's inventory (clear <bot> minecraft:blaze_rod 0), from the nether arena's spawner and from a fortress pad."
   :problem/last-failure
-  "Not played yet: the parts land first (issue #262): a drop's stack is read from its metadata, :collect-drops is done when nothing of the item lies near, a Nether spawner is remembered, and an engaged fight walks on toward a target hovering out of reach. Then the goal (blaze.clj) and its gym rows: blaze-1 (invulnerable, six rods given) passed 3/3 twice (runs 38891907112, 38893160457). blaze-7 (not invulnerable) died twice of three burning in a 7-square room (blaze-7a, run 38891910129) and stalled once when fire by the spawner lit its floor past light 11, so the spawner made no blaze for three minutes: the arena now sets mob griefing off and gives Fire Resistance; then 2/3 (blaze-7b), a volley taking 12.7 health in two seconds while the bot fought on hungry (a meal now comes first under 14 health); then 3/5 (blaze-7c), three blazes' volleys at once killing from 16; with one blaze at a time from a slower spawner, 5/5 (blaze-7d, run 38896099962), breaking off under 10 in three runs and eating in four. blaze-fortress (from the fortress pad): every run failed three fights :unreachable on blazes seen through the fortress's walls (blaze-fortress-a; only reachable blazes are fought now), then camped ten minutes in the wall four over the spawner, its blazes out of reach (blaze-fortress-b; a tunnel to a spawner now ends within 2 of it, at its blazes' floor)."
+  "Not played yet: the parts land first (issue #262): a drop's stack is read from its metadata, :collect-drops is done when nothing of the item lies near, a Nether spawner is remembered, and an engaged fight walks on toward a target hovering out of reach. Then the goal (blaze.clj) and its gym rows: blaze-1 (invulnerable, six rods given) passed 3/3 twice (runs 38891907112, 38893160457). blaze-7 (not invulnerable) died twice of three burning in a 7-square room (blaze-7a, run 38891910129) and stalled once when fire by the spawner lit its floor past light 11, so the spawner made no blaze for three minutes: the arena now sets mob griefing off and gives Fire Resistance; then 2/3 (blaze-7b), a volley taking 12.7 health in two seconds while the bot fought on hungry (a meal now comes first under 14 health); then 3/5 (blaze-7c), three blazes' volleys at once killing from 16; with one blaze at a time from a slower spawner, 5/5 (blaze-7d, run 38896099962), breaking off under 10 in three runs and eating in four. blaze-fortress (from the fortress pad): every run failed three fights :unreachable on blazes seen through the fortress's walls (blaze-fortress-a; only reachable blazes are fought now), then camped ten minutes in the wall four over the spawner, its blazes out of reach (blaze-fortress-b; a tunnel to a spawner now ends in the open cell beside it, climbing first); then came up three under the spawner's floor and killed eight blazes whose rods lay out of reach over it, while the :defend row chased blazes through walls and over its head (blaze-fortress-c; only blazes in sight and within 3 over or 2 under the feet are fought now, by either row); then reached the cell beside the spawner and died there waiting to heal, burning and shot, in every run of -e, -f and -g (a hurt bot now hides in the nearest cell out of a watching blaze's sight, and the row gives Fire Resistance); blaze-fortress-h (run 38905665758) still 0/3: fights :unreachable three in a row (the fight's approach walks straight, never along a route, and a blaze behind a fortress fence is never reached), the tunnel's step into the spawner's room failing :no-path, and one run slain by volleys. With the slower arena spawner blaze-7 passed 14/15 (blaze-7d, -e, -f) and blaze-1 3/3 in every batch."
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
                     "brain/siblings/sib-blaze-combat.md" "brain/bot/plan/survival.md"
                     "brain/bot/plan/collect-intent.md"]}
@@ -363,4 +363,35 @@
    "The fixture claims for each bot, through the claims channel, and speaks to the bot only through its own bounded event queue"
    "Cells are 96 blocks square from where the first bot joins; the forest nearest a cell's middle is claimed by the cell it lies in"
    "keep_inventory on, as the siblings race; peaceful, as the full run"]
-  :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/roadmap-issues.md"]}]
+  :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/roadmap-issues.md"]}
+ {:problem/stage :ender-pearls
+  :problem/issue 263
+  :problem/goals [:ender-pearls :ender-pearl]
+  :problem/statement
+  "Split from :end-and-dragon. Twelve eyes of ender need twelve ender pearls, and bartering for them takes far more gold than the run mines, so the bot hunts endermen: find one, make it come, kill it with the sword and live, pick up the pearl it drops one time in two, about twenty-four times."
+  :problem/needs
+  ["The endermen round the bot, alive or dead, from the mob model (#258)"
+   "The pearl drop rate, read from the game's own loot table, which sets how many kills the stage costs"
+   "Whether a look at an enderman provokes it, and when an angry one teleports, from the game's classes"
+   "A clear line from the eye to an enderman's head, from the terrain"
+   "Where a kill fell, to pick its drop up"
+   "Armour worn and a sword in hand before the first fight (#259)"]
+  :problem/decisions
+  ["Hunt, never barter (issue #263): a stack of gold per twelve pearls is a mine the run never makes"
+   "The loot table is one roll of ender_pearl, count uniform 0 to 1, plus 0 to 1 a level of looting (probe run 38889277228): a pearl a kill one time in two"
+   "A warped forest is the hunting ground: its only monster spawner is the enderman, four at a time (the same probe)"
+   "Provoke by a stare at the head from 6 blocks or more, then look at its legs: an angry enderman stared at within 4 teleports away, one stared at within 16 stands frozen, and a melee hit by the bot never teleports it (EnderMan.hurtServer, EndermanLookForPlayerGoal)"
+   "Fight from a burrow, not in the open: three stairs down and a tunnel two high, the enderman stopped at the last stair two cells off, out of its reach (a mob's melee is its box grown 0.83 sideways, never up or down: Mob.getAttackBoundingBox, probe run 38893918055) and inside the sword's; the open fight is only the fallback where no burrow can be cut. Never from water, which the escapes already forbid"
+   "The rows stay asides until the stages before them are proven; raising the chain to them is its own change"]
+  :problem/risks
+  ["Seven a hit on Normal, one hit a second, against forty health: an iron sword needs seven hits, so a fight in the open costs most of the bot's health even in iron"
+   "The bot staring at an enderman's face by accident (a look at its head from within 4 blocks) sends it away mid-fight"
+   "An enderman carrying a block drops the block beside its pearl: only a drop that says it holds a pearl (#262's :entity/item), or has not said yet, may be picked up"
+   "No warped forest near where the bot comes out of the portal"
+   "Endermen teleporting out of reach"]
+  :problem/done
+  "RCON: clear <bot> minecraft:ender_pearl 0 finds twelve or more after a warped forest landing at Normal (gym pearls-12), and one or more from summoned endermen (gym pearls-1)."
+  :problem/last-failure
+  "clojurecraft has never hunted an enderman. steve hunted them (tasks/combat huntEndermen: do not look at its eyes before attacking) and its End attempts f7 dragon-1/3/5 were all slain by endermen; ruststeve bartered with piglins and never fought one. Gym batch pearls-263a (plan run 38892130785): five NoAI trials passed, five live trials died fighting three endermen at once in the open in iron (5.74 a hit, the sweep pulling the next one in), and every warped forest landing failed to find a floor under the roots; the hunt now fights from a burrow, provoking from its mouth."
+  :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/plan/ender-pearls.md"
+                    "brain/bot/plan/survival.md"]}]

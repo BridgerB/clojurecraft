@@ -515,14 +515,12 @@
   (is (nil? (plan/goals-for "play"))))
 
 (deftest the-current-stage-is-the-furthest-target
-  ;; issue #262 added the blaze rods past the fortress (the race's own :race/until stays where
-  ;; ci/race.edn puts it)
-  (is (= "blaze-rods" (plan/current-until)))
+  (is (= "fortress" (plan/current-until)))
   ;; A gym stage names only its own target. A fresh run plays every step up to it.
-  (is (= [:blaze-rods] (plan/goals-for (plan/current-until))))
+  (is (= [:fortress] (plan/goals-for (plan/current-until))))
   (let [chain (plan/through (plan/current-until))]
     (is (= [:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket :water-bucket
-            :flint-and-steel :iron-kit :portal-kit :cast-one :portal :nether :fortress :blaze-rods]
+            :flint-and-steel :iron-kit :portal-kit :cast-one :portal :nether :fortress]
            chain))
     (is (= [:wood] (plan/through "wood")))
     (is (nil? (plan/through "play")))

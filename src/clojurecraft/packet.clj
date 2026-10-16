@@ -283,7 +283,9 @@
    issue #258). A byte (0) is read unsigned, since the one the bot reads is a bitfield (index 0,
    the shared flags: on fire, sneaking ...). Direction (12) and pose (20) are varint enums. An item
    stack (7) is read as a slot (read-slot): a dropped item's stack is its index 8, and a drop is
-   known by what it holds (issue #262: a blaze rod picked out from the cobblestone). The rest
+   known by what it holds (issue #262: a blaze rod picked out from the cobblestone). An optional
+   block state (15) is one varint, 0 for none: an enderman's carried block (index 16) comes just
+   before its creepy flag (17), which the pearl hunt reads (issue #263). The rest
    (components, particles, block positions, variants) are not here: a skim stops at the first of
    them."
   {0 b/read-u8      ; BYTE
@@ -294,6 +296,7 @@
    7 read-slot      ; ITEM_STACK: a dropped item's (index 8)
    8 b/read-bool    ; BOOLEAN
    12 b/read-varint ; DIRECTION
+   15 b/read-varint ; OPTIONAL_BLOCK_STATE: 0, or a block state id
    20 b/read-varint}) ; POSE
 
 (defn read-metadata

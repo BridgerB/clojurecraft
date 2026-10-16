@@ -63,6 +63,18 @@
     (is (= [1.5 64.0 0.5] (mob/step-toward free? [1.5 64.0 0.5] [0.5 64.0 0.5] 0.115 1.0))
         "already at its stop")))
 
+(deftest an-enderman-stays-out-of-a-tunnel-two-high
+  ;; issue #263: 2.9 tall, an enderman needs three free cells (mob/tall); a roof at y 66 over x 3
+  ;; and on keeps it out where a zombie walks in
+  (let [free? (floor-free? (set (for [x (range 3 10)] [x 66 0])))]
+    (is (= 3 (mob/tall :enderman)))
+    (is (= 2 (mob/tall :zombie)) "every other walker as before")
+    (is (= [2.95 64.0 0.5]
+           (mob/step-toward free? [2.95 64.0 0.5] [8.5 64.0 0.5] 0.197 1.12 (mob/tall :enderman))))
+    (is (near?
+         [3.065 64.0 0.5]
+         (mob/step-toward free? [2.95 64.0 0.5] [8.5 64.0 0.5] 0.115 1.12 (mob/tall :zombie))))))
+
 ;; ---------------------------------------------------------------- on the model
 
 (defn arena
@@ -122,6 +134,22 @@
     (is (< (:sim/health later) 20.0) "and was hit")
     (is (zero? (mod (- 20.0 (:sim/health later)) 3.0)) "three a hit on Normal")
     (is (some #(< (:health %) 20.0) (said later :set-health)) "the client is told")))
+
+(defn close? "Is the number a within a millionth of b?" [a b] (< (abs (- a b)) 1e-6))
+
+(deftest armour-takes-its-share-of-a-mobs-hit
+  ;; CombatRules.getDamageAfterAbsorb (issue #263): with no armour in the model an enderman beat
+  ;; every sword before the fight's break-off
+  (is (= 7.0 (mob/absorbed 7.0 0 0.0)) "nothing worn")
+  (is (close? 5.74 (mob/absorbed 7.0 8 0.0)) "an enderman's 7 on iron helmet and chestplate")
+  (is (close? 1.89 (mob/absorbed 7.0 20 8.0)) "on all four diamond pieces")
+  (let [worn {[:armour 0] {:item (recipe/item-id :iron_helmet) :count 1}
+              [:armour 1] {:item (recipe/item-id :iron_chestplate) :count 1}}
+        sim (arena {} worn nil night [{:type :zombie :pos [2.5 64.0 0.5]}])]
+    (is (close? 5.74 (sim/armoured sim 7.0)) "the model reads what window 0's armour slots hold")
+    (is (= 7.0 (sim/armoured (arena {} {} nil night []) 7.0)))
+    (is (close? (- 20.0 (mob/absorbed 3.0 8 0.0)) (:sim/health (ticks sim 15)))
+        "a zombie's first hit, through the iron")))
 
 (def iron-sword {[:hotbar 0] {:item (recipe/item-id :iron_sword) :count 1}})
 

@@ -21,6 +21,12 @@ sourceRefs:
   - src/clojurecraft/gym.clj#def portal-arena
   - src/clojurecraft/gym.clj#def nether-arena
   - src/clojurecraft/gym.clj#defmethod land! :nether-arena
+  - src/clojurecraft/gym.clj#defmethod land! :warped-forest
+  - src/clojurecraft/gym.clj#defn spread
+  - src/clojurecraft/gym.clj#defn warped?
+  - src/clojurecraft/gym.clj#defn trial-name
+  - test/clojurecraft/gym_test.clj#a-warped-forest-landing-is-spread-onto-its-floor
+  - test/clojurecraft/gym_test.clj#the-pearl-rows-are-found-by-their-own-names
   - src/clojurecraft/gym.clj#defmethod land! :end
   - src/clojurecraft/gym.clj#defn place!
   - src/clojurecraft/gym.clj#defn wait-in!
@@ -80,6 +86,7 @@ A row says how it starts with `:gym/land`, a `land!` method; `gym/dimensions` na
 
 ## Several rows of one goal (#262)
 A row may carry `:gym/name` when more than one row plays its goal from different starts: the blaze rods are played from an invulnerable bot in the nether arena (`blaze-1`), from a hurt one there (`blaze-7`) and from the fortress pad (`blaze-fortress`), all `:gym/goal :blaze-rods` with `--until blaze-rods` ([[blaze-rods]]). `gym` finds a row by its name first, then by its goal or `--until` name; `plan-matrix` puts the name (else the `--until` name) in the matrix, so each trial looks its own row up. The summon helpers for them: `invulnerable` (Resistance V and Fire Resistance, since no command sets `Invulnerable` on a player), `iron-armour`, and the truth `rods-held`.
+**The pearl rows (issue #263).** `pearls-1`: five NoAI endermen within the hunt's strike range in the Nether room, the pearl kit (`pearl-kit`: an iron sword and pickaxe, the iron helmet and chestplate, cooked beef); judged by a pearl held (`pearls-held`). Five because a kill drops a pearl one time in two ([[ender-pearls]]). `pearls-1-live`: three live endermen ten blocks off in `pearl-arena` (stone eight deep under a floor 25 square, a clear midnight sky, light blocks five over the floor: the burrow is cut in stone, the endermen are far enough to be provoked on purpose, and no zombie spawns in the light; the Nether room put all three within reach, and the unlit arena of batch pearls-263b spawned a zombie the :defend row and the hunt took turns over until the bot died), a pearl held and health left. `pearls-12`: `:warped-forest`, the forest `locate biome` names nearest the landing's Nether coordinates, and a floor in it: the bot spread onto one round the located point (`spread`: `spreadplayers ... under 110`, the highest place a body fits under the roof where vanilla judges a player safe), ranges `warped-ranges` 16 to 96, three tries each, until the server says the cell is warped forest (`warped?`, `if biome`); then `place!` stands the bot there. Batches pearls-263a and b asked for nylium cell by cell round the located point and found none: probe 38896760962 read that column netherrack from y 4 to 125, the located height inside the rock; twelve pearls held. The two `pearls-1` rows share their goal and `--until`, so the live one carries `:gym/name`: `gym` finds a row by it first, and `trial-name` sends it across the job boundary in the matrix (every other row still crosses as its `--until`).
 
 ## Landing sets
 `ci/gym.edn` names each set: a centre far from world spawn, n grid cells spacing apart, the biome cells snap to, and a pregeneration radius. A is forests (20000, 20000); W is beaches (26000, 20000), steve's landing set W for the water trial (`:shore`, [[water-escape]]), whose truth commands are the server's own dry-land test (`execute ... unless block ~ ~ ~ minecraft:water unless block ~ ~1 ~ minecraft:water`) and `OnGround 1b`. `landings/landings!` snaps each cell with `locate biome`, finds the surface with a marker entity, keeps it when y >= 55 and no fixture landing check passes (else tries the fixture's nearby offsets), and pregenerates the chunks around it. Run k always lands on `landings[k]` (`landing-for`, wrapping), so batches are paired.

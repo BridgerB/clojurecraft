@@ -52,6 +52,12 @@
              (entity/metadata-facts blocks/item-entity-type {8 {:item 1117 :count 1}})))
       (is (= {} (entity/metadata-facts pig {8 {:item 1117 :count 1}})))
       (is (= {} (entity/metadata-facts blocks/item-entity-type {8 nil})) "an empty stack, nothing"))
+    (testing "an enderman says when it has a target, and only an enderman (issue #263)"
+      (is (= {:entity/creepy? true}
+             (entity/metadata-facts (blocks/entity-types :enderman) {17 true})))
+      (is (entity/creepy? (entity/metadata-facts (blocks/entity-types :enderman) {17 true})))
+      (is (not (entity/creepy? (entity/metadata-facts (blocks/entity-types :enderman) {17 false}))))
+      (is (= {} (entity/metadata-facts pig {17 true}))))
     (testing "a blaze's flags say it burns"
       (is (entity/on-fire? (merge (mob :blaze [0.0 0.0 0.0])
                                   (entity/metadata-facts (blocks/entity-types :blaze) {0 1})))))))
