@@ -87,12 +87,19 @@
       (or (contains? blacklist pos) (>= (get failures [x z] 0) max-trunk-failures)))))
 
 (defn log-walk
-  "A walk to the log of bottom nearest the feet, tagged as the gather chain."
+  "A walk to the log of bottom nearest the feet, tagged as the gather chain. When even that log
+   is intent/pickup-rise or more over the feet, a trunk on a bank no jump climbs, the walk must
+   end where the drop will lie in the pickup box (:intent/pickup?: intent/walk-goal's :pickup
+   goal, within pickup-range of the log's cell), so a trunk reached only from the foot of the
+   bank has no route and is passed over. The forest property at FOREST_SEED 388575908371 (three
+   trees, one on a two-high mound, two on banks it climbs) dug the mound's trunk from the ground
+   three cells off, the drop came to rest on the mound top out of the box, the collect timed out
+   :not-picked-up, and a second log was dug for the first."
   [world bottom]
-  {:intent/kind :walk
-   :intent/target (trunk-target world bottom)
-   :intent/for :log
-   :intent/trunk bottom})
+  (let [target (trunk-target world bottom)
+        feet-y (long (math/floor (physics/y-of (:player/pos world))))]
+    (cond-> {:intent/kind :walk :intent/target target :intent/for :log :intent/trunk bottom}
+      (>= (- (physics/y-of target) feet-y) intent/pickup-rise) (assoc :intent/pickup? true))))
 
 (defn trees-climb
   "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk above
