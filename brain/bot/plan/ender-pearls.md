@@ -38,6 +38,7 @@ related:
   - "[[sim-mobs]]"
   - "[[entities]]"
   - "[[collect-intent]]"
+  - "[[gym-on-runners]]"
 ---
 
 # Ender pearls
@@ -65,6 +66,9 @@ In order:
 
 ## Against the model
 The model's enderman (`mob/kinds`) is neutral until stared at (`sim/provoke`, from the look the client sends) or hit, then walks at the bot and hits for 7 a second. The model had no armour, so an enderman beat every sword before the 10-health break-off; `sim/armoured` now takes the worn pieces' share of every mob hit, arrow and blast (`mob/absorbed`, CombatRules: armour counts for points − damage / (2 + toughness / 4), at least a fifth of the points and at most 20, 4% a point; `mob/armour-points` from `ArmorMaterials`). An enderman's 7 is 5.74 on iron helmet and chestplate and 1.89 on all four diamond pieces. The sim test hunts one fixture enderman in diamond with an iron sword, eleven pearls given and a seed whose first mob roll drops the twelfth (`pearl-seed`).
+
+## Gym rows
+`pearls-1` (five NoAI endermen in the sealed Nether room, a pearl held), `pearls-1-live` (three live ones there, a pearl held and health left) and `pearls-12` (the warped forest nearest the landing's Nether coordinates, twelve held), all at Normal with an iron sword and the iron helmet and chestplate: [[gym-on-runners]].
 
 ## Limits
 - The fight is in the open, as the issue asks. Seven a hit, one a second, against forty health: an iron sword needs seven hits, so even in iron the fight costs most of the bot's health; the gym rows say how it goes on a real server.

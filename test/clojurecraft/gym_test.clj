@@ -139,6 +139,48 @@
     (is (not (:gym/landed? r)) "a bot that never reaches the dimension is a failed landing")
     (is (not-any? #(str/starts-with? % "give ") sent) "and never gets its kit in the wrong world")))
 
+(deftest the-pearl-rows-are-found-by-their-own-names
+  ;; issue #263: pearls-1 and pearls-1-live share the goal :ender-pearl and the --until pearls-1
+  (let [still (gym/gym "pearls-1")
+        live (gym/gym "pearls-1-live")]
+    (is (= [:ender-pearl :ender-pearl :ender-pearls]
+           (mapv :gym/goal [still live (gym/gym "pearls-12")])))
+    (is (not= still live))
+    (is (every? #(str/includes? % "NoAI:1b") (:gym/summon still)) "first, endermen that never move")
+    (is (not-any? #(str/includes? % "NoAI") (:gym/summon live)) "then live ones")
+    (is (= ["pearls-1" "pearls-1-live"] (mapv gym/trial-name [still live])))
+    (is (str/includes? (gym/plan-matrix ["pearls-1-live"] 1)
+                       "{\"goal\":\"pearls-1-live\",\"run\":1")
+        "the live trial crosses the job boundary under its own name")
+    (is (str/includes? (gym/plan-matrix ["table"] 1) "{\"goal\":\"table\",\"run\":1")
+        "every other row as before")
+    (is (:truth/ok? (gym/truth (first (:gym/truth (gym/gym "pearls-12")))
+                               "c"
+                               "Found 13 matching item(s) on player")))
+    (is (not (:truth/ok? (gym/truth (first (:gym/truth (gym/gym "pearls-12")))
+                                    "c"
+                                    "Found 1 matching item(s) on player"))))))
+
+(deftest a-warped-forest-landing-stands-on-its-nylium
+  ;; issue #263: the forest nearest the landing's Nether coordinates, a floor found cell by cell
+  (let [[r sent] (landing-commands
+                  :ender-pearls
+                  #(cond (str/includes? % "locate biome")
+                         "The nearest minecraft:warped_forest is at [120, 70, 240] (90 blocks away)"
+                         (str/includes? % "#minecraft:nylium")
+                         (if (str/includes? % " if block 120 65 240 ") "Test passed" "Test failed")
+                         :else "Test passed"))]
+    (is (:gym/landed? r))
+    (is (= [120 240 66] (:gym/landing r)))
+    (is
+     (some
+      #{"execute in minecraft:the_nether positioned 100 64 200 run locate biome minecraft:warped_forest"}
+      sent)
+     "an eighth of the overworld landing [800 1600]")
+    (is (some #(str/includes? % "run tp Clj_g1 120.5 66 240.5") sent))
+    (is (some #{"difficulty normal"} sent))
+    (is (some #{"give Clj_g1 minecraft:iron_sword 1"} sent))))
+
 (deftest a-truth-reads-the-servers-reply
   (let [row {:truth/cmd "clear {name} minecraft:stick 0" :truth/re "Found ([4-9]|[1-9][0-9])"}]
     (is (= "clear Clj_g1 minecraft:stick 0" (gym/truth-cmd row "Clj_g1" [0 0 64])))
