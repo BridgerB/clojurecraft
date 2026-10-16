@@ -5,11 +5,12 @@ type: reference
 tags: [bot, tooling, sim, crafting]
 aliases: [sim click, click-view, layouts, sim/inv, sim/cursor, result-of, craft-once, insert, accepts?, own-slots]
 status: verified
-lastUpdated: 2026-10-11
+lastUpdated: 2026-10-15
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#defmulti click-view
   - src/clojurecraft/sim.clj#defn click-kind
+  - src/clojurecraft/sim.clj#defmethod click-view :throw
   - src/clojurecraft/sim.clj#defn stack-size
   - test/clojurecraft/sim_test.clj#tools-never-stack-and-wear-one-at-a-time
   - src/clojurecraft/inventory.clj#def layouts
@@ -43,6 +44,7 @@ The sim stores the player's window-0 slots in `:sim/inv` (1-44 meaningful), the 
 - **Slot 0, other modes**: with an empty or same-item cursor that can hold it, craft once onto the cursor; else nothing.
 - **Slot 0 with no result**: violation `[:click-on-empty-result mode]`.
 - **Mode 2 (hotbar swap)**: swap the slot with hotbar slot `hotbar + button`, unless the slot refuses the hotbar's item.
+- **Mode 4 (throw)**: with nothing on the cursor, the slot's stack (button 1) or one item of it (button 0) leaves the window; with a loaded cursor nothing happens, as vanilla's `doClick`. The model makes no item entity of it, so nothing picks it up again (a real server drops it on the ground; the bot throws looking up so it lands outside the pickup box, [[window-views]]).
 - **Mode 1 on the container's own slot** (`inventory/own-slots`: a grid cell, or a furnace's input, fuel or output): move the stack into the store, leftover stays. Elsewhere nothing.
 - **Button 0**: pick up, put down, merge to 64 (remainder stays on the cursor), or swap.
 - **Button 1**: empty cursor picks up half (rounded up); else place one into an empty or same-item, non-full slot.

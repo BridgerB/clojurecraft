@@ -115,6 +115,22 @@
       (is (not= 3 (bit-shift-right (ffirst (scoop/hunt-targets w)) 4))
           "not the roofed low ground"))))
 
+(deftest a-hunt-that-knows-a-far-pool-walks-toward-it
+  ;; sim race 38806318231 runner 1 (issue #60, world R2/19): the hunt went outward and downhill,
+  ;; west, away from surface pools a hundred blocks east it had remembered, to the captured
+  ;; world's edge, and waited :no-water; runner 8 (world R4/29) stood in the world's corner with
+  ;; pools toward its landing and every bearing that way refused as homeward
+  (let [remembered #(memory/remember-pools % [-8 0] (world/column {[8 63 8] water}))
+        west {:intent/kind :walk :intent/target [-32 64 8] :intent/for :water-hunt}
+        w (remembered (wide [8.5 8.5] #{[3 0]} [8.5 64.0 8.5]))
+        away (wide [8.5 8.5] #{} [-100.5 64.0 8.5])]
+    (is (= [[-120 63 8]] (vals (memory/pools w :water))) "a pool remembered, its chunk not loaded")
+    (is (empty? (scoop/pools-near w)) "past a walk to it")
+    (is (= west (scoop/scoop-next w)) "west toward the pool, not down to the low ground east")
+    (is (not= west (scoop/scoop-next away)) "with no pool known, never back toward the landing")
+    (is (= west (scoop/scoop-next (remembered away)))
+        "with the pool known that way, homeward toward it")))
+
 (deftest water-the-eyes-cannot-reach-is-no-target
   ;; live iron-kit run 3 (local landing 2360,2360): three scoops at aquifer sources with stone
   ;; over them, beside the bot at y 23, each acked by the server and none filling the bucket

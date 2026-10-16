@@ -63,11 +63,13 @@
 (def click-modes
   "The container-click packet's mode, by name (26.1.2 ContainerInput): :pickup picks a stack up
    or puts it down, :quick-move moves it to the other part of the window (a shift-click), :swap
-   trades it with the hotbar slot the button names."
-  {:pickup 0 :quick-move 1 :swap 2})
+   trades it with the hotbar slot the button names, :throw drops it out of the window (only with
+   nothing on the cursor)."
+  {:pickup 0 :quick-move 1 :swap 2 :throw 4})
 
 (def left-button 0)                    ; with :pickup, the whole stack
 (def right-button 1)                   ; with :pickup, one item put down (or half picked up)
+(def whole-stack 1)                    ; with :throw, the whole stack (0 throws one item)
 
 (defn left-click
   "Pick up the whole stack at window slot s, or put the cursor's down there."
@@ -83,6 +85,11 @@
   "Move the stack at window slot s to the other part of the window (a quick move)."
   [s]
   {:click/slot s :click/button left-button :click/mode (click-modes :quick-move)})
+
+(defn toss-click
+  "Throw the whole stack at window slot s out of the window, onto the ground (ctrl+Q)."
+  [s]
+  {:click/slot s :click/button whole-stack :click/mode (click-modes :throw)})
 
 (defn swap-click
   "Trade the stack at window slot s with hotbar slot n."
