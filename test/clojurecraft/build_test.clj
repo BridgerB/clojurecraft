@@ -13,6 +13,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.scoop :as scoop]
             [clojurecraft.world :as world]))
 
 (def origin [100 64 200])
@@ -462,3 +463,50 @@
         "far above the room: stairs down toward the landing's height")
     (is (nil? (build/way-back (standing-at (open-ground {}) [6.5 31.0 15.5]) i))
         "at the landing already: nothing to go back by")))
+
+(deftest refill-scoops-a-source-under-flowing-lava
+  ;; sim race 38715231137 (issue #142, regressed, 166 runs in 44 rounds): at the station the
+  ;; nearest source's cell over it held flowing lava (the source there scooped before), the line
+  ;; to it was clear, and the refill, asking for air over the source, failed :no-station three
+  ;; times in three ticks with the pool half full. The bucket's ray passes flowing lava
+  (let [feet [5.5 63.0 5.5]
+        refill (fn [blocks]
+                 (let [w (standing-at (open-ground blocks) feet)]
+                   (build/scoop-at-station w
+                                           (build/reach-sources (build/lava-sources w) [5 63 5]))))
+        flowing (inc blocks/lava-base)]
+    (is (= {:intent/kind :scoop
+            :intent/target [7 62 5]
+            :intent/fluid :lava
+            :intent/aim (scoop/aim-point [7 62 5])}
+           (refill {[7 62 5] blocks/lava-base [7 63 5] flowing}))
+        "flowing lava over the source: scooped along the line")
+    (is (= [2 62 5]
+           (:intent/target (refill {[7 62 5] blocks/lava-base
+                                    [7 63 5] (blocks/default-state :obsidian)
+                                    [2 62 5] blocks/lava-base})))
+        "obsidian on the line to the nearest, never dug: the next source is scooped")
+    (is (= :no-station
+           (refill {[7 62 5] blocks/lava-base [7 63 5] (blocks/default-state :obsidian)}))
+        "no source the eyes can be given a line to")))
+
+(deftest a-way-over-a-hole-gets-a-floor
+  ;; sim race 38665691522 (issue #162, world R3/37): the refill's way out from the landing ran
+  ;; over a cave's open cell, the line clear and nothing to dig, and the walk to the far side,
+  ;; with no floor to stand on, failed :no-path three times. Here the stand two ahead is walled
+  ;; in on three sides and the cell between is a hole two deep
+  (let [walls (into {} (for [[x z] [[4 6] [6 6] [4 7] [6 7] [5 8]] y [63 64]] [[x y z] 1]))
+        hole {[5 62 6] blocks/air [5 61 6] blocks/air}
+        cobble {0 {:item (recipe/item-id :cobblestone) :count 8}}
+        toward (fn [inv]
+                 (build/toward-stand (assoc (standing-at (open-ground (merge walls hole))
+                                                         [5.5 63.0 5.5])
+                                            :player/inventory
+                                            inv)
+                                     [5 63 7]
+                                     :portal
+                                     [100 64 200]
+                                     :south))]
+    (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell [5 62 6]} (toward cobble))
+        "the hole's top cell is floored from the feet")
+    (is (= :walk (:intent/kind (toward {}))) "nothing to place: the walk, as before")))
