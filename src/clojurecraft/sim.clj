@@ -71,7 +71,7 @@
         (let [k (column-key pos)]
           (when-let [column (column-of sim k)] (chunk/block-at {k column} pos)))))
 
-(declare disturb full sync-window stream-from set-cell)
+(declare disturb full sync-window stream-from set-cell ultrawarm?)
 
 (defn held-slot
   "The window-0 slot of the hotbar place the client last selected (set-carried-item), the
@@ -354,9 +354,30 @@
   [sim {:keys [id]}]
   (update sim :sim/keep-alives-pending disj id))
 
+(def melting-ice
+  "The blocks the game's IceBlock turns to water when a player breaks them (playerDestroy)."
+  #{:ice :frosted_ice})
+
+(defn melts?
+  "Does breaking block id at pos leave a water source, as the game's IceBlock.playerDestroy does
+   for ice broken without silk touch (the bot never holds it) over a block that blocks motion or
+   a fluid, outside the Nether, where the water evaporates? Before it, ice broke to air here: sim
+   race 38806318231 world R2/43 (issue #177, 83 runs) came up under a frozen sea, dug the ice
+   over its head from the water, and floated a block under the hole's rim, the ice two over the
+   water's top and no bank in the impulse's lift, until its escape timed out three times; on a
+   server the hole fills, the water's top is a block higher and the ice round it is the bank."
+  [sim [x y z] id]
+  (let [below (block-at sim [x (dec y) z])]
+    (boolean (and (melting-ice (blocks/name-of id))
+                  (not (ultrawarm? sim))
+                  (or (blocks/fluid below)
+                      (some-> below
+                              blocks/solid?))))))
+
 (defn break-block
   "Block id at pos is broken by the player holding held in slot: gone (placed or not), its
-   block update, its drop as an item entity, the tool worn, the neighbours disturbed."
+   block update, its drop as an item entity, the tool worn, the neighbours disturbed; ice over
+   water or a solid becomes a water source (melts?)."
   [sim pos id held slot]
   (let [eid (:sim/next-eid sim)
         [x y z] pos
@@ -369,7 +390,8 @@
                 (update :sim/broken conj pos)
                 (send {:packet/name :block-update :pos pos :state blocks/air})
                 (update :sim/inv wear slot)
-                (disturb pos))
+                (disturb pos)
+                (cond-> (melts? sim pos id) (set-cell pos blocks/water-base)))
         sim (sync-window sim :inventory before (:sim/cursor sim) false)]
     (if drop
       (-> sim
