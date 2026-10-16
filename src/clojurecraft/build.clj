@@ -842,7 +842,10 @@
   [world i {:build/keys [op stand pos step]}]
   (let [{:intent/keys [build origin facing]} i]
     (cond (and (= :landing step) build)
-          (toward-stand world (or (reachable-stand world stand pos) stand) build origin facing)
+          (if-let [alt (or (reachable-stand world stand pos) (room-stand world i pos))]
+            (when-not (intent/centred? world alt)
+              {:intent/kind :walk :intent/target alt :intent/for :build})
+            (toward-stand world stand build origin facing))
           (and (= :dig op) (= stand pos))
           (cond (within-reach? world pos) nil
                 :else
