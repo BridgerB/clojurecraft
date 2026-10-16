@@ -2,7 +2,7 @@ name: copilot
 
 # Copilot cloud agent sessions on the bot-failure issues, kept going until each closes (bb copilot
 # dispatch, bb/clojurecraft/copilot.clj): an unassigned issue is given to Copilot's bot-fixer agent
-# (.github/agents/bot-fixer.agent.md) while fewer than COPILOT_CAP are held, a green ready pull
+# (.github/agents/bot-fixer.agent.md) while fewer than COPILOT_CAP (default 1: one at a time, no conflicts between fixes) are held, a green ready pull
 # request is merged (its Fixes line closes the issue), a red or abandoned one gets a continue
 # comment, a session that never started is retried. It runs when an issue is filed or reopened,
 # when a fix's checks finish, and every fifteen minutes. GitHub assigns Copilot and hears @copilot

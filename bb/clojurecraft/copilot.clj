@@ -27,7 +27,7 @@
 (def repo "BridgerB/clojurecraft")
 (def agent-login "copilot-swe-agent[bot]")
 (def custom-agent "bot-fixer")                ; .github/agents/bot-fixer.agent.md
-(def default-cap 3)                           ; issues assigned at once (COPILOT_CAP): sessions and their checks take runners from the lanes
+(def default-cap 1)                           ; issues assigned at once (COPILOT_CAP): sessions and their checks take runners from the lanes
 (def start-grace-ms (* 20 60 1000))           ; an assignment with no pull request and no session this long is retried
 (def nudge-every-ms (* 30 60 1000))           ; the least time between two continue comments on one pull request
 (def max-nudges 8)                            ; continue comments before the issue is left for a person
@@ -50,21 +50,25 @@
 
 (defn check-state
   "The required checks of a pull request's status rollup as one word: :green when every one
-   passed, :red when any failed, :pending otherwise (missing ones count as pending). A name that
+   passed, :approval when a run waits for a person to approve it (Copilot's pushes, while the
+   repository asks for that), :red when any failed, :pending otherwise (missing ones count as pending). A name that
    appears twice (test.yml and issue.yml both run `unit / unit`) takes its worst run."
   [rollup]
   (let [word (fn [c]
                (let [w (str/upper-case (str (or (:conclusion c) (:state c) "")))]
-                 (cond (#{"FAILURE" "CANCELLED" "TIMED_OUT" "ACTION_REQUIRED" "ERROR"} w) :red
+                 (cond (= "ACTION_REQUIRED" w) :approval
+                       (#{"FAILURE" "CANCELLED" "TIMED_OUT" "ERROR"} w) :red
                        (#{"SUCCESS" "SKIPPED" "NEUTRAL"} w) :green
                        :else :pending)))
         by-name (group-by #(or (:name %) (:context %)) rollup)
         states (for [n required-checks
                      :let [ws (set (map word (get by-name n)))]]
-                 (cond (ws :red) :red
+                 (cond (ws :approval) :approval
+                       (ws :red) :red
                        (and (seq ws) (= ws #{:green})) :green
                        :else :pending))]
-    (cond (some #{:red} states) :red
+    (cond (some #{:approval} states) :approval
+          (some #{:red} states) :red
           (every? #{:green} states) :green
           :else :pending)))
 
@@ -78,6 +82,11 @@
     (cond
       (some hands-off labels) {:move :leave :issue n :why "hands-off label"}
       (and pr (live (:branch pr))) {:move :wait :issue n :pr (:number pr) :why "session running"}
+      (and pr (= :approval (:checks pr)))
+      {:move :wait
+       :issue n
+       :pr (:number pr)
+       :why "checks wait for approval: Settings, Copilot, cloud agent"}
       (and pr (not (:draft? pr)) (= :green (:checks pr)) (:guarded? pr))
       {:move :review :issue n :pr (:number pr)}
       (and pr (not (:draft? pr)) (= :green (:checks pr))) {:move :merge :issue n :pr (:number pr)}
