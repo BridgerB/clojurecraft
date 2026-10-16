@@ -205,7 +205,10 @@
   (let [level (remembered {[12 64 8] 136 [12 65 8] 136} [8.5 64.0 8.5])
         bottoms [(memory/nearest-log level (game/eye level) 48 #{} wood/standing-trunk?)]]
     (is (nil? (wood/trees-climb level bottoms))
-        "a trunk at the eye's height is hunted for, not climbed toward")))
+        "a trunk at the eye's height is hunted for, not climbed toward")
+    ;; sim race 38811417241 runner 2 (issue #87, world R3/4): on an island, the trunk five over
+    ;; the eye a hundred blocks off across a lake was climbed toward, a stair at a time
+    (is (nil? (wood/trees-climb level [[108 69 8]])) "a trunk past the near band is no climb")))
 
 (deftest a-trunk-across-powder-snow-is-walked-to
   ;; sim race 38811417241 runner 2 (issue #87, world R2/20): out of the mine on one cobblestone

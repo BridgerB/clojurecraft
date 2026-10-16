@@ -97,11 +97,19 @@
   sky at y 70 with 999 trunks remembered and the nearest thirty blocks above on the mountain;
   the near band stops twelve over the eye, no walk climbs the cliff, the hunt's targets stop
   sixteen over the eye and never come nearer the landing, and the climb would not cut because
-  out? said out, so the plan waited :no-log with the trees in reach of a staircase."
+  out? said out, so the plan waited :no-log with the trees in reach of a staircase. Only a
+  trunk within search-radius on the plane: sim race 38811417241 runner 2 (issue #87, world R3/4)
+  stood on a sand island with the nearest trunks a hundred blocks off across a lake, one five
+  over the eye, and cut stairs up on the island toward it until one was not taken."
   [world trunks]
   (let [feet (intent/feet world)]
     (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
-      (when-let [above (first (filter #(< (physics/y-of (game/eye world)) (nth % 1)) trunks))]
+      (when-let [above (first (filter (fn [[tx ty tz]]
+                                        (and (< (physics/y-of (game/eye world)) ty)
+                                             (<= (physics/horizontal-distance (:player/pos world)
+                                                                              [tx 0 tz])
+                                                 search-radius)))
+                                      trunks))]
         (let [[fx _ fz] feet
               [tx _ tz] above
               dir (if (>= (abs (- tx fx)) (abs (- tz fz)))
