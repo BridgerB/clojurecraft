@@ -1,0 +1,11 @@
+;; Issue #263's gym rows, run as a plan from branch gym/263 (gym.yml's goal dropdown cannot name
+;; them yet): the NoAI and live pearls-1 trials in the sealed Nether room, and pearls-12 in the
+;; warped forest nearest each landing's Nether coordinates. One bot a server.
+{:plans/label "pearls-263a"
+ :plans/jobs 13
+ :plans/max-parallel 8
+ :plans/issue 263
+ :plans/experiments
+ [{:exp/name "pearls-1" :exp/kind :gym :exp/goal "pearls-1" :exp/runs 5 :exp/est-s 300}
+  {:exp/name "pearls-1-live" :exp/kind :gym :exp/goal "pearls-1-live" :exp/runs 5 :exp/est-s 360}
+  {:exp/name "pearls-12" :exp/kind :gym :exp/goal "pearls-12" :exp/runs 3 :exp/est-s 2700}]}
