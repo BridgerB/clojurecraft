@@ -256,7 +256,7 @@
    one clojure -M:simrace --judge over them, its heap held to sim-heap, its lines to
    <data-dir>/snapshots/judge-<n>.log (budgeted!). Returns the JUDGE lines (judge-line-of)."
   [{:keys [data-dir]} n runs]
-  (let [todo (judgeable runs)
+  (let [todo (filter #(fs/exists? (str (:run/snapshot %))) (judgeable runs)) ; one missing file would stop them all
         out (fs/path data-dir snapshots-dir)]
     (when (seq todo)
       (fs/create-dirs out)

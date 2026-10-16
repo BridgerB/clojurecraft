@@ -6,4 +6,4 @@
  :simrace/until "fortress"           ; the target each run plays every step up to: the Nether, then the fortress (issue #261)
  :simrace/max-minutes 330            ; simulated minutes a run may take: the real bots' horizon, a lane's job (#252); a run that finishes early stops early
  :simrace/budget-minutes 330         ; wall minutes a runner plays: 300 took 303 with setup (sim race 38515210080), inside the job's 355 of GitHub's 360
- :simrace/heap-mb 12288}                ; the runner's 16 GB, less the system's share
+ :simrace/heap-mb 11264}                ; the runner's 16 GB, less the system's share and the churn's 2 GB judge (issue #299)
