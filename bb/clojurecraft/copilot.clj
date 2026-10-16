@@ -10,7 +10,10 @@
         cap issues are assigned. The session it starts opens the pull request;
      2. assigned, no pull request and no session running for start-grace-ms: assign again (the
         session never started or died before its first push);
-     3. its pull request has a session running, or checks still pending: wait;
+     3. its pull request has a session running, or checks still pending: wait. Runs held for
+        approval on its head commit (pushed while the repository asked for that, or by an
+        automation) are rerun, which releases them; a draft whose session ended is marked ready
+        (Copilot has no tool to do it, and the checks decide from there);
      4. ready (not a draft), `unit / unit` and `check` green: merge. The merge closes the issue
         by its Fixes line. A pull request that changes a guarded path (the workflows, this
         dispatcher) is never merged here: the issue is labelled needs-review for a person;
@@ -32,7 +35,7 @@
 (def nudge-every-ms (* 30 60 1000))           ; the least time between two continue comments on one pull request
 (def max-nudges 8)                            ; continue comments before the issue is left for a person
 (def required-checks #{"unit / unit" "check"}) ; the checks a fix must pass (issue.yml)
-(def marker "<!-- copilot-dispatch -->")      ; in every comment this namespace writes, so it can count its own
+(def nudge-lead "@copilot Go on with #")      ; how every continue comment begins, so the dispatcher counts its own
 (def hands-off #{"no-agent" "agent-stuck" "needs-review"}) ; labels that keep an issue away from Copilot
 (def guarded
   "Paths a Copilot pull request may not change and still be merged here: the workflows and this
@@ -82,6 +85,8 @@
     (cond
       (some hands-off labels) {:move :leave :issue n :why "hands-off label"}
       (and pr (live (:branch pr))) {:move :wait :issue n :pr (:number pr) :why "session running"}
+      (and pr (seq (:held pr))) {:move :release :issue n :pr (:number pr) :runs (:held pr)}
+      (and pr (:draft? pr)) {:move :ready :issue n :pr (:number pr)}
       (and pr (= :approval (:checks pr)))
       {:move :wait
        :issue n
@@ -114,17 +119,19 @@
   "The continue comment for a pull request in move m, saying what is left."
   [{:keys [issue checks draft?]}]
   (str
-   "@copilot Go on with #" issue
+   nudge-lead
+   issue
    " by your bot-fixer profile until it can merge. "
    (cond
      (= :red checks)
      "A required check is red: read its log whole (the run's failed job), fix the cause and push. "
      draft?
-     "The pull request is still a draft and no session is working on it: finish the fix, judge the snapshots on main and on your branch, fill in the body, and mark it ready. "
+     "No session is working on it and it is not done: finish the fix, judge the snapshots on main and on your branch, and fill in the body. "
      :else
      "The pull request has no green `unit / unit` and `check` yet: push the fix and let them run. ")
-   "Its first line must stay `Fixes #" issue
-   "`.\n\n" marker))
+   "Its first line must stay `Fixes #"
+   issue
+   "`."))
 
 ;;;; I/O: gh ;;;;
 
@@ -158,24 +165,34 @@
                :assignees (map :login (:assignees i))}))
        (sort-by :number)))
 
+(defn held-runs
+  "The ids of the runs on commit sha that wait for approval (conclusion action_required)."
+  [sha]
+  (vec (for [r (:workflow_runs
+                (gh-json "api" (str "repos/" repo "/actions/runs?per_page=50&head_sha=" sha)))
+             :when (= "action_required" (:conclusion r))]
+         (:id r))))
+
 (defn copilot-prs
   "The open pull requests from copilot/* branches, by the issue each fixes:
-   {n {:number :branch :draft? :checks :nudges :last-nudge-ms}}."
+   {n {:number :branch :draft? :held :guarded? :checks :nudges :last-nudge-ms}}."
   []
   (into {}
-        (for [pr (gh-json "pr" "list"
-                          "--repo" repo
-                          "--state" "open"
-                          "--limit" "100"
-                          "--json"
-                          "number,headRefName,isDraft,body,statusCheckRollup,comments,files")
+        (for [pr (gh-json
+                  "pr" "list"
+                  "--repo" repo
+                  "--state" "open"
+                  "--limit" "100"
+                  "--json"
+                  "number,headRefName,headRefOid,isDraft,body,statusCheckRollup,comments,files")
               :when (str/starts-with? (:headRefName pr) "copilot/")
-              :let [ours (filter #(str/includes? (str (:body %)) marker) (:comments pr))]
+              :let [ours (filter #(str/starts-with? (str (:body %)) nudge-lead) (:comments pr))]
               n (fixes (:body pr))]
           [n
            {:number (:number pr)
             :branch (:headRefName pr)
             :draft? (:isDraft pr)
+            :held (held-runs (:headRefOid pr))
             :guarded? (boolean (some (fn [{:keys [path]}] (some #(str/starts-with? path %) guarded))
                                      (:files pr)))
             :checks (check-state (:statusCheckRollup pr))
@@ -248,18 +265,17 @@
               "comment" (str pr)
               "--repo" repo
               "--body"
-              (str
-               "Green, but it changes a workflow or the dispatcher, which only a person merges.\n\n"
-               marker)))
+              "Green, but it changes a workflow or the dispatcher, which only a person merges."))
       :nudge (gh "pr" "comment" (str pr) "--repo" repo "--body" (nudge-text m))
+      :release (run! #(gh "run" "rerun" (str %) "--repo" repo) (:runs m))
+      :ready (gh "pr" "ready" (str pr) "--repo" repo)
       :stuck
       (do (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "agent-stuck")
           (gh "pr"
               "comment" (str pr)
               "--repo" repo
               "--body"
-              (str "Left for a person: " max-nudges
-                   " continue requests and still not mergeable.\n\n" marker)))
+              (str "Left for a person: " max-nudges " continue requests and still not mergeable.")))
       (:wait :leave) nil)))
 
 (defn dispatch!
