@@ -316,7 +316,9 @@
   ;; sim race 38839767273 runner 6 (issue #69, worlds R3/8 and R4/35): the tunnel toward a bank
   ;; walked an open corridor past its water, eight steps east, eight back, two thousand tunnels
   ;; until the run's ninety minutes were spent
-  (let [w (standing {[10 63 8] water [11 63 8] water} [8.5 8.5])
+  (let [pond {[10 63 8] water [11 63 8] water}
+        wall (into pond (for [z (range 16) y [64 65]] [[9 y z] 1]))
+        w (standing wall [8.5 8.5])
         tunnel (fn [from]
                  {:intent/kind :tunnel
                   :intent/for :bank
@@ -334,8 +336,15 @@
     (let [w (ran [8 64 8])]
       (is (= :done (get-in w [:plan/intent :intent/status])))
       (is (= #{[10 63 8] [11 63 8]} (:plan/blacklist w))
-          "no nearer than it began: the pond given up"))
-    (is (empty? (:plan/blacklist (ran [2 64 8]))) "six blocks nearer: the water kept")))
+          "no nearer than it began, and walled off: the pond given up"))
+    (is (empty? (:plan/blacklist (ran [2 64 8]))) "six blocks nearer: the water kept")
+    (let [i (tunnel [8 64 8])
+          open (intent/run (assoc (standing pond [8.5 8.5]) :plan/intent i)
+                           i
+                           {:event/kind :tick :event/now 1000 :event/rand 0.5})]
+      ;; sim world R4/30 seed 1 (issue #69's second round): the tunnel had opened the walk to the
+      ;; pond's bank, and the pond was given up all the same
+      (is (empty? (:plan/blacklist open)) "no nearer, but a walk to the bank has a route: kept"))))
 
 (deftest the-refills-ray-past-a-blocks-edge-is-a-wall
   ;; race 38839564087 runner 1 (issue #225): bots Clj_r12, Clj_r19 and Clj_r21 sent nine scoops each
