@@ -74,10 +74,11 @@
 (def hungry-food 10)                  ; the food a :hungry landing waits for before the bot is told to go
 
 (def warped-reach 8)                  ; blocks round a located warped forest loaded while its floor is looked for
-(def warped-up 16)                    ; blocks over the located height the floor is looked for
-(def warped-down 48)                  ; and under it
-(def warped-columns ; columns round the located point tried for a floor, nearest first
-  [[0 0] [3 0] [0 3] [-3 0] [0 -3] [6 0] [0 6] [-6 0] [0 -6]])
+(def warped-up 32)                    ; blocks over the located height the floor is looked for
+(def warped-down 40)                  ; and under it
+(def warped-columns ; columns round the located point tried for a floor, nearest first: a grid 4 apart, 8 out
+  (vec (sort-by (fn [[dx dz]] [(+ (abs dx) (abs dz)) dx dz])
+                (for [dx (range -8 9 4) dz (range -8 9 4)] [dx dz]))))
 
 (def dimensions
   "The dimension each kind of landing (:gym/land) leaves the bot in; any other is the overworld.
@@ -795,9 +796,25 @@
         h (range (+ y warped-up) (- y warped-down) -1)]
     [(+ x dx) h (+ z dz)]))
 
+(defn open
+  "The test clause that passes when a body fits in cell [x y z]: a block a body passes through
+   (#minecraft:replaceable: air, and the warped roots and nether sprouts that carpet a warped
+   forest, probe run 38893018465), and not
+   lava or water, which that tag holds too."
+  [[x y z]]
+  (let [at (str x " " y " " z)]
+    (str " if block "
+         at
+         " #minecraft:replaceable unless block "
+         at
+         " minecraft:lava unless block "
+         at
+         " minecraft:water")))
+
 (defn floor-test
   "The test the server passes when a body can stand at [x y z] in the Nether: nylium under the
-   feet, air at the feet and the head."
+   feet, the feet and the head open. Gym batch pearls-263a (plan run 38892130785) asked for air
+   there and found no floor in any of three forests: warped roots and nether sprouts carpet them."
   [[x y z]]
   (str "execute in "
        dimension/nether
@@ -808,20 +825,8 @@
        " "
        z
        " #minecraft:nylium"
-       " if block "
-       x
-       " "
-       y
-       " "
-       z
-       " minecraft:air"
-       " if block "
-       x
-       " "
-       (inc y)
-       " "
-       z
-       " minecraft:air"))
+       (open [x y z])
+       (open [x (inc y) z])))
 
 (defmethod land! :warped-forest
   ;; the warped forest nearest the landing's Nether coordinates (an eighth of the overworld's, so
