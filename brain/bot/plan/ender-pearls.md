@@ -76,7 +76,7 @@ In order:
 2. **The drop still to come.** While the body still lies there (`body?`: the entity still tracked, dead), `{:plan/wait :drop}`: the server drops the loot as it dies and removes the body a second later.
 3. **The hunt** (`hunt`), over the nearest of `endermen` (alive, not blacklisted, within `hunt-radius` 32) and the nearest of them that is coming (`entity/creepy?`: the server's creepy flag, metadata index 17, set while it has a target):
    - out of the burrow (`shelter`: `:pearls/shelter` within `shelter-reach` 16 and still a `shelter?`) with one coming, one within `strike-range` 4.5, or under 10 health: a walk back to its end (`:intent/for :shelter`: the walk ends in that very cell, as a build's stand does). Batch pearls-263b: one bot met an enderman in the open after a provoke that ended by its coming near, and another backed away hurt; both died;
-   - in it, the one coming, or one at hand, is fought where the bot stands: `:fight` with `:intent/hold?` (combat.clj: it never walks, never presses after the target and never breaks off; the approach stands facing it until it comes within 3, at most 20 s);
+   - in it, the one coming, or one at hand, is fought where the bot stands: `:fight` with `:intent/hold?` (combat.clj: it never walks, never presses after the target and never breaks off; the approach stands facing it until it comes within 3, at most `hold-timeout-ms` 60 s);
    - with no burrow, one at hand is fought, or backed away from under 10 health (the open fight, the fallback);
    - no burrow and a pickaxe held (`pickaxe?`): `:burrow`, heading `away` from the nearest enderman, so the stairs open toward it;
    - in the burrow with none coming: a walk to its mouth (`:pearls/mouth`) to look round;
