@@ -297,7 +297,11 @@
 
 (defmethod on-packet [:play :set-health]
   [w p]
+  ;; the food and saturation ride on the same packet (issue #259: the :eat row reads the food); a
+  ;; packet decoded short, a prefix of the spec, has health alone
   (cond-> (assoc w :player/health (:health p))
+    (:food p) (assoc :player/food (:food p))
+    (:saturation p) (assoc :player/saturation (:saturation p))
     (and (<= (:health p) 0) (not (:player/dead? w))) die))
 
 (defmethod on-packet [:play :container-set-content]
