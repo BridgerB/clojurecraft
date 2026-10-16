@@ -46,6 +46,9 @@
 (def pearl :ender_pearl)               ; the item a kill may drop
 
 (def hunt-radius 32.0)                ; blocks from the feet an enderman is hunted within
+(def seek-radius 64.0)                ; blocks from the feet an enderman is walked toward, none nearer
+(def lookout-ms 5000)                 ; ms a :lookout stands turning before the plan looks again
+(def lookout-turn 0.09)               ; degrees of yaw a :lookout turns a ms: a full turn in four seconds
 (def strike-range 4.5)                ; blocks on the plane within which the hunt fights (hunt/strike-range: past a walk's reach)
 (def stare-range 24.0)                ; blocks to the head within which a provoke stares, with a clear line
 (def stare-from 6.0)                  ; never stare nearer: an angry enderman stared at within 4 teleports away
@@ -61,17 +64,19 @@
 
 (defn endermen
   "{eid entity} of the endermen the hunt may go after: alive (not dead by the server's word), not
-   blacklisted (a ghost, an enderman that would not come), within hunt-radius of the feet."
-  [world]
-  (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
-    (into {}
-          (filter (fn [[eid e]]
-                    (and (= :enderman (entity/kind e))
-                         (not (entity/dead? e))
-                         (not (contains? bl eid))
-                         (<= (physics/distance pos (:entity/pos e)) hunt-radius))))
-          (:world/entities world))))
+   blacklisted (a ghost, an enderman that would not come), within radius (hunt-radius when not
+   given) of the feet."
+  ([world] (endermen world hunt-radius))
+  ([world radius]
+   (let [pos (:player/pos world)
+         bl (:plan/blacklist world #{})]
+     (into {}
+           (filter (fn [[eid e]]
+                     (and (= :enderman (entity/kind e))
+                          (not (entity/dead? e))
+                          (not (contains? bl eid))
+                          (<= (physics/distance pos (:entity/pos e)) radius))))
+           (:world/entities world)))))
 
 (defn head
   "The point an enderman at pos is stared at: its eye, as the server's stare test measures it
@@ -253,6 +258,27 @@
                                 intent/done)
                             :else (intent/fail w :no-shelter))))))))
 
+;; ---------------------------------------------------------------- the lookout
+
+(defmethod intent/run :lookout
+  ;; {:intent/kind :lookout}: stand, the eyes level and turning (lookout-turn), for lookout-ms,
+  ;; then done: the hunt with nothing to go after waits as an intent, not a planner wait, whose
+  ;; 400 ticks fail the plan. Gym batch pearls-263c (plan run 38897897563): the warped forest
+  ;; landings failed :no-enderman and :no-route in 40 s, before any enderman had come. A stare
+  ;; it turns onto by chance provokes one, which is what the hunt wants
+  [world i _]
+  (let [now (:time/now world)
+        since (or (:intent/since i) now)
+        world (intent/assoc-intent world :intent/since since)]
+    (cond (>= (- now since) lookout-ms)
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          :else
+          (assoc world
+                 :player/controls
+                 {:control/look [(mod (* lookout-turn (- now since)) 360.0) 0.0]}))))
+
 ;; ---------------------------------------------------------------- the plan
 
 (defn hunt
@@ -264,8 +290,9 @@
    the nearest enderman; in the burrow with none coming, out to its mouth to look round; one not
    yet coming and provokable? from here, provoked (never one already coming: a provoke of it
    ends at once, and batch pearls-263b's bot, its pickaxe lost, provoked one 26 times in a row);
-   one coming and no burrow to meet it in, fought; else a walk to the nearest a route reaches; a
-   wait when there is none."
+   one coming and no burrow to meet it in, fought; else a walk to the nearest within seek-radius a
+   route reaches; else a :lookout, standing where it is: no enderman yet is no failure (batch
+   pearls-263c's warped forest landings failed :no-enderman and :no-route in 40 s)."
   [world]
   (let [pos (:player/pos world)
         ms (endermen world)
@@ -276,7 +303,6 @@
         home (shelter world)
         in? (and home (= home (intent/feet world)))]
     (cond
-      (nil? e) {:plan/wait :no-enderman}
       (and home (not in?) (or ce near? hurt?))
       {:intent/kind :walk :intent/target home :intent/for :shelter}
       (and in? (or ce near?))
@@ -284,16 +310,16 @@
       (and near? hurt?) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
       near? {:intent/kind :fight :intent/target eid :intent/for :pearls}
       (and (nil? home) (pickaxe? world))
-      {:intent/kind :burrow :intent/dir (away world e) :intent/for :pearls}
+      {:intent/kind :burrow :intent/dir (if e (away world e) [1 0]) :intent/for :pearls}
       (and in? (:pearls/mouth world))
       {:intent/kind :walk :intent/target (:pearls/mouth world) :intent/for :shelter}
-      (and (not (entity/creepy? e)) (provokable? world e))
+      (and e (not (entity/creepy? e)) (provokable? world e))
       {:intent/kind :provoke :intent/target eid :intent/for :pearls}
       ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       :else
-      (if-let [[_ far] (routable world ms)]
+      (if-let [[_ far] (routable world (endermen world seek-radius))]
         {:intent/kind :walk :intent/target (cell (:entity/pos far)) :intent/for :pearls}
-        {:plan/wait :no-route}))))
+        {:intent/kind :lookout :intent/for :pearls}))))
 
 (defmethod plan/next-intent :pearls
   [world _ _]

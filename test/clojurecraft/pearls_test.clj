@@ -87,11 +87,12 @@
      (= {:intent/kind :walk :intent/target [8 64 13] :intent/for :pearls}
         (plan/next-intent close row plan/goals))
      "five blocks off is too near to stare (within 4 an angry one teleports away), too far to hit")
-    (is (= {:plan/wait :no-enderman} (plan/next-intent (standing {}) row plan/goals)))
-    (is (= {:plan/wait :no-enderman}
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (standing {}) row plan/goals)))
+    (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc near :plan/blacklist #{7}) row plan/goals))
         "a ghost or one that would not come is left")
-    (is (= {:plan/wait :no-enderman}
+    (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc-in near [:world/entities 7 :entity/died-at] 0) row plan/goals))
         "a dead one is no quarry")))
 
@@ -202,13 +203,13 @@
                              row
                              plan/goals))
         "a drop that holds a pearl, or has not said what it holds, is picked up")
-    (is (= {:plan/wait :no-enderman}
+    (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc (standing {9 block}) :plan/last kill) row plan/goals))
         "the block an enderman carried is left (#262: a drop says what it holds)")
     (is (= {:plan/wait :drop}
            (plan/next-intent (assoc (standing {7 body}) :plan/last kill) row plan/goals))
         "the body still lies there: its drop may still come")
-    (is (= {:plan/wait :no-enderman}
+    (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc (standing {}) :plan/last kill) row plan/goals))
         "body gone and nothing dropped: no pearl this time")
     (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}

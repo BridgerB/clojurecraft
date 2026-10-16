@@ -74,10 +74,11 @@
       :walk (intent/routable? w i) ; to stone in the floor beside the feet, which a route reaches
       :dig (some? (memory/remembered w (:intent/target i))) ; the placed table, taken along
       :wade (some? (swim/entry w (intent/feet w))) ; into water the bot remembers, from a bank it can stand on
+      :burrow (pos? (get counts :wooden_pickaxe 0)) ; the pearl hunt's burrow, cut only with a pickaxe held (issue #263)
+      :lookout true ; the pearl hunt standing until an enderman comes
       nil
-      (contains? #{:no-log :no-water :in-water :no-site :other-dimension :no-mob :looking
-                   :no-enderman}
-                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round, the pearl hunt with no enderman near (issue #263): wait
+      (contains? #{:no-log :no-water :in-water :no-site :other-dimension :no-mob :looking}
+                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round: wait
       false)))
 
 (deftest the-planner-only-picks-executable-intents

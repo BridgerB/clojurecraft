@@ -3,7 +3,7 @@ title: Ender pearls
 description: How the bot gets twelve ender pearls (issue #263) - endermen hunted with the sword, never bartered; the loot table, the warped forest and the enderman's stare and teleport rules read from the jar; the :pearls plan (the kill's drop, the fight, a stare from range to provoke, a walk), the :provoke intent, the two goal rows, the sim test and the model's armour.
 type: reference
 tags: [bot, plan, combat, nether, goals, intents]
-aliases: [:pearls, :provoke, :ender-pearls, :ender-pearl, pearls-12, pearls-1, :unprovoked, :no-enderman, stare-from, stare-range]
+aliases: [:pearls, :provoke, :burrow, :lookout, :pearls/shelter, :entity/creepy?, :intent/hold?, :ender-pearls, :ender-pearl, pearls-12, pearls-1, :unprovoked, :no-enderman, stare-from, stare-range]
 status: verified
 lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
@@ -17,6 +17,8 @@ sourceRefs:
   - src/clojurecraft/pearls.clj#defn shelter?
   - src/clojurecraft/pearls.clj#defn away
   - src/clojurecraft/pearls.clj#defmethod intent/run :burrow
+  - src/clojurecraft/pearls.clj#defmethod intent/run :lookout
+  - src/clojurecraft/pearls.clj#def seek-radius 64.0
   - src/clojurecraft/combat.clj#defmethod fight-stage :approach
   - src/clojurecraft/entity.clj#def creepy-index 17
   - src/clojurecraft/mob.clj#defn tall
@@ -78,7 +80,7 @@ In order:
    - in the burrow with none coming: a walk to its mouth (`:pearls/mouth`) to look round;
    - one not yet coming and `provokable?` (its head within `stare-range` 24 of the eye and no nearer than `stare-from` 6, with a clear line): `:provoke`. Never one already coming: its provoke ends at once, and batch pearls-263b's bot, its pickaxe lost to a death, provoked one 26 times in a row;
    - one coming and no burrow to meet it in: fought;
-   - else a walk to the first of the three nearest a route reaches; `{:plan/wait :no-route}`, or `{:plan/wait :no-enderman}` with none at all.
+   - else a walk to the first of the three nearest within `seek-radius` 64 a route reaches; else a `:lookout`: standing for `lookout-ms` 5 s, the eyes level and turning, then done. Waiting as an intent, not a planner wait (whose 400 ticks fail the plan): batch pearls-263c's warped forest landings failed `:no-enderman` and `:no-route` 40 s in, before any enderman had come. With no enderman at all the burrow is still dug first, heading east.
 
 ## The burrow
 Gym batch pearls-263a (plan run 38892130785) put three live endermen round the bot in iron helmet and chestplate: five trials, five deaths. A replay of one (probe 38893413043) showed the hits landing at 5.74 a second, the sword's sweep pulling a second enderman in, and a break-off with nowhere to go. A sword needs seven hits against forty health; the open fight loses. The game says where it cannot lose: a mob's melee is its box grown 0.83 sideways and not at all up or down (`Mob.getAttackBoundingBox`, `isWithinMeleeAttackRange`, probe 38893918055), and an enderman needs three free cells to stand. `shelter?` is that rule over the terrain: the bot's own two cells open, and no cell an enderman could stand in (`stand?`: a floor, three open cells) in the nine columns round it, at the heights whose body would overlap the bot's (feet two under to one over).
@@ -99,7 +101,7 @@ The model's enderman (`mob/kinds`) is neutral until stared at (`sim/provoke`, fr
 - The enderman must come down the stairs: the server's pathfinder takes it to the nearest place it fits, the last stair. One that stays at the top is out of reach: the held fight fails `:unreachable` after 20 s and the enderman is blacklisted.
 - No emergency escape into water yet (the Nether has none; water poured there evaporates).
 - Gym batch pearls-263b (plan run 38895776486), with the burrow: `pearls-1-live` passed 3 of 5 where the open fight had died five times in five. One death came from a zombie the unlit midnight arena spawned, which the `:defend` row backed away from turn about with the hunt; the other from an enderman met in the open. The arena is lit now, and an enderman at hand, one coming or a hurt bot sends it back to its burrow.
-- No exploring: with no enderman within 32 the plan waits and fails `:no-enderman`.
+- No exploring beyond `seek-radius`: with no enderman tracked within 64 the bot stands and looks round until one comes, or the run's time ends.
 
 ## See also
 - [[survival]] - the fight, the armour and the sword this hunt uses.
