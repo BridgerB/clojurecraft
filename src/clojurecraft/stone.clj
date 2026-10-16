@@ -270,7 +270,9 @@
    the row's depth a tunnel (tunnel-heading), or deeper stairs when none can be cut, or a retreat
    when neither can, or a climb out when there is no way away either (climb); wait for the
    tool. The live runs that waited at the depth with nothing in sight failed there; a tunnel's
-   walls are where the ore shows."
+   walls are where the ore shows. Beside a lava trap still in force (path/near-lava-trap?) the
+   retreat comes before any stair or tunnel: sim race 38844683780 (issue #230) cut its stairs down
+   where the lava had just caught it, and the flow followed it down."
   [world row]
   (or (continue-mine world row)
       (let [missing (tool-missing world row)
@@ -292,7 +294,8 @@
               stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
               walk walk
               :else
-              (or (stairs world row)
+              (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
+                  (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
                   (deeper world)

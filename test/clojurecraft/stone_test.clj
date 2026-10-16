@@ -237,7 +237,13 @@
     (is (not= [8 61 8] (first-ore (trapped :lava 50000))) "a lava trap a column off: passed over")
     (is (= [8 61 8] (first-ore (trapped :water 50000))) "a water trap does not keep the mine away")
     (is (= [8 61 8] (first-ore (assoc (trapped :lava 50000) :time/now 700000)))
-        "ten minutes on, the trap is out of force")))
+        "ten minutes on, the trap is out of force")
+    (let [bare (assoc (standing 64 :stone_pickaxe) :time/now 60000)
+          caught (assoc bare :world/traps [{:trap/pos [5 5] :trap/kind :lava :trap/at 50000}])]
+      (is (= :stairs-down (:intent/kind (stone/mine-next bare (row :mine-iron))))
+          "nothing in sight: stairs down")
+      (is (= :retreat (:intent/for (stone/mine-next caught (row :mine-iron))))
+          "where lava just caught it: away first, no stair under the flow"))))
 
 (def corridor
   "A tunnel two high at y 64-65 along x from 2 to 12 at z 8, cut into stone filling y 64-70, with
