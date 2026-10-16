@@ -30,6 +30,15 @@
   :goal/done? :not-trapped-in
   :goal/plan :escape
   :goal/act :flee}
+ {:goal/id :defend
+  :goal/priority 0
+  :goal/target? true
+  :goal/always? true
+  :goal/until "defend"
+  :goal/doc
+  "answer a hostile mob within 4 blocks, a creeper within 6, before anything else but the escapes (issue #259): on Normal the night brings zombies, skeletons and creepers to every stage. Fought with the best sword held (attacks 650 ms apart); a creeper, or anything while the health is under 10, backed away from. An always row at priority 0 after the escapes and before the meal in this table: nothing is eaten with a zombie at hand"
+  :goal/done? :safe?
+  :goal/plan :defend}
  {:goal/id :wood
   :goal/priority 1
   :goal/target? true
@@ -275,4 +284,13 @@
   :goal/doc
   "an iron helmet, then an iron chestplate, from the ingots left once the iron the portal needs (flint and steel, the water bucket, the empty bucket) is held, with a table at hand (issue #259); an always row at the portal kit's priority, after it in this table, so a chained run makes them the moment that iron is in hand and never mines for them"
   :goal/done? :armoured?
-  :goal/plan :armour}]
+  :goal/plan :armour}
+ {:goal/id :attack
+  :goal/priority 5
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "attack"
+  :goal/doc
+  "kill every hostile mob within 16 blocks (issue #259, the gym's attack trial: a zombie that does not move, gone, its attacks 650 ms apart in the recording); an aside, never a step of a chained run, as the water trial is one; fought with the best sword held"
+  :goal/done? :cleared?
+  :goal/plan :attack}]

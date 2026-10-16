@@ -175,10 +175,13 @@
    player dies then, a fault as an input: a death mid-task), :dimension (the dimension the
    player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
    there), :food (the hunger bar the player joins with, told at login; absent, no food is
-   modelled and none is told) and :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
+   modelled and none is told), :mobs {eid {:type name :pos [x y z] :health h}} (mobs that stand
+   where they are, shown at login, hurt by attacks and removed when their health is gone: a
+   fight's fixture) and :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
    and where the player arrives)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
-           inventory lag-ticks slow-breaks respawn seed tick-seed kill-at dimension nether food]
+           inventory lag-ticks slow-breaks respawn seed tick-seed kill-at dimension nether food
+           mobs]
     :or {keep-alive-every keep-alive-every}}]
   (cond->
     {:sim/phase :handshake
@@ -220,6 +223,7 @@
     kill-at (assoc :sim/kill-at kill-at)
     dimension (assoc :sim/dimension dimension)
     food (assoc :sim/food food)
+    mobs (assoc :sim/mobs mobs)
     nether (assoc :sim/nether nether)))
 
 (defn send "Queue pkt for the client in :sim/out." [sim pkt] (update sim :sim/out conj pkt))
@@ -336,6 +340,53 @@
   [sim]
   (send sim (health sim)))
 
+;; ---------------------------------------------------------------- mobs (issue #259)
+
+(def hurt-ms 500)                     ; a living entity takes no damage this long after a hit (10 ticks of invulnerability)
+(def mob-reach 4.0)                   ; eye to a mob's middle within which the model takes an attack (3 to its box, as the server measures)
+(def mob-middle 0.9)                  ; a mob's middle over its feet
+(def fist-damage 1.0)                 ; an attack with no weapon
+
+(def weapon-damage
+  "What an attack with each sword takes from a mob's health (the game's attack damage, the
+   player's 1 included), by name; anything else in hand is a fist."
+  {:wooden_sword 4.0
+   :golden_sword 4.0
+   :stone_sword 5.0
+   :copper_sword 5.0
+   :iron_sword 6.0
+   :diamond_sword 7.0
+   :netherite_sword 8.0})
+
+(defn mob-packets
+  "The packets that show mob eid to the client: its add-entity, and its health as metadata
+   (index 9, entity/health-index) when it is a living type."
+  [eid {:keys [type pos health]}]
+  (let [[x y z] pos]
+    [{:packet/name :add-entity
+      :entity-id eid
+      :uuid (java.util.UUID. 0 eid)
+      :type (blocks/entity-types type)
+      :x x
+      :y y
+      :z z
+      :vel [0.0 0.0 0.0]
+      :pitch 0
+      :yaw 0
+      :head-yaw 0
+      :data 0} {:packet/name :set-entity-data :entity-id eid :metadata {9 (double health)}}]))
+
+(defn show-mobs
+  "The model with every mob in :sim/mobs shown to the client (mob-packets)."
+  [sim]
+  (reduce (fn [sim [eid m]] (reduce send sim (mob-packets eid m))) sim (:sim/mobs sim)))
+
+(defn in-reach?
+  "Is mob m's middle within mob-reach of the player's eye (its last reported position)?"
+  [sim m]
+  (when-let [pos (:sim/player-pos sim)]
+    (<= (physics/distance (physics/eye pos) (update (:pos m) 1 + mob-middle)) mob-reach)))
+
 (defmethod on-packet [:configuration :finish-configuration]
   [sim _]
   (let [[x y z] (:sim/spawn sim)]
@@ -360,6 +411,7 @@
                             (range (inventory/slot-count (inventory/layouts :inventory))))
                :carried nil})
         (cond-> (:sim/food sim) tell-health)
+        show-mobs
         stream)))
 
 (defmethod on-packet [:play :move-player-pos-rot]
@@ -1306,6 +1358,28 @@
     (-> sim
         (assoc :sim/inv inv)
         (sync-window :inventory before (:sim/cursor sim) false))))
+
+(defmethod on-packet [:play :attack]
+  ;; a mob in reach and past its hurt time loses the held weapon's damage (weapon-damage, a fist
+  ;; otherwise), told as its health; at none it dies: its death event, then its removal. An attack
+  ;; on what is not a mob, out of reach or inside the hurt time does nothing, as on a server.
+  ;; Every attack is counted (:sim/attacks), the hits apart (:sim/hits)
+  [sim {:keys [entity-id]}]
+  (let [m (get-in sim [:sim/mobs entity-id])
+        now (:sim/now sim)
+        sim (update sim :sim/attacks (fnil inc 0))]
+    (cond (or (nil? m) (not (in-reach? sim m)) (< (- now (:hit-at m (- hurt-ms))) hurt-ms)) sim
+          :else
+          (let [h (- (:health m) (get weapon-damage (recipe/item-name (held-item sim)) fist-damage))
+                sim (update sim :sim/hits (fnil inc 0))]
+            (if (pos? h)
+              (-> sim
+                  (assoc-in [:sim/mobs entity-id] (assoc m :health h :hit-at now))
+                  (send {:packet/name :set-entity-data :entity-id entity-id :metadata {9 h}}))
+              (-> sim
+                  (update :sim/mobs dissoc entity-id)
+                  (send {:packet/name :entity-event :entity-id entity-id :status 3})
+                  (send {:packet/name :remove-entities :ids [entity-id]})))))))
 
 (defn eats?
   "Does a use-item with item (an id) held start eating it: food is modelled (:sim/food), the bar
