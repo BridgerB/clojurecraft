@@ -363,7 +363,43 @@
     :gym/truth [{:truth/cmd "execute if items entity {name} armor.head minecraft:iron_helmet"
                  :truth/re "Test passed"}
                 {:truth/cmd "execute if items entity {name} armor.chest minecraft:iron_chestplate"
-                 :truth/re "Test passed"}]}])
+                 :truth/re "Test passed"}]}
+   ;; issue #259: a husk that does not move (NoAI; a husk does not burn by day) three blocks east
+   ;; of the landing at noon, a stone sword given; judged by the husk gone. The attacks' spacing
+   ;; is read from the recording
+   {:gym/goal :attack
+    :gym/until "attack"
+    :gym/prereqs ["minecraft:stone_sword 1"]
+    :gym/setup ["time set noon"
+                "summon minecraft:husk {x+3} {y} {z} {NoAI:1b,PersistenceRequired:1b}"]
+    :gym/timeout-ms 90000
+    :gym/truth
+    [{:truth/cmd
+      "execute positioned {x} {y} {z} unless entity @e[type=minecraft:husk,distance=..24]"
+      :truth/re "Test passed"}]}
+   ;; issue #259: three zombies two blocks round the landing at midnight, the bot in iron armour
+   ;; (put on by the fixture: a zombie at hand comes before dressing) with an iron sword; judged
+   ;; by a zombie killed (a kill counter the setup adds: counting zombies round the landing counts
+   ;; the night's new ones too, five in defend-259b run 1) and the bot alive with health left (a
+   ;; death is its own outcome). Not all
+   ;; three: the row is done when none is within 4, and in gym defend-259a (run 38881961947)
+   ;; the others wandered off while the first was fought. Judged at the landing, never as the
+   ;; bot: execute as the bot answered RCON with nothing in every trial of that run
+   {:gym/goal :defend
+    :gym/until "defend"
+    :gym/prereqs ["minecraft:iron_sword 1"]
+    :gym/setup ["time set midnight"
+                "scoreboard objectives add zkills minecraft.killed:minecraft.zombie"
+                "item replace entity {name} armor.head with minecraft:iron_helmet"
+                "item replace entity {name} armor.chest with minecraft:iron_chestplate"
+                "item replace entity {name} armor.legs with minecraft:iron_leggings"
+                "item replace entity {name} armor.feet with minecraft:iron_boots"
+                "summon minecraft:zombie {x+2} {y} {z} {PersistenceRequired:1b}"
+                "summon minecraft:zombie {x-2} {y} {z+1} {PersistenceRequired:1b}"
+                "summon minecraft:zombie {x} {y} {z-2} {PersistenceRequired:1b}"]
+    :gym/timeout-ms 120000
+    :gym/truth [{:truth/cmd "scoreboard players get {name} zkills" :truth/re "has [1-9]"}
+                {:truth/cmd "data get entity {name} Health" :truth/re "data: [1-9]"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."

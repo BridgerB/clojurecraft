@@ -178,7 +178,7 @@
    [:plan/go-at "the landing a fixture named" "from a :go with :go/at"]
    [:plan/since "ms the status last changed" "from the :go event"]
    [:plan/blacklist
-    "targets that failed, skipped when choosing; never the cell a :place or a :redig chose"
+    "targets that failed, skipped when choosing (a ghost's entity id among them); never the cell a :place or a :redig chose"
     "from the :go event"]
    [:plan/trunk-failures
     "failed gather intents per trunk column [x z]; a column that failed twice is skipped when choosing a log"
@@ -204,14 +204,16 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
    [:intent/goal "the target goal id the intent serves; another target chosen preempts it"
     "intents the planner starts"]
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
-   [:intent/target "block position it acts on or walks to" "most intents"]
+   [:intent/target
+    "block position it acts on or walks to; for a :fight or a :back-off, the entity id it is after (issue #259: a widening, a position is still one)"
+    "most intents"]
    [:intent/for
     "what the intent serves (:log, :log-hunt, a mining row's id), so chains continue only their own"
     "gather-chain intents"]
@@ -255,8 +257,10 @@
    [:intent/started "ms the intent began" "walk and dig"]
    [:intent/still "ticks the bot has been still" "settling intents"]
    [:intent/face "block face it acts on" "dig"]
-   [:intent/next-swing "ms of the next arm swing" "dig"]
-   [:intent/finish-at "ms after which FINISH may be sent" "dig"]
+   [:intent/next-swing "ms of the next arm swing, or of a :fight's next attack" "dig, fight"]
+   [:intent/swings
+    "attacks a :fight has sent in reach of its target; combat/max-swings make it a ghost"
+    "fight, after its first attack"] [:intent/finish-at "ms after which FINISH may be sent" "dig"]
    [:intent/slot "hotbar slot the dig holds its tool in (0 for the hand)" "dig, from START"]
    [:intent/tool "item id of the tool the dig holds, nil for the hand" "dig, from START"]
    [:intent/dig-ms "ms the server needs to break the target with that tool" "dig, from START"]

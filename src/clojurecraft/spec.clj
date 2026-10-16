@@ -7,6 +7,7 @@
             [clojurecraft.armour]
             [clojurecraft.build :as build]
             [clojurecraft.claims :as claims]
+            [clojurecraft.combat]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.fortress :as fortress]
@@ -213,13 +214,16 @@
 ;; plan and intents
 (s/def :intent/kind keyword?)
 (s/def :intent/status #{:active :done :failed})
-(s/def :intent/target ::block-pos)
+(s/def ::target ; a block position, or the entity id a :fight or :back-off is after (issue #259)
+  (s/or :block ::block-pos
+        :entity int?))
+(s/def :intent/target ::target)
 (s/def ::intent (s/keys :req [:intent/kind] :opt [:intent/status :intent/target :intent/recipe]))
 (s/def :plan/intent ::intent)
 (s/def :plan/status #{:landing :active :done :failed})
 (s/def :plan/go-at ::vec3)
 (s/def :go/at ::vec3)
-(s/def :plan/blacklist (s/coll-of ::block-pos :kind set?))
+(s/def :plan/blacklist (s/coll-of ::target :kind set?)) ; a ghost's entity id too
 (s/def :plan/trunk-failures (s/map-of (s/tuple int? int?) pos-int?))
 (s/def :plan/boxed-at (s/coll-of ::block-pos :kind set?)) ; feet cells where a staircase died :boxed
 (s/def :plan/unwalkable nat-int?)
@@ -411,6 +415,7 @@
 (s/def :intent/still nat-int?)
 (s/def :intent/face int?)
 (s/def :intent/next-swing number?)
+(s/def :intent/swings pos-int?)
 (s/def :intent/finish-at number?)
 (s/def :intent/slot (s/int-in 0 9))
 (s/def :intent/tool (s/nilable int?))
@@ -483,7 +488,7 @@
 (s/def :intention/event #{:started :done :failed :abandoned})
 (s/def :intention/kind keyword?)
 (s/def :intention/at int?)
-(s/def :intention/target ::block-pos)
+(s/def :intention/target ::target)
 (s/def :intention/recipe keyword?)
 (s/def :intention/reason some?)
 (s/def :answer/kind #{:ack :pickup :death})

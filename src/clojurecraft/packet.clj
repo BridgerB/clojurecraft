@@ -157,6 +157,10 @@
    [:play :c2s :set-carried-item] [[:slot :i16]]
    [:play :c2s :player-action] [[:status :varint] [:pos :position] [:face :i8] [:sequence :varint]]
    [:play :c2s :swing] [[:hand :varint]]
+   ;; an attack on an entity, its id alone: 775 split attacking out of interact, which is a
+   ;; right-click now (ruststeve src/bot/mod.rs: an interact with mouse 1 dealt nothing, and with
+   ;; no hand field got the bot kicked); ServerboundAttackPacket's codec, issue #259
+   [:play :c2s :attack] [[:entity-id :varint]]
    ;; right-click with the held item, aimed by look: a bucket fills or pours here, not through
    ;; use-item-on; field order read from the game's ServerboundUseItemPacket
    [:play :c2s :use-item] [[:hand :varint] [:sequence :varint] [:y-rot :f32] [:x-rot :f32]]

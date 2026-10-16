@@ -2,6 +2,7 @@
 ;; packet_test holds it: each spec here must still exist with these fields as a prefix of its
 ;; current fields. Adding a field: append it to the spec, then add it here. Adding a packet: add it here.
 {[:configuration :c2s :finish-configuration] []
+ [:play :c2s :attack] [[:entity-id :varint]]
  [:configuration :c2s :keep-alive] [[:id :i64]]
  [:configuration :c2s :pong] [[:id :i32]]
  [:configuration :c2s :select-known-packs]
