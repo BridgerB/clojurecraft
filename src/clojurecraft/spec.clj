@@ -29,6 +29,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.stronghold :as stronghold]
             [clojurecraft.sword]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
@@ -73,6 +74,11 @@
          :facing build/facings
          :h (s/? nat-int?))
   :ret ::plan)
+(s/fdef stronghold/triangulate
+  :args
+  (s/cat :a ::throw
+         :b ::throw)
+  :ret (s/nilable (s/tuple double? double?)))
 
 ;; bot
 (s/def :bot/phase #{:handshake :login :configuration :play})
@@ -164,6 +170,11 @@
 (s/def :entity/creepy? boolean?)
 (s/def :pearls/shelter ::block-pos)
 (s/def :pearls/mouth ::block-pos)
+(s/def :throw/from ::vec3)
+(s/def :throw/dir (s/tuple double? double?))
+(s/def :throw/at int?)
+(s/def ::throw (s/keys :req [:throw/from :throw/dir :throw/at]))
+(s/def :stronghold/throws (s/coll-of ::throw :kind vector?))
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
