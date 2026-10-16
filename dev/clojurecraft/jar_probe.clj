@@ -3,7 +3,8 @@
    hardness (BlockState.getDestroySpeed, the number the server divides by when it breaks a
    block), which blocks drop only to their correct tool (requiresCorrectToolForDrops: stone
    dug by hand drops nothing), every tool material's speed, durability and harvest tag
-   (ToolMaterial), and every fuel's burn ticks (FuelValues). Run by
+   (ToolMaterial), every fuel's burn ticks (FuelValues), and every living entity type's
+   maximum health and category (DefaultAttributes, MobCategory). Run by
    bb datagen in a JVM whose classpath is the inner server jar plus the libraries the
    bundler ships, since the server's classes need them to boot:
 
@@ -25,6 +26,8 @@
            [net.minecraft.server.packs.repository ServerPacksSource]
            [net.minecraft.server.packs.resources MultiPackResourceManager]
            [net.minecraft.tags TagLoader]
+           [net.minecraft.world.entity EntityType MobCategory]
+           [net.minecraft.world.entity.ai.attributes AttributeSupplier Attributes DefaultAttributes]
            [net.minecraft.world.flag FeatureFlags]
            [net.minecraft.world.item Item ToolMaterial]
            [net.minecraft.world.level EmptyBlockGetter]
@@ -99,6 +102,23 @@
                 :when (and (not (.isEmpty s)) (not= s (Shapes/block)))]
             [(str (.getKey reg b)) (.max s Direction$Axis/Y)]))))
 
+(defn mobs
+  "{\"minecraft:pig\" {\"max-health\" 10.0 \"category\" \"creature\"} ...}: every entity type the
+   game gives attributes to (DefaultAttributes.hasSupplier: the living entities, and only those,
+   since a living entity cannot be built without them), its maximum health (the MAX_HEALTH its
+   supplier starts it with) and its MobCategory's name (monster, creature, misc ...). Health in an
+   entity's metadata belongs to living entities only: the same index carries an interaction's
+   height (issue #258)."
+  []
+  (let [reg BuiltInRegistries/ENTITY_TYPE]
+    (into (sorted-map)
+          (for [^EntityType t reg
+                :when (DefaultAttributes/hasSupplier t)
+                :let [^AttributeSupplier s (DefaultAttributes/getSupplier t)]]
+            [(str (.getKey reg t))
+             {"max-health" (.getValue s Attributes/MAX_HEALTH)
+              "category" (.getName ^MobCategory (.getCategory t))}]))))
+
 (defn -main
   "Boot the game's registries and write {\"hardness\" ... \"needs-tool\" ... \"materials\" ...
    \"fuel\" ...} as JSON to out."
@@ -110,7 +130,8 @@
                  "needs-tool" (needs-tool)
                  "materials" (materials)
                  "fuel" (fuel)
-                 "partial-shapes" (partial-shapes)}
+                 "partial-shapes" (partial-shapes)
+                 "mobs" (mobs)}
                 w))
   (println "wrote" out)
   (shutdown-agents))

@@ -215,7 +215,7 @@
                     "brain/siblings/sib-dimension-change.md"]}
  {:problem/stage :survival
   :problem/issue 259
-  :problem/goals [:eat]
+  :problem/goals [:eat :wear-armour :armour]
   :problem/statement
   "Normal difficulty brings hunger and night mobs to every stage. Food drains with every dig and jump, an empty bar stops healing and starves the bot to one heart, and zombies, skeletons and creepers find a bot that cannot hit back. The world value read the health from set-health and threw the food away; the bot could not eat, wear armour or attack."
   :problem/needs
@@ -226,7 +226,8 @@
   :problem/decisions
   ["Eating is an always row at priority 0 after the escapes, done when fed (food 14 or more) or when nothing edible is held, so a hungry bot with no food goes on with the run"
    "The meal is the server's food rising; a deadline from the food's eating time, stretched by the server's slowdown, fails it :not-eaten"
-   "Never eat what poisons or makes hungry, chorus fruit, suspicious stew or golden apples"]
+   "Never eat what poisons or makes hungry, chorus fruit, suspicious stew or golden apples"
+   "Armour is put on by two window-0 clicks (pick up, put down in the armour slot) and made only from ingots spare once the portal's iron is held, with a table at hand: it never sends the bot mining or after a tree"]
   :problem/risks
   ["A meal preempts work mid-intent: a smelt abandoned leaves its input in the furnace"
    "Another slot selected mid-meal stops the eating (set-carried-item)"
@@ -285,6 +286,30 @@
   :problem/last-failure
   "Not played yet: the sim lanes ran without hunger or mobs while the real races ran at Normal (#257), so a death or an empty bar was a real-only failure."
   :problem/sources ["brain/bot/tooling/server-model.md" "docs/RICH-HICKEY.md"]}
+ {:problem/stage :mob-model
+  :problem/issue 258
+  :problem/goals [:entities]
+  :problem/statement
+  "Split from :end-and-dragon. The world value tracks item drops only, so no goal can see a mob, how fast it moves, how hurt it is, or that it died; every fight after this needs that, read from the server and never predicted."
+  :problem/needs
+  ["Every add-entity kept, with its velocity" "set-entity-motion and teleport-entity applied"
+   "A living entity's health and shared flags from set-entity-data, skimmed"
+   "Which entity types are living (only they have health at the metadata's index 9), from the game's classes"
+   "Death as a fact: entity-event status 3, then the removal"]
+  :problem/decisions
+  ["Velocity is the game's LpVec3, read from the jar (probe run 38876275250), not three shorts in 1/8000 blocks"
+   "The metadata skim reads only simple serializers and stops at the first other, keeping what it read"
+   "Living types and their maximum health come from DefaultAttributes by jar-probe (mobs.edn), never a hand list"
+   "Hostile is the game's monster category minus the neutral ones (enderman, zombified piglin)"]
+  :problem/risks ["A pig beside a drop taken for the drop now that every entity is tracked"
+                  "An interaction's or a boat's float at index 9 read as health"
+                  "A custom name (a component) before the health ends the skim"
+                  "Metadata or motion for the bot's own player, which is never added"]
+  :problem/done
+  "The gym's entities row: a summoned pig's health in the bot's world value equals RCON data get entity on it, RESULT :ok true."
+  :problem/last-failure
+  "clojurecraft has never attempted this. typecraft decodes the whole metadata stream and one entry off in its type table desyncs every later one; a skimmer that stops at the first unknown type cannot."
+  :problem/sources ["docs/RICH-HICKEY.md" "brain/bot/world/entities.md"]}
  {:problem/stage :race
   :problem/issue 17
   :problem/statement

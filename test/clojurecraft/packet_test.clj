@@ -1,5 +1,6 @@
 (ns clojurecraft.packet-test
   (:require [clojure.edn :as edn]
+            [clojure.math :as math]
             [clojure.test :refer [deftest is testing]]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
@@ -205,3 +206,82 @@
                   k)))))
   (testing "every spec today is in the history, so the next change is held to it too"
     (is (= [] (vec (remove #(contains? ever %) (keys p/specs)))))))
+
+(defn lp-roundtrip [v] (b/read-lpvec3 (b/buffer (b/with-out #(b/write-lpvec3 % v)))))
+
+(deftest an-lpvec3-reads-back-what-the-game-writes
+  ;; issue #258: 26.1.2 sends velocities as the game's LpVec3 (probe run 38876275250), not three
+  ;; shorts in 1/8000 blocks; 15 bits a component over the largest magnitude rounded up
+  (is (= [0.0 0.0 0.0] (lp-roundtrip [0.0 0.0 0.0])))
+  (is (= [0] (map #(bit-and % 0xFF) (b/with-out #(b/write-lpvec3 % [0.0 0.0 0.0]))))
+      "the zero vector is one zero byte")
+  (doseq [v [[0.25 -0.0784 0.0] [-1.0 1.0 0.5] [3.9 -2.0 0.1] [12.5 0.0 -7.25] [0.0 -40.0 0.0]]]
+    (let [[x y z] (lp-roundtrip v)
+          scale (math/ceil (apply max (map abs v)))]
+      (is (every? #(< (abs %) (/ (* 2.0 scale) 32766.0)) (map - [x y z] v))
+          (str v " within one step of " scale "/16383")))))
+
+(defn entity-frame
+  "A play s2c frame of packet name, its fields written by f."
+  [name f]
+  (b/with-out (fn [o] (b/write-varint o (get-in p/ids [:play :s2c name])) (f o))))
+
+(deftest entity-packets-decode
+  (testing "add-entity carries the velocity, the angles and the data"
+    (is
+     (= {:packet/name :add-entity
+         :entity-id 60
+         :uuid a-uuid
+         :type 95
+         :x 4.5
+         :y 64.0
+         :z -4.5
+         :vel [0.0 0.0 0.0]
+         :pitch 0
+         :yaw -64
+         :head-yaw -64
+         :data 0}
+        (p/decode :play
+                  :s2c
+                  (entity-frame :add-entity
+                                (fn [o]
+                                  (doto o
+                                    (b/write-varint 60)
+                                    (b/write-uuid a-uuid)
+                                    (b/write-varint 95)
+                                    (b/write-f64 4.5)
+                                    (b/write-f64 64.0)
+                                    (b/write-f64 -4.5)
+                                    (b/write-lpvec3 [0.0 0.0 0.0])
+                                    (b/write-i8 0)
+                                    (b/write-i8 -64)
+                                    (b/write-i8 -64)
+                                    (b/write-varint 0))))))))
+  (testing "entity-event: an int id and a status byte"
+    (is (= {:packet/name :entity-event :entity-id 60 :status 3}
+           (p/decode :play
+                     :s2c
+                     (entity-frame :entity-event (fn [o] (b/write-i32 o 60) (b/write-i8 o 3)))))))
+  (testing "set-entity-data: flags, air, health, then a stop at the first serializer not modelled"
+    (let [entry
+          (fn [o i serializer write] (b/write-u8 o i) (b/write-varint o serializer) (write o))]
+      (is (= {:packet/name :set-entity-data :entity-id 60 :metadata {0 1 1 300 9 7.5}}
+             (p/decode :play
+                       :s2c
+                       (entity-frame :set-entity-data
+                                     (fn [o]
+                                       (b/write-varint o 60)
+                                       (entry o 0 0 #(b/write-u8 % 1))
+                                       (entry o 1 1 #(b/write-varint % 300))
+                                       (entry o 9 3 #(b/write-f32 % 7.5))
+                                       (b/write-u8 o 255))))))
+      (is (= {:packet/name :set-entity-data :entity-id 61 :metadata {0 0}}
+             (p/decode :play
+                       :s2c
+                       (entity-frame :set-entity-data
+                                     (fn [o]
+                                       (b/write-varint o 61)
+                                       (entry o 0 0 #(b/write-u8 % 0))
+                                       (entry o 2 6 #(b/write-bool % true)) ; a custom name: a component
+                                       (b/write-bytes o (byte-array 12))))))
+          "a custom name ends the skim before the health"))))

@@ -277,8 +277,10 @@
     (is (nil? (terrain/block-at w [16 64 0])) "unloaded")
     (is (= 2 (terrain/block-at w [17 133 0]))
         "section update: chunk x=1 z=0 section y=8, local (1,5,0)")
-    (is (= {50 {:entity/type 71 :entity/pos [2.0 64.0 0.5] :entity/seen-at 0}} (:world/entities w))
-        "only items are tracked")
+    (is (= {50 {:entity/type 71 :entity/pos [2.0 64.0 0.5] :entity/seen-at 0}
+            51 {:entity/type 5 :entity/pos [1.0 64.0 1.0] :entity/seen-at 0}}
+           (:world/entities w))
+        "every entity is tracked, not only items (issue #258)")
     (testing "sightings remember logs and their later states"
       (is (= {[3 64 0] {:block/state 136 :block/seen-at 0}
               [3 65 0] {:block/state 0 :block/seen-at 0}}
@@ -310,3 +312,67 @@
                    [(packet {:packet/name :unknown :packet/id 83})
                     (packet {:packet/name :unknown :packet/id 83})])]
     (is (= {[:play 83] 2} (:stats/unknown w)))))
+
+(deftest a-mob-is-tracked-with-its-motion-health-and-death
+  ;; issue #258: every entity is kept, with its velocity, a living one's health and flags from its
+  ;; metadata, and its death as the server states it; an interaction's float at the health index
+  ;; is not health
+  (let [pig (blocks/entity-types :pig)
+        interaction (blocks/entity-types :interaction)
+        [w _] (run (in-play)
+                   [(packet {:packet/name :add-entity
+                             :entity-id 60
+                             :uuid nil
+                             :type pig
+                             :x 4.5
+                             :y 64.0
+                             :z 4.5
+                             :vel [0.0 -0.0784 0.0]
+                             :pitch 0
+                             :yaw 0
+                             :head-yaw 0
+                             :data 0})
+                    (packet {:packet/name :add-entity
+                             :entity-id 61
+                             :uuid nil
+                             :type interaction
+                             :x 0.5
+                             :y 64.0
+                             :z 0.5})
+                    (packet
+                     {:packet/name :set-entity-data :entity-id 60 :metadata {0 1 1 300 9 7.5}})
+                    (packet {:packet/name :set-entity-data :entity-id 61 :metadata {8 1.0 9 2.0}})
+                    (packet {:packet/name :set-entity-data :entity-id 99 :metadata {9 3.0}})
+                    (packet {:packet/name :set-entity-motion :entity-id 60 :vel [0.25 0.0 0.0]})])]
+    (is (= {:entity/type pig
+            :entity/pos [4.5 64.0 4.5]
+            :entity/seen-at 0
+            :entity/vel [0.25 0.0 0.0]
+            :entity/health 7.5
+            :entity/flags 1}
+           (get-in w [:world/entities 60])))
+    (is (not (contains? (get-in w [:world/entities 61]) :entity/health))
+        "an interaction's height is not health")
+    (is (not (contains? (:world/entities w) 99)) "metadata for an untracked entity adds nothing")
+    (testing "a teleport moves it, relative axes added"
+      (let [[w2 _] (run w
+                        [(packet {:packet/name :teleport-entity
+                                  :entity-id 60
+                                  :x 1.0
+                                  :y 70.0
+                                  :z 0.0
+                                  :dx 0.0
+                                  :dy 0.0
+                                  :dz 0.0
+                                  :yaw 0.0
+                                  :pitch 0.0
+                                  :flags 5
+                                  :on-ground false})])]
+        (is (= [5.5 70.0 4.5] (get-in w2 [:world/entities 60 :entity/pos])))))
+    (testing "a death is a fact, then the removal"
+      (let [[w2 _] (run w
+                        [{:event/kind :tick :event/now 500 :event/rand 0.5}
+                         (packet {:packet/name :entity-event :entity-id 60 :status 3})])
+            [w3 _] (run w2 [(packet {:packet/name :remove-entities :ids [60]})])]
+        (is (= 500 (get-in w2 [:world/entities 60 :entity/died-at])))
+        (is (nil? (get-in w3 [:world/entities 60])))))))

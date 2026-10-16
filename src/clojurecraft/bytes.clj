@@ -5,6 +5,7 @@
   java.io.DataOutputStream. Neither escapes the decode/encode call that owns it, so
   every public function here is bytes-in, value-out."
   (:refer-clojure :exclude [read-string])
+  (:require [clojure.math :as math])
   (:import [java.io ByteArrayOutputStream DataOutputStream]
            [java.nio ByteBuffer]
            [java.nio.charset StandardCharsets]
@@ -89,6 +90,35 @@
   ^bytes [^ByteBuffer b]
   (read-bytes b (.remaining b)))
 
+(def lp-max 32766.0)                  ; the largest of LpVec3's 15-bit components, which stands for 1.0
+(def lp-shifts [3 18 33])             ; where x, y and z sit in an LpVec3's 48 bits
+(def lp-zero 3.051944088384301E-5)    ; under this the game writes the zero vector (one zero byte)
+(def lp-limit 1.7179869183E10)        ; the game clamps every component into plus or minus this
+
+(defn lp-unpack
+  "One 15-bit LpVec3 component (the low 15 bits of v) as a double in [-1, 1]."
+  ^double [^long v]
+  (- (/ (* (min (double (bit-and v 32767)) lp-max) 2.0) lp-max) 1.0))
+
+(defn read-lpvec3
+  "An LpVec3, the game's low-precision vector (an entity's velocity in blocks a tick), as
+   [x y z]. A first byte of zero is the zero vector. Otherwise that byte, a second one and a u32
+   make 48 bits: the scale's low two bits, a continuation bit (bit 2: a varint follows with the
+   scale's higher bits) and three 15-bit components at bits 3, 18 and 33, each in [-1, 1] times
+   the scale. Read from the 26.1.2 jar's net.minecraft.network.LpVec3.read (probe run
+   38876275250, issue #258); before 1.21.9 velocity was three shorts in 1/8000 blocks."
+  [^ByteBuffer b]
+  (let [a (read-u8 b)]
+    (cond (zero? a) [0.0 0.0 0.0]
+          :else
+          (let [second-byte (read-u8 b)
+                packed (bit-or (bit-shift-left (read-u32 b) 16) (bit-shift-left second-byte 8) a)
+                low (bit-and a 3)
+                scale (cond (= 4 (bit-and a 4))
+                            (bit-or low (bit-shift-left (bit-and (read-varint b) 0xFFFFFFFF) 2))
+                            :else low)]
+            (mapv #(* (double scale) (lp-unpack (unsigned-bit-shift-right packed %))) lp-shifts)))))
+
 ;; ---------------------------------------------------------------- writing
 
 (defn write-varint
@@ -170,6 +200,35 @@
   "[x y z] as the packed i64 block position."
   [^DataOutputStream out pos]
   (.writeLong out (pack-position pos)))
+
+(defn lp-pack
+  "One component v of a vector scaled to [-1, 1] as LpVec3's 15-bit number."
+  ^long [^double v]
+  (math/round (* (+ (* v 0.5) 0.5) lp-max)))
+
+(defn write-lpvec3
+  "[x y z] as an LpVec3, as the game's LpVec3.write does it (see read-lpvec3): NaN is 0, every
+   component clamped to lp-limit, one zero byte when every component is under lp-zero, else the
+   scale (the largest magnitude rounded up), its low two bits and the continuation bit, the three
+   components over it, and the scale's higher bits as a varint when they are not zero."
+  [^DataOutputStream out v]
+  (let [[x y z] (map #(cond (Double/isNaN (double %)) 0.0
+                            :else (max (- lp-limit) (min lp-limit (double %))))
+                     v)
+        m (max (abs x) (abs y) (abs z))]
+    (cond (< m lp-zero) (write-u8 out 0)
+          :else
+          (let [scale (long (math/ceil m))
+                more? (not= scale (bit-and scale 3))
+                bits (bit-or (cond more? (bit-or (bit-and scale 3) 4)
+                                   :else scale)
+                             (bit-shift-left (lp-pack (/ x scale)) 3)
+                             (bit-shift-left (lp-pack (/ y scale)) 18)
+                             (bit-shift-left (lp-pack (/ z scale)) 33))]
+            (write-u8 out (bit-and bits 0xFF))
+            (write-u8 out (bit-and (bit-shift-right bits 8) 0xFF))
+            (write-u32 out (bit-shift-right bits 16))
+            (when more? (write-varint out (bit-shift-right scale 2)))))))
 
 (defn with-out
   "Run f with a DataOutputStream; return the bytes written."

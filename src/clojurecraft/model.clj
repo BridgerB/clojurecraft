@@ -115,12 +115,24 @@
    [:world/unconfirmed
     "{[x y z] ms}: cells the bot's own dig emptied in the overlay before the server said so, and when; the server's block-update there (the break, or the block put back) takes each out, and one the server stays silent on for terrain/unconfirmed-ms is forgotten, the chunk's block back in view"
     "after the first own break"]
-   [:world/entities "{entity-id {:entity/type :entity/pos :entity/seen-at}}: tracked items"
+   [:world/entities
+    "{entity-id {:entity/type :entity/pos :entity/seen-at ...}}: every entity the server added and has not removed (items only before issue #258: a widening, an item is still one)"
     "always"]
    [:world/facts "memory: DataScript value of append-only observations, never retracted" "always"]
    [:entity/type "entity type id (71 is an item)" "inside :world/entities"]
    [:entity/pos "last known entity position" "inside :world/entities"]
    [:entity/seen-at "ms the entity was added" "inside :world/entities"]
+   [:entity/vel
+    "velocity [vx vy vz] in blocks a tick, the server's word (add-entity, set-entity-motion, teleport-entity)"
+    "inside :world/entities, once the server gave one"]
+   [:entity/health "a living entity's health, from its metadata (index 9)"
+    "inside :world/entities, a living one, once its metadata said"]
+   [:entity/flags
+    "the entity's shared flags byte, from its metadata (index 0): 1 on fire, 2 crouching, 32 invisible"
+    "inside :world/entities, once its metadata said"]
+   [:entity/died-at
+    "ms the server said the entity died (entity-event status 3); the body is removed after"
+    "inside :world/entities, after a death"]
    [:sight/pos "an observation's block position" "a fact in :world/facts"]
    [:sight/state "the state id observed there" "a fact in :world/facts"]
    [:sight/at "ms of the observation" "a fact in :world/facts"]
@@ -192,7 +204,7 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
@@ -331,7 +343,7 @@
    [:intent/awaiting "state id a click waits on" "after a click"]
    [:intent/awaiting-window "window id that click went to" "after a click"]
    [:intent/sent-at "ms a click or placement was sent" "after sending"]
-   [:intent/item "item to place, put in the hand, or eat" "place, redig, equip, eat"]
+   [:intent/item "item to place, put in the hand, eat or wear" "place, redig, equip, eat, wear"]
    [:intent/food-before "the food level when an :eat sent its use-item; a higher one is the meal"
     "eat, :eating stage"]
    [:intent/eat-by "ms past which an :eat whose food has not risen fails :not-eaten"

@@ -508,7 +508,7 @@ Consult on demand. Spot-checked against `src/clojurecraft/` at 51505a9; when the
 **One tick (`plan/plan-tick`), in order.**
 1. `trap/trapped-tick` re-derives `:plan/trap` (only with `:player/pos`); `plan/reach` adds milestones on a chained run.
 2. `plan/choose`: highest-priority target in play (`:plan/goals` or every target, plus `:goal/always?` rows), not in `:plan/reached`, `done-by` false, worked in this dimension (`here?`).
-3. Running intent whose cursor holds an item (`can-abandon?` false): run it anyway (it puts the item down).
+3. Running intent whose cursor holds an item, or with a click unanswered (`can-abandon?` false): run it anyway (it puts the item down, the answer comes).
 4. No goal here but one undone elsewhere (`elsewhere?`): abandon `:goal-met`, wait `:other-dimension`.
 5. No goal: abandon `:goal-met`, `:plan/status :done`.
 6. Running intent for another goal than the chosen one: abandon `:preempted`, plan again this tick.
@@ -714,7 +714,7 @@ Every attribute, its meaning and lifetime is in `src/clojurecraft/model.clj` (`m
 - `:slot` components decode through `component-codecs` (damage, max damage, max stack size, repair cost, unbreakable); any other truncates the rest (`:truncated true`). Before this, a worn pickaxe hid the water bucket behind it (`:no-scoop`).
 - Phases `:handshake → :login → :configuration → :play`, back on `start-configuration`. `hello` carries the MD5 v3 UUID of `OfflinePlayer:<name>`; changing `--name` changes player data.
 - The first teleport also emits `player-loaded`; without it nothing (pickup included) ticks for the player; resent after a dimension change.
-- `set-time` has a fieldless spec; `game/clocked` estimates `:server/tick-ms` from its spacing (one every 20 server ticks). Not modelled: `attack` (c2s 1), `place-recipe` (39), entity metadata, encryption.
+- `set-time` has a fieldless spec; `game/clocked` estimates `:server/tick-ms` from its spacing (one every 20 server ticks). Not modelled: `attack` (c2s 1), `place-recipe` (39), encryption. Entity metadata is skimmed (`packet/read-metadata`: simple serializers, stopping at the first other); every entity is tracked with velocity, a living one's health and flags, deaths (`entity.clj`, brain `world/entities`, #258).
 - `:bot/sequence` increments for each `player-action`, `use-item-on`, `use-item`; answered when `:stats/last-ack` ≥ ours. `block-changed-ack` appends an `:ack` answer.
 - **After a break the server sends `block-update` then the ack. An ack alone means not broken** (dropped early FINISH, or refused). Under delayed destroy a loaded server breaks seconds after the ack (#64).
 - Never predicted: placed blocks, window slots and cursor, an acked-but-undone break, pickups (`take-item-entity` with our id appends `:pickup`), health. The only guess is the dig-silence overlay.
@@ -789,6 +789,8 @@ Most are stated where they apply above (grass type, resting vy, `:name` collisio
 | 0 | `:escape-water` (always) | `:not-trapped-in` | `:escape` → `:swim-out` |
 | 0 | `:escape-lava` (always) | `:not-trapped-in` | `:escape` → `:flee` |
 | 0 | `:eat` (always, after the escapes; `eat`) | `:fed?`: food ≥ 14, unknown, or nothing safe to eat held | `:eat` → `:eat` (issue #259) |
+| 0 | `:wear-armour` (always, after `:eat`) | `:dressed?`: no piece held over an empty armour slot | `:wear` → `:wear` |
+| 13 | `:armour` (always, after `:portal-kit`; `armour`) | `:armoured?`: no iron helmet or chestplate the spare ingots pay for, table at hand | `:armour` → needs planner (craft) |
 | 1 | `:wood` | `{:tag/logs 1}` | needs |
 | 2 | `:kit` (`table`) | `{:item/crafting_table 1 :item/stick 4}` | needs |
 | 3 | `:pickaxe` | wooden pickaxe | needs |

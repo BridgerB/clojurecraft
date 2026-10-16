@@ -96,8 +96,23 @@
    [:play :s2c :container-set-slot] [[:window-id :varint] [:state-id :varint] [:slot :i16]
                                      [:item :slot]]
    [:play :s2c :set-player-inventory] [[:slot :varint] [:item :slot]]
+   ;; add-entity: then its velocity (an LpVec3), pitch, yaw and head yaw in 1/256 turns, and its
+   ;; data (an item frame's facing, a falling block's state), field order read from the game's
+   ;; ClientboundAddEntityPacket.write (probe run 38876275250, issue #258)
    [:play :s2c :add-entity] [[:entity-id :varint] [:uuid :uuid] [:type :varint] [:x :f64] [:y :f64]
-                             [:z :f64]]
+                             [:z :f64] [:vel :lpvec3] [:pitch :i8] [:yaw :i8] [:head-yaw :i8]
+                             [:data :varint]]
+   ;; an entity's new velocity, blocks a tick (ClientboundSetEntityMotionPacket's codec: varint, LpVec3)
+   [:play :s2c :set-entity-motion] [[:entity-id :varint] [:vel :lpvec3]]
+   ;; an entity moved far: PositionMoveRotation (position, velocity, yaw, pitch), the Relative set
+   ;; (as player-position's flags) and on-ground (ClientboundTeleportEntityPacket's codec)
+   [:play :s2c :teleport-entity] [[:entity-id :varint] [:x :f64] [:y :f64] [:z :f64] [:dx :f64]
+                                  [:dy :f64] [:dz :f64] [:yaw :f32] [:pitch :f32] [:flags :u32]
+                                  [:on-ground :bool]]
+   ;; an entity's status byte: 3 is a living entity's death (ClientboundEntityEventPacket: an int, a byte)
+   [:play :s2c :entity-event] [[:entity-id :i32] [:status :i8]]
+   ;; an entity's changed metadata, skimmed (read-metadata)
+   [:play :s2c :set-entity-data] [[:entity-id :varint] [:metadata :metadata]]
    [:play :s2c :remove-entities] [[:ids [:vec :varint]]]
    [:play :s2c :move-entity-pos] [[:entity-id :varint] [:dx :i16] [:dy :i16] [:dz :i16]
                                   [:on-ground :bool]]
@@ -256,7 +271,47 @@
               (do (dotimes [_ removed] (b/read-varint buf))
                   (cond-> {:item item :count n} (seq comps) (assoc :components comps))))))))
 
+(def metadata-end 255)                ; the index that ends an entity's metadata (the game's EOF_MARKER)
+
+(def metadata-readers
+  "How the metadata values the bot steps over are written, by serializer id: the game's
+   EntityDataSerializers in registration order, read in the 26.1.2 jar (probe run 38876275250,
+   issue #258). A byte (0) is read unsigned, since the one the bot reads is a bitfield (index 0,
+   the shared flags: on fire, sneaking ...). Direction (12) and pose (20) are varint enums. The
+   rest (components, item stacks, particles, block positions, variants) are not here: a skim stops
+   at the first of them."
+  {0 b/read-u8      ; BYTE
+   1 b/read-varint  ; INT
+   2 b/read-varlong ; LONG
+   3 b/read-f32     ; FLOAT: a living entity's health is one (index 9)
+   4 b/read-string  ; STRING
+   8 b/read-bool    ; BOOLEAN
+   12 b/read-varint ; DIRECTION
+   20 b/read-varint}) ; POSE
+
+(defn read-metadata
+  "An entity's metadata as {index value}: entries of [index u8][serializer varint][value] up to
+   the index metadata-end. Only serializers in metadata-readers are read; at the first other one
+   the skim stops and keeps what it has, as a frame's unread tail is ignored. A living entity's
+   health (index 9) comes after its flags, air, pose and frozen ticks, all readable, so only a
+   custom name (index 2, a component) hides it."
+  [buf]
+  (loop [m {}]
+    (let [i (b/read-u8 buf)
+          read (when (not= i metadata-end) (metadata-readers (b/read-varint buf)))]
+      (cond (nil? read) m
+            :else (recur (assoc m i (read buf)))))))
+
 (defn int-in? "Is x an integer in [lo, hi]?" [lo hi x] (and (int? x) (<= lo x hi)))
+
+(defn metadata?
+  "A skimmed metadata map: {index value}, each index 0-254, each value a number, a boolean or a
+   string."
+  [x]
+  (and (map? x)
+       (every? (fn [[k v]] (and (int-in? 0 254 k) (or (number? v) (boolean? v) (string? v)))) x)))
+
+(defn vec3? "Three numbers in a vector." [x] (and (vector? x) (= 3 (count x)) (every? number? x)))
 
 (defn slot?
   "A decoded slot: nil when empty, else at least {:item id :count n}."
@@ -265,8 +320,8 @@
 
 (def wire-types
   "Every primitive wire type the specs use: how to read one from a buffer, how to write one to a
-   stream, and what a value of it must be (with the wire's own range). :slot is read-only; a
-   click writes :hashed-slot. One table, so the codec and the packet spec cannot disagree."
+   stream, and what a value of it must be (with the wire's own range). :slot and :metadata are
+   read-only; a click writes :hashed-slot. One table, so the codec and the packet spec cannot disagree."
   {:bool {:read b/read-bool :write b/write-bool :valid? boolean?}
    :i8 {:read b/read-i8 :write b/write-i8 :valid? (partial int-in? -128 127)}
    :u8 {:read b/read-u8 :write b/write-u8 :valid? (partial int-in? 0 255)}
@@ -292,6 +347,8 @@
            :write (fn [out ^bytes v] (b/write-varint out (alength v)) (b/write-bytes out v))
            :valid? bytes?}
    :rest {:read b/read-rest :write b/write-bytes :valid? bytes?}
+   :lpvec3 {:read b/read-lpvec3 :write b/write-lpvec3 :valid? vec3?}
+   :metadata {:read read-metadata :valid? metadata?}
    :slot {:read read-slot :valid? slot?}
    :hashed-slot {:read read-hashed-slot :write write-hashed-slot :valid? slot?}})
 

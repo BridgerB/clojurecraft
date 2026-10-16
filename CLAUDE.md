@@ -37,6 +37,7 @@ src/clojurecraft/physics.clj  vanilla land movement over :player/* attributes, l
 src/clojurecraft/memory.clj   observation facts in DataScript, with time, after chunks unload; Datalog queries
 src/clojurecraft/game.clj     the protocol reducer: handshake, keep-alive, teleports, every packet's handler, ticks
 src/clojurecraft/inventory.clj the player's items and screen as values: slot maps, window state, what is held
+src/clojurecraft/entity.clj   every entity the server shows as values: type, position, velocity, a living one's health; hostiles, nearest, gone?
 src/clojurecraft/terrain.clj  the blocks around the bot: columns, the block overlay, block-at, solid-fn; feeds memory
 src/clojurecraft/path.clj     a route for the feet over the block grid: A* with a node budget, moves and goals as data
 src/clojurecraft/dig.clj      a block's break time and drop as a pure function of block, held item and penalties, over the generated tables
@@ -45,6 +46,7 @@ src/clojurecraft/stairs.clj   the :stairs-down executor: a staircase of child :d
 src/clojurecraft/stone.clj    the :mine act: a row's blocks (stone, ore, gravel) walk → dig → collect, or stairs down to its depth
 src/clojurecraft/swim.clj     the escape goals' rules and executors: :swim-out, :flee, and :wade (the shore trial)
 src/clojurecraft/eat.clj      the :eat always row and executor: hungry under 14 with safe food held, one use-item, done when the server's food rises
+src/clojurecraft/armour.clj   the :wear-armour and :armour always rows: a piece held put on by two window-0 clicks; a helmet and chestplate from spare ingots
 src/clojurecraft/food.clj     the game's food as data: nutrition and eating time per item, for the bot and the server model
 src/clojurecraft/craft.clj    the :craft executor: settle, lay the grid with clicks, verify, take
 src/clojurecraft/smelt.clj    the :smelt executor: settle, lay the fuel and the input, cook, take, close; fuel in burn order
