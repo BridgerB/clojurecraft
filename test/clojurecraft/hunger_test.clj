@@ -22,8 +22,8 @@
     (let [empty-sat (assoc tired :food/saturation 0.0)]
       (is (= 19 (:food/level (hunger/spend empty-sat :normal))) "then the bar")
       (is (= 20 (:food/level (hunger/spend empty-sat :peaceful))) "never on peaceful"))
-    (is (= hunger/fresh (hunger/spend (hunger/exhaust hunger/fresh 3.9) :normal))
-        "under four nothing is spent")))
+    (let [rested (hunger/exhaust hunger/fresh 3.9)]
+      (is (= rested (hunger/spend rested :normal)) "under four nothing is spent"))))
 
 (deftest starvation-stops-at-ten-on-easy-one-on-normal-and-kills-on-hard
   (is (hunger/starves? 11.0 :easy))
