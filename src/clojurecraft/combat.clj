@@ -38,6 +38,7 @@
 (def retreat-health 10)               ; health under which a fight breaks off
 (def retreat-distance 6.0)            ; blocks a broken-off fight puts between the bot and the target
 (def approach-timeout-ms 20000)       ; an approach that never reaches the target fails :unreachable
+(def press-within 0.8)                ; blocks on the plane under which an engage out of reach stops pressing in (it is under the target)
 (def back-off-timeout-ms 10000)       ; a walk away ends after this, however far it got
 
 (def swords
@@ -124,14 +125,27 @@
           (> (- now since) approach-timeout-ms) (intent/fail world :unreachable)
           :else (assoc world :player/controls (intent/toward world (aim e) 0.0)))))
 
+(defn pressing?
+  "Should an engaged fight walk on toward entity e: its aim out of attack-reach of the eye while
+   it is still press-within or more away on the plane. A blaze hovers: two blocks over the floor,
+   its aim from approach-range on the plane was 3.3 from the eye, past attack-reach, and the engage
+   faced it and never attacked (issue #262, the server model's blaze)."
+  [world e]
+  (and (> (physics/distance (game/eye world) (aim e)) attack-reach)
+       (>= (horizontal world e) press-within)))
+
 (defmethod fight-stage :engage
-  ;; face the target every tick; attack when the deadline has passed, the eyes face it (the look
-  ;; went out a tick before, with the movement packet) and it is in reach
+  ;; face the target every tick, walking on toward it while it is out of reach (pressing?);
+  ;; attack when the deadline has passed, the eyes face it (the look went out a tick before, with
+  ;; the movement packet) and it is in reach
   [world {:intent/keys [target next-swing swings] :or {next-swing 0 swings 0}} e]
   (let [now (:time/now world)
         eye (game/eye world)
         [yaw _ :as look] (physics/look-at eye (aim e))
-        world (assoc world :player/controls {:control/look look})]
+        world (assoc
+               world
+               :player/controls
+               (if (pressing? world e) (intent/toward world (aim e) 0.0) {:control/look look}))]
     (cond (> (horizontal world e) (inc approach-range))
           (intent/assoc-intent world :intent/stage :approach :intent/since now)
           (>= swings max-swings) (intent/fail world :ghost)

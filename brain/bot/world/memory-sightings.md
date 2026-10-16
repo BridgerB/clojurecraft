@@ -5,7 +5,7 @@ type: reference
 tags: [bot, world, memory]
 aliases: [sightings, block memory, remembered logs, nearest-log]
 status: verified
-lastUpdated: 2026-10-12
+lastUpdated: 2026-10-16
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/memory.clj#defn remember-column
@@ -19,6 +19,8 @@ sourceRefs:
   - "src/clojurecraft/memory.clj#The latest observation at every position on record in the bot's dimension:"
   - src/clojurecraft/wood.clj#defn trunk-target
   - src/clojurecraft/memory.clj#defn latest-entity
+  - src/clojurecraft/memory.clj#def nether-landmark-kinds
+  - test/clojurecraft/memory_test.clj#a-spawner-is-remembered-in-the-nether-only
   - test/clojurecraft/memory_test.clj#the-same-place-in-two-dimensions-is-two-places
 related:
   - "[[bot/world/_moc|World]]"
@@ -28,7 +30,7 @@ related:
 
 # Memory sightings
 
-`:world/facts` is a DataScript value of observation facts `{:sight/pos [x y z] :sight/state id :sight/at ms}`, appended only when what is seen at a position changes and never retracted. Only watched kinds start a record (logs, memory's `placed-kinds`, crafting tables and furnaces, and its `landmark-kinds`, a fortress's bricks, fences and stairs and a lit portal: blocks the overworld never generates, so overworld runs remember what they did); a position on record is followed through every change, so a dug log becomes air and both facts remain. `remembered` is the latest fact at a position, `latest` the newest per position, `history` every fact at one. A position is a place in one dimension: each fact says `:sight/dimension` (one without it, written before #11, is the overworld's), pool facts `:pool/dimension`, and every question is asked in the bot's dimension (`dimension/of`), with a Datalog rule (`in-dimension`) in the queries (`the-same-place-in-two-dimensions-is-two-places`).
+`:world/facts` is a DataScript value of observation facts `{:sight/pos [x y z] :sight/state id :sight/at ms}`, appended only when what is seen at a position changes and never retracted. Only watched kinds start a record (logs, memory's `placed-kinds`, crafting tables and furnaces, and its `landmark-kinds`, a fortress's bricks, fences and stairs and a lit portal: blocks the overworld never generates, so overworld runs remember what they did; and seen in the Nether only, `nether-landmark-kinds`, a spawner: a fortress's blaze spawner, where the rods come from, issue #262; `watched?` takes the dimension for it, since an overworld spawner is a dungeon's and would change what the forest recording remembers); a position on record is followed through every change, so a dug log becomes air and both facts remain. `remembered` is the latest fact at a position, `latest` the newest per position, `history` every fact at one. A position is a place in one dimension: each fact says `:sight/dimension` (one without it, written before #11, is the overworld's), pool facts `:pool/dimension`, and every question is asked in the bot's dimension (`dimension/of`), with a Datalog rule (`in-dimension`) in the queries (`the-same-place-in-two-dimensions-is-two-places`).
 
 ## Key files
 - `memory.clj`, `remember-column` - on chunk load, every watched block in the column becomes a sighting.

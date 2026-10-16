@@ -91,6 +91,18 @@
     (is (= :engage (:intent/stage (:plan/intent w))))
     (is (= 3 (:intent/swings (:plan/intent w))))))
 
+(deftest a-hovering-target-out-of-reach-is-pressed-in-on
+  ;; issue #262: a blaze two over the floor, three off on the plane, has its aim 3.3 from the eye,
+  ;; past attack-reach; the engage walks on until it is in reach, then attacks
+  (let [w (assoc (standing {7 (mob :blaze [11.5 66.0 8.5] 20.0)})
+                 :plan/intent
+                 {:intent/kind :fight :intent/target 7 :intent/status :active})
+        [w fx] (fx/fold intent-step w (map tick (range 50 2050 50)))]
+    (is (seq (attacks fx)) "it attacked")
+    (is (< (physics/horizontal-distance (:player/pos w) [11.5 66.0 8.5]) 3.0) "from nearer"))
+  (testing "one overhead is not walked under"
+    (is (not (combat/pressing? (standing {}) (mob :blaze [8.5 70.0 8.5] 20.0))))))
+
 (deftest a-target-gone-is-a-kill
   (let [[w _] (fx/fold intent-step
                        (fighting 2.0)
