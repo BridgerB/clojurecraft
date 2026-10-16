@@ -372,6 +372,23 @@
     (is (= [13 63 5] (build/nearest-stand-cell w i [14 63 5]))
         "the stand nearest the cell, at the feet's height, the wall in the way to dig")))
 
+(deftest a-site-left-for-a-pickaxe-is-gone-back-to
+  ;; sim race 38806318231 (issue #196, 75 runs in 37 rounds, world R2/3): the cast's room at y 23,
+  ;; the bot climbed to y 64 for a pickaxe's wood and made it; the next op, a room cell 41 below,
+  ;; had no stand and no cut at the feet's height, and the build failed :no-stand three times
+  (let [i {:intent/kind :build
+           :intent/build :portal
+           :intent/origin [6 30 12]
+           :intent/facing :south
+           :intent/access 1}
+        pos (build/cell [6 30 12] :south [1 0 1])
+        op {:build/op :dig :build/pos pos :build/stand pos :build/step :room}
+        far (standing-at (open-ground {}) [5.5 63.0 5.5])]
+    (is (= {:intent/kind :stairs-down :intent/to-y 57} (build/approach-stand far i op))
+        "far above the room: stairs down toward the landing's height")
+    (is (nil? (build/way-back (standing-at (open-ground {}) [6.5 31.0 15.5]) i))
+        "at the landing already: nothing to go back by")))
+
 (deftest a-stowed-pickaxe-is-put-in-hand-before-a-dig
   ;; sim race 38665691522 (issue #163, world R3/16): the hotbar's stone pickaxe broke on a frame
   ;; hole at y 4, two pickaxes were left in the main inventory, and the next dig, which takes its
