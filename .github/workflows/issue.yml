@@ -41,22 +41,27 @@ jobs:
         env:
           HEAD_REF: ${{ github.head_ref }}
           BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
           n=$(echo "$HEAD_REF" | sed -E 's|^fix/([0-9]+).*|\1|')
           case "$n" in ''|*[!0-9]*) echo "::error::branch $HEAD_REF names no issue number"; exit 1;; esac
           named=$(printf '%s\n' "$BODY" | grep -oiE '(fixes|closes|resolves) #[0-9]+' | grep -oE '[0-9]+' || true)
+          # only the snapshots this pull request adds or changes: its own evidence. A snapshot already
+          # on main proved an earlier fix (and no longer recurs there), so a later PR for the same
+          # issue (a fix/<n>-r2 after a regression, PR #245) is never judged by it
+          added=$(git diff --name-only --diff-filter=AM "$BASE_SHA" HEAD -- 'test/issues/*/*.edn.gz' || true)
           files=""
           red=0
           for m in $(printf '%s\n%s\n' "$n" "$named" | grep -E '^[0-9]+$' | sort -un); do
-            found=$(ls "test/issues/$m"/*.edn.gz 2>/dev/null || true)
+            found=$(printf '%s\n' "$added" | grep -E "^test/issues/$m/" || true)
             if [ -n "$found" ]; then
-              echo "issue $m: $(echo "$found" | wc -l | tr -d ' ') snapshots"
+              echo "issue $m: $(echo "$found" | wc -l | tr -d ' ') snapshots this pull request adds"
               files="$files $found"
             elif printf '%s\n' "$named" | grep -qx "$m"; then
               labels=$(gh api "repos/$GITHUB_REPOSITORY/issues/$m" --jq '[.labels[].name] | join(",")' 2>/dev/null || echo '')
               if echo ",$labels," | grep -q ',sim,'; then
-                echo "::error::issue $m is reproduced in the sim (label sim) but test/issues/$m holds no snapshot: bb issue-check fetch $m, or do not say Fixes"
+                echo "::error::issue $m is reproduced in the sim (label sim) but this pull request adds no snapshot under test/issues/$m: bb issue-check fetch $m, or do not say Fixes"
                 red=1
               else
                 echo "::warning::issue $m has no sim reproduction and no snapshot: it closes on the real recordings' word alone"
