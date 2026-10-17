@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T22:00:57.847Z",
+  "at" : "2026-10-17T22:04:25.380Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -12,6 +12,11 @@
     "nudges" : 0,
     "pr" : 386,
     "session" : false
+  }, {
+    "number" : 348,
+    "title" : "Bot stops at flint-and-steel: stuck",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
   }, {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : false,
@@ -97,7 +102,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 398,
-    "session" : true
+    "session" : false
   }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
@@ -224,6 +229,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 348,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
+  }, {
     "issue" : 342,
     "move" : "leave",
     "why" : "hands-off label"
@@ -261,9 +270,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 156,
-    "move" : "wait",
-    "pr" : 398,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 398
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -1027,5 +1035,15 @@
     "issue" : 156,
     "move" : "assign",
     "at" : "2026-10-17T21:34:25.198Z"
+  }, {
+    "issue" : 348,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-17T22:04:25.380Z"
+  }, {
+    "issue" : 156,
+    "move" : "ready",
+    "pr" : 398,
+    "at" : "2026-10-17T22:04:25.380Z"
   } ]
 }
