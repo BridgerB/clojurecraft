@@ -191,16 +191,18 @@
 (defn iso "Epoch milliseconds as an ISO instant." [t] (str (java.time.Instant/ofEpochMilli t)))
 
 (defn status
-  "What the orchestrator saw and did in one pass, as the page reads it: when, the cap, the open
+  "What the orchestrator saw and did in one pass, as the page reads it: when, the cap, whether its
+   token can start follow-ups (:agent-tasks, agent-tasks?), the open
    issues (with Copilot's pull request, its checks, whether a session runs, its continue
    comments and whether it has gone quiet), this pass's moves, and prev's log with this pass's
    actions (every move but :wait and :leave) added, the newest log-keep. Pure."
-  [{:keys [issues prs live moves cap now prev]}]
+  [{:keys [issues prs live moves cap now prev agent-tasks?]}]
   (let [acted (for [m moves
                     :when (not (#{:wait :leave} (:move m)))]
                 (assoc (select-keys m [:issue :move :pr :why]) :at (iso now)))]
     {:at (iso now)
      :cap cap
+     :agent-tasks agent-tasks?
      :issues (vec (for [{n :number :keys [title labels assignees]} issues
                         :let [pr (prs n)]]
                     (cond-> {:number n
@@ -486,6 +488,16 @@
                "; assigning on" follow-model)
       (post! (str "repos/" repo "/issues/" n "/assignees") (body follow-model)))))
 
+(defn agent-tasks?
+  "Can the token start Copilot follow-ups: does it read the repository's agent tasks (the Agent
+   tasks permission, which starting one needs too). Written to the status every pass, so a token
+   without it shows on the page, never only in the loop's log."
+  []
+  (zero? (:exit (p/shell {:out :string :err :string :continue true}
+                         "gh"
+                         "api"
+                         (str "agents/repos/" repo "/tasks?per_page=1")))))
+
 (defn follow-up!
   "Ask Copilot to go on with move m's pull request on follow-model: an agent task on its branch,
    which continues that pull request (head_ref) rather than opening another, and, only once the
@@ -589,8 +601,14 @@
             made)
       (when-not dry?
         (let [{prev :value sha :sha} (read-status)
-              next (status
-                    {:issues issues :prs prs :live live :moves made :cap cap :now now :prev prev})]
+              next (status {:issues issues
+                            :prs prs
+                            :live live
+                            :moves made
+                            :cap cap
+                            :now now
+                            :prev prev
+                            :agent-tasks? (agent-tasks?)})]
           (when (status-changed? prev next now) (write-status! next sha)))))))
 
 (defn -main
