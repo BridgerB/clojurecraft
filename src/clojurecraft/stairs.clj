@@ -864,7 +864,7 @@
               (and (pos? rise) (< (physics/y-of (:player/pos world)) (- started-y 0.5))))
           (-> world
               (assoc :player/controls {})
-              (intent/assoc-intent :intent/stage :plan)
+              (intent/assoc-intent :intent/stage :plan :intent/turns 0)
               (intent/dissoc-intent :intent/child :intent/cells :intent/rejections :intent/rise))
           (next-to-open world cells) ; gravel or sand fell into the stair: dig it again
           (-> world

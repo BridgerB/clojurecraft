@@ -268,6 +268,23 @@
          (stone/mine-next w (row :mine-iron)))
         "the open one, farther, is the one walked to")))
 
+(deftest exposed-rock-that-would-let-fluid-in-is-passed-over
+  (let [near [6 64 5]
+        far [10 64 5]
+        w (assoc (standing 64 :stone_pickaxe)
+                 :world/chunks
+                 {[0 0] (world/column {near (blocks/default-state :iron_ore)
+                                       far (blocks/default-state :iron_ore)})})
+        seen #(stone/exposed-of-states % (stone/states-of-row (row :mine-iron)))]
+    (is (= near (first (seen w))))
+    (doseq [fluid [blocks/water-base blocks/lava-base]
+            cell [[7 64 5] [6 65 5] [6 63 5]]
+            :let [wet (assoc w :world/blocks {cell fluid})]]
+      (is (not-any? #{near} (seen wet)) "the child dig would refuse the fluid")
+      (is (= far (:intent/target (stone/mine-next wet (row :mine-iron)))))
+      (is (= near (first (seen (assoc wet :world/blocks {}))))
+          "a later dry observation makes the rock available again"))))
+
 (deftest ore-beside-a-lava-trap-is-left-alone
   ;; sim race 38844683780 (issue #230, world R2/9): lava falling from ten blocks up caught the bot
   ;; at y 38; it fled a cell, the mine chose the iron two blocks off under the same flow, and the
@@ -348,6 +365,33 @@
       (is (= :open (:intent/stage (:plan/intent w))))
       (is (= [[5 66 5] [6 66 5] [6 65 5]] (:intent/cells (:plan/intent w)))
           "the stair from the landed feet, its new feet on the wall's lower block"))))
+
+(deftest each-new-stair-gets-a-full-turn
+  (doseq [[kind from to cells] [[:stairs-down [4 65 5] 58 stairs/stair-cells]
+                                [:stairs-up [4 63 5] 70 stairs/up-cells]]]
+    (let [i {:intent/kind kind
+             :intent/to-y to
+             :intent/to-height? true
+             :intent/status :active
+             :intent/stage :step
+             :intent/dir [1 0]
+             :intent/turns 3
+             :intent/cells (cells from [1 0])
+             :intent/started-y (double (second from))
+             :intent/started-tick 0}
+          w (assoc (standing 64 :stone_pickaxe)
+                   :world/blocks {[7 63 5] blocks/water-base}
+                   :time/tick 20
+                   :plan/intent i)
+          tick {:event/kind :tick :event/now 1000}
+          stepped (intent/run w i tick)
+          next (intent/run stepped (:plan/intent stepped) tick)]
+      (is (= :plan (get-in stepped [:plan/intent :intent/stage])))
+      (is (= 0 (get-in stepped [:plan/intent :intent/turns]))
+          "refusals from the previous feet cell do not box the new one")
+      (is (= :active (get-in next [:plan/intent :intent/status])))
+      (is (= 1 (get-in next [:plan/intent :intent/turns])))
+      (is (= [0 1] (get-in next [:plan/intent :intent/dir]))))))
 
 (deftest a-stair-up-replans-after-falling-below-its-launch-height
   (let [up {:intent/kind :stairs-up

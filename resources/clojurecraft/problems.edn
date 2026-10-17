@@ -148,6 +148,7 @@
    "Proof of a scoop: water_bucket appearing in the inventory"]
   :problem/risks
   ["Planks burned as fuel run dry after about 3 ingots and starve the wood chain"
+   "Race 39037024176 runner 1 (issue #342) mined toward fluid-exposing rock and carried stair refusals between feet cells until furnace failed :boxed; exposed targets must pass the dig's fluid guard, and a completed stair must reset its turns"
    "Items in the furnace or grid are invisible to the inventory count, so steps flicker"
    "Closing the window with a loaded cursor drops the item on the ground"
    "No reachable surface water in a dry biome; the bot hangs at fill-water"
