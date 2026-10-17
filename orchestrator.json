@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T11:18:21.175Z",
+  "at" : "2026-10-17T11:19:27.252Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -8,7 +8,7 @@
     "checks" : "pending",
     "title" : "Bot stops at portal: boxed",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 364,
     "session" : false
@@ -170,8 +170,9 @@
   } ],
   "moves" : [ {
     "issue" : 363,
-    "move" : "ready",
-    "pr" : 364
+    "move" : "wait",
+    "pr" : 364,
+    "why" : "checks running"
   }, {
     "issue" : 338,
     "move" : "leave",
