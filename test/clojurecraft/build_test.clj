@@ -382,6 +382,23 @@
     (is (not ((build/kept origin facing) (:intent/target child))) "never the frame's rock")
     (is (not= (at [2 0 -2]) (:intent/target child)) "not the straight way into the rock")))
 
+(deftest a-corner-is-never-a-cell-of-the-room-the-cast-digs
+  ;; sim race 38924530337 (issue #45, regressed, world R2/9): the corner round the frame's rock was
+  ;; a cell of the room's upper row; the bridge laid cobblestone under it, the room op dug it out
+  ;; again, and the walk to the corner failed :no-path
+  (let [origin [6 63 6]
+        facing :south
+        at #(build/cell origin facing %)
+        feet (at [2 0 -3])
+        rock (into {} (for [x (range 16) y [63 64] z (range 16)] [[x y z] 1]))
+        w (standing-at (open-ground (assoc rock feet blocks/air (update feet 1 inc) blocks/air))
+                       (mapv + feet [0.5 0.0 0.5]))
+        stand (at [2 0 2])
+        corner (build/round-corner w stand origin facing)]
+    (is (build/in-room? origin facing (at [1 2 2])) "a cell of the room's upper row")
+    (is (not (build/in-room? origin facing (at [2 0 -3]))) "the feet's cell, behind the frame")
+    (is (not (build/in-room? origin facing corner)) "the corner lies outside the room")))
+
 (deftest a-way-filled-by-falling-gravel-is-cleared-again
   ;; sim race 38837004562 (issue #45, world R1/6): the level way to the landing ran under a bed
   ;; of gravel, each dug cell filled again, and three walks along it failed :no-path
