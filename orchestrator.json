@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T06:29:36.684Z",
+  "at" : "2026-10-17T06:30:44.163Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 342,
-    "title" : "Bot stops at furnace: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 342,
+    "checks" : "red",
+    "title" : "Bot stops at furnace: boxed",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 343,
+    "session" : true
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
@@ -155,7 +161,9 @@
   } ],
   "moves" : [ {
     "issue" : 342,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 343,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
