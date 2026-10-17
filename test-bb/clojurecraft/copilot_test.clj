@@ -19,7 +19,11 @@
   (let [issue {:number 351 :labels ["bot-failure" "sim"] :assignees ["Copilot"]}
         pr {:number 352 :branch "copilot/x" :checks :red :nudges 0}]
     (is (= :gave-up (:move (copilot/issue-move issue (assoc pr :gave-up? true) #{} nil now))))
-    (is (= :nudge (:move (copilot/issue-move issue (assoc pr :gave-up? false) #{} nil now))))))
+    (is (= :nudge (:move (copilot/issue-move issue (assoc pr :gave-up? false) #{} nil now))))
+    (testing "a draft with only evidence is a session at work, never a hand-off (#386)"
+      (is (= :ready
+             (:move
+              (copilot/issue-move issue (assoc pr :gave-up? true :draft? true) #{} nil now)))))))
 
 (deftest a-stale-assignment-is-released
   (let [issue {:number 45 :labels ["bot-failure"] :assignees ["BridgerB" "Copilot"]}]

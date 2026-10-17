@@ -80,11 +80,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           for n in $(gh issue list --repo "$GITHUB_REPOSITORY" --label bot-failure --label sim --state open --limit 100 --json number --jq '.[].number'); do
-            bb issue-check fetch "$n" || echo "issue $n: fetch failed"
-            for f in $(git ls-files --others --exclude-standard "test/issues/$n"); do
+            out=$(bb issue-check fetch "$n" 2>&1) || echo "issue $n: fetch failed"
+            echo "$out"
+            # every file the fetch names, tracked or not: a snapshot an earlier fix committed under
+            # the same name was overwritten, never untracked, and the brief said no evidence (#342)
+            for f in $(echo "$out" | sed -n 's/^fetched //p'); do
               mkdir -p "cache/issues/$n"
-              mv "$f" "cache/issues/$n/"
+              cp "$f" "cache/issues/$n/"
             done
+            git checkout -q -- "test/issues/$n" 2>/dev/null || true
+            git clean -qfd -- "test/issues/$n"
           done
           ls -R cache/issues 2>/dev/null || echo "no snapshots fetched"
       - name: The brief for the issue Copilot holds
