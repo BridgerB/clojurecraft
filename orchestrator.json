@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T08:11:27.753Z",
+  "at" : "2026-10-17T08:12:34.159Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 348,
-    "title" : "Bot stops at flint-and-steel: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 348,
+    "checks" : "red",
+    "title" : "Bot stops at flint-and-steel: stuck",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 357,
+    "session" : true
   }, {
     "number" : 347,
     "title" : "Bot stops at portal: no-pickaxe",
@@ -179,7 +185,9 @@
   } ],
   "moves" : [ {
     "issue" : 348,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 357,
+    "why" : "session running"
   }, {
     "issue" : 296,
     "move" : "leave",
