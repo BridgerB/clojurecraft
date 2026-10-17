@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T11:36:49.093Z",
+  "at" : "2026-10-17T11:40:03.040Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 366,
@@ -20,13 +20,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 284,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at fortress: no-path",
     "copilot" : true,
     "draft" : true,
     "nudges" : 0,
     "pr" : 365,
-    "session" : true
+    "session" : false
   }, {
     "number" : 231,
     "title" : "Bot stops at cast-one: no-footing",
@@ -183,9 +183,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 284,
-    "move" : "wait",
-    "pr" : 365,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 365
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -563,5 +562,10 @@
     "issue" : 284,
     "move" : "assign",
     "at" : "2026-10-17T11:24:54.548Z"
+  }, {
+    "issue" : 284,
+    "move" : "ready",
+    "pr" : 365,
+    "at" : "2026-10-17T11:40:03.040Z"
   } ]
 }
