@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T05:36:36.818Z",
+  "at" : "2026-10-17T05:37:42.552Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -8,7 +8,7 @@
     "checks" : "pending",
     "title" : "Bot stops at fortress: no-footing",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 340,
     "session" : false
@@ -140,8 +140,9 @@
   } ],
   "moves" : [ {
     "issue" : 339,
-    "move" : "ready",
-    "pr" : 340
+    "move" : "wait",
+    "pr" : 340,
+    "why" : "checks running"
   }, {
     "issue" : 296,
     "move" : "leave",
