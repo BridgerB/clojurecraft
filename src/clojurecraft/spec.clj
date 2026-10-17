@@ -455,6 +455,7 @@
 (s/def :intent/state int?)
 (s/def :intent/confirm-left nat-int?)
 (s/def :intent/to-y int?)
+(s/def :intent/floor-to int?)
 (s/def :intent/to-height? boolean?)
 (s/def :intent/dir (s/tuple int? int?))
 (s/def :intent/turns nat-int?)

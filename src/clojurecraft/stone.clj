@@ -152,14 +152,17 @@
 
 (defn stairs
   "The staircase to cut when nothing is in sight: stair-depth down from the feet, never below
-   the row's :goal/depth; nil when the feet are already there, or when the feet cell is in
+   the row's :goal/depth, which a mine row's staircase carries as :intent/floor-to (how far a
+   floor laid through a cave must go on, stairs/floors-affordable?; the build's lava hunt passes
+   a depth that is a floor, not a target, and carries none); nil when the feet are already there, or when the feet cell is in
    :plan/boxed-at, a stairs-down having died :boxed there. Another one from that cell dies the
    same way; the act tunnels, goes deeper, retreats or climbs out instead."
-  [world {:goal/keys [depth]}]
+  [world {:goal/keys [depth act]}]
   (let [feet (long (math/floor (physics/y-of (:player/pos world))))
         to (cond-> (- feet stair-depth) depth (max depth))]
     (when (and (< to feet) (not (contains? (:plan/boxed-at world #{}) (intent/feet world))))
-      {:intent/kind :stairs-down :intent/to-y to})))
+      (cond-> {:intent/kind :stairs-down :intent/to-y to}
+        (and depth (= :mine act)) (assoc :intent/floor-to depth)))))
 
 (def floor-margin 8)                  ; blocks above the bottom of the world a staircase deeper stops
 

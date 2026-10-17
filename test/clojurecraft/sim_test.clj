@@ -806,7 +806,7 @@
   ;; refused for the drop under it, and nothing else could be cut from the lip: the plan waited
   ;; :boxed out (issue #37). A missing floor is laid first, and the stair is then cut as any other
   (let [pickaxe {:item (get blocks/items :wooden_pickaxe) :count 1}
-        cobblestone {:item (get blocks/items :cobblestone) :count 16}
+        cobblestone {:item (get blocks/items :cobblestone) :count 18} ; ten to lay, eight kept for the climb back (stairs/lay-reserve)
         [w sim] (intent-run-holding {:intent/kind :stairs-down :intent/to-y 71}
                                     cave-lip
                                     76
@@ -819,7 +819,7 @@
     (is (= 10 (count (:sim/placed sim))) "a holder and a floor laid a stair, five stairs")
     (is (empty? (:sim/broken sim)) "nothing dug: the cave is open")
     (is (= 10
-           (- 16
+           (- 18
               (:count (some #(when (= (:item cobblestone) (:item %)) %)
                             (vals (:player/inventory w))))))
         "from the cobblestone carried")
