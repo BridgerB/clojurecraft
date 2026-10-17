@@ -1,18 +1,7 @@
 {
-  "at" : "2026-10-17T18:53:27.217Z",
+  "at" : "2026-10-17T18:54:36.959Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 389,
-    "checks" : "green",
-    "title" : "Bot stops at nether: timeout",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 390,
-    "session" : false
-  }, {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 385,
@@ -197,10 +186,6 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 389,
-    "move" : "merge",
-    "pr" : 390
-  }, {
     "issue" : 385,
     "move" : "leave",
     "why" : "hands-off label"
@@ -228,6 +213,9 @@
     "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 161,
+    "move" : "assign"
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -858,5 +846,9 @@
     "move" : "merge",
     "pr" : 390,
     "at" : "2026-10-17T18:53:27.217Z"
+  }, {
+    "issue" : 161,
+    "move" : "assign",
+    "at" : "2026-10-17T18:54:36.959Z"
   } ]
 }
