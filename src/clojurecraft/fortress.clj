@@ -40,6 +40,10 @@
 
 (defn brick? "Is state id a fortress block?" [id] (contains? fortress-kinds (blocks/name-of id)))
 
+(def brick-states
+  "Every state of a fortress block, for the indexed sightings query."
+  (blocks/states-where (fn [[_ _ lo]] (brick? lo))))
+
 ;; ---------------------------------------------------------------- a step as data
 
 (def up [0 1 0])
@@ -209,11 +213,11 @@
 ;; ---------------------------------------------------------------- the goal
 
 (defn bricks
-  "The fortress blocks on record in the bot's dimension at or above brick-min-y."
+  "The fortress blocks on record in the bot's dimension at or above brick-min-y, from the
+   indexed current sightings (memory/positions-now). After the room in issue #328 was restored,
+   scanning every sighting each tick exhausted the snapshot judge's four-minute budget."
   [world]
-  (for [[[_ y _ :as p] {:block/keys [state]}] (memory/latest world)
-        :when (and (brick? state) (>= y brick-min-y))]
-    p))
+  (for [[_ y _ :as p] (memory/positions-now world brick-states) :when (>= y brick-min-y)] p))
 
 (defn nearest-brick
   "The fortress block on record nearest the feet (within sight-radius), or nil."

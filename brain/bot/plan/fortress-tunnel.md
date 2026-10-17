@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, nether, fortress]
 aliases: [fortress.clj, :tunnel-to, :fortress, step-plan, safe?, at-fortress?]
 status: verified
-lastUpdated: 2026-10-16
+lastUpdated: 2026-10-17
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/fortress.clj#defn step-plan
@@ -13,6 +13,9 @@ sourceRefs:
   - src/clojurecraft/fortress.clj#defn safe?
   - src/clojurecraft/fortress.clj#defn dry?
   - src/clojurecraft/fortress.clj#defn moves
+  - src/clojurecraft/fortress.clj#def brick-states
+  - src/clojurecraft/fortress.clj#defn bricks
+  - test/clojurecraft/fortress_test.clj#fortress-bricks-use-the-indexed-current-sightings
   - src/clojurecraft/fortress.clj#defmethod intent/run :tunnel-to
   - src/clojurecraft/fortress.clj#defmethod plan/next-intent :fortress
   - src/clojurecraft/fortress.clj#defmethod plan/done-by :at-fortress?
@@ -35,6 +38,8 @@ related:
 # Fortress tunnel
 
 The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) is done when a fortress block on record (`nether_bricks`, its fence or stairs, at y 32 or more, so never one under the lava sea) is within 6 blocks of the feet. Its planner (`plan/next-intent :fortress`) starts a `:tunnel-to` (not stone's `:tunnel`, which digs along a direction for ore) to the nearest one on record, or, with none, 48 blocks along the first axis with a safe first step.
+
+`bricks` asks `memory/positions-now` for `brick-states`, the indexed current sightings remembered by the facts' identity, before filtering the height; it never scans all sightings with `memory/latest`. Issue #328's snapshot, once streamed chunks restored its dug room ([[server-model]]), could tunnel but exhausted the judge's four-minute budget in that full scan on every tick. The indexed query preserves the dimension and recency rules without repeating the whole-memory query.
 
 ## A step is a plan of ops
 `step-plan feet move` is a vector of [[build-plan]] ops, a pure function of where the step starts and its `[dx dy dz]`: place a floor under the cell stepped into (it may be lava: a placement replaces it), dig the cells the body passes through (`opens`: the two it ends in, plus the head's cell on a step down or the cell over the head on a step up), and stand in the new cell (`[:feet to]`, the plan's goal). `build/next-op` and `build/work-op` work it exactly as a `:build` works the portal, so the dig, place and walk children are the ones the portal uses. The `:tunnel-to` intent chooses a move when a step starts (`:intent/move`, `:intent/from`), works the step until the bot stands in it, counts it, and stops at the target or after 32 steps, so the planner can choose again from what the new chunks showed.

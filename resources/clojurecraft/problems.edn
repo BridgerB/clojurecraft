@@ -211,7 +211,7 @@
   :problem/done
   "RCON confirms the bot is in minecraft:the_nether with nether_bricks under its feet or within 6 blocks, RESULT :ok true, and zero deaths counted."
   :problem/last-failure
-  "clojurecraft has never attempted this. ruststeve: after entering the Nether its overworld columns answered Nether lookups (fortress brick reported 64 blocks too low) and the parser panicked on the shorter Nether chunk; finding the fortress was solved, but reaching it alive was not, with 9+ falls into the lava sea at one spot."
+  "clojurecraft has never attempted this. ruststeve: after entering the Nether its overworld columns answered Nether lookups (fortress brick reported 64 blocks too low) and the parser panicked on the shorter Nether chunk; finding the fortress was solved, but reaching it alive was not, with 9+ falls into the lava sea at one spot. Sim race 38999010135 (issue #328, R1/7 seed 2): after the portal the model resent the original columns without the dug room, putting the client's feet in deepslate and failing the first tunnel :no-stand; streamed columns now carry the model's changed blocks too, and fortress sightings use the indexed current-state query so the recovered tunnel can finish its judge window without scanning every sighting each tick."
   :problem/sources ["docs/issues/09-nether-and-fortress.md" "brain/bot/plan/roadmap-issues.md"
                     "brain/siblings/sib-dimension-change.md"]}
  {:problem/stage :survival

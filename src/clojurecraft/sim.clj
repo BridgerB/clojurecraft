@@ -377,7 +377,10 @@
           :else (stream-from sim here))))
 
 (defn stream-from
-  "stream's work for a player in column here: send what came into view, forget what left it."
+  "stream's work for a player in column here: send what came into view, forget what left it.
+   Fresh columns carry their changed blocks after the captured bytes, before the batch ends.
+   Sim race 38999010135 (issue #328): the portal dropped the client's overlay, and the original
+   column put its dug room back in deepslate, failing the first fortress tunnel :no-stand."
   [sim here]
   (let [now (in-view sim)
         sent (:sim/view sim)
@@ -397,7 +400,15 @@
                              ;; one column every run of this world shares, so no run decodes it
                              :chunk/column (column-of sim k)}))
                     sim
-                    fresh)]
+                    fresh)
+        fresh? (set fresh)
+        changed (->> (into (:sim/broken sim) (keys (:sim/placed sim)))
+                     (filter #(contains? fresh? (column-key %)))
+                     sort)
+        sim (reduce (fn [sim pos]
+                      (send sim {:packet/name :block-update :pos pos :state (block-at sim pos)}))
+                    sim
+                    changed)]
     (cond-> (assoc sim :sim/view now :sim/view-at here)
       (seq fresh) (send {:packet/name :chunk-batch-finished :batch-size (count fresh)}))))
 
