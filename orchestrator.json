@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T08:26:23.084Z",
+  "at" : "2026-10-17T08:28:31.222Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -11,7 +11,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 357,
-    "session" : true
+    "session" : false
   }, {
     "number" : 347,
     "title" : "Bot stops at portal: no-pickaxe",
@@ -190,9 +190,8 @@
   } ],
   "moves" : [ {
     "issue" : 348,
-    "move" : "wait",
-    "pr" : 357,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 357
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -479,5 +478,10 @@
     "issue" : 348,
     "move" : "assign",
     "at" : "2026-10-17T08:11:27.753Z"
+  }, {
+    "issue" : 348,
+    "move" : "ready",
+    "pr" : 357,
+    "at" : "2026-10-17T08:28:31.222Z"
   } ]
 }
