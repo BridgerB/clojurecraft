@@ -152,10 +152,15 @@
         "judged from the moment to a minute past the stop")
     (is (= 0 (:t (simrace/chosen-moment moments stopping {:why :wait :t 10000} 150000)))
         "a decision older than every moment: the oldest kept")
-    (is (= 300000
+    (is (= simrace/stall-judge-ms
            (get-in (simrace/chosen-moment moments stopping {:why :stall :t 0} 150000)
                    [:moment :window-ms]))
-        "a stall is judged over its stall window"))
+        "a stall is judged over fifteen minutes (issue #62: a stage can take longer than five)")
+    (is (= simrace/stall-judge-ms
+           (simrace/window-of {:snapshot/moment {:why :stall :window-ms 300000}}))
+        "and a stall kept with five minutes is judged over fifteen")
+    (is (= 120000 (simrace/window-of {:snapshot/moment {:why :intent-failed :window-ms 120000}}))
+        "any other moment over its own window"))
   (let [facts (memory/empty-facts)
         w {:time/now 500000 :world/facts facts}]
     (is (= {:why :stall :t 200000} (simrace/decision w [:ingots :timeout])))

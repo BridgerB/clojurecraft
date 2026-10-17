@@ -117,7 +117,8 @@
 
 (def snapshot-budget-ms 120000)       ; simulated ms an old snapshot (no :snapshot/moment) is played on for
 (def decision-lead-ms 30000)          ; a snapshot's moment comes at least this long before the choice that failed
-(def stall-window-ms 300000)          ; a :timeout is judged over this window: five simulated minutes with no new stage
+(def stall-window-ms 300000)          ; a :timeout is a stall: five simulated minutes with no new stage, where its moment is kept
+(def stall-judge-ms 900000)           ; and the window a stall is judged over: fifteen simulated minutes (issue #62)
 (def window-tail-ms 60000)            ; a failure's window runs this long past the stop it led to
 
 (defn decision
@@ -158,7 +159,7 @@
             :t (:t m)
             :decision-t t
             :stop-t stop-t
-            :window-ms (cond (= :stall why) stall-window-ms
+            :window-ms (cond (= :stall why) stall-judge-ms
                              :else (+ (- stop-t (:t m)) window-tail-ms))})))
 
 (defn snapshot
@@ -235,9 +236,14 @@
 
 (defn window-of
   "The simulated ms a snapshot is judged over: its moment's window, or snapshot-budget-ms for a
-   snapshot from before moments were kept."
+   snapshot from before moments were kept; a stall's at least stall-judge-ms. A stall is kept
+   from its run's last five minutes with no new stage, but a stage can take longer than that by
+   rights (iron mined and smelted): issue #62's two stall snapshots, the bot no longer dying on
+   one stair, smelted their ingots 8 and 11 minutes on, and a five-minute judge called both
+   recurring. Kept snapshots carry five minutes; they are judged over fifteen."
   [snap]
-  (get-in snap [:snapshot/moment :window-ms] snapshot-budget-ms))
+  (let [w (get-in snap [:snapshot/moment :window-ms] snapshot-budget-ms)]
+    (if (= :stall (get-in snap [:snapshot/moment :why])) (max w stall-judge-ms) w)))
 
 (defn story
   "What the bot did from a moment on, from the facts of the world it ended in: each intention

@@ -10,6 +10,7 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.entity :as entity]
             [clojurecraft.eyes]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
@@ -2581,6 +2582,23 @@
     (is (= 1 (:sim/respawns sim)) "the bot asked to respawn, once")
     (is (= 2.5 (first (:player/pos w))) "on the world spawn, beside the well")
     (is (empty? (:sim/violations sim)))))
+
+(deftest a-respawned-bot-is-told-the-mobs-about-it-again
+  ;; issue #62, sim race 38900840841: the client forgets every entity at a respawn and the model
+  ;; never told it the mobs again, so a bot that died on a stair never saw the zombie that
+  ;; followed it down and died there again and again
+  (let [[w _] (sim/run
+               step
+               (game/init fx/opts)
+               (sim/init {:column (world/column-bytes well)
+                          :spawn [0.5 64.0 0.5]
+                          :respawn [2.5 64.0 0.5]
+                          :mobs [{:type :zombie :pos [6.5 64.0 6.5]}]})
+               #(and (pos? (:stats/deaths % 0)) (not (:player/dead? %)) (:player/on-ground? %))
+               40000
+               {:event/kind :go :go/goals []})]
+    (is (= 1 (:stats/deaths w)) "died once")
+    (is (= 1 (count (entity/hostiles w))) "and knows the zombie again after the respawn")))
 
 ;; ---------------------------------------------------------------- escaping water (issue #5)
 
