@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T19:44:18.372Z",
+  "at" : "2026-10-17T19:45:27.414Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -67,7 +67,7 @@
     "title" : "Bot stops at portal-kit: timeout",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 3,
+    "nudges" : 4,
     "pr" : 391,
     "session" : false
   }, {
@@ -231,8 +231,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 161,
-    "move" : "nudge",
-    "pr" : 391
+    "move" : "wait",
+    "pr" : 391,
+    "why" : "nudged recently"
   }, {
     "issue" : 62,
     "move" : "leave",
