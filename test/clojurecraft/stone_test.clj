@@ -442,3 +442,22 @@
     (is (not (stairs/level-safe? (at {[6 60 5] gravel [6 59 5] blocks/water-base})
                                  [[5 61 5] target]))
         "beside a bed on water: refused, so the stairs go round")))
+
+(deftest a-stair-up-is-not-cut-from-feet-in-fed-water
+  ;; race 38988094276 runner 3 bot Clj_r05 (issue #320): the portal build's stairs up started in
+  ;; its own tunnel with flowing water over the floor, fed from beside; from feet in water a jump
+  ;; only bobs, and three stairs failed :stair-not-taken. Here water stands in the feet cell and
+  ;; the cell west of it feeds it; the step east is solid, the stair's cells open
+  (let [cells (stairs/up-cells [5 64 5] [1 0])
+        at (fn [blocks]
+             (assoc (standing 64 :cobblestone)
+                    :world/chunks
+                    {[0 0] (world/column (merge {[6 64 5] 1} blocks))}))
+        fed (at {[5 64 5] blocks/water-base [4 64 5] blocks/water-base})
+        dry (at {})]
+    (is (stairs/up-sealed? fed cells) "the stair's own cells border no water")
+    (is (= [[4 64 5]] (stairs/wet-feet fed cells)) "what feeds the water under the feet")
+    (is (not (stairs/up-dry? fed cells)) "so the stair is not cut as it stands")
+    (is (= [[4 64 5]] (stairs/up-lay fed [5 64 5] cells)) "the feeding cell is filled first")
+    (is (= [] (stairs/wet-feet dry cells)))
+    (is (stairs/up-dry? dry cells) "dry feet: cut as before")))
