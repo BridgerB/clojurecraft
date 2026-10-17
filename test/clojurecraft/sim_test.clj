@@ -29,7 +29,7 @@
             [clojurecraft.record :as record]
             [clojurecraft.scoop :as scoop]
             [clojurecraft.sim :as sim]
-            [clojurecraft.stairs]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.stone]
             [clojurecraft.swim]
             [clojurecraft.terrain :as terrain]
@@ -2045,6 +2045,22 @@
         (pr-str (select-keys (:plan/intent w)
                              [:intent/status :intent/reason :intent/stage :intent/turns])))
     (is (<= 72.0 (second (:player/pos w))) "six stairs up")
+    (is (:player/on-ground? w))
+    (is (empty? (:sim/violations sim)))))
+
+(deftest a-stair-up-saved-above-its-launch-floor-recovers
+  (let [up {:intent/kind :stairs-up
+            :intent/to-y 72
+            :intent/to-height? true
+            :intent/stage :step
+            :intent/dir [1 0]
+            :intent/cells (stairs/up-cells [8 67 8] [1 0])
+            :intent/started-y 67.0
+            :intent/started-tick 0}
+        [w sim] (intent-run up pocket 66 (get blocks/items :wooden_pickaxe) 120000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w) [:intent/status :intent/reason :intent/stage])))
+    (is (<= 72.0 (second (:player/pos w))))
     (is (:player/on-ground? w))
     (is (empty? (:sim/violations sim)))))
 
