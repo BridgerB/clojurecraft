@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T18:25:49.800Z",
+  "at" : "2026-10-17T18:26:57.458Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 389,
@@ -66,7 +66,7 @@
     "checks" : "pending",
     "title" : "Bot stops at portal: no-path",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 388,
     "session" : false
@@ -231,8 +231,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 162,
-    "move" : "ready",
-    "pr" : 388
+    "move" : "wait",
+    "pr" : 388,
+    "why" : "checks running"
   }, {
     "issue" : 62,
     "move" : "leave",
