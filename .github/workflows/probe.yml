@@ -10,7 +10,8 @@ name: probe
 # The command runs from the checkout root with Java, the Clojure CLI and Babashka; its output is the
 # job's log and out/run.log, and anything it writes under out/ is the artifact probe-<run id>.
 # worlds names the captured sim worlds to restore (R1,R2,R3,R4, the race's sets), which snapshots
-# and simrace runs need; none by default.
+# and simrace runs need, each with its captured Nether when there is one (simworld.yml's nether job,
+# issue #353); none by default.
 
 on:
   workflow_dispatch:
@@ -64,6 +65,34 @@ jobs:
           path: cache/sim-worlds/R4
           key: simworld-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
           fail-on-cache-miss: true
+      - name: R1's captured Nether
+        if: contains(inputs.worlds, 'R1')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R1.edn.gz
+          key: simnether-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
+      - name: R2's captured Nether
+        if: contains(inputs.worlds, 'R2')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R2.edn.gz
+          key: simnether-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
+      - name: R3's captured Nether
+        if: contains(inputs.worlds, 'R3')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R3.edn.gz
+          key: simnether-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
+      - name: R4's captured Nether
+        if: contains(inputs.worlds, 'R4')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R4.edn.gz
+          key: simnether-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
       - uses: actions/setup-java@v6
         with:
           distribution: temurin

@@ -80,7 +80,8 @@ jobs:
           echo "files=$files" >> "$GITHUB_OUTPUT"
           echo "sets=$sets" >> "$GITHUB_OUTPUT"
           echo "files: ${files:-none}; worlds: ${sets:-none}"
-      # only the captured worlds the snapshots name (simworld.yml's key, as simrace.yml restores it)
+      # only the captured worlds the snapshots name (simworld.yml's key, as simrace.yml restores it),
+      # and their sets' Nethers (a snapshot past a portal names one, :snapshot/nether-file, issue #353)
       - name: R1's captured worlds
         if: contains(steps.which.outputs.sets, 'R1,')
         uses: actions/cache/restore@v6
@@ -109,6 +110,34 @@ jobs:
           path: cache/sim-worlds/R4
           key: simworld-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
           fail-on-cache-miss: true
+      - name: R1's captured Nether
+        if: contains(steps.which.outputs.sets, 'R1,')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R1.edn.gz
+          key: simnether-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
+      - name: R2's captured Nether
+        if: contains(steps.which.outputs.sets, 'R2,')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R2.edn.gz
+          key: simnether-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
+      - name: R3's captured Nether
+        if: contains(steps.which.outputs.sets, 'R3,')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R3.edn.gz
+          key: simnether-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
+      - name: R4's captured Nether
+        if: contains(steps.which.outputs.sets, 'R4,')
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R4.edn.gz
+          key: simnether-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
       - uses: actions/setup-java@v6
         if: steps.which.outputs.files != ''
         with:

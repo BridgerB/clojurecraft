@@ -9,6 +9,7 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
+            [clojurecraft.chunk :as chunk]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
             [clojurecraft.eyes]
@@ -3074,6 +3075,116 @@
     (is (= dimension/nether (:player/dimension w)))
     (is (some #(fortress/arrived? w %) (fortress/bricks w)))
     (is (empty? (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- a captured Nether (issue #353)
+
+(def lava (blocks/default-state :lava))
+(def nether-bricks (blocks/default-state :nether_bricks))
+
+(defn nether-column
+  "A Nether column's bytes (16 sections from y 0): netherrack from y 60 to 63 under open air,
+   the lava sea's top at y 31 (stone round it, as every fixture column below y 64), and blocks
+   over it ({[lx y lz] id})."
+  [blocks]
+  (world/column-bytes
+   (merge (into {} (for [lx (range 16) lz (range 16) y (range 60 64)] [[lx y lz] netherrack]))
+          (into {} (for [lx (range 16) lz (range 16)] [[lx 31 lz] lava]))
+          blocks)
+   dimension/nether))
+
+(def captured-nether
+  "A captured Nether's columns, seven chunks along x by three along z round [0 0]: open ground
+   on netherrack, a fortress's bricks one chunk east (x 16 and 17), and another's four chunks
+   east (x 64), farther than the view the model streams."
+  (into {}
+        (for [cx (range -2 5)
+              cz (range -1 2)]
+          [[cx cz]
+           (nether-column
+            (case [cx cz]
+              [1 0]
+              (into {} (for [lx [0 1] y (range 64 67) lz (range 6 11)] [[lx y lz] nether-bricks]))
+              [4 0] (into {} (for [lz (range 6 11)] [[0 64 lz] nether-bricks]))
+              {}))])))
+
+(defn decoded-of
+  "The columns decoded, as a prepared world holds them."
+  [columns]
+  (update-vals columns chunk/decode))
+
+(deftest a-portal-leads-to-the-scaled-point
+  ;; NetherPortalBlock.getExitPortal: the overworld's x and z over 8, floored, y kept
+  (is (= [10 64 -2] (sim/exit-point [80.7 64.0 -9.2])))
+  (is (= [0 -25 0] (sim/exit-point [7.9 -25.0 0.5]))))
+
+(deftest the-arrival-is-the-standing-cell-nearest-the-exit-point
+  (let [decoded (decoded-of captured-nether)]
+    (is (= {:at [1.5 64.0 1.5] :placed {}} (sim/arrival decoded [8.5 64.0 8.5]))
+        "on the netherrack at the exit point itself")
+    (testing "lava under the exit point: the nearest cell with a solid floor, ties by position"
+      (let [pool (decoded-of (assoc captured-nether [0 0] (nether-column {[1 63 1] lava})))]
+        (is (= [0.5 64.0 1.5] (:at (sim/arrival pool [8.5 64.0 8.5]))))))
+    (testing "nearest in height too: a portal deep in the overworld comes out in a cave under it"
+      (let [cave (decoded-of (assoc captured-nether
+                                    [0 0]
+                                    (nether-column {[5 40 1] blocks/air [5 41 1] blocks/air})))]
+        (is (= [5.5 40.0 1.5] (:at (sim/arrival cave [8.5 -20.0 8.5]))))))
+    (testing "the bedrock roof is never stood under: no cell with its head at 128 or over"
+      (is (nil? (sim/exit-spot (fn [[_ y _]] (if (< y 128) netherrack blocks/air)) [0 120 0] 128))))
+    (testing "nowhere to stand within sixteen: the server's forced platform"
+      (is (nil? (sim/exit-spot (constantly netherrack) [1 30 1] 128)))
+      (let [{:keys [at placed]} (sim/arrival {} [8.5 30.0 8.5])]
+        (is (= [1.5 70.0 1.5] at) "its y held at 70 or over")
+        (is (= (blocks/default-state :obsidian) (placed [1 69 1])) "an obsidian floor")
+        (is (= blocks/air (placed [1 71 1])) "air over it")
+        (is (= 24 (count placed)) "two by three, a floor and three cells of air")))))
+
+(defn captured-nether-run
+  "The planner from the portal kit toward the Nether and its fortress, the portal leading into
+   captured-nether streamed a chunk round the player, until stop? or the plan ends. Returns
+   [world sim]."
+  [stop?]
+  (sim/run step
+           (game/init fx/opts)
+           (sim/init {:column (world/column-bytes lava-pit)
+                      :spawn [9.5 64.0 10.5]
+                      :inventory (merge kit {[:hotbar 7] (fortress-kit [:hotbar 0])})
+                      :nether {:columns captured-nether
+                               :decoded (decoded-of captured-nether)
+                               :view-distance 1}})
+           #(or (stop? %) (plan/done? %) (plan/failed? %))
+           1800000
+           {:event/kind :go :go/goals [:nether :fortress]}))
+
+(deftest a-portal-leads-into-the-captured-nether
+  ;; issue #353: the sim race's portal led into a copy of the overworld's columns, and the bot
+  ;; tunnelled stone for bricks that were not there. With a captured Nether the player comes out
+  ;; where the server would link the portal, on netherrack over the lava sea, and sees the
+  ;; fortress within the view the model streams, not one farther off
+  (let [arrived? #(and (= dimension/nether (:player/dimension %)) (seq (fortress/bricks %)))
+        [w sim] (captured-nether-run arrived?)
+        [x y z :as feet] (intent/feet w)]
+    (is (= dimension/nether (:player/dimension w)) (pr-str (plan/summary w)))
+    (is (= netherrack (terrain/block-at w [x (dec y) z])) "on netherrack")
+    (is (= blocks/air (terrain/block-at w feet)))
+    (is (<= (- sim/exit-search) x (inc sim/exit-search))
+        "within sixteen of the portal's x over 8 (0 or 1: the arena is chunk [0 0])")
+    (is (= lava (terrain/block-at w [x 31 z])) "the lava sea's top under it")
+    (is (some #(= [16 64 6] %) (fortress/bricks w)) "the near fortress's bricks on record")
+    (is (not-any? #(>= (first %) 64) (fortress/bricks w)) "the far one's never sent")
+    (is (= (sim/block-at sim [16 64 6]) (terrain/block-at w [16 64 6])))
+    (testing "and it tunnels on to the fortress it saw"
+      (let [{w' :world sim' :sim} (sim/play-on step
+                                               w
+                                               sim
+                                               #(or (plan/done? %) (plan/failed? %))
+                                               600000
+                                               (:time/now w)
+                                               []
+                                               nil)]
+        (is (= :done (:plan/status w')) (pr-str (plan/summary w')))
+        (is (some #(fortress/arrived? w' %) (fortress/bricks w')))
+        (is (empty? (:sim/violations sim')))))))
 
 
 (deftest a-full-inventory-throws-junk-to-take-the-pickaxe

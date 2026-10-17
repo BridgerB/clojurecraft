@@ -225,7 +225,9 @@
    player joins in, the overworld when absent: a run that starts in the Nether is a gym's tp
    there), :food (the hunger bar the player joins with, told at login; absent, no food is
    modelled and none is told), :nether {:column bytes :at [x y z]} (the Nether a portal leads to: its one column
-   and where the player arrives; :columns {[cx cz] bytes} in place of :column, a whole Nether, arrive) and :difficulty (:peaceful, :easy, :normal or :hard, as the
+   and where the player arrives; :columns {[cx cz] bytes} in place of :column, a whole Nether,
+   with optional :decoded, the same columns decoded once, :view-distance r, the chunks streamed
+   round the player there, and :at, absent for where the server would link the portal: arrive) and :difficulty (:peaceful, :easy, :normal or :hard, as the
    server's setting: hunger drains the bar, a full one when :food is absent, and heals and
    starves by it, issue #260; absent, nothing drains the bar, as before, so a snapshot from then
    plays the same; given, the day turns from :day-time (game ticks, 0 when absent), hostiles
@@ -1324,29 +1326,103 @@
               (send ack))
           :else (send sim ack))))
 
+(def exit-search 16)                  ; blocks round the exit point the server looks for a place to stand (PortalForcer: 16 in the Nether)
+(def platform-min-y 70)               ; a forced platform's lowest feet y (PortalForcer.createPortal)
+(def platform-below-top 10)           ; and its highest, this under the logical height (118 in the Nether)
+
+(defn exit-point
+  "The cell a portal whose player stands at pos [x y z] in the overworld leads to in the Nether:
+   x and z scaled by the two dimensions' coordinate scales (1/8), floored, y kept, as
+   NetherPortalBlock.getExitPortal scales the entity's position."
+  [[x y z]]
+  (let [scale (/ (:dimension/coordinate-scale (dimension/by-name dimension/overworld))
+                 (:dimension/coordinate-scale (dimension/by-name dimension/nether)))]
+    [(long (math/floor (* x scale))) (long (math/floor y)) (long (math/floor (* z scale)))]))
+
+(defn standing?
+  "Can a player stand with its feet in cell [x y z] of a world read by at (a cell → its state id,
+   nil where nothing is loaded): a solid block under it, and air in it and the cell over it (never
+   lava or water)."
+  [at [x y z]]
+  (let [floor (at [x (dec y) z])
+        feet (at [x y z])
+        head (at [x (inc y) z])]
+    (boolean (and floor feet head (blocks/solid? floor) (blocks/air? feet) (blocks/air? head)))))
+
+(defn exit-spot
+  "The cell a player arrives in through a portal whose exit point is target, in a Nether read by
+   at: of the standing? cells within exit-search blocks of target across (x and z) whose heads
+   are under top (the Nether's logical height, 128: over it is the bedrock roof), the nearest to
+   target, by distance squared and then position, so a world and a target give one cell; nil
+   when there is none. PortalForcer.createPortal's search, as the server places a new linked
+   portal, made smaller: one cell to stand in, not the frame's four by five, and no frame built."
+  [at [tx _ tz :as target] top]
+  (let [d2 (fn [c] (reduce + (map #(let [d (- %1 %2)] (* d d)) c target)))]
+    (reduce (fn [best c]
+              (cond (not (standing? at c)) best
+                    (or (nil? best) (neg? (compare (into [(d2 c)] c) (into [(d2 best)] best)))) c
+                    :else best))
+            nil
+            (for [x (range (- tx exit-search) (inc (+ tx exit-search)))
+                  z (range (- tz exit-search) (inc (+ tz exit-search)))
+                  y (range 1 (dec top))]
+              [x y z]))))
+
+(defn platform
+  "Where the server puts a player when no cell near target can be stood in: target with its y
+   held between platform-min-y and platform-below-top under top, on an obsidian floor two by
+   three with three cells of air over it (PortalForcer.createPortal's forced platform). Returns
+   {:feet cell :placed {cell state}}."
+  [[tx ty tz] top]
+  (let [y (max platform-min-y (min (long ty) (- top platform-below-top)))]
+    {:feet [tx y tz]
+     :placed (into {}
+                   (for [x [(dec tx) tx]
+                         z [(dec tz) tz (inc tz)]
+                         dy [-1 0 1 2]]
+                     [[x (+ y dy) z]
+                      (if (neg? dy) (blocks/default-state :obsidian) blocks/air)]))}))
+
+(defn arrival
+  "Where a portal at pos leads in a Nether of decoded columns ({[cx cz] column}), a pure function
+   of the two: {:at the feet's position :placed {cell state}}, the exit-spot nearest pos's
+   exit-point with nothing changed, or, with none, the platform the server builds there."
+  [decoded pos]
+  (let [top (:dimension/logical-height (dimension/by-name dimension/nether))
+        target (exit-point pos)
+        spot (exit-spot #(chunk/block-at decoded %) target top)
+        {[x y z] :feet placed :placed} (if spot {:feet spot :placed {}} (platform target top))]
+    {:at [(+ x 0.5) (double y) (+ z 0.5)] :placed placed}))
+
 (defn arrive
   "The model in the Nether: with a :sim/nether, its column becomes the world (the overworld's
    placed and broken blocks were the other dimension's) and the player stands at its :at; without
    one, the same column where the player stood (a one-column model of the portal alone). A
    :sim/nether with :columns ({[cx cz] bytes}, a real Nether as a real race's recording holds it,
-   issue #299) is that whole Nether instead, decoded once on arrival, and the overworld's items,
-   mobs, fluids and falling blocks stay behind, as the client drops their entities."
+   issue #299, or a race set's captured Nether, issue #353) is that whole Nether instead, decoded
+   once on arrival unless it comes :decoded, and the overworld's items, mobs, fluids and falling
+   blocks stay behind, as the client drops their entities. With no :at, the player stands where
+   the server would place the portal linked to the one it stood in (arrival); with a
+   :view-distance, the Nether's columns stream round it as a server's do, never all at once."
   [sim]
-  (let [{:keys [column columns at]} (:sim/nether sim)]
+  (let [{:keys [column columns decoded at view-distance]} (:sim/nether sim)]
     (cond columns
-          (-> sim
-              (assoc :sim/columns columns
-                     :sim/decoded (update-vals columns chunk/decode)
-                     :sim/placed {}
-                     :sim/broken #{}
-                     :sim/items {}
-                     :sim/mobs {}
-                     :sim/fluids {}
-                     :sim/falls {}
-                     :sim/falling {}
-                     :sim/player-pos at
-                     :sim/view #{})
-              (dissoc :sim/view-at))
+          (let [decoded (or decoded (update-vals columns chunk/decode))
+                landed (if at {:at at :placed {}} (arrival decoded (:sim/player-pos sim)))]
+            (-> sim
+                (assoc :sim/columns columns
+                       :sim/decoded decoded
+                       :sim/placed (:placed landed)
+                       :sim/broken #{}
+                       :sim/items {}
+                       :sim/mobs {}
+                       :sim/fluids {}
+                       :sim/falls {}
+                       :sim/falling {}
+                       :sim/player-pos (:at landed)
+                       :sim/view #{})
+                (cond-> view-distance (assoc :sim/view-distance view-distance))
+                (dissoc :sim/view-at)))
           column
           (-> sim
               (assoc :sim/columns {[0 0] column}
