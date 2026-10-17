@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T10:04:49.931Z",
+  "at" : "2026-10-17T10:05:55.637Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -18,7 +18,7 @@
     "checks" : "pending",
     "title" : "Bot stops at fortress: other-dimension",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 361,
     "session" : false
@@ -178,8 +178,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 287,
-    "move" : "ready",
-    "pr" : 361
+    "move" : "wait",
+    "pr" : 361,
+    "why" : "checks running"
   }, {
     "issue" : 196,
     "move" : "leave",
