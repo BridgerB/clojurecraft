@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T13:18:33.106Z",
+  "at" : "2026-10-17T13:22:50.863Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 368,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at portal-kit: stair-not-taken",
     "copilot" : true,
     "draft" : true,
