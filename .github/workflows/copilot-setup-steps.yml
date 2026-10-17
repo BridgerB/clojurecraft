@@ -6,7 +6,11 @@ name: copilot-setup-steps
 # captured sim worlds a snapshot is played in, as probe.yml restores them; and the snapshots of
 # every open sim bot-failure issue (bb issue-check fetch: from the evidence releases its comments
 # name, or an older comment's artifact) moved to cache/issues/<n>/, outside the
-# tree, so the session copies only its own issue's into test/issues/<n>/. The job must be named
+# tree, so the session copies only its own issue's into test/issues/<n>/. Last, the brief for the
+# issue Copilot holds (bb brief write, bb/clojurecraft/brief.clj): its snapshots judged on main
+# and on the session's branch, where its reason is raised, the stage's rows, the issue and the
+# closed issues with the same reason, in cache/issues/<n>/brief.md, so the model spends no turns
+# (each re-sends everything read so far) on what a script finds. The job must be named
 # copilot-setup-steps; a push or pull request that changes this file runs it as a check.
 
 on:
@@ -20,6 +24,7 @@ permissions:
   contents: read
   actions: read                         # an older comment's snapshot artifact (newer ones are release assets)
   issues: read                          # which bot-failure issues are open, and their comments
+  pull-requests: read                   # the brief: the pull requests that closed an issue with the same reason
 
 jobs:
   copilot-setup-steps:
@@ -82,3 +87,7 @@ jobs:
             done
           done
           ls -R cache/issues 2>/dev/null || echo "no snapshots fetched"
+      - name: The brief for the issue Copilot holds
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: timeout 900 bb brief write || echo "no brief written: the session finds these itself"
