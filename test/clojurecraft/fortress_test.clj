@@ -7,11 +7,29 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.fortress :as fortress]
-            [clojurecraft.intent :as intent]))
+            [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]))
 
 (def netherrack (blocks/default-state :netherrack))
 (def air (blocks/default-state :air))
+
+(deftest fortress-bricks-use-the-indexed-current-sightings
+  ;; Issue #328: once the tunnel could run, scanning all sightings every tick exhausted the
+  ;; judge's budget. The state-indexed query keeps the same dimension, height and recency rules.
+  (let [brick (blocks/default-state :nether_bricks)
+        w (reduce (fn [w [p state]] (memory/observe w p state))
+                  {:world/facts (memory/empty-facts) :player/dimension dimension/nether :time/now 0}
+                  [[[0 31 0] brick] [[0 32 0] brick] [[1 64 0] brick] [[1 64 0] air]
+                   [[2 64 0] (blocks/default-state :nether_brick_fence)]
+                   [[3 64 0] (blocks/default-state :nether_brick_stairs)]])
+        w (-> w
+              (assoc :player/dimension dimension/overworld)
+              (memory/observe [4 64 0] brick)
+              (assoc :player/dimension dimension/nether))]
+    (with-redefs [memory/latest (fn [_] (throw (ex-info "Full sightings scan" {})))]
+      (is (= #{[0 32 0] [2 64 0] [3 64 0]} (set (fortress/bricks w)))))))
 
 (defn rock
   "A world of netherrack round [0 64 0] (x and z -4..4, y 60..70), the bot's two cells open, with

@@ -5,7 +5,7 @@ type: reference
 tags: [bot, tooling, sim, tests]
 aliases: [sim.clj, fake server, socket-free test, sim/run]
 status: verified
-lastUpdated: 2026-10-14
+lastUpdated: 2026-10-17
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#defn init
@@ -24,7 +24,10 @@ sourceRefs:
   - test/clojurecraft/fluid_test.clj#water-directly-above-a-lava-source-makes-obsidian
   - src/clojurecraft/sim.clj#defn light
   - src/clojurecraft/sim.clj#defn through-portal
+  - src/clojurecraft/sim.clj#defn stream-from
   - test/clojurecraft/sim_test.clj#standing-in-the-portal-four-seconds-goes-to-the-nether
+  - test/clojurecraft/sim_test.clj#streamed-chunks-include-the-blocks-the-server-now-holds
+  - test/clojurecraft/sim_test.clj#a-portal-transition-does-not-put-the-client-back-in-undug-rock
   - test/clojurecraft/sim_test.clj#water-poured-into-the-bowl-turns-the-lava-under-it-to-obsidian
   - src/clojurecraft/sim.clj#defn roll
   - src/clojurecraft/sim.clj#defn tick-falls
@@ -54,6 +57,9 @@ related:
 ## Two ways to drive it
 - `sim/run` folds the bot's reducer and the model together on one thread, 50 ms per tick of model time: deterministic and fast, so the generated-worlds property can run thousands of worlds.
 - `sim/connect!` puts the model on a thread of its own behind a bounded channel pair shaped like `conn/open!`'s (`:in`, `:out`, `:close!`), ticking every 50 ms of wall time. `main`'s own loop (`run-loop!`, `apply-event!`, `go-when-loaded!`) then runs against it unchanged: the essay's "bot and server model composed through a channel pair", a complete run of the real process with no Java server. `main's-own-loop-against-the-model-through-channels` gets a log that way in about 6 s, with the model's keep-alives answered; a model that never forwards its packets fails it.
+
+## Streamed chunks
+`stream-from` sends the captured columns first, then the model's changed blocks in those fresh columns, before the batch finishes. Broken cells are air unless a later placement occupies them (`block-at`); changes outside the fresh view are not sent. The column bytes and decoded values stay shared, never rewritten. Sim race 38999010135 (issue #328, R1/7 seed 2) crossed the portal after digging its room at y -25: the dimension change dropped the client's overlay, but the model resent only the original columns, putting its feet and head back in deepslate while the model still held the open room. The first fortress tunnel failed `:no-stand` twice in 300 ms. Resending the changed blocks keeps the two terrain views in agreement after a dimension change or an ordinary chunk reload.
 
 ## Falling blocks
 A block of one of `blocks/falling-types` looks under itself `fall-delay-ms` (two game ticks) after the block under it changed (`disturb`, called by a break, a placement, a scoop and a fall), as the game's `FallingBlock` schedules its tick on the neighbour update. If the cell under it is then free (air, a liquid, anything passable: `FallingBlock.isFree`), its cell becomes air for the client and it is in the air in `:sim/falling`. Each game tick `fall-tick` moves it as `FallingBlockEntity.tick` does (it gains 0.04 blocks a tick of speed, moves, keeps 98% of it) and lands it on whatever is under it at that moment, so a second gravel lands on the first rather than in the cell the first was still falling into: one block down takes seven ticks. Read in the 26.1.2 jar with `javap`. Not modelled: a block landing in a cell no longer free (the game drops it as an item), and harm to a player under it.

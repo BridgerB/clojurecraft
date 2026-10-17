@@ -1303,6 +1303,52 @@
     (is (= "minecraft:the_nether" (:sim/dimension later)))
     (is (some #(= "minecraft:the_nether" (:dimension %)) (:sim/out later)))))
 
+(deftest streamed-chunks-include-the-blocks-the-server-now-holds
+  ;; Sim race 38999010135 (issue #328): resending the original column after the portal erased
+  ;; the client's dug room, so its feet were in deepslate and the tunnel failed :no-stand.
+  (let [column (world/column-bytes {})
+        broken [1 63 1]
+        placed [2 64 1]
+        replaced [3 63 1]
+        cobble (blocks/default-state :cobblestone)
+        s (-> (sim/init
+               {:columns {[0 0] column [1 0] column} :spawn [0.5 64.0 0.5] :view-distance 0})
+              (assoc :sim/broken #{broken replaced [17 63 1]}
+                     :sim/placed {placed cobble replaced cobble [18 64 1] cobble}))
+        s (sim/stream s)
+        updates (filter #(= :block-update (:packet/name %)) (:sim/out s))
+        w (reduce game/on-packet (assoc (game/init fx/opts) :bot/phase :play) (:sim/out s))]
+    (is (= {broken blocks/air placed cobble replaced cobble}
+           (into {} (map (juxt :pos :state)) updates))
+        "only the fresh column's changes, with a placement winning over an earlier break")
+    (doseq [p [broken placed replaced]] (is (= (sim/block-at s p) (terrain/block-at w p))))
+    (is (= :chunk-batch-finished (:packet/name (last (:sim/out s)))))
+    (testing "a column that leaves view and comes back still carries its changes"
+      (let [away (sim/stream (assoc s :sim/player-pos [16.5 64.0 0.5] :sim/out []))
+            back (sim/stream (assoc away :sim/player-pos [0.5 64.0 0.5] :sim/out []))
+            w (reduce game/on-packet w (concat (:sim/out away) (:sim/out back)))]
+        (doseq [p [broken placed replaced]] (is (= (sim/block-at back p) (terrain/block-at w p))))))
+    (testing "a column already held sends nothing again"
+      (is (empty? (:sim/out (sim/stream (assoc s :sim/out []))))))))
+
+(deftest a-portal-transition-does-not-put-the-client-back-in-undug-rock
+  (let [feet [1 62 1]
+        head [1 63 1]
+        s (-> (sim/init {:column (world/column-bytes {}) :spawn [1.27 62.0 1.7]})
+              (assoc :sim/player-pos [1.27 62.0 1.7]
+                     :sim/portal-since 0
+                     :sim/placed {feet (blocks/default-state :nether_portal)}
+                     :sim/broken #{head}))
+        s (sim/through-portal s sim/portal-ms)
+        w (reduce game/on-packet (assoc (game/init fx/opts) :bot/phase :play) (:sim/out s))
+        op (second (fortress/step-plan feet [1 0 0]))]
+    (is (= dimension/nether (:player/dimension w)))
+    (is (= (sim/block-at s feet) (terrain/block-at w feet)))
+    (is (= blocks/air (terrain/block-at w head)))
+    (is (path/standable? w feet))
+    (is (= :walk (:intent/kind (build/op-child w {:intent/kind :tunnel-to} op)))
+        "the off-centre feet can walk to their stand instead of failing :no-stand")))
+
 ;; ---------------------------------------------------------------- building the portal (issue #8)
 
 (def build-origin
