@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T09:01:47.871Z",
+  "at" : "2026-10-17T09:07:06.951Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 346,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at nether: no-path",
     "copilot" : true,
     "draft" : true,
