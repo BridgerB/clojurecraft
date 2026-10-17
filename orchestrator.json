@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T21:16:10.235Z",
+  "at" : "2026-10-17T21:17:18.472Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -29,7 +29,7 @@
     "checks" : "pending",
     "title" : "Bot stops at fortress: no-stand",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 395,
     "session" : false
@@ -222,8 +222,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 328,
-    "move" : "ready",
-    "pr" : 395
+    "move" : "wait",
+    "pr" : 395,
+    "why" : "checks running"
   }, {
     "issue" : 320,
     "move" : "leave",
