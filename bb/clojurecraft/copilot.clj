@@ -22,7 +22,9 @@
         would fail; it used to throw and end the pass, its status unwritten);
      6. Copilot answered the last continue request and pushed nothing since (silent?): agent-stuck
         at once, never asked again (PR #324 was asked eight times for one dead end);
-     7. a hand-off: a pull request that only says Refs #n, or that changes nothing of the bot
+     7. a hand-off: a ready pull request (a draft is a session still at work, whose first push is
+        the evidence alone: #386 was labelled stuck a minute in, then went green) that only says
+        Refs #n, or that changes nothing of the bot
         (no file under src/ or resources/: evidence and notes only, as #341 and #352 were, whose
         Fixes line GitHub appends): Copilot could not prove a fix, so the issue is labelled
         agent-stuck for a person, never asked to go on (#352 was asked six times in 30 minutes);
@@ -134,7 +136,7 @@
     (cond
       (some hands-off labels) {:move :leave :issue n :why "hands-off label"}
       (and pr (live (:branch pr))) {:move :wait :issue n :pr (:number pr) :why "session running"}
-      (and pr (:gave-up? pr)) {:move :gave-up :issue n :pr (:number pr)}
+      (and pr (:gave-up? pr) (not (:draft? pr))) {:move :gave-up :issue n :pr (:number pr)} ; a draft is a session at work: its first push is the evidence alone (#386)
       (and pr (seq (:held pr))) {:move :release :issue n :pr (:number pr) :runs (:held pr)}
       (and pr (:draft? pr)) {:move :ready :issue n :pr (:number pr)}
       (and pr (= :approval (:checks pr)))
