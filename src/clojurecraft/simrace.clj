@@ -27,6 +27,7 @@
             [clojurecraft.main :as main]
             [clojurecraft.memory :as memory]
             [clojurecraft.plan :as plan]
+            [clojurecraft.scene :as scene]
             [clojurecraft.sim :as sim]
             [datascript.core :as d]))
 
@@ -262,7 +263,9 @@
    (go-of), as the run did. halt? (no arguments, default never) ends the play early too: the
    caller's wall-clock budget, so a judge cannot outlast its job; a play it ended is :run/halted?.
    The RESULT, marked (failure/mark), with :run/ms the time it ended at, :run/from the moment's
-   time and :run/story what the bot did between (story)."
+   time, :run/story what the bot did between (story), and :run/scenes the bot's world at the
+   moment and where the play ended ({:start {:facts :slice} :end ...}, scene/facts and
+   scene/slice)."
   [snap w & [halt?]]
   (let [{:keys [world] :as m} (moment-of snap w)
         stage (stage-of snap)
@@ -281,7 +284,10 @@
            :run/ms (:time/now world')
            :run/from (:time/now world)
            :run/halted? @halted
-           :run/story (vec (story world' (:time/now world))))))
+           :run/story (vec (story world' (:time/now world)))
+           :run/scenes
+           {:start {:facts (scene/facts world) :slice (scene/slice world)}
+            :end {:facts (scene/facts world') :slice (scene/slice world')}})))
 
 (defn timeout-signature?
   "Is a snapshot's signature a :timeout: the run used up its simulated time, a stall?"
@@ -416,7 +422,9 @@
    one JUDGE line (the signature, why and when its moment was kept, the window, whether it
    recurs, how it ended, simulated and wall ms, and :slow? past slow-ms: a verdict that took half
    the budget could halt on a slower runner, so the churn files no such snapshot) and the STORY of
-   what the bot did over the window, one line an intention fact. Returns {:path :recurs? :played}."
+   what the bot did over the window, one line an intention fact, then a SCENE line and SLICE lines
+   for the moment (start) and where the play ended (end): the bot's facts and the blocks round its
+   feet. Returns {:path :recurs? :played}."
   [path]
   (let [t0 (System/currentTimeMillis)
         snap (capture/read-world path)
@@ -436,6 +444,9 @@
                       :wall-ms (- (System/currentTimeMillis) t0)
                       :slow? (> (- (System/currentTimeMillis) t0) slow-ms)}))
     (doseq [line (:run/story r)] (println "STORY" path (pr-str line)))
+    (doseq [[at {:keys [facts slice]}] (:run/scenes r)]
+      (println "SCENE" path (name at) (pr-str facts))
+      (doseq [line slice] (println "SLICE" path (name at) line)))
     {:path path :recurs? recurs :played r}))
 
 (defn from-landing!
