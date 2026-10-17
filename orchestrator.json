@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T16:19:41.480Z",
+  "at" : "2026-10-17T16:22:54.497Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 382,
@@ -16,7 +16,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 381,
-    "session" : true
+    "session" : false
   }, {
     "number" : 339,
     "title" : "Bot stops at fortress: no-footing",
@@ -191,9 +191,8 @@
   } ],
   "moves" : [ {
     "issue" : 380,
-    "move" : "wait",
-    "pr" : 381,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 381
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -760,5 +759,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-17T16:07:38.978Z"
+  }, {
+    "issue" : 380,
+    "move" : "ready",
+    "pr" : 381,
+    "at" : "2026-10-17T16:22:54.497Z"
   } ]
 }
