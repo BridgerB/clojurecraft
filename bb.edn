@@ -16,11 +16,13 @@
               [clojurecraft.brief-test]
               [clojurecraft.copilot-test]
               [clojurecraft.evidence-test]
+              [clojurecraft.fleet-test]
               [clojurecraft.page-test]
               [clojurecraft.site-test])
    :task (let [{:keys [fail error]} (ct/run-tests 'clojurecraft.brief-test
                                                   'clojurecraft.copilot-test
                                                   'clojurecraft.evidence-test
+                                                  'clojurecraft.fleet-test
                                                   'clojurecraft.page-test
                                                   'clojurecraft.site-test)]
            (when (pos? (+ fail error)) (System/exit 1)))}
