@@ -1,84 +1,39 @@
 {
-  "at" : "2026-10-17T04:22:46.762Z",
+  "at" : "2026-10-17T04:27:02.876Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
-  }, {
-    "number" : 87,
-    "title" : "Bot stops at ingots: no-log",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 89,
-    "title" : "Bot stops at portal-kit: no-log",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 94,
-    "title" : "Bot stops at portal-kit: no-spot",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 105,
-    "title" : "Bot stops at flint-and-steel: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 108,
-    "title" : "Bot stops at water-bucket: no-log",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 130,
-    "title" : "Bot stops at cast-one: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 131,
-    "title" : "Bot stops at portal-kit: stale-window",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
+    "number" : 328,
+    "title" : "Bot stops at fortress: no-stand",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "number" : 323,
+    "title" : "Bot stops at flint-and-steel: stale-window",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 156,
-    "title" : "Bot stops at portal-kit: stuck",
+    "number" : 296,
+    "title" : "Bot stops at fortress: no-pickaxe",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 286,
+    "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 157,
-    "title" : "Bot stops at ingots: stuck",
+    "number" : 284,
+    "title" : "Bot stops at fortress: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 161,
-    "title" : "Bot stops at portal-kit: timeout",
+    "number" : 279,
+    "title" : "Bot stops at fortress: rejected",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 162,
-    "title" : "Bot stops at portal: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 186,
-    "title" : "Bot stops at cast-one: no-log",
+    "number" : 229,
+    "title" : "Bot stops at cast-one: no-pickaxe",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
@@ -87,53 +42,98 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 229,
-    "title" : "Bot stops at cast-one: no-pickaxe",
+    "number" : 186,
+    "title" : "Bot stops at cast-one: no-log",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 279,
-    "title" : "Bot stops at fortress: rejected",
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 284,
-    "title" : "Bot stops at fortress: no-path",
+    "number" : 162,
+    "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 286,
-    "title" : "Bot stops at fortress: blocked",
+    "number" : 161,
+    "title" : "Bot stops at portal-kit: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 157,
+    "title" : "Bot stops at ingots: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 296,
-    "title" : "Bot stops at fortress: no-pickaxe",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "number" : 156,
+    "title" : "Bot stops at portal-kit: stuck",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 323,
-    "title" : "Bot stops at flint-and-steel: stale-window",
+    "number" : 151,
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 328,
-    "title" : "Bot stops at fortress: no-stand",
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
+  }, {
+    "number" : 131,
+    "title" : "Bot stops at portal-kit: stale-window",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 130,
+    "title" : "Bot stops at cast-one: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 108,
+    "title" : "Bot stops at water-bucket: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 105,
+    "title" : "Bot stops at flint-and-steel: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 94,
+    "title" : "Bot stops at portal-kit: no-spot",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 89,
+    "title" : "Bot stops at portal-kit: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 87,
+    "title" : "Bot stops at ingots: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
   } ],
   "moves" : [ {
-    "issue" : 71,
-    "move" : "wait",
-    "why" : "session starting"
+    "issue" : 296,
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 296,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "issue" : 71,
+    "move" : "wait",
+    "why" : "session starting"
   } ],
   "log" : [ {
     "issue" : 60,
