@@ -461,6 +461,10 @@
    [:milestone/at "when, ms (:time/now)" "a milestone fact"]
    [:milestone/after-s "seconds after its plan began, its landing"
     "a milestone fact, once a plan began"]
+   ;; ---- server model
+   [:sim/fluid-sources-ready?
+    "the fluid scheduler includes aquatic and waterlogged sources beside changed cells"
+    "new models; older saved models after their first fluid tick"]
    ;; ---- packets
    [:packet/name "which packet; its other fields are the wire's names, unqualified" "every packet"]
    [:chunk/column "the decoded column, added on the reader thread; never recorded"

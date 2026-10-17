@@ -250,6 +250,7 @@
      :sim/falls {}
      :sim/falling {}
      :sim/fluids {}
+     :sim/fluid-sources-ready? true
      :sim/next-window 1
      :sim/clicks 0
      :sim/drop-clicks (or drop-clicks #{})
@@ -1656,12 +1657,14 @@
 (defn fluid-tick
   "One fluid cell's tick: it becomes what the rules say its neighbours feed it (fluid/next-state,
    air when nothing), then writes what it spreads into the cells round it (fluid/spread); each
-   change is set-cell's, so the cells round it are woken in turn."
+   change is set-cell's, so the cells round it are woken in turn. A source held by a plant or
+   waterlogged block keeps its block while spreading its water."
   [sim pos]
   (let [at #(block-at sim %)
         id (at pos)
+        fs (fluid/state-of id)
         nxt (fluid/next-state at pos (ultrawarm? sim))
-        now-id (cond (nil? (fluid/state-of id)) id
+        now-id (cond (or (nil? fs) (= nxt fs)) id
                      (nil? nxt) blocks/air
                      :else (fluid/block-state nxt))
         sim (if (= now-id id) sim (set-cell sim pos now-id))]
@@ -1671,9 +1674,16 @@
 
 (defn tick-fluids
   "One game tick of fluids: every cell whose tick is due, in position order so a run replays,
-   ticks (fluid-tick)."
+   ticks (fluid-tick). Older saved models first wake fluids beside changed cells: their
+   scheduler did not recognize aquatic sources. Sim race 39007350790 (issue #344, R3/4) dug
+   beneath tall seagrass, leaving an unscheduled source over a dry shaft until :no-escape."
   [sim]
-  (let [now (:sim/now sim)
+  (let [sim (if (:sim/fluid-sources-ready? sim)
+              sim
+              (assoc (reduce wake-fluids sim (into (:sim/broken sim #{}) (keys (:sim/placed sim))))
+                     :sim/fluid-sources-ready?
+                     true))
+        now (:sim/now sim)
         due (sort (keep (fn [[p at]] (when (<= at now) p)) (:sim/fluids sim)))]
     (reduce (fn [sim p] (fluid-tick (update sim :sim/fluids dissoc p) p)) sim due)))
 
