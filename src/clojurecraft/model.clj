@@ -270,6 +270,9 @@
     "a :tunnel-to that takes only steps opening no cell by water (fortress/dry?): the overworld's way toward the stronghold and down to its portal room (issue #265)"
     "a :tunnel-to to a stronghold's frame"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
+   [:intent/tunnel-visited
+    "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"
+    ":tunnel-to, after choosing its first step"]
    [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
     ":tunnel-to, during a step"]
    [:intent/from-feet

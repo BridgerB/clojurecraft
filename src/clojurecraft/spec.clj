@@ -429,6 +429,7 @@
 (s/def :intent/from ::block-pos)
 (s/def :intent/from-feet ::block-pos)
 (s/def :intent/taken nat-int?)
+(s/def :intent/tunnel-visited (s/coll-of ::block-pos :kind set?))
 (s/def :intent/steps pos-int?)
 (s/def :intent/reach (s/and number? pos?))
 (s/def :intent/climb nat-int?)
@@ -826,11 +827,21 @@
          :feet ::block-pos
          :cells (s/coll-of ::block-pos)))
 
+(s/fdef fortress/next-move
+  :args
+  (s/cat :world (requires :world/chunks)
+         :feet ::block-pos
+         :target ::block-pos
+         :climb nat-int?
+         :dry-only? boolean?
+         :visited :intent/tunnel-visited)
+  :ret (s/nilable :intent/move))
+
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
    `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held `drops/lying
-   `blaze/blazes `pearls/endermen `stairs/down-safe? `stairs/down-lay])
+   `blaze/blazes `pearls/endermen `stairs/down-safe? `stairs/down-lay `fortress/next-move])
 (s/def :stats/deaths pos-int?)

@@ -127,6 +127,90 @@
   (is (every? (fn [[dx _ dz]] (= 1 (+ (abs dx) (abs dz)))) (fortress/moves [0 64 0] [5 64 5]))
       "one block along one axis"))
 
+(deftest a-blocked-tunnel-can-retreat
+  (let [wall (blocks/default-state :obsidian)
+        w (rock (into {} (for [[x z] [[1 0] [0 1] [0 -1]] y (range 63 67)] [[x y z] wall])))]
+    (is (= [-1 0 0] (fortress/choose-move w [0 64 0] [10 64 0])))
+    (is (= [-1 0 0] (fortress/next-move w [0 64 0] [10 64 0] 3 false #{})))))
+
+(deftest a-portal-is-walked-through-not-dug
+  (let [portal (blocks/default-state :nether_portal)
+        w (rock {[1 64 0] portal [1 65 0] portal})]
+    (is (fortress/safe? w [0 64 0] [1 0 0]))
+    (is (= :stand-in (:build/op (build/next-op w (fortress/step-plan [0 64 0] [1 0 0])))))))
+
+(deftest a-tunnel-turns-onto-ground-instead-of-pacing-in-the-portal
+  (let [obsidian (blocks/default-state :obsidian)
+        portal (blocks/default-state :nether_portal)
+        w (rock (merge (into {} (for [x (range -4 5) y (range 60 71) z (range -4 5)] [[x y z] air]))
+                       {[0 63 0] obsidian
+                        [-1 63 0] obsidian
+                        [-1 64 0] portal
+                        [-1 65 0] portal
+                        [-2 63 1] netherrack}))
+        w (assoc w
+                 :player/pos [-0.5 64.0 0.5]
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0)
+        feet [-1 64 0]
+        visited #{[0 64 0]}
+        move (fortress/next-move w feet [10 64 0] 3 false visited)
+        floor (fortress/plus (fortress/plus feet move) [0 -1 0])
+        ops (fortress/step-plan feet move)
+        i {:intent/kind :tunnel-to
+           :intent/target [10 64 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/tunnel-visited visited}
+        started (intent/run (assoc w :plan/intent i :player/controls {:control/forward? true})
+                            i
+                            {:event/kind :tick :event/now 0})]
+    (is (= [0 0 1] move) "a fresh turn before returning to the other portal cell")
+    (is (not (fortress/safe? w feet move)) "a missing floor is still not safe to enter")
+    (is (= :place (:build/op (build/next-op w ops))) "lay the floor before walking")
+    (is (= {} (:player/controls started)) "stop before working an unfinished floor")
+    (is (= (conj visited feet) (get-in started [:plan/intent :intent/tunnel-visited])))
+    (is (= move (get-in started [:plan/intent :intent/move])))
+    (is (fortress/safe? (assoc-in w [:world/blocks floor] netherrack) feet move))
+    (is (= [1 0 0]
+           (fortress/next-move (assoc-in w [:world/blocks [-1 63 0]] air)
+                               feet
+                               [10 64 0]
+                               3
+                               false
+                               visited))
+        "a floored turn starts only from solid footing")
+    (is (= [1 0 0]
+           (fortress/next-move (assoc-in w [:world/blocks [-2 63 1]] air)
+                               feet
+                               [10 64 0]
+                               3
+                               false
+                               visited))
+        "no floor extending away from ground into a drop")
+    (is (not= move
+              (fortress/next-move (assoc-in w [:world/blocks [-1 64 2]] blocks/water-base)
+                                  feet
+                                  [10 64 0]
+                                  3
+                                  true
+                                  visited))
+        "an overworld turn still refuses water beside the body")
+    (is (= [1 0 0]
+           (fortress/next-move
+            (update w
+                    :world/blocks
+                    merge
+                    (into {} (for [x (range -4 5) z (range -4 5)] [[x 62 z] blocks/lava-base])))
+            feet
+            [10 64 0]
+            3
+            false
+            visited))
+        "retreat rather than laying a turn over lava")))
+
 (deftest no-step-opens-a-spawner
   ;; issue #262: the blaze rods come from a fortress's spawner; a tunnel to it stops beside it
   (let [w (rock {[1 64 0] (blocks/default-state :spawner)})]
