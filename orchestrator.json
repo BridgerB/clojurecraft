@@ -1,9 +1,9 @@
 {
-  "at" : "2026-10-17T19:39:53.837Z",
+  "at" : "2026-10-17T19:42:06.005Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
-    "quiet" : false,
+    "quiet" : true,
     "number" : 385,
     "checks" : "green",
     "title" : "Bot stops at water-bucket: needs-tool",
@@ -173,6 +173,11 @@
   }, {
     "number" : 45,
     "title" : "Bot stops at cast-one: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
