@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T17:40:46.493Z",
+  "at" : "2026-10-17T17:41:52.087Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -11,7 +11,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 386,
-    "session" : true
+    "session" : false
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
