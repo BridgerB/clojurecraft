@@ -354,6 +354,21 @@
                 (= :no-spot (:intent/reason child))
                 (:player/in-water? world))))
 
+(defn redig-place
+  "The child placement in a neighbouring cell the feet can stand in, or a retreat to fresh
+   ground when none is there. Issue #151's R3/14 and real runner 8 snapshots placed gravel
+   through a wall or round a corner: within click reach, but not within pickup reach."
+  [world item]
+  (let [[fx fy fz] (intent/feet world)
+        refused (set (for [[dx dy dz] place/around
+                           :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]]
+                           :when (not (and (zero? dy)
+                                           (= 1 (+ (abs dx) (abs dz)))
+                                           (path/standable? world cell)))]
+                       cell))
+        [cell] (place/spot world true refused)]
+    (if cell {:intent/kind :place :intent/item item :intent/cell cell} (place/fresh-rock world))))
+
 (defmethod redig-stage :place
   ;; a place that found no spot afloat is not the redig's failure: a :swim-out for :retreat
   ;; (done on dry land) takes the child's place, and the place is started again from the bank
@@ -362,14 +377,15 @@
         (intent/assoc-intent world
                              :intent/child
                              {:intent/kind :swim-out :intent/for :retreat :intent/status :active})
-        (and (= :swim-out (:intent/kind child)) (intent/done? child))
+        (and (contains? #{:swim-out :walk :stairs-up} (:intent/kind child)) (intent/done? child))
         (intent/dissoc-intent world :intent/child)
         :else
         (link
          world
          i
          event
-         {:intent/kind :place :intent/item item :intent/passage-ok? true}
+         (when-not child
+           (or (redig-place world item) {:intent/kind :swim-out :intent/for :retreat}))
          (fn [w placed]
            (intent/assoc-intent w :intent/stage :dig :intent/target (:intent/target placed))))))
 
