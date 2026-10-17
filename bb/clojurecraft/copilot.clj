@@ -6,7 +6,7 @@
 
    Each open bot-failure issue is in one of a few states, and each state has one move:
      1. no Copilot pull request names it (Fixes #n) and it is not assigned: assign Copilot with
-        the bot-fixer agent (.github/agents/bot-fixer.agent.md), oldest first, while fewer than
+        the bot-fixer agent (.github/agents/bot-fixer.agent.md), newest first, while fewer than
         cap issues are assigned. The session it starts opens the pull request;
      2. assigned, no pull request and no session running for start-grace-ms: assign again (the
         session never started or died before its first push);
@@ -157,7 +157,7 @@
       :else {:move :assign :issue n})))
 
 (defn moves
-  "Every issue's move, oldest issue first, with :assign held back to the cap: assigned counts the
+  "Every issue's move, newest issue first, with :assign held back to the cap: assigned counts the
    issues Copilot holds now (assigned or with a pull request), and only cap minus that many
    unassigned issues are given out."
   [issue-moves holding cap]
@@ -253,7 +253,7 @@
 (defn ms "An ISO instant's epoch milliseconds." [s] (.toEpochMilli (java.time.Instant/parse s)))
 
 (defn open-issues
-  "The open bot-failure issues, oldest first: [{:number :labels :assignees}]."
+  "The open bot-failure issues, newest first: [{:number :labels :assignees}]."
   []
   (->> (gh-json "issue" "list"
                 "--repo" repo
@@ -266,7 +266,7 @@
                :title (:title i)
                :labels (map :name (:labels i))
                :assignees (map :login (:assignees i))}))
-       (sort-by :number)))
+       (sort-by :number >))) ; newest first: the bot's current walls (Bridger, 2026-10-17)
 
 (defn held-runs
   "The ids of the runs on commit sha that wait for approval (conclusion action_required)."
@@ -496,7 +496,9 @@
                         parse-long)
                 default-cap)
         assigned? (fn [i] (some #(str/starts-with? (str/lower-case %) "copilot") (:assignees i)))
-        holding (count (filter #(or (assigned? %) (prs (:number %))) issues))
+        holding (count (filter #(and (or (assigned? %) (prs (:number %)))
+                                     (not-any? hands-off (:labels %)))
+                               issues)) ; a stuck issue waits for a person, never blocks the queue
         each (for [i issues]
                (issue-move i
                            (prs (:number i))
