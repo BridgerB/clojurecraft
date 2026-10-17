@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T22:38:19.468Z",
+  "at" : "2026-10-17T22:39:26.882Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -64,7 +64,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 401,
-    "session" : true
+    "session" : false
   }, {
     "number" : 142,
     "title" : "Bot stops at portal: no-station",
@@ -207,9 +207,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "wait",
-    "pr" : 401,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 401
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -1011,5 +1010,10 @@
     "issue" : 151,
     "move" : "assign",
     "at" : "2026-10-17T22:18:07.042Z"
+  }, {
+    "issue" : 151,
+    "move" : "ready",
+    "pr" : 401,
+    "at" : "2026-10-17T22:39:26.882Z"
   } ]
 }
