@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T19:56:34.575Z",
+  "at" : "2026-10-17T20:00:58.870Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -231,9 +231,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 161,
-    "move" : "wait",
-    "pr" : 391,
-    "why" : "nudged recently"
+    "move" : "nudge",
+    "pr" : 391
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -908,5 +907,10 @@
     "move" : "nudge",
     "pr" : 391,
     "at" : "2026-10-17T19:55:24.730Z"
+  }, {
+    "issue" : 161,
+    "move" : "nudge",
+    "pr" : 391,
+    "at" : "2026-10-17T20:00:58.870Z"
   } ]
 }
