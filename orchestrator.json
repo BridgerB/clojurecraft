@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T04:06:42.322Z",
+  "at" : "2026-10-17T04:07:49.875Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
@@ -119,7 +119,8 @@
   } ],
   "moves" : [ {
     "issue" : 71,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 196,
     "move" : "leave",
