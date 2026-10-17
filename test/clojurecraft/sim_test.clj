@@ -2629,6 +2629,38 @@
     (is (= 2.5 (first (:player/pos w))) "on the world spawn, beside the well")
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-respawned-player-can-equip-after-dying-with-a-furnace-open
+  ;; issue #323, sim race 39004332220 R2/2: the old furnace menu survived the respawn, so the
+  ;; model ignored every window-0 swap even though the bot correctly forgot the open menu
+  (let [pickaxe {:item (item :stone_pickaxe) :count 1}
+        pos [1 64 0]
+        furnace {:slots {0 {:item (item :raw_iron) :count 3}}}
+        dead (-> (sim/init {:column (world/column-bytes {})
+                            :spawn [0.5 64.0 0.5]
+                            :inventory {[:main 0] pickaxe}})
+                 (assoc :sim/phase :play
+                        :sim/health 0.0
+                        :sim/window {:id 10 :kind :furnace :state-id 7 :pos pos}
+                        :sim/furnaces {pos furnace}))
+        respawn {:packet/name :client-command
+                 :action (packet/value :client-command :perform-respawn)}
+        alive (sim/on-packet dead respawn)
+        equipped (sim/on-packet alive
+                                (merge {:packet/name :container-click
+                                        :window-id 0
+                                        :state-id (:sim/state-id alive)
+                                        :changed []
+                                        :cursor nil}
+                                       (wire (inventory/swap-click (inventory/slot [:main 0]) 0))))]
+    (is (nil? (:sim/window alive)) "the old life has no menu in the new one")
+    (is (= (:sim/inv dead) (:sim/inv alive)) "keep_inventory still holds")
+    (is (= furnace (get-in alive [:sim/furnaces pos])) "the furnace keeps its input")
+    (is (= pickaxe (get-in equipped [:sim/inv (inventory/slot [:hotbar 0])])))
+    (is (empty? (:sim/violations equipped)) "window 0 accepts the swap")
+    (is (= dead (sim/on-packet dead (assoc respawn :action 1))) "another command is not a respawn")
+    (let [living (assoc dead :sim/health sim/max-health)]
+      (is (= living (sim/on-packet living respawn)) "a living player's menu stays open"))))
+
 (deftest a-respawned-bot-is-told-the-mobs-about-it-again
   ;; issue #62, sim race 38900840841: the client forgets every entity at a respawn and the model
   ;; never told it the mobs again, so a bot that died on a stair never saw the zombie that

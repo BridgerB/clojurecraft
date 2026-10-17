@@ -1242,12 +1242,13 @@
 (defmethod on-packet [:play :client-command]
   [sim {:keys [action]}]
   ;; a dead player asking to respawn gets a new life at spawn, full health and breath, a fresh
-  ;; bar with hunger (issue #260), eating nothing, then the teleport that places it
+  ;; bar with hunger (issue #260), eating nothing, no old container, then the teleport that
+  ;; places it; issue #323's furnace survived here and refused every window-0 swap after death
   (if (and (= action (packet/value :client-command :perform-respawn)) (<= (:sim/health sim) 0.0))
     (let [[x y z] (:sim/respawn sim)]
       (-> sim
           (assoc :sim/health max-health :sim/air max-air :sim/player-pos [x y z])
-          (dissoc :sim/eating)
+          (dissoc :sim/eating :sim/window)
           (cond-> (:sim/difficulty sim) (with-food-value hunger/fresh))
           (update :sim/respawns inc)
           (send respawn)
