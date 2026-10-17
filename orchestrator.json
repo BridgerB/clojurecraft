@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T13:52:02.733Z",
+  "at" : "2026-10-17T13:54:12.574Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -26,7 +26,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 374,
-    "session" : true
+    "session" : false
   }, {
     "number" : 229,
     "title" : "Bot stops at cast-one: no-pickaxe",
@@ -192,9 +192,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 231,
-    "move" : "wait",
-    "pr" : 374,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 374
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -652,5 +651,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-17T13:33:45.759Z"
+  }, {
+    "issue" : 231,
+    "move" : "ready",
+    "pr" : 374,
+    "at" : "2026-10-17T13:54:12.574Z"
   } ]
 }
