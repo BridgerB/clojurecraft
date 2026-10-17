@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T10:03:45.088Z",
+  "at" : "2026-10-17T10:04:49.931Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -21,7 +21,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 361,
-    "session" : true
+    "session" : false
   }, {
     "number" : 286,
     "title" : "Bot stops at fortress: blocked",
@@ -178,9 +178,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 287,
-    "move" : "wait",
-    "pr" : 361,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 361
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -515,5 +514,10 @@
     "issue" : 287,
     "move" : "assign",
     "at" : "2026-10-17T09:45:40.269Z"
+  }, {
+    "issue" : 287,
+    "move" : "ready",
+    "pr" : 361,
+    "at" : "2026-10-17T10:04:49.931Z"
   } ]
 }
