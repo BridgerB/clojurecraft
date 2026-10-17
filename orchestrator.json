@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T14:44:11.840Z",
+  "at" : "2026-10-17T14:47:25.243Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -26,7 +26,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 377,
-    "session" : true
+    "session" : false
   }, {
     "number" : 227,
     "title" : "Bot stops at portal: no-scoop",
@@ -182,9 +182,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 228,
-    "move" : "wait",
-    "pr" : 377,
-    "why" : "session running"
+    "move" : "gave-up",
+    "pr" : 377
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -689,5 +688,10 @@
     "issue" : 228,
     "move" : "assign",
     "at" : "2026-10-17T14:43:03.525Z"
+  }, {
+    "issue" : 228,
+    "move" : "gave-up",
+    "pr" : 377,
+    "at" : "2026-10-17T14:47:25.243Z"
   } ]
 }
