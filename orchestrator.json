@@ -1,17 +1,11 @@
 {
-  "at" : "2026-10-17T03:04:50.786Z",
+  "at" : "2026-10-17T03:06:57.418Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
-    "quiet" : false,
     "number" : 62,
-    "checks" : "red",
     "title" : "Bot stops at ingots: timeout",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 8,
-    "pr" : 324,
-    "session" : false
+    "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : true
   }, {
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
