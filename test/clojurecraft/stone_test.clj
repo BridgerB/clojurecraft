@@ -374,6 +374,15 @@
     (is (= :lay (:intent/stage (at need))) "enough to floor six stairs and keep the reserve: laid")
     (is (not= :lay (:intent/stage (at (dec need)))) "one short: no floor, the staircase turns")
     (is (= 1 (:intent/turns (at (dec need)))))
+    (is
+     (not= :lay
+           (:intent/stage (let [mine (assoc down :intent/floor-to 30)
+                                w (-> (standing 64 :stone_pickaxe)
+                                      (carrying need)
+                                      (assoc :world/chunks {[0 0] (world/column air)}
+                                             :plan/intent mine))]
+                            (:plan/intent (intent/run w mine tick)))))
+     "a mine's staircase is floored only as far as the filler reaches its depth, not this one's to-y")
     (is (stairs/floors-affordable? (carrying (standing 64) 1)
                                    {:intent/kind :stairs-up :intent/to-y 90}
                                    [5 64 5]

@@ -140,18 +140,21 @@
 
 (defn floors-affordable?
   "May a stair down lay to-lay (a floor and what holds it) before it is cut: only when the filler
-   carried would floor the rest of the way to the staircase's to-y at this stair's rate and still
+   carried would floor the rest of the way down at this stair's rate and still
    keep lay-reserve for the climb back. A staircase that breaks into a cave lays a floor under
    every stair from then on; started with too little it ends mid-cave on a bridge of its own with
    nothing left to lay, and every stair, up or down, is refused for the air under it. Race
    38984748832 runner 3 bot Clj_r01 (issue #37): the mine's stairs down broke into a cave at y 50
    holding 16 cobblestone and 25 dirt, floored thirty-one stairs down through the open cave, and at
-   y 19 stood on a one-block dirt bridge with none left, :boxed. Any other kind, or no to-y, may."
-  [world {:intent/keys [kind to-y]} [_ y _] to-lay]
-  (or (not= :stairs-down kind)
-      (nil? to-y)
-      (>= (carried-filler world)
-          (+ lay-reserve (* (count to-lay) (max 1 (- (long y) (long to-y))))))))
+   y 19 stood on a one-block dirt bridge with none left, :boxed. The way's end is the mine's depth
+   (:intent/floor-to) when the staircase is one of a mine's, cut a few stairs at a time toward it,
+   else its own to-y. Any other kind, or neither, may."
+  [world {:intent/keys [kind to-y floor-to]} [_ y _] to-lay]
+  (let [end (or floor-to to-y)]
+    (or (not= :stairs-down kind)
+        (nil? end)
+        (>= (carried-filler world)
+            (+ lay-reserve (* (count to-lay) (max 1 (- (long y) (long end)))))))))
 
 (def bridge-depth 16)                 ; blocks under a floor to be laid looked down through for a fluid
 
