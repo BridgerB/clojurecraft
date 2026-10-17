@@ -369,7 +369,7 @@
     (case move
       :assign (assign! issue)
       :reassign (do (unassign! issue) (assign! issue))
-      :merge (gh "pr" "merge" (str pr) "--repo" repo "--merge")
+      :merge (gh "pr" "merge" (str pr) "--repo" repo "--merge" "--delete-branch")
       :review
       (do (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "needs-review")
           (gh "pr"
