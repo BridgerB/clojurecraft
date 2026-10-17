@@ -151,7 +151,8 @@
    "Closing the window with a loaded cursor drops the item on the ground"
    "No reachable surface water in a dry biome; the bot hangs at fill-water"
    "Cave or aquifer water is chosen and the bot drowns at the scoop"
-   "Scoop echo lags, so an empty bucket is reported though the source was there"]
+   "Scoop echo lags, so an empty bucket is reported though the source was there"
+   "Sim race 39004332220 R2/2 (issue #323) died while smelting and the model retained the old furnace menu, refusing every equip click until :stale-window; respawn now drops that menu reference while keeping the inventory and furnace contents"]
   :problem/done
   "RCON Inventory shows a filled water_bucket and flint_and_steel after a live run on the local server, with RESULT :ok true."
   :problem/last-failure
