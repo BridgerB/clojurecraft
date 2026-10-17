@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T06:17:39.519Z",
+  "at" : "2026-10-17T06:20:51.897Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -130,6 +130,11 @@
   }, {
     "number" : 43,
     "title" : "Bot stops at portal-kit: no-pickaxe",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 36,
+    "title" : "Bot stops at ingots: no-pickaxe",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   } ],
