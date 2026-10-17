@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, path, intents]
 aliases: [path/plan, A*, route, waypoints, :awkward, lava rule, node budget, path.clj]
 status: verified
-lastUpdated: 2026-10-15
+lastUpdated: 2026-10-17
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/path.clj#defn plan
@@ -21,6 +21,8 @@ sourceRefs:
   - src/clojurecraft/path.clj#defn lava-near?
   - src/clojurecraft/path.clj#defmulti goal-done?
   - src/clojurecraft/path.clj#defmethod goal-done? :sky
+  - src/clojurecraft/stairs.clj#defmethod path/goal-done? :surface
+  - src/clojurecraft/stairs.clj#defmethod path/heuristic :surface
   - src/clojurecraft/path.clj#def default-max-nodes 6000
   - src/clojurecraft/path.clj#defn trap-factor
   - test/clojurecraft/path_test.clj#a-cliff-is-descended-by-its-stair-never-by-the-six-block-drop
@@ -49,6 +51,8 @@ related:
 - `path.clj`, `search` - A* with a sorted set of `[f g node]` (ties break on the node, so the search is deterministic), g and parent maps, a closed set, and the nearest node seen by the heuristic. Each move's cost is multiplied by `trap-factor`: 10 within two columns of a trap in `:world/traps` younger than ten minutes ([[water-escape]]).
 
 ## How it works
+The `:surface` goal is registered in `stairs`: `out?` requires usable open ground, not merely the sky over a pit, and its heuristic is the same as `:sky`. Walks out of a mine use it so a climb and a walk agree about where the exit is ([[walk-intent]]).
+
 1. A node is the feet cell `[x y z]`. `from` is `(path/feet-cell pos)`.
 2. Expanding a node asks every move whether its needs hold; a drop also needs a landing.
 3. `:found` when a node satisfies the goal. `:partial` when `max-nodes` (default 6000) expansions are spent, `:none` when the open set empties; both return the route to the nearest node seen, which is what a walker should follow before planning again as chunks load.

@@ -391,7 +391,8 @@
 (deftest a-shaft-to-the-sky-is-not-a-spare
   ;; full run f277605 walked out of the iron mine for a spare pickaxe and cut straight back
   ;; down, for five hours: the walk reaches the sky, and from there no trunk could be walked to
-  (let [col (world/column sky-shaft)
+  (let [surface (into {} (for [x (range 8 16) y (range 56 64) z (range 16)] [[x y z] blocks/air]))
+        col (world/column (merge sky-shaft surface))
         w (-> (with-furnace (world-holding {:stone_pickaxe 1 :coal 1} false))
               (assoc :player/pos [2.5 50.0 8.5] :world/chunks {[0 0] col})
               (memory/remember-column [0 0] col))

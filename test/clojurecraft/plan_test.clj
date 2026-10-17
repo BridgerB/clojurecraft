@@ -405,7 +405,8 @@
 
 (deftest a-shaft-to-the-sky-is-walked-not-cut
   ;; full run 4528031 cut a new stair out of the iron mine and the only pickaxe broke on it
-  (let [w (remembered sky-shaft [2.5 50.0 8.5])
+  (let [surface (into {} (for [x (range 8 16) y (range 56 64) z (range 16)] [[x y z] blocks/air]))
+        w (remembered (merge sky-shaft surface) [2.5 50.0 8.5])
         i (wood/gather-next w)]
     (is (not (terrain/under-sky? w (intent/feet w))))
     (is
@@ -413,7 +414,34 @@
       (memory/nearest-log w (game/eye w) wood/search-radius (wood/skipped w) wood/standing-trunk?))
      "the log is in the stone, past the near band")
     (is (= {:intent/kind :walk :intent/target [8 56 8] :intent/for :opening} i))
-    (is (terrain/under-sky? w (:intent/target i)))))
+    (is (stairs/out? w (:intent/target i)))
+    (let [out (assoc w :player/pos [8.5 56.0 8.5])]
+      (is (intent/arrived? out i 2.0))
+      (is (nil? (intent/opening out))))))
+
+(deftest a-shaft-open-to-the-sky-is-not-a-way-out
+  (let [w (remembered sky-shaft [2.5 50.0 8.5])
+        mouth [8 56 8]
+        opening {:intent/kind :walk :intent/for :opening :intent/target mouth}
+        at-mouth (assoc w :player/pos [8.5 56.0 8.5])]
+    (is (= :found (:path/status (path/plan w (intent/feet w) {:goal/kind :sky}))))
+    (is (terrain/under-sky? w mouth))
+    (is (not (stairs/out? w mouth)))
+    (is (not (path/goal-done? w {:goal/kind :surface} mouth)))
+    (is (nil? (intent/opening w)) "do not walk back down into the shaft between climbs")
+    (is (not (intent/arrived? at-mouth opening 2.0)) "an in-flight walk must also reach ground")
+    (is (= :stairs-up (:intent/kind (wood/gather-next w))))
+    (is (= :stairs-up (:intent/kind (wood/gather-next at-mouth))))))
+
+(deftest a-walk-out-continues-past-the-sky-over-a-shaft
+  (let [steps (into {} (for [i (range 9) dy [0 1 2]] [[8 (+ 56 i dy) (- 8 i)] blocks/air]))
+        w (remembered (merge sky-shaft steps) [8.5 56.0 8.5])
+        i (intent/opening w)]
+    (is (terrain/under-sky? w (intent/feet w)))
+    (is (not (stairs/out? w (intent/feet w))))
+    (is (= [:walk :opening] [(:intent/kind i) (:intent/for i)]))
+    (is (not (intent/arrived? w i 2.0)))
+    (is (stairs/out? w (:intent/target i)))))
 
 (deftest a-trunk-above-the-band-is-walked-to
   (let [w (remembered shaft [0.5 40.0 8.5])

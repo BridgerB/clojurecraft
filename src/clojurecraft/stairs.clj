@@ -1084,6 +1084,9 @@
                       directions))
        (nil? (pit-rim world feet))))
 
+(defmethod path/goal-done? :surface [world _ node] (out? world node))
+(defmethod path/heuristic :surface [_ node] (path/heuristic {:goal/kind :sky} node))
+
 (def surfaced-window 600000)            ; ms a climb out stays a fact about its place for a spare's sake
 (def surfaced-radius 16)               ; blocks on the plane round where a climb came out that count as the same place
 

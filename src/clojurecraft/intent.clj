@@ -240,10 +240,10 @@
        (<= (physics/horizontal-distance (:player/pos world) (physics/centre cell)) centred-within)))
 
 (defn goal-of
-  "The path goal a walk is planned toward. A walk up to the open sky (:intent/for :opening) has
-   no cell it must stand in: path's :sky, which climbs the air already dug."
+  "The path goal a walk is planned toward. A walk out (:intent/for :opening) has no cell it must
+   stand in: :surface climbs the air already dug to ground the bot can leave."
   [i]
-  (if (= :opening (:intent/for i)) {:goal/kind :sky} (walk-goal i)))
+  (if (= :opening (:intent/for i)) {:goal/kind :surface} (walk-goal i)))
 
 (defn arrived?
   "Is a walk over: the target within reach, and the feet where the drop will come to rest inside
@@ -258,11 +258,11 @@
    ended in reach but in its own stair pit two below the surface, and saw no water. For a build's
    stand (#8: a pour is aimed from it) or the hunt's burrow (:shelter), the feet in that cell near
    its middle (centred?). For a
-   walk up to the open sky (:intent/for :opening), the feet under it, however far the mouth is:
-   within reach of the mouth the bot is still in the shaft."
+   walk out (:intent/for :opening), the surface goal itself: sky over the feet alone may still
+   be a shaft or a pit, and within reach of the mouth the bot is still in the shaft."
   [world {:intent/keys [target for pickup?] :as i} d]
   (if (= :opening for)
-    (terrain/under-sky? world (feet world))
+    (path/goal-done? world (goal-of i) (feet world))
     (let [rise (- (physics/y-of target) (long (math/floor (physics/y-of (:player/pos world)))))]
       (and (<= d reach)
            (cond pickup? (path/goal-done? world (walk-goal i) (feet world))
@@ -310,15 +310,18 @@
     (update (toward world centre 0.0) :control/jump? #(or % (and up? near?)))))
 
 (defn opening
-  "A walk up to the open sky, or nil. The way already dug is open air: path's :sky climbs it
+  "A walk out to the surface, or nil. The way already dug is open air: :surface climbs it
    before filling a mine and the walk follows that to the mouth. nil when the feet are already
-   under the sky, and nil when no mouth is reached. Full run 4528031 had cut its stair down to
+   out, and nil when no way out is reached. Full run 4528031 had cut its stair down to
    the iron at y 17, then cut a new one up through stone; the only pickaxe broke at y 49 and
-   three :no-pickaxe failures ended the plan."
+   three :no-pickaxe failures ended the plan. Sim race 39007353160 (issue #349, world R4/2)
+   climbed eight stairs out of a pit, then walked back down to its open sky, every eleven seconds:
+   the mouth must be out of the ground (stairs/out?), not merely under the sky."
   [world]
-  (let [feet (feet world)]
-    (when-not (terrain/under-sky? world feet)
-      (let [r (path/plan world feet {:goal/kind :sky})]
+  (let [feet (feet world)
+        goal {:goal/kind :surface}]
+    (when-not (path/goal-done? world goal feet)
+      (let [r (path/plan world feet goal)]
         (when (and (= :found (:path/status r)) (seq (:path/waypoints r)))
           {:intent/kind :walk :intent/target (last (:path/waypoints r)) :intent/for :opening})))))
 
