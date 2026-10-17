@@ -1,7 +1,12 @@
 {
-  "at" : "2026-10-17T10:15:38.094Z",
+  "at" : "2026-10-17T10:16:42.440Z",
   "cap" : 1,
   "issues" : [ {
+    "number" : 363,
+    "title" : "Bot stops at portal: boxed",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
@@ -143,6 +148,11 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
+    "number" : 60,
+    "title" : "Bot stops at water-bucket: no-water",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
+  }, {
     "number" : 45,
     "title" : "Bot stops at cast-one: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -180,6 +190,10 @@
     "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 60,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   } ],
   "log" : [ {
     "issue" : 60,
@@ -524,5 +538,10 @@
     "issue" : 286,
     "move" : "assign",
     "at" : "2026-10-17T10:13:26.617Z"
+  }, {
+    "issue" : 60,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-17T10:16:42.440Z"
   } ]
 }
