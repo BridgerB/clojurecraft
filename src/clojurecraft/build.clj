@@ -1247,7 +1247,8 @@
 
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
-   the child of the old one (the world moved on), a child that failed fails i (a dig that found
+   the child of the old one (the world moved on), except an active climb finishes before its
+   headroom is repaired. A child that failed fails i (a dig that found
    its cell open, found-open?, makes way for the next as one done would), one that is done
    makes way for the next. Shared by every intent that works a plan of ops. A dig of rock with no
    pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand when one can be
@@ -1256,7 +1257,10 @@
    half hour of its ninety minutes."
   [world {:intent/keys [child op] :as i} next event]
   (cond (not= next op)
-        (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child)
+        (if (and (= :stairs-up (:intent/kind child))
+                 (not (or (intent/done? child) (intent/failed? child))))
+          (intent/run-child world event)
+          (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child))
         (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
         (and child (refused-for-the-body? world child))
         ;; the server refused a block into the bot's own body: the stand was wrong, not the op
