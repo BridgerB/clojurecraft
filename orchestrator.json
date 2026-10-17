@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T16:48:49.476Z",
+  "at" : "2026-10-17T16:53:05.473Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 382,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at portal: inventory-full",
     "copilot" : true,
     "draft" : false,
@@ -186,9 +186,8 @@
   } ],
   "moves" : [ {
     "issue" : 382,
-    "move" : "wait",
-    "pr" : 383,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 383
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -774,5 +773,10 @@
     "move" : "ready",
     "pr" : 383,
     "at" : "2026-10-17T16:47:43.552Z"
+  }, {
+    "issue" : 382,
+    "move" : "merge",
+    "pr" : 383,
+    "at" : "2026-10-17T16:53:05.473Z"
   } ]
 }
