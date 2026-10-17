@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T22:45:02.650Z",
+  "at" : "2026-10-17T22:48:23.986Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -63,7 +63,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 151,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "copilot" : true,
     "draft" : false,
@@ -217,9 +217,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "wait",
-    "pr" : 401,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 401
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -1026,5 +1025,10 @@
     "move" : "ready",
     "pr" : 401,
     "at" : "2026-10-17T22:39:26.882Z"
+  }, {
+    "issue" : 151,
+    "move" : "merge",
+    "pr" : 401,
+    "at" : "2026-10-17T22:48:23.986Z"
   } ]
 }
