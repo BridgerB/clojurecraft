@@ -209,3 +209,26 @@
 
 (deftest every-junk-item-is-an-item-of-the-game
   (is (every? recipe/item-id window/junk) (pr-str (remove recipe/item-id window/junk))))
+
+(deftest surplus-building-blocks-make-room-without-spending-the-reserve
+  (doseq [[item keep] window/filler-keep]
+    (testing (name item)
+      (let [stack {:item (recipe/item-id item) :count 64}
+            w (assoc (in-play) :player/inventory {9 stack 10 stack 11 stack})
+            v (window/view w :inventory)]
+        (is (= 128 keep))
+        (is (= 9 (window/junk-slot w)) "192 held: one stack can go")
+        (is (nil? (window/junk-slot (update w :player/inventory dissoc 11)))
+            "128 held: the building reserve stays")
+        (is (nil? (window/junk-slot (-> w
+                                        (assoc-in [:player/inventory 10 :count] 63)
+                                        (assoc-in [:player/inventory 11 :count] 2))))
+            "129 held: no whole stack may take the reserve below 128")
+        (is (= 11 (window/junk-slot (assoc-in w [:player/inventory 11 :count] 1)))
+            "a partial surplus stack may go when two full stacks stay")
+        (is (nil? (window/tossable w v)) "a free slot needs no discard"))))
+  (is (nil? (window/junk-slot {:player/inventory {9 {:item (recipe/item-id :raw_iron) :count 64}
+                                                  10 {:item (recipe/item-id :coal) :count 64}
+                                                  11 {:item (recipe/item-id :stone_pickaxe)
+                                                      :count 1}}}))
+      "ores, fuel and tools are not surplus building blocks"))

@@ -3201,6 +3201,31 @@
     (is (= (* 32 64) (:sand (held w))) "one stack of sand thrown, no more")
     (is (= [] (:sim/violations sim)))))
 
+(deftest a-full-inventory-throws-surplus-deepslate-to-replace-the-pickaxe
+  (let [deepslate {:item (recipe/item-id :cobbled_deepslate) :count 64}
+        cobblestone {:item (recipe/item-id :cobblestone) :count 64}
+        inv (into {}
+                  (concat (for [n (range 5 9)] [[:hotbar n] deepslate])
+                          (for [n (range 27)] [[:main n] deepslate])
+                          {[:hotbar 0] cobblestone
+                           [:hotbar 1] cobblestone
+                           [:hotbar 2] {:item (recipe/item-id :oak_planks) :count 4}
+                           [:hotbar 3] {:item (recipe/item-id :stick) :count 3}
+                           [:hotbar 4] {:item (recipe/item-id :crafting_table) :count 2}}))
+        [w model] (sim/run step
+                           (game/init fx/opts)
+                           (sim/init
+                            {:column (world/column-bytes {}) :spawn [0.5 64.0 0.5] :inventory inv})
+                           #(or (plan/done? %) (plan/failed? %))
+                           60000
+                           {:event/kind :go :go/goals [:stone-pickaxe]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (:stone_pickaxe (held w))))
+    (is (= 125 (:cobblestone (held w))) "only the recipe's three cobblestone are spent")
+    (is (= (* 30 64) (:cobbled_deepslate (held w))) "one surplus stack thrown")
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations model)))))
+
 (deftest eyes-of-ender-from-rods-and-pearls
   ;; issue #264: the rods and pearls the two stages before make, given; blaze powder from the rods
   ;; and twelve eyes from the powder and the pearls, all in the 2x2 grid, through the craft rows
