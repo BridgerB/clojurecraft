@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T12:42:54.193Z",
+  "at" : "2026-10-17T12:43:59.223Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -21,6 +21,11 @@
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
+  }, {
+    "number" : 320,
+    "title" : "Bot stops at cast-one: stair-not-taken",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 296,
@@ -185,6 +190,10 @@
     "why" : "session running"
   }, {
     "issue" : 338,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 320,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
