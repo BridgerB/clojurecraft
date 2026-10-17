@@ -15,14 +15,15 @@
    joins, is made a spectator, is teleported into the Nether and over stops a view apart until
    every column of the region has arrived, touring again the stops whose columns the server was
    still generating. Only columns that arrive while the client is in the Nether are kept: the
-   overworld's round the spawn it joined at share their keys. Before the tour each landing's
-   nearest fortress is located (locate structure), and after it the fortress bricks the region
-   holds are measured from each landing's Nether point (reach): what a run there can find.
+   overworld's round the spawn it joined at share their keys. Then the fortress bricks the region
+   holds are measured from each landing's Nether point (reach): what a run there can find. Not
+   locate structure: its ring search named fortresses 600 to 1100 blocks off for R4's landings
+   whose captured bricks were 0 to 250 away (simworld run 39017474789).
 
    Its own namespace and its own cache key: capture.clj, landings.clj, fixture.clj and the
    server's files are the overworld worlds' key, and an edit to one makes every lane miss its
    worlds. The file is {:nether/set :nether/landings [[x z y] ...] :nether/region [cx0 cz0 cx1
-   cz1] :nether/located [[x z] or nil, a landing each] :nether/columns {[cx cz] bytes}}, bytes
+   cz1] :nether/columns {[cx cz] bytes}}, bytes
    printed as the recordings print them."
   (:require [clojure.core.async :as async]
             [clojure.java.io :as io]
@@ -100,23 +101,11 @@
         wanted (set (map nearest gaps))]
     (filterv wanted ss)))
 
-(defn located-at
-  "The [x z] a locate reply names (\"The nearest minecraft:fortress is at [x, ~, z] (n blocks
-   away)\"), or nil when it names none."
-  [reply]
-  (some->> (re-find #"\[(-?\d+), ~, (-?\d+)\]" (str reply))
-           rest
-           (mapv parse-long)))
-
 (defn nether
-  "The Nether file's value for set-name: the landings it was taken for, the region, each one's
-   located fortress and the columns."
-  [set-name ls region located columns]
-  {:nether/set set-name
-   :nether/landings (vec ls)
-   :nether/region region
-   :nether/located (vec located)
-   :nether/columns columns})
+  "The Nether file's value for set-name: the landings it was taken for, the region and the
+   columns."
+  [set-name ls region columns]
+  {:nether/set set-name :nether/landings (vec ls) :nether/region region :nether/columns columns})
 
 ;; ---------------------------------------------------------------- what a run there can find
 
@@ -134,18 +123,15 @@
   (math/sqrt (+ (* (- bx x) (- bx x)) (* (- bz z) (- bz z)))))
 
 (defn reach
-  "Each landing's Nether point among the bricks found in a captured Nether: {:landing :point :brick the distance across to
-   the nearest brick, nil with none :located the distance to its located fortress, nil with none},
-   a landing each, in order."
-  [ls located found]
-  (mapv (fn [l f]
+  "Each landing's Nether point among the bricks found in a captured Nether: {:landing :point
+   :brick the distance across to the nearest one, nil with none}, a landing each, in order."
+  [ls found]
+  (mapv (fn [l]
           (let [p (nether-point l)]
             {:landing l
              :point p
-             :brick (when (seq found) (math/round (reduce min (map #(across p %) found))))
-             :located (when f (math/round (across p [(first f) 0 (second f)])))}))
-        ls
-        located))
+             :brick (when (seq found) (math/round (reduce min (map #(across p %) found))))}))
+        ls))
 
 (defn summary
   "How many landings of reach's have a brick within each of bands blocks, and how many none in
@@ -174,21 +160,6 @@
    :result (fn [_])
    :close (fn [])})
 
-(defn locate!
-  "Each landing's nearest fortress from its Nether point, [x z] or nil, a landing each."
-  [rc ls]
-  (mapv (fn [l]
-          (let [[x z] (nether-point l)
-                reply (rcon/command! rc
-                                     (str "execute in minecraft:the_nether positioned "
-                                          x
-                                          " 64 "
-                                          z
-                                          " run locate structure minecraft:fortress"))]
-            (cli/log "locate" (pr-str l) "->" reply)
-            (located-at reply)))
-        ls))
-
 (defn tour!
   "Teleport the capture client to each of ss in the Nether, waiting at each until its columns
    stop arriving (capture/settle!)."
@@ -200,10 +171,9 @@
     (capture/settle! got)))
 
 (defn take-region!
-  "Connect a fresh client, locate each landing's fortress, tour the region's stops in the Nether
-   (again over the stops near columns still missing, passes tours at most) and return {:located
-   :columns}, the columns those of region."
-  [{:keys [host port rcon-port rcon-pass]} ls region]
+  "Connect a fresh client, tour the region's stops in the Nether (again over the stops near
+   columns still missing, passes tours at most) and return its columns, {[cx cz] bytes}."
+  [{:keys [host port rcon-port rcon-pass]} region]
   (let [got (atom {})
         opts {:host host :port port :name capture/capture-name}
         c (conn/open! opts)
@@ -218,38 +188,37 @@
           (:out c)
           tap)
          (main/run-loop! c (async/chan 1) world* (fn [_] (realized? done)) tap))]
-    (try
-      (rcon/with-rcon
-       host
-       rcon-port
-       rcon-pass
-       (fn [rc]
-         (when-not (capture/wait-loaded! world* 60000)
-           (throw (ex-info "the capture client never loaded" {:region region})))
-         (rcon/command! rc (str "gamemode spectator " capture/capture-name))
-         (let [located (locate! rc ls)
-               ss (stops region)]
-           (cli/log "region"
-                    (pr-str region)
-                    ":"
-                    (count (columns-of region))
-                    "columns,"
-                    (count ss)
-                    "stops")
-           (reduce (fn [_ pass]
-                     (let [m (missing @got region)]
-                       (cond (empty? m) (reduced nil)
-                             :else
-                             (do (cli/log "tour" pass ":" (count m) "columns missing")
-                                 (tour! rc (if (= 1 pass) ss (again ss m)) got)))))
-                   nil
-                   (range 1 (inc passes)))
-           (let [columns (within @got region)]
-             (cli/log "region" (pr-str region)
-                      ":" (count columns)
-                      "columns" (if (empty? (missing columns region)) "(complete)" "(INCOMPLETE)"))
-             {:located located :columns columns}))))
-      (finally (deliver done true) (async/<!! loop-done) ((:close! c))))))
+    (try (rcon/with-rcon
+          host
+          rcon-port
+          rcon-pass
+          (fn [rc]
+            (when-not (capture/wait-loaded! world* 60000)
+              (throw (ex-info "the capture client never loaded" {:region region})))
+            (rcon/command! rc (str "gamemode spectator " capture/capture-name))
+            (let [ss (stops region)]
+              (cli/log "region"
+                       (pr-str region)
+                       ":"
+                       (count (columns-of region))
+                       "columns,"
+                       (count ss)
+                       "stops")
+              (reduce (fn [_ pass]
+                        (let [m (missing @got region)]
+                          (cond (empty? m) (reduced nil)
+                                :else
+                                (do (cli/log "tour" pass ":" (count m) "columns missing")
+                                    (tour! rc (if (= 1 pass) ss (again ss m)) got)))))
+                      nil
+                      (range 1 (inc passes)))
+              (let [columns (within @got region)]
+                (cli/log "region" (pr-str region)
+                         ":" (count columns)
+                         "columns"
+                         (if (empty? (missing columns region)) "(complete)" "(INCOMPLETE)"))
+                columns))))
+         (finally (deliver done true) (async/<!! loop-done) ((:close! c))))))
 
 (defn -main
   "Take the Nether of --landings (--set) from the server at --port (RCON --rcon-port,
@@ -266,10 +235,10 @@
                 :rcon-pass rcon-pass}
         ls (landings/read-landings landings)
         r (region ls (if margin (Long/parseLong margin) default-margin))
-        {:keys [located columns]} (take-region! server ls r)
-        measured (reach ls located (bricks (update-vals columns chunk/decode)))]
+        columns (take-region! server r)
+        measured (reach ls (bricks (update-vals columns chunk/decode)))]
     (doseq [m measured] (println "NETHER" (pr-str m)))
     (println "NETHERSUM"
              (pr-str (assoc (summary measured) :set set-name :region r :columns (count columns))))
-    (capture/write-world! (str (io/file out)) (nether set-name ls r located columns))
+    (capture/write-world! (str (io/file out)) (nether set-name ls r columns))
     (shutdown-agents)))

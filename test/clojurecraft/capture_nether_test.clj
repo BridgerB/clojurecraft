@@ -38,21 +38,14 @@
     (is (= (count got) (count (nether/within (assoc got [40 40] (byte-array 1)) r)))
         "a column outside the region is not kept")))
 
-(deftest a-locate-reply-names-the-fortress
-  (is (= [-123 456]
-         (nether/located-at
-          "The nearest minecraft:fortress is at [-123, ~, 456] (300 blocks away)")))
-  (is (nil? (nether/located-at
-             "Could not find a structure of type \"minecraft:fortress\" nearby"))))
-
 (deftest the-bricks-are-measured-from-each-nether-point
   ;; a brick under the lava sea's top is never a target (fortress/brick-min-y), so it is not found
   (let [brick (blocks/default-state :nether_bricks)
         columns {[0 0] (world/column-bytes {[3 70 4] brick [5 20 5] brick} dimension/nether)}
         found (nether/bricks (update-vals columns chunk/decode))
-        measured (nether/reach [[24 32 70] [800 32 70]] [[0 0] nil] found)]
+        measured (nether/reach [[24 32 70] [800 32 70]] found)]
     (is (= [[3 70 4]] found))
-    (is (= [{:landing [24 32 70] :point [3 4] :brick 0 :located 5}
-            {:landing [800 32 70] :point [100 4] :brick 97 :located nil}]
+    (is (= [{:landing [24 32 70] :point [3 4] :brick 0}
+            {:landing [800 32 70] :point [100 4] :brick 97}]
            measured))
     (is (= {:landings 2 :within {96 1 192 2 256 2 512 2} :none 0} (nether/summary measured)))))
