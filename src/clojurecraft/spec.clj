@@ -833,6 +833,12 @@
          :src ::block-pos)
   :ret boolean?)
 
+(s/fdef build/scoop-blocked?
+  :args
+  (s/cat :world (requires :world/chunks :player/pos)
+         :child map?)
+  :ret boolean?)
+
 (s/fdef fortress/next-move
   :args
   (s/cat :world (requires :world/chunks)
@@ -850,5 +856,5 @@
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
    `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held `drops/lying
    `blaze/blazes `pearls/endermen `stairs/down-safe? `stairs/down-lay `build/safe-source?
-   `fortress/next-move])
+   `build/scoop-blocked? `fortress/next-move])
 (s/def :stats/deaths pos-int?)
