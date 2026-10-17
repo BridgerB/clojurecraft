@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T16:04:17.473Z",
+  "at" : "2026-10-17T16:05:26.435Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 380,
-    "title" : "Bot stops at cast-one: no-station",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 380,
+    "checks" : "red",
+    "title" : "Bot stops at cast-one: no-station",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 381,
+    "session" : true
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -175,7 +181,9 @@
   } ],
   "moves" : [ {
     "issue" : 380,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 381,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
