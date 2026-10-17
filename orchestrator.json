@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T18:47:56.513Z",
+  "at" : "2026-10-17T18:49:03.837Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -8,7 +8,7 @@
     "checks" : "pending",
     "title" : "Bot stops at nether: timeout",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 390,
     "session" : false
@@ -198,8 +198,9 @@
   } ],
   "moves" : [ {
     "issue" : 389,
-    "move" : "ready",
-    "pr" : 390
+    "move" : "wait",
+    "pr" : 390,
+    "why" : "checks running"
   }, {
     "issue" : 385,
     "move" : "leave",
