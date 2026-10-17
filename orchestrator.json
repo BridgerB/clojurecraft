@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T08:35:00.627Z",
+  "at" : "2026-10-17T08:36:07.774Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 347,
-    "title" : "Bot stops at portal: no-pickaxe",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 347,
+    "checks" : "red",
+    "title" : "Bot stops at portal: no-pickaxe",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 358,
+    "session" : true
   }, {
     "number" : 346,
     "title" : "Bot stops at nether: no-path",
@@ -179,7 +185,9 @@
   } ],
   "moves" : [ {
     "issue" : 347,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 358,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
