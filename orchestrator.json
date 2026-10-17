@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T06:41:38.035Z",
+  "at" : "2026-10-17T06:42:43.577Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 347,
@@ -121,7 +121,7 @@
   }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 135,
