@@ -1,18 +1,7 @@
 {
-  "at" : "2026-10-17T08:10:22.825Z",
+  "at" : "2026-10-17T08:11:27.753Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 351,
-    "checks" : "red",
-    "title" : "Bot stops at fortress: stuck",
-    "copilot" : true,
-    "draft" : true,
-    "nudges" : 0,
-    "pr" : 356,
-    "session" : false
-  }, {
     "number" : 348,
     "title" : "Bot stops at flint-and-steel: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -31,11 +20,6 @@
     "number" : 344,
     "title" : "Bot stops at cast-one: no-escape",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "copilot" : false
   }, {
     "number" : 296,
@@ -194,13 +178,8 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 351,
-    "move" : "gave-up",
-    "pr" : 356
-  }, {
-    "issue" : 338,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "issue" : 348,
+    "move" : "assign"
   }, {
     "issue" : 296,
     "move" : "leave",
@@ -479,5 +458,9 @@
     "move" : "gave-up",
     "pr" : 356,
     "at" : "2026-10-17T08:10:22.825Z"
+  }, {
+    "issue" : 348,
+    "move" : "assign",
+    "at" : "2026-10-17T08:11:27.753Z"
   } ]
 }
