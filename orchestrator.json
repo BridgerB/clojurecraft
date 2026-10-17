@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T05:23:39.919Z",
+  "at" : "2026-10-17T05:24:44.918Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 339,
@@ -15,7 +15,7 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 323,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at flint-and-steel: stale-window",
     "copilot" : true,
     "draft" : false,
@@ -140,9 +140,8 @@
   } ],
   "moves" : [ {
     "issue" : 323,
-    "move" : "wait",
-    "pr" : 336,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 336
   }, {
     "issue" : 296,
     "move" : "leave",
@@ -272,5 +271,10 @@
     "move" : "ready",
     "pr" : 336,
     "at" : "2026-10-17T05:19:21.845Z"
+  }, {
+    "issue" : 323,
+    "move" : "merge",
+    "pr" : 336,
+    "at" : "2026-10-17T05:24:44.918Z"
   } ]
 }
