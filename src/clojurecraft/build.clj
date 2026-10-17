@@ -486,9 +486,10 @@
 
 (defn stands-beside
   "[stand src] for each cell beside the cell over lava source src (the source diagonally below
-   the feet, never beside them) that the feet can stand in once it is opened: firm under it, it
-   and the head openable, no fluid touching them, and the cell over the source openable with no
-   fluid round it but the source. A stand inside the rock is dug to (refill), the cell over a
+   the feet, never beside them) that the feet can stand in once it is opened: a firm walking
+   floor under it (path/floor?), it and the head openable, no fluid touching them, and the cell
+   over the source openable with no fluid round it but the source. A stand inside the rock is
+   dug to (refill), the cell over a
    sealed source dug open."
   [world [x y z :as src]]
   (let [over [x (inc y) z]]
@@ -496,6 +497,7 @@
           :let [stand [(+ x dx) (inc y) (+ z dz)]
                 head (update stand 1 inc)]
           :when (and (holds? world [:firm (update stand 1 dec)])
+                     (path/floor? world (update stand 1 dec))
                      (openable? world stand)
                      (openable? world head)
                      (openable? world over)
@@ -550,8 +552,9 @@
    landing at a height h over the room's floor (h between one and max-access: water spilled on
    the floor never runs up to it; the h given first), four to station-depth in front of the frame
    and up to station-span aside of the landing's column, that the feet can stand in once opened
-   (firm under it, it and the head openable, no fluid touching them, outside the footprint) and
-   from which lava sources are in reach (reach-sources), with safe sight lines (safe-source?).
+   (a firm walking floor under it, it and the head openable, no fluid touching them, outside the
+   footprint) and from which lava sources are in reach (reach-sources), with safe sight lines
+   (safe-source?).
    At a stand the feet already centre on, the sight lines use the actual eyes, not the cell's
    exact centre: issue #380's R3/32 refill reached a stand slightly off centre, where the ray
    would open higher lava, and failed :no-station although the projected ray was safe.
@@ -569,6 +572,7 @@
           :let [stand (cell origin facing [dx h dz])
                 head (update stand 1 inc)]
           :when (and (holds? world [:firm (update stand 1 dec)])
+                     (path/floor? world (update stand 1 dec))
                      (openable? world stand)
                      (openable? world head)
                      (dry? world (mapcat touching [stand head]))
@@ -818,13 +822,20 @@
   (not-any? #(or (kept? %) (kept? (update % 1 inc))) (stance-line a b)))
 
 (defn barred
-  "The cells a way to a stand never opens: the frame's rock (kept) and any cell lava lies in or
-   beside (lava-touching?). Sim race 38843557186 runner 3 (issue #231, world R1/31): the way to a
-   landing 72 blocks off at the lava sea's height was dug along the sea's edge, a cell beside a
-   source opened (a build's dig may expose fluid), the lava flowed in, and no footing was in
+  "The cells a way to a stand never opens: the frame's rock (kept), water, awkward footing, and
+   any cell lava lies in or beside (lava-touching?). Solid magma is no walking floor, and a
+   flooded way cannot be walked or dug clear (issue #162). Sim race 38843557186 runner 3 (issue
+   #231, world R1/31): the way to a landing 72 blocks off at the lava sea's height was dug along
+   the sea's edge, a cell beside a source opened (a build's dig may expose fluid), the lava
+   flowed in, and no footing was in
    reach: :no-footing three times in a tick."
   [world origin facing]
-  (let [kept? (kept origin facing)] (fn [c] (or (kept? c) (lava-touching? world c)))))
+  (let [kept? (kept origin facing)]
+    (fn [c]
+      (or (kept? c)
+          (lava-touching? world c)
+          (= :water (path/classify world c))
+          (= :awkward (path/classify world (update c 1 dec)))))))
 
 (def room-footprint
   "[origin facing] → the set of cells the cast's room opens (room-cells, its stair and access
@@ -1078,19 +1089,28 @@
 (defn lost-way?
   "Did child, the way to the site from far off (a walk, a swim out, stairs), fail for want of a
    way (:no-path, :stuck) with the feet beyond site-reach of the room's landing? Then it is the
-   site that no way reaches, not an op: sim race 38839665459 (issue #222, world R1/11, six runs
-   in two rounds) chose a site 70 blocks off across an aquifer, the walk there failed :no-path,
+   site that no way reaches, not an op. A nearby walk whose target is flooded or has awkward
+   footing also gives up the site: its fixed stance is no walking destination (issue #162).
+   Sim race 38839665459 (issue #222, world R1/11, six runs in two rounds) chose a site 70 blocks
+   off across an aquifer, the walk there failed :no-path,
    the stairs down toward its landing at y 24 were refused for the water beside them, the swim
    out of the water let in dug down a staircase it flooded until :stuck, and the escape from
    that water failed :stuck too: three failures, all toward the one site the planner kept. Only
    a :build has a site: a :tunnel-to (fortress) works its steps through work-op too."
-  [world {:intent/keys [kind origin facing access]} {:intent/keys [reason] :as child}]
+  [world {:intent/keys [kind origin facing access]} {:intent/keys [reason target] :as child}]
   (boolean (and (= :build kind)
                 (intent/failed? child)
                 (#{:no-path :stuck} reason)
-                (> (physics/distance (physics/centre (intent/feet world))
-                                     (physics/centre (cell origin facing (landing (or access 0)))))
-                   site-reach))))
+                (or (> (physics/distance (physics/centre (intent/feet world))
+                                         (physics/centre
+                                          (cell origin facing (landing (or access 0)))))
+                       site-reach)
+                    (and (= :walk (:intent/kind child))
+                         (not (:intent/pickup? child))
+                         target
+                         (or (= :water (path/classify world target))
+                             (= :water (path/classify world (update target 1 inc)))
+                             (= :awkward (path/classify world (update target 1 dec)))))))))
 
 (defn way-back
   "The way back to the build's site from far off: toward the room's landing (landing for the
@@ -1337,13 +1357,13 @@
               ;; the needs planner is asked only when no pickaxe is held
               c (or (when (and missing (hand-dig-refused? world (:intent/target c))) missing)
                     (tool-first world c))]
-          (cond (and (= :no-station c)
-                     (spent? world (lava-sources world) (:intent/origin i) (:intent/facing i)))
-                ;; the pool is spent, not the build: the planner chooses a site with lava enough
+          (cond (and (= :no-station c) (= :build (:intent/kind i)))
+                ;; lava remains but no safe station reaches it: do not choose this site again
                 (-> world
                     (assoc :player/controls {})
+                    (memory/give-up-site (:intent/origin i))
                     intent/done
-                    (game/say "build: the pool at the site is spent, a new site"))
+                    (game/say "build: no safe lava station at the site, a new site"))
                 (keyword? c) (intent/fail world c)
                 :else
                 (intent/run-child
@@ -1471,11 +1491,14 @@
 (def here-radius 2)                   ; a stand this near the feet is where the bot is: not walked to
 
 (defn sources-near
-  "The lava sources loaded within hunt-radius of the feet, nearest first."
+  "The lava sources loaded within hunt-radius of the feet, nearest first, outside given-up
+   sites. Hunting back to a pool the planner refuses only walks between its stands forever."
   [world]
-  (let [feet (physics/centre (intent/feet world))]
+  (let [feet (physics/centre (intent/feet world))
+        given (memory/given-up-sites world)]
     (->> (lava-sources world)
          (filter #(<= (physics/distance (physics/centre %) feet) hunt-radius))
+         (remove #(given-up? given %))
          (sort-by #(physics/distance (physics/centre %) feet)))))
 
 (defn lava-walk

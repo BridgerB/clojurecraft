@@ -715,6 +715,76 @@
         "the hole's top cell is floored from the feet")
     (is (= :walk (:intent/kind (toward {}))) "nothing to place: the walk, as before")))
 
+(deftest a-way-is-cut-round-water-and-awkward-footing
+  (doseq [obstacle [{[5 63 8] blocks/water-base}
+                    {[5 62 8] (blocks/default-state :magma_block) [5 61 8] blocks/lava-base}]]
+    (let [origin [6 63 0]
+          feet [2 63 8]
+          stand [10 63 8]
+          rock (into {} (for [x (range 16) y [63 64] z (range 16)] [[x y z] 1]))
+          w (standing-at
+             (merge (open-ground rock) {feet blocks/air (update feet 1 inc) blocks/air} obstacle)
+             [2.5 63.0 8.5])
+          barred? (build/barred w origin :south)
+          corner (build/round-corner w stand origin :south)
+          child (build/toward-stand w stand :portal origin :south)]
+      (is (not (build/clear-of? barred? feet stand)))
+      (is (some? corner))
+      (is (build/clear-of? barred? feet corner))
+      (is (build/clear-of? barred? corner stand))
+      (is (= :dig (:intent/kind child)) "cut a dry detour, not a walk through the obstacle")
+      (is (not= [3 63 8] (:intent/target child)) "never begin the barred straight way"))))
+
+(deftest a-refill-stand-never-rests-on-magma
+  (let [w (standing-at (open-ground trench) feet-pos)
+        {:keys [origin facing h]} (site-at trench)
+        stand (:stand (build/station w origin facing h))
+        changed
+        (assoc-in w [:world/blocks (update stand 1 dec)] (blocks/default-state :magma_block))
+        other (:stand (build/station changed origin facing h))]
+    (is (some? stand))
+    (is (some? other))
+    (is (not= stand other))
+    (is (path/floor? changed (update other 1 dec)))))
+
+(deftest an-unsafe-build-stance-gives-up-the-site
+  (let [site [8 62 4]
+        target [9 63 7]
+        op (assoc hill-op :build/stand target)
+        child
+        {:intent/kind :walk :intent/target target :intent/status :failed :intent/reason :no-path}
+        i (assoc hill-intent :intent/origin site :intent/op op :intent/child child)]
+    (doseq [obstacle [{target blocks/water-base} {(update target 1 inc) blocks/water-base}
+                      {(update target 1 dec) (blocks/default-state :magma_block)}]]
+      (let [w (assoc (standing-at (open-ground obstacle) [8.5 63.0 7.5]) :plan/intent i)
+            out (build/work-op w i op {:event/kind :tick})]
+        (is (build/lost-way? w i child))
+        (is (not (build/lost-way? w i (assoc child :intent/pickup? true)))
+            "a walk beside a work block does not require standing in that block")
+        (is (intent/done? (:plan/intent out)))
+        (is (= #{site} (memory/given-up-sites out)))))))
+
+(deftest a-pool-without-a-safe-station-is-left
+  (let [site [8 62 4]
+        i (assoc hill-intent :intent/origin site :intent/op hill-op)
+        w (assoc (standing-at (open-ground {}) [8.5 63.0 7.5]) :plan/intent i)
+        out (with-redefs [build/op-child (fn [_ _ _] :no-station)]
+              (build/work-op w i hill-op {:event/kind :tick}))]
+    (is (intent/done? (:plan/intent out)))
+    (is (= #{site} (memory/given-up-sites out)))))
+
+(deftest the-lava-hunt-passes-over-a-given-up-pool
+  (let [deeper [8 40 12]
+        w (standing-at (open-ground (assoc trench deeper blocks/lava-base)) feet-pos)
+        left (memory/give-up-site w [8 62 12])]
+    (is (seq (build/sources-near w)))
+    (is (= [deeper] (build/sources-near left)) "sources outside the rejected site are retained")
+    (is (nil? (build/lava-walk left)))
+    (is (nil? (build/uncap left)))
+    (is (= :stairs-down (:intent/kind (build/lava-hunt left))))
+    (is (< (:intent/to-y (build/lava-hunt left)) (second (intent/feet left)))
+        "seek deeper lava, not another walk round the rejected pool")))
+
 (deftest a-refill-never-opens-lava-over-its-stand
   ;; Issue #231, R1/32: the ray to a low source opened the wall under higher lava,
   ;; which flowed onto the stand before the next dig finished.
