@@ -131,6 +131,31 @@
   (let [held (recipe/counts (:player/inventory world))]
     (first (filter #(>= (get held % 0) n) fillers))))
 
+(def lay-reserve 8)                    ; filler a staircase down never lays into floors: what the climb back seals and steps with
+
+(defn carried-filler
+  "How many of every filler the inventory holds, together."
+  [world]
+  (reduce + 0 (vals (select-keys (recipe/counts (:player/inventory world)) fillers))))
+
+(defn floors-affordable?
+  "May a stair down lay to-lay (a floor and what holds it) before it is cut: only when the filler
+   carried would floor the rest of the way down at this stair's rate and still
+   keep lay-reserve for the climb back. A staircase that breaks into a cave lays a floor under
+   every stair from then on; started with too little it ends mid-cave on a bridge of its own with
+   nothing left to lay, and every stair, up or down, is refused for the air under it. Race
+   38984748832 runner 3 bot Clj_r01 (issue #37): the mine's stairs down broke into a cave at y 50
+   holding 16 cobblestone and 25 dirt, floored thirty-one stairs down through the open cave, and at
+   y 19 stood on a one-block dirt bridge with none left, :boxed. The way's end is the mine's depth
+   (:intent/floor-to) when the staircase is one of a mine's, cut a few stairs at a time toward it,
+   else its own to-y. Any other kind, or neither, may."
+  [world {:intent/keys [kind to-y floor-to]} [_ y _] to-lay]
+  (let [end (or floor-to to-y)]
+    (or (not= :stairs-down kind)
+        (nil? end)
+        (>= (carried-filler world)
+            (+ lay-reserve (* (count to-lay) (max 1 (- (long y) (long end)))))))))
+
 (def bridge-depth 16)                 ; blocks under a floor to be laid looked down through for a fluid
 
 (defn over-fluid?
@@ -180,9 +205,15 @@
    a filler is carried; nil when the stair needs none (safe?) or none can be laid. Race
    38477665442: five of the eight bots on runner 8 that stopped :boxed stood on the lip of a
    cave their staircase had broken into, 7 to 284 cobblestone in hand, every stair refused for
-   the drop under it and nothing else to cut from the lip (issue #37)."
+   the drop under it and nothing else to cut from the lip (issue #37). A floor never eats into
+   lay-reserve, whichever way down lays it (a staircase, its level steps, the mine's deeper
+   stairs): that much is kept for the climb back, which seals and steps with it (issue #37 again:
+   race 38984748832 runner 3 bot Clj_r01 floored a cave down to nothing and was :boxed on its own
+   bridge; probe 38988294166, its stairs budgeted, still reached y 16 with none, by the mine's
+   other descents)."
   [world feet cells]
-  (cells-to-lay world cells (floor-laying world feet cells)))
+  (when-let [laid (cells-to-lay world cells (floor-laying world feet cells))]
+    (when (>= (- (carried-filler world) (count laid)) lay-reserve) laid)))
 
 #_{:splint/disable [naming/conversion-functions]} ; "the step to lay", not a conversion
 (defn step-to-lay
@@ -608,8 +639,9 @@
         safe? (fn [world cells] (and (fresh? cells) (shape-safe? world cells)))
         feet (intent/feet world)
         cells (cells-of feet dir)
-        to-lay (when (and lay (fresh? cells) (not (safe? world cells))) (lay world feet cells))
-        rock (when to-lay (rock-heading i #(safe? world (cells-of feet %))))]
+        needed (when (and lay (fresh? cells) (not (safe? world cells))) (lay world feet cells))
+        to-lay (when (and needed (floors-affordable? world i feet needed)) needed)
+        rock (when needed (rock-heading i #(safe? world (cells-of feet %))))]
     (cond (airborne? world) (assoc world :player/controls {}) ; land first
           (safe? world cells)
           (intent/assoc-intent world
@@ -637,6 +669,15 @@
                                    :intent/started-tick (:time/tick world))
               (game/say (str "stairs: laying " to-lay " before the stair toward " dir)))
           (boxed? turns) (step-aside world (assoc i :intent/dir dir))
+          needed
+          (turned world
+                  dir
+                  turns
+                  (str "stairs: too little filler to floor the way toward "
+                       dir
+                       " down to y "
+                       (:intent/to-y i)
+                       ", turning"))
           :else (turned world dir turns (str "stairs: refused toward " dir ", turning")))))
 
 (defn refuse

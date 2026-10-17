@@ -312,6 +312,9 @@
    [:intent/confirm-left "ticks left to wait for the server's word after FINISH"
     "dig, :confirm stage"]
    [:intent/to-y "feet height at or below which the staircase is done" "stairs-down"]
+   [:intent/floor-to
+    "the height a mine's staircases are cut toward a few stairs at a time (its row's :goal/depth): how far down a floor laid through a cave must go on"
+    "stairs-down from the mine act (stone/stairs), when the row has a depth"]
    [:intent/to-height?
     "a :stairs-up that ends only at :intent/to-y: the open sky over a pit's floor is not out"
     "a climb out of a pit under the sky"]
