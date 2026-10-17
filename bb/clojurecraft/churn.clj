@@ -9,7 +9,9 @@
    under at its end (race-<sha>-<runner>, simrace-<sha>-<runner>), which a reproduction names. A
    batch is the whole lines each file gained since the last batch: they are copied under
    churn-batches/<n>/<artifact>/, then their failures filed (bb failures, judged by the job's
-   counts so far), their facts published as a batch of the run on the results page (bb page),
+   counts so far), their facts published as a batch of the run on the results page (bb page; a
+   batch whose push never gets through is held in data-dir's .pages-held.edn and sent with the
+   next, so none is lost),
    the wall appended to the job's summary, a win released. The state (offsets, the batch number,
    the counts) is a value in data-dir's .churn.edn, written only after a batch is reported; a
    batch with no run ended in it reports nothing and keeps its lines for the next.
@@ -39,6 +41,7 @@
             [clojurecraft.win :as win]))
 
 (def state-file ".churn.edn")          ; in data-dir: {:churn/offsets {path lines} :churn/batch n :churn/counts {signature n}}
+(def held-file ".pages-held.edn")      ; in data-dir: the rounds a publish could not push, sent again with the next batch's
 (def batches-dir "churn-batches")      ; in the checkout, beside data/: never inside a directory the job uploads
 (def logs #{"race.log" "runs.edn"})    ; the files a run ends into, a line each
 (def fresh {:churn/offsets {} :churn/batch 0 :churn/counts {}})
@@ -271,6 +274,18 @@
     (spit (str f) (str (str/join "\n" ls) "\n")))
   dir)
 
+(defn read-held
+  "The rounds a publish could not push yet, oldest first, from data-dir."
+  [data-dir]
+  (let [f (fs/file data-dir held-file)] (if (fs/exists? f) (edn/read-string (slurp f)) [])))
+
+(defn publish!
+  "Publish round with every round held back before it (page/publish-rounds!), and keep in
+   data-dir what still could not be pushed."
+  [data-dir round]
+  (let [left (page/publish-rounds! (conj (read-held data-dir) round))]
+    (spit (str (fs/file data-dir held-file)) (pr-str (vec left)))))
+
 (defn budgeted!
   "Run clojure with args at nice level (under the lane's own work), its output to log, stopped at
    budget (ms: what it did not reach stays unreproduced, never filed); returns the log's lines."
@@ -406,7 +421,7 @@
     (failures/report-runs! runs head code-at counts)
     (when-let [summary (System/getenv "GITHUB_STEP_SUMMARY")]
       (spit summary (wall-text head (page/wall (:round/failures round) milestones)) :append true))
-    (page/publish-round! round)
+    (publish! data-dir round)
     (when (= kind :real) (win/release-runs! runs run sha data-dir))))
 
 (defn batch!

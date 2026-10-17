@@ -10,8 +10,8 @@
 
 (def source-paths
   "Where the Clojure the checks look at lives: the bot, its tooling, its tests, the REPL's user
-   namespace and these tasks."
-  ["src" "dev" "test" "repl" "bb"])
+   namespace, these tasks and their tests."
+  ["src" "dev" "test" "repl" "bb" "test-bb"])
 
 (defn tool!
   "Run native (a program name) with args when it is on PATH, else `clojure -M:<alias>` with the

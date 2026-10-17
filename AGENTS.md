@@ -86,7 +86,7 @@ The artifact `race-<sha>-<runner>` (uploaded at the job's end, when a cancelled 
 
 ## 3. Who works which issue
 
-No agent chooses. The orchestrator (`.github/workflows/copilot.yml` running `bb copilot dispatch`, one runner, once a minute) gives the open bot-failure issues to Copilot's bot-fixer agent (`.github/agents/bot-fixer.agent.md`) one at a time (`COPILOT_CAP`, default 1), oldest first. The assignment is the claim. The orchestrator also releases runs held for approval, marks a finished draft ready, merges a pull request whose `unit / unit` and `check` are green (never one that changes `.github/`, `bb.edn` or the dispatcher: that one gets `needs-review`), asks Copilot to go on when a check is red (at most eight times, then `agent-stuck`), and writes what it saw and did to the results page's Agents tab (https://bridgerb.github.io/clojurecraft/agents.html, from `orchestrator.json` on gh-pages).
+No agent chooses. The orchestrator (`.github/workflows/copilot.yml` running `bb copilot dispatch`, one runner, once a minute) gives the open bot-failure issues to Copilot's bot-fixer agent (`.github/agents/bot-fixer.agent.md`) one at a time (`COPILOT_CAP`, default 1), oldest first. The assignment is the claim. The orchestrator also releases runs held for approval, marks a finished draft ready, merges a pull request whose `unit / unit` and `check` are green (never one that changes `.github/`, `bb.edn` or the dispatcher: that one gets `needs-review`), asks Copilot to go on when a check is red (at most eight times, then `agent-stuck`), and writes what it saw and did to the results page's Agents tab (https://bridgerb.github.io/clojurecraft/#agents, from `orchestrator.json` on gh-pages).
 
 Anyone else (a person, a Claude session) works an issue only when the owner names it: label it `no-agent` first, so the orchestrator leaves it alone. Never take an issue assigned to Copilot or one with an open `copilot/*` pull request. Labels: `no-agent` (never given to Copilot), `agent-stuck` and `needs-review` (a person's turn). Never #10 (the roadmap), never an issue without `bot-failure`. The project board (`bb board`) is no longer part of the loop.
 
@@ -921,7 +921,7 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 | `probe.yml` | hand | one command on a branch with the sim worlds asked for | `probe-<id>`: files under `out/` |
 | `gym.yml` | hand | N trials of one goal on real servers, judged by RESULT + truth commands | recordings and logs |
 | `world.yml`, `simworld.yml` | hand when a key changes | build a landing set's world / capture sim worlds once | caches |
-| `pages.yml` | each report | deploys the results page from `gh-pages` | Pages |
+| `pages.yml` | each report | builds the results site from main over `gh-pages`'s data, adds new gym runs, deploys | Pages |
 | `plan.yml`, `timer.yml`, `capacity.yml`, `full.yml` | hand or schedule | plan files, capacity study, one fresh-world attempt | their own |
 
 - A push does not judge snapshots; the PR's check does, or a probe with `--judge` before the PR.
