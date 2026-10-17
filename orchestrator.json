@@ -1,18 +1,7 @@
 {
-  "at" : "2026-10-17T08:01:46.223Z",
+  "at" : "2026-10-17T08:02:53.006Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 351,
-    "checks" : "red",
-    "title" : "Bot stops at fortress: stuck",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 5,
-    "pr" : 352,
-    "session" : false
-  }, {
     "number" : 348,
     "title" : "Bot stops at flint-and-steel: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -28,26 +17,10 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 345,
-    "title" : "Bot stops at fortress: no-escape",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 344,
     "title" : "Bot stops at cast-one: no-escape",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
-    "quiet" : false,
-    "number" : 338,
-    "checks" : "red",
-    "title" : "Bot stops at fortress: timeout",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 8,
-    "pr" : 341,
-    "session" : false
   }, {
     "number" : 296,
     "title" : "Bot stops at fortress: no-pickaxe",
@@ -67,11 +40,6 @@
     "number" : 284,
     "title" : "Bot stops at fortress: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 279,
-    "title" : "Bot stops at fortress: rejected",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 229,
@@ -205,14 +173,6 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 351,
-    "move" : "nudge",
-    "pr" : 352
-  }, {
-    "issue" : 338,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 296,
     "move" : "leave",
     "why" : "hands-off label"
