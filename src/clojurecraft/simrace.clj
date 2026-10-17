@@ -15,13 +15,17 @@
    issue however many runs hit it.
 
    A world is read once and its columns decoded once (prepared); every run of it shares that
-   value. The model holds the whole world: nothing loads or unloads."
+   value. The model holds the whole world: nothing loads or unloads. A portal leads to the set's
+   captured Nether (capture_nether.clj, cache/sim-nether/<set>.edn.gz beside the set's worlds),
+   read and decoded once for every world of the set, streamed round the player as a server's
+   view (issue #353); a set with none captured keeps the overworld's columns past the portal."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojurecraft.capture :as capture]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.cli :as cli]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.failure :as failure]
             [clojurecraft.game :as game]
             [clojurecraft.main :as main]
@@ -38,6 +42,7 @@
 (def default-max-minutes 330)         ; simulated minutes a run may take: a real bot's horizon, a lane's job (#252)
 (def difficulty :normal)              ; the model's difficulty, as every real server's since #257: hunger and mobs (issue #260)
 (def day-step 3000)                   ; game ticks between the times of day a run may start at, by its seed
+(def nether-view 6)                   ; chunks a race server shows round a player (view-distance, bb/clojurecraft/server.clj)
 
 (defn day-time-of
   "The time of day a run of seed starts at: one of eight, three hours of the game's day apart, so a
@@ -59,6 +64,38 @@
   (assoc w
          :capture/decoded
          (into {} (map (fn [[k bytes]] [k (chunk/decode bytes)])) (:capture/columns w))))
+
+(defn nether-file
+  "The captured Nether of the set a world file belongs to, by the caches' layout: world
+   cache/sim-worlds/R1/7.edn.gz is set R1's, whose Nether capture-nether wrote to
+   cache/sim-nether/R1.edn.gz."
+  [world-file]
+  (let [set-dir (.getParentFile (io/file (str world-file)))
+        cache (some-> set-dir
+                      .getParentFile
+                      .getParentFile)]
+    (str (io/file cache
+                  "sim-nether"
+                  (str (some-> set-dir
+                               .getName)
+                       ".edn.gz")))))
+
+(defn sim-nether
+  "A captured Nether (capture-nether's file's value) as the model's :sim/nether: its columns,
+   decoded once for every run of its set to share, streamed nether-view chunks round the player
+   (a captured overworld goes to the client whole; a set's whole Nether at once would show the
+   bot fortresses no server showed it), and no :at, so a run arrives where the server would link
+   its portal (sim/arrival)."
+  [n]
+  {:columns (:nether/columns n)
+   :decoded (into {} (map (fn [[k bytes]] [k (chunk/decode bytes)])) (:nether/columns n))
+   :view-distance nether-view})
+
+(defn with-nether
+  "World w with its set's Nether (sim-nether's value) as every run's portal destination, and the
+   file it came from, which a snapshot names to read it again."
+  [w nether file]
+  (assoc w :capture/nether nether :capture/nether-file (str file)))
 
 (defn spawn-of
   "Where a run starts: on the landing ([x z y], its surface) at the column's centre."
@@ -86,21 +123,25 @@
    #37) climbed under a lake with 32 level steps where a real bot has 32 and the way home, and
    was :boxed five columns short of the shore. The model runs at difficulty from a time of day
    the seed picks (day-time-of), as the real servers
-   do (issue #260: before it the sim lanes had no hunger and were easier than the real ones)."
+   do (issue #260: before it the sim lanes had no hunger and were easier than the real ones). Its
+   portal leads to w's Nether (:capture/nether, with-nether) when w has one: before issue #353
+   none had, and a bot through its portal tunnelled the overworld's stone for bricks."
   [w seed until max-ms]
   (let [opts {:host "sim" :port 0 :name "Clj_sim"}
-        {:keys [world sim last moments crashed]} (sim/run+ step
-                                                           (game/init opts)
-                                                           (sim/init {:columns (:capture/columns w)
-                                                                      :decoded (:capture/decoded w)
-                                                                      :spawn (spawn-of w)
-                                                                      :seed seed
-                                                                      :tick-seed seed
-                                                                      :difficulty difficulty
-                                                                      :day-time (day-time-of seed)})
-                                                           #(or (plan/done? %) (plan/failed? %))
-                                                           max-ms
-                                                           (go-of w until))
+        {:keys [world sim last moments crashed]}
+        (sim/run+ step
+                  (game/init opts)
+                  (sim/init (cond-> {:columns (:capture/columns w)
+                                     :decoded (:capture/decoded w)
+                                     :spawn (spawn-of w)
+                                     :seed seed
+                                     :tick-seed seed
+                                     :difficulty difficulty
+                                     :day-time (day-time-of seed)}
+                              (:capture/nether w) (assoc :nether (:capture/nether w))))
+                  #(or (plan/done? %) (plan/failed? %))
+                  max-ms
+                  (go-of w until))
         ok (and (nil? crashed) (main/ok? world until))]
     (assoc (cond-> (main/result world until ok)
              crashed (assoc :reason :crashed :error (str crashed)))
@@ -172,20 +213,23 @@
    them, moment-of), the seed, the target, the code, the signature and :snapshot/moment, when
    and why and the window it is judged over. The facts are d/serializable, since a DataScript
    value does not print as EDN. Everything else prints as the recordings print (byte arrays as
-   #clojurecraft/bytes)."
+   #clojurecraft/bytes). A world with a captured Nether (with-nether) is named by its file too
+   (:snapshot/nether-file), the model's Nether kept without its columns, as the world is."
   [w seed until commit signature {:keys [world sim moment] :as m}]
-  {:snapshot/file (:capture/file w)
-   :snapshot/seed seed
-   :snapshot/until until
-   :snapshot/commit commit
-   :snapshot/signature signature
-   :snapshot/moment moment
-   :snapshot/next (select-keys m [:pending :t :rand :went? :inflight])
-   :snapshot/chunks (set (keys (:world/chunks world)))
-   :snapshot/world (-> world
-                       (dissoc :world/chunks)
-                       (update :world/facts d/serializable))
-   :snapshot/sim (dissoc sim :sim/columns :sim/decoded)})
+  (cond-> {:snapshot/file (:capture/file w)
+           :snapshot/seed seed
+           :snapshot/until until
+           :snapshot/commit commit
+           :snapshot/signature signature
+           :snapshot/moment moment
+           :snapshot/next (select-keys m [:pending :t :rand :went? :inflight])
+           :snapshot/chunks (set (keys (:world/chunks world)))
+           :snapshot/world (-> world
+                               (dissoc :world/chunks)
+                               (update :world/facts d/serializable))
+           :snapshot/sim (cond-> (dissoc sim :sim/columns :sim/decoded)
+                           (:capture/nether-file w) (update :sim/nether dissoc :columns :decoded))}
+    (:capture/nether-file w) (assoc :snapshot/nether-file (:capture/nether-file w))))
 
 (defn snapshot-name
   "The file a run's snapshot goes to under dir: <set>-<n>-<seed>.edn.gz, n the world file's
@@ -205,15 +249,22 @@
    value again, and what the next tick depends on. w is the captured world the snapshot names,
    prepared. A snapshot from before :snapshot/next plays on from its world's time with nothing
    pending and the tick seed restarted; a plan with no landing (a snapshot written before run
-   named one, issue #37) gets the captured world's."
+   named one, issue #37) gets the captured world's. With w's captured Nether (:capture/nether),
+   the model's Nether gets its columns back, and a moment past the portal holds the Nether's
+   columns, the bot's chunks among them, where one before it holds the overworld's."
   [{:snapshot/keys [chunks world sim next]} w]
-  (merge {:pending [] :t (:time/now world) :rand (:sim/tick-seed sim) :went? true :inflight []}
-         next
-         {:world (-> world
-                     (assoc :world/chunks (select-keys (:capture/decoded w) chunks))
-                     (update :world/facts d/from-serializable)
-                     (cond-> (nil? (:plan/go-at world)) (assoc :plan/go-at (spawn-of w))))
-          :sim (assoc sim :sim/columns (:capture/columns w) :sim/decoded (:capture/decoded w))}))
+  (let [nether (:capture/nether w)
+        here (if (and nether (= dimension/nether (:sim/dimension sim)))
+               nether
+               {:columns (:capture/columns w) :decoded (:capture/decoded w)})]
+    (merge {:pending [] :t (:time/now world) :rand (:sim/tick-seed sim) :went? true :inflight []}
+           next
+           {:world (-> world
+                       (assoc :world/chunks (select-keys (:decoded here) chunks))
+                       (update :world/facts d/from-serializable)
+                       (cond-> (nil? (:plan/go-at world)) (assoc :plan/go-at (spawn-of w))))
+            :sim (cond-> (assoc sim :sim/columns (:columns here) :sim/decoded (:decoded here))
+                   (and nether (:sim/nether sim)) (update :sim/nether merge nether))})))
 
 (defn own-world
   "The world a self-contained snapshot is played in, prepared: the columns it carries
@@ -403,14 +454,23 @@
       (flush))
     r))
 
+(defn read-nether
+  "The captured Nether at path as a world's (sim-nether), read and decoded."
+  [path]
+  (sim-nether (capture/read-world path)))
+
 (defn world-for!
   "The world a snapshot is played in, prepared: its own columns (own-world, a real failure's),
-   else the captured world file it names, read."
+   else the captured world file it names, read, with the captured Nether it names
+   (:snapshot/nether-file), which must be there: judged without it, a portal would lead into the
+   overworld's columns."
   [snap]
   (or (own-world snap)
-      (assoc (prepared (capture/read-world (:snapshot/file snap)))
-             :capture/file
-             (:snapshot/file snap))))
+      (cond-> (assoc (prepared (capture/read-world (:snapshot/file snap)))
+                     :capture/file
+                     (:snapshot/file snap))
+        (:snapshot/nether-file snap)
+        (with-nether (read-nether (:snapshot/nether-file snap)) (:snapshot/nether-file snap)))))
 
 (def judge-wall-ms 240000)            ; a judge's wall-clock budget a snapshot: four minutes, inside issue.yml's 15
 (def slow-ms (quot judge-wall-ms 2))  ; a judge slower than this is no evidence: on a slower runner it would halt (issue #299)
@@ -484,9 +544,17 @@
                     (shard (into [] (mapcat world-files) (str/split worlds #","))
                            (Long/parseLong (or runner "1"))
                            (Long/parseLong (or runners "1"))))
+        ;; one Nether a set, read once, shared by every world of it
+        nether-of (memoize (fn [path]
+                             (cond (.exists (io/file path))
+                                   (do (cli/log "nether" path) (read-nether path))
+                                   :else (cli/log "no captured Nether" path))))
         ws (mapv (fn [f]
                    (cli/log "world" (str f))
-                   (assoc (prepared (capture/read-world f)) :capture/file (str f)))
+                   (let [w (assoc (prepared (capture/read-world f)) :capture/file (str f))
+                         path (nether-file f)
+                         nether (nether-of path)]
+                     (cond-> w nether (with-nether nether path))))
                  files)
         deadline (when budget (+ (System/currentTimeMillis) (* 60000 (Long/parseLong budget))))
         todo (atom (if given
@@ -518,7 +586,8 @@
    --seeds each when no budget is given). --world f plays one file. --runs f plays exactly the
    runs an EDN file lists, [[world-file seed] ...] (an issue's reproductions). Prints a SIMRUN
    line per run and the SIMRACE tally; keeps every run in <out>/runs.edn and each failed run's
-   snapshot in <out>/snapshots.
+   snapshot in <out>/snapshots. A portal leads to the set's captured Nether when there is one
+   (nether-file: cache/sim-nether/<set>.edn.gz beside cache/sim-worlds/<set>).
    --judge f1,f2 judges snapshots as the issue check does (judge!), uninstrumented: a judge, not
    a spec test. With --expect recur, it exits 1 unless every one recurs (the base code: the
    moment must reproduce the failure); with --expect pass, unless none does (the fix).

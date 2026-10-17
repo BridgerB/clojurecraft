@@ -616,10 +616,15 @@
 (s/def :sim/portal-since int?)
 (s/def :sim/kill-at int?)
 (s/def :sim/nether ; the Nether a portal leads to: one column, or a real one's columns (issue #299)
-  (s/and (s/keys :req-un [:sim.nether/at] :opt-un [:sim.nether/column :sim.nether/columns])
-         #(or (:column %) (:columns %))))
+  (s/and (s/keys :opt-un
+                 [:sim.nether/at :sim.nether/column :sim.nether/columns :sim.nether/decoded
+                  :sim.nether/view-distance])
+         ;; whole columns may leave :at out: the arrival is then the portal's (sim/arrival, #353)
+         #(or (:columns %) (and (:column %) (:at %)))))
 (s/def :sim.nether/column bytes?)
 (s/def :sim.nether/columns (s/map-of ::column-key bytes?))
+(s/def :sim.nether/decoded map?)              ; the same columns decoded once, shared by every run of a set
+(s/def :sim.nether/view-distance pos-int?)    ; chunks streamed round the player there, as a server's view
 (s/def :sim.nether/at ::vec3)
 (s/def :sim/falling (s/map-of ::block-pos map?))
 (s/def :sim/next-window int?)
