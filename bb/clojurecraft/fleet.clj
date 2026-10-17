@@ -8,8 +8,12 @@
 
    A lane is one run of race.yml or simrace.yml with input lane k (its run-name `race lane k`,
    `simrace lane k`): one job, the runner k of the old matrix. What a look decides (decide):
-     1. a lane on a commit whose code main has replaced is cancelled (new code preempts; a
-        docs-only merge, brain/ docs/ *.md, does not);
+     1. a lane on a commit whose code main has replaced is cancelled once it has run
+        :fleet/stale-after-minutes (a queued one at once; a docs-only merge, brain/ docs/ *.md,
+        never): new code preempts, but not before the lane's runs have had time to reach the late
+        stages. On 2026-10-17 the orchestrator merged a fix every half hour, and cancelling at
+        every merge cut 52 of 60 real lanes at a median 26 minutes, while a real run needs 29 to
+        reach the Nether: the late stages were never reached and cut runs are never filed;
      2. while another workflow's job is queued: queued lanes are cancelled, then the newest running
         lanes, as many as the queued jobs exceed the free runners, never a kind below its floor;
      3. while nothing waits: free runners get new lanes on main, the kind with fewer lanes first,
@@ -95,6 +99,17 @@
                 {:live live :used used :out []}
                 (range slots))))
 
+(defn stale?
+  "Is lane l to be replaced for its code: a round of the old matrix (no lane number), or on a
+   commit main has replaced (stale-shas) and either still queued (it holds no runner) or created
+   at least stale-after-minutes before now (ms)."
+  [l stale-shas stale-after-minutes now]
+  (or (nil? (:lane l))
+      (and (stale-shas (:sha l))
+           (or (= "queued" (:status l))
+               (>= (- now (.toEpochMilli (java.time.Instant/parse (:created l))))
+                   (* 60000 stale-after-minutes))))))
+
 (defn decide
   "What one look does: {:cancel [lane ...] :dispatch [[kind lane] ...] :why {...}}, from the runs
    and jobs listed, the commits whose code main has replaced (stale-shas), the fleet's memory
@@ -103,14 +118,14 @@
    runner, so only running lanes are given back for need; cancelled ones still running count as
    runners on their way. Pure: rules 1 to 3 of the namespace doc."
   [{:keys [runs jobs stale-shas memory config now continuous]}]
-  (let [{:fleet/keys [cap floor dispatch-grace-s]} config
+  (let [{:fleet/keys [cap floor dispatch-grace-s stale-after-minutes]} config
         maxes (:fleet/max config)
         {:keys [busy demand]} (counts runs jobs)
         free (- cap busy)
         ls (lanes runs)
         cancelling (:cancelling memory #{})
         live (remove #(cancelling (:id %)) ls)
-        stale (filter #(or (nil? (:lane %)) (stale-shas (:sha %))) live)
+        stale (filter #(stale? % stale-shas (or stale-after-minutes 0) now) live)
         current (remove (set stale) live)
         recent (filter #(< (- now (:at %)) (* 1000 dispatch-grace-s)) (:dispatched memory))
         unseen (remove (fn [d] (some #(and (= (:kind d) (:kind %)) (= (:lane d) (:lane %))) ls))
