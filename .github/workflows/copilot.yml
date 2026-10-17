@@ -15,6 +15,7 @@ name: copilot
 # GitHub assigns Copilot and hears @copilot only from a user, so it needs the secret COPILOT_TOKEN
 # in the environment copilot-dispatch (deployment branches: main only, so no other branch's
 # workflow can read it): a fine-grained token on this repository with read and write on actions,
+# agent tasks (the follow-ups: without it every follow-up is refused, and it was until 2026-10-17),
 # contents, issues and pull requests. The dispatcher never merges a change to the workflows or
 # itself (copilot/guarded), the one way a session's code could reach the token. Without the secret
 # the job says so and stops. To stop the orchestrator: set the variable COPILOT_DISPATCH=false and
