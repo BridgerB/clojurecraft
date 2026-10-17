@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T13:55:18.872Z",
+  "at" : "2026-10-17T13:56:25.367Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 342,
     "title" : "Bot stops at furnace: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -184,10 +184,6 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 342,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
-  }, {
     "issue" : 338,
     "move" : "leave",
     "why" : "hands-off label"
