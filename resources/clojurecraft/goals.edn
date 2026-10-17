@@ -156,6 +156,17 @@
   :goal/plan :build
   :goal/build :nether
   :goal/done? :built?}
+ {:goal/id :return-nether
+  :goal/priority 16
+  :goal/target? true
+  :goal/always? true
+  :goal/doc
+  "return through a portal after respawning in the overworld when a reached Nether entry still has unfinished Nether targets"
+  :goal/dimension "minecraft:overworld"
+  :goal/holds {:tag/pickaxes 1}
+  :goal/plan :return-nether
+  :goal/build :nether
+  :goal/done? :nether-access?}
  {:goal/id :fortress
   :goal/priority 17
   :goal/target? true

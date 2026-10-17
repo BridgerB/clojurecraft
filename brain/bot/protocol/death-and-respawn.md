@@ -20,6 +20,7 @@ sourceRefs:
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :client-command]
   - test/clojurecraft/sim_test.clj#held-under-water-the-bot-drowns-and-respawns-with-no-intent
   - test/clojurecraft/sim_test.clj#a-respawned-player-can-equip-after-dying-with-a-furnace-open
+  - test/clojurecraft/sim_test.clj#a-nether-death-allows-another-portal-crossing
   - test/clojurecraft/props_test.clj#step-is-total-after-a-death
 related:
   - "[[bot/protocol/_moc|Protocol]]"
@@ -47,6 +48,7 @@ The `respawn` packet (its fields now modelled: dimension type, dimension, seed, 
 `sim/drown`: each tick, the model's `:sim/air` falls while the position the client last reported puts the eye in a water block of its column and refills otherwise; at zero it takes `drown-damage` (2) every `drown-every` (20) ticks and tells the client with `set-health`. `client-command` 0 from a dead player (health 0) respawns it at `:sim/respawn` (an input to `sim/init`, the spawn by default: a gym landing differs from the world spawn) with full health and breath, sending `respawn` then the teleport. `held-under-water-the-bot-drowns-and-respawns-with-no-intent` runs it: a well drowns the bot in 25 s of model time and it comes back on the world spawn beside it, lungs full, one death counted, the death a fact.
 
 ## Gotchas
+- **The model's dimension must match its respawn packet.** Issue #287's Nether deaths sent an overworld respawn but retained `:sim/dimension` as Nether, so a return portal could never cross again. A successful death respawn now sets the model to the overworld too and resends its chunks when changing dimensions, since the client discarded the old dimension's terrain. The portal-crossing test checks the chunk resend and enters the Nether again after that respawn.
 - **The old menu does not survive a new life.** Sim race 39004332220 R2/2 (issue #323) died while smelting for flint and steel. The bot forgot the furnace on respawn, but the model retained `:sim/window` and refused every window-0 equip click until `:stale-window`. The model's successful `client-command` respawn now drops that menu reference, preserving the inventory and the furnace's contents; `a-respawned-player-can-equip-after-dying-with-a-furnace-open` checks the next swap succeeds. The saved snapshot completes its equip and resumes descending instead of failing.
 - **A respawn can change the dimension** (a portal, #8). `change-dimension` sets `:player/dimension` from the packet's `:dimension` name; when it differs from the one the bot is in (`dimension/of`: the login's, which now reads the spawn info, else the overworld), the columns and the block overlay go and `:player/loaded?` is false, so the teleport that places the bot sends `player-loaded` again. Nether chunks decode at their own height ([[chunk-sections]], #11).
 - A hand-built `{:packet/name :respawn}` no longer passes the packet spec: use `fixtures/respawn` (the decoder's shape).

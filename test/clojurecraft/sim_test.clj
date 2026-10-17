@@ -1320,6 +1320,20 @@
     (is (= "minecraft:the_nether" (:sim/dimension later)))
     (is (some #(= "minecraft:the_nether" (:dimension %)) (:sim/out later)))))
 
+(deftest a-nether-death-allows-another-portal-crossing
+  (let [lit (sim/stream (strike (lighter-sim frame) [5 64 8]))
+        dead (assoc lit :sim/health 0.0 :sim/dimension dimension/nether :sim/out [])
+        alive (sim/on-packet dead
+                             {:packet/name :client-command
+                              :action (packet/value :client-command :perform-respawn)})
+        in-portal (assoc alive :sim/player-pos [5.5 65.0 8.5])
+        entered (sim/through-portal (sim/through-portal in-portal 0) sim/portal-ms)]
+    (is (= dimension/overworld (:sim/dimension alive)))
+    (is (some #(= :level-chunk-with-light (:packet/name %)) (:sim/out alive))
+        "the client discarded the other dimension's chunks")
+    (is (= dimension/nether (:sim/dimension entered)))
+    (is (= 1 (:sim/respawns entered)))))
+
 (deftest streamed-chunks-include-the-blocks-the-server-now-holds
   ;; Sim race 38999010135 (issue #328): resending the original column after the portal erased
   ;; the client's dug room, so its feet were in deepslate and the tunnel failed :no-stand.

@@ -194,7 +194,7 @@
                     "brain/siblings/sib-lava-safety.md"]}
  {:problem/stage :nether-and-fortress
   :problem/issue 11
-  :problem/goals [:fortress]
+  :problem/goals [:fortress :return-nether]
   :problem/statement
   "The world value is overworld-only, so after a portal the bot cannot tell which dimension it is in, decodes Nether chunks with the wrong height, and has no safe way to reach a fortress across the lava sea."
   :problem/needs
@@ -208,17 +208,19 @@
    "A column's height is the sections the server sent (16 or 24), looked up in dimensions.edn: the reader thread decodes without knowing the dimension"
    "The dimension is the respawn's and login's name (:player/dimension, from #8), not the registry id, which only dimensions.edn's row order explains"
    "No lava capping: a cell behind a wall cannot be capped before the wall is dug, so a tunnel step never opens a cell beside lava and tries another step instead"
-   "The gym gives a row's kit only once the server says the bot stands in the row's dimension (execute as <bot> at @s if dimension): steve gave its End kit before the cross-dimension teleport and the server held none of it (issue #261)"]
+   "The gym gives a row's kit only once the server says the bot stands in the row's dimension (execute as <bot> at @s if dimension): steve gave its End kit before the cross-dimension teleport and the server held none of it (issue #261)"
+   "A return-nether always row reuses the portal build after an overworld respawn while Nether targets remain undone; the first entry stays a historical milestone (issue #287)"]
   :problem/risks
   ["Stale overworld columns answer Nether lookups (a brick reported exactly 64 blocks off)"
    "Parsing a Nether chunk as 24 sections runs off the buffer"
    "Overworld goals (mine iron) run in the Nether"
    "Falling into the lava sea on an open approach to the fortress"
-   "Fortress brick picked below the lava sea surface"]
+   "Fortress brick picked below the lava sea surface"
+   "Death returns the bot to the overworld after the Nether entry milestone; unfinished Nether targets need a return portal, not an other-dimension wait"]
   :problem/done
   "RCON confirms the bot is in minecraft:the_nether with nether_bricks under its feet or within 6 blocks, RESULT :ok true, and zero deaths counted."
   :problem/last-failure
-  "clojurecraft has never attempted this. ruststeve: after entering the Nether its overworld columns answered Nether lookups (fortress brick reported 64 blocks too low) and the parser panicked on the shorter Nether chunk; finding the fortress was solved, but reaching it alive was not, with 9+ falls into the lava sea at one spot. Sim race 38999010135 (issue #328, R1/7 seed 2): after the portal the model resent the original columns without the dug room, putting the client's feet in deepslate and failing the first tunnel :no-stand; streamed columns now carry the model's changed blocks too, and fortress sightings use the indexed current-state query so the recovered tunnel can finish its judge window without scanning every sighting each tick."
+  "clojurecraft has never attempted this. ruststeve: after entering the Nether its overworld columns answered Nether lookups (fortress brick reported 64 blocks too low) and the parser panicked on the shorter Nether chunk; finding the fortress was solved, but reaching it alive was not, with 9+ falls into the lava sea at one spot. Sim race 38999010135 (issue #328, R1/7 seed 2): after the portal the model resent the original columns without the dug room, putting the client's feet in deepslate and failing the first tunnel :no-stand; streamed columns now carry the model's changed blocks too, and fortress sightings use the indexed current-state query so the recovered tunnel can finish its judge window without scanning every sighting each tick. Issue #287 (R2/12 and R2/15 seed 1): Nether deaths respawned in the overworld with the Nether entry already reached, leaving only other-dimension waits; a return goal now works the portal again, and the model resets its dimension and resends terrain on that respawn."
   :problem/sources ["docs/issues/09-nether-and-fortress.md" "brain/bot/plan/roadmap-issues.md"
                     "brain/siblings/sib-dimension-change.md"]}
  {:problem/stage :survival
