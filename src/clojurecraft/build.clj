@@ -496,6 +496,7 @@
           :let [stand [(+ x dx) (inc y) (+ z dz)]
                 head (update stand 1 inc)]
           :when (and (holds? world [:firm (update stand 1 dec)])
+                     (path/floor? world (update stand 1 dec))
                      (openable? world stand)
                      (openable? world head)
                      (openable? world over)
@@ -569,6 +570,7 @@
           :let [stand (cell origin facing [dx h dz])
                 head (update stand 1 inc)]
           :when (and (holds? world [:firm (update stand 1 dec)])
+                     (path/floor? world (update stand 1 dec))
                      (openable? world stand)
                      (openable? world head)
                      (dry? world (mapcat touching [stand head]))
@@ -824,7 +826,12 @@
    source opened (a build's dig may expose fluid), the lava flowed in, and no footing was in
    reach: :no-footing three times in a tick."
   [world origin facing]
-  (let [kept? (kept origin facing)] (fn [c] (or (kept? c) (lava-touching? world c)))))
+  (let [kept? (kept origin facing)]
+    (fn [c]
+      (or (kept? c)
+          (lava-touching? world c)
+          (= :water (path/classify world c))
+          (= :awkward (path/classify world (update c 1 dec)))))))
 
 (def room-footprint
   "[origin facing] → the set of cells the cast's room opens (room-cells, its stair and access
