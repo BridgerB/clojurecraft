@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T08:55:22.677Z",
+  "at" : "2026-10-17T08:56:29.118Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 346,
-    "title" : "Bot stops at nether: no-path",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 346,
+    "checks" : "red",
+    "title" : "Bot stops at nether: no-path",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 359,
+    "session" : true
   }, {
     "number" : 344,
     "title" : "Bot stops at cast-one: no-escape",
@@ -174,7 +180,9 @@
   } ],
   "moves" : [ {
     "issue" : 346,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 359,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
