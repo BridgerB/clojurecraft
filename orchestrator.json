@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T23:36:17.317Z",
+  "at" : "2026-10-17T23:37:26.027Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 296,
@@ -17,13 +17,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 37,
-    "title" : "Bot stops at ingots: boxed",
+    "number" : 130,
+    "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 130,
-    "title" : "Bot stops at cast-one: boxed",
+    "number" : 37,
+    "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -105,6 +105,11 @@
     "pr" : 391,
     "session" : false
   }, {
+    "number" : 69,
+    "title" : "Bot stops at water-bucket: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -115,11 +120,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 69,
-    "title" : "Bot stops at water-bucket: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 171,
     "title" : "Bot stops at flint-and-steel: unsafe",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -128,7 +128,7 @@
     "number" : 349,
     "title" : "Bot stops at flint-and-steel: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 110,
     "title" : "Bot stops at pickaxe: no-log",
@@ -193,10 +193,6 @@
     "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 349,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 62,
     "move" : "leave",
