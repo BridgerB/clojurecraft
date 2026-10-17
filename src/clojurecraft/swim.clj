@@ -162,7 +162,7 @@
   "With no bank in reach, the cell to dig toward one: a notch in the nearest wall, two cells
    over a solid at the float-top level (the floor the impulse lifts onto, as a pond's bank is
    one over the water's top), within notch-radius of feet on the plane and a dig's reach of
-   the afloat eye; the lower cell while it is solid, then the upper. nil with no wall in reach
+   the current eye; the lower cell while it is solid, then the upper. nil with no wall in reach
    (issue #73: an aquifer's rock walls rise straight from the water, so no cell within sixteen
    was standable and the escape rose until it timed out), and nil under a roof on the water
    (the surface cell solid): a capped well is left through its cap, which the escape digs once
@@ -171,20 +171,19 @@
    red since #113, issue #116)."
   [world [fx _ fz :as feet] surface]
   (let [top (float-top world feet surface)
-        eye [(+ fx 0.5) (+ top physics/eye-height) (+ fz 0.5)]
+        eye (game/eye world)
         roofed? (solid-cell? world [fx surface fz])]
     (->> (for [dx (if roofed? [] (range (- notch-radius) (inc notch-radius)))
                dz (range (- notch-radius) (inc notch-radius))
                :let [lower [(+ fx dx) (inc top) (+ fz dz)]
-                     upper [(+ fx dx) (+ top 2) (+ fz dz)]]
+                     upper [(+ fx dx) (+ top 2) (+ fz dz)]
+                     cell (first (filter #(solid-cell? world %) [lower upper]))]
                :when (and (solid-cell? world [(+ fx dx) top (+ fz dz)])
-                          (<= (physics/distance eye (physics/centre lower)) intent/reach)
-                          (or (solid-cell? world lower) (solid-cell? world upper)))]
-           [lower upper])
-         (sort-by (fn [[lower _]] [(physics/horizontal-distance (physics/centre feet)
-                                                                (physics/centre lower)) lower]))
-         first
-         (filter #(solid-cell? world %))
+                          cell
+                          (<= (physics/distance eye (physics/centre cell)) intent/reach))]
+           cell)
+         (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
+                                                           (physics/centre cell)) cell]))
          first)))
 
 (defn child-dig
@@ -333,6 +332,10 @@
               (intent/fail :no-escape))
           (and child (intent/done? child))
           (intent/dissoc-intent world :intent/child :intent/best-tick)
+          (and child (intent/failed? child) (= :out-of-reach (:intent/reason child)))
+          (-> world
+              (assoc :player/controls {:control/jump? true})
+              (intent/dissoc-intent :intent/child :intent/best-tick :intent/next-search))
           (and child (intent/failed? child))
           (-> world
               (assoc :player/controls {})

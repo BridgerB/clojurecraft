@@ -114,6 +114,48 @@
            [(:control/forward? (:player/controls w2)) (:control/jump? (:player/controls w2))])
         "swimming toward it, rising")))
 
+(deftest a-deep-swim-rises-into-reach-before-notching
+  (let [swim {:intent/kind :swim-out :intent/status :active}
+        cells (merge (into {} (for [y (range 39 55)] [[5 y 5] blocks/water-base]))
+                     (into {} (for [y (range 55 64)] [[5 y 5] blocks/air])))
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 39.0 5.5]
+                 :player/loaded? true
+                 :player/in-water? true
+                 :player/eye-in-water? true
+                 :world/chunks {[0 0] (world/column cells)}
+                 :plan/intent swim)
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        rising (intent/run w swim tick)]
+    (is (nil? (swim/notch w [5 39 5] 55)) "the float level is not the current eye level")
+    (is (nil? (:intent/child (:plan/intent rising))))
+    (is (:control/jump? (:player/controls rising)))
+    (is (some? (swim/notch (assoc w :player/pos [5.5 53.0 5.5]) [5 53 5] 55))
+        "near the surface the wall can be notched")
+    (let [old (assoc swim
+                     :intent/child
+                     (assoc (swim/child-dig [4 55 5])
+                            :intent/status :failed
+                            :intent/reason :out-of-reach))
+          recovered (intent/run (assoc w :plan/intent old) old tick)]
+      (is (= :active (:intent/status (:plan/intent recovered))))
+      (is (nil? (:intent/child (:plan/intent recovered))))
+      (is (:control/jump? (:player/controls recovered)))
+      (let [next (intent/run recovered (:plan/intent recovered) tick)]
+        (is (nil? (:intent/child (:plan/intent next))))
+        (is (:control/jump? (:player/controls next)))))))
+
+(deftest a-notch-checks-reach-to-the-solid-upper-cell
+  (let [w (assoc (game/init fx/opts)
+                 :player/pos [5.5 64.0 5.5]
+                 :world/chunks
+                 {[0 0] (world/column {[8 65 7] (blocks/default-state :stone)
+                                       [8 67 7] (blocks/default-state :stone)})})]
+    (is (nil? (swim/notch w [5 64 5] 66)) "the lower cell is air and only it is in reach")
+    (is (= [8 67 7] (swim/notch (assoc w :player/pos [5.5 64.5 5.5]) [5 64 5] 66))
+        "the solid upper cell is dug once it is in reach")))
+
 (deftest a-crossing-swims-at-the-surface-and-ends-on-the-far-side
   ;; issue #87 (world R3/4): the :cross wood/crossing starts from an island
   (let [lake (into {}

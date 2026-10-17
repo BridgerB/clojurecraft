@@ -26,6 +26,7 @@ sourceRefs:
   - src/clojurecraft/swim.clj#defn obstacle
   - test/clojurecraft/swim_test.clj#a-wall-between-the-swim-and-a-level-bank-is-dug
   - src/clojurecraft/swim.clj#defn notch
+  - test/clojurecraft/swim_test.clj#a-deep-swim-rises-into-reach-before-notching
   - src/clojurecraft/swim.clj#defn far-shore
   - src/clojurecraft/swim.clj#defn in-the-open?
   - test/clojurecraft/swim_test.clj#at-sea-with-no-bank-in-reach-the-escape-swims-for-the-shore
@@ -90,6 +91,8 @@ Survival is two goal rows, a trap rule the planner applies every tick, and the e
 4. **Stuck** (`stuck-ticks` 40 without `progress` 0.05 toward the bank): `obstacle` names what to dig: a lily pad over the head first (a lid, steve's rule), else the cell ahead at head height, else the cell ahead at feet height when the bank is no higher than the feet (a wall between them, not a step to climb), else the cell over the head; never the cell ahead at feet height under a higher bank, which is the step the impulse needs to collide with. Race 38805758078 runner 1 (issues #156, #157) bot Clj_r44, in a flooded tunnel at y 16, had its bank two blocks off at its own height with a block between at the feet: the swim dug the ceiling over its head every twenty seconds, then nothing was named and it failed `:stuck` (`a-wall-between-the-swim-and-a-level-bank-is-dug`). The dig is a child `:dig` with `:intent/exposes-ok?` run by `intent/run-child` (intents composing intents, as [[stairs-down]]).
 5. **Afloat.** A child dig runs through `dig-afloat`: under an open surface (the cell over the water not solid) jump is held through the dig, so the eye stays in air and the dig is off the ground (five times slower, the same as the eye under water from the floor); a body left on the floor for a dig's length drowned (issue #73). Under a roof the floor is where the dig is from.
 6. **From the floor.** `dig-or-sink`: off the ground a dig is five times slower and under water five times again, so a cap dug from the water takes 28 s with a wooden pickaxe and the breath lasts 25. When the cap is within reach of the eye standing on the floor (`dig-from-floor?`), the escape holds sneak, remembers the cell as `:intent/dig-when-down`, and starts the dig once on the ground: 5.75 s.
+
+Notch reach is measured from the current eye to the solid cell that will actually be dug, not from the predicted float level. Issue #366 (R1/38 seed 1) started an escape at y 39 and chose a notch at y 55, nearly fifteen blocks from its eye, failing `:out-of-reach` three times. With no reachable notch the escape keeps rising; a child already failed `:out-of-reach` is dropped so the escape can search again instead of propagating that failure.
 
 A `:swim-out` started by the mine act's retreat (`:intent/for :retreat`, out of a flooded tunnel the bot is wading in) ends itself on dry land (`trap/dry-land?`); one started by the gather's `into-water` (`:intent/for :rise`, up a shaft dug into the sea, [[gather-chain]]) on dry land in the open, cap and notch skipped; an escape's is ended by its goal when the trap clears ([[mine-act]]).
 
