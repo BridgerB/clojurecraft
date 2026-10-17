@@ -487,26 +487,30 @@
       (post! (str "repos/" repo "/issues/" n "/assignees") (body follow-model)))))
 
 (defn follow-up!
-  "Ask Copilot to go on with move m's pull request on follow-model: a note on the pull request
-   (no mention, which would start a session of its own on the fix model) and an agent task on its
-   branch, which continues that pull request (head_ref) rather than opening another."
+  "Ask Copilot to go on with move m's pull request on follow-model: an agent task on its branch,
+   which continues that pull request (head_ref) rather than opening another, and, only once the
+   task exists, a note on the pull request saying so (no mention, which would start a session of
+   its own on the fix model). A refused task leaves the issue to a person at once, the refusal in
+   a comment: until 2026-10-17 the note went first and every refusal was silent (COPILOT_TOKEN
+   lacked the Agent tasks permission), so red pull requests collected notes that started nothing."
   [m]
   (let [text (nudge-text m)
         model (model-of "COPILOT_FOLLOW_MODEL" follow-model)
-        task (fn [mdl]
-               (post! (str "agents/repos/" repo "/tasks")
-                      {:prompt text :base_ref "main" :head_ref (:branch m) :model mdl}))]
-    (gh "pr" "comment" (str (:pr m)) "--repo" repo "--body" (str text " (model " model ")"))
-    (let [r (task model)]
-      (when-not (zero? (:exit r))
-        (println
-         "follow-up on"
-         model
-         "refused for PR #"
-         (:pr m)
-         ":"
-         (str/trim (:err r))
-         "; not asked again on another model (GitHub's own choice may be a Claude model)")))))
+        r (post! (str "agents/repos/" repo "/tasks")
+                 {:prompt text :base_ref "main" :head_ref (:branch m) :model model})]
+    (cond (zero? (:exit r))
+          (gh "pr" "comment" (str (:pr m)) "--repo" repo "--body" (str text " (model " model ")"))
+          :else
+          (do (println "follow-up on" model "refused for PR #" (:pr m) ":" (str/trim (:err r)))
+              (gh "issue" "edit" (str (:issue m)) "--repo" repo "--add-label" "agent-stuck")
+              (gh "pr"
+                  "comment" (str (:pr m))
+                  "--repo" repo
+                  "--body"
+                  (str "Left for a person: the follow-up session could not start ("
+                       (str/trim (:err r))
+                       "). The orchestrator's token (COPILOT_TOKEN) needs the repository "
+                       "permission Agent tasks: read and write to start one."))))))
 
 (defn unassign!
   "Take Copilot off issue n."
