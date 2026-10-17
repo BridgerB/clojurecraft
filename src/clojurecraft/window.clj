@@ -128,20 +128,25 @@
 
 (def cobblestone-keep 128)            ; cobblestone a full inventory never throws below: a cast's walls, floors and seals
 
+(def filler-keep
+  "How many of each building block a full inventory keeps when throwing surplus stacks."
+  (zipmap [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt]
+          (repeat cobblestone-keep)))
+
 (defn junk-slot
   "The player slot (main inventory first) of the stack a full inventory throws away: the first
-   holding junk, else a stack of cobblestone whose loss still leaves cobblestone-keep; nil when
+   holding junk, else a building-block stack whose loss still leaves filler-keep of its kind; nil when
    there is neither."
   [world]
   (let [inv (:player/inventory world)
-        cobblestone (get (recipe/counts inv) :cobblestone 0)
+        counts (recipe/counts inv)
         held (for [p inventory/main-then-hotbar
                    :let [s (get inv p)]
                    :when s]
                [p (recipe/item-name (:item s)) (:count s)])]
     (or (some (fn [[p n]] (when (junk n) p)) held)
         (some (fn [[p n c]]
-                (when (and (= n :cobblestone) (>= (- cobblestone c) cobblestone-keep)) p))
+                (when-let [keep (filler-keep n)] (when (>= (- (get counts n 0) c) keep) p)))
               held))))
 
 (defn tossable

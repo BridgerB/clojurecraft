@@ -177,7 +177,8 @@
    "Which ops of the build plan are already satisfied, so a resume skips them"
    "The current dimension, from the respawn packet"]
   :problem/risks
-  ["A broken pickaxe and no crafting table require wood below the feet: tree-directed stairs must be cut by hand, not repeatedly fail :no-pickaxe (issue #229, R4/5)"
+  ["Surplus deepslate and dirt can fill every slot while exactly 128 protected cobblestone remain: discard a surplus building-block stack while retaining 128 of its kind before gathering or crafting a replacement pickaxe (issue #382, R4/23)."
+   "A broken pickaxe and no crafting table require wood below the feet: tree-directed stairs must be cut by hand, not repeatedly fail :no-pickaxe (issue #229, R4/5)"
    "Trees near an exposed mountain ledge can require a long detour down the mine stairs: before waiting :no-log, search a larger bounded route and retain its budget through execution and replans (issue #186, R2/17)."
    "Lava pour lands outside the hole: the ray enters the frame below the cell (a stand too low or too far aside)"
    "Water poured beside the lava instead of over it: the source flows into the water and leaves cobblestone"
