@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T15:02:47.702Z",
+  "at" : "2026-10-17T15:04:59.430Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -31,7 +31,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 227,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at portal: no-scoop",
     "copilot" : true,
     "draft" : true,
