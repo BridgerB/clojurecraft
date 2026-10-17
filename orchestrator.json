@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T22:19:17.014Z",
+  "at" : "2026-10-17T22:22:39.465Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -69,7 +69,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 151,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "copilot" : true,
     "draft" : true,
