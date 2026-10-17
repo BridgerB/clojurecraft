@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T19:22:06.605Z",
+  "at" : "2026-10-17T19:23:13.364Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -69,7 +69,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 391,
-    "session" : true
+    "session" : false
   }, {
     "number" : 157,
     "title" : "Bot stops at ingots: stuck",
@@ -226,9 +226,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 161,
-    "move" : "wait",
-    "pr" : 391,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 391
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -868,5 +867,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-17T18:56:52.277Z"
+  }, {
+    "issue" : 161,
+    "move" : "ready",
+    "pr" : 391,
+    "at" : "2026-10-17T19:23:13.364Z"
   } ]
 }
