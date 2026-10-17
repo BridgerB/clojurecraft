@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T22:49:34.136Z",
+  "at" : "2026-10-17T22:50:44.283Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -13,10 +13,16 @@
     "pr" : 400,
     "session" : false
   }, {
-    "number" : 342,
-    "title" : "Bot stops at furnace: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 342,
+    "checks" : "pending",
+    "title" : "Bot stops at furnace: boxed",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 403,
+    "session" : true
   }, {
     "number" : 320,
     "title" : "Bot stops at cast-one: stair-not-taken",
@@ -186,7 +192,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 342,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 403,
+    "why" : "session running"
   }, {
     "issue" : 320,
     "move" : "leave",
