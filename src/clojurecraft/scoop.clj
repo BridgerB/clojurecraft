@@ -432,29 +432,35 @@
    lip of rock. Every hunt and walk had no route, and each waited :no-water.
    The cut names the water it heads for (:intent/target): a cut that is :boxed gives that water
    up (stairs/box) and the next look chooses other water, or none and a climb; so does a tunnel
-   that ends no nearer it than it began (:intent/from-feet, stairs/no-nearer?)."
-  [world]
-  (let [fy (physics/y-of (intent/feet world))]
-    (when-let [[_ y _ :as w] (first (concat (sources world) (pools-near world)))]
-      (let [bank (inc y)]
-        (assoc (cond (> bank fy)
-                     {:intent/kind :stairs-up
-                      :intent/to-y (stairs/climb-to world bank)
-                      :intent/to-height? true
-                      :intent/for :bank}
-                     (< bank fy)
-                     {:intent/kind :stairs-down
-                      :intent/to-y (max bank (- fy stone/stair-depth))
-                      :intent/dir (heading-to world w)
-                      :intent/for :bank}
-                     :else
-                     {:intent/kind :tunnel
-                      :intent/dir (heading-to world w)
-                      :intent/length tunnel-out-length
-                      :intent/for :bank
-                      :intent/from-feet (intent/feet world)})
-               :intent/target
-               w)))))
+   that ends no nearer it than it began (:intent/from-feet, stairs/no-nearer?).
+   With radius, the pools remembered within it count (pool-radius by default; scoop-next asks
+   far-pool-radius last: sim race 38811426215 runner 8 (issue #60, world R4/29) stood at the
+   corner of its world with pools 150 blocks off and 25 to 50 blocks under it, hunt targets
+   over a cliff beyond reach of a route, climbed its pit to the landing's height and waited
+   :no-water there with the pool remembered and no cut toward it)."
+  ([world] (to-bank world pool-radius))
+  ([world radius]
+   (let [fy (physics/y-of (intent/feet world))]
+     (when-let [[_ y _ :as w] (first (concat (sources world) (pools-near world radius)))]
+       (let [bank (inc y)]
+         (assoc (cond (> bank fy)
+                      {:intent/kind :stairs-up
+                       :intent/to-y (stairs/climb-to world bank)
+                       :intent/to-height? true
+                       :intent/for :bank}
+                      (< bank fy)
+                      {:intent/kind :stairs-down
+                       :intent/to-y (max bank (- fy stone/stair-depth))
+                       :intent/dir (heading-to world w)
+                       :intent/for :bank}
+                      :else
+                      {:intent/kind :tunnel
+                       :intent/dir (heading-to world w)
+                       :intent/length tunnel-out-length
+                       :intent/for :bank
+                       :intent/from-feet (intent/feet world)})
+                :intent/target
+                w))))))
 
 (defn dig-out
   "Out of the ground when the sky is not open over the feet, whatever the height: walk up the
@@ -492,23 +498,29 @@
    give way to the cut toward its bank, which they would undo a stair at a time. Sim race
    38669750355 (issue #69) landed on hills at y 100 and y 73, cut a stair down toward a pond, was
    then deep under the landing with rock over the head, climbed back up its opening, and did it
-   again, sixteen hundred times in ninety minutes."
+   again, sixteen hundred times in ninety minutes. A pool remembered beyond pool-radius, level
+   with or under the feet, is cut toward the same way (far-down: before the climbs, which
+   would undo its stairs, and one over the feet last, far), where there was only the wait."
   [world]
   (let [srcs (sources world)
         src (first (filter #(and (in-reach? world %) (sees? world %)) srcs))
-        bank (delay (to-bank world))]
+        bank (delay (to-bank world))
+        far (delay (when-not @bank (to-bank world far-pool-radius)))
+        far-down (delay (when-not (= :stairs-up (:intent/kind @far)) @far))]
     (cond src {:intent/kind :scoop :intent/target src}
           :else
           (or (first-walk world :scoop srcs)
               (first-walk world :scoop (pools-near world))
               (seen-source world)
               (from-below world)
-              (when-not @bank (climb world))
+              (when-not (or @bank @far-down) (climb world))
               (hunt world)
-              (when-not @bank (pit-climb world))
+              (when-not (or @bank @far-down) (pit-climb world))
               @bank
+              @far-down
               (dig-out world)
               (tunnel-out world)
+              @far
               {:plan/wait :no-water}))))
 
 (defmethod plan/act :scoop [world _] (scoop-next world))
