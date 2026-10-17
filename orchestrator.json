@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T08:06:04.922Z",
+  "at" : "2026-10-17T08:07:11.167Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 351,
-    "title" : "Bot stops at fortress: stuck",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 351,
+    "checks" : "red",
+    "title" : "Bot stops at fortress: stuck",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 356,
+    "session" : true
   }, {
     "number" : 348,
     "title" : "Bot stops at flint-and-steel: stuck",
@@ -189,7 +195,9 @@
   } ],
   "moves" : [ {
     "issue" : 351,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 356,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
