@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T20:00:58.870Z",
+  "at" : "2026-10-17T20:02:08.396Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -22,6 +22,11 @@
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
+  }, {
+    "number" : 328,
+    "title" : "Bot stops at fortress: no-stand",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
   }, {
     "number" : 320,
     "title" : "Bot stops at cast-one: stair-not-taken",
@@ -67,7 +72,7 @@
     "title" : "Bot stops at portal-kit: timeout",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 6,
+    "nudges" : 7,
     "pr" : 391,
     "session" : false
   }, {
@@ -210,6 +215,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 328,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
+  }, {
     "issue" : 320,
     "move" : "leave",
     "why" : "hands-off label"
@@ -231,8 +240,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 161,
-    "move" : "nudge",
-    "pr" : 391
+    "move" : "wait",
+    "pr" : 391,
+    "why" : "nudged recently"
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -912,5 +922,10 @@
     "move" : "nudge",
     "pr" : 391,
     "at" : "2026-10-17T20:00:58.870Z"
+  }, {
+    "issue" : 328,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-17T20:02:08.396Z"
   } ]
 }
