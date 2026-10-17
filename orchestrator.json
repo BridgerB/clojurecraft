@@ -1,14 +1,14 @@
 {
-  "at" : "2026-10-17T07:33:08.127Z",
+  "at" : "2026-10-17T07:34:15.192Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 351,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at fortress: stuck",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 352,
     "session" : false
@@ -206,7 +206,7 @@
   } ],
   "moves" : [ {
     "issue" : 351,
-    "move" : "ready",
+    "move" : "nudge",
     "pr" : 352
   }, {
     "issue" : 338,
@@ -455,5 +455,10 @@
     "move" : "ready",
     "pr" : 352,
     "at" : "2026-10-17T07:33:08.127Z"
+  }, {
+    "issue" : 351,
+    "move" : "nudge",
+    "pr" : 352,
+    "at" : "2026-10-17T07:34:15.192Z"
   } ]
 }
