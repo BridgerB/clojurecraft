@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T02:22:10.561Z",
+  "at" : "2026-10-17T02:25:21.695Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -11,7 +11,7 @@
     "draft" : false,
     "nudges" : 3,
     "pr" : 324,
-    "session" : true
+    "session" : false
   }, {
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
@@ -107,7 +107,7 @@
     "issue" : 62,
     "move" : "wait",
     "pr" : 324,
-    "why" : "session running"
+    "why" : "nudged recently"
   }, {
     "issue" : 196,
     "move" : "leave",
