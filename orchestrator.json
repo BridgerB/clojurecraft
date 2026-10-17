@@ -1,8 +1,8 @@
 {
-  "at" : "2026-10-17T03:02:43.336Z",
+  "at" : "2026-10-17T03:04:50.786Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "quiet" : false,
     "number" : 62,
     "checks" : "red",
