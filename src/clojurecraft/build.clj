@@ -1307,6 +1307,7 @@
 
 (defmethod intent/run :build
   ;; work the first op of the plan not satisfied (next-op, work-op); done when the last op holds.
+  ;; A lost pickaxe ends this intent so held-first replaces it without spending a failed attempt.
   ;; The site is remembered once, so a new life resumes the build there
   [world {:intent/keys [origin facing] :as i} event]
   (let [world (cond-> world
@@ -1317,7 +1318,15 @@
       (-> world
           (assoc :player/controls {})
           intent/done)
-      (work-op world i next event))))
+      (let [world (work-op world i next event)
+            i (:plan/intent world)]
+        (cond (and (intent/failed? i) (= :no-pickaxe (:intent/reason i)))
+              (-> world
+                  (assoc :player/controls {})
+                  (intent/dissoc-intent :intent/reason)
+                  intent/done
+                  (game/say "build: the pickaxe broke, planning its replacement"))
+              :else world)))))
 
 ;; ---------------------------------------------------------------- the site and the targets
 
