@@ -187,6 +187,25 @@
     (is (some? (stone/deeper (standing 16 :stone_pickaxe))) "plain rock: stairs deeper")
     (is (nil? (stone/deeper w)) "water beside every stair: none")))
 
+(deftest a-boxed-pocket-retreats-along-a-short-route-to-new-rock
+  (let [corridor (into {} (for [x (range 5 10) y [48 49]] [[x y 5] blocks/air]))
+        w (assoc (standing 48) :world/chunks {[0 0] (world/column corridor)})
+        boxed (assoc w :plan/boxed-at #{[5 48 5]})]
+    (is (nil? (stone/retreat w)) "an ordinary retreat still seeks twelve blocks of distance")
+    (is (= {:intent/kind :walk :intent/target [9 48 5] :intent/for :retreat} (stone/retreat boxed))
+        "a boxed pocket uses the reachable end even when twelve blocks cannot be reached")
+    (is (= [8 48 5] (:intent/target (stone/retreat (update boxed :plan/boxed-at conj [9 48 5]))))
+        "the shorter way ends on rock not already known to be boxed")
+    (let [near (assoc boxed :plan/boxed-at #{[5 48 5] [7 48 5] [8 48 5] [9 48 5]})
+          walk (stone/retreat near)
+          away (assoc near :player/pos [6.5 48.0 5.5])]
+      (is (= [6 48 5] (:intent/target walk)))
+      (is (= {:goal/kind :block :goal/pos [6 48 5]} (intent/walk-goal walk)))
+      (is (not (intent/arrived? near walk 1.5)) "in reach is still in the boxed pocket")
+      (is (intent/arrived? away walk 1.5) "the retreat ends standing on its unboxed destination"))
+    (is (nil? (stone/retreat (assoc boxed :plan/boxed-at (set (for [x (range 5 10)] [x 48 5])))))
+        "a corridor whose every cell is boxed is not retried")))
+
 (deftest boxed-in-by-water-with-no-way-away-the-mine-climbs-out
   ;; race 38515209959 (issue #105): runner 3 bot Clj_r19 and runner 9 bot Clj_r18 tunnelled for
   ;; gravel at y 38-40 into underground water, swam out onto a cell every stair and tunnel from

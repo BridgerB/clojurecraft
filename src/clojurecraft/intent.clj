@@ -209,8 +209,9 @@
    (#8: a pour is aimed from it), the pearl hunt's burrow (:shelter, issue #263), a hiding place
    out of a blaze's sight (:cover, issue #262: a cell within reach of the eye but round a corner
    hides only once stood in) and a fight's stand round a wall (:fight, issue #262: a walk near
-   the target ended in reach of it through the wall, where it started)."
-  #{:build :shelter :cover :fight})
+   the target ended in reach of it through the wall, where it started), and a retreat's new
+   ground (:retreat: a short way out of a boxed pocket must leave that pocket)."
+  #{:build :shelter :cover :fight :retreat})
 
 (defn walk-goal
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell
@@ -219,8 +220,8 @@
    close off), and with :intent/step-down? a straight neighbour a block up too (the block in the
    floor beside the feet, path's :goal/step-down?); for water to scoop, its bank (arrived?: path's :pickup goal at the cell over the
    source, rise 1); for a build's stand or the pearl hunt's burrow (:intent/for :shelter, issue #263:
-   a step short of it is where an enderman reaches the bot), that cell itself; else anywhere
-   within goal-range."
+   a step short of it is where an enderman reaches the bot) or a retreat's new ground, that cell
+   itself; else anywhere within goal-range."
   [{:intent/keys [target for pickup? step-down?]}]
   (cond pickup?
         (cond->
@@ -256,8 +257,8 @@
    scoop, on its bank: the feet level with the cell over the source or a block lower, within
    scoop-range on the plane, where the eyes look down on its surface; the tenth live run's walk
    ended in reach but in its own stair pit two below the surface, and saw no water. For a build's
-   stand (#8: a pour is aimed from it) or the hunt's burrow (:shelter), the feet in that cell near
-   its middle (centred?). For a
+   stand (#8: a pour is aimed from it), the hunt's burrow (:shelter) or a retreat's new ground,
+   the feet in that cell near its middle (centred?). For a
    walk out (:intent/for :opening), the surface goal itself: sky over the feet alone may still
    be a shaft or a pit, and within reach of the mouth the bot is still in the shaft."
   [world {:intent/keys [target for pickup?] :as i} d]

@@ -167,6 +167,20 @@
     (is (= {:plan/wait :no-log} (wood/gather-next (boxed (bed :gravel))))
         "never under gravel, which would fall on the bot")))
 
+(deftest a-climb-for-wood-boxed-under-gravel-takes-the-short-way-away
+  (let [corridor (into {[12 64 8] 136} (for [x (range 5 10) y [48 49]] [[x y 5] blocks/air]))
+        bed (into corridor (for [x (range 5 10)] [[x 51 5] (blocks/default-state :gravel)]))
+        w (assoc (remembered bed [5.5 48.0 5.5]) :plan/boxed-at #{[5 48 5]})
+        next (wood/gather-or-out w)]
+    (is (= {:plan/wait :no-log} (wood/gather-next w)) "no tree can yet be reached")
+    (is (= {:intent/kind :walk :intent/target [9 48 5] :intent/for :retreat} next)
+        "the gather act leaves instead of waiting in the boxed pocket")
+    (let [away (assoc w :player/pos [9.5 48.0 5.5])]
+      (is (= :stairs-up (:intent/kind (wood/gather-or-out away))))
+      (is (not (stairs/up-dry? away (stairs/up-cells (intent/feet away) [-1 0]))))
+      (is (not (stairs/level-safe? away [[5 49 5] [5 48 5]]))
+          "the way back into the boxed pocket stays refused"))))
+
 (deftest a-near-trunk-with-no-route-is-climbed-for-too
   ;; sim race 38395033917, world R3/24 (issue #75): at the bottom of two staircases that met, the
   ;; second having dug out the first's riser, no route led up, and every walk to a trunk within

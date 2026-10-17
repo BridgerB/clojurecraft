@@ -235,18 +235,23 @@
 (defn retreat
   "Away from where nothing can be cut: out of water first when the feet are in it (a :swim-out for
    :retreat, done on dry land), else a walk to the end of a route at least retreat-distance
-   away (path's :away goal), where the rock is new; nil when there is no way. Gym batch iron-a6
+   away (path's :away goal), where the rock is new. From a boxed cell, when the search exhausts
+   the reachable ground short of that distance, use its last unboxed waypoint instead;
+   nil when there is no way. Gym batch iron-a6
    run 3's tunnel at y 16 ran along an aquifer until water filled its floor, and every tunnel and
    stair from there was refused."
   [world]
   (if (:player/in-water? world)
     {:intent/kind :swim-out :intent/for :retreat}
-    (let [r (path/plan
-             world
-             (path/feet-cell (:player/pos world))
-             {:goal/kind :away :goal/pos (intent/feet world) :goal/range retreat-distance})]
-      (when (= :found (:path/status r))
-        {:intent/kind :walk :intent/target (last (:path/waypoints r)) :intent/for :retreat}))))
+    (let [feet (intent/feet world)
+          boxed (:plan/boxed-at world #{})
+          r (path/plan world
+                       (path/feet-cell (:player/pos world))
+                       {:goal/kind :away :goal/pos feet :goal/range retreat-distance})
+          target (cond (= :found (:path/status r)) (last (:path/waypoints r))
+                       (and (= :none (:path/status r)) (contains? boxed feet))
+                       (last (remove boxed (:path/waypoints r))))]
+      (when target {:intent/kind :walk :intent/target target :intent/for :retreat}))))
 
 (defn climb
   "Stairs up out of the ground, climb-stairs at a time (stairs/climb-to), when nothing can be
