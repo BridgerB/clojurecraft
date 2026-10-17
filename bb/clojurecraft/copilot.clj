@@ -64,18 +64,25 @@
 (defn check-state
   "The required checks of a pull request's status rollup as one word: :green when every one
    passed, :approval when a run waits for a person to approve it (Copilot's pushes, while the
-   repository asks for that), :red when any failed, :pending otherwise (missing ones count as pending). A name that
-   appears twice (test.yml and issue.yml both run `unit / unit`) takes its worst run."
+   repository asks for that), :red when any failed, :pending otherwise (missing ones count as
+   pending). Only each workflow's newest run of a check counts: a pull request's edits and pushes
+   start new runs and cancel the older ones, and a cancelled run is never red (PR #311: superseded,
+   cancelled runs beside green ones read red, and Copilot was asked seven times to fix a green
+   pull request). A name two workflows run (test.yml and issue.yml both run `unit / unit`) takes
+   the worse of their newest runs."
   [rollup]
   (let [word (fn [c]
                (let [w (str/upper-case (str (or (:conclusion c) (:state c) "")))]
                  (cond (= "ACTION_REQUIRED" w) :approval
-                       (#{"FAILURE" "CANCELLED" "TIMED_OUT" "ERROR"} w) :red
+                       (#{"FAILURE" "TIMED_OUT" "ERROR"} w) :red
                        (#{"SUCCESS" "SKIPPED" "NEUTRAL"} w) :green
                        :else :pending)))
-        by-name (group-by #(or (:name %) (:context %)) rollup)
+        newest (->> rollup
+                    (group-by (juxt #(or (:name %) (:context %)) :workflowName))
+                    (map (fn [[[n _] cs]] [n (last (sort-by #(str (:startedAt %)) cs))])))
+        by-name (group-by first newest)
         states (for [n required-checks
-                     :let [ws (set (map word (get by-name n)))]]
+                     :let [ws (set (map (comp word second) (get by-name n)))]]
                  (cond (ws :approval) :approval
                        (ws :red) :red
                        (and (seq ws) (= ws #{:green})) :green
