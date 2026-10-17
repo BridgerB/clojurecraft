@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T17:30:56.255Z",
+  "at" : "2026-10-17T17:32:04.451Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -44,10 +44,16 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 178,
+    "checks" : "red",
+    "title" : "Bot stops at portal: timeout",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 387,
+    "session" : true
   }, {
     "number" : 162,
     "title" : "Bot stops at portal: no-path",
@@ -205,7 +211,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 178,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 387,
+    "why" : "session running"
   }, {
     "issue" : 62,
     "move" : "leave",
