@@ -1,7 +1,17 @@
 {
-  "at" : "2026-10-17T06:37:17.309Z",
+  "at" : "2026-10-17T06:40:32.456Z",
   "cap" : 1,
   "issues" : [ {
+    "number" : 347,
+    "title" : "Bot stops at portal: no-pickaxe",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 346,
+    "title" : "Bot stops at nether: no-path",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 345,
     "title" : "Bot stops at fortress: no-escape",
     "labels" : [ "bot-failure", "sim" ],
@@ -15,7 +25,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 342,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at furnace: boxed",
     "copilot" : true,
     "draft" : true,
