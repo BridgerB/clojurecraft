@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T13:06:41.185Z",
+  "at" : "2026-10-17T13:07:49.284Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 368,
-    "title" : "Bot stops at portal-kit: stair-not-taken",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 368,
+    "checks" : "red",
+    "title" : "Bot stops at portal-kit: stair-not-taken",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 373,
+    "session" : true
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -174,7 +180,9 @@
   } ],
   "moves" : [ {
     "issue" : 368,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 373,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
