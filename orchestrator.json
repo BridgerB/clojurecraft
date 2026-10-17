@@ -1,18 +1,7 @@
 {
-  "at" : "2026-10-17T11:23:45.868Z",
+  "at" : "2026-10-17T11:24:54.548Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 363,
-    "checks" : "green",
-    "title" : "Bot stops at portal: boxed",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 364,
-    "session" : false
-  }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
@@ -169,10 +158,6 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 363,
-    "move" : "merge",
-    "pr" : 364
-  }, {
     "issue" : 338,
     "move" : "leave",
     "why" : "hands-off label"
@@ -180,6 +165,9 @@
     "issue" : 296,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 284,
+    "move" : "assign"
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -553,5 +541,9 @@
     "move" : "merge",
     "pr" : 364,
     "at" : "2026-10-17T11:23:45.868Z"
+  }, {
+    "issue" : 284,
+    "move" : "assign",
+    "at" : "2026-10-17T11:24:54.548Z"
   } ]
 }
