@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T22:40:35.175Z",
+  "at" : "2026-10-17T22:43:55.219Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -43,6 +43,11 @@
     "nudges" : 0,
     "pr" : 387,
     "session" : false
+  }, {
+    "number" : 171,
+    "title" : "Bot stops at flint-and-steel: unsafe",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
