@@ -1,22 +1,11 @@
 {
-  "at" : "2026-10-17T07:24:15.707Z",
+  "at" : "2026-10-17T07:25:25.434Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 351,
     "title" : "Bot stops at fortress: stuck",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 349,
-    "checks" : "green",
-    "title" : "Bot stops at flint-and-steel: timeout",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 350,
-    "session" : false
   }, {
     "number" : 348,
     "title" : "Bot stops at flint-and-steel: stuck",
@@ -200,9 +189,8 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 349,
-    "move" : "merge",
-    "pr" : 350
+    "issue" : 351,
+    "move" : "assign"
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -437,5 +425,9 @@
     "move" : "merge",
     "pr" : 350,
     "at" : "2026-10-17T07:24:15.707Z"
+  }, {
+    "issue" : 351,
+    "move" : "assign",
+    "at" : "2026-10-17T07:25:25.434Z"
   } ]
 }
