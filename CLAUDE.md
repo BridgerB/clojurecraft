@@ -2,7 +2,7 @@
 
 clojurecraft: a from-scratch Minecraft Java Edition bot in Clojure whose purpose is to beat the Ender Dragon with no human input. It is the third bot in the `mc` monorepo next to steve (TypeScript) and ruststeve (Rust) and is deliberately built the opposite way: no mutable Bot object, no framework.
 
-**Fixing `bot-failure` issues: follow `AGENTS.md`** at the repository root, the manual every agent uses for that work (the board, the claim, the loop, the reference). It starts by sending you here, to `docs/RICH-HICKEY.md` and to the brain.
+**Fixing `bot-failure` issues: follow `AGENTS.md`** at the repository root, the manual every agent uses for that work (who works which issue, the rules, the loop; a short entry agents load every turn, with the long sections under `docs/fixing/`). It starts by sending you here, to `docs/RICH-HICKEY.md` and to the brain.
 
 ## The brain
 
