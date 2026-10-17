@@ -782,9 +782,11 @@
    the way out of the ground is worth 7500 ms a block of stone, since the tool is made up there.
    Race 38477665442 Clj_r21's pickaxe broke at y 60 in the iron mine; its stairs up stopped
    :no-pickaxe, the sticks for another were in the trees up top, and twelve walks to them failed
-   :no-path (issue #40). A stair down and a tunnel stop for the tool instead (tool-missing)."
+   :no-path (issue #40). A stair down toward trees is too: the wood for a replacement can be
+   below the feet (issue #229). Other descents and tunnels stop for the tool (tool-missing)."
   [i]
-  (= :stairs-up (:intent/kind i)))
+  (or (= :stairs-up (:intent/kind i))
+      (and (= :stairs-down (:intent/kind i)) (= :trees (:intent/for i)))))
 
 (defn dig-next
   "Start a child for cell, the next of a stair's to open: a :dig, or first an :equip of the tool
