@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T23:17:16.557Z",
+  "at" : "2026-10-17T23:21:42.504Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 296,
@@ -42,13 +42,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -177,9 +177,8 @@
   } ],
   "moves" : [ {
     "issue" : 342,
-    "move" : "wait",
-    "pr" : 403,
-    "why" : "nudged recently"
+    "move" : "nudge",
+    "pr" : 403
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -1022,5 +1021,10 @@
     "move" : "nudge",
     "pr" : 403,
     "at" : "2026-10-17T23:16:06.399Z"
+  }, {
+    "issue" : 342,
+    "move" : "nudge",
+    "pr" : 403,
+    "at" : "2026-10-17T23:21:42.504Z"
   } ]
 }
