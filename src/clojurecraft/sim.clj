@@ -1191,6 +1191,43 @@
    :debug? false
    :flat? false})
 
+(defn health-data
+  "The set-entity-data that tells the client mob eid's health."
+  [eid health]
+  {:packet/name :set-entity-data :entity-id eid :metadata {entity/health-index (double health)}})
+
+(defn retell-entities
+  "The model with every mob and every item lying about told to the client again (add-entity, a
+   mob's health after it), as a vanilla server does for a respawned player, whose client starts
+   a new life knowing no entity. Sim race 38900840841 (issue #62): a bot that died and respawned
+   never saw the zombie and spider that followed it down the stair, so :defend never fought them
+   and it died on the same stair again and again."
+  [sim]
+  (let [told (reduce (fn [sim [eid {:keys [type pos health]}]]
+                       (let [[x y z] pos]
+                         (-> sim
+                             (send {:packet/name :add-entity
+                                    :entity-id eid
+                                    :uuid nil
+                                    :type (mob/type-id type)
+                                    :x x
+                                    :y y
+                                    :z z})
+                             (send (health-data eid health)))))
+                     sim
+                     (:sim/mobs sim))]
+    (reduce (fn [sim [eid {[x y z] :pos}]]
+              (send sim
+                    {:packet/name :add-entity
+                     :entity-id eid
+                     :uuid nil
+                     :type blocks/item-entity-type
+                     :x x
+                     :y y
+                     :z z}))
+            told
+            (:sim/items sim))))
+
 (defmethod on-packet [:play :client-command]
   [sim {:keys [action]}]
   ;; a dead player asking to respawn gets a new life at spawn, full health and breath, a fresh
@@ -1203,6 +1240,7 @@
           (cond-> (:sim/difficulty sim) (with-food-value hunger/fresh))
           (update :sim/respawns inc)
           (send respawn)
+          retell-entities
           (send {:packet/name :player-position
                  :teleport-id 2
                  :x x
@@ -1878,11 +1916,6 @@
   "A cell → does it block a line of sight: solid, or not loaded."
   [sim]
   (fn [c] (let [id (block-at sim c)] (or (nil? id) (blocks/solid? id)))))
-
-(defn health-data
-  "The set-entity-data that tells the client mob eid's health."
-  [eid health]
-  {:packet/name :set-entity-data :entity-id eid :metadata {entity/health-index (double health)}})
 
 (defn add-mob
   "The model with a mob of kind standing at pos: its own entity id and the kind's full health,

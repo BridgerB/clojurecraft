@@ -18,6 +18,8 @@ sourceRefs:
   - src/clojurecraft/sim.clj#defn armoured
   - test/clojurecraft/mob_test.clj#armour-takes-its-share-of-a-mobs-hit
   - src/clojurecraft/sim.clj#defn with-mobs
+  - src/clojurecraft/sim.clj#defn retell-entities
+  - test/clojurecraft/sim_test.clj#a-respawned-bot-is-told-the-mobs-about-it-again
   - src/clojurecraft/sim.clj#defn tick-mobs
   - src/clojurecraft/sim.clj#defn try-spawn
   - src/clojurecraft/sim.clj#defn hurt-mob
@@ -66,6 +68,8 @@ Every mob hit, arrow and blast on the player passes through `armoured` (issue #2
 
 ## Limits
 Not modelled: pathfinding round walls, knockback, an arrow's or fireball's flight (the damage lands as it is fired), a blast breaking blocks, endermen teleporting, spiders climbing, mobs swimming, armour wearing out, `set-time` (the bot is not told the time of day), and tracking range (every mob is sent however far).
+
+A respawn makes the client forget every entity, so the model tells it every mob and item again after the respawn packet (`retell-entities`, sim race 38900840841, issue #62): without it a bot that died on a stair never saw the zombie behind it, `:defend` never fought, and it died on the same stair until `:timeout`.
 
 ## See also
 - [[server-model]] - the model this extends.
