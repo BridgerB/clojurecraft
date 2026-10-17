@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T23:09:21.240Z",
+  "at" : "2026-10-17T23:10:28.786Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 296,
@@ -55,7 +55,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 342,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at furnace: boxed",
     "copilot" : true,
     "draft" : false,
@@ -177,9 +177,8 @@
   } ],
   "moves" : [ {
     "issue" : 342,
-    "move" : "wait",
-    "pr" : 403,
-    "why" : "checks running"
+    "move" : "nudge",
+    "pr" : 403
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -1012,5 +1011,10 @@
     "move" : "ready",
     "pr" : 403,
     "at" : "2026-10-17T23:07:11.950Z"
+  }, {
+    "issue" : 342,
+    "move" : "nudge",
+    "pr" : 403,
+    "at" : "2026-10-17T23:10:28.786Z"
   } ]
 }
