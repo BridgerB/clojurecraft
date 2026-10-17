@@ -1,7 +1,12 @@
 {
-  "at" : "2026-10-17T11:50:55.623Z",
+  "at" : "2026-10-17T11:52:00.820Z",
   "cap" : 1,
   "issues" : [ {
+    "number" : 369,
+    "title" : "Bot stops at cast-one: not-held",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 368,
     "title" : "Bot stops at portal-kit: stair-not-taken",
     "labels" : [ "bot-failure", "sim" ],
