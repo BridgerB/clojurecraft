@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T18:21:26.805Z",
+  "at" : "2026-10-17T18:25:49.800Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 389,
@@ -69,7 +69,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 388,
-    "session" : true
+    "session" : false
   }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
@@ -231,9 +231,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 162,
-    "move" : "wait",
-    "pr" : 388,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 388
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -840,5 +839,10 @@
     "issue" : 162,
     "move" : "assign",
     "at" : "2026-10-17T17:49:30.293Z"
+  }, {
+    "issue" : 162,
+    "move" : "ready",
+    "pr" : 388,
+    "at" : "2026-10-17T18:25:49.800Z"
   } ]
 }
