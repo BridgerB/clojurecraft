@@ -1,7 +1,12 @@
 {
-  "at" : "2026-10-17T07:18:47.073Z",
+  "at" : "2026-10-17T07:20:57.312Z",
   "cap" : 1,
   "issues" : [ {
+    "number" : 351,
+    "title" : "Bot stops at fortress: stuck",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 349,
