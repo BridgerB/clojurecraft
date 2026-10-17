@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T08:48:54.935Z",
+  "at" : "2026-10-17T08:54:14.114Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 347,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at portal: no-pickaxe",
     "copilot" : true,
     "draft" : false,
@@ -185,9 +185,8 @@
   } ],
   "moves" : [ {
     "issue" : 347,
-    "move" : "wait",
-    "pr" : 358,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 358
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -493,5 +492,10 @@
     "move" : "ready",
     "pr" : 358,
     "at" : "2026-10-17T08:47:49.144Z"
+  }, {
+    "issue" : 347,
+    "move" : "merge",
+    "pr" : 358,
+    "at" : "2026-10-17T08:54:14.114Z"
   } ]
 }
