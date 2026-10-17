@@ -12,6 +12,7 @@ sourceRefs:
   - test/clojurecraft/plan_test.clj#a-long-route-gets-the-time-to-walk-it
   - src/clojurecraft/intent.clj#defmethod run :walk
   - src/clojurecraft/intent.clj#defn route!
+  - test/clojurecraft/plan_test.clj#a-long-way-back-to-the-trees-keeps-its-search-budget
   - src/clojurecraft/intent.clj#defn route-stale?
   - src/clojurecraft/intent.clj#defn waypoint-reached?
   - src/clojurecraft/intent.clj#defn follow
@@ -49,6 +50,8 @@ related:
 - `intent.clj`, `arrived?` - within reach, and for a log the feet no more than `pickup-rise` (2) below it, for a block mined from beside (`:intent/pickup?`) the walk-goal itself (`path/goal-done?`): neither above it nor more than `pickup-rise` below it, and within `pickup-range` (octile 1.5: a neighbour, diagonals too) of its cell, or with `:intent/step-down?` a straight neighbour a block up: where the drop comes to rest inside the pickup box; for water to scoop (`:intent/for :scoop`), right beside the source with the feet level with the cell over it or a block lower ([[scoop-intent]]). Within reach alone, a walk to ore in a tunnel's wall ended round the corner, and the collect walked straight at the drop into the wall until it failed `:not-picked-up`.
 
 ## How it works
+`routable?` and `route!` both honor an optional `:intent/max-nodes`; without it they use the pathfinder's default. The wood gatherer's last-resort return walk needs a larger bounded search for long detours around mountains (issue #186). Keeping the budget on the intent makes the executor and every replan agree with the route check, without increasing the cost of ordinary walks.
+
 1. Arrived (`arrived?`): set only `:control/look` at the target and finish, so the next intent starts already looking.
 2. More than `walk-deadline` since the walk began: `walk-timeout-ticks` (1200, 60 s) and `waypoint-ticks` (10, half a second) more for each waypoint of the route: fail `:stuck`. Sim world R2/19 seed 12 (issue #87's second round, 5f1542d against 090ef14) walked to three pools across a snowy mountain, routes of 123 and 175 waypoints, at waypoint 116 when the flat sixty seconds ran out, and three such walks ended the plan (`a-long-route-gets-the-time-to-walk-it`).
 3. No route yet: plan. A route that is `:none` with no waypoints at all fails `:no-path` at once.

@@ -280,11 +280,15 @@
    ran out of loaded terrain, not of ways (gym batch solid-b1 run 1's own tunnel home ran to the
    edge of what was loaded). Not :none toward a loaded target, nor :partial toward a target in
    loaded terrain, the budget spent on it: walks to such targets failed :no-path again and
-   again. An act asks before it chooses a target, so one with no way to it is passed over, not
+   again. Uses :intent/max-nodes when given, as route! does. An act asks before it chooses a
+   target, so one with no way to it is passed over, not
    walked at: three such walks in a row ended live runs among ore and water in caves."
-  [world {:intent/keys [target] :as i}]
-  (let [{:path/keys [status waypoints]}
-        (path/plan world (path/feet-cell (:player/pos world)) (goal-of i))]
+  [world {:intent/keys [target max-nodes] :as i}]
+  (let [{:path/keys [status waypoints]} (path/plan world
+                                                   (path/feet-cell (:player/pos world))
+                                                   (goal-of i)
+                                                   (cond-> {}
+                                                     max-nodes (assoc :path/max-nodes max-nodes)))]
     (case status
       :found true
       (:partial :none) (boolean (and (seq waypoints) (not (terrain/chunk-loaded? world target))))
@@ -328,9 +332,13 @@
 
 (defn route!
   "The intent with a fresh route from the feet toward its walk-goal, counting the plan and
-   noting how many chunks were loaded when it was made."
-  [world {:intent/keys [replans] :or {replans 0} :as i}]
-  (let [r (path/plan world (path/feet-cell (:player/pos world)) (goal-of i))]
+   noting how many chunks were loaded when it was made. Uses :intent/max-nodes when given;
+   otherwise the pathfinder's default budget."
+  [world {:intent/keys [replans max-nodes] :or {replans 0} :as i}]
+  (let [r (path/plan world
+                     (path/feet-cell (:player/pos world))
+                     (goal-of i)
+                     (cond-> {} max-nodes (assoc :path/max-nodes max-nodes)))]
     (assoc-intent world
                   :intent/waypoints (:path/waypoints r)
                   :intent/route (:path/status r)

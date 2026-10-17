@@ -367,6 +367,8 @@
     "walk, once planned"] [:intent/at "index of the next waypoint" "walk, once planned"]
    [:intent/replans "routes planned for this walk; more than intent/max-replans fails :no-path"
     "walk, once planned"]
+   [:intent/max-nodes "node expansion budget for this walk's route checks and replans"
+    "walk, when a longer search is needed"]
    [:intent/planned-chunks
     "chunk columns loaded when the route was made (kept for the record; a new chunk no longer replans by itself)"
     "walk, once planned"]
