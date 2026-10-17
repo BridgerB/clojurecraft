@@ -205,9 +205,15 @@
    a filler is carried; nil when the stair needs none (safe?) or none can be laid. Race
    38477665442: five of the eight bots on runner 8 that stopped :boxed stood on the lip of a
    cave their staircase had broken into, 7 to 284 cobblestone in hand, every stair refused for
-   the drop under it and nothing else to cut from the lip (issue #37)."
+   the drop under it and nothing else to cut from the lip (issue #37). A floor never eats into
+   lay-reserve, whichever way down lays it (a staircase, its level steps, the mine's deeper
+   stairs): that much is kept for the climb back, which seals and steps with it (issue #37 again:
+   race 38984748832 runner 3 bot Clj_r01 floored a cave down to nothing and was :boxed on its own
+   bridge; probe 38988294166, its stairs budgeted, still reached y 16 with none, by the mine's
+   other descents)."
   [world feet cells]
-  (cells-to-lay world cells (floor-laying world feet cells)))
+  (when-let [laid (cells-to-lay world cells (floor-laying world feet cells))]
+    (when (>= (- (carried-filler world) (count laid)) lay-reserve) laid)))
 
 #_{:splint/disable [naming/conversion-functions]} ; "the step to lay", not a conversion
 (defn step-to-lay
