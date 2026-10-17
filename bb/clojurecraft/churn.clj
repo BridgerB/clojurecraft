@@ -52,9 +52,9 @@
 (def per-signature 2)                  ; failures a batch converts or judges of each signature: the most a fix's check judges (issue-check)
 (def real-heap "-J-Xmx3g")             ; the conversion's JVM, beside two 3 GB servers and two 2 GB races on a 16 GB runner
 (def sim-heap "-J-Xmx2g")              ; the judge's JVM, beside the sim race's (ci/simrace.edn's heap)
-(def real-cpu "-J-XX:ActiveProcessorCount=1") ; the conversion's JVM sized to one core (its GC, its compilers): the race keeps the rest
+(def one-core "-J-XX:ActiveProcessorCount=1") ; a conversion's or judge's JVM sized to one core (its GC, its compilers): the race keeps the rest
 (def real-nice 0)                      ; the conversion's nice level: an equal share beside the servers and bots (see convert!)
-(def sim-nice 19)                      ; the judge's beside the sim race: judges take seconds
+(def sim-nice 0)                       ; the judge's, as real-nice: at 19 beside a sim race on every core it starves
 
 ;; ---------------------------------------------------------------- a batch, as values
 
@@ -306,7 +306,7 @@
 (defn convert!
   "Turn a real batch's failures (convertible, each recording's size read first) into snapshots:
    one clojure -M:simrace --from-recording over their recordings, its heap held to real-heap and
-   its JVM to one core (real-cpu), at real-nice, writing <data-dir>/snapshots (gaps under its
+   its JVM to one core (one-core), at real-nice, writing <data-dir>/snapshots (gaps under its
    gaps/) and its lines to snapshots/convert-<n>.log (budgeted!). Returns the REAL and GAP lines
    it printed (line-of).
 
@@ -315,8 +315,7 @@
    of its five batches ran out of the 10 minutes with nothing kept; the same two fold in 27 and
    37 s on an idle runner, 65 and 97 s at nice 0 beside four CPU-bound loops (probe 38982758264),
    78 and 100 s with the JVM held to one core (probe 38983529740), 300 and 416 s at nice 10
-   (probe 38982746654), and at nice 19 beside those loops not both in 25 minutes (probe
-   38982735367)."
+   (probe 38982746654), and 1055 and 1464 s at nice 19 beside those loops (probe 38982735367)."
   [{:keys [data-dir run runner budget]} n runs]
   (let [todo (convertible (mapv #(cond-> %
                                    (and (:run/dir %) (fs/exists? (recording data-dir %)))
@@ -329,7 +328,7 @@
                              (budgeted! (fs/file out (str "convert-" n ".log"))
                                         real-nice
                                         budget
-                                        [real-heap real-cpu "-M:simrace" "--from-recording"
+                                        [real-heap one-core "-M:simrace" "--from-recording"
                                          (str/join "," (map #(recording data-dir %) todo)) "--name"
                                          (str/join "," (map #(snapshot-name runner %) todo)) "--out"
                                          (str out) "--round" (str run)])))]
@@ -338,8 +337,9 @@
 
 (defn judge!
   "Judge a sim batch's failures' snapshots (judgeable) as the fix's check will, on this commit:
-   one clojure -M:simrace --judge over them, its heap held to sim-heap, at sim-nice, its lines
-   to <data-dir>/snapshots/judge-<n>.log (budgeted!). Returns the JUDGE lines (judge-line-of)."
+   one clojure -M:simrace --judge over them, its heap held to sim-heap and its JVM to one core
+   (one-core), at sim-nice, its lines to <data-dir>/snapshots/judge-<n>.log (budgeted!).
+   Returns the JUDGE lines (judge-line-of)."
   [{:keys [data-dir budget]} n runs]
   (let [todo (filter #(fs/exists? (str (:run/snapshot %))) (judgeable runs)) ; one missing file would stop them all
         out (fs/path data-dir snapshots-dir)]
@@ -349,7 +349,7 @@
                              (budgeted! (fs/file out (str "judge-" n ".log"))
                                         sim-nice
                                         budget
-                                        [sim-heap "-M:simrace" "--judge"
+                                        [sim-heap one-core "-M:simrace" "--judge"
                                          (str/join "," (map #(str (:run/snapshot %)) todo))])))]
         (println "churn:" (judging-text lines))
         lines))))

@@ -132,6 +132,8 @@ jobs:
             --budget-minutes ${{ needs.plan.outputs.budget }} --commit "$GITHUB_SHA" --out data/simrace \
             > data/simrace/simrace.log 2>&1 &
           sim=$!
+          mkdir -p work
+          echo "$sim" > work/sim.pid   # for Stop the sim race, on a cancel too
           code_at=$(git show -s --format=%cI "$GITHUB_SHA")
           report() {
             bb churn batch sim data/simrace "simrace-$GITHUB_SHA-$RUNNER_N" "$GITHUB_RUN_ID" "$GITHUB_SHA" "$code_at" "$RUNNER_N" \
@@ -150,6 +152,13 @@ jobs:
           wait "$sim" || true
           wait "$churn" || true
           grep -E '^SIMRACE ' data/simrace/simrace.log || tail -n 40 data/simrace/simrace.log
+      - name: Stop the sim race
+        # before the last report: a cancel leaves the sim race running on every core, as it leaves
+        # race.yml's races (Stop the races, issue #145), and the last report's judges would get none
+        # of them (sim lane 38986998175: out of time at 120 s, nothing judged). Shell builtins only
+        if: always()
+        run: |
+          if [ -f work/sim.pid ]; then kill "$(cat work/sim.pid)" 2>/dev/null || true; fi
       - name: Last report
         # the runs that ended since the last batch; a cancel (a merge's push) runs it too, its judges
         # stopped after 120 s (GitHub kills a cancelled job about four minutes on)
