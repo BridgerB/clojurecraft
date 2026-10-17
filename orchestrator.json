@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T05:48:30.728Z",
+  "at" : "2026-10-17T05:49:34.954Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 338,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at fortress: timeout",
     "copilot" : true,
     "draft" : false,
@@ -135,9 +135,8 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "wait",
-    "pr" : 341,
-    "why" : "checks running"
+    "move" : "nudge",
+    "pr" : 341
   }, {
     "issue" : 296,
     "move" : "leave",
@@ -295,5 +294,10 @@
     "move" : "ready",
     "pr" : 341,
     "at" : "2026-10-17T05:47:24.994Z"
+  }, {
+    "issue" : 338,
+    "move" : "nudge",
+    "pr" : 341,
+    "at" : "2026-10-17T05:49:34.954Z"
   } ]
 }
