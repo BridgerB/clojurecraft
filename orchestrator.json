@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T23:41:55.822Z",
+  "at" : "2026-10-17T23:50:48.464Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 296,
@@ -32,13 +32,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
+    "number" : 105,
+    "title" : "Bot stops at flint-and-steel: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 105,
-    "title" : "Bot stops at flint-and-steel: boxed",
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -105,11 +105,6 @@
     "pr" : 391,
     "session" : false
   }, {
-    "number" : 69,
-    "title" : "Bot stops at water-bucket: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -118,6 +113,11 @@
     "number" : 68,
     "title" : "Bot stops at ingots: no-spot",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 69,
+    "title" : "Bot stops at water-bucket: timeout",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 349,
