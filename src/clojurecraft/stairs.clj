@@ -304,13 +304,43 @@
       (when (and (seq cells) (every? #(place/support world %) cells) (filler world (count cells)))
         cells))))
 
+(defn wet-feet
+  "The water cells beside the feet a stair up is cut from (the cell under its first cell, two
+   below the cell over the head), when water stands in those feet: what feeds it. [] when the
+   feet are dry or nothing beside them is water."
+  [world cells]
+  (let [[x y z] (first cells)
+        feet [x (- (long y) 2) z]]
+    (if (= :water (terrain/fluid-kind world feet)) (vec (water-beside world [feet])) [])))
+
+(defn up-dry?
+  "May a stair up be cut as it stands: up-sealed?, and no water feeds the feet it is taken from
+   (wet-feet). From feet in water a jump only bobs, never a block up onto the step, and the step
+   is never taken. Race 38988094276 runner 3 bot Clj_r05 (issue #320): the portal build's stairs
+   up started in its own tunnel at y 41 with flowing water over the floor, fed from a source two
+   cells west; three stairs bobbed from y 41.0 to 41.36 for ten seconds each and failed
+   :stair-not-taken, and the build with them."
+  [world cells]
+  (and (up-sealed? world cells) (empty? (wet-feet world cells))))
+
+(defn dry-feet
+  "The water cells beside wet feet to lay a filler into before a stair up is cut (wet-feet), so
+   the water under the feet is cut off and drains: when each has a solid neighbour to place
+   against (place/support) and enough of a filler is carried; nil when none are wanted or can be
+   laid."
+  [world _feet cells]
+  (let [cells (wet-feet world cells)]
+    (when (and (seq cells) (every? #(place/support world %) cells) (filler world (count cells)))
+      cells)))
+
 (defn up-lay
   "The cells to lay before a stair up from feet can be cut: the seal over the water beside its
-   cells (seal, issue #54) when there is any, else its missing step (step-lay, issue #61); nil
-   when the stair needs none or none can be laid. The seal comes first: a step laid beside
-   open water is a stair the child dig then refuses (intent/exposes-fluid?)."
+   cells (seal, issue #54) when there is any, else the water that feeds wet feet (dry-feet, issue
+   #320), else its missing step (step-lay, issue #61); nil when the stair needs none or none can
+   be laid. The seal comes first: a step laid beside open water is a stair the child dig then
+   refuses (intent/exposes-fluid?)."
   [world feet cells]
-  (or (seal world feet cells) (step-lay world feet cells)))
+  (or (seal world feet cells) (dry-feet world feet cells) (step-lay world feet cells)))
 
 (def shapes
   "How each kind of staircase is cut: the cells a stair opens (top first, the new feet last), the
@@ -318,7 +348,7 @@
    can be: for stairs down the floor where it is missing and its holder (lay), for stairs up a
    seal over the water beside its cells, else its missing step (up-lay)."
   {:stairs-down {:cells stair-cells :safe? safe? :rise -1 :lay lay}
-   :stairs-up {:cells up-cells :safe? up-sealed? :rise 1 :lay up-lay}})
+   :stairs-up {:cells up-cells :safe? up-dry? :rise 1 :lay up-lay}})
 
 (defn tool-missing
   "The reason to stop, :no-pickaxe, when the block at cell is rock that would be dug by hand for
