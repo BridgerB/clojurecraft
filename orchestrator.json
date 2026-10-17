@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T13:58:38.046Z",
+  "at" : "2026-10-17T13:59:44.618Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 342,
-    "title" : "Bot stops at furnace: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 342,
+    "checks" : "red",
+    "title" : "Bot stops at furnace: boxed",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 375,
+    "session" : true
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -174,7 +180,9 @@
   } ],
   "moves" : [ {
     "issue" : 342,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 375,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
