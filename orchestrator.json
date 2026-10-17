@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T02:06:09.534Z",
+  "at" : "2026-10-17T02:10:22.886Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 62,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at ingots: timeout",
     "copilot" : true,
     "draft" : false,
@@ -110,9 +110,8 @@
   } ],
   "moves" : [ {
     "issue" : 62,
-    "move" : "wait",
-    "pr" : 324,
-    "why" : "checks running"
+    "move" : "nudge",
+    "pr" : 324
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -145,5 +144,10 @@
     "move" : "ready",
     "pr" : 324,
     "at" : "2026-10-17T02:05:04.153Z"
+  }, {
+    "issue" : 62,
+    "move" : "nudge",
+    "pr" : 324,
+    "at" : "2026-10-17T02:10:22.886Z"
   } ]
 }
