@@ -28,6 +28,29 @@
          (into {} (map-indexed (fn [i n] [i {:item (blocks/items n) :count 1}])) items)
          :world/chunks {[0 0] (world/column {})}))
 
+(deftest redig-places-only-where-the-drop-can-be-collected
+  (let [w (standing 64 :gravel)
+        place (stone/redig-place w :gravel)]
+    (is (= {:intent/kind :place :intent/item :gravel :intent/cell [4 64 5]} place)
+        "a supported neighbour, not the first diagonal cell within click reach")
+    (is (= [5 64 4] (:intent/cell (stone/redig-place (assoc w :world/blocks {[4 65 5] 1}) :gravel)))
+        "a niche with no headroom cannot be entered for the drop")
+    (let [walls (into {} (for [cell [[4 64 5] [6 64 5] [5 64 4] [5 64 6]]] [cell 1]))
+          child (stone/redig-place (assoc w :world/blocks walls) :gravel)]
+      (is (contains? #{:walk :stairs-up} (:intent/kind child))
+          "no pickup cell: leave, never cut a niche"))))
+
+(deftest redig-tries-placement-again-after-reaching-fresh-ground
+  (doseq [kind [:walk :stairs-up]]
+    (let [i {:intent/kind :redig
+             :intent/item :gravel
+             :intent/child {:intent/kind kind :intent/status :done}}
+          w (assoc (standing 64 :gravel) :plan/intent i)
+          next (stone/redig-stage w i {:event/kind :tick})]
+      (is (nil? (get-in next [:plan/intent :intent/child])))
+      (is (nil? (get-in next [:plan/intent :intent/stage]))
+          "a completed retreat is not a completed placement"))))
+
 (deftest a-stair-down-seals-water-before-opening-the-rock
   (let [feet [5 64 5]
         cells (stairs/stair-cells feet [1 0])
