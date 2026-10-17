@@ -403,21 +403,32 @@
 
 (defn from-below
   "Deep under the landing with a lake or an aquifer over the head (overhead): dig up through its
-   bed, the rock under the water bottom first (a dig that may let the water in, exposes-ok?),
+   bed, the rock under the water bottom first (a dig that may let the water in, exposes-ok?,
+   whose drop is not needed, drop-ok?),
    then scoop the source from below, aimed at the underside of its cell (:intent/aim): the
    bucket's ray passes the water falling in and takes the first source. nil when there is no
    water over the head. Sim race 38662908438 (issue #61, 115 runs): climbs for water from under
    a lake or the sea, no shore within 48 columns, stepped and dug until :boxed, a room of 150
-   cells at y 43 dug under a lake bed two blocks thick, the water it needed over its head."
+   cells at y 43 dug under a lake bed two blocks thick, the water it needed over its head.
+   A stowed tool is equipped first (stowed-breaker). Race 39051573292 (issue #385): copper ore
+   in the bed refused :needs-tool after the hotbar pickaxe broke, its spare still stowed; only
+   the opening, not the ore, is needed."
   [world]
   (when (deep? world)
     (when-let [{:keys [source rock]} (overhead world)]
-      (if-let [r (first rock)]
-        (assoc (intent/child-dig r) :intent/exposes-ok? true :intent/for :water-from-below)
-        (let [[sx sy sz] source]
-          {:intent/kind :scoop
-           :intent/target source
-           :intent/aim [(+ sx 0.5) (+ sy 0.05) (+ sz 0.5)]})))))
+      (let [r (first rock)
+            [_ item] (when r (intent/stowed-breaker world (terrain/block-at world r)))]
+        (cond item {:intent/kind :equip :intent/item (recipe/item-name item)}
+              r
+              (assoc (intent/child-dig r)
+                     :intent/exposes-ok? true
+                     :intent/drop-ok? true
+                     :intent/for :water-from-below)
+              :else
+              (let [[sx sy sz] source]
+                {:intent/kind :scoop
+                 :intent/target source
+                 :intent/aim [(+ sx 0.5) (+ sy 0.05) (+ sz 0.5)]}))))))
 
 (defn to-bank
   "Stairs cut toward the bank of the nearest water seen that no route reaches (a surface source

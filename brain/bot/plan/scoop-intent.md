@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, water, bucket, intents]
 aliases: [:scoop, scoop.clj, fill-bucket, water bucket, use-item, no-scoop, no-water, aim-point]
 status: verified
-lastUpdated: 2026-10-16
+lastUpdated: 2026-10-17
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/scoop.clj#defn scoop-next
@@ -14,6 +14,7 @@ sourceRefs:
   - src/clojurecraft/scoop.clj#defn overhead
   - src/clojurecraft/scoop.clj#defn boxed-here?
   - test/clojurecraft/scoop_test.clj#deep-under-water-the-bucket-is-filled-from-below
+  - test/clojurecraft/scoop_test.clj#water-access-does-not-require-the-beds-drop
   - src/clojurecraft/scoop.clj#defn sources
   - src/clojurecraft/scoop.clj#defn surface-water?
   - test/clojurecraft/scoop_test.clj#a-pond-below-a-hill-is-surface-water
@@ -93,6 +94,7 @@ No flag stands for "the bucket is in use" (steve's `usingHeldItem`): only the in
 `sim/scooped` casts a ray from the reported eye along the packet's look, in 0.05 steps up to 4.5: the first water source fills the held bucket (the source becomes air), any block but air, water or lava first stops it (`the-models-bucket-ray-stops-at-a-plant`). The pond test fills a bucket from hotbar slot 4, from the bank, without entering the water.
 
 ## Gotchas
+- **The bed's drop is not needed.** `from-below` equips a stowed spare (`intent/stowed-breaker`) before digging and marks its digs `:intent/drop-ok?`: race 39051573292 (issue #385) broke its hotbar pickaxe on copper ore under water, left its spare stowed and refused the next bed cell `:needs-tool` three times. Opening the bed must still work with a lower-tier pickaxe or the hand; harvesting the ore is not the water goal.
 - **No walk already arrived.** `first-walk` leaves out targets whose walk has already arrived (for water, standing at its bank): when it left out targets in reach and the arrival rule was reach, gym batch water-a3 run 5 walked to a remembered pool under stone, in reach, and the walk ended the tick it began and began again every tick for four minutes until the trial timed out (`a-remembered-pool-under-stone-is-no-walk`).
 - **A route that only half gets there is no route.** `intent/routable?` accepts a `:partial` route, or a `:none` one with waypoints (the search ran out of loaded terrain, not of ways), only toward a target in a chunk not loaded yet: gym batch solid-b1 run 1, 146 blocks from its landing under the sea, had its own tunnel home end at the edge of what was loaded, and cut stairs up under the sea until `:boxed` five times (`the-way-home-runs-out-of-loaded-terrain`); in loaded terrain a search that spent its budget short of the target meant walks failing `:no-path` again and again (water-a3 run 3).
 - **A ray past a block's edge is a wall.** The game casts the bucket's ray exactly; samples of the line every 0.05 step past a block's edge the line grazes. So the ray must clear every cell it passes through or within `ray-margin` (0.03) of (`ray-cells`, `clear?`), and the eyes aim at the surface's centre or, when its ray is not clear, at a point `aim-offset` (a quarter block) off it (`surface-aim`; `centre-aim` for a scoop through a cell's side), and `sees?` is that some point is clear. Race 38759618225 runner 4 (issue #83, at 76010d2): bots Clj_r15, Clj_r38, Clj_r61 and Clj_r78 held the bucket and sent nine scoops each along lines within 0.03 of an edge of sand by a pond, dirt and sand under a lake, stone and granite in a cave (one stood at a corner of its cell, the line to the centre running down the edges of four columns); the server filled nothing, while the model's sampled ray filled the bucket, so only real runs failed. And `seen-source` read no blacklist, so after a scoop failed `:no-scoop` the next intent chose the same source, three in a row; it, and `overhead` for `from-below`, now leave blacklisted sources out (`a-ray-past-a-blocks-edge-is-a-wall`).

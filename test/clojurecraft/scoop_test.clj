@@ -299,6 +299,24 @@
       (is (contains? (:plan/boxed-at w) [5 40 5]))
       (is (nil? (scoop/climb w))))))
 
+(deftest water-access-does-not-require-the-beds-drop
+  (let [ore (first (blocks/states-where #(= :copper_ore (first %))))]
+    (doseq [tools [{} {1 {:item (recipe/item-id :wooden_pickaxe) :count 1}}]]
+      (let [w (update (deep-in {[5 42 5] ore [5 43 5] water}) :player/inventory merge tools)
+            i (scoop/from-below w)
+            [w effects] (fx/fold intent-step (assoc w :plan/intent i) (fx/ticks 50 1500))]
+        (is (:intent/drop-ok? i) "only the opening is needed, not the ore")
+        (is (= :digging (get-in w [:plan/intent :intent/stage])))
+        (is (not= :failed (get-in w [:plan/intent :intent/status])))
+        (is (some #(= :player-action (:packet/name %)) (fx/packets effects))
+            "the bed is broken even without a pickaxe that harvests it")))
+    (doseq [tool [:stone_pickaxe :wooden_pickaxe]]
+      (let [w (assoc-in (deep-in {[5 42 5] ore [5 43 5] water})
+               [:player/inventory 15]
+               {:item (recipe/item-id tool) :count 1})]
+        (is (= {:intent/kind :equip :intent/item tool} (scoop/from-below w))
+            "a stowed spare is equipped before opening the bed")))))
+
 (deftest a-boxed-cut-toward-the-bank-gives-that-water-up
   ;; race 38805762352 runner 2 (issue #61): bots Clj_r18 (in a cave at y 30) and Clj_r22 (on the
   ;; steps its climb had laid in a cavern) tunnelled toward water no route reached, each tunnel
@@ -375,4 +393,3 @@
          {:intent/kind :scoop :intent/target src :intent/fluid :lava :intent/aim [10.25 63.85 10.5]}
          (build/scoop-at-station w [src]))
         "scooped along the clear ray, nothing dug")))
-
