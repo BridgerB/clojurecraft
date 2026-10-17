@@ -637,7 +637,7 @@ A build is a vector of ops with done-predicates as data (`build/holds?`); `next-
 
 ### 19.13 Fortress tunnel (`fortress.clj`)
 
-`:fortress` (Nether) done by `:at-fortress?`: a brick on record at y ≥ 32 within 6. `:tunnel-to` the nearest brick within 512, else explore 48 along the first safe axis; wait `:other-dimension` outside the Nether, `:no-way` nowhere safe. `step-plan`: floor under the new cell, `opens` dug, stand in it (worked by `build/next-op`). `safe?` refuses unloaded cells, opened lava/unbreakable cells, lava beside an opened cell, a floor neither solid nor lava. Vertical first when > 3 off. Done at target or after 32 steps. Failure `:blocked`.
+`:fortress` (Nether) done by `:at-fortress?`: a brick on record at y ≥ 32 within 6. `:tunnel-to` the nearest brick within 512, else explore 48 along the first safe axis; wait `:other-dimension` outside the Nether, `:no-way` nowhere safe. `step-plan`: floor under the new cell, `opens` dug, stand in it (worked by `build/next-op`). `safe?` refuses unloaded cells, opened lava/unbreakable cells, lava beside an opened cell, a floor neither solid nor lava. Vertical first when > 3 off. Done at target or after 32 steps. Failure `:blocked`. The row holds a pickaxe: with none held and one at hand (`build/pickaxe-at-hand?`), `fortress/held-first` makes it before a step (work-op refuses rock for the hand then) and the table is taken along (#296).
 
 ### 19.14 Intentions as facts (`memory.clj`)
 
@@ -808,7 +808,7 @@ Most are stated where they apply above (grass type, resting vy, `:name` collisio
 | 14 | `:cast-one` | `:built?` | `:build :cast-one`, holds a pickaxe (#70) |
 | 15 | `:portal` | `:built?` | `:build :portal`, holds a pickaxe |
 | 16 | `:nether` | `:built?` (stood in until the Nether) | `:build :nether`, holds a pickaxe |
-| 17 | `:fortress` | `:at-fortress?` | `:fortress` |
+| 17 | `:fortress` | `:at-fortress?` | `:fortress`, holds a pickaxe (#296) |
 | 18 | `:blaze-rods` (aside for now; `blaze-rods`) | 7 blaze rods (Nether) | `:blaze-rods` → `:fight`, `:collect-drops`, `:camp`, `:tunnel-to` the spawner (issue #262) |
 | 19 | `:ender-pearls` (aside for now; `pearls-12`) | 12 ender pearls | `:pearls` → `:collect` the drop, `:fight`, `:provoke` by a stare from range, `:walk` (issue #263) |
 | 19 | `:ender-pearl` (aside: gym only; `pearls-1`) | 1 ender pearl | `:pearls`, as above |

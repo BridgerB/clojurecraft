@@ -15,6 +15,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.intent :as intent]
+            [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
@@ -233,12 +234,31 @@
   (boolean (and (= dimension/nether (dimension/of world))
                 (some #(arrived? world %) (bricks world)))))
 
+(defn held-first
+  "What the needs planner does toward what the row holds (:goal/holds, a pickaxe) before a step
+   is dug, when one can be made without going out for anything (build/pickaxe-at-hand?: a table
+   placed, a craft): an intent that makes it, or nil when one is held or nothing at hand makes
+   one, and the hand digs on. A step's dig of rock refuses the hand while a pickaxe is at hand
+   (build/work-op, hand-dig-refused?), so the row makes one first. Sim race 38951520971 (issue
+   #296, 24 runs in 11 rounds): the pickaxe wore out on the way into the Nether, and there, with
+   a table, sticks and hundreds of cobblestone held, the tunnel's first step failed :no-pickaxe
+   three times."
+  [world goal table]
+  (when (and (seq (:goal/holds goal)) (build/pickaxe-at-hand? world))
+    (make/decide world (assoc goal :goal/provides (:goal/holds goal)) table)))
+
 (defmethod plan/next-intent :fortress
-  ;; tunnel to the nearest brick on record; with none, explore; with nowhere safe, or outside the
-  ;; Nether (the planner waits there for a row of another dimension anyway), wait
-  [world _ _]
+  ;; what the row holds first, when it is at hand (held-first), then the table placed for it
+  ;; taken along (the next pickaxe is made from it), then tunnel to the nearest brick on record;
+  ;; with none, explore; with nowhere safe, or outside the Nether (the planner waits there for a
+  ;; row of another dimension anyway), wait
+  [world goal table]
   (let [t (when (= dimension/nether (dimension/of world))
             (or (nearest-brick world) (exploring world)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
-          t {:intent/kind :tunnel-to :intent/target t :intent/steps steps-per-tunnel}
-          :else {:plan/wait :no-way})))
+          :else
+          (or (held-first world goal table)
+              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+              (make/take-table-along world)
+              (when t {:intent/kind :tunnel-to :intent/target t :intent/steps steps-per-tunnel})
+              {:plan/wait :no-way}))))

@@ -7,8 +7,14 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
+            [clojurecraft.dimension :as dimension]
+            [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
-            [clojurecraft.intent :as intent]))
+            [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
+            [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.world :as world]))
 
 (def netherrack (blocks/default-state :netherrack))
 (def air (blocks/default-state :air))
@@ -140,3 +146,31 @@
     (is (fortress/dry? w [0 64 0] [-1 0 0]))
     (is (= [1 0 0] (fortress/choose-move w [0 64 0] [4 64 0])))
     (is (not= [1 0 0] (fortress/choose-move w [0 64 0] [4 64 0] fortress/climb-past true)))))
+
+(defn in-the-nether
+  "A bot in play in the Nether at [8.5 64 8.5] on the stone floor of one column, holding inv."
+  [inv]
+  (-> (game/init fx/opts)
+      (assoc :bot/phase :play
+             :player/dimension dimension/nether
+             :player/pos [8.5 64.0 8.5]
+             :player/loaded? true
+             :player/on-ground? true
+             :world/chunks {[0 0] (world/column {})}
+             :window/state-id 5
+             :player/inventory inv)))
+
+(deftest a-pickaxe-at-hand-is-made-before-the-first-step
+  ;; sim race 38951520971 (issue #296, 24 runs in 11 rounds): through the portal with the
+  ;; pickaxe worn out, a table, sticks and cobblestone held; every first step refused rock for
+  ;; the hand while a pickaxe was at hand, and the tunnel failed :no-pickaxe three times
+  (let [row (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        item (fn [k n] {:item (recipe/item-id k) :count n})
+        next-intent #(plan/next-intent (in-the-nether %) row plan/goals)
+        kit {0 (item :stick 2) 1 (item :cobblestone 3) 2 (item :crafting_table 1)}]
+    (is (= {:tag/pickaxes 1} (:goal/holds row)) "the row holds a pickaxe")
+    (is (= [:place :crafting_table] ((juxt :intent/kind :intent/item) (next-intent kit)))
+        "a table, sticks and cobblestone held: the table down for the pickaxe, not a step")
+    (is (= :tunnel-to (:intent/kind (next-intent {0 (item :iron_pickaxe 1)}))) "a pickaxe held")
+    (is (= :tunnel-to (:intent/kind (next-intent {})))
+        "nothing to make one from here: the steps are dug by hand")))

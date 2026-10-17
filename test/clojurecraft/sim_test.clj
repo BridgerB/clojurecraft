@@ -2962,6 +2962,30 @@
     (is (some #(fortress/arrived? w %) (fortress/bricks w)))
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-worn-out-pickaxe-is-made-again-in-the-nether
+  ;; sim race 38951520971 (issue #296, 24 runs in 11 rounds): through the portal with the
+  ;; pickaxe worn out and a table, sticks and cobblestone held, the tunnel's first step refused
+  ;; the netherrack for the hand and failed :no-pickaxe three times; now the table goes down,
+  ;; a stone pickaxe is made, the table is taken along, and the tunnel goes on
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes nether-fragment dimension/nether)
+                                    :spawn nether-arrival
+                                    :dimension dimension/nether
+                                    :inventory {[:hotbar 0] {:item (recipe/item-id :stick) :count 2}
+                                                [:hotbar 1] {:item (recipe/item-id :cobblestone)
+                                                             :count 64}
+                                                [:hotbar 2] {:item (recipe/item-id :crafting_table)
+                                                             :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         600000
+                         {:event/kind :go :go/goals [:fortress]})]
+    (is (= :done (:plan/status w)) (pr-str (plan/summary w)))
+    (is (some #(fortress/arrived? w %) (fortress/bricks w)) "within 6 of a brick")
+    (is (= 1 (:stone_pickaxe (held w))) "the pickaxe made from what was held")
+    (is (= 1 (:crafting_table (held w))) "and the table taken along for the next")
+    (is (empty? (:sim/violations sim)))))
+
 
 (deftest a-full-inventory-throws-junk-to-take-the-pickaxe
   ;; race 38805920624 runner 5 (issues #172, #192): with every slot full, the craft's result had
