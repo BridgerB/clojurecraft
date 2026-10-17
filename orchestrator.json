@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T16:32:42.933Z",
+  "at" : "2026-10-17T16:35:56.404Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 382,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at portal: inventory-full",
     "copilot" : true,
     "draft" : true,
