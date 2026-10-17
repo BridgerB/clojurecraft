@@ -1,12 +1,7 @@
 {
-  "at" : "2026-10-17T04:05:36.495Z",
+  "at" : "2026-10-17T04:06:42.322Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 65,
-    "title" : "Bot stops at cobblestone: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -123,7 +118,7 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 65,
+    "issue" : 71,
     "move" : "assign"
   }, {
     "issue" : 196,
@@ -227,5 +222,9 @@
     "issue" : 65,
     "move" : "assign",
     "at" : "2026-10-17T04:05:36.495Z"
+  }, {
+    "issue" : 71,
+    "move" : "assign",
+    "at" : "2026-10-17T04:06:42.322Z"
   } ]
 }
