@@ -90,4 +90,5 @@ jobs:
       - name: The brief for the issue Copilot holds
         env:
           GH_TOKEN: ${{ github.token }}
-        run: timeout 900 bb brief write || echo "no brief written: the session finds these itself"
+        run: |
+          timeout 900 bb brief write || echo "no brief written; the session finds these itself"
