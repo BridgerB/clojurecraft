@@ -45,10 +45,11 @@
 
 (deftest with-nothing-in-sight-the-stairs-stop-at-the-rows-depth
   (testing "stairs: six down at a time"
-    (is (= {:intent/kind :stairs-down :intent/to-y 58}
-           (stone/mine-next (standing 64 :stone_pickaxe) (row :mine-iron)))))
+    (is (= {:intent/kind :stairs-down :intent/to-y 58 :intent/floor-to 16}
+           (stone/mine-next (standing 64 :stone_pickaxe) (row :mine-iron)))
+        "carrying the row's depth, which floors laid through a cave are budgeted to"))
   (testing "never below the row's depth: there, a tunnel"
-    (is (= {:intent/kind :stairs-down :intent/to-y 16}
+    (is (= {:intent/kind :stairs-down :intent/to-y 16 :intent/floor-to 16}
            (stone/mine-next (standing 20 :stone_pickaxe) (row :mine-iron))))
     (is (= {:intent/kind :tunnel :intent/dir [1 0] :intent/length stone/tunnel-length}
            (stone/mine-next (standing 16 :stone_pickaxe) (row :mine-iron))))
@@ -141,7 +142,8 @@
     (is (contains? (:plan/boxed-at died) [5 32 5]) "the cell it died on")
     (is (not (contains? (:plan/blacklist died) [5 32 5])) "not a target blacklisted")
     (is (= [:walk :retreat] [(:intent/kind r) (:intent/for r)]) (pr-str r))
-    (is (= {:intent/kind :stairs-down :intent/to-y 26} (stone/mine-next w (row :mine-iron)))
+    (is (= {:intent/kind :stairs-down :intent/to-y 26 :intent/floor-to 16}
+           (stone/mine-next w (row :mine-iron)))
         "the first descent still starts")
     (let [stone (into {} (for [x (range 16) y (range 28 36) z (range 16)] [[x y z] 1]))
           hill (assoc w :world/chunks {[0 0] (world/column (assoc stone [5 32 5] 0 [5 33 5] 0))})]
