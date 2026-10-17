@@ -6,11 +6,13 @@
 
    Each open bot-failure issue is in one of a few states, and each state has one move:
      1. no Copilot pull request names it (Fixes #n) and it is not assigned: assign Copilot with
-        the bot-fixer agent (.github/agents/bot-fixer.agent.md), newest first, while fewer than
-        cap issues are assigned. The session it starts opens the pull request;
+        the bot-fixer agent (.github/agents/bot-fixer.agent.md), the most frequent failure first
+        (weights: its share of the real runs plus its share of the sim runs in the last
+        weight-hours of batches on gh-pages; ties and issues the batches never name, newest
+        first), while fewer than cap issues are assigned. The session it starts opens the pull request;
      2. assigned, no pull request and no session running for start-grace-ms: take Copilot off it
         (the session never started, died before its first push, or the issue was reopened long
-        after its fix merged), and the queue gives the slot out again, newest first;
+        after its fix merged), and the queue gives the slot out again;
      3. its pull request has a session running, or checks still pending: wait. Runs held for
         approval on its head commit (pushed while the repository asked for that, or by an
         automation) are rerun, which releases them; a draft whose session ended is marked ready
@@ -53,6 +55,7 @@
 (def old-nudge-lead "@copilot Go on with #")  ; how continue comments began before follow-ups had their own model
 (def fix-model "gpt-6.1-sol")                 ; the model an assigned issue is fixed with (COPILOT_FIX_MODEL overrides)
 (def follow-model "gpt-6-luna")               ; the model a follow-up runs on, a cheap one (COPILOT_FOLLOW_MODEL overrides)
+(def weight-hours 6)                          ; the batches the queue ranks failures by: recent enough to see a merge's effect
 (def hands-off #{"no-agent" "agent-stuck" "needs-review"}) ; labels that keep an issue away from Copilot
 (def bot-paths ["src/" "resources/"])            ; a fix changes one of these; a pull request that changes neither is a hand-off
 (def guarded
@@ -171,7 +174,7 @@
       :else {:move :assign :issue n})))
 
 (defn moves
-  "Every issue's move, newest issue first, with :assign held back to the cap: assigned counts the
+  "Every issue's move, in the queue's order (ranked), with :assign held back to the cap: assigned counts the
    issues Copilot holds now (assigned or with a pull request), and only cap minus that many
    unassigned issues are given out."
   [issue-moves holding cap]
@@ -249,6 +252,37 @@
    issue
    "`."))
 
+(defn signature-of
+  "The failure signature a bot-failure title names (\"Bot stops at portal: no-stand\"), as the
+   batches write it, \"portal no-stand\"; nil for another title."
+  [title]
+  (when-let [[_ stage reason] (re-find #"(?i)stops at ([\w-]+): ([\w-]+)" (str title))]
+    (str stage " " reason)))
+
+(defn weights
+  "Each failure signature's weight over batches (the results page's batch records, ndjson rows:
+   {:kind :runs :failures [[stage reason n] ...] :ended}) that ended at or after since (an ISO
+   instant): its share of the real runs plus its share of the sim runs, so the sim's five times
+   as many runs do not drown the real races. {\"portal no-stand\" 0.17 ...}."
+  [batches since]
+  (let [recent (filter #(>= (compare (str (or (:ended %) (:at %))) since) 0) batches)
+        runs (reduce (fn [m b] (update m (:kind b) (fnil + 0) (or (:runs b) 0))) {} recent)]
+    (reduce
+     (fn [m {:keys [kind failures]}]
+       (reduce
+        (fn [m [stage reason n]]
+          (update m (str stage " " reason) (fnil + 0) (/ (double n) (max 1 (get runs kind 1)))))
+        m
+        failures))
+     {}
+     recent)))
+
+(defn ranked
+  "issues in the order the queue gives them out: the heaviest failure first (w, signature-of's
+   weights), then the newest."
+  [issues w]
+  (sort-by (juxt #(- (get w (signature-of (:title %)) 0.0)) #(- (:number %))) issues))
+
 ;;;; I/O: gh ;;;;
 
 (defn gh
@@ -280,7 +314,25 @@
                :title (:title i)
                :labels (map :name (:labels i))
                :assignees (map :login (:assignees i))}))
-       (sort-by :number >))) ; newest first: the bot's current walls (Bridger, 2026-10-17)
+       (sort-by :number >))) ; newest first; dispatch! ranks them by weight (ranked)
+
+(defn recent-batches
+  "The batch records of today and yesterday (UTC) from gh-pages's data/batches/<day>.ndjson;
+   empty when they cannot be read (the queue then goes newest first)."
+  [now]
+  (vec (for [d [(java.time.LocalDate/ofInstant (java.time.Instant/ofEpochMilli now)
+                                               java.time.ZoneOffset/UTC)]
+             day [(.minusDays d 1) d]
+             :let [r (p/shell
+                      {:out :string :err :string :continue true}
+                      "gh"
+                      "api" "-H"
+                      "Accept: application/vnd.github.raw"
+                      (str "repos/" repo "/contents/data/batches/" day ".ndjson?ref=gh-pages"))]
+             :when (zero? (:exit r))
+             line (str/split-lines (:out r))
+             :when (str/starts-with? line "{")]
+         (json/parse-string line true))))
 
 (defn held-runs
   "The ids of the runs on commit sha that wait for approval (conclusion action_required)."
@@ -505,10 +557,11 @@
 (defn dispatch!
   "Look at every open bot-failure issue and make its one move (the namespace doc)."
   [dry?]
-  (let [issues (open-issues)
+  (let [now (System/currentTimeMillis)
+        issues (ranked (open-issues)
+                       (weights (recent-batches now) (iso (- now (* weight-hours 3600 1000)))))
         prs (copilot-prs)
         live (live-branches)
-        now (System/currentTimeMillis)
         cap (or (some-> (System/getenv "COPILOT_CAP")
                         parse-long)
                 default-cap)

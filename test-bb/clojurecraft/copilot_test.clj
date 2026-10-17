@@ -32,3 +32,32 @@
              (:move (copilot/issue-move issue nil #{} (- now copilot/start-grace-ms 1) now)))))
     (testing "inside the grace: wait for the session"
       (is (= :wait (:move (copilot/issue-move issue nil #{} (- now 1000) now)))))))
+
+(deftest the-most-frequent-failure-first
+  (let [batches [{:kind "real"
+                  :runs 100
+                  :ended "2026-10-17T20:00:00Z"
+                  :failures [["portal" "no-stand" 15] ["ingots" "boxed" 2]]}
+                 {:kind "sim"
+                  :runs 1000
+                  :ended "2026-10-17T20:00:00Z"
+                  :failures [["cast-one" "timeout" 90] ["ingots" "boxed" 10]]}
+                 {:kind "real"
+                  :runs 50
+                  :ended "2026-10-17T01:00:00Z"
+                  :failures [["water-bucket" "timeout" 50]]}]
+        w (copilot/weights batches "2026-10-17T14:00:00Z")]
+    (testing "each kind's share of its own runs, older batches left out"
+      (is (= 0.15 (get w "portal no-stand")))
+      (is (= 0.09 (get w "cast-one timeout")))
+      (is (= 0.03 (get w "ingots boxed")))
+      (is (nil? (get w "water-bucket timeout"))))
+    (testing "the queue: heaviest first, then newest"
+      (is (= [196 135 37 400 300]
+             (map :number
+                  (copilot/ranked [{:number 300 :title "Bot stops at wood: no-log"}
+                                   {:number 37 :title "Bot stops at ingots: boxed"}
+                                   {:number 196 :title "Bot stops at portal: no-stand"}
+                                   {:number 400 :title "Bot stops at furnace: boxed"}
+                                   {:number 135 :title "Bot stops at cast-one: timeout"}]
+                                  w)))))))
