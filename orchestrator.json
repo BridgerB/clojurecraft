@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T13:33:45.759Z",
+  "at" : "2026-10-17T13:34:52.256Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -166,7 +166,7 @@
     "number" : 41,
     "title" : "Bot stops at cast-one: no-site",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 37,
     "title" : "Bot stops at ingots: boxed",
@@ -199,10 +199,6 @@
     "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 41,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   } ],
   "log" : [ {
     "issue" : 60,
