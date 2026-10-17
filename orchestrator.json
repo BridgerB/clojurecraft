@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T20:54:52.051Z",
+  "at" : "2026-10-17T20:56:01.773Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -13,15 +13,26 @@
     "pr" : 386,
     "session" : false
   }, {
+    "number" : 342,
+    "title" : "Bot stops at furnace: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
+  }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
-    "number" : 328,
-    "title" : "Bot stops at fortress: no-stand",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 328,
+    "checks" : "red",
+    "title" : "Bot stops at fortress: no-stand",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 395,
+    "session" : true
   }, {
     "number" : 320,
     "title" : "Bot stops at cast-one: stair-not-taken",
@@ -206,12 +217,18 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 342,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
+  }, {
     "issue" : 338,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 328,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 395,
+    "why" : "session running"
   }, {
     "issue" : 320,
     "move" : "leave",
@@ -962,5 +979,10 @@
     "issue" : 328,
     "move" : "assign",
     "at" : "2026-10-17T20:54:52.051Z"
+  }, {
+    "issue" : 342,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-17T20:56:01.773Z"
   } ]
 }
