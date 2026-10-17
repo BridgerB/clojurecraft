@@ -1,6 +1,7 @@
 {
-  "at" : "2026-10-17T23:54:11.215Z",
+  "at" : "2026-10-17T23:55:19.088Z",
   "cap" : 1,
+  "agent-tasks" : true,
   "issues" : [ {
     "number" : 296,
     "title" : "Bot stops at fortress: no-pickaxe",
