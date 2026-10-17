@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T06:59:06.890Z",
+  "at" : "2026-10-17T07:00:16.991Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 349,
@@ -31,17 +31,6 @@
     "title" : "Bot stops at cast-one: no-escape",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 342,
-    "checks" : "green",
-    "title" : "Bot stops at furnace: boxed",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 343,
-    "session" : false
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
@@ -195,9 +184,8 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 342,
-    "move" : "merge",
-    "pr" : 343
+    "issue" : 349,
+    "move" : "assign"
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -418,5 +406,9 @@
     "move" : "merge",
     "pr" : 343,
     "at" : "2026-10-17T06:59:06.890Z"
+  }, {
+    "issue" : 349,
+    "move" : "assign",
+    "at" : "2026-10-17T07:00:16.991Z"
   } ]
 }
