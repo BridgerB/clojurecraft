@@ -19,7 +19,9 @@
    in air, and the block under the feet a solid that is not a lily pad (steve's isOnDryLand)."
   [world]
   (let [[x y z] (:player/pos world)
-        support (terrain/block-at world [(math/floor x) (math/floor (- y 0.5)) (math/floor z)])]
+        support (terrain/block-at world
+                                  [(long (math/floor x)) (long (math/floor (- y 0.5)))
+                                   (long (math/floor z))])]
     (boolean (and (:player/on-ground? world)
                   (not (:player/in-water? world))
                   (not (:player/eye-in-water? world))
