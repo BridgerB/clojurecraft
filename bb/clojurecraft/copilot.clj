@@ -19,9 +19,11 @@
         dispatcher) is never merged here: the issue is labelled needs-review for a person;
      5. a pull request that conflicts with main: ask Copilot to merge main and resolve it (a merge
         would fail; it used to throw and end the pass, its status unwritten);
-     6. a pull request that only says Refs #n (Copilot could not prove a fix and handed off):
+     6. Copilot answered the last continue request and pushed nothing since (silent?): agent-stuck
+        at once, never asked again (PR #324 was asked eight times for one dead end);
+     7. a pull request that only says Refs #n (Copilot could not prove a fix and handed off):
         the issue is labelled agent-stuck for a person, never reassigned;
-     7. otherwise (a red check, a draft left by a session that ended, a Refs-only body): ask
+     8. otherwise (a red check, a draft left by a session that ended, a Refs-only body): ask
         Copilot to go on, in a pull request comment that says what is wrong, at most once every
         nudge-every-ms and max-nudges times; after that the issue is labelled agent-stuck and
         left for a person.
@@ -94,6 +96,19 @@
           (every? #{:green} states) :green
           :else :pending)))
 
+(defn silent?
+  "Did Copilot answer the last continue request without pushing anything since it: a reply
+   after the request and no commit after it. Asking again gets the same answer: PR #324 (issue
+   #62) was asked eight times, and each time Copilot read the state again, explained that the
+   blocker was the Fixes line GitHub appends to its pull request (which it cannot edit), and
+   pushed nothing, eight sessions spent on one dead end. The first such answer leaves the issue
+   to a person."
+  [{:keys [last-nudge-ms last-push-ms answered-ms]}]
+  (boolean (and last-nudge-ms
+                answered-ms
+                (> answered-ms last-nudge-ms)
+                (or (nil? last-push-ms) (< last-push-ms last-nudge-ms)))))
+
 (defn issue-move
   "The one move for open issue i ({:number :labels :assignees}), given pr (the open Copilot pull
    request that fixes it, {:number :branch :draft? :checks :nudges :last-nudge-ms} or nil), live
@@ -122,6 +137,7 @@
       (and pr (= :pending (:checks pr)) (not (:draft? pr)))
       {:move :wait :issue n :pr (:number pr) :why "checks running"}
       (and pr (>= (:nudges pr) max-nudges)) {:move :stuck :issue n :pr (:number pr)}
+      (silent? pr) {:move :stuck :issue n :pr (:number pr) :why "answered with no push"}
       (and pr (:last-nudge-ms pr) (< (- now (:last-nudge-ms pr)) nudge-every-ms))
       {:move :wait :issue n :pr (:number pr) :why "nudged recently"}
       pr {:move :nudge :issue n :pr (:number pr) :checks (:checks pr) :draft? (:draft? pr)}
@@ -245,6 +261,15 @@
              :when (= "action_required" (:conclusion r))]
          (:id r))))
 
+(defn last-push-ms
+  "When pull request n's newest commit was made, or nil."
+  [n]
+  (some->> (gh-json "api" (str "repos/" repo "/pulls/" n "/commits?per_page=100"))
+           (keep #(get-in % [:commit :committer :date]))
+           seq
+           (map ms)
+           (apply max)))
+
 (defn copilot-prs
   "The open pull requests from copilot/* branches, by the issue each fixes:
    {n {:number :branch :draft? :held :guarded? :checks :nudges :last-nudge-ms}}."
@@ -279,7 +304,14 @@
        :last-nudge-ms (some->> ours
                                (map (comp ms :createdAt))
                                seq
-                               (apply max))}])))
+                               (apply max))
+       :last-push-ms (last-push-ms (:number pr))
+       :answered-ms (some->> (:comments pr)
+                             (filter #(str/starts-with? (str (get-in % [:author :login]))
+                                                        "copilot"))
+                             (map (comp ms :createdAt))
+                             seq
+                             (apply max))}])))
 
 (defn live-branches
   "The branches with a Copilot session queued or running (its runs have event dynamic)."
@@ -382,12 +414,16 @@
       :ready (gh "pr" "ready" (str pr) "--repo" repo)
       :gave-up (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "agent-stuck")
       :stuck
-      (do (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "agent-stuck")
-          (gh "pr"
-              "comment" (str pr)
-              "--repo" repo
-              "--body"
-              (str "Left for a person: " max-nudges " continue requests and still not mergeable.")))
+      (do
+        (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "agent-stuck")
+        (gh
+         "pr"
+         "comment" (str pr)
+         "--repo" repo
+         "--body"
+         (if (= "answered with no push" (:why m))
+           "Left for a person: Copilot answered the last continue request without pushing anything, so asking again would get the same answer. Its reply above says what blocks it (often a partial fix, which an issue-assigned Copilot pull request cannot mark Refs instead of Fixes). AGENTS.md section 3: a person takes it from here."
+           (str "Left for a person: " max-nudges " continue requests and still not mergeable."))))
       (:wait :leave) nil)))
 
 (defn dispatch!
