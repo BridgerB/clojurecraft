@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T05:43:05.542Z",
+  "at" : "2026-10-17T05:44:12.450Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 338,
+    "checks" : "red",
+    "title" : "Bot stops at fortress: timeout",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 341,
+    "session" : true
   }, {
     "number" : 296,
     "title" : "Bot stops at fortress: no-pickaxe",
@@ -129,7 +135,9 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 341,
+    "why" : "session running"
   }, {
     "issue" : 296,
     "move" : "leave",
