@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T03:08:01.120Z",
+  "at" : "2026-10-17T03:11:11.234Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
@@ -19,6 +19,11 @@
   }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 105,
+    "title" : "Bot stops at flint-and-steel: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -107,6 +112,9 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 65,
+    "move" : "assign"
+  }, {
     "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
@@ -179,5 +187,9 @@
     "move" : "stuck",
     "pr" : 324,
     "at" : "2026-10-17T02:51:01.679Z"
+  }, {
+    "issue" : 65,
+    "move" : "assign",
+    "at" : "2026-10-17T03:11:11.234Z"
   } ]
 }
