@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T03:19:48.103Z",
+  "at" : "2026-10-17T03:21:56.109Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 62,
@@ -129,9 +129,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 65,
-    "move" : "wait",
-    "pr" : 327,
-    "why" : "nudged recently"
+    "move" : "nudge",
+    "pr" : 327
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -219,5 +218,10 @@
     "move" : "nudge",
     "pr" : 327,
     "at" : "2026-10-17T03:16:34.771Z"
+  }, {
+    "issue" : 65,
+    "move" : "nudge",
+    "pr" : 327,
+    "at" : "2026-10-17T03:21:56.109Z"
   } ]
 }
