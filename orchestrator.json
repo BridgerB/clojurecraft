@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T09:22:11.047Z",
+  "at" : "2026-10-17T09:27:29.784Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 344,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at cast-one: no-escape",
     "copilot" : true,
     "draft" : true,
