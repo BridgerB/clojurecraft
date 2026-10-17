@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T16:54:13.261Z",
+  "at" : "2026-10-17T16:55:20.186Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 339,
-    "title" : "Bot stops at fortress: no-footing",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 339,
+    "checks" : "red",
+    "title" : "Bot stops at fortress: no-footing",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 384,
+    "session" : true
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -175,7 +181,9 @@
   } ],
   "moves" : [ {
     "issue" : 339,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 384,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
