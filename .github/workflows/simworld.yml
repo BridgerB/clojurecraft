@@ -3,7 +3,10 @@ name: simworld
 # Captures a race landing set's worlds for the server model, once, and caches them (clojure
 # -M:capture): a real server on the set's pregenerated world (world.yml's cache, never built
 # here), a client toured round each landing, the server's own chunk columns saved one world file
-# a landing. simrace.yml restores them; the model plays thousands of runs in them a runner.
+# a landing. simrace.yml restores them; the model plays thousands of runs in them a runner. The
+# nether job captures the set's Nether the same way, from the same world (its seed lives in its
+# level.dat, so it is the Nether the race's servers generate), one file a set (issue #353): a sim
+# run's portal leads there.
 
 on:
   workflow_call:
@@ -86,3 +89,89 @@ jobs:
       - name: Summary
         run: |
           echo "### sim worlds $SET: found in the cache: ${{ steps.have.outputs.cache-hit || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
+
+  # the set's Nether (issue #353, capture_nether.clj): one region round every landing's Nether
+  # point, one file a set, under its own key (the server world's files and capture_nether.clj,
+  # never capture.clj: no lane's worlds change with it); simrace.yml restores it beside the worlds
+  nether:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 90
+    env:
+      SET: ${{ inputs.set }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: have
+        name: The captured Nether (found, or taken here)
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/${{ env.SET }}.edn.gz
+          # the key simrace.yml restores: the server world's files and the Nether capture's own
+          key: simnether-${{ env.SET }}-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          lookup-only: true
+      - name: The set's server world (world.yml built it)
+        if: steps.have.outputs.cache-hit != 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/worlds/${{ env.SET }}
+          key: world-${{ env.SET }}-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj') }}
+          fail-on-cache-miss: true
+      - uses: actions/setup-java@v6
+        if: steps.have.outputs.cache-hit != 'true'
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install the Clojure CLI and Babashka
+        if: steps.have.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh -o /tmp/clj.sh
+          sudo bash /tmp/clj.sh
+          curl -fsSL https://raw.githubusercontent.com/babashka/babashka/master/install -o /tmp/bb.sh
+          sudo bash /tmp/bb.sh --version 1.13.225
+      - uses: actions/cache@v6
+        if: steps.have.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+          key: clj-${{ hashFiles('deps.edn') }}
+      - uses: actions/cache@v6
+        if: steps.have.outputs.cache-hit != 'true'
+        with:
+          path: data/local-server/server-26.1.2.jar
+          key: server-jar-97ccd4c0ed3f81bbb7bfacddd1090b0c56f9bc51
+      - name: Capture
+        if: steps.have.outputs.cache-hit != 'true'
+        run: |
+          RCON_PASS=$(openssl rand -hex 16)
+          echo "::add-mask::$RCON_PASS"
+          mkdir -p work out
+          cp -r "cache/worlds/$SET" work/world
+          clojure -P -M
+          PORT=25565 RCON_PORT=25575 RCON_PASS=$RCON_PASS WORLD=$PWD/work/world HEAP_MB=6144 \
+            COMPRESSION_THRESHOLD=-1 MAX_TICK_TIME=-1 bb server start
+          clojure -J-Xmx4g -M -m clojurecraft.capture-nether --port 25565 --rcon-port 25575 --rcon-pass "$RCON_PASS" \
+            --landings "cache/worlds/$SET/landings.edn" --set "$SET" --out "cache/sim-nether/$SET.edn.gz" \
+            | tee "out/nether-$SET.log"
+          WORLD=$PWD/work/world bb server stop || true
+          ls -l "cache/sim-nether/$SET.edn.gz"
+      - uses: actions/cache/save@v6
+        if: steps.have.outputs.cache-hit != 'true'
+        with:
+          path: cache/sim-nether/${{ env.SET }}.edn.gz
+          key: simnether-${{ env.SET }}-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### sim Nether $SET: found in the cache: ${{ steps.have.outputs.cache-hit || 'false' }}"
+            echo '```'
+            grep -E '^NETHERSUM ' "out/nether-$SET.log" 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: simnether-${{ env.SET }}-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: ignore
+          path: out/
