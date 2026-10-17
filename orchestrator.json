@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T09:57:22.813Z",
+  "at" : "2026-10-17T10:03:45.088Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -15,7 +15,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 287,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at fortress: other-dimension",
     "copilot" : true,
     "draft" : true,
