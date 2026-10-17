@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T07:27:39.377Z",
+  "at" : "2026-10-17T07:28:45.538Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 351,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at fortress: stuck",
     "copilot" : true,
     "draft" : true,
@@ -171,6 +171,11 @@
   }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 74,
+    "title" : "Bot stops at cast-one: no-stand",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
