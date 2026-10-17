@@ -1,18 +1,7 @@
 {
-  "at" : "2026-10-17T05:06:26.713Z",
+  "at" : "2026-10-17T05:07:34.774Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 328,
-    "checks" : "green",
-    "title" : "Bot stops at fortress: no-stand",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 335,
-    "session" : false
-  }, {
     "number" : 323,
     "title" : "Bot stops at flint-and-steel: stale-window",
     "labels" : [ "bot-failure", "sim" ],
@@ -129,9 +118,8 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 328,
-    "move" : "merge",
-    "pr" : 335
+    "issue" : 323,
+    "move" : "assign"
   }, {
     "issue" : 296,
     "move" : "leave",
@@ -252,5 +240,9 @@
     "move" : "merge",
     "pr" : 335,
     "at" : "2026-10-17T05:06:26.713Z"
+  }, {
+    "issue" : 323,
+    "move" : "assign",
+    "at" : "2026-10-17T05:07:34.774Z"
   } ]
 }
