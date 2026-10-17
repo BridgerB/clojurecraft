@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, intents, walk]
 aliases: [:walk, waypoints, follow, waypoint-reached?, route-stale?, :no-path, replans, reach 4.0]
 status: verified
-lastUpdated: 2026-10-16
+lastUpdated: 2026-10-17
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/intent.clj#defn walk-deadline
@@ -17,6 +17,8 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn follow
   - src/clojurecraft/intent.clj#defn arrived?
   - src/clojurecraft/intent.clj#defn opening
+  - src/clojurecraft/stairs.clj#defmethod path/goal-done? :surface
+  - test/clojurecraft/plan_test.clj#a-shaft-open-to-the-sky-is-not-a-way-out
   - src/clojurecraft/intent.clj#defn goal-of
   - src/clojurecraft/intent.clj#def stuck-ticks 40
   - src/clojurecraft/intent.clj#def max-replans 6
@@ -38,7 +40,7 @@ related:
 
 ## Key files
 - `intent.clj`, `run :walk` - the whole intent. Its bookkeeping lives on the intent map: `:intent/waypoints`, `:intent/route` (how the plan ended), `:intent/at` (the next waypoint's index), `:intent/replans`, `:intent/planned-chunks`, `:intent/best-tick` (the tick a waypoint was last reached), `:intent/started`.
-- `intent.clj`, `walk-goal` and `route!` - plans from the feet cell toward `{:goal/kind :near :goal/pos target :goal/range 3}`, or, for a walk to a block mined from beside (`:intent/pickup?`, [[mine-act]]), `:goal/kind :pickup` (within `pickup-range` on the plane, the block at the feet's height or up to `pickup-rise` above; with `:intent/step-down?`, `:goal/step-down?` too, a block up beside it), and counts the plan. A walk up to the open sky (`:intent/for :opening`, `goal-of`) is planned toward path's `:sky` instead, and is over when the feet are under the sky (`arrived?`), not when the mouth is merely in reach.
+- `intent.clj`, `walk-goal` and `route!` - plans from the feet cell toward `{:goal/kind :near :goal/pos target :goal/range 3}`, or, for a walk to a block mined from beside (`:intent/pickup?`, [[mine-act]]), `:goal/kind :pickup` (within `pickup-range` on the plane, the block at the feet's height or up to `pickup-rise` above; with `:intent/step-down?`, `:goal/step-down?` too, a block up beside it), and counts the plan. A walk out (`:intent/for :opening`, `goal-of`) is planned toward `:surface` instead: `stairs/out?`, the same ground a climb ends on, not a sky-lit shaft or pit. `arrived?` asks that same goal, not whether the mouth is merely in reach.
 - `intent.clj`, `waypoint-reached?` - within `waypoint-reach` (0.35) of the waypoint's centre on the plane, and the feet within half a block of its height in both directions.
 - `intent.clj`, `follow` - `toward` the waypoint's centre, jumping when it is above the feet and within `jump-near` (1.3), or when blocked.
 - `intent.clj`, `route-stale?` - the three reasons to plan again.
@@ -54,6 +56,7 @@ related:
 7. Otherwise `follow` it.
 
 ## Gotchas
+- A sky-lit pit is not a way out. Sim race 39007353160 (issue #349, R4/2) climbed eight stairs for wood, then walked back down to the sky over the pit at `[2256 75 2321]`, every eleven seconds. `opening` now searches for `:surface`, registered in `stairs` with `out?`, so both new and in-flight walks must reach usable open ground rather than undoing the climb.
 - A waypoint one block down counts only once the feet are down. With a looser gate the property test caught a bot standing on the lip of a ledge counting the cell below as reached ([[pathfinder]]).
 - Time is counted in ticks (`:time/tick`), not ms, unlike dig and craft; a stalled tick rate stretches the 60 s timeout.
 - A walk started by the gather chain carries `:intent/for :log`, which is what lets the chain continue it into a dig ([[gather-chain]]).

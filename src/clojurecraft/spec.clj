@@ -489,15 +489,15 @@
 (s/def :path/max-nodes pos-int?)
 (s/def :path/from ::block-pos)
 (s/def ::route (s/keys :req [:path/waypoints :path/cost :path/status] :opt [:path/from]))
-(s/def :goal/kind #{:near :block :xz :away :pickup :sky :unseen}) ; :unseen is blaze.clj's: out of a blaze's sight
+(s/def :goal/kind #{:near :block :xz :away :pickup :sky :surface :unseen}) ; :unseen is blaze.clj's: out of a blaze's sight
 (s/def :goal/pos ::block-pos)
 (s/def :goal/range number?)
 (s/def :goal/rise nat-int?)
 (s/def :goal/step-down? boolean?)
 (s/def ::path-goal
-  ;; :sky has no :goal/pos: the mouth is wherever the open sky is reached
+  ;; :sky and :surface have no :goal/pos: the mouth is wherever their terrain predicate holds
   (s/and (s/keys :req [:goal/kind] :opt [:goal/pos :goal/range :goal/rise :goal/step-down?])
-         #(or (= :sky (:goal/kind %)) (contains? % :goal/pos))))
+         #(or (contains? #{:sky :surface} (:goal/kind %)) (contains? % :goal/pos))))
 (s/def :intent/logs-before nat-int?)
 (s/def :intent/drops (s/coll-of int? :kind set?))
 (s/def :intent/drops-before nat-int?)
