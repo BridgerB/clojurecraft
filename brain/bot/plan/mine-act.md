@@ -30,6 +30,9 @@ sourceRefs:
   - src/clojurecraft/stone.clj#defn deeper
   - test/clojurecraft/stone_test.clj#deeper-only-where-a-stair-can-be-dug
   - src/clojurecraft/stone.clj#defn retreat
+  - src/clojurecraft/stone.clj#defmethod path/goal-done? :unboxed-away
+  - test/clojurecraft/stone_test.clj#a-long-retreat-does-not-end-on-boxed-ground
+  - test/clojurecraft/stone_test.clj#a-boxed-search-does-not-retreat-to-its-start
   - test/clojurecraft/stone_test.clj#a-boxed-pocket-retreats-along-a-short-route-to-new-rock
   - src/clojurecraft/stone.clj#defn climb
   - src/clojurecraft/plan.clj#def boxing-kinds
@@ -66,6 +69,8 @@ A mining row is data: `:goal/act :mine`, the blocks it digs (`:goal/blocks`) and
 ## Short retreats from boxed ground
 
 `stone/retreat` still prefers a route more than twelve blocks away. When the feet are in `:plan/boxed-at` and the search exhausts the reachable ground before that distance (`:path/status :none`), it instead walks to the last unboxed waypoint on the returned route. An empty route or one with only boxed cells still yields nil; a search that merely spent its budget is not exhaustion. Retreat walks end standing on that destination (`intent/standing-walks`), never merely within reach of it, which could leave a short retreat in its boxed starting cell. Sim race 39028864642 (issue #370, R1/29) finished a climb for portal wood under gravel at y 48 with an eight-cell route back through its tunnel, all shorter than twelve blocks away, and waited `:no-log`. The short retreat leaves that pocket so gathering can re-plan from new rock without relaxing the gravel or boxed-cell guards.
+
+The `:unboxed-away` route goal excludes both boxed cells and `:plan/boxed-route`, the cells visited by descents or tunnels that failed `:boxed` (`plan/fail-intent`). Routes may cross those cells but cannot end on them. Issue #161's R1/29 snapshot repeatedly walked between boxed cells; excluding only the final boxed cells then repeated short descents from their still-unmarked starting cells. Remembering the failed searches' visited cells lets the bot leave that area and finish the portal kit.
 
 ## How it works (`mine-next`)
 1. A chain in flight continues: walk → dig → collect via `intent/chain-next`, tagged `:intent/for` the row's id, so another row's chain (a coal walk when iron is now wanted) is never continued as this one's dig.
