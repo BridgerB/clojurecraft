@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T04:37:42.084Z",
+  "at" : "2026-10-17T04:38:46.118Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 328,
@@ -120,9 +120,12 @@
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   } ],
   "moves" : [ {
+    "issue" : 328,
+    "move" : "assign"
+  }, {
     "issue" : 296,
     "move" : "leave",
     "why" : "hands-off label"
@@ -130,10 +133,6 @@
     "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 71,
-    "move" : "wait",
-    "why" : "session starting"
   } ],
   "log" : [ {
     "issue" : 60,
@@ -232,5 +231,9 @@
     "issue" : 71,
     "move" : "assign",
     "at" : "2026-10-17T04:06:42.322Z"
+  }, {
+    "issue" : 328,
+    "move" : "assign",
+    "at" : "2026-10-17T04:38:46.118Z"
   } ]
 }
