@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T06:43:49.223Z",
+  "at" : "2026-10-17T06:49:17.874Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 348,
@@ -30,7 +30,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 342,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at furnace: boxed",
     "copilot" : true,
     "draft" : true,
