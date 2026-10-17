@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T08:38:15.599Z",
+  "at" : "2026-10-17T08:39:19.901Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 347,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at portal: no-pickaxe",
     "copilot" : true,
     "draft" : true,
