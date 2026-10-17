@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T07:26:33.354Z",
+  "at" : "2026-10-17T07:27:39.377Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -184,6 +184,11 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
+  }, {
     "number" : 43,
     "title" : "Bot stops at portal-kit: no-pickaxe",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -211,6 +216,10 @@
     "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 45,
+    "move" : "wait",
+    "why" : "session starting"
   } ],
   "log" : [ {
     "issue" : 60,
