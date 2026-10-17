@@ -219,17 +219,18 @@
 (defn step-to-lay
   "The cells to lay so that a stair up has its step, the block ahead at the feet's height, which
    its new feet cell (the last) stands on: [] when it is solid already; the step alone when it
-   is clear and a solid block borders it to place against (place/support); nil when it is
-   water, lava or unloaded, or nothing can hold it. No holder, as a stair down lays: the cell
-   under the step is beside the feet, and what would hold the holder is the cell the bot stands
-   in."
+   is clear and a solid block borders it to place against (place/support); else a holder under
+   the step, beside the floor the feet stand on, then the step. nil when either cell is water,
+   lava or unloaded, or nothing can hold it."
   [world cells]
   (let [[nx ny nz] (last cells)
         step [nx (dec ny) nz]
-        kind (path/classify world step)]
-    (cond (= :solid kind) []
-          (not= :clear kind) nil
+        holder (update step 1 dec)
+        kind #(path/classify world %)]
+    (cond (= :solid (kind step)) []
+          (not= :clear (kind step)) nil
           (place/support world step) [step]
+          (and (= :clear (kind holder)) (place/support world holder)) [holder step]
           :else nil)))
 
 (defn falls-over?
@@ -683,7 +684,7 @@
   [world {:intent/keys [kind dir turns visited] :or {turns 0 visited #{}} :as i} _]
   (let [dir (or dir (first directions))
         {shape-safe? :safe? lay :lay cells-of :cells} (shapes kind)
-        fresh? (fn [cells] (not (contains? visited (last cells)))) ; no stair back onto a stepped cell
+        fresh? (fn [cells] (or (= :stairs-up kind) (not (contains? visited (last cells)))))
         fresh-safe? (fn [world cells] (and (fresh? cells) (shape-safe? world cells)))
         feet (intent/feet world)
         cells (cells-of feet dir)
@@ -1120,15 +1121,25 @@
   ;; done standing at to-y, or out of the ground (out?), whichever comes first; one that is
   ;; :intent/to-height? ends at to-y alone: the open sky over a pit's floor is not out. A climb
   ;; out that comes out is remembered (surfaced)
-  [world {:intent/keys [to-y to-height?] :as i} event]
-  (if (and (:player/on-ground? world)
-           (or (>= (physics/y-of (intent/feet world)) to-y)
-               (and (not to-height?) (out? world (intent/feet world)))))
-    (-> world
-        (assoc :player/controls {})
-        surfaced
-        intent/done)
-    (stairs-stage world i event)))
+  [world {:intent/keys [to-y to-height? rise] :as i} event]
+  (cond (and (:player/on-ground? world)
+             (or (>= (physics/y-of (intent/feet world)) to-y)
+                 (and (not to-height?) (out? world (intent/feet world)))))
+        (-> world
+            (assoc :player/controls {})
+            surfaced
+            intent/done)
+        (and (= -1 rise)
+             (:player/on-ground? world)
+             (some (fn [d]
+                     (let [cells (up-cells (intent/feet world) d)]
+                       (and (up-dry? world cells) (not-any? #(too-hard? world %) cells))))
+                   directions))
+        (-> world
+            (assoc :player/controls {})
+            (intent/assoc-intent :intent/stage :plan)
+            (intent/dissoc-intent :intent/child :intent/cells :intent/rise))
+        :else (stairs-stage world i event)))
 
 (defmethod intent/run :stairs-down
   [world {:intent/keys [to-y] :as i} event]

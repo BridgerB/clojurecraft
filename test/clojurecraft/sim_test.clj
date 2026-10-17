@@ -2214,6 +2214,20 @@
     (is (< (:intent/level-steps (:plan/intent w) 0) 4) "climbed, not walked")
     (is (empty? (:sim/violations sim)))))
 
+(deftest stairs-up-build-supported-steps-from-a-ledge
+  (let [[w sim] (intent-run-holding
+                 {:intent/kind :stairs-up :intent/to-y 72 :intent/to-height? true}
+                 {[8 65 8] 1}
+                 66
+                 {[:hotbar 0] {:item (item :cobblestone) :count 16}}
+                 30000)]
+    (is (= :done (:intent/status (:plan/intent w))) (pr-str (:plan/intent w)))
+    (is (<= 72.0 (second (:player/pos w))))
+    (is (:player/on-ground? w))
+    (is (= 12 (count (:sim/placed sim))) "a holder and a step for each rise")
+    (is (empty? (:sim/broken sim)) "no ducking down through its own steps")
+    (is (empty? (:sim/violations sim)))))
+
 (def aquifer-round-the-pocket
   "pocket with a water source beside every cell the first stair up each way would open: at
    y 67 and 68, two blocks out from the shaft along each axis."

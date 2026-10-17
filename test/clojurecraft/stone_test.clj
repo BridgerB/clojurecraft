@@ -378,6 +378,63 @@
   [w n]
   (assoc-in w [:player/inventory 8] {:item (blocks/items :cobblestone) :count n}))
 
+(deftest a-stair-up-lays-a-holder-beside-its-floor
+  (let [feet [5 66 5]
+        cells (stairs/up-cells feet [1 0])
+        holder [6 65 5]
+        step [6 66 5]
+        w (-> (standing 66 :stone_pickaxe)
+              (carrying 2)
+              (assoc :world/blocks {[5 65 5] 1}))
+        up {:intent/kind :stairs-up :intent/to-y 70 :intent/status :active}
+        planned (:plan/intent
+                 (intent/run (assoc w :plan/intent up) up {:event/kind :tick :event/now 0}))]
+    (is (= [holder step] (stairs/step-to-lay w cells)))
+    (is (= [holder step] (stairs/step-lay w feet cells)))
+    (is (= :lay (:intent/stage planned)) "climb rather than duck down from the ledge")
+    (is (= [holder step] (:intent/lay planned)))
+    (is (= [step] (stairs/step-to-lay (assoc-in w [:world/blocks holder] 1) cells))
+        "an existing support needs only the step")
+    (is (stairs/up-dry? (update w :world/blocks assoc holder 1 step 1) cells))
+    (is (nil? (stairs/step-lay (carrying w 1) feet cells)) "both blocks must be held")
+    (is (nil? (stairs/step-to-lay (assoc w :world/chunks {}) cells))
+        "an unloaded holder is not a place to build")
+    (doseq [id [blocks/water-base blocks/lava-base]]
+      (is (nil? (stairs/step-to-lay (assoc-in w [:world/blocks holder] id) cells))
+          "the holder never replaces a fluid"))
+    (is (nil? (stairs/step-to-lay (assoc-in w [:world/blocks [5 65 5]] blocks/air) cells))
+        "no unsupported holder")))
+
+(deftest a-climb-regains-a-higher-step-instead-of-digging-it-away
+  (let [feet [5 66 5]
+        cells (stairs/up-cells feet [1 0])
+        w (assoc (standing 66 :stone_pickaxe) :world/blocks {[5 65 5] 1 [6 66 5] 1})
+        up {:intent/kind :stairs-up
+            :intent/to-y 70
+            :intent/status :active
+            :intent/visited #{(last cells)}}
+        tick {:event/kind :tick :event/now 0}
+        run #(intent/run (assoc w :plan/intent %) % tick)
+        duck (assoc up
+                    :intent/rise -1
+                    :intent/stage :open
+                    :intent/cells (stairs/stair-cells feet [1 0])
+                    :intent/child (intent/child-dig [6 66 5]))
+        replanned (:plan/intent (run duck))]
+    (is (= :open (:intent/stage (:plan/intent (run up))))
+        "a higher step is progress even when visited before")
+    (is (= :plan (:intent/stage replanned)) "an old duck is reconsidered before digging")
+    (is (nil? (:intent/child replanned)))
+    (is (nil? (:intent/rise replanned)))
+    (is (nil? (:intent/cells replanned)))
+    (let [ore (assoc-in w [:world/blocks (last cells)] (blocks/default-state :gold_ore))]
+      (is (= :open
+             (get-in (intent/run (assoc ore :plan/intent duck) duck tick)
+                     [:plan/intent :intent/stage]))
+          "ore the held tool cannot cut is not a way up"))
+    (is (not (stairs/up-dry? (assoc w :plan/boxed-at #{(last cells)}) cells))
+        "a pocket known to be boxed is still refused")))
+
 (deftest a-stair-down-lays-floors-only-while-the-filler-reaches-its-depth
   ;; race 38984748832 runner 3 bot Clj_r01 (issue #37): the mine's stairs down broke into a cave at
   ;; y 50 holding 16 cobblestone and 25 dirt, floored thirty-one stairs down through the open cave,
