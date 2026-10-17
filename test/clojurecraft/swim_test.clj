@@ -6,6 +6,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.swim :as swim]
+            [clojurecraft.trap :as trap]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -195,3 +196,22 @@
     (is (not (:control/jump? (swim/flee-controls w target))) "without jumping")
     (is (= {} (swim/flee-controls (assoc w :player/pos [6.5 64.0 5.5]) target))
         "centred on it: still, so the body lands")))
+
+(deftest a-flee-clears-its-trap-on-a-placed-floor
+  ;; Issue #339: the flee landed on cobblestone over lava, but floating-point cell coordinates
+  ;; missed the block update, so the chunk's old lava kept the trap until :no-footing.
+  (doseq [[pos floor chunk local] [[[5.5 64.0 5.5] [5 63 5] [0 0] [5 63 5]]
+                                   [[-0.5 -54.0 -0.5] [-1 -55 -1] [-1 -1] [15 -55 15]]]]
+    (let [w (assoc (game/init fx/opts)
+                   :bot/phase :play
+                   :player/pos pos
+                   :player/on-ground? true
+                   :world/chunks {chunk (world/column {local blocks/lava-base})}
+                   :world/blocks {floor (blocks/default-state :cobblestone)}
+                   :plan/trap :lava
+                   :plan/trap-at [0 0]
+                   :plan/dry-ticks (dec trap/dry-ticks-to-clear))]
+      (is (trap/dry-land? w) "the placed floor, not the chunk's old lava")
+      (is (nil? (:plan/trap (trap/trapped-tick w))) "dry land clears the escape goal")
+      (is (not (trap/dry-land? (assoc w :world/blocks {floor blocks/air})))
+          "a missing floor is not dry land"))))

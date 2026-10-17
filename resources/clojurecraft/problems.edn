@@ -108,7 +108,8 @@
    "Head goes under mid-intent and the bot drowns inside the step"
    "A one-tick bob to dry Y reads as escaped, then the next step shoves it back in"
    "Roofed aquifer: every move goes up into stone while air is sideways and down"
-   "Standing beside or over lava; a lily pad lid stops the rise"]
+   "Standing beside or over lava; a lily pad lid stops the rise"
+   "Sim race 39005324315 R2/16 seed 1 (issue #339): a flee landed on placed cobblestone over lava but timed out :no-footing because floating-point support coordinates missed the integer-keyed block overlay; dry-land? must read the current floor with integer coordinates."]
   :problem/done
   "From a shore landing the bot walks into water and back out: RESULT reports :escaped true, RCON confirms no water at the feet or head cell and OnGround 1b, with at least 9 of 10 CI trials passing and zero deaths."
   :problem/last-failure

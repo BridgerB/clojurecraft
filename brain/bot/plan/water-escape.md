@@ -5,13 +5,14 @@ type: reference
 tags: [bot, plan, water, lava, survival, intents, goals]
 aliases: [:escape-water, :escape-lava, :swim-out, :flee, :wade, :shore, trapped-tick, dry-land?, :plan/trap, :world/traps, :goal/always?, bank, roofed pool, capped well, exposes-fluid?, never-dug]
 status: verified
-lastUpdated: 2026-10-15
+lastUpdated: 2026-10-17
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/trap.clj#defn dry-land?
   - src/clojurecraft/trap.clj#defn trapped-tick
   - src/clojurecraft/trap.clj#def trap-after-ticks 20
   - src/clojurecraft/trap.clj#def dry-ticks-to-clear 6
+  - test/clojurecraft/swim_test.clj#a-flee-clears-its-trap-on-a-placed-floor
   - src/clojurecraft/plan.clj#defn choose
   - "resources/clojurecraft/goals.edn#{:goal/id :escape-water :goal/priority 0 :goal/target? true :goal/always? true"
   - src/clojurecraft/swim.clj#defn banks
@@ -89,6 +90,8 @@ Survival is two goal rows, a trap rule the planner applies every tick, and the e
 A `:swim-out` started by the mine act's retreat (`:intent/for :retreat`, out of a flooded tunnel the bot is wading in) ends itself on dry land (`trap/dry-land?`); one started by the gather's `into-water` (`:intent/for :rise`, up a shaft dug into the sea, [[gather-chain]]) on dry land in the open, cap and notch skipped; an escape's is ended by its goal when the trap clears ([[mine-act]]).
 
 ## :flee
+`dry-land?` reads the support cell with integer block coordinates, so a placed floor in `:world/blocks` wins over the original chunk. Issue #339 (Sim race 39005324315, R2/16 seed 1) landed on cobblestone over lava but kept the lava trap until `:no-footing`: floating-point coordinates missed the overlay's integer keys and read the old lava instead (`a-flee-clears-its-trap-on-a-placed-floor`).
+
 The lava half: `footing` is the nearest standable cell within `flee-radius` 6, at most one up or down, with no lava in it, over it or under it (`lava-free?`), those with no lava beside them first (`lava-beside?`): a cell flowing lava covers is standable to a route, and sim race 38844683780 runner 7 (issue #230, world R2/9) fled to one three times and timed out (`a-flee-never-ends-in-the-lava-it-flees`); forward toward it, jumping only in the lava or against a step and still once centred in it (`flee-controls`: jump held over dry ground bounced the body off its footing until the flee timed out, issues #230 and #231, `a-flee-lands-on-its-footing-instead-of-bouncing`); `flee-timeout-ticks` (200) fails it `:no-footing`. The planner ends it the moment the trap clears.
 
 ## :wade and :shore
