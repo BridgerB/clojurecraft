@@ -1567,7 +1567,8 @@
 (defn hunt-target
   "The lava source the hunt cuts toward (toward-lava): the nearest loaded within hunt-radius
    (sources-near) whose cell over it is not above the feet, since the hunt's stairs go down and
-   its tunnel goes level, and round which a frame could be cast (castable?); nil when none.
+   its tunnel goes level, with a safe stand to open beside it (stands-beside), and round which
+   a frame could be cast (castable?); nil when none.
    Sim race 38811561269 runner 6 (issue #41, worlds R1/38, R2/8 and R2/32 round after round,
    R2/26 on runner 8): the hunt took the nearest source whatever its height, tunnelled under a
    lone source six blocks over the feet (R1/38) and under a small pool eleven over (R2/26),
@@ -1576,7 +1577,9 @@
   [world]
   (let [fy (physics/y-of (intent/feet world))
         sources (lava-sources world)]
-    (first (filter #(and (<= (inc (physics/y-of %)) fy) (castable? sources %))
+    (first (filter #(and (<= (inc (physics/y-of %)) fy)
+                        (seq (stands-beside world %))
+                        (castable? sources %))
                    (sources-near world)))))
 
 (defn toward-lava
