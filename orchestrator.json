@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T18:15:58.166Z",
+  "at" : "2026-10-17T18:21:26.805Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 389,
@@ -154,6 +154,11 @@
     "number" : 69,
     "title" : "Bot stops at water-bucket: timeout",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 68,
+    "title" : "Bot stops at ingots: no-spot",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 65,
