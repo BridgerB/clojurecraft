@@ -53,7 +53,7 @@
    [:intent/from-dist "how far on the plane a :cross started from its trunk" "while a :cross runs"]
    [:intent/water "the water cell a :wade enters from its bank (:intent/target)"
     "while a :wade has an entry"]
-   [:intent/dig-when-down "the cell a :swim-out will dig once it has sunk to the floor"
+   [:intent/dig-when-down "the cell a :swim-out or :cross will dig once it has sunk to the floor"
     "while a :swim-out sinks"]
    [:intent/next-search "the tick a :swim-out with no bank yet looks for one again"
     "while a :swim-out rises with no bank"]

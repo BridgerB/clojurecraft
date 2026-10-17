@@ -204,8 +204,112 @@
                     :player/loaded? true
                     :world/chunks {[0 0] (world/column (merge cells extra))}))]
     (is (= [4 60 5] (swim/obstacle (at {}) [5 60 5] [3 60 5])) "the wall at the feet is dug")
-    (is (= [5 62 5] (swim/obstacle (at {[3 62 5] blocks/air}) [5 60 5] [3 61 5]))
-        "under a bank a block up the step stays, the impulse climbs it: the ceiling instead")))
+    (is (= [4 62 5] (swim/obstacle (at {[3 62 5] blocks/air}) [5 60 5] [3 61 5]))
+        "under a higher bank the step stays, but the overhang blocking the lift is dug")))
+
+(deftest a-bank-overhang-is-cleared-without-digging-its-step
+  ;; issue #156, race 38999008545 Clj_r06: the bank's feet and head cells were clear,
+  ;; but packed ice above the step stopped the body's lift out of the water.
+  (let [w (assoc (game/init fx/opts)
+                 :world/chunks
+                 {[0 0] (world/column {[5 62 5] blocks/water-base
+                                       [6 63 5] blocks/air
+                                       [6 64 5] (blocks/default-state :packed_ice)})})]
+    (is (= [6 64 5] (swim/obstacle w [5 62 5] [8 63 5])))
+    (is (nil? (swim/obstacle w [5 62 5] nil)) "no bank: only the cap over the body is considered")))
+
+(deftest a-bank-left-below-a-rising-swim-is-dropped
+  ;; issue #156, race 38999008545 Clj_r06: a bank kept at y 49 remained dry while
+  ;; the swim rose to y 62 directly over it, then failed :stuck at distance zero.
+  (let [bank [5 49 5]
+        swim {:intent/kind :swim-out
+              :intent/bank bank
+              :intent/target bank
+              :intent/best-dist 0.0
+              :intent/best-tick 0
+              :intent/status :active}
+        w (assoc (game/init fx/opts)
+                 :player/pos [5.5 62.0 5.5]
+                 :player/in-water? true
+                 :time/tick 50
+                 :world/chunks
+                 {[0 0] (world/column
+                         {bank blocks/air [5 50 5] blocks/air [5 62 5] blocks/water-base})}
+                 :plan/intent swim)
+        tick {:event/kind :tick :event/now 2500 :event/rand 0.5}
+        i (:plan/intent (intent/run w swim tick))]
+    (is (swim/bank? w bank) "still dry, but no longer within the swim's height band")
+    (is (= :active (:intent/status i)))
+    (is (nil? (:intent/bank i)))
+    (is (nil? (:intent/best-dist i)))
+    (is (nil? (:intent/best-tick i)))
+    (is (= bank (get-in (intent/run (assoc w :time/tick 10) swim tick) [:plan/intent :intent/bank]))
+        "do not redirect a rise before its progress has stalled")))
+
+(deftest a-diagonal-bank-approach-clears-the-side-wall
+  (let [w (assoc (game/init fx/opts)
+                 :world/chunks
+                 {[0 0] (world/column {[5 62 5] blocks/water-base
+                                       [5 63 5] blocks/air
+                                       [5 62 6] blocks/water-base
+                                       [5 63 6] blocks/air
+                                       [5 64 6] blocks/air
+                                       [6 63 5] (blocks/default-state :packed_ice)})})]
+    (is (= [6 63 5] (swim/obstacle w [5 62 5] [6 63 10]))
+        "the larger axis is clear, but the body catches the wall along the other axis")))
+
+(deftest a-bank-approach-clears-a-wall-touching-the-bodys-edge
+  (let [w (assoc (game/init fx/opts)
+                 :player/pos [5.71 62.0 5.7]
+                 :world/chunks
+                 {[0 0] (world/column {[5 62 5] blocks/water-base
+                                       [5 63 5] blocks/air
+                                       [5 62 6] blocks/water-base
+                                       [5 63 6] blocks/air
+                                       [5 64 6] blocks/air
+                                       [6 63 5] blocks/air
+                                       [6 63 6] (blocks/default-state :packed_ice)})})]
+    (is (= [6 63 6] (swim/obstacle w [5 62 5] [5 63 10]))
+        "the body extends into another column even when the bank is straight ahead")))
+
+(deftest a-crossing-clears-a-wall-and-continues-after-the-dig
+  ;; issue #156, race 39060308623 Clj_r14: a crossing pressed into packed ice,
+  ;; sometimes out of water during a bob, and spent three attempts on :stuck.
+  (let [cross {:intent/kind :cross
+               :intent/target [14 64 5]
+               :intent/status :active
+               :intent/started 0
+               :intent/best-dist 8.0
+               :intent/best-tick 0}
+        w (assoc (game/init fx/opts)
+                 :player/pos [5.7 64.0 5.5]
+                 :player/on-ground? true
+                 :player/horizontal-collision? true
+                 :time/tick 200
+                 :world/chunks
+                 {[0 0] (world/column {[6 64 5] (blocks/default-state :packed_ice)
+                                       [6 65 5] (blocks/default-state :packed_ice)})}
+                 :plan/intent cross)
+        tick {:event/kind :tick :event/now 10000 :event/rand 0.5}]
+    (doseq [wet? [false true]]
+      (let [i (:plan/intent (intent/run (assoc w :player/in-water? wet?) cross tick))]
+        (is (= :active (:intent/status i)))
+        (is (= :dig (get-in i [:intent/child :intent/kind])))
+        (is (= [6 65 5] (get-in i [:intent/child :intent/target])))
+        (let [dug (assoc-in i [:intent/child :intent/status] :done)
+              resumed (:plan/intent (intent/run (assoc w :plan/intent dug) dug tick))]
+          (is (= :active (:intent/status resumed)) "a dig does not finish the crossing")
+          (is (nil? (:intent/child resumed)))
+          (is (nil? (:intent/best-tick resumed))))))
+    (let [afloat (assoc w :player/in-water? true :player/on-ground? false)
+          sinking (intent/run afloat cross tick)
+          i (:plan/intent sinking)
+          down (assoc sinking :player/on-ground? true)
+          digging (:plan/intent (intent/run down i tick))]
+      (is (= [6 65 5] (:intent/dig-when-down i)))
+      (is (true? (get-in sinking [:player/controls :control/sneak?])))
+      (is (= [6 65 5] (get-in digging [:intent/child :intent/target])))
+      (is (nil? (:intent/dig-when-down digging))))))
 
 (deftest a-crossing-stuck-in-the-water-retreats-to-a-bank
   ;; sim race 38844589684 runner 6 (issue #57, world R1/30 seed 4): forty blocks over, the swim
