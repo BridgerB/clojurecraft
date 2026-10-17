@@ -1,22 +1,11 @@
 {
-  "at" : "2026-10-17T16:29:21.623Z",
+  "at" : "2026-10-17T16:30:29.890Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 382,
     "title" : "Bot stops at portal: inventory-full",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 380,
-    "checks" : "green",
-    "title" : "Bot stops at cast-one: no-station",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 381,
-    "session" : false
   }, {
     "number" : 339,
     "title" : "Bot stops at fortress: no-footing",
@@ -190,9 +179,8 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 380,
-    "move" : "merge",
-    "pr" : 381
+    "issue" : 382,
+    "move" : "assign"
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -769,5 +757,9 @@
     "move" : "merge",
     "pr" : 381,
     "at" : "2026-10-17T16:29:21.623Z"
+  }, {
+    "issue" : 382,
+    "move" : "assign",
+    "at" : "2026-10-17T16:30:29.890Z"
   } ]
 }
