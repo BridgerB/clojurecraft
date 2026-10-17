@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T05:10:51.123Z",
+  "at" : "2026-10-17T05:11:55.525Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 323,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at flint-and-steel: stale-window",
     "copilot" : true,
     "draft" : true,
