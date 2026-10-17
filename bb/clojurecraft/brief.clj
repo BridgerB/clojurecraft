@@ -106,8 +106,9 @@
    (section
     "Snapshots"
     (cond (empty? snapshots)
-          ["None in cache/issues/" number
-           "/: stop at once as the profile's budget says (no evidence on disk)."]
+          [(str "None in cache/issues/"
+                number
+                "/: stop at once as the profile's budget says (no evidence on disk).")]
           :else
           (concat
            (for [s snapshots] (str "- `" s "`"))
