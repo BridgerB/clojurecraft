@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T23:06:05.906Z",
+  "at" : "2026-10-17T23:07:11.950Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -11,7 +11,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 403,
-    "session" : true
+    "session" : false
   }, {
     "number" : 320,
     "title" : "Bot stops at cast-one: stair-not-taken",
@@ -177,9 +177,8 @@
   } ],
   "moves" : [ {
     "issue" : 342,
-    "move" : "wait",
-    "pr" : 403,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 403
   }, {
     "issue" : 320,
     "move" : "leave",
@@ -1007,5 +1006,10 @@
     "issue" : 342,
     "move" : "assign",
     "at" : "2026-10-17T22:49:34.136Z"
+  }, {
+    "issue" : 342,
+    "move" : "ready",
+    "pr" : 403,
+    "at" : "2026-10-17T23:07:11.950Z"
   } ]
 }
