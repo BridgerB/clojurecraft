@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T07:34:15.192Z",
+  "at" : "2026-10-17T07:35:23.880Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -9,7 +9,7 @@
     "title" : "Bot stops at fortress: stuck",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 0,
+    "nudges" : 1,
     "pr" : 352,
     "session" : false
   }, {
@@ -206,8 +206,9 @@
   } ],
   "moves" : [ {
     "issue" : 351,
-    "move" : "nudge",
-    "pr" : 352
+    "move" : "wait",
+    "pr" : 352,
+    "why" : "nudged recently"
   }, {
     "issue" : 338,
     "move" : "leave",
