@@ -153,6 +153,7 @@
    "No reachable surface water in a dry biome; the bot hangs at fill-water"
    "Cave or aquifer water is chosen and the bot drowns at the scoop"
    "Scoop echo lags, so an empty bucket is reported though the source was there"
+   "Race 39007354638 runner 3 batch 2 (issue #348) retreated from gravel to a seagrass cell and bobbed until flint-and-steel failed :stuck; an escape bank must have no fluid at the feet or head, even when its plants are passable"
    "Sim race 39007353160 R4/2 (issue #349) climbed eight stairs for wood, then walked back down to a sky-lit pit every eleven seconds until flint-and-steel timed out; an exit walk must reach the same usable open ground as the climb, not merely open sky"
    "Sim race 39004332220 R2/2 (issue #323) died while smelting and the model retained the old furnace menu, refusing every equip click until :stale-window; respawn now drops that menu reference while keeping the inventory and furnace contents"]
   :problem/done

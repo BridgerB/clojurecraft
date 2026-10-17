@@ -2733,6 +2733,16 @@
     (is (some #(= :swim-out (:intention/kind %)) (memory/intentions w)))
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-pond-with-seagrass-is-left-for-a-dry-bank
+  (let [cells
+        (into {} (for [x (range 6 11) z (range 6 11)] [[x 63 z] (blocks/default-state :seagrass)]))
+        [w sim] (intent-run {:intent/kind :swim-out :intent/for :retreat} cells 63 nil 30000)]
+    (is (= :done (:intent/status (:plan/intent w))) (pr-str (:plan/intent w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (trap/dry-land? w))
+    (is (>= (second (:player/pos w)) 64.0) "on the shore, not the submerged plants")
+    (is (empty? (:sim/violations sim)))))
+
 (def roofed-pool
   "ruststeve's water_roofed: a 5x5 pool six deep (y 23-28) under solid stone, the only air a
    pocket one block west of the pool and one down from its top (y 27-28 at x 0), with a floor."

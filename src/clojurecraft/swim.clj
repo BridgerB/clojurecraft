@@ -80,6 +80,7 @@
 (defn bank?
   "Could the feet rest in cell once out of the water: a cell they could stand in
    (path/standable?), or one over a lake's ice (stairs/lake-ice) with the body and the head clear.
+   Neither body cell may contain fluid: a passable water plant is not dry land.
    A route never stands on ice (path/awkward-types: the physics does not slide), but the impulse
    lifts the body onto it as onto any solid, and on it the bot is on dry land (trap/dry-land?).
    Sim race 38806318231 world R2/43 (issue #177, 83 runs): the bot came up under a frozen sea,
@@ -87,12 +88,14 @@
    top, and with no other bank within sixteen it pressed toward a far shore under the ice until
    its escape timed out, three times, :no-escape."
   [world [x y z :as cell]]
-  (or (path/standable? world cell)
-      (boolean (and (some-> (terrain/block-at world [x (dec y) z])
-                            blocks/name-of
-                            stairs/lake-ice)
-                    (path/clear? world cell)
-                    (path/clear? world [x (inc y) z])))))
+  (and (or (path/standable? world cell)
+           (boolean (and (some-> (terrain/block-at world [x (dec y) z])
+                                 blocks/name-of
+                                 stairs/lake-ice)
+                         (path/clear? world cell)
+                         (path/clear? world [x (inc y) z]))))
+       (not (terrain/fluid-kind world cell))
+       (not (terrain/fluid-kind world [x (inc y) z]))))
 
 (defn banks
   "Cells the feet could stand in, nearest first, within bank-radius of feet on the plane and
