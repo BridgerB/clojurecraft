@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T08:28:31.222Z",
+  "at" : "2026-10-17T08:29:36.782Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -8,7 +8,7 @@
     "checks" : "pending",
     "title" : "Bot stops at flint-and-steel: stuck",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 357,
     "session" : false
@@ -190,8 +190,9 @@
   } ],
   "moves" : [ {
     "issue" : 348,
-    "move" : "ready",
-    "pr" : 357
+    "move" : "wait",
+    "pr" : 357,
+    "why" : "checks running"
   }, {
     "issue" : 338,
     "move" : "leave",
