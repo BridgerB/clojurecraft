@@ -1,18 +1,7 @@
 {
-  "at" : "2026-10-17T22:52:57.018Z",
+  "at" : "2026-10-17T22:58:27.269Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
-    "quiet" : false,
-    "number" : 348,
-    "checks" : "red",
-    "title" : "Bot stops at flint-and-steel: stuck",
-    "copilot" : true,
-    "draft" : true,
-    "nudges" : 0,
-    "pr" : 400,
-    "session" : false
-  }, {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 342,
@@ -31,12 +20,12 @@
   }, {
     "number" : 296,
     "title" : "Bot stops at fortress: no-pickaxe",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 196,
     "title" : "Bot stops at portal: no-stand",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
@@ -187,24 +176,12 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 348,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 342,
     "move" : "wait",
     "pr" : 403,
     "why" : "session running"
   }, {
     "issue" : 320,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 296,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
