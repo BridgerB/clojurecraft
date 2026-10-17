@@ -524,32 +524,57 @@
                    (and (< sy y) (<= (physics/distance eye (physics/centre src)) intent/reach))))
          (sort-by #(physics/distance eye (physics/centre %))))))
 
+(defn lava-aim
+  "Where on the surface of lava source src the eyes can aim with nothing on the ray
+   (scoop/surface-points, scoop/ray-walls), or nil. Issue #225: the refill's line to the
+   surface's centre grazed a block's edge the samples stepped past, and three scoops filled
+   nothing."
+  [world src]
+  (first (filter #(empty? (scoop/ray-walls world %)) (scoop/surface-points src))))
+
+(defn safe-source?
+  "Can src be scooped or its sight line opened without admitting lava at or above the feet?
+   A lid over lava may be opened; higher lava beside or above any block on the ray must stay
+   sealed. Issue #231 (R1/32) opened a low source's lid under higher lava, flooding its stand."
+  [world src]
+  (let [[_ y _] (intent/feet world)]
+    (or (not-any? (fn [block]
+                    (some #(and (>= (second %) (max y (second block)))
+                                (= :lava (terrain/fluid-kind world %)))
+                          (touching block)))
+                  (scoop/ray-walls world (scoop/aim-point src)))
+        (some? (lava-aim world src)))))
+
 (defn station-among
   "{:stand :sources :h} to refill lava from for a frame at origin facing: the cell nearest the
    landing at a height h over the room's floor (h between one and max-access: water spilled on
    the floor never runs up to it; the h given first), four to station-depth in front of the frame
    and up to station-span aside of the landing's column, that the feet can stand in once opened
    (firm under it, it and the head openable, no fluid touching them, outside the footprint) and
-   from which lava sources are in reach (reach-sources). As a pool's near sources are scooped the
+   from which lava sources are in reach (reach-sources), with safe sight lines (safe-source?).
+   As a pool's near sources are scooped the
    next stand along it is the station; the way to one runs straight out from the landing, then
    aside (refill), never along the stair. nil when none."
   ([world sources origin facing] (station-among world sources origin facing nil))
   ([world sources origin facing prefer]
-   (first (for [h (distinct (cons (or prefer 1) (range 1 (inc max-access))))
-                :when (<= 1 h max-access)
-                :let [[lx _ _] (landing h)]
-                dz (range 4 (inc station-depth))
-                dx (sort-by #(abs (- % lx)) (range (- lx station-span) (inc (+ lx station-span))))
-                :let [stand (cell origin facing [dx h dz])
-                      head (update stand 1 inc)]
-                :when (and (holds? world [:firm (update stand 1 dec)])
-                           (openable? world stand)
-                           (openable? world head)
-                           (dry? world (mapcat touching [stand head]))
-                           (not (contains? (footprint origin facing h) stand)))
-                :let [srcs (reach-sources sources stand)]
-                :when (seq srcs)]
-            {:stand stand :sources srcs :h h}))))
+   (first
+    (for [h (distinct (cons (or prefer 1) (range 1 (inc max-access))))
+          :when (<= 1 h max-access)
+          :let [[lx _ _] (landing h)]
+          dz (range 4 (inc station-depth))
+          dx (sort-by #(abs (- % lx)) (range (- lx station-span) (inc (+ lx station-span))))
+          :let [stand (cell origin facing [dx h dz])
+                head (update stand 1 inc)]
+          :when (and (holds? world [:firm (update stand 1 dec)])
+                     (openable? world stand)
+                     (openable? world head)
+                     (dry? world (mapcat touching [stand head]))
+                     (not (contains? (footprint origin facing h) stand)))
+          :let [pos (assoc (physics/centre stand) 1 (double (second stand)))
+                srcs (filter #(safe-source? (assoc world :player/pos pos) %)
+                             (reach-sources sources stand))]
+          :when (seq srcs)]
+      {:stand stand :sources srcs :h h}))))
 
 (def pool-radius
   "How far from a frame's origin a source its lava stands reach can lie: the stands' farthest
@@ -911,24 +936,18 @@
   [world src]
   (first (filter #(terrain/block-at world %) (scoop/ray-walls world (scoop/aim-point src)))))
 
-(defn lava-aim
-  "Where on the surface of lava source src the eyes can aim with nothing on the ray
-   (scoop/surface-points, scoop/ray-walls), or nil. Issue #225: the refill's line to the
-   surface's centre grazed a block's edge the samples stepped past, and three scoops filled
-   nothing."
-  [world src]
-  (first (filter #(empty? (scoop/ray-walls world %)) (scoop/surface-points src))))
-
 (defn source-in-sight
   "[src block] for the first of sources (nearest first) the eyes can be given a clear line to:
    block is the first block on the line to src (sight-block), nil when the line is clear already,
-   and never one a dig may not take (obsidian). nil when no source has such a line."
+   and never one a dig may not take (obsidian) or a line unsafe to open (safe-source?).
+   nil when no source has such a line."
   [world sources]
   (some (fn [src]
           (let [block (when-not (lava-aim world src) (sight-block world src))]
-            (when (or (nil? block)
-                      (not (contains? intent/never-dug
-                                      (blocks/name-of (terrain/block-at world block)))))
+            (when (and (safe-source? world src)
+                       (or (nil? block)
+                           (not (contains? intent/never-dug
+                                           (blocks/name-of (terrain/block-at world block))))))
               [src block])))
         sources))
 
