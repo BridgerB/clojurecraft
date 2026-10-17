@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T06:51:28.782Z",
+  "at" : "2026-10-17T06:52:36.124Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 348,
@@ -33,7 +33,7 @@
     "checks" : "pending",
     "title" : "Bot stops at furnace: boxed",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 343,
     "session" : false
@@ -191,8 +191,9 @@
   } ],
   "moves" : [ {
     "issue" : 342,
-    "move" : "ready",
-    "pr" : 343
+    "move" : "wait",
+    "pr" : 343,
+    "why" : "checks running"
   }, {
     "issue" : 338,
     "move" : "leave",
