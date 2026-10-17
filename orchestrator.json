@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T09:45:40.269Z",
+  "at" : "2026-10-17T09:46:46.967Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -12,10 +12,16 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 287,
-    "title" : "Bot stops at fortress: other-dimension",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 287,
+    "checks" : "red",
+    "title" : "Bot stops at fortress: other-dimension",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 361,
+    "session" : true
   }, {
     "number" : 286,
     "title" : "Bot stops at fortress: blocked",
@@ -172,7 +178,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 287,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 361,
+    "why" : "session running"
   }, {
     "issue" : 196,
     "move" : "leave",
