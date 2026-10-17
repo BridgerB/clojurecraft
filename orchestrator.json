@@ -1,18 +1,7 @@
 {
-  "at" : "2026-10-17T22:05:35.789Z",
+  "at" : "2026-10-17T22:06:51.635Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 385,
-    "checks" : "green",
-    "title" : "Bot stops at water-bucket: needs-tool",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 386,
-    "session" : false
-  }, {
     "number" : 348,
     "title" : "Bot stops at flint-and-steel: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -60,7 +49,7 @@
     "pr" : 387,
     "session" : false
   }, {
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 161,
     "checks" : "red",
@@ -203,10 +192,6 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 385,
-    "move" : "merge",
-    "pr" : 386
-  }, {
     "issue" : 342,
     "move" : "leave",
     "why" : "hands-off label"
@@ -232,8 +217,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 161,
-    "move" : "stuck",
-    "pr" : 391
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 156,
     "move" : "wait",
