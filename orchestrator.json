@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T18:39:09.062Z",
+  "at" : "2026-10-17T18:44:37.952Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 389,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at nether: timeout",
     "copilot" : true,
     "draft" : true,
