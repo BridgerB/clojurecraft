@@ -27,6 +27,7 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn work-op
   - src/clojurecraft/plan.clj#defn elsewhere?
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-cell-beside-lava
+  - test/clojurecraft/fortress_test.clj#a-tunnel-replaces-a-solid-floor-the-route-cannot-walk
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-spawner
   - src/clojurecraft/fortress.clj#defn arrived?
   - src/clojurecraft/fortress.clj#def aside
@@ -51,6 +52,8 @@ The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) i
 
 ## Never beside lava
 `safe?` refuses a step when a cell it opens or its floor is not loaded, a cell it opens is lava or a solid a tunnel never opens (obsidian, bedrock, a spawner: the blaze rods come from it, issue #262), a cell it opens has lava beside it (other than the floor, which is filled first), or the floor is neither solid nor lava a placed block can fill. A passable portal cell needs no dig and may be walked through; its frame remains protected. An air floor is never safe to enter: live run f1-5 stood at a cave's edge, slid off while placing one and fell forty blocks into the lava sea. A cell behind a wall cannot be capped before the wall is dug, and Nether lava flows a block every half second, so instead of capping (ruststeve's `nether_tunnel_step`) the tunnel goes round: `moves` tries the axis with farther to go, up or down first when the target is more than 3 off, then level, then the other axis, sideways, and finally backward.
+
+Solid does not mean walkable: issue #284's two real snapshots chose soul-sand floors, which the route classifies as awkward, and failed the entry walk `:no-path`. Each step first digs a floor unless `[:walk-floor floor]` (`path/floor?`) already holds, then places cobblestone before entering. The dig's guard also holds after placement, so the repair cannot undo itself. A repair is safe only with replacement support, no protected block, and no fluid exposed by the dig. An in-flight step re-reads these ops too: its failed entry walk is dropped when the floor repair becomes the next op; an unsafe repair drops the step instead, choosing again from the current world.
 
 Issue #286 exposed two false dead ends: R3/10 had a safe retreat behind the feet that `moves` omitted, and the real portal at [256 97 464] was passable but rejected. Merely adding those moves paced between the portal's two cells. `next-move` prefers cells not yet left by this tunnel (`:intent/tunnel-visited`). Before retreating it can floor a level turn onto adjoining ground: the air floor must have immediate placement support and another solid horizontal neighbour besides the floor under the feet, and `stairs/over-fluid?` must find no fluid below it. The step must satisfy the same lava and optional water rules with that floor filled. Controls stop when the step is chosen, and its ordinary floor op must be confirmed before the walk begins; this is a short corner onto ground, not permission to enter an air floor or extend a causeway over lava.
 

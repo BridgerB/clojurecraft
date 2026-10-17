@@ -16,6 +16,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.stairs :as stairs]
@@ -49,6 +50,8 @@
 
 (def up [0 1 0])
 
+(defmethod build/holds? :walk-floor [world [_ p]] (path/floor? world p))
+
 (defn plus "Cell a moved by offset d." [a d] (mapv + a d))
 
 (defn opens
@@ -62,13 +65,14 @@
       1 [(plus feet [0 2 0]) (plus to up) to])))
 
 (defn step-plan
-  "The ops of one step from feet by move, in order: a floor under the cell stepped into, the cells
-   dug out, then standing there (the plan's goal). Every op is worked from feet; a pure function."
+  "The ops of one step from feet by move, in order: replace an unwalkable floor under the cell
+   stepped into, dig the cells, then stand there. Every op is worked from feet; a pure function."
   [feet move]
   (let [to (plus feet move)
         floor (plus to [0 -1 0])]
     (vec (concat
-          [(build/place-op floor feet nil :floor)]
+          [(build/dig-op floor feet [:walk-floor floor] :floor-clear)
+           (build/place-op floor feet nil :floor)]
           (map #(build/dig-op % feet nil :open) (opens feet move))
           [{:build/op :stand-in :build/stand to :build/step :enter :build/done [:feet to]}]))))
 
@@ -83,7 +87,8 @@
    the floor, which is filled first, and the body's own), and a floor that is solid, or lava a
    block placed against a solid neighbour fills. Never air: a step over a drop is not enclosed
    (live run f1-5 stood at a cave's edge with air under the next floor, slid off while placing it
-   and fell forty blocks into the lava sea)."
+   and fell forty blocks into the lava sea). A solid floor the route cannot walk on is replaced
+   only when digging it opens no fluid and leaves support for its replacement."
   [world feet move]
   (let [cells (opens feet move)
         floor (plus (plus feet move) [0 -1 0])
@@ -95,7 +100,11 @@
          (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %))))
                    cells)
          (not-any? lava? (remove own (mapcat neighbours cells)))
-         (or (build/holds? world [:solid floor])
+         (or (path/floor? world floor)
+             (and (build/holds? world [:solid floor])
+                  (not (contains? unbreakable (blocks/name-of (at floor))))
+                  (not (intent/exposes-fluid? world floor))
+                  (= floor (build/foundation world floor)))
              (and (lava? floor) (= floor (build/foundation world floor)))))))
 
 (defn dry?
@@ -239,11 +248,13 @@
                 (intent/fail :blocked)))
           :else
           (let [next (build/next-op world (step-plan from move))]
-            (if (nil? next)
-              (reduce intent/dissoc-intent
-                      (intent/assoc-intent world :intent/taken (inc taken))
-                      step-keys)
-              (build/work-op world i next event))))))
+            (cond (nil? next)
+                  (reduce intent/dissoc-intent
+                          (intent/assoc-intent world :intent/taken (inc taken))
+                          step-keys)
+                  (and (= :floor-clear (:build/step next)) (not (safe? world from move)))
+                  (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
+                  :else (build/work-op world i next event))))))
 
 ;; ---------------------------------------------------------------- the goal
 

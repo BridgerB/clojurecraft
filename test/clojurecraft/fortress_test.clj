@@ -11,6 +11,7 @@
             [clojurecraft.fortress :as fortress]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]))
 
 (def netherrack (blocks/default-state :netherrack))
@@ -64,9 +65,10 @@
 
 (deftest a-step-is-a-floor-the-cells-it-opens-and-standing-there
   (let [plan (fortress/step-plan [0 64 0] [1 0 0])]
-    (is (= [:place :dig :dig :stand-in] (map :build/op plan)))
+    (is (= [:dig :place :dig :dig :stand-in] (map :build/op plan)))
     (is (= [1 63 0] (:build/pos (first plan))) "the floor under the cell stepped into")
-    (is (= [[1 65 0] [1 64 0]] (map :build/pos (filter #(= :dig (:build/op %)) plan))) "head first")
+    (is (= [[1 63 0] [1 65 0] [1 64 0]] (map :build/pos (filter #(= :dig (:build/op %)) plan)))
+        "floor repaired before opening the body cells head first")
     (is (= [:feet [1 64 0]] (:build/done (peek plan))))
     (is (every? #(= [0 64 0] (:build/stand %)) (butlast plan)) "every op worked from the feet"))
   (testing "a step down opens the cell the head passes through; a step up the one over the head"
@@ -96,6 +98,54 @@
         op (peek (fortress/step-plan [0 64 0] [1 0 0]))]
     (is (= {:intent/kind :walk :intent/target [1 64 0] :intent/for :build}
            (build/op-child w {:intent/kind :tunnel-to :intent/target [9 64 0]} op)))))
+
+(deftest a-tunnel-replaces-a-solid-floor-the-route-cannot-walk
+  (let [floor [1 63 0]
+        w (rock {floor (blocks/default-state :soul_sand) [1 64 0] air [1 65 0] air})
+        ops (fortress/step-plan [0 64 0] [1 0 0])
+        cleared (assoc-in w [:world/blocks floor] air)
+        filled (assoc-in w [:world/blocks floor] netherrack)]
+    (is (fortress/safe? w [0 64 0] [1 0 0]))
+    (is (not (path/standable? w [1 64 0])))
+    (is (= :floor-clear (:build/step (build/next-op w ops))))
+    (is (= floor (:build/pos (build/next-op w ops))))
+    (is (= :place (:build/op (build/next-op cleared ops))))
+    (is (= :stand-in (:build/op (build/next-op filled ops))))
+    (is (= :found
+           (:path/status (path/plan filled [0 64 0] {:goal/kind :block :goal/pos [1 64 0]}))))
+    (testing "an in-flight failed entry walk is dropped for the newly required floor repair"
+      (let [i {:intent/kind :tunnel-to
+               :intent/target [10 64 0]
+               :intent/steps 32
+               :intent/status :active
+               :intent/from [0 64 0]
+               :intent/move [1 0 0]
+               :intent/op (peek ops)
+               :intent/child {:intent/kind :walk
+                              :intent/target [1 64 0]
+                              :intent/status :failed
+                              :intent/reason :no-path}}
+            out (intent/run
+                 (assoc w :bot/phase :play :bot/effects [] :time/now 0 :time/tick 0 :plan/intent i)
+                 i
+                 {:event/kind :tick :event/now 0})]
+        (is (= :active (get-in out [:plan/intent :intent/status])))
+        (is (= :floor-clear (get-in out [:plan/intent :intent/op :build/step])))
+        (is (nil? (get-in out [:plan/intent :intent/child])))
+        (doseq [[p state] [[[1 62 0] blocks/lava-base] [floor (blocks/default-state :spawner)]]]
+          (let [unsafe (intent/run (assoc-in (assoc out :plan/intent i) [:world/blocks p] state)
+                                   i
+                                   {:event/kind :tick :event/now 0})]
+            (is (= :active (get-in unsafe [:plan/intent :intent/status])))
+            (is (nil? (get-in unsafe [:plan/intent :intent/move])))
+            (is (nil? (get-in unsafe [:plan/intent :intent/child])))))))
+    (testing "repair never opens fluid or a protected floor"
+      (doseq [fluid [blocks/lava-base blocks/water-base]
+              p [[1 62 0] [2 63 0]]]
+        (is (not (fortress/safe? (assoc-in w [:world/blocks p] fluid) [0 64 0] [1 0 0]))))
+      (is (not (fortress/safe? (assoc-in w [:world/blocks floor] (blocks/default-state :spawner))
+                               [0 64 0]
+                               [1 0 0]))))))
 
 (def gen-move
   (gen/elements (for [d [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [(first d) dy (second d)])))
