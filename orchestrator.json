@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T20:08:52.895Z",
+  "at" : "2026-10-17T20:10:02.510Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 392,
-    "title" : "Bot stops at portal: no-site",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 392,
+    "checks" : "red",
+    "title" : "Bot stops at portal: no-site",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 393,
+    "session" : true
   }, {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : true,
@@ -213,7 +219,9 @@
   } ],
   "moves" : [ {
     "issue" : 392,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 393,
+    "why" : "session running"
   }, {
     "issue" : 385,
     "move" : "leave",
