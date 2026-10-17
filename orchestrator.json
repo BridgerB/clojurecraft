@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T05:37:42.552Z",
+  "at" : "2026-10-17T05:41:57.771Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 339,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at fortress: no-footing",
     "copilot" : true,
     "draft" : false,
@@ -140,9 +140,8 @@
   } ],
   "moves" : [ {
     "issue" : 339,
-    "move" : "wait",
-    "pr" : 340,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 340
   }, {
     "issue" : 296,
     "move" : "leave",
@@ -286,5 +285,10 @@
     "move" : "ready",
     "pr" : 340,
     "at" : "2026-10-17T05:36:36.818Z"
+  }, {
+    "issue" : 339,
+    "move" : "merge",
+    "pr" : 340,
+    "at" : "2026-10-17T05:41:57.771Z"
   } ]
 }
