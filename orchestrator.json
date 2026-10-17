@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T07:01:24.655Z",
+  "at" : "2026-10-17T07:02:30.263Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -126,6 +126,11 @@
   }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 142,
+    "title" : "Bot stops at portal: no-station",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
