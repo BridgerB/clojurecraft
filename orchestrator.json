@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T18:32:32.197Z",
+  "at" : "2026-10-17T18:33:41.049Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 389,
-    "title" : "Bot stops at nether: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 389,
+    "checks" : "red",
+    "title" : "Bot stops at nether: timeout",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 390,
+    "session" : true
   }, {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : false,
@@ -192,7 +198,9 @@
   } ],
   "moves" : [ {
     "issue" : 389,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 390,
+    "why" : "session running"
   }, {
     "issue" : 385,
     "move" : "leave",
