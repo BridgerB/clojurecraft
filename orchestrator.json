@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T12:59:05.971Z",
+  "at" : "2026-10-17T13:05:32.779Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 369,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at cast-one: not-held",
     "copilot" : true,
     "draft" : false,
@@ -185,9 +185,8 @@
   } ],
   "moves" : [ {
     "issue" : 369,
-    "move" : "wait",
-    "pr" : 372,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 372
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -629,5 +628,10 @@
     "move" : "ready",
     "pr" : 372,
     "at" : "2026-10-17T12:57:59.895Z"
+  }, {
+    "issue" : 369,
+    "move" : "merge",
+    "pr" : 372,
+    "at" : "2026-10-17T13:05:32.779Z"
   } ]
 }
