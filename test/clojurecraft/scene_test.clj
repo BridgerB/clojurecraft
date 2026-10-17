@@ -16,6 +16,7 @@
                       38 {:item (blocks/items :stone_pickaxe) :count 1}}
    :plan/intent {:intent/kind :tunnel-to :intent/target [10 -25 21] :intent/route [[0 0 0] [1 0 0]]}
    :plan/status :active
+   :world/chunks {}
    :world/blocks (merge (into {}
                               (for [x (range -5 6) z (range -5 6)] [[x 63 z] (state :netherrack)]))
                         {[1 64 0] (state :lava) [0 65 0] (state :air) [0 64 0] (state :air)})})
