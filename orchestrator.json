@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T16:07:38.978Z",
+  "at" : "2026-10-17T16:09:00.410Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 382,
@@ -21,7 +21,7 @@
     "number" : 339,
     "title" : "Bot stops at fortress: no-footing",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -194,10 +194,6 @@
     "move" : "wait",
     "pr" : 381,
     "why" : "session running"
-  }, {
-    "issue" : 339,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 338,
     "move" : "leave",
