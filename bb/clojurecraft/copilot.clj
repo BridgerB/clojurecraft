@@ -8,8 +8,9 @@
      1. no Copilot pull request names it (Fixes #n) and it is not assigned: assign Copilot with
         the bot-fixer agent (.github/agents/bot-fixer.agent.md), newest first, while fewer than
         cap issues are assigned. The session it starts opens the pull request;
-     2. assigned, no pull request and no session running for start-grace-ms: assign again (the
-        session never started or died before its first push);
+     2. assigned, no pull request and no session running for start-grace-ms: take Copilot off it
+        (the session never started, died before its first push, or the issue was reopened long
+        after its fix merged), and the queue gives the slot out again, newest first;
      3. its pull request has a session running, or checks still pending: wait. Runs held for
         approval on its head commit (pushed while the repository asked for that, or by an
         automation) are rerun, which releases them; a draft whose session ended is marked ready
@@ -21,8 +22,10 @@
         would fail; it used to throw and end the pass, its status unwritten);
      6. Copilot answered the last continue request and pushed nothing since (silent?): agent-stuck
         at once, never asked again (PR #324 was asked eight times for one dead end);
-     7. a pull request that only says Refs #n (Copilot could not prove a fix and handed off):
-        the issue is labelled agent-stuck for a person, never reassigned;
+     7. a hand-off: a pull request that only says Refs #n, or that changes nothing of the bot
+        (no file under src/ or resources/: evidence and notes only, as #341 and #352 were, whose
+        Fixes line GitHub appends): Copilot could not prove a fix, so the issue is labelled
+        agent-stuck for a person, never asked to go on (#352 was asked six times in 30 minutes);
      8. otherwise (a red check, a draft left by a session that ended, a Refs-only body): ask
         Copilot to go on (an agent task on the pull request's branch, on follow-model, and a note
         on the pull request saying what is wrong), at most once every
@@ -49,6 +52,7 @@
 (def fix-model "gpt-6.1-sol")                 ; the model an assigned issue is fixed with (COPILOT_FIX_MODEL overrides)
 (def follow-model "gpt-6-luna")               ; the model a follow-up runs on, a cheap one (COPILOT_FOLLOW_MODEL overrides)
 (def hands-off #{"no-agent" "agent-stuck" "needs-review"}) ; labels that keep an issue away from Copilot
+(def bot-paths ["src/" "resources/"])            ; a fix changes one of these; a pull request that changes neither is a hand-off
 (def guarded
   "Paths a Copilot pull request may not change and still be merged here: the workflows and this
    dispatcher. COPILOT_TOKEN lives in an environment only main can read, so a merged change to
@@ -68,6 +72,13 @@
   [body]
   (set (map (comp parse-long second)
             (re-seq #"(?i)(?:fixes|closes|resolves) #(\d+)" (or body "")))))
+
+(defn hand-off?
+  "Does a Copilot pull request hand the issue off rather than fix it: it fixes no issue (only Refs
+   #n), or none of its files (paths) is the bot's (bot-paths)? The Fixes line GitHub appends to a
+   Copilot pull request says nothing about what the session claims, so the files decide."
+  [fixed paths]
+  (or (empty? fixed) (not-any? (fn [path] (some #(str/starts-with? path %) bot-paths)) paths)))
 
 (defn check-state
   "The required checks of a pull request's status rollup as one word: :green when every one
@@ -152,7 +163,8 @@
        :branch (:branch pr)
        :checks (:checks pr)
        :draft? (:draft? pr)}
-      (and assigned? assigned-ms (> (- now assigned-ms) start-grace-ms)) {:move :reassign :issue n}
+      (and assigned? assigned-ms (> (- now assigned-ms) start-grace-ms))
+      {:move :unassign :issue n :why "no pull request and no session since the assignment"}
       assigned? {:move :wait :issue n :why "session starting"}
       :else {:move :assign :issue n})))
 
@@ -311,7 +323,7 @@
        :branch (:headRefName pr)
        :draft? (:isDraft pr)
        :conflict? (= "CONFLICTING" (:mergeable pr))
-       :gave-up? (empty? fixed)
+       :gave-up? (hand-off? fixed (map :path (:files pr)))
        :updated-ms (ms (:updatedAt pr))
        :held (held-runs (:headRefOid pr))
        :guarded? (boolean (some (fn [{:keys [path]}] (some #(str/starts-with? path %) guarded))
@@ -341,11 +353,14 @@
          (:head_branch r))))
 
 (defn assigned-ms
-  "When Copilot was last assigned to issue n, or nil."
+  "When Copilot was last assigned to issue n, or nil. The events name it Copilot, capitalised: a
+   case-sensitive match found none, and an issue reopened long after its fix kept its stale
+   assignment, waiting on a session that never came (#45, #71)."
   [n]
   (some->> (gh-json "api" (str "repos/" repo "/issues/" n "/events?per_page=100"))
            (filter #(and (= "assigned" (:event %))
-                         (str/starts-with? (str (get-in % [:assignee :login])) "copilot")))
+                         (str/starts-with? (str/lower-case (str (get-in % [:assignee :login])))
+                                           "copilot")))
            last
            :created_at
            ms))
@@ -459,7 +474,7 @@
   (when-not dry?
     (case move
       :assign (assign! issue)
-      :reassign (do (unassign! issue) (assign! issue))
+      :unassign (unassign! issue)
       :merge (gh "pr" "merge" (str pr) "--repo" repo "--merge" "--delete-branch")
       :review
       (do (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "needs-review")
