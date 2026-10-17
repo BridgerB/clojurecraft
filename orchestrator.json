@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T15:52:05.858Z",
+  "at" : "2026-10-17T15:53:12.352Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -42,7 +42,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 379,
-    "session" : true
+    "session" : false
   }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
@@ -201,9 +201,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 186,
-    "move" : "wait",
-    "pr" : 379,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 379
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -731,5 +730,10 @@
     "issue" : 186,
     "move" : "assign",
     "at" : "2026-10-17T15:16:01.303Z"
+  }, {
+    "issue" : 186,
+    "move" : "ready",
+    "pr" : 379,
+    "at" : "2026-10-17T15:53:12.352Z"
   } ]
 }
