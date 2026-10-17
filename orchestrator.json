@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T12:31:56.005Z",
+  "at" : "2026-10-17T12:33:02.751Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 370,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at portal: no-log",
     "copilot" : true,
     "draft" : true,
@@ -156,7 +156,7 @@
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 60,
     "title" : "Bot stops at water-bucket: no-water",
@@ -200,10 +200,6 @@
     "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 65,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   } ],
   "log" : [ {
     "issue" : 60,
