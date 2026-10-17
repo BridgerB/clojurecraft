@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T17:32:04.451Z",
+  "at" : "2026-10-17T17:35:19.598Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 385,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at water-bucket: needs-tool",
     "copilot" : true,
     "draft" : true,
@@ -47,7 +47,7 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 178,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at portal: timeout",
     "copilot" : true,
     "draft" : true,
