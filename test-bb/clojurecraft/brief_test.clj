@@ -76,3 +76,48 @@
     (is (= "JUDGE {:path \"cache/issues/1/a.edn.gz\"}"
            (brief/relative
             (str "JUDGE {:path \"" (fs/absolutize "cache/issues/1/a.edn.gz") "\"}"))))))
+
+(def source
+  ["(ns x)" "" "(defn a" "  \"Docs: fails :no-stand.\"" "  []" "  :no-stand)" "" "(defn b [] 1)"])
+
+(deftest the-function-round-a-line
+  (is (= [3 7] (brief/enclosing source 6)) "from its defn to the line before the next form")
+  (is (= [8 8] (brief/enclosing source 8)) "the last form runs to the end"))
+
+(deftest a-keyword-in-code-not-in-its-docstring
+  (is (brief/in-code? {:text ":no-stand)"} "no-stand"))
+  (is (not (brief/in-code? {:text "\"Docs: fails :no-stand.\""} "no-stand")))
+  (is (not (brief/in-code? {:text ";; :no-stand here"} "no-stand"))))
+
+(deftest each-function-shown-once-code-hits-first
+  (let [hits [{:file "x.clj" :line 4 :text "\"Docs: fails :no-stand.\""}
+              {:file "x.clj" :line 6 :text ":no-stand)"}]
+        [e & more] (brief/excerpts hits "no-stand" (constantly source))]
+    (is (nil? more) "two hits in one function: one excerpt")
+    (is (= {:file "x.clj" :from 3 :to 7} (select-keys e [:file :from :to])))
+    (is (= "6    :no-stand)" (nth (brief/numbered e) 3)))))
+
+(deftest only-a-check-whose-newest-run-failed
+  (let [rollup [{:name "check" :conclusion "FAILURE" :completedAt "2026-10-17T10:00:00Z"}
+                {:name "check" :conclusion "SUCCESS" :completedAt "2026-10-17T11:00:00Z"}
+                {:name "unit / unit" :conclusion "FAILURE" :completedAt "2026-10-17T11:00:00Z"}
+                {:name "forests (1)" :conclusion "FAILURE" :completedAt "2026-10-17T11:00:00Z"}]]
+    (is (= ["unit / unit"] (map :name (brief/latest-red rollup))))))
+
+(deftest a-log-tail-without-gh-columns
+  (is (= "FAIL in (x)" (brief/log-tail "unit\tRun tests\t2026-10-17T11:00:00.1Z FAIL in (x)"))))
+
+(deftest the-scene-goes-into-the-brief
+  (is (= ["JUDGE {}" "SCENE a start {}" "SLICE a start y+0 z+0 ....."]
+         (brief/judged-lines "JUDGE {}\nSCENE a start {}\nSLICE a start y+0 z+0 .....\nnoise"))))
+
+(deftest none-recurring-says-stop
+  (let [issue {:number 7 :title "Bot stops at portal: no-stand" :body "" :comments []}
+        fixed (brief/brief issue
+                           {:snapshots ["a"]
+                            :judged {:main {:sha "s" :out "JUDGE {:path \"a\", :recurs? false}"}}})
+        live (brief/brief issue
+                          {:snapshots ["a"]
+                           :judged {:main {:sha "s" :out "JUDGE {:path \"a\", :recurs? true}"}}})]
+    (is (str/includes? fixed "No snapshot recurs on main"))
+    (is (not (str/includes? live "No snapshot recurs on main")))))

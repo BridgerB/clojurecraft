@@ -122,6 +122,7 @@ clojure -M:simrace --world cache/sim-worlds/R1/7.edn.gz --seed 3 --seeds 1   # o
 clojure -M:simrace --judge test/issues/37/R2-16-3.edn.gz      # a failure's kept moment judged over its window, as the check does: does it recur?
 clojure -M:simrace --from-recording s2/Clj_r17.edn.zst --out d # a real failure as a snapshot (real.clj), kept only when it recurs against the model
 bb issue-check fetch 37                                        # an issue's snapshots into test/issues/37/, for a fix/37-* PR to commit
+bb verify 37                                                   # a fix's whole check in one command: its snapshots judged, the suite without the forest property, bb check, a verdict
 bb churn batch real|sim <data-dir> <artifact> <run> <sha> <code-at> <runner>   # a runner's report every 20 minutes: the runs ended since its last (race.yml, simrace.yml); real ones become snapshots first
 bb failures report <dir> <title>                                # failed runs by signature, one issue each, one comment a batch (bb churn calls it on each batch)
 bb win release <dir> <run> <sha>                                # a real race's winners become a release with their recordings

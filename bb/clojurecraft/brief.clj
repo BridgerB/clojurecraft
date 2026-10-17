@@ -33,6 +33,9 @@
 (def raised-kept 12)        ; src lines that name the reason
 (def notes-kept 5)          ; brain notes that cite a file the reason is raised in
 (def related-kept 6)        ; closed issues with the same reason
+(def forms-kept 3)          ; the functions round the raising lines shown whole
+(def form-lines 70)         ; a function longer than this is shown as this many lines round the hit
+(def log-lines 60)          ; a red check's log: its last lines
 
 ;; ---------------------------------------------------------------- the brief as values
 
@@ -51,15 +54,63 @@
     {:stage stage :reason reason}))
 
 (defn judged-lines
-  "The JUDGE lines and each snapshot's last story-kept STORY lines from a judge's output, in the
-   order printed."
+  "The JUDGE lines, each snapshot's last story-kept STORY lines, and its SCENE and SLICE lines
+   (the bot's facts and the blocks round its feet at the moment and where the play ended,
+   simrace/judge!), from a judge's output, in the order printed."
   [out]
   (let [lines (str/split-lines (str out))
         judges (filter #(str/starts-with? % "JUDGE ") lines)
         stories (->> lines
                      (filter #(str/starts-with? % "STORY "))
-                     (group-by #(second (str/split % #" " 3))))]
-    (concat judges (mapcat (fn [[_ ls]] (take-last story-kept ls)) stories))))
+                     (group-by #(second (str/split % #" " 3))))
+        scenes (filter #(or (str/starts-with? % "SCENE ") (str/starts-with? % "SLICE ")) lines)]
+    (concat judges (mapcat (fn [[_ ls]] (take-last story-kept ls)) stories) scenes)))
+
+(defn top-level?
+  "Does a source line begin a top-level form: an open paren in its first column."
+  [line]
+  (str/starts-with? (str line) "("))
+
+(defn enclosing
+  "The 1-based [first last] lines of the top-level form round line n of a file's lines: from the
+   last top-level line at or before n to the line before the next one (or the end), cut to
+   form-lines centred on n when longer."
+  [lines n]
+  (let [start (or (last (filter #(top-level? (nth lines (dec %))) (range 1 (inc n)))) 1)
+        nxt (first (filter #(top-level? (nth lines (dec %))) (range (inc n) (inc (count lines)))))
+        end (cond nxt (dec nxt)
+                  :else (count lines))]
+    (cond (<= (inc (- end start)) form-lines) [start end]
+          :else
+          (let [lo (max start (- n (quot form-lines 2)))] [lo (min end (+ lo (dec form-lines)))]))))
+
+(defn in-code?
+  "Is a grep hit's keyword in code rather than in a docstring or comment: no quote and no semicolon
+   before it on its line."
+  [{:keys [text]} reason]
+  (let [i (str/index-of (str text) (str ":" reason))]
+    (and i (not (re-find #"[\";]" (subs text 0 i))))))
+
+(defn excerpts
+  "The top-level forms round the hits, the ones raising the reason in code first, each once, at
+   most forms-kept: [{:file :from :to :lines [text ...]}], given read (a file's lines)."
+  [hits reason read]
+  (->> (concat (filter #(in-code? % reason) hits) (remove #(in-code? % reason) hits))
+       (map (fn [{:keys [file line]}]
+              (let [lines (read file)
+                    [from to] (enclosing lines line)]
+                {:file file :from from :to to :lines (subvec lines (dec from) to)})))
+       (reduce (fn [acc e]
+                 (cond (some #(= (select-keys % [:file :from]) (select-keys e [:file :from])) acc)
+                       acc
+                       :else (conj acc e)))
+               [])
+       (take forms-kept)))
+
+(defn numbered
+  "An excerpt's lines, each prefixed with its line number."
+  [{:keys [from lines]}]
+  (map-indexed (fn [i l] (str (+ from i) "  " l)) lines))
 
 (defn grep-hits
   "grep -n output (path:line:text) as [{:file :line :text}], the text trimmed and clipped."
@@ -90,10 +141,13 @@
 (defn brief
   "The brief's markdown for issue i ({:number :title :body :comments}), given what was found: the
    snapshot files, the judge outputs ({:main {:sha :out} :branch {:sha :out}}, :branch only when
-   the session's branch differs from main), where the reason is raised (grep-hits), the brain
+   the session's branch differs from main), the red checks of the session's pull request
+   ([{:check :url :log}], a follow-up's), where the reason is raised (grep-hits), the functions
+   round it (excerpts), the brain
    notes citing those files, the stage's goal and problem rows (grep-hits), and the closed issues
    with the same reason ([{:number :title :prs}])."
-  [{:keys [number title body comments]} {:keys [snapshots judged raised notes rows related]}]
+  [{:keys [number title body comments]}
+   {:keys [snapshots judged raised forms red notes rows related]}]
   (str
    "# Brief for #"
    number
@@ -103,16 +157,22 @@
    "Written by copilot-setup-steps before your session (bb brief write). It replaces fetching the "
    "issue, searching issues and pull requests, judging the snapshots on main and finding where "
    "the reason is raised: do none of those again. Read the files it names, at the lines it names.\n\n"
-   (section
-    "Snapshots"
-    (cond (empty? snapshots)
-          [(str "None in cache/issues/"
-                number
-                "/: stop at once as the profile's budget says (no evidence on disk).")]
-          :else
-          (concat
-           (for [s snapshots] (str "- `" s "`"))
-           ["" (str "Copy these into `test/issues/" number "/` (the check judges them there).")])))
+   (section "Snapshots"
+            (cond
+              (empty? snapshots)
+              [(str "None in cache/issues/"
+                    number
+                    "/: stop at once as the profile's budget says (no evidence on disk).")]
+              :else
+              (concat
+               (for [s snapshots] (str "- `" s "`"))
+               ["" (str "Copy these into `test/issues/" number "/` (the check judges them there).")]
+               (when (and (get-in judged [:main :out])
+                          (not (re-find #":recurs\? true" (get-in judged [:main :out]))))
+                 [""
+                  (str "**No snapshot recurs on main: the failure is fixed already. Write `Refs #"
+                       number
+                       "`, say so, and stop.**")]))))
    (section (str "Judged on main (" (get-in judged [:main :sha]) "), where each must recur")
             (some-> (get-in judged [:main :out])
                     judged-lines
@@ -123,8 +183,22 @@
                     judged-lines
                     seq
                     fenced))
+   (section "Your pull request's red checks (fix these first)"
+            (for [{:keys [check url log]} red]
+              (str "### " check " (" url ")\n\n```\n" log "\n```\n")))
    (section "Where the reason is raised"
             (for [{:keys [file line text]} raised] (str "- `" file ":" line "` " text)))
+   (section "The code round it (whole functions, so you need not open these again)"
+            (for [{:keys [file from to] :as e} forms]
+              (str "### `"
+                   file
+                   ":"
+                   from
+                   "-"
+                   to
+                   "`\n\n```clojure\n"
+                   (str/join "\n" (numbered e))
+                   "\n```\n")))
    (section "Brain notes citing those files" (for [n notes] (str "- `" n "`")))
    (section "The stage's rows"
             (for [{:keys [file line text]} rows] (str "- `" file ":" line "` " text)))
@@ -148,6 +222,23 @@
                  ", newest first)")
             (for [c (take comments-kept (reverse comments))]
               (str "### " (:createdAt c) "\n\n" (clip (:body c) comment-chars) "\n")))))
+
+(defn latest-red
+  "The required checks whose newest run failed, from a pull request's status rollup:
+   [{:name :detailsUrl ...}], an older failure a newer run superseded left out."
+  [rollup]
+  (for [[_ runs] (group-by :name (filter #(copilot/required-checks (:name %)) rollup))
+        :let [c (last (sort-by #(str (or (:completedAt %) (:startedAt %))) runs))]
+        :when (= "FAILURE" (:conclusion c))]
+    c))
+
+(defn log-tail
+  "A job log's last log-lines lines, each without the job and step columns gh prints."
+  [log]
+  (->> (str/split-lines (str log))
+       (map #(str/replace % #"^[^\t]*\t[^\t]*\t\S+ " ""))
+       (take-last log-lines)
+       (str/join "\n")))
 
 ;;;; I/O: gh, git, grep, the judge, the files ;;;;
 
@@ -243,6 +334,29 @@
              {:sha (str/trim (sh {} "git" "rev-parse" "--short" "HEAD"))
               :out (judge here paths)}))))
 
+(defn red-checks
+  "The required checks that failed on the open pull request from the session's branch, each with
+   its log's tail: [{:check :url :log}]; empty on a first session's branch (no pull request yet)."
+  []
+  (let [branch (or (System/getenv "GITHUB_REF_NAME")
+                   (str/trim (sh {} "git" "rev-parse" "--abbrev-ref" "HEAD")))
+        prs (json/parse-string (sh {}
+                                   "gh"
+                                   "pr" "list"
+                                   "--repo" copilot/repo
+                                   "--head" branch
+                                   "--state" "open"
+                                   "--json" "number,statusCheckRollup")
+                               true)]
+    (for [pr prs
+          c (latest-red (:statusCheckRollup pr))
+          :let [[_ run job] (re-find #"/runs/(\d+)/job/(\d+)" (str (:detailsUrl c)))]
+          :when job]
+      {:check (:name c)
+       :url (:detailsUrl c)
+       :log (log-tail
+             (sh {} "gh" "run" "view" run "--repo" copilot/repo "--job" job "--log-failed"))})))
+
 (defn found
   "What the brief says about issue i: its snapshots, their judgements, where its reason is raised,
    the notes citing those files, the stage's rows and the closed issues with the same reason."
@@ -252,8 +366,11 @@
         paths (map #(str (fs/absolutize %)) snapshots)
         raised (when reason
                  (take raised-kept (grep-hits (sh {} "grep" "-rn" (str ":" reason "\\b") "src"))))
-        files (distinct (map :file raised))]
+        files (distinct (map :file raised))
+        read (memoize (fn [file] (vec (str/split-lines (slurp file)))))]
     {:snapshots snapshots
+     :red (vec (red-checks))
+     :forms (when reason (excerpts raised reason read))
      :judged (when (seq paths) (judged paths))
      :raised raised
      :notes (take notes-kept
