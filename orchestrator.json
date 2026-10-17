@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T15:48:48.900Z",
+  "at" : "2026-10-17T15:52:05.858Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -36,7 +36,7 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 186,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at cast-one: no-log",
     "copilot" : true,
     "draft" : true,
