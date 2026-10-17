@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T12:55:50.391Z",
+  "at" : "2026-10-17T12:57:59.895Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -11,7 +11,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 372,
-    "session" : true
+    "session" : false
   }, {
     "number" : 368,
     "title" : "Bot stops at portal-kit: stair-not-taken",
@@ -185,9 +185,8 @@
   } ],
   "moves" : [ {
     "issue" : 369,
-    "move" : "wait",
-    "pr" : 372,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 372
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -624,5 +623,10 @@
     "issue" : 369,
     "move" : "assign",
     "at" : "2026-10-17T12:41:45.810Z"
+  }, {
+    "issue" : 369,
+    "move" : "ready",
+    "pr" : 372,
+    "at" : "2026-10-17T12:57:59.895Z"
   } ]
 }
