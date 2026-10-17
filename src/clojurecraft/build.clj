@@ -1210,11 +1210,21 @@
               :stand-in {:intent/kind :await :intent/expect done}
               :verify :unverified))))
 
+(defn lit-entry
+  "The entry op of plan when its preceding light op is satisfied, or nil. Portal plans end
+   with light then enter: a lit portal needs no more casting, even if its room has filled."
+  [world plan]
+  (when (= :enter (:build/step (peek plan)))
+    (let [light (peek (pop plan))]
+      (when (and (= :light (:build/step light)) (satisfied? world light)) (peek plan)))))
+
 (defn next-op
   "The op of plan to work now: the first not satisfied, or nil when the plan's last op holds (its
-   goal: past it, as in another dimension, the earlier ops' cells are not even loaded)."
+   goal: past it, as in another dimension, the earlier ops' cells are not even loaded).
+   A lit portal goes straight to entry (lit-entry), not back through the casting work."
   [world plan]
-  (when-not (satisfied? world (peek plan)) (first (remove #(satisfied? world %) plan))))
+  (when-not (satisfied? world (peek plan))
+    (or (lit-entry world plan) (first (remove #(satisfied? world %) plan)))))
 
 (defn refused-for-the-body?
   "Did child, a placement, fail :rejected with its cell inside the player (place/inside-player?)?
@@ -1674,7 +1684,8 @@
   ;; cobblestone and no table at y -21, and issue #186's casts left the table at the furnace); then
   ;; build the row's plan (:goal/build) at the site remembered while its pool can finish it
   ;; (spent?), else at one chosen now (the :build intent remembers it), its access steps up to the
-  ;; lava's height (station); with none, hunt for lava (lava-hunt), else wait :no-site
+  ;; lava's height (station); with none, hunt for lava (lava-hunt), else wait :no-site.
+  ;; A reachable lit portal skips the kit and table collection: only entry remains (lit-entry)
   [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]}
         (let [{:site/keys [origin facing] :as site} (memory/site world)]
@@ -1685,10 +1696,15 @@
         chosen (when-not origin (choose-site world))
         origin (or origin (:origin chosen))
         facing (or facing (:facing chosen))
-        h (when origin (or (:h chosen) (:h (station world origin facing)) 1))]
-    (or (held-first world goal table (when origin (plan-for build origin facing h)))
-        (intent/chain-next (:plan/last world) :take-table make/table-drops {})
-        (make/take-table-along world)
+        h (when origin (or (:h chosen) (:h (station world origin facing)) 1))
+        ops (when origin (plan-for build origin facing h))
+        entry (lit-entry world ops)]
+    (or (when-not (and entry
+                       (or (intent/centred? world (:build/stand entry))
+                           (stand-walk world (:build/stand entry))))
+          (or (held-first world goal table ops)
+              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+              (make/take-table-along world)))
         (cond origin
               {:intent/kind :build
                :intent/build build
