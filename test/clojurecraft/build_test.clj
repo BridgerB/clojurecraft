@@ -370,6 +370,21 @@
               (assoc :plan/boxed-at #{[10 41 10]}))]
     (is (some? (build/toward-lava w)) "no stair from the pocket: the way out")))
 
+(deftest the-lava-hunt-passes-sources-with-no-safe-stand
+  (let [lava (into {} (for [x [11 12 13] y (range 40 51) z [2 3 4 5]] [[x y z] blocks/lava-base]))
+        pool (into {} (for [x [2 3 4] z [2 3 4 5]] [[x 40 z] blocks/lava-base]))]
+    (doseq [pos [[10.5 41.0 10.5] [14.5 41.0 6.5]]]
+      (let [[x y z] (path/feet-cell pos)
+            room {[x y z] blocks/air [x (inc y) z] blocks/air}
+            w (standing-at (open-ground (merge room lava)) pos)]
+        (is (seq (build/sources-near w)) "the nearest lava is loaded")
+        (is (nil? (build/hunt-target w)) "lava above the source leaves no safe refill stand")
+        (is (= {:intent/kind :stairs-down :intent/to-y 35} (build/toward-lava w))
+            "seek usable lava even when already beside the unusable source")
+        (let [other (standing-at (open-ground (merge room lava pool)) pos)]
+          (is (contains? (set (keys pool)) (build/hunt-target other))
+              "a farther pool with a safe stand remains a hunt target"))))))
+
 (deftest a-way-to-the-site-boxed-in-is-left-by-the-way-out
   ;; sim race 38806318231 (issue #130, world R3/11): the stairs down to the cast's landing met an
   ;; aquifer, every stair refused, and the build was sent down the same stairs from the same cell
