@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T16:30:29.890Z",
+  "at" : "2026-10-17T16:32:42.933Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 382,
-    "title" : "Bot stops at portal: inventory-full",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 382,
+    "checks" : "red",
+    "title" : "Bot stops at portal: inventory-full",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 383,
+    "session" : true
   }, {
     "number" : 339,
     "title" : "Bot stops at fortress: no-footing",
@@ -180,7 +186,9 @@
   } ],
   "moves" : [ {
     "issue" : 382,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 383,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
