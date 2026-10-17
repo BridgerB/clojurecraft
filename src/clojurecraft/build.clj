@@ -1578,8 +1578,8 @@
   (let [fy (physics/y-of (intent/feet world))
         sources (lava-sources world)]
     (first (filter #(and (<= (inc (physics/y-of %)) fy)
-                        (seq (stands-beside world %))
-                        (castable? sources %))
+                         (seq (stands-beside world %))
+                         (castable? sources %))
                    (sources-near world)))))
 
 (defn toward-lava

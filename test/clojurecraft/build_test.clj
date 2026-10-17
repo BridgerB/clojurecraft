@@ -371,9 +371,7 @@
     (is (some? (build/toward-lava w)) "no stair from the pocket: the way out")))
 
 (deftest the-lava-hunt-passes-sources-with-no-safe-stand
-  (let [lava (into {}
-                   (for [x [11 12 13] y (range 40 51) z [2 3 4 5]]
-                     [[x y z] blocks/lava-base]))
+  (let [lava (into {} (for [x [11 12 13] y (range 40 51) z [2 3 4 5]] [[x y z] blocks/lava-base]))
         pool (into {} (for [x [2 3 4] z [2 3 4 5]] [[x 40 z] blocks/lava-base]))]
     (doseq [pos [[10.5 41.0 10.5] [14.5 41.0 6.5]]]
       (let [[x y z] (path/feet-cell pos)
