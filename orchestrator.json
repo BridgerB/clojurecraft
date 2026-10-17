@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T02:18:56.138Z",
+  "at" : "2026-10-17T02:20:00.539Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -98,11 +98,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 320,
-    "title" : "Bot stops at cast-one: stair-not-taken",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 323,
     "title" : "Bot stops at flint-and-steel: stale-window",
     "labels" : [ "bot-failure", "sim" ],
@@ -119,10 +114,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 296,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 320,
     "move" : "leave",
     "why" : "hands-off label"
   } ],
