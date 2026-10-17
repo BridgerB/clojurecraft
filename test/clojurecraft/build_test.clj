@@ -382,6 +382,40 @@
     (is (not ((build/kept origin facing) (:intent/target child))) "never the frame's rock")
     (is (not= (at [2 0 -2]) (:intent/target child)) "not the straight way into the rock")))
 
+(deftest a-portal-behind-its-back-wall-is-entered-from-the-room
+  (doseq [facing build/facings]
+    (let [origin [6 63 6]
+          at #(build/cell origin facing %)
+          feet (at [1 1 -2])
+          rock (into {} (for [x (range 16) y [63 64 65 66] z (range 16)] [[x y z] 1]))
+          portal (blocks/default-state :nether_portal)
+          terrain (merge rock
+                         (into {} (for [c (build/room-cells 1)] [(at c) blocks/air]))
+                         (into {} (for [c build/interior] [(at (conj c 0)) portal]))
+                         {(at [1 0 0]) (blocks/default-state :obsidian)
+                          feet blocks/air
+                          (update feet 1 inc) blocks/air})
+          w (standing-at terrain (mapv + feet [0.5 0.0 0.5]))
+          i {:intent/kind :build
+             :intent/build :nether
+             :intent/origin origin
+             :intent/facing facing
+             :intent/access 1}
+          op (build/enter-op at)
+          child (build/op-child w i op)]
+      (is (nil? (build/stand-walk w (:build/stand op))))
+      (is (nil? (build/round-corner w (:build/stand op) origin facing)))
+      (is (= (build/toward-stand w (at (build/landing 1)) :nether origin facing) child))
+      (is (= :dig (:intent/kind child)))
+      (is (not ((build/kept origin facing) (:intent/target child))))
+      (let [room (assoc w :player/pos (build/point origin facing [1.5 0 2.5]))]
+        (is (= {:intent/kind :walk :intent/target (at [1 1 0]) :intent/for :build}
+               (build/op-child room i op))
+            "once the room is reached, walk straight into the portal"))
+      (let [inside (assoc w :player/pos (build/point origin facing [1.5 1 0.5]))]
+        (is (= :await (:intent/kind (build/op-child inside i op)))
+            "stay in the portal until the dimension changes")))))
+
 (deftest a-corner-is-never-a-cell-of-the-room-the-cast-digs
   ;; sim race 38924530337 (issue #45, regressed, world R2/9): the corner round the frame's rock was
   ;; a cell of the room's upper row; the bridge laid cobblestone under it, the room op dug it out

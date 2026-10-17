@@ -182,6 +182,7 @@
    "Placing into a lava source destroys it; casting over a lava sea has no stance"
    "A rejected placement left as a ghost block; the pathfinder digs finished obsidian"
    "Lighting with the hitbox in the fire cell burns the bot"
+   "Entering a lit portal from behind its protected back wall fails :no-path: approach through the room's landing when no route reaches the interior (issue #346, R4/1)"
    "A pickaxe broken in the cast or its child staircase exhausts the failure budget before replacement: the build must yield for held-first to replace it, retaining its site (issue #347, R1/35 and R1/4)"]
   :problem/done
   "Ten obsidian frame blocks and nether_portal blocks inside exist (RCON execute if block), and after standing in the portal RCON data get entity Dimension reads the Nether."

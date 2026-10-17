@@ -1088,39 +1088,46 @@
    landing is gone to at its height (toward-stand: stairs to it first, then a level way dug); a
    room cell (its stand the cell itself) is dug from anywhere that reaches it, the nearest such
    cell a route reaches (reachable-stand), or from far off the way back to the site (way-back);
-   any other op from its designated stand (toward), or, for a place or a dig whose stand cannot
-   be occupied, a cell that already reaches the block. A keyword is why
+   entry through the room's landing when no route reaches the portal from here (its back wall
+   is kept, never cut through); any other op from its designated stand (toward), or, for a place
+   or a dig whose stand cannot be occupied, a cell that already reaches the block. A keyword is why
    no such cell exists. Ground in the way is dug only for a :build, whose plan says which rock to
    keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
   [world i {:build/keys [op stand pos step]}]
   (let [{:intent/keys [build origin facing]} i]
-    (cond (and (= :landing step) build) (toward-stand world stand build origin facing)
-          (and (= :dig op) (= stand pos))
-          (cond (within-reach? world pos) nil
-                :else
-                (let [alt (or (reachable-stand world pos pos) (when build (room-stand world i pos)))
-                      cut (when (and (nil? alt) build) (nearest-stand-cell world i pos))
-                      home (when (and (nil? alt) (nil? cut) build) (way-back world i))]
-                  (cond alt {:intent/kind :walk :intent/target alt :intent/for :build}
-                        ;; no route into the room: cut the way to the stand nearest the feet
-                        cut (toward-stand world cut build origin facing)
-                        ;; far from the site (out for a pickaxe's wood): the way back to it
-                        home home
-                        :else :no-stand)))
-          (intent/centred? world stand) nil
-          :else
-          (let [blocked (when build (clear-stand world stand build origin facing))]
-            (cond blocked blocked
-                  (or (path/standable? world stand) (not (#{:place :dig} op)))
-                  (or (when build (toward-stand world stand build origin facing))
-                      {:intent/kind :walk :intent/target stand :intent/for :build})
-                  :else
-                  (let [work (cond (= :place op) (or (foundation world pos) pos)
-                                   :else pos)
-                        alt (reachable-stand world stand work)]
-                    (cond (nil? alt) :no-stand
-                          (intent/centred? world alt) nil
-                          :else {:intent/kind :walk :intent/target alt :intent/for :build})))))))
+    (cond
+      (and (= :landing step) build) (toward-stand world stand build origin facing)
+      (and (= :dig op) (= stand pos))
+      (cond (within-reach? world pos) nil
+            :else
+            (let [alt (or (reachable-stand world pos pos) (when build (room-stand world i pos)))
+                  cut (when (and (nil? alt) build) (nearest-stand-cell world i pos))
+                  home (when (and (nil? alt) (nil? cut) build) (way-back world i))]
+              (cond alt {:intent/kind :walk :intent/target alt :intent/for :build}
+                    ;; no route into the room: cut the way to the stand nearest the feet
+                    cut (toward-stand world cut build origin facing)
+                    ;; far from the site (out for a pickaxe's wood): the way back to it
+                    home home
+                    :else :no-stand)))
+      (intent/centred? world stand) nil
+      (and (= :enter step) build)
+      (or
+       (stand-walk world stand)
+       (toward-stand world (cell origin facing (landing (:intent/access i 0))) build origin facing)
+       (toward-stand world stand build origin facing))
+      :else
+      (let [blocked (when build (clear-stand world stand build origin facing))]
+        (cond blocked blocked
+              (or (path/standable? world stand) (not (#{:place :dig} op)))
+              (or (when build (toward-stand world stand build origin facing))
+                  {:intent/kind :walk :intent/target stand :intent/for :build})
+              :else
+              (let [work (cond (= :place op) (or (foundation world pos) pos)
+                               :else pos)
+                    alt (reachable-stand world stand work)]
+                (cond (nil? alt) :no-stand
+                      (intent/centred? world alt) nil
+                      :else {:intent/kind :walk :intent/target alt :intent/for :build})))))))
 
 (defn stray-lava?
   "Would water poured into cell touch lava besides the source straight under it, the one it is
