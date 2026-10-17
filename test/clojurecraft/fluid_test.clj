@@ -34,6 +34,35 @@
   (doseq [id (concat blocks/water-states blocks/lava-states)]
     (is (= id (fluid/block-state (fluid/state-of id))) (pr-str id (fluid/state-of id)))))
 
+(deftest aquatic-sources-fill-an-opened-shaft-without-erasing-the-plant
+  ;; Sim race 39007350790 runner 2 (issue #344): the roof dug beneath tall seagrass
+  ;; left the water suspended over a dry shaft and the rise jumped until :no-escape.
+  (doseq [plant [:seagrass :tall_seagrass :kelp :kelp_plant :bubble_column]
+          state (blocks/states-of plant)]
+    (let [sim (-> (sim-over {[8 63 8] state [8 62 8] blocks/air})
+                  (put [8 62 8] blocks/air)
+                  (after 1000))]
+      (is (= (fluid/source :water) (fluid/state-of state)) (str plant))
+      (is (= state (sim/block-at sim [8 63 8])) "a fluid tick preserves its source's block")
+      (is (:fluid/falling? (fluid-at sim [8 62 8])) "the source flows into the shaft"))))
+
+(deftest saved-models-wake-previously-unrecognized-sources-once
+  (let [plant (blocks/default-state :tall_seagrass)
+        old (-> (sim-over {[8 63 8] plant})
+                (assoc :sim/broken #{[8 62 8]})
+                (dissoc :sim/fluid-sources-ready?))
+        ready (sim/tick-fluids old)
+        due (get-in ready [:sim/fluids [8 63 8]])
+        again (sim/tick-fluids (assoc ready :sim/now 50))
+        drained (sim/tick-fluids (assoc ready :sim/fluids {} :sim/now 50))
+        sim (after ready 1000)]
+    (is (true? (:sim/fluid-sources-ready? ready)))
+    (is (= 250 due))
+    (is (= due (get-in again [:sim/fluids [8 63 8]])) "the pending tick is not postponed")
+    (is (empty? (:sim/fluids drained)) "changed cells are not woken again after initialization")
+    (is (:fluid/falling? (fluid-at sim [8 62 8])) "the old moment's dry shaft fills too")
+    (is (= plant (sim/block-at sim [8 63 8])))))
+
 (deftest water-spreads-seven-blocks-on-a-floor
   (let [sim (after (put (sim-over {}) [8 64 8] blocks/water-base) 3000)]
     (is (:fluid/source? (fluid-at sim [8 64 8])) "the source stays")

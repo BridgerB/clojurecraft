@@ -2743,6 +2743,39 @@
     (is (>= (second (:player/pos w)) 64.0) "on the shore, not the submerged plants")
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-rise-enters-the-water-above-an-opened-seagrass-shaft
+  (let [cells
+        (merge
+         (into {} (for [x (range 6 11) z (range 6 11) y (range 56 64)] [[x y z] blocks/water-base]))
+         (into {} (for [y (range 52 55)] [[8 y 8] blocks/air]))
+         {[8 56 8] (blocks/default-state :tall_seagrass)})
+        model (-> (sim/init {:column (world/column-bytes cells) :spawn [8.5 52.0 8.5]})
+                  (sim/set-cell [8 55 8] blocks/air))
+        step (fn [w e]
+               (let [w (game/step w e)
+                     i (:plan/intent w)]
+                 (cond (= :go (:event/kind e))
+                       (assoc w
+                              :plan/intent
+                              {:intent/kind :swim-out
+                               :intent/for :rise
+                               :intent/to-y 64
+                               :intent/status :active})
+                       (and (= :tick (:event/kind e)) i (:player/loaded? w)) (intent/run w i e)
+                       :else w)))
+        [w model] (sim/run step
+                           (game/init fx/opts)
+                           model
+                           #(or (intent/done? (:plan/intent %))
+                                (intent/failed? (:plan/intent %))
+                                (pos? (:stats/deaths % 0)))
+                           30000)]
+    (is (intent/done? (:plan/intent w)) (pr-str (:plan/intent w)))
+    (is (zero? (:stats/deaths w 0)))
+    (is (trap/dry-land? w))
+    (is (>= (second (:player/pos w)) 64.0))
+    (is (empty? (:sim/violations model)))))
+
 (def roofed-pool
   "ruststeve's water_roofed: a 5x5 pool six deep (y 23-28) under solid stone, the only air a
    pocket one block west of the pool and one down from its top (y 27-28 at x 0), with a floor."

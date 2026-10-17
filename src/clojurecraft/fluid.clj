@@ -16,8 +16,7 @@
    lava to stone the moment water touches it (LiquidBlock.shouldSpreadLiquid on placement and on
    a neighbour change).
 
-   Not modelled: waterlogged blocks as flows (a waterlogged block holds water but here never
-   spreads it), lava's random slow-down when it rises (LavaFluid.getSpreadDelay), fire from lava,
+   Not modelled: lava's random slow-down when it rises (LavaFluid.getSpreadDelay), fire from lava,
    and the blocks a flow cannot enter besides solids (doors, signs, ladders, portals)."
   (:require [clojurecraft.blocks :as blocks]))
 
@@ -58,11 +57,10 @@
 ;; ---------------------------------------------------------------- fluid states and block states
 
 (defn state-of
-  "The fluid state a block state holds, or nil: water and lava blocks only (a waterlogged block is
-   not a flow here)."
+  "The fluid state a block state holds, or nil, including the sources held by aquatic plants
+   and waterlogged blocks (blocks/fluid)."
   [id]
-  (let [kind (condp contains? id blocks/water-states :water blocks/lava-states :lava nil)
-        level (when kind (- id (if (= kind :water) blocks/water-base blocks/lava-base)))]
+  (let [{:fluid/keys [kind level]} (blocks/fluid id)]
     (cond (nil? kind) nil
           (zero? level) {:fluid/kind kind :fluid/amount 8 :fluid/source? true :fluid/falling? false}
           (>= level 8)

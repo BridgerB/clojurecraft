@@ -608,6 +608,7 @@
 (s/def :sim/furnaces (s/map-of ::block-pos map?))
 (s/def :sim/falls (s/map-of ::block-pos int?))
 (s/def :sim/fluids (s/map-of ::block-pos int?)) ; a fluid cell → when its next tick is due, ms (sim/wake-fluids)
+(s/def :sim/fluid-sources-ready? boolean?)
 (s/def :sim/dimension string?)
 (s/def :sim/portal-since int?)
 (s/def :sim/kill-at int?)
