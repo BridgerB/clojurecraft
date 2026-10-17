@@ -18,6 +18,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -91,7 +92,8 @@
         lava? #(contains? blocks/lava-states (at %))]
     (and (every? some? (map at (conj cells floor)))
          (not-any? lava? cells)
-         (not-any? #(contains? unbreakable (blocks/name-of (at %))) cells)
+         (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %))))
+                   cells)
          (not-any? lava? (remove own (mapcat neighbours cells)))
          (or (build/holds? world [:solid floor])
              (and (lava? floor) (= floor (build/foundation world floor)))))))
@@ -110,16 +112,15 @@
 (defn toward "The sign of d: -1, 0 or 1." [d] (long (math/signum (double d))))
 
 (def aside
-  "The directions a step takes when target is straight over or under the feet: every one, since
-   no step goes straight up or down (a target three over the feet, a spawner's, left the tunnel
-   with no move at all, issue #262)."
+  "Every horizontal direction, completing the moves toward a target with ways aside and back.
+   A target straight over or under the feet needs them all (issue #262)."
   [[1 0] [0 1] [-1 0] [0 -1]])
 
 (defn moves
   "The steps to try from feet toward target, best first: along the axis with the farther way to go,
-   then the other, then sideways (aside, when target is straight over or under); each up or down
-   first when target is more than climb (climb-past when not given) above or below, then level,
-   then the other way."
+   then the other, then sideways and back (aside, when target is straight over or under); each
+   up or down first when target is more than climb (climb-past when not given) above or below,
+   then level, then the other way."
   ([feet target] (moves feet target climb-past))
   ([[fx fy fz] [tx ty tz] climb]
    (let [ddx (- tx fx)
@@ -133,8 +134,7 @@
          z [0 (toward ddz)]
          [a b] (if (>= (abs ddx) (abs ddz)) [x z] [z x])
          side (fn [[p q]] [[q p] [(- q) (- p)]])
-         dirs (distinct (remove #(= [0 0] %) (concat [a b] (side (if (= [0 0] a) b a)))))
-         dirs (if (seq dirs) dirs aside)]
+         dirs (distinct (remove #(= [0 0] %) (concat [a b] (side (if (= [0 0] a) b a)) aside)))]
      (for [[dx dz] dirs dy ys] [dx dy dz]))))
 
 (defn choose-move
@@ -145,6 +145,38 @@
   ([world feet target climb dry-only?]
    (first (filter #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
                   (moves feet target climb)))))
+
+(defn next-move
+  "The next tunnel move: a safe unvisited cell first, then a short floored turn onto adjoining
+   ground, then a safe retreat. A turn fills one air floor from the current stand before entering;
+   it needs support on another side too and never bridges over fluid."
+  [world feet target climb dry-only? visited]
+  (let [ways (moves feet target climb)
+        fresh (remove #(contains? visited (plus feet %)) ways)
+        allowed? #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
+        turn? (fn [move]
+                (let [floor (plus (plus feet move) [0 -1 0])
+                      own-floor (plus feet [0 -1 0])]
+                  (and (zero? (second move))
+                       (build/holds? world [:solid own-floor])
+                       (contains? #{:air :cave_air :void_air}
+                                  (blocks/name-of (terrain/block-at world floor)))
+                       (not (stairs/over-fluid? world floor))
+                       (= floor (build/foundation world floor))
+                       (some #(and (not= own-floor %)
+                                   (= (second floor) (second %))
+                                   (build/holds? world [:solid %]))
+                             (neighbours floor))
+                       (or (not dry-only?) (dry? world feet move)))))]
+    (or (first (filter allowed? fresh))
+        (first (filter (fn [move]
+                         (let [floor (plus (plus feet move) [0 -1 0])
+                               filled (assoc-in world
+                                       [:world/blocks floor]
+                                       (blocks/default-state :cobblestone))]
+                           (and (turn? move) (safe? filled feet move))))
+                       fresh))
+        (first (filter allowed? ways)))))
 
 (defn arrived?
   "Is the bot within reach of target (from the feet cell's centre), or within r when given?"
@@ -185,9 +217,9 @@
   ;; is safe. Steps go up or down first past :intent/climb blocks off (climb-past when absent);
   ;; with :intent/dry? only steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
-   {:intent/keys [target steps taken move from climb dry?]
+   {:intent/keys [target steps taken move from climb dry? tunnel-visited]
     r :intent/reach
-    :or {taken 0 r reach climb climb-past}
+    :or {taken 0 r reach climb climb-past tunnel-visited #{}}
     :as i} event]
   (let [feet (intent/feet world)]
     (cond (or (arrived? world target r) (>= taken steps))
@@ -197,8 +229,11 @@
           (and move (or (off-step? feet from move) (lost-way? i)))
           (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
           (nil? move)
-          (if-let [m (choose-move world feet target climb (boolean dry?))]
-            (intent/assoc-intent world :intent/move m :intent/from feet)
+          (if-let [m (next-move world feet target climb (boolean dry?) tunnel-visited)]
+            (intent/assoc-intent (assoc world :player/controls {})
+                                 :intent/move m
+                                 :intent/from feet
+                                 :intent/tunnel-visited (conj tunnel-visited feet))
             (-> world
                 (assoc :player/controls {})
                 (intent/fail :blocked)))
