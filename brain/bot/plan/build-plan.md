@@ -38,6 +38,7 @@ sourceRefs:
   - src/clojurecraft/memory.clj#defn give-up-site
   - src/clojurecraft/memory.clj#defn given-up-sites
   - test/clojurecraft/build_test.clj#a-site-no-way-reaches-is-given-up
+  - test/clojurecraft/build_test.clj#a-boxed-climb-back-gives-up-the-distant-site
   - src/clojurecraft/build.clj#defn boxed-way?
   - src/clojurecraft/build.clj#defn to-height
   - src/clojurecraft/build.clj#defn round-corner
@@ -170,6 +171,8 @@ In solid rock the cast places four blocks: the walls its own digging opened (the
 
 ## The `:build` intent
 The lava hunt's `sources-near` excludes sources within `give-up-radius` of a given-up site, just as `choose-site` does. Otherwise abandoning an unsafe pool sends `lava-walk` back and forth between its stands, although no frame there will be accepted (`the-lava-hunt-passes-over-a-given-up-pool`).
+
+A return climb that exhausts its headings (`:stairs-up`, `:boxed`) beyond `site-reach` also gives up the site through `lost-way?`. Issue #363's R2/43 and R4/18 snapshots retried such climbs toward the same distant room until three build attempts failed. Ending the build and recording the given-up site lets the next planner pass choose elsewhere, including when the failed child is already present. Boxed descents still remember their pocket and seek the way out; nearby climbs and non-build executors retain their own failure handling (`a-boxed-climb-back-gives-up-the-distant-site`).
 
 Refill approaches use the pathfinder's footing rules, not solidity alone. `stands-beside` and `station-among` require a firm walking floor (`path/floor?`); magma is solid but cannot support a route. `barred` includes water and cells over awkward footing, so `out-first?` rejects a flooded or magma-lined straight approach and `round-corner` cuts a dry detour instead. Issue #162's R1/16 approach crossed water fed from an aquifer above the mine, while R1/42 selected magma footing beside the pool; repeated walks failed `:no-path` (`a-way-is-cut-round-water-and-awkward-footing`, `a-refill-stand-never-rests-on-magma`). When a fixed stance itself is flooded or has awkward footing, a failed walk gives up the site even nearby (`lost-way?`). A refill with no safe station also gives up its site, whether lava remains or not: geometric source counts do not prove it can be scooped. Both use `memory/give-up-site`, so the next planner pass chooses elsewhere instead of spending three failures at the same unsafe site (`an-unsafe-build-stance-gives-up-the-site`, `a-pool-without-a-safe-station-is-left`).
 
