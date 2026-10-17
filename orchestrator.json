@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T20:03:16.846Z",
+  "at" : "2026-10-17T20:06:34.345Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -236,9 +236,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 161,
-    "move" : "wait",
-    "pr" : 391,
-    "why" : "nudged recently"
+    "move" : "nudge",
+    "pr" : 391
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -923,5 +922,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-17T20:02:08.396Z"
+  }, {
+    "issue" : 161,
+    "move" : "nudge",
+    "pr" : 391,
+    "at" : "2026-10-17T20:06:34.345Z"
   } ]
 }
