@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T22:18:07.042Z",
+  "at" : "2026-10-17T22:19:17.014Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 348,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at flint-and-steel: stuck",
     "copilot" : true,
     "draft" : true,
@@ -66,10 +66,16 @@
     "pr" : 391,
     "session" : false
   }, {
-    "number" : 151,
-    "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 151,
+    "checks" : "pending",
+    "title" : "Bot stops at flint-and-steel: not-picked-up",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 401,
+    "session" : true
   }, {
     "number" : 142,
     "title" : "Bot stops at portal: no-station",
@@ -220,7 +226,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 151,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 401,
+    "why" : "session running"
   }, {
     "issue" : 62,
     "move" : "leave",
