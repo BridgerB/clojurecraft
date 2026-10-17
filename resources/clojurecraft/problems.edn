@@ -153,6 +153,7 @@
    "Closing the window with a loaded cursor drops the item on the ground"
    "No reachable surface water in a dry biome; the bot hangs at fill-water"
    "Cave or aquifer water is chosen and the bot drowns at the scoop"
+   "Race 39051573292 (issue #385) broke its hotbar pickaxe opening copper ore beneath water, left its spare stowed and failed water-bucket :needs-tool; bed digs must equip a stowed spare and permit breaking without the ore's drop"
    "Scoop echo lags, so an empty bucket is reported though the source was there"
    "Sim race 39028867619 R1/38 (issue #366) escaped from y 39 by selecting a wall notch at y 55 and failed flint-and-steel :out-of-reach; notch digs must be within reach of the current eye, and an unreachable child must be dropped while the escape rises"
    "Race 39007354638 runner 3 batch 2 (issue #348) retreated from gravel to a seagrass cell and bobbed until flint-and-steel failed :stuck; an escape bank must have no fluid at the feet or head, even when its plants are passable"
