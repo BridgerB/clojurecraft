@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T07:00:16.991Z",
+  "at" : "2026-10-17T07:01:24.655Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 349,
-    "title" : "Bot stops at flint-and-steel: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 349,
+    "checks" : "red",
+    "title" : "Bot stops at flint-and-steel: timeout",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 350,
+    "session" : true
   }, {
     "number" : 348,
     "title" : "Bot stops at flint-and-steel: stuck",
@@ -185,7 +191,9 @@
   } ],
   "moves" : [ {
     "issue" : 349,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 350,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
