@@ -941,6 +941,34 @@
         (is (= :no-path (get-in near [:plan/intent :intent/reason])))
         (is (empty? (memory/given-up-sites near)))))))
 
+(deftest a-boxed-climb-back-gives-up-the-distant-site
+  (let [site [8 75 4]
+        op (first (build/plan-for :portal site :south 1))
+        i {:intent/kind :build
+           :intent/build :portal
+           :intent/origin site
+           :intent/facing :south
+           :intent/access 1
+           :intent/status :active
+           :intent/op op
+           :intent/child {:intent/kind :stairs-up :intent/status :failed :intent/reason :boxed}}
+        w (assoc (standing-at (open-ground {}) feet-pos)
+                 :plan/intent i
+                 :plan/attempts 2
+                 :player/controls {:control/forward? true})
+        result (build/work-op w i op {:event/kind :tick :event/now 0})]
+    (is (intent/done? (:plan/intent result)) "the exhausted climb does not fail the last attempt")
+    (is (= 2 (:plan/attempts result)))
+    (is (= {} (:player/controls result)))
+    (is (= #{site} (memory/given-up-sites result)) "the next plan cannot retry this site")
+    (testing "other uses of the shared executor keep their own failure handling"
+      (is (not (build/lost-way? w (assoc i :intent/kind :tunnel-to) (:intent/child i)))))
+    (testing "a nearby climb is not a lost route back to the site"
+      (is (not (build/lost-way?
+                (assoc w :player/pos (physics/centre (build/cell site :south (build/landing 1))))
+                i
+                (:intent/child i)))))))
+
 (deftest a-stand-still-in-the-rock-is-cut-to-not-walked-near
   ;; sim race 38855091523 (issue #178, world R1/34 seed 2): the lava's stand was stone, a route
   ;; led beside it, the walk ended a block under it, and the refill went back to the landing and

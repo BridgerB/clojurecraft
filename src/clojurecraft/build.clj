@@ -1088,8 +1088,8 @@
 
 (defn lost-way?
   "Did child, the way to the site from far off (a walk, a swim out, stairs), fail for want of a
-   way (:no-path, :stuck) with the feet beyond site-reach of the room's landing? Then it is the
-   site that no way reaches, not an op. A nearby walk whose target is flooded or has awkward
+   way (:no-path, :stuck, or a climb :boxed) beyond site-reach of the room's landing? Then it is
+   the site that no way reaches, not an op. A nearby walk whose target is flooded or has awkward
    footing also gives up the site: its fixed stance is no walking destination (issue #162).
    Sim race 38839665459 (issue #222, world R1/11, six runs in two rounds) chose a site 70 blocks
    off across an aquifer, the walk there failed :no-path,
@@ -1098,19 +1098,19 @@
    that water failed :stuck too: three failures, all toward the one site the planner kept. Only
    a :build has a site: a :tunnel-to (fortress) works its steps through work-op too."
   [world {:intent/keys [kind origin facing access]} {:intent/keys [reason target] :as child}]
-  (boolean (and (= :build kind)
-                (intent/failed? child)
-                (#{:no-path :stuck} reason)
-                (or (> (physics/distance (physics/centre (intent/feet world))
-                                         (physics/centre
-                                          (cell origin facing (landing (or access 0)))))
-                       site-reach)
-                    (and (= :walk (:intent/kind child))
-                         (not (:intent/pickup? child))
-                         target
-                         (or (= :water (path/classify world target))
-                             (= :water (path/classify world (update target 1 inc)))
-                             (= :awkward (path/classify world (update target 1 dec)))))))))
+  (boolean
+   (and (= :build kind)
+        (intent/failed? child)
+        (or (#{:no-path :stuck} reason) (and (= :stairs-up (:intent/kind child)) (= :boxed reason)))
+        (or (> (physics/distance (physics/centre (intent/feet world))
+                                 (physics/centre (cell origin facing (landing (or access 0)))))
+               site-reach)
+            (and (= :walk (:intent/kind child))
+                 (not (:intent/pickup? child))
+                 target
+                 (or (= :water (path/classify world target))
+                     (= :water (path/classify world (update target 1 inc)))
+                     (= :awkward (path/classify world (update target 1 dec)))))))))
 
 (defn way-back
   "The way back to the build's site from far off: toward the room's landing (landing for the
