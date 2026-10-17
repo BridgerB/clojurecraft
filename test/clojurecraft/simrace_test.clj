@@ -1,8 +1,10 @@
 (ns clojurecraft.simrace-test
   "The sim race: a run over a world of many columns crosses from one to the next as the game's
    do, a run is the same run every time, and failures group by what they were doing and why."
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.capture :as capture]
+            [clojurecraft.chunk :as chunk]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.failure :as failure]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
@@ -257,3 +259,43 @@
     (is (:run/halted? played))
     (is (simrace/recurs? snap played))
     (is (not (:run/halted? (simrace/judged snap bare))) "without a budget, never halted")))
+
+(deftest a-sets-nether-is-found-beside-its-worlds
+  ;; issue #353: capture-nether writes one file a set, beside the set's captured worlds
+  (is (= "cache/sim-nether/R1.edn.gz" (simrace/nether-file "cache/sim-worlds/R1/7.edn.gz"))))
+
+(deftest a-moment-past-the-portal-holds-the-captured-nether
+  ;; issue #353: a snapshot copies neither the world's columns nor the Nether's (it names their
+  ;; files); played on, a moment in the Nether gets the Nether's columns back, the bot's chunks
+  ;; among them, and one in the overworld the overworld's, its portal still leading there
+  (let [columns {[0 0] (world/column-bytes {} dimension/nether)}
+        nether {:columns columns :decoded (update-vals columns chunk/decode) :view-distance 6}
+        w (simrace/with-nether bare nether "cache/sim-nether/test.edn.gz")
+        sim {:sim/phase :play
+             :sim/now 0
+             :sim/out []
+             :sim/dimension dimension/nether
+             :sim/nether nether
+             :sim/columns columns
+             :sim/decoded (:decoded nether)}
+        world {:time/now 0
+               :world/chunks (:decoded nether)
+               :world/facts (memory/empty-facts)
+               :plan/go-at (simrace/spawn-of bare)}
+        snap
+        (simrace/snapshot w 1 "fortress" "abc" [:fortress :blocked] {:world world :sim sim :t 0})
+        played (simrace/moment-of snap w)]
+    (is (= "cache/sim-nether/test.edn.gz" (:snapshot/nether-file snap)))
+    (is (= {:view-distance 6} (get-in snap [:snapshot/sim :sim/nether])) "no columns copied")
+    (is (= columns (get-in played [:sim :sim/columns])) "the Nether's columns")
+    (is (identical? (get-in nether [:decoded [0 0]]) (get-in played [:world :world/chunks [0 0]]))
+        "the bot's chunks the Nether's, decoded once")
+    (is (= nether (get-in played [:sim :sim/nether])))
+    (testing "a moment before the portal holds the overworld's"
+      (let [before (simrace/moment-of
+                    (assoc-in snap [:snapshot/sim :sim/dimension] dimension/overworld)
+                    w)]
+        (is (= (:capture/columns bare) (get-in before [:sim :sim/columns])))
+        (is (identical? (get-in bare [:capture/decoded [0 0]])
+                        (get-in before [:world :world/chunks [0 0]])))
+        (is (= nether (get-in before [:sim :sim/nether])) "its portal leading to the Nether")))))

@@ -52,6 +52,30 @@ jobs:
         with:
           path: cache/sim-worlds/R4
           key: simworld-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture.clj') }}
+      - name: R1's captured Nether
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R1.edn.gz
+          key: simnether-R1-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
+      - name: R2's captured Nether
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R2.edn.gz
+          key: simnether-R2-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
+      - name: R3's captured Nether
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R3.edn.gz
+          key: simnether-R3-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
+      - name: R4's captured Nether
+        uses: actions/cache/restore@v6
+        with:
+          path: cache/sim-nether/R4.edn.gz
+          key: simnether-R4-${{ hashFiles('ci/gym.edn', 'bb/clojurecraft/server.clj', 'bb/clojurecraft/worlds.clj', 'src/clojurecraft/landings.clj', 'src/clojurecraft/fixture.clj', 'src/clojurecraft/capture_nether.clj') }}
+          fail-on-cache-miss: false
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
