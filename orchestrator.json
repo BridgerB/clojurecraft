@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T10:54:42.488Z",
+  "at" : "2026-10-17T10:56:52.084Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 363,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at portal: boxed",
     "copilot" : true,
     "draft" : true,
