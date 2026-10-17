@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T15:47:42.334Z",
+  "at" : "2026-10-17T15:48:48.900Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -144,6 +144,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 62,
+    "title" : "Bot stops at ingots: timeout",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
+  }, {
     "number" : 60,
     "title" : "Bot stops at water-bucket: no-water",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -199,6 +204,10 @@
     "move" : "wait",
     "pr" : 379,
     "why" : "session running"
+  }, {
+    "issue" : 62,
+    "move" : "leave",
+    "why" : "hands-off label"
   } ],
   "log" : [ {
     "issue" : 60,
