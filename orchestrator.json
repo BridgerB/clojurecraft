@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T18:55:45.846Z",
+  "at" : "2026-10-17T18:56:52.277Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -12,6 +12,11 @@
     "nudges" : 0,
     "pr" : 386,
     "session" : false
+  }, {
+    "number" : 363,
+    "title" : "Bot stops at portal: boxed",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : true
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -58,7 +63,7 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 161,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at portal-kit: timeout",
     "copilot" : true,
     "draft" : true,
@@ -195,6 +200,10 @@
     "issue" : 385,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 363,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -858,5 +867,10 @@
     "issue" : 161,
     "move" : "assign",
     "at" : "2026-10-17T18:54:36.959Z"
+  }, {
+    "issue" : 363,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-17T18:56:52.277Z"
   } ]
 }
