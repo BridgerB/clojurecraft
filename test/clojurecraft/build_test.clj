@@ -125,6 +125,38 @@
       (assoc :bot/phase :play :player/pos pos :player/loaded? true :player/on-ground? true)
       (assoc :world/chunks {[0 0] (world/column blocks)})))
 
+(deftest a-lit-portal-is-entered-without-rebuilding-or-fetching-tools
+  (let [origin [4 63 4]
+        at #(build/cell origin :south %)
+        frame (into {}
+                    (map (fn [[x y]] [(at [x y 0]) (blocks/default-state :obsidian)])
+                         build/frame-cells))
+        unlit (-> (standing-at (open-ground
+                                (assoc frame (at [1 0 1]) (blocks/default-state :cobblestone)))
+                               [5.5 63.0 6.5])
+                  (memory/remember-site origin :south))
+        lit (assoc-in unlit [:world/blocks (at [1 1 0])] (blocks/default-state :nether_portal))
+        ops (build/plan-for :nether origin :south 1)
+        goal (first (filter #(= :nether (:goal/id %)) plan/goals))]
+    (is (= :room (:build/step (build/next-op unlit ops))) "an unfinished cast still opens the room")
+    (is (= {:plan/wait :no-log} (plan/next-intent unlit goal plan/goals))
+        "an unfinished cast still requires a pickaxe")
+    (is (= (peek ops) (build/next-op lit ops))
+        "the lit portal skips filled room cells and the rest of the casting work")
+    (doseq [inventory [{} {0 {:item (recipe/item-id :oak_planks) :count 4}}]]
+      (is (= :build
+             (:intent/kind
+              (plan/next-intent (assoc lit :player/inventory inventory) goal plan/goals)))
+          "entry needs neither a replacement pickaxe nor a table for one"))
+    (is (= {:plan/wait :no-log}
+           (plan/next-intent
+            (assoc-in lit [:world/blocks (at [1 2 0])] (blocks/default-state :stone))
+            goal
+            plan/goals))
+        "a blocked entry still requires a tool to reopen its way")
+    (is (nil? (build/next-op (assoc lit :player/dimension "minecraft:the_nether") ops))
+        "entry remains done after the dimension changes")))
+
 (deftest a-stand-inside-a-hill-is-dug
   ;; full run 4e59246 stood at the pond and the pad's stand was stone; the walk was :none and
   ;; three :no-path failures ended the plan

@@ -843,6 +843,12 @@
          :child map?)
   :ret boolean?)
 
+(s/fdef build/lit-entry
+  :args
+  (s/cat :world (requires :world/chunks)
+         :plan (s/nilable ::plan))
+  :ret (s/nilable ::op))
+
 (s/fdef fortress/next-move
   :args
   (s/cat :world (requires :world/chunks)
@@ -860,5 +866,5 @@
    `memory/nearest-log `make/near `make/decide `wood/gather-next `wood/return-walk `place/spot
    `place/ashore `window/view `path/plan `path/classify `entity/hostiles `entity/gone?
    `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe? `stairs/down-lay
-   `build/safe-source? `build/scoop-blocked? `fortress/next-move])
+   `build/safe-source? `build/scoop-blocked? `build/lit-entry `fortress/next-move])
 (s/def :stats/deaths pos-int?)
