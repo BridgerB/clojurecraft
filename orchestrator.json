@@ -1,7 +1,12 @@
 {
-  "at" : "2026-10-17T06:52:36.124Z",
+  "at" : "2026-10-17T06:53:42.364Z",
   "cap" : 1,
   "issues" : [ {
+    "number" : 349,
+    "title" : "Bot stops at flint-and-steel: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 348,
     "title" : "Bot stops at flint-and-steel: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
