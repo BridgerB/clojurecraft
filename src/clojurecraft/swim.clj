@@ -142,19 +142,33 @@
 (defn obstacle
   "The cell to dig when the swim makes no progress: a lid over the head, else the cell ahead at
    head height, else the cell ahead at feet height when the bank is no higher than the feet (a
-   wall between them, not a bank to climb), else the cell over the head (the cap of a roofed
-   pool); never the cell ahead at feet height under a higher bank, which is the step the impulse
+   wall between them, not a bank to climb), else the cell above the head ahead (clearance for
+   the lift onto a bank), else the cell over the head (the cap of a roofed pool);
+   both axes, their corner and the body's edges are checked.
+   Never the cell ahead at feet height under a higher bank, which is the step the impulse
    needs to collide with. nil when none of them is solid. Race 38805758078 runner 1 (issues
    #156, #157) bot Clj_r44, in a flooded tunnel at y 16, had its bank two blocks off at its own
    height with a block between at the feet; the swim dug the ceiling over its head again and
-   again, then nothing was named and it failed :stuck."
+   again, then nothing was named and it failed :stuck. Race 38999008545 bot Clj_r06 (issue #156)
+   reached a step with air above it but packed ice one higher, which stopped the lift."
   [world [x y z :as feet] bank]
   (let [over [x (+ y 2) z]
-        level (when bank (ahead feet bank))
-        head (when level (update level 1 inc))]
+        [x0 _ z0 x1 _ z1] (physics/aabb (get world :player/pos (physics/centre feet)))
+        levels (when-let [[bx _ bz] bank]
+                 (let [nx (+ x (Long/signum (- bx x)))
+                       nz (+ z (Long/signum (- bz z)))
+                       xs (distinct [x nx (long (math/floor x0)) (long (math/floor x1))])
+                       zs (distinct [z nz (long (math/floor z0)) (long (math/floor z1))])]
+                   (remove #{feet}
+                           (distinct (concat [(ahead feet bank) [nx y z] [x y nz] [nx y nz]]
+                                             (for [cx xs cz zs] [cx y cz]))))))
+        head (first (filter #(solid-cell? world %) (map #(update % 1 inc) levels)))
+        level (when (and bank (<= (second bank) y)) (first (filter #(solid-cell? world %) levels)))
+        upper (first (filter #(solid-cell? world %) (map #(update % 1 + 2) levels)))]
     (cond (lid? world feet) over
-          (and head (solid-cell? world head)) head
-          (and level (<= (second bank) y) (solid-cell? world level)) level
+          head head
+          level level
+          upper upper
           (solid-cell? world over) over
           :else nil)))
 
@@ -317,6 +331,7 @@
   (let [tick (:time/tick world)
         started (or started tick)
         feet (intent/feet world)
+        surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
         world (intent/assoc-intent world :intent/started started)
         dist (when bank (physics/horizontal-distance (:player/pos world) (physics/centre bank)))
         nearer? (and dist (< dist (- (or best-dist Double/MAX_VALUE) progress)))
@@ -344,19 +359,20 @@
           (and dig-when-down (or (:player/on-ground? world) (not (:player/in-water? world))))
           (start-dig world dig-when-down "down")
           dig-when-down (assoc world :player/controls {:control/sneak? true})
-          (and bank (flooded? world bank))
+          (and bank
+               (or (flooded? world bank)
+                   (and (> (- tick best-tick) stuck-ticks)
+                        (< (second bank) (- (float-top world feet surface) bank-drop)))))
           (-> world
               (intent/dissoc-intent :intent/bank :intent/target :intent/best-dist :intent/best-tick)
-              (game/say (str "swim-out: bank " bank " flooded, looking again")))
+              (game/say (str "swim-out: bank " bank " no longer usable, looking again")))
           (and (nil? bank) next-search (< tick next-search))
-          (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)]
-            ;; rise until the next look
-            (assoc world
-                   :player/controls
-                   (shore-controls world shore (or to-y (inc (float-top world feet surface))))))
+          ;; rise until the next look
+          (assoc world
+                 :player/controls
+                 (shore-controls world shore (or to-y (inc (float-top world feet surface)))))
           (nil? bank)
-          (let [surface (surface-y world (if (:player/in-lava? world) :lava :water) feet)
-                b (banks world feet surface (:plan/blacklist world #{}))
+          (let [b (banks world feet surface (:plan/blacklist world #{}))
                 rise? (= :rise for)
                 cap (when-not (or b rise?) (obstacle world feet nil))
                 wall (when-not (or b cap rise?) (notch world feet surface))]
@@ -402,7 +418,10 @@
   ;; crossing ends on dry land: sim race 38844589684 runner 6 (issue #57, world R1/30 seed 4,
   ;; probe 38853120299) swam forty blocks, stuck eight short against the far bank, and failed
   ;; :stuck three times between other intents before a climb and an escape got it out
-  [world {:intent/keys [target started wet? from-dist best-dist best-tick child]} event]
+  ;; A solid wall is cleared by child digs before retreating: race 39060308623 bot Clj_r14
+  ;; (issue #156) met packed ice beside its starting bank and never crossed it.
+  [world {:intent/keys [target started wet? from-dist best-dist best-tick child dig-when-down]}
+   event]
   (let [tick (:time/tick world)
         started (or started tick)
         wet? (or wet? (boolean (:player/in-water? world)))
@@ -410,13 +429,19 @@
         from-dist (or from-dist dist)
         nearer? (< dist (- (or best-dist Double/MAX_VALUE) progress))
         best-tick (if (or nearer? (nil? best-tick)) tick best-tick)
+        feet (intent/feet world)
+        cell (when (> (- tick best-tick) cross-stuck-ticks) (obstacle world feet target))
         world (intent/assoc-intent world
                                    :intent/started started
                                    :intent/wet? wet?
                                    :intent/from-dist from-dist
                                    :intent/best-dist (if nearer? dist best-dist)
                                    :intent/best-tick best-tick)]
-    (cond (and child (intent/done? child))
+    (cond (and child (intent/done? child) (= :dig (:intent/kind child)))
+          (-> world
+              (assoc :player/controls {})
+              (intent/dissoc-intent :intent/child :intent/best-tick))
+          (and child (intent/done? child))
           (-> world
               (assoc :player/controls {})
               (intent/dissoc-intent :intent/child)
@@ -429,11 +454,16 @@
           (-> world
               (assoc :player/controls {})
               (intent/fail :no-crossing))
-          child (intent/run-child world event)
+          child
+          (if (= :dig (:intent/kind child)) (dig-afloat world event) (intent/run-child world event))
+          (and dig-when-down (or (:player/on-ground? world) (not (:player/in-water? world))))
+          (start-dig world dig-when-down "down")
+          dig-when-down (assoc world :player/controls {:control/sneak? true})
           (and wet? (trap/dry-land? world) (<= dist (- from-dist cross-gain)))
           (-> world
               (assoc :player/controls {})
               intent/done)
+          cell (dig-or-sink world feet cell "crossing blocked")
           (and (> (- tick best-tick) cross-stuck-ticks) (:player/in-water? world))
           (-> world
               (intent/assoc-intent

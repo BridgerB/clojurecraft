@@ -25,6 +25,10 @@ sourceRefs:
   - src/clojurecraft/swim.clj#defn float-top
   - src/clojurecraft/swim.clj#defn obstacle
   - test/clojurecraft/swim_test.clj#a-wall-between-the-swim-and-a-level-bank-is-dug
+  - test/clojurecraft/swim_test.clj#a-bank-overhang-is-cleared-without-digging-its-step
+  - test/clojurecraft/swim_test.clj#a-diagonal-bank-approach-clears-the-side-wall
+  - test/clojurecraft/swim_test.clj#a-bank-approach-clears-a-wall-touching-the-bodys-edge
+  - test/clojurecraft/swim_test.clj#a-bank-left-below-a-rising-swim-is-dropped
   - src/clojurecraft/swim.clj#defn notch
   - test/clojurecraft/swim_test.clj#a-deep-swim-rises-into-reach-before-notching
   - src/clojurecraft/swim.clj#defn far-shore
@@ -50,6 +54,7 @@ sourceRefs:
   - src/clojurecraft/swim.clj#defmethod intent/run :cross
   - test/clojurecraft/swim_test.clj#a-crossing-swims-at-the-surface-and-ends-on-the-far-side
   - test/clojurecraft/swim_test.clj#a-crossing-stuck-in-the-water-retreats-to-a-bank
+  - test/clojurecraft/swim_test.clj#a-crossing-clears-a-wall-and-continues-after-the-dig
   - src/clojurecraft/swim.clj#defmethod intent/run :wade
   - src/clojurecraft/swim.clj#defn entry
   - src/clojurecraft/swim.clj#defn entries
@@ -94,6 +99,8 @@ Survival is two goal rows, a trap rule the planner applies every tick, and the e
 
 Notch reach is measured from the current eye to the solid cell that will actually be dug, not from the predicted float level. Issue #366 (R1/38 seed 1) started an escape at y 39 and chose a notch at y 55, nearly fifteen blocks from its eye, failing `:out-of-reach` three times. With no reachable notch the escape keeps rising; a child already failed `:out-of-reach` is dropped so the escape can search again instead of propagating that failure.
 
+Issue #156 recurred in race 38999008545 bot Clj_r06: an escape kept a dry bank at y 49 while rising to y 62 directly above it, then failed at horizontal distance zero. Once progress stalls, a bank below the current float-top's `bank-drop` band is dropped too; while still making progress, the rise keeps its heading rather than turning sideways deep underwater. At the surface, packed ice above a step and along the other axis of a diagonal approach blocked the lift. `obstacle` checks both axes, their corner and columns touched by the body's bounding box, including the cell two above the feet ahead, without digging away a higher bank's step.
+
 A `:swim-out` started by the mine act's retreat (`:intent/for :retreat`, out of a flooded tunnel the bot is wading in) ends itself on dry land (`trap/dry-land?`); one started by the gather's `into-water` (`:intent/for :rise`, up a shaft dug into the sea, [[gather-chain]]) on dry land in the open, cap and notch skipped; an escape's is ended by its goal when the trap clears ([[mine-act]]).
 
 `bank?` also requires no fluid in the feet or head cell, using `terrain/fluid-kind` rather than a route's collision classification. Passable water plants (seagrass, tall seagrass, kelp) and bubble columns still contain water. Race 39007354638 runner 3 batch 2 bot Clj_r22 (issue #348) retreated to seagrass at [3204 62 3520], reached its centre and bobbed until `:stuck` at flint-and-steel. Rejecting that cell both keeps new escapes off submerged plants and lets `flooded?` discard a bank already kept in an older world value.
@@ -125,6 +132,8 @@ Four model fixtures from the issue, the siblings' deaths and the sim race: a two
 
 ## A crossing (`:cross`)
 The gather's deliberate swim (`wood/crossing`, issue #87, world R3/4: a sand island with the trees across a lake): straight at the remembered trunk, jumping on land only when blocked and holding jump in the water, so the body swims at the surface with the eye in air and the trap never calls the escape back to the near bank. Done on dry land once the body has been in the water (`:intent/wet?`) and come `cross-gain` (8) nearer the trunk than it started (`:intent/from-dist`), so wading the near shore is not the far side; stuck `cross-stuck-ticks` (100) without coming nearer while in the water (a far bank too high for the lift), a child `:swim-out` for `:retreat` takes it to the nearest bank and the crossing ends there; stuck on land it fails `:stuck`; `:no-crossing` after `cross-timeout-ticks` (2400). Sim race 38844589684 runner 6 (issue #57, world R1/30 seed 4) swam forty blocks and stuck eight short against the far bank; it failed `:stuck` three times between other intents before a climb and an escape got it out (probe 38853120299; `a-crossing-stuck-in-the-water-retreats-to-a-bank`).
+
+A crossing blocked by solid terrain first clears `obstacle` with a child dig, using the same sinking and afloat digging rules as an escape. A finished dig clears the child and progress timer, not the crossing; a finished retreat still ends the crossing. Race 39060308623 bot Clj_r14 (issue #156) repeatedly pressed into packed ice beside its starting bank, sometimes bobbing out of the water when its stall was judged, and spent three attempts on `:stuck`. The crossing now clears the wall and continues instead.
 
 ## See also
 - [[fluid-physics]] - the flags this reads.
