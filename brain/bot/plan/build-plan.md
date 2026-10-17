@@ -84,6 +84,7 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn source-in-sight
   - src/clojurecraft/build.clj#defn safe-source?
   - test/clojurecraft/build_test.clj#a-refill-never-opens-lava-over-its-stand
+  - test/clojurecraft/build_test.clj#a-refill-checks-the-eyes-at-the-stand
   - src/clojurecraft/build.clj#defn scoop-at-station
   - src/clojurecraft/build.clj#defn scoop-blocked?
   - test/clojurecraft/build_test.clj#a-refill-reconsiders-a-scoop-whose-ray-filled
@@ -162,6 +163,8 @@ In solid rock the cast places four blocks: the walls its own digging opened (the
 The refill's clear ray can fill after its scoop child is chosen. `scoop-blocked?` checks a lava scoop's `:intent/aim` against the current terrain before `work-op` advances it, including a child already waiting for an answer or failed. A blocked child is dropped without spending a build attempt; the next refill chooses a clear source or digs its sight line again. Issue #227's R3/26 and R3/29 snapshots had gravel fall into the ray while the bucket was equipped, then retried that same blocked ray until `:no-scoop` (`a-refill-reconsiders-a-scoop-whose-ray-filled`). Water scoops retain their cast's side aim.
 
 Refill sight lines must be safe to excavate as well as reachable. `safe-source?` refuses a source whose ray walls touch lava at or above the stand's feet; lava below the feet may still be uncovered. Both `station-among` and `source-in-sight` apply this rule, so a new station avoids the dangerous opening and a resumed refill reconsiders it. Issue #231's R1/32 snapshot targeted a source at y -26 from a stand at y -25, but the rock on its ray held back lava at y -24. Opening it flooded the stand and three escapes failed `:no-footing`. With the unsafe sight line rejected, the snapshot casts its first obsidian after 30700 ms (`a-refill-never-opens-lava-over-its-stand`).
+
+When the feet already centre on a candidate stand (`intent/centred?`), `station-among` checks its sight lines from the actual eyes, not the cell's exact centre. Sim race 39044511861 runner 6 (issue #380, R3/32) reached a stand slightly off centre: its projected ray was safe, but the actual ray grazed a higher wall holding back lava. The refill refused that ray and failed `:no-station` three times despite 113 sources remaining in the pool. Reconsidering the stand from the actual eyes selects another and casts the first obsidian after 202750 ms (`a-refill-checks-the-eyes-at-the-stand`).
 
 An active child climb finishes before `work-op` switches to a newly unsatisfied op. Issue #369's R3/16 snapshot dug a room floor for the climb's headroom; switching ops cancelled the climb, replaced the floor over the feet and repeated until all 28 cobblestone were spent (`:not-held`). Finishing the climb lets the feet leave the pocket before the plan repairs its floor. Finished or failed climbs, and other children, still give way to a changed op (`a-climb-finishes-before-the-build-repairs-its-headroom`).
 

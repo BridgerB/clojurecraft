@@ -737,6 +737,36 @@
         (is (= [4 63 5] (:stand (build/station-among safe [src] [2 62 1] :south 1)))
             "a lid over lava below the feet may still be opened")))))
 
+(deftest a-refill-checks-the-eyes-at-the-stand
+  ;; Issue #380, R3/32: a stand's projected ray was safe, but the feet slightly off its
+  ;; centre saw a wall holding back higher lava and failed :no-station three times.
+  (let [src [3 61 6]
+        stand [5 63 5]
+        origin [13 62 1]
+        w (standing-at
+           (open-ground
+            {src blocks/lava-base [4 63 5] 1 [4 63 6] 1 [4 64 5] 1 [4 65 5] blocks/lava-base})
+           [5.474 63.0 5.506])
+        centred (assoc w :player/pos [5.5 63.0 5.5])]
+    (is (intent/centred? w stand))
+    (is (build/safe-source? centred src) "the projected eyes accept this stand")
+    (is (not (build/safe-source? w src)) "the actual eyes must not open the higher lava")
+    (is (= stand (:stand (build/station-among centred [src] origin :west 1))))
+    (let [station (build/station-among w [src] origin :west 1)]
+      (is (some? station) "another stand can reach the source")
+      (is (not= stand (:stand station)) "the unsafe stand is reconsidered before refilling"))
+    (is (= stand
+           (:stand
+            (build/station-among (assoc w :player/pos [12.5 63.0 5.5]) [src] origin :west 1)))
+        "a stand not yet reached still uses its projected eyes")
+    (let [w (assoc w :player/inventory {0 {:item (recipe/item-id :bucket) :count 1}})
+          i {:intent/kind :build
+             :intent/build :cast-one
+             :intent/origin origin
+             :intent/facing :west
+             :intent/access 1}]
+      (is (map? (build/refill w i)) "an already active refill replans instead of failing"))))
+
 (deftest a-climb-finishes-before-the-build-repairs-its-headroom
   (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])
         climb {:intent/kind :stairs-up
