@@ -1,8 +1,8 @@
 {
-  "at" : "2026-10-17T02:51:01.679Z",
+  "at" : "2026-10-17T02:52:09.045Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 62,
     "checks" : "red",
@@ -105,8 +105,8 @@
   } ],
   "moves" : [ {
     "issue" : 62,
-    "move" : "stuck",
-    "pr" : 324
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 196,
     "move" : "leave",
