@@ -182,6 +182,7 @@
    "Water poured beside the lava instead of over it: the source flows into the water and leaves cobblestone"
    "Water aimed at the floor replaces the lava source instead of making obsidian"
    "Scooping late lets water spread and convert the lava pool"
+   "Gravel can fall into a lava refill's cleared ray while the bucket is equipped: drop the blocked scoop and reconsider the refill, rather than retry the stale aim until :no-scoop (issue #227, R3/26 and R3/29)."
    "Placing into a lava source destroys it; casting over a lava sea has no stance"
    "Sim race 39032523584 (issue #231, R1/32): opening a low source's sight line admitted lava above the stand and three escapes failed :no-footing; stations and refills now reject ray excavations beside lava at or above the feet."
    "A rejected placement left as a ghost block; the pathfinder digs finished obsidian"

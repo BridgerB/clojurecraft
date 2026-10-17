@@ -653,6 +653,47 @@
            (refill {[7 62 5] blocks/lava-base [7 63 5] (blocks/default-state :obsidian)}))
         "no source the eyes can be given a line to")))
 
+(deftest a-refill-reconsiders-a-scoop-whose-ray-filled
+  ;; issue #227: gravel fell into the cleared line while the bucket was equipped, and the
+  ;; build retried the same blocked scoop until :no-scoop.
+  (let [src [7 62 5]
+        wall [6 63 5]
+        w (standing-at (open-ground {src blocks/lava-base}) [5.5 63.0 5.5])
+        child (build/scoop-at-station w [src])
+        op {:build/op :pour :build/item :lava_bucket}
+        fallen (assoc-in w [:world/blocks wall] (blocks/default-state :gravel))
+        event {:event/kind :tick :event/now 1000 :event/rand 0.5}]
+    (is (= :scoop (:intent/kind child)))
+    (is (empty? (scoop/ray-walls w (:intent/aim child))) "clear when the child was chosen")
+    (is (not (build/scoop-blocked? w child)))
+    (is (build/scoop-blocked? fallen child))
+    (is (not (build/scoop-blocked? fallen (assoc child :intent/fluid :water)))
+        "the cast's water scoop keeps its own side aim")
+    (is (not (build/scoop-blocked? fallen (dissoc child :intent/aim))))
+    (doseq [state [{:intent/stage :equip :intent/status :active}
+                   {:intent/stage :aim :intent/since 0 :intent/still 3 :intent/status :active}
+                   {:intent/stage :sent :intent/sent-at 0 :intent/before 0 :intent/status :active}
+                   {:intent/stage :sent :intent/status :failed :intent/reason :no-scoop}]]
+      (let [i (assoc hill-intent
+                     :intent/status :active
+                     :intent/op op
+                     :intent/child (merge child state))
+            result (build/work-op (assoc fallen :time/now 1000 :plan/intent i) i op event)]
+        (is (nil? (get-in result [:plan/intent :intent/child])) (pr-str state))
+        (is (= :active (get-in result [:plan/intent :intent/status])))
+        (is (= {} (:player/controls result)))
+        (is (empty? (filter #(= :send (:effect/kind %)) (:bot/effects result))))))
+    (let [i (assoc hill-intent
+                   :intent/op op
+                   :intent/child (assoc child :intent/status :failed :intent/reason :no-scoop))
+          result (build/work-op (assoc w :plan/intent i) i op event)]
+      (is (= :no-scoop (get-in result [:plan/intent :intent/reason])))
+      (is (intent/failed? (:plan/intent result))
+          "an unanswered scoop with a clear ray still fails"))
+    (let [next (build/scoop-at-station fallen [src])]
+      (is (= :dig (:intent/kind next)))
+      (is (= wall (:intent/target next)) "the next refill clears the new obstruction"))))
+
 (deftest a-way-over-a-hole-gets-a-floor
   ;; sim race 38665691522 (issue #162, world R3/37): the refill's way out from the landing ran
   ;; over a cave's open cell, the line clear and nothing to dig, and the walk to the far side,

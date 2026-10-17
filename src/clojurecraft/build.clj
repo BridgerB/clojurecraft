@@ -1264,12 +1264,19 @@
                       (mapcat (fn [c] [c (update c 1 inc)])
                        (stance-line (intent/feet world) target))))))
 
+(defn scoop-blocked?
+  "Is a lava scoop child's aimed ray now blocked (scoop/ray-walls)? The refill chose a clear
+   line, but gravel can fall into it while the bucket is equipped or its answer is awaited."
+  [world {:intent/keys [kind fluid aim]}]
+  (boolean (and (= :scoop kind) (= :lava fluid) aim (seq (scoop/ray-walls world aim)))))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), except an active climb finishes before its
    headroom is repaired. A child that failed fails i (a dig that found
    its cell open, found-open?, makes way for the next as one done would), one that is done
-   makes way for the next. Shared by every intent that works a plan of ops. A dig of rock with no
+   makes way for the next. A lava scoop whose sight line filled (scoop-blocked?) is dropped so
+   the refill opens it again. Shared by every intent that works a plan of ops. A dig of rock with no
    pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand when one can be
    made without going out for anything (pickaxe-at-hand?), so the build's row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
    in the cast's room at y -20 and dug deepslate by hand, fifteen seconds a block, for the last
@@ -1295,6 +1302,11 @@
             (assoc :player/controls {})
             (intent/dissoc-intent :intent/child)
             (game/say "build: the way filled with what fell over it, clearing it again"))
+        (and child (scoop-blocked? world child))
+        (-> world
+            (assoc :player/controls {})
+            (intent/dissoc-intent :intent/child)
+            (game/say "build: the scoop's sight line filled, opening it again"))
         (and child (lost-way? world i child))
         ;; no way reaches the site from here: it is given up and the planner chooses another
         (-> world
