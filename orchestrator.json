@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T12:37:23.304Z",
+  "at" : "2026-10-17T12:40:37.726Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 370,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at portal: no-log",
     "copilot" : true,
     "draft" : false,
@@ -185,9 +185,8 @@
   } ],
   "moves" : [ {
     "issue" : 370,
-    "move" : "wait",
-    "pr" : 371,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 371
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -611,5 +610,10 @@
     "move" : "ready",
     "pr" : 371,
     "at" : "2026-10-17T12:36:17Z"
+  }, {
+    "issue" : 370,
+    "move" : "merge",
+    "pr" : 371,
+    "at" : "2026-10-17T12:40:37.726Z"
   } ]
 }
