@@ -1,17 +1,17 @@
 {
-  "at" : "2026-10-17T04:49:27.544Z",
+  "at" : "2026-10-17T04:58:59.524Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 328,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at fortress: no-stand",
     "copilot" : true,
     "draft" : true,
     "nudges" : 0,
     "pr" : 335,
-    "session" : true
+    "session" : false
   }, {
     "number" : 323,
     "title" : "Bot stops at flint-and-steel: stale-window",
@@ -130,9 +130,8 @@
   } ],
   "moves" : [ {
     "issue" : 328,
-    "move" : "wait",
-    "pr" : 335,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 335
   }, {
     "issue" : 296,
     "move" : "leave",
@@ -243,5 +242,10 @@
     "issue" : 328,
     "move" : "assign",
     "at" : "2026-10-17T04:38:46.118Z"
+  }, {
+    "issue" : 328,
+    "move" : "ready",
+    "pr" : 335,
+    "at" : "2026-10-17T04:58:59.524Z"
   } ]
 }
