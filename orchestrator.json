@@ -1,7 +1,12 @@
 {
-  "at" : "2026-10-17T16:05:26.435Z",
+  "at" : "2026-10-17T16:06:32.678Z",
   "cap" : 1,
   "issues" : [ {
+    "number" : 382,
+    "title" : "Bot stops at portal: inventory-full",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 380,
