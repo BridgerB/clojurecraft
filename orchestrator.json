@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T12:33:02.751Z",
+  "at" : "2026-10-17T12:36:17Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -11,7 +11,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 371,
-    "session" : true
+    "session" : false
   }, {
     "number" : 369,
     "title" : "Bot stops at cast-one: not-held",
@@ -185,9 +185,8 @@
   } ],
   "moves" : [ {
     "issue" : 370,
-    "move" : "wait",
-    "pr" : 371,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 371
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -606,5 +605,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-17T12:31:56.005Z"
+  }, {
+    "issue" : 370,
+    "move" : "ready",
+    "pr" : 371,
+    "at" : "2026-10-17T12:36:17Z"
   } ]
 }
