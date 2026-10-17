@@ -2,7 +2,8 @@
   "A Copilot session's brief (bb brief): the signature a title names, the judge's lines kept, grep
    hits as values, the pull requests that closed an issue, and the markdown, whose empty sections
    are left out. Babashka runs these (bb test:bb)."
-  (:require [clojure.string :as str]
+  (:require [babashka.fs :as fs]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [clojurecraft.brief :as brief]))
 
@@ -69,3 +70,8 @@
     (testing "no snapshots: the brief says stop"
       (is (str/includes? bare "None in cache/issues/328"))
       (is (not (str/includes? bare "Judged on main"))))))
+
+(deftest paths-into-the-checkout-are-cut
+  (let [here (str (fs/absolutize ".") "/")]
+    (is (= "JUDGE {:path \"cache/issues/1/a.edn.gz\"}"
+           (brief/relative (str "JUDGE {:path \"" here "cache/issues/1/a.edn.gz\"}"))))))

@@ -204,19 +204,30 @@
                                 true)))]
     (for [i issues] (assoc i :prs (get prs (:number i) [])))))
 
-(defn tree
-  "A commit's tree id in dir."
-  [dir rev]
-  (str/trim (sh {:dir dir} "git" "rev-parse" (str rev "^{tree}"))))
+(defn bot-changed?
+  "Does the checkout's bot (src/ and resources/) differ from origin/main's? Only then is a judgement
+   on the branch worth its minutes: a tooling or test change plays the snapshots exactly as main."
+  []
+  (not (zero? (:exit (p/shell {:continue true :out :string :err :string}
+                              "git" "diff"
+                              "--quiet" "origin/main"
+                              "HEAD" "--"
+                              "src" "resources")))))
+
+(defn relative
+  "out with every absolute path into the checkout cut to a path relative to it: the brief's lines
+   stay short."
+  [out]
+  (str/replace (str out) (str (fs/absolutize ".") "/") ""))
 
 (defn judge
   "The judge's output (stdout and stderr) for the snapshot paths, played by the code in dir."
   [dir paths]
-  (sh {:dir dir :err? true} "clojure" "-M:simrace" "--judge" (str/join "," paths)))
+  (relative (sh {:dir dir :err? true} "clojure" "-M:simrace" "--judge" (str/join "," paths))))
 
 (defn judged
   "The snapshots judged on origin/main (a worktree of it beside the checkout, sharing its cache)
-   and, when the checkout's tree differs from main's, on the checkout."
+   and, when the checkout's bot differs from main's (bot-changed?), on the checkout."
   [paths]
   (let [base (str (fs/absolutize "../brief-base"))
         here (str (fs/absolutize "."))]
@@ -226,7 +237,7 @@
       (fs/create-sym-link (fs/path base "cache") (fs/path here "cache")))
     (cond-> {:main {:sha (str/trim (sh {} "git" "rev-parse" "--short" "origin/main"))
                     :out (judge base paths)}}
-      (not= (tree here "HEAD") (tree here "origin/main"))
+      (bot-changed?)
       (assoc :branch
              {:sha (str/trim (sh {} "git" "rev-parse" "--short" "HEAD"))
               :out (judge here paths)}))))
