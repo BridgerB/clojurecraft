@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T09:09:15.770Z",
+  "at" : "2026-10-17T09:10:21.889Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -8,7 +8,7 @@
     "checks" : "pending",
     "title" : "Bot stops at nether: no-path",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 359,
     "session" : false
@@ -180,8 +180,9 @@
   } ],
   "moves" : [ {
     "issue" : 346,
-    "move" : "ready",
-    "pr" : 359
+    "move" : "wait",
+    "pr" : 359,
+    "why" : "checks running"
   }, {
     "issue" : 338,
     "move" : "leave",
