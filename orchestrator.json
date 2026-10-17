@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T15:04:59.430Z",
+  "at" : "2026-10-17T15:10:27.205Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -37,7 +37,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 378,
-    "session" : true
+    "session" : false
   }, {
     "number" : 196,
     "title" : "Bot stops at portal: no-stand",
@@ -192,9 +192,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 227,
-    "move" : "wait",
-    "pr" : 378,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 378
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -708,5 +707,10 @@
     "issue" : 227,
     "move" : "assign",
     "at" : "2026-10-17T14:48:31.923Z"
+  }, {
+    "issue" : 227,
+    "move" : "ready",
+    "pr" : 378,
+    "at" : "2026-10-17T15:10:27.205Z"
   } ]
 }
