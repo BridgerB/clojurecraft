@@ -2126,6 +2126,19 @@
     (is (empty? (:sim/broken sim)) "nothing dug by hand")
     (is (< (:time/now w) 2000))))
 
+(deftest stairs-down-to-trees-with-no-pickaxe-are-cut-by-hand
+  (doseq [purpose [:trees :lava nil]]
+    (let [i (cond-> {:intent/kind :stairs-down :intent/to-y 71} purpose (assoc :intent/for purpose))
+          [w sim] (intent-run i deep-stone 76 nil 180000)]
+      (cond (= :trees purpose)
+            (do (is (= :done (:intent/status (:plan/intent w))))
+                (is (<= (second (:player/pos w)) 71.5))
+                (is (seq (:sim/broken sim))))
+            :else
+            (do (is (= :no-pickaxe (:intent/reason (:plan/intent w))))
+                (is (empty? (:sim/broken sim)))))
+      (is (empty? (:sim/violations sim))))))
+
 (deftest stairs-up-with-no-pickaxe-are-cut-by-hand
   ;; race 38477665442 Clj_r21 (issue #40): the pickaxe broke at y 60 in the iron mine, the stairs
   ;; up stopped :no-pickaxe, the sticks for another were in the trees up top, and twelve walks
