@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T11:59:34.209Z",
+  "at" : "2026-10-17T12:00:41.350Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 370,
@@ -23,7 +23,7 @@
     "checks" : "pending",
     "title" : "Bot stops at flint-and-steel: out-of-reach",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 367,
     "session" : false
@@ -185,8 +185,9 @@
   } ],
   "moves" : [ {
     "issue" : 366,
-    "move" : "ready",
-    "pr" : 367
+    "move" : "wait",
+    "pr" : 367,
+    "why" : "checks running"
   }, {
     "issue" : 338,
     "move" : "leave",
