@@ -1,17 +1,11 @@
 {
-  "at" : "2026-10-17T04:02:26.389Z",
+  "at" : "2026-10-17T04:05:36.495Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
-    "quiet" : false,
     "number" : 65,
-    "checks" : "red",
     "title" : "Bot stops at cobblestone: boxed",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 2,
-    "pr" : 327,
-    "session" : false
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -130,8 +124,7 @@
   } ],
   "moves" : [ {
     "issue" : 65,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "move" : "assign"
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -230,5 +223,9 @@
     "pr" : 327,
     "why" : "answered with no push",
     "at" : "2026-10-17T03:26:14.084Z"
+  }, {
+    "issue" : 65,
+    "move" : "assign",
+    "at" : "2026-10-17T04:05:36.495Z"
   } ]
 }
