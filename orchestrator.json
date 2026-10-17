@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T15:14:52.254Z",
+  "at" : "2026-10-17T15:16:01.303Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -26,17 +26,6 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 377,
-    "session" : false
-  }, {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 227,
-    "checks" : "green",
-    "title" : "Bot stops at portal: no-scoop",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 378,
     "session" : false
   }, {
     "number" : 196,
@@ -191,13 +180,12 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 227,
-    "move" : "merge",
-    "pr" : 378
-  }, {
     "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 186,
+    "move" : "assign"
   } ],
   "log" : [ {
     "issue" : 60,
@@ -717,5 +705,9 @@
     "move" : "merge",
     "pr" : 378,
     "at" : "2026-10-17T15:14:52.254Z"
+  }, {
+    "issue" : 186,
+    "move" : "assign",
+    "at" : "2026-10-17T15:16:01.303Z"
   } ]
 }
