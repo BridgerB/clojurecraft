@@ -24,7 +24,8 @@
      7. a pull request that only says Refs #n (Copilot could not prove a fix and handed off):
         the issue is labelled agent-stuck for a person, never reassigned;
      8. otherwise (a red check, a draft left by a session that ended, a Refs-only body): ask
-        Copilot to go on, in a pull request comment that says what is wrong, at most once every
+        Copilot to go on (an agent task on the pull request's branch, on follow-model, and a note
+        on the pull request saying what is wrong), at most once every
         nudge-every-ms and max-nudges times; after that the issue is labelled agent-stuck and
         left for a person.
    Each pass also writes what it saw and did to orchestrator.json on the gh-pages branch (when it
@@ -43,7 +44,10 @@
 (def nudge-every-ms (* 5 60 1000))            ; the least time between two continue comments on one pull request (a live session already holds them off)
 (def max-nudges 8)                            ; continue comments before the issue is left for a person
 (def required-checks #{"unit / unit" "check"}) ; the checks a fix must pass (issue.yml)
-(def nudge-lead "@copilot Go on with #")      ; how every continue comment begins, so the dispatcher counts its own
+(def nudge-lead "Asked Copilot to go on with #") ; how every continue note begins, so the dispatcher counts its own (no @copilot: a mention would start a second session)
+(def old-nudge-lead "@copilot Go on with #")  ; how continue comments began before follow-ups had their own model
+(def fix-model "gpt-6.1-sol")                 ; the model an assigned issue is fixed with (COPILOT_FIX_MODEL overrides)
+(def follow-model "gpt-6-luna")               ; the model a follow-up runs on, a cheap one (COPILOT_FOLLOW_MODEL overrides)
 (def hands-off #{"no-agent" "agent-stuck" "needs-review"}) ; labels that keep an issue away from Copilot
 (def guarded
   "Paths a Copilot pull request may not change and still be merged here: the workflows and this
@@ -130,7 +134,8 @@
       (and pr (:conflict? pr) (>= (:nudges pr) max-nudges)) {:move :stuck :issue n :pr (:number pr)}
       (and pr (:conflict? pr) (:last-nudge-ms pr) (< (- now (:last-nudge-ms pr)) nudge-every-ms))
       {:move :wait :issue n :pr (:number pr) :why "conflicts; asked recently"}
-      (and pr (:conflict? pr)) {:move :nudge :issue n :pr (:number pr) :conflict? true}
+      (and pr (:conflict? pr))
+      {:move :nudge :issue n :pr (:number pr) :branch (:branch pr) :conflict? true}
       (and pr (not (:draft? pr)) (= :green (:checks pr)) (:guarded? pr))
       {:move :review :issue n :pr (:number pr)}
       (and pr (not (:draft? pr)) (= :green (:checks pr))) {:move :merge :issue n :pr (:number pr)}
@@ -140,7 +145,13 @@
       (silent? pr) {:move :stuck :issue n :pr (:number pr) :why "answered with no push"}
       (and pr (:last-nudge-ms pr) (< (- now (:last-nudge-ms pr)) nudge-every-ms))
       {:move :wait :issue n :pr (:number pr) :why "nudged recently"}
-      pr {:move :nudge :issue n :pr (:number pr) :checks (:checks pr) :draft? (:draft? pr)}
+      pr
+      {:move :nudge
+       :issue n
+       :pr (:number pr)
+       :branch (:branch pr)
+       :checks (:checks pr)
+       :draft? (:draft? pr)}
       (and assigned? assigned-ms (> (- now assigned-ms) start-grace-ms)) {:move :reassign :issue n}
       assigned? {:move :wait :issue n :why "session starting"}
       :else {:move :assign :issue n})))
@@ -202,11 +213,15 @@
 
 (defn nudge-text
   "The continue comment for a pull request in move m, saying what is left."
-  [{:keys [issue checks draft? conflict?]}]
+  [{:keys [issue pr branch checks draft? conflict?]}]
   (str
    nudge-lead
    issue
-   " by your bot-fixer profile until it can merge. "
+   " (pull request #"
+   pr
+   ", branch "
+   branch
+   ") by your bot-fixer profile (.github/agents/bot-fixer.agent.md: read it once) until it can merge. "
    (cond
      conflict?
      "It conflicts with main, so it cannot merge: merge origin/main into your branch, resolve the conflicts keeping both sides' intent (problems.edn sentences: keep both), push, and let the checks run again. "
@@ -286,7 +301,9 @@
        "--json"
        "number,headRefName,headRefOid,isDraft,body,statusCheckRollup,comments,files,updatedAt,mergeable")
       :when (str/starts-with? (:headRefName pr) "copilot/")
-      :let [ours (filter #(str/starts-with? (str (:body %)) nudge-lead) (:comments pr))]
+      :let [ours (filter #(or (str/starts-with? (str (:body %)) nudge-lead)
+                              (str/starts-with? (str (:body %)) old-nudge-lead))
+                         (:comments pr))]
       :let [fixed (fixes (:body pr))]
       n (if (seq fixed) fixed (refs (:body pr)))]
      [n
@@ -365,20 +382,62 @@
                    "--input" "-")]
     (when-not (zero? (:exit r)) (println "status not written:" (str/trim (:err r))))))
 
+(defn model-of
+  "The model named by the environment variable env, else default."
+  [env default]
+  (or (not-empty (System/getenv env)) default))
+
+(defn post!
+  "POST body (a value, as JSON) to the API path; {:exit :err}."
+  [path body]
+  (p/shell {:in (json/generate-string body) :out :string :err :string :continue true}
+           "gh"
+           "api" "-X"
+           "POST" path
+           "--input" "-"))
+
 (defn assign!
-  "Assign Copilot to issue n with the bot-fixer agent, which starts a session."
+  "Assign Copilot to issue n with the bot-fixer agent on fix-model, which starts a session; when
+   the model is refused (a name GitHub does not offer), assign on follow-model, a GPT model the
+   sessions are known to run, never GitHub's own choice (which may be a Claude model), and say so."
   [n]
-  (let [body (json/generate-string {:assignees [agent-login]
-                                    :agent_assignment {:target_repo repo
-                                                       :base_branch "main"
-                                                       :custom_instructions ""
-                                                       :custom_agent custom-agent
-                                                       :model ""}})]
-    (p/shell {:in body :out :string}
-             "gh"
-             "api" "-X"
-             "POST" (str "repos/" repo "/issues/" n "/assignees")
-             "--input" "-")))
+  (let [model (model-of "COPILOT_FIX_MODEL" fix-model)
+        body (fn [m]
+               {:assignees [agent-login]
+                :agent_assignment {:target_repo repo
+                                   :base_branch "main"
+                                   :custom_instructions ""
+                                   :custom_agent custom-agent
+                                   :model m}})
+        r (post! (str "repos/" repo "/issues/" n "/assignees") (body model))]
+    (when-not (zero? (:exit r))
+      (println "model" model
+               "refused for #" n
+               ":" (str/trim (:err r))
+               "; assigning on" follow-model)
+      (post! (str "repos/" repo "/issues/" n "/assignees") (body follow-model)))))
+
+(defn follow-up!
+  "Ask Copilot to go on with move m's pull request on follow-model: a note on the pull request
+   (no mention, which would start a session of its own on the fix model) and an agent task on its
+   branch, which continues that pull request (head_ref) rather than opening another."
+  [m]
+  (let [text (nudge-text m)
+        model (model-of "COPILOT_FOLLOW_MODEL" follow-model)
+        task (fn [mdl]
+               (post! (str "agents/repos/" repo "/tasks")
+                      {:prompt text :base_ref "main" :head_ref (:branch m) :model mdl}))]
+    (gh "pr" "comment" (str (:pr m)) "--repo" repo "--body" (str text " (model " model ")"))
+    (let [r (task model)]
+      (when-not (zero? (:exit r))
+        (println
+         "follow-up on"
+         model
+         "refused for PR #"
+         (:pr m)
+         ":"
+         (str/trim (:err r))
+         "; not asked again on another model (GitHub's own choice may be a Claude model)")))))
 
 (defn unassign!
   "Take Copilot off issue n."
@@ -409,7 +468,7 @@
               "--repo" repo
               "--body"
               "Green, but it changes a workflow or the dispatcher, which only a person merges."))
-      :nudge (gh "pr" "comment" (str pr) "--repo" repo "--body" (nudge-text m))
+      :nudge (follow-up! m)
       :release (run! #(gh "run" "rerun" (str %) "--repo" repo) (:runs m))
       :ready (gh "pr" "ready" (str pr) "--repo" repo)
       :gave-up (gh "issue" "edit" (str issue) "--repo" repo "--add-label" "agent-stuck")
