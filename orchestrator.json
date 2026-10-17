@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T11:30:18.877Z",
+  "at" : "2026-10-17T11:33:33.158Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -22,6 +22,11 @@
     "nudges" : 0,
     "pr" : 365,
     "session" : true
+  }, {
+    "number" : 231,
+    "title" : "Bot stops at cast-one: no-footing",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
   }, {
     "number" : 229,
     "title" : "Bot stops at cast-one: no-pickaxe",
