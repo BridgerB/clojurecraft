@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T15:16:01.303Z",
+  "at" : "2026-10-17T15:17:10.116Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -33,10 +33,16 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 186,
-    "title" : "Bot stops at cast-one: no-log",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 186,
+    "checks" : "red",
+    "title" : "Bot stops at cast-one: no-log",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 379,
+    "session" : true
   }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
@@ -185,7 +191,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 186,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 379,
+    "why" : "session running"
   } ],
   "log" : [ {
     "issue" : 60,
