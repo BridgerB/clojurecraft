@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T03:59:12.977Z",
+  "at" : "2026-10-17T04:00:17.775Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -20,6 +20,11 @@
   }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 94,
+    "title" : "Bot stops at portal-kit: no-spot",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
