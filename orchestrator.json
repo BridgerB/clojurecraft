@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T21:29:51.198Z",
+  "at" : "2026-10-17T21:33:14.535Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -80,13 +80,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 157,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at ingots: stuck",
     "copilot" : true,
     "draft" : true,
     "nudges" : 0,
     "pr" : 397,
-    "session" : true
+    "session" : false
   }, {
     "number" : 156,
     "title" : "Bot stops at portal-kit: stuck",
@@ -251,9 +251,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 157,
-    "move" : "wait",
-    "pr" : 397,
-    "why" : "session running"
+    "move" : "gave-up",
+    "pr" : 397
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -1008,5 +1007,10 @@
     "issue" : 157,
     "move" : "assign",
     "at" : "2026-10-17T21:28:40.589Z"
+  }, {
+    "issue" : 157,
+    "move" : "gave-up",
+    "pr" : 397,
+    "at" : "2026-10-17T21:33:14.535Z"
   } ]
 }
