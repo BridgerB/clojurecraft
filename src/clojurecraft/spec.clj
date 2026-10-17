@@ -827,6 +827,12 @@
          :feet ::block-pos
          :cells (s/coll-of ::block-pos)))
 
+(s/fdef build/safe-source?
+  :args
+  (s/cat :world (requires :world/chunks :player/pos)
+         :src ::block-pos)
+  :ret boolean?)
+
 (s/fdef fortress/next-move
   :args
   (s/cat :world (requires :world/chunks)
@@ -843,5 +849,6 @@
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
    `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held `drops/lying
-   `blaze/blazes `pearls/endermen `stairs/down-safe? `stairs/down-lay `fortress/next-move])
+   `blaze/blazes `pearls/endermen `stairs/down-safe? `stairs/down-lay `build/safe-source?
+   `fortress/next-move])
 (s/def :stats/deaths pos-int?)

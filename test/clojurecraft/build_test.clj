@@ -674,6 +674,28 @@
         "the hole's top cell is floored from the feet")
     (is (= :walk (:intent/kind (toward {}))) "nothing to place: the walk, as before")))
 
+(deftest a-refill-never-opens-lava-over-its-stand
+  ;; Issue #231, R1/32: the ray to a low source opened the wall under higher lava,
+  ;; which flowed onto the stand before the next dig finished.
+  (doseq [leak [[7 64 5] [7 63 6]]]
+    (let [src [7 62 5]
+          wall [7 63 5]
+          w (standing-at (open-ground {src blocks/lava-base wall 1 leak blocks/lava-base})
+                         [5.5 63.0 5.5])]
+      (is (= wall (build/sight-block w src)))
+      (is (= :no-station (build/scoop-at-station w [src]))
+          "a low source does not make the rock over it safe to open")
+      (let [other [2 62 5]
+            w (assoc-in w [:world/blocks other] blocks/lava-base)]
+        (is (= other (:intent/target (build/scoop-at-station w [src other])))
+            "another source is used instead"))
+      (let [station (build/station-among w [src] [2 62 1] :south 1)]
+        (is (not= [4 63 5] (:stand station)) "the unsafe stand is rejected before walking to it"))
+      (let [safe (assoc-in w [:world/blocks leak] blocks/air)]
+        (is (= wall (:intent/target (build/scoop-at-station safe [src]))))
+        (is (= [4 63 5] (:stand (build/station-among safe [src] [2 62 1] :south 1)))
+            "a lid over lava below the feet may still be opened")))))
+
 (deftest a-climb-finishes-before-the-build-repairs-its-headroom
   (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])
         climb {:intent/kind :stairs-up

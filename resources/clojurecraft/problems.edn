@@ -181,6 +181,7 @@
    "Water aimed at the floor replaces the lava source instead of making obsidian"
    "Scooping late lets water spread and convert the lava pool"
    "Placing into a lava source destroys it; casting over a lava sea has no stance"
+   "Sim race 39032523584 (issue #231, R1/32): opening a low source's sight line admitted lava above the stand and three escapes failed :no-footing; stations and refills now reject ray excavations beside lava at or above the feet."
    "A rejected placement left as a ghost block; the pathfinder digs finished obsidian"
    "A climb that opens a room floor for headroom must finish before the build repairs it: cancelling the climb on the changed op digs and replaces the same floor until cobblestone runs out (issue #369, R3/16)."
    "Lighting with the hitbox in the fire cell burns the bot"
