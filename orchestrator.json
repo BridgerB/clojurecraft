@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T13:25:02.575Z",
+  "at" : "2026-10-17T13:30:24.302Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 368,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at portal-kit: stair-not-taken",
     "copilot" : true,
     "draft" : false,
@@ -180,9 +180,8 @@
   } ],
   "moves" : [ {
     "issue" : 368,
-    "move" : "wait",
-    "pr" : 373,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 373
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -638,5 +637,10 @@
     "move" : "ready",
     "pr" : 373,
     "at" : "2026-10-17T13:23:56.081Z"
+  }, {
+    "issue" : 368,
+    "move" : "merge",
+    "pr" : 373,
+    "at" : "2026-10-17T13:30:24.302Z"
   } ]
 }
