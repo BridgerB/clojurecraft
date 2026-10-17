@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, mining, goals]
 aliases: [:mine, stone.clj, mine-next, :goal/blocks, :goal/depth, mine-stone, mine-coal, mine-iron, dig-gravel, none-in-sight, intent/pickup?, step-down?, :redig, flint-from-gravel, flint]
 status: verified
-lastUpdated: 2026-10-16
+lastUpdated: 2026-10-17
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/stone.clj#defn mine-next
@@ -29,6 +29,7 @@ sourceRefs:
   - src/clojurecraft/stone.clj#defn deeper
   - test/clojurecraft/stone_test.clj#deeper-only-where-a-stair-can-be-dug
   - src/clojurecraft/stone.clj#defn retreat
+  - test/clojurecraft/stone_test.clj#a-boxed-pocket-retreats-along-a-short-route-to-new-rock
   - src/clojurecraft/stone.clj#defn climb
   - src/clojurecraft/plan.clj#def boxing-kinds
   - test/clojurecraft/stone_test.clj#boxed-in-by-water-with-no-way-away-the-mine-climbs-out
@@ -60,6 +61,10 @@ A mining row is data: `:goal/act :mine`, the blocks it digs (`:goal/blocks`) and
 | `:mine-coal` | coal ore, deepslate coal ore | any pickaxe (`:tag/pickaxes`) | coal | 40 |
 | `:mine-iron` | iron ore, deepslate iron ore | a stone pickaxe | raw iron | 16 |
 | `:dig-gravel` | gravel | any pickaxe, for the stairs down, and a spare (race 38477665442 bot Clj_r19 wore both out tunnelling for gravel, issue #67) | gravel | 40 |
+
+## Short retreats from boxed ground
+
+`stone/retreat` still prefers a route more than twelve blocks away. When the feet are in `:plan/boxed-at` and the search exhausts the reachable ground before that distance (`:path/status :none`), it instead walks to the last unboxed waypoint on the returned route. An empty route or one with only boxed cells still yields nil; a search that merely spent its budget is not exhaustion. Retreat walks end standing on that destination (`intent/standing-walks`), never merely within reach of it, which could leave a short retreat in its boxed starting cell. Sim race 39028864642 (issue #370, R1/29) finished a climb for portal wood under gravel at y 48 with an eight-cell route back through its tunnel, all shorter than twelve blocks away, and waited `:no-log`. The short retreat leaves that pocket so gathering can re-plan from new rock without relaxing the gravel or boxed-cell guards.
 
 ## How it works (`mine-next`)
 1. A chain in flight continues: walk → dig → collect via `intent/chain-next`, tagged `:intent/for` the row's id, so another row's chain (a coal walk when iron is now wanted) is never continued as this one's dig.

@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, wood, intents]
 aliases: [gather-next, continue-gather, intent/for :log, max-clears, log chain, wood chain]
 status: verified
-lastUpdated: 2026-10-16
+lastUpdated: 2026-10-17
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/wood.clj#defn continue-gather
@@ -15,6 +15,8 @@ sourceRefs:
   - src/clojurecraft/wood.clj#defn way-out
   - src/clojurecraft/wood.clj#defn gather-or-out
   - test/clojurecraft/build_test.clj#a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
+  - src/clojurecraft/stone.clj#defn retreat
+  - test/clojurecraft/plan_test.clj#a-climb-for-wood-boxed-under-gravel-takes-the-short-way-away
   - src/clojurecraft/wood.clj#defn trees-climb
   - src/clojurecraft/wood.clj#defn trees-descend
   - test/clojurecraft/plan_test.clj#a-trunk-far-below-is-descended-toward-when-out
@@ -73,6 +75,7 @@ Getting a log is a chain of three intents, each started by the planner after the
 | anything else | nil (start fresh) |
 
 ## Gotchas
+- A boxed climb under gravel must not wait just because its way back is shorter than `stone/retreat-distance`. The gather act's `way-out` uses `stone/retreat`, which accepts the last unboxed waypoint of an exhausted search from boxed feet when the full distance is unreachable. Issue #370 (R1/29) had eight reachable tunnel cells, none twelve blocks away; gathering now walks away and re-plans a climb while the gravel and boxed-cell guards remain intact.
 - The tag exists so a walk for another purpose (to a crafting table) is never continued as a dig; before it, any finished walk or dig was assumed to be part of a log chain.
 - The chain lives entirely in `:plan/last` and the intent maps; nothing else remembers it. A failed intent clears `:plan/last`, so a failure restarts the chain from a fresh search with the target blacklisted.
 - The sim test drops a 2x2 oak canopy one block above the ground between bot and trunk; the bot breaks the leaf at `[3 65 0]` and finishes with no failed attempts.

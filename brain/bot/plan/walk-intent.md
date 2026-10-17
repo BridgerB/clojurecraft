@@ -16,6 +16,8 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn waypoint-reached?
   - src/clojurecraft/intent.clj#defn follow
   - src/clojurecraft/intent.clj#defn arrived?
+  - src/clojurecraft/intent.clj#def standing-walks
+  - test/clojurecraft/stone_test.clj#a-boxed-pocket-retreats-along-a-short-route-to-new-rock
   - src/clojurecraft/intent.clj#defn opening
   - src/clojurecraft/stairs.clj#defmethod path/goal-done? :surface
   - test/clojurecraft/plan_test.clj#a-shaft-open-to-the-sky-is-not-a-way-out
@@ -56,6 +58,7 @@ related:
 7. Otherwise `follow` it.
 
 ## Gotchas
+- A retreat must stand on its target (`standing-walks`, `:goal/kind :block`), not merely get within reach. A short retreat from a boxed pocket could otherwise finish without leaving it; issue #370's recovery uses such short routes when twelve blocks of distance cannot be reached.
 - A sky-lit pit is not a way out. Sim race 39007353160 (issue #349, R4/2) climbed eight stairs for wood, then walked back down to the sky over the pit at `[2256 75 2321]`, every eleven seconds. `opening` now searches for `:surface`, registered in `stairs` with `out?`, so both new and in-flight walks must reach usable open ground rather than undoing the climb.
 - A waypoint one block down counts only once the feet are down. With a looser gate the property test caught a bot standing on the lip of a ledge counting the cell below as reached ([[pathfinder]]).
 - Time is counted in ticks (`:time/tick`), not ms, unlike dig and craft; a stalled tick rate stretches the 60 s timeout.
