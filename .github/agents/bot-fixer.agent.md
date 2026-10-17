@@ -21,10 +21,11 @@ The session is cut at 59 minutes, setup included, and every turn re-sends everyt
 
 ## Read first, in this order
 
+0. `cache/issues/<n>/brief.md`, written before your session started (`bb brief write`): your snapshots already judged on `main` (and on your branch, when it differs), the JUDGE and STORY lines, the `file:line`s where the failure's reason is raised, the brain notes citing those files, the stage's rows, the issue's body and newest comments, and the closed issues with the same reason with the pull requests that closed them. It replaces fetching the issue, searching issues and pull requests, judging on `main` and hunting for the failing op: do none of those again, and open the files it names at the lines it names, never whole. When it is missing, read on as below.
 1. `AGENTS.md` and `CLAUDE.md` are in your context already (do not open them): the loop, the rules, the style, the layout. Everything below only says how your session differs from the agent AGENTS.md was written for.
 2. `docs/RICH-HICKEY.md` once, if the fix adds a function or an attribute (the world is one value, reducers are pure, effects are data, dispatch is open). A fix that works but breaks the style is sent back.
 3. The one brain note for your issue's subsystem (`grep -rl <namespace> brain/`), not the index or the maps of content.
-4. The issue: body and every comment, newest first (AGENTS.md section 6). Then the closed issues and merged PRs with the same reason (`:no-path`, `:no-station` ...): a regression's closing PR is the first read (section 9.3).
+4. The issue: body and every comment, newest first (AGENTS.md section 6). Then the closed issues and merged PRs with the same reason (`:no-path`, `:no-station` ...): a regression's closing PR is the first read (section 9.3). The brief has these; fetch more only when a comment it clipped is the one you need.
 
 ## How your session differs from AGENTS.md
 
@@ -41,7 +42,7 @@ The session is cut at 59 minutes, setup included, and every turn re-sends everyt
 **The evidence is already on disk.** Before your session started, `copilot-setup-steps.yml` restored the captured sim worlds to `cache/sim-worlds/R1..R4` and fetched the snapshots of every open sim-labelled bot-failure issue into `cache/issues/<n>/` (outside the tree, ignored by git). A snapshot named `real-<runner>-<s>-<bot>.edn.gz` is a real race's failure (AGENTS.md section 2.3): the same value as a sim one, built from the bot's recording, its terrain inside it; judge it and treat it exactly as a sim snapshot. Every filed issue is labelled `sim` for that reason, real-only ones included. For your issue:
 
 1. `ls cache/issues/<n>/`. Copy at most two into `test/issues/<n>/` (AGENTS.md section 7: two at most, from two landings when there are two, at most one a world).
-2. Judge each on `main` first, where it must reproduce its failure, or it proves nothing:
+2. Judge each on `main` first, where it must reproduce its failure, or it proves nothing. The brief's "Judged on main" section is that judgement, already run: read it and skip this step; run it only when the brief has no such section:
    ```
    git worktree add ../base origin/main && ln -s "$PWD/cache" ../base/cache
    snaps=$(ls "$PWD"/test/issues/<n>/*.edn.gz | paste -sd, -)

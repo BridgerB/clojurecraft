@@ -13,10 +13,12 @@
   {:doc "The Babashka tooling's tests (test-bb/): the evidence, the results' writers and the site"
    :extra-paths ["test-bb"]
    :requires ([clojure.test :as ct]
+              [clojurecraft.brief-test]
               [clojurecraft.evidence-test]
               [clojurecraft.page-test]
               [clojurecraft.site-test])
-   :task (let [{:keys [fail error]} (ct/run-tests 'clojurecraft.evidence-test
+   :task (let [{:keys [fail error]} (ct/run-tests 'clojurecraft.brief-test
+                                                  'clojurecraft.evidence-test
                                                   'clojurecraft.page-test
                                                   'clojurecraft.site-test)]
            (when (pos? (+ fail error)) (System/exit 1)))}
@@ -101,6 +103,11 @@
    "Copilot sessions on the bot-failure issues until each closes (copilot.yml): dispatch [--dry-run]"
    :requires ([clojurecraft.copilot :as copilot])
    :task (apply copilot/-main *command-line-args*)}
+  brief
+  {:doc
+   "A Copilot session's brief before it starts (copilot-setup-steps.yml): write puts cache/issues/<n>/brief.md for the issue Copilot holds"
+   :requires ([clojurecraft.brief :as brief])
+   :task (apply brief/-main *command-line-args*)}
   probe
   {:doc
    "A code question on a runner (probe.yml): run <label> <command> [worlds] for the pushed branch | log <id>"
