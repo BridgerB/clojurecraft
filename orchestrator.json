@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T23:21:42.504Z",
+  "at" : "2026-10-17T23:36:17.317Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 296,
@@ -32,8 +32,8 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -42,13 +42,18 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 60,
+    "title" : "Bot stops at water-bucket: no-water",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -59,17 +64,22 @@
     "title" : "Bot stops at furnace: boxed",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 2,
+    "nudges" : 5,
     "pr" : 403,
-    "session" : false
-  }, {
-    "number" : 60,
-    "title" : "Bot stops at water-bucket: no-water",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "session" : true
   }, {
     "number" : 89,
     "title" : "Bot stops at portal-kit: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 74,
+    "title" : "Bot stops at cast-one: no-stand",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 87,
+    "title" : "Bot stops at ingots: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -84,11 +94,6 @@
     "pr" : 387,
     "session" : false
   }, {
-    "number" : 74,
-    "title" : "Bot stops at cast-one: no-stand",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 161,
@@ -99,11 +104,6 @@
     "nudges" : 8,
     "pr" : 391,
     "session" : false
-  }, {
-    "number" : 87,
-    "title" : "Bot stops at ingots: no-log",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
   }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
@@ -125,19 +125,19 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 65,
-    "title" : "Bot stops at cobblestone: boxed",
+    "number" : 349,
+    "title" : "Bot stops at flint-and-steel: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : true
+  }, {
+    "number" : 110,
+    "title" : "Bot stops at pickaxe: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : false
-  }, {
-    "number" : 110,
-    "title" : "Bot stops at pickaxe: no-log",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 320,
@@ -165,6 +165,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 65,
+    "title" : "Bot stops at cobblestone: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 43,
     "title" : "Bot stops at portal-kit: no-pickaxe",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -177,8 +182,9 @@
   } ],
   "moves" : [ {
     "issue" : 342,
-    "move" : "nudge",
-    "pr" : 403
+    "move" : "wait",
+    "pr" : 403,
+    "why" : "session running"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -187,6 +193,10 @@
     "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 349,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -1026,5 +1036,10 @@
     "move" : "nudge",
     "pr" : 403,
     "at" : "2026-10-17T23:21:42.504Z"
+  }, {
+    "issue" : 349,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-17T23:36:17.317Z"
   } ]
 }
