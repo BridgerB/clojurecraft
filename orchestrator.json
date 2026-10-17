@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T12:57:59.895Z",
+  "at" : "2026-10-17T12:59:05.971Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -8,7 +8,7 @@
     "checks" : "pending",
     "title" : "Bot stops at cast-one: not-held",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 372,
     "session" : false
@@ -185,8 +185,9 @@
   } ],
   "moves" : [ {
     "issue" : 369,
-    "move" : "ready",
-    "pr" : 372
+    "move" : "wait",
+    "pr" : 372,
+    "why" : "checks running"
   }, {
     "issue" : 338,
     "move" : "leave",
