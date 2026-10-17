@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T18:54:36.959Z",
+  "at" : "2026-10-17T18:55:45.846Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -55,10 +55,16 @@
     "pr" : 387,
     "session" : false
   }, {
-    "number" : 161,
-    "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 161,
+    "checks" : "pending",
+    "title" : "Bot stops at portal-kit: timeout",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 391,
+    "session" : true
   }, {
     "number" : 157,
     "title" : "Bot stops at ingots: stuck",
@@ -215,7 +221,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 161,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 391,
+    "why" : "session running"
   }, {
     "issue" : 62,
     "move" : "leave",
