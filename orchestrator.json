@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T21:25:17.174Z",
+  "at" : "2026-10-17T21:27:31.953Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -16,13 +16,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 342,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at furnace: boxed",
     "copilot" : true,
     "draft" : true,
     "nudges" : 0,
     "pr" : 396,
-    "session" : true
+    "session" : false
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -213,9 +213,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 342,
-    "move" : "wait",
-    "pr" : 396,
-    "why" : "session running"
+    "move" : "gave-up",
+    "pr" : 396
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -989,5 +988,10 @@
     "issue" : 342,
     "move" : "assign",
     "at" : "2026-10-17T21:24:07.180Z"
+  }, {
+    "issue" : 342,
+    "move" : "gave-up",
+    "pr" : 396,
+    "at" : "2026-10-17T21:27:31.953Z"
   } ]
 }
