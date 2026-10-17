@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T13:23:56.081Z",
+  "at" : "2026-10-17T13:25:02.575Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -8,7 +8,7 @@
     "checks" : "pending",
     "title" : "Bot stops at portal-kit: stair-not-taken",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 373,
     "session" : false
@@ -180,8 +180,9 @@
   } ],
   "moves" : [ {
     "issue" : 368,
-    "move" : "ready",
-    "pr" : 373
+    "move" : "wait",
+    "pr" : 373,
+    "why" : "checks running"
   }, {
     "issue" : 338,
     "move" : "leave",
