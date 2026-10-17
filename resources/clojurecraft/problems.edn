@@ -223,7 +223,8 @@
    "The gym gives a row's kit only once the server says the bot stands in the row's dimension (execute as <bot> at @s if dimension): steve gave its End kit before the cross-dimension teleport and the server held none of it (issue #261)"
    "A return-nether always row reuses the portal build after an overworld respawn while Nether targets remain undone; the first entry stays a historical milestone (issue #287)"
    "A blocked tunnel considers a safe retreat and passes through portal cells without digging; fresh steps and a supported, non-fluid-floored corner onto adjoining ground precede revisiting a cell (issue #286)"
-   "A tunnel replaces solid floors the route cannot walk, such as soul sand, before entering; the repair needs support and must expose no fluid or protected block, including when resuming a failed entry walk (issue #284)"]
+   "A tunnel replaces solid floors the route cannot walk, such as soul sand, before entering; the repair needs support and must expose no fluid or protected block, including when resuming a failed entry walk (issue #284)"
+   "A descending walk stops input over its waypoint; a tunnel step counts only after centring and landing, then clears controls, so neither new nor in-flight steps run past their repaired floor into lava with no footing (issue #339)"]
   :problem/risks
   ["Stale overworld columns answer Nether lookups (a brick reported exactly 64 blocks off)"
    "Parsing a Nether chunk as 24 sections runs off the buffer"

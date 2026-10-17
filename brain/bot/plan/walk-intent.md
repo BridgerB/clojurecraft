@@ -16,6 +16,7 @@ sourceRefs:
   - src/clojurecraft/intent.clj#defn route-stale?
   - src/clojurecraft/intent.clj#defn waypoint-reached?
   - src/clojurecraft/intent.clj#defn follow
+  - test/clojurecraft/path_test.clj#a-descending-walk-does-not-run-past-its-landing
   - src/clojurecraft/intent.clj#defn arrived?
   - src/clojurecraft/intent.clj#def standing-walks
   - test/clojurecraft/stone_test.clj#a-boxed-pocket-retreats-along-a-short-route-to-new-rock
@@ -45,7 +46,7 @@ related:
 - `intent.clj`, `run :walk` - the whole intent. Its bookkeeping lives on the intent map: `:intent/waypoints`, `:intent/route` (how the plan ended), `:intent/at` (the next waypoint's index), `:intent/replans`, `:intent/planned-chunks`, `:intent/best-tick` (the tick a waypoint was last reached), `:intent/started`.
 - `intent.clj`, `walk-goal` and `route!` - plans from the feet cell toward `{:goal/kind :near :goal/pos target :goal/range 3}`, or, for a walk to a block mined from beside (`:intent/pickup?`, [[mine-act]]), `:goal/kind :pickup` (within `pickup-range` on the plane, the block at the feet's height or up to `pickup-rise` above; with `:intent/step-down?`, `:goal/step-down?` too, a block up beside it), and counts the plan. A walk out (`:intent/for :opening`, `goal-of`) is planned toward `:surface` instead: `stairs/out?`, the same ground a climb ends on, not a sky-lit shaft or pit. `arrived?` asks that same goal, not whether the mouth is merely in reach.
 - `intent.clj`, `waypoint-reached?` - within `waypoint-reach` (0.35) of the waypoint's centre on the plane, and the feet within half a block of its height in both directions.
-- `intent.clj`, `follow` - `toward` the waypoint's centre, jumping when it is above the feet and within `jump-near` (1.3), or when blocked.
+- `intent.clj`, `follow` - `toward` the waypoint's centre, jumping when it is above the feet and within `jump-near` (1.3), or when blocked. Over a lower waypoint, within half a block minus `physics/half-width` (0.2) horizontally, stop input while descending: continuing forward until the height matches ran past a fortress tunnel's repaired floor into lava (issue #339). The body must be wholly over that cell before stopping, or a walk resumed at rest on the lip could remain supported there and never fall.
 - `intent.clj`, `route-stale?` - the three reasons to plan again.
 - `intent.clj`, `arrived?` - within reach, and for a log the feet no more than `pickup-rise` (2) below it, for a block mined from beside (`:intent/pickup?`) the walk-goal itself (`path/goal-done?`): neither above it nor more than `pickup-rise` below it, and within `pickup-range` (octile 1.5: a neighbour, diagonals too) of its cell, or with `:intent/step-down?` a straight neighbour a block up: where the drop comes to rest inside the pickup box; for water to scoop (`:intent/for :scoop`), right beside the source with the feet level with the cell over it or a block lower ([[scoop-intent]]). Within reach alone, a walk to ore in a tunnel's wall ended round the corner, and the collect walked straight at the drop into the wall until it failed `:not-picked-up`.
 
