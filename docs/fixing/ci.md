@@ -41,7 +41,7 @@ You never run a test locally; the PR's `unit / unit` runs them all in 2-4 minute
 | `issue.yml` | PR from `fix/*` | `check`: the issues the PR names; `sim` issues must have snapshots; `--judge` on base (must recur) and head (must not), only their worlds restored (15 min cap, a few in practice); plus `unit / unit` | step summary: JUDGE and STORY lines |
 | `probe.yml` | hand | one command on a branch with the sim worlds asked for | `probe-<id>`: files under `out/` |
 | `gym.yml` | hand | N trials of one goal on real servers, judged by RESULT + truth commands | recordings and logs |
-| `world.yml`, `simworld.yml` | hand when a key changes | build a landing set's world / capture sim worlds once | caches |
+| `world.yml`, `simworld.yml` | hand when a key changes | build a landing set's world / capture sim worlds and each set's Nether once | caches |
 | `pages.yml` | each report | builds the results site from main over `gh-pages`'s data, adds new gym runs, deploys | Pages |
 | `plan.yml`, `timer.yml`, `capacity.yml`, `full.yml` | hand or schedule | plan files, capacity study, one fresh-world attempt | their own |
 
