@@ -657,6 +657,27 @@
     (is (= [13 63 5] (build/nearest-stand-cell w i [14 63 5]))
         "the stand nearest the cell, at the feet's height, the wall in the way to dig")))
 
+(deftest a-reachable-dig-needs-no-new-stance
+  (let [w (standing-at (open-ground {[5 63 5] blocks/water-base [5 64 6] 1}) [5.1 63.0 5.5])
+        op (build/dig-op [5 64 6] [5 63 5] nil :open)]
+    (is (not (intent/centred? w [5 63 5])))
+    (is (not (path/standable? w [5 63 5])))
+    (is (= (build/way-dig [5 64 6]) (build/op-child w {:intent/kind :tunnel-to} op))
+        "a tunnel digs from its actual position, even off-centre in water")))
+
+(deftest a-nearby-room-at-another-height-is-gone-back-to
+  (let [roof (into {} (for [x (range 16) z (range 16)] [[x 64 z] 1]))
+        w (standing-at (assoc roof [10 63 6] blocks/air [10 64 6] blocks/air) [10.8 63.0 6.5])
+        i (assoc hill-intent :intent/origin [9 57 8] :intent/facing :west :intent/access 1)
+        pos [6 62 10]
+        op (build/dig-op pos pos nil :room)]
+    (is (< (physics/distance (physics/centre (intent/feet w)) (physics/centre [6 58 8]))
+           build/site-reach))
+    (is (nil? (build/reachable-stand w pos pos)))
+    (is (nil? (build/nearest-stand-cell w i pos)))
+    (is (= {:intent/kind :stairs-down :intent/to-y 58} (build/op-child w i op))
+        "near the site but above it: descend to the fixed landing, not no-stand")))
+
 (deftest a-site-left-for-a-pickaxe-is-gone-back-to
   ;; sim race 38806318231 (issue #196, 75 runs in 37 rounds, world R2/3): the cast's room at y 23,
   ;; the bot climbed to y 64 for a pickaxe's wood and made it; the next op, a room cell 41 below,
