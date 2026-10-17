@@ -219,7 +219,7 @@
   "out with every absolute path into the checkout cut to a path relative to it: the brief's lines
    stay short."
   [out]
-  (str/replace (str out) (str (fs/absolutize ".") "/") ""))
+  (str/replace (str out) (str (fs/cwd) "/") ""))
 
 (defn judge
   "The judge's output (stdout and stderr) for the snapshot paths, played by the code in dir."
@@ -231,7 +231,7 @@
    and, when the checkout's bot differs from main's (bot-changed?), on the checkout."
   [paths]
   (let [base (str (fs/absolutize "../brief-base"))
-        here (str (fs/absolutize "."))]
+        here (str (fs/cwd))]
     (sh {} "git" "fetch" "-q" "origin" "main")
     (when-not (fs/exists? base)
       (sh {} "git" "worktree" "add" "-q" "--detach" base "origin/main")

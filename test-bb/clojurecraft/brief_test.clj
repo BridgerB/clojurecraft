@@ -72,6 +72,7 @@
       (is (not (str/includes? bare "Judged on main"))))))
 
 (deftest paths-into-the-checkout-are-cut
-  (let [here (str (fs/absolutize ".") "/")]
+  (testing "a snapshot path made absolute as found makes it, as the judge prints it"
     (is (= "JUDGE {:path \"cache/issues/1/a.edn.gz\"}"
-           (brief/relative (str "JUDGE {:path \"" here "cache/issues/1/a.edn.gz\"}"))))))
+           (brief/relative
+            (str "JUDGE {:path \"" (fs/absolutize "cache/issues/1/a.edn.gz") "\"}"))))))
