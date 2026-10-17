@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T10:12:18.680Z",
+  "at" : "2026-10-17T10:13:26.617Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 338,
@@ -11,17 +11,6 @@
     "title" : "Bot stops at fortress: no-pickaxe",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 287,
-    "checks" : "green",
-    "title" : "Bot stops at fortress: other-dimension",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 361,
-    "session" : false
   }, {
     "number" : 286,
     "title" : "Bot stops at fortress: blocked",
@@ -177,9 +166,8 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 287,
-    "move" : "merge",
-    "pr" : 361
+    "issue" : 286,
+    "move" : "assign"
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -524,5 +512,9 @@
     "move" : "merge",
     "pr" : 361,
     "at" : "2026-10-17T10:12:18.680Z"
+  }, {
+    "issue" : 286,
+    "move" : "assign",
+    "at" : "2026-10-17T10:13:26.617Z"
   } ]
 }
