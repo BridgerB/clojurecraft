@@ -144,6 +144,7 @@ jobs:
         run: |
           RCON_PASS=$(openssl rand -hex 16)
           echo "::add-mask::$RCON_PASS"
+          set -o pipefail
           mkdir -p work out
           cp -r "cache/worlds/$SET" work/world
           clojure -P -M
