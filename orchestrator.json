@@ -1,11 +1,22 @@
 {
-  "at" : "2026-10-17T11:49:48.659Z",
+  "at" : "2026-10-17T11:50:55.623Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 366,
-    "title" : "Bot stops at flint-and-steel: out-of-reach",
+    "number" : 368,
+    "title" : "Bot stops at portal-kit: stair-not-taken",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
+  }, {
+    "labels" : [ "bot-failure", "sim" ],
+    "quiet" : false,
+    "number" : 366,
+    "checks" : "red",
+    "title" : "Bot stops at flint-and-steel: out-of-reach",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 367,
+    "session" : true
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -164,7 +175,9 @@
   } ],
   "moves" : [ {
     "issue" : 366,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 367,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
