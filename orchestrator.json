@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T23:51:56.354Z",
+  "at" : "2026-10-17T23:53:03.748Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 296,
@@ -57,6 +57,16 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 89,
+    "title" : "Bot stops at portal-kit: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 74,
+    "title" : "Bot stops at cast-one: no-stand",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 342,
@@ -67,16 +77,6 @@
     "nudges" : 5,
     "pr" : 403,
     "session" : true
-  }, {
-    "number" : 89,
-    "title" : "Bot stops at portal-kit: no-log",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 74,
-    "title" : "Bot stops at cast-one: no-stand",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
   }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
