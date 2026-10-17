@@ -24,6 +24,7 @@
 (def cross-reach 48)                  ; blocks along the way to a trunk a crossing looks for open water
 (def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
 (def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
+(def return-max-nodes 120000)         ; expansions for a complete way back to trees when local routes and hunts fail
 
 (defn ground?
   "Can a drop come to rest on this block where a player stands beside it: solid, and neither a log
@@ -336,12 +337,32 @@
         (when (water-toward? world feet trunk (physics/y-of eye))
           {:intent/kind :cross :intent/target trunk})))))
 
+(defn return-walk
+  "A complete walk back to a standing trunk with a larger bounded search, when local routes
+   and hunts fail. Only from open ground: a mine still climbs out first. A long detour can
+   exceed the local route budget even when its tree is nearby."
+  [world]
+  (let [feet (intent/feet world)]
+    (when (stairs/out? world feet)
+      (some (fn [trunk]
+              (let [i (assoc (log-walk world trunk) :intent/max-nodes return-max-nodes)
+                    goal (intent/goal-of i)]
+                (when (= :found
+                         (:path/status
+                          (path/plan world feet goal {:path/max-nodes return-max-nodes})))
+                  i)))
+            (->> (memory/positions-now world blocks/log-states)
+                 (memory/nearest-first (game/eye world) far-radius)
+                 (remove (skipped world))
+                 (filter #(standing-trunk? world %))
+                 (take far-candidates))))))
+
 (defn gather-next
   "The next step of getting a log: continue the chain, or start toward the nearest remembered
    trunk a route reaches (near-walk). Any goal that needs a log uses this. With none in the near
    band a route reaches, climb out to the trees, or walk toward them (hunt), or boxed under water
    dig up into it (into-water), or across open water swim for them (crossing), instead of
-   waiting :no-log."
+   waiting :no-log. On open ground, return-walk tries a longer bounded route before waiting."
   [world]
   (or (continue-gather world)
       (near-walk world)
@@ -349,6 +370,7 @@
       (hunt world)
       (into-water world)
       (crossing world)
+      (return-walk world)
       {:plan/wait :no-log}))
 
 (defn way-out

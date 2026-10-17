@@ -483,6 +483,7 @@
 (s/def :intent/route #{:found :partial :none})
 (s/def :intent/at nat-int?)
 (s/def :intent/replans nat-int?)
+(s/def :intent/max-nodes pos-int?)
 (s/def :intent/planned-chunks nat-int?)
 (s/def :path/waypoints (s/coll-of ::block-pos :kind vector?))
 (s/def :path/cost double?)
@@ -769,6 +770,9 @@
 (s/fdef wood/gather-next
   :args
   (s/cat :world (requires :player/pos :world/facts)))
+(s/fdef wood/return-walk
+  :args
+  (s/cat :world (requires :player/pos :world/facts :world/chunks)))
 (s/fdef place/spot
   :args
   (s/cat :world (requires :player/pos :world/chunks)
@@ -853,8 +857,8 @@
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
-   `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
-   `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held `drops/lying
-   `blaze/blazes `pearls/endermen `stairs/down-safe? `stairs/down-lay `build/safe-source?
-   `build/scoop-blocked? `fortress/next-move])
+   `memory/nearest-log `make/near `make/decide `wood/gather-next `wood/return-walk `place/spot
+   `place/ashore `window/view `path/plan `path/classify `entity/hostiles `entity/gone?
+   `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe? `stairs/down-lay
+   `build/safe-source? `build/scoop-blocked? `fortress/next-move])
 (s/def :stats/deaths pos-int?)

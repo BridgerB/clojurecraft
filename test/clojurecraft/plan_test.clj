@@ -249,6 +249,27 @@
     ;; the eye a hundred blocks off across a lake was climbed toward, a stair at a time
     (is (nil? (wood/trees-climb level [[108 69 8]])) "a trunk past the near band is no climb")))
 
+(deftest a-long-way-back-to-the-trees-keeps-its-search-budget
+  ;; Issue #186, R2/17: a nearby trunk required a long detour down the mine's stairs and
+  ;; around the mountain. Local searches spent their budget and the plan waited :no-log.
+  (let [w (assoc (remembered {[12 64 8] 136} [1.5 64.0 8.5]) :time/tick 0)
+        local (assoc (wood/log-walk w [12 64 8]) :intent/max-nodes 2)
+        i (wood/return-walk w)
+        routed (:plan/intent (intent/route! (assoc w :plan/intent i) i))]
+    (is (not (intent/routable? w local)) "the local search is partial, not a complete route")
+    (is (= :partial
+           (get-in (intent/route! (assoc w :plan/intent local) local) [:plan/intent :intent/route]))
+        "the executor honors a smaller explicit budget too")
+    (is (= (assoc local :intent/max-nodes wood/return-max-nodes) i))
+    (is (intent/routable? w i) "the larger search finds a complete route")
+    (is (= :found (:intent/route routed)) "the executor uses the same budget")
+    (is (seq (:intent/waypoints routed)))
+    (is (nil? (wood/return-walk (assoc w :plan/blacklist #{[12 64 8]}))))
+    (is (nil? (wood/return-walk (assoc w :player/pos [1.5 50.0 8.5]))))
+    (let [replanned (:plan/intent (intent/route! (assoc w :plan/intent routed) routed))]
+      (is (= :found (:intent/route replanned)))
+      (is (= 2 (:intent/replans replanned))))))
+
 (deftest a-trunk-far-below-is-descended-toward-when-out
   ;; real race (issue #57, snapshot real-4-s2-Clj_r07): out on a mountain top at y 238 with the
   ;; nearest trunk fifty-six below and sixty across, no walk reaching it, the plan waited :no-log.
