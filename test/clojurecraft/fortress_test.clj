@@ -10,10 +10,30 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.intent :as intent]
-            [clojurecraft.memory :as memory]))
+            [clojurecraft.memory :as memory]
+            [clojurecraft.plan :as plan]))
 
 (def netherrack (blocks/default-state :netherrack))
 (def air (blocks/default-state :air))
+
+(deftest a-reached-nether-entry-does-not-strand-an-unfinished-fortress
+  (let [w {:world/facts (memory/empty-facts)
+           :player/pos [0.5 64.0 0.5]
+           :time/now 0
+           :plan/goals #{:nether :fortress}
+           :plan/chain? true
+           :plan/reached #{:nether}
+           :player/dimension dimension/overworld}
+        table (filter #(#{:nether :fortress :return-nether} (:goal/id %)) plan/goals)
+        return-goal (first (filter #(= :return-nether (:goal/id %)) table))]
+    (is (= :return-nether (:goal/id (plan/choose w table))))
+    (is (= :nether (:goal/build return-goal)) "reuse the portal build and its supply planner")
+    (is (= #{:nether} (:plan/reached (plan/reach w table))) "milestones remain historical")
+    (is (= :fortress (:goal/id (plan/choose (assoc w :player/dimension dimension/nether) table))))
+    (is (nil? (plan/choose (assoc w :plan/reached #{:nether :fortress}) table)))
+    (is (nil? (plan/choose (assoc w :plan/goals #{:nether}) table)))
+    (is (nil? (plan/choose (dissoc (assoc w :plan/goals #{:fortress}) :plan/reached) table))
+        "a standalone trial does not build a portal")))
 
 (deftest fortress-bricks-use-the-indexed-current-sightings
   ;; Issue #328: once the tunnel could run, scanning all sightings every tick exhausted the

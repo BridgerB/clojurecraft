@@ -1248,8 +1248,13 @@
   (if (and (= action (packet/value :client-command :perform-respawn)) (<= (:sim/health sim) 0.0))
     (let [[x y z] (:sim/respawn sim)]
       (-> sim
-          (assoc :sim/health max-health :sim/air max-air :sim/player-pos [x y z])
-          (dissoc :sim/eating :sim/window)
+          (cond-> (not= dimension/overworld (:sim/dimension sim dimension/overworld))
+                  (assoc :sim/view #{}))
+          (assoc :sim/health max-health
+                 :sim/air max-air
+                 :sim/player-pos [x y z]
+                 :sim/dimension dimension/overworld)
+          (dissoc :sim/eating :sim/window :sim/view-at)
           (cond-> (:sim/difficulty sim) (with-food-value hunger/fresh))
           (update :sim/respawns inc)
           (send respawn)

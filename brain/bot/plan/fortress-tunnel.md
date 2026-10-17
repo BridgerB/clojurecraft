@@ -19,6 +19,9 @@ sourceRefs:
   - src/clojurecraft/fortress.clj#defmethod intent/run :tunnel-to
   - src/clojurecraft/fortress.clj#defmethod plan/next-intent :fortress
   - src/clojurecraft/fortress.clj#defmethod plan/done-by :at-fortress?
+  - src/clojurecraft/fortress.clj#defmethod plan/done-by :nether-access?
+  - src/clojurecraft/fortress.clj#defmethod plan/next-intent :return-nether
+  - test/clojurecraft/fortress_test.clj#a-reached-nether-entry-does-not-strand-an-unfinished-fortress
   - src/clojurecraft/build.clj#defn work-op
   - src/clojurecraft/plan.clj#defn elsewhere?
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-cell-beside-lava
@@ -49,6 +52,8 @@ The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) i
 
 ## The planner across dimensions
 A row with `:goal/dimension` is chosen only there (`plan/here?`). When no row can be chosen here but one is undone elsewhere (`elsewhere?`), the plan waits `:other-dimension` instead of ending, so `--until fortress` in the overworld does not report done, and a run toward `[:nether :fortress]` works the portal, then the fortress.
+
+After a chained run has reached `:nether`, a death can respawn it in the overworld while Nether targets remain undone (issue #287). The always row `:return-nether` works the existing `:nether` build and its supply planner there. Its `:nether-access?` predicate checks the unfinished Nether targets in play, not merely the historical entry milestone: it does nothing before the first entry, in another dimension, or after those targets are reached. Milestones remain historical; a standalone fortress trial does not acquire a portal-building prerequisite.
 
 ## Reach and climb
 A `:tunnel-to` is done at its target from `reach` 6 (`arrived?`, from the feet cell's centre), or from `:intent/reach` when the intent gives one; its steps go up or down first only past `climb-past` 3 blocks off, or past `:intent/climb` when given. The blaze rods' tunnel to a spawner goes into the open cell beside it on its floor (reach 0.5, climb 0), or to within 2 of it when none is known ([[blaze-rods]]): from 6 off, gym blaze-fortress-b stood in the wall four over the spawner, and with climb 3 blaze-fortress-c run 3 came up three under its floor, out of reach of every blaze and rod. A target straight over or under the feet used to leave no move at all; `moves` then tries every direction (`aside`).

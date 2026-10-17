@@ -237,6 +237,17 @@
   (boolean (and (= dimension/nether (dimension/of world))
                 (some #(arrived? world %) (bricks world)))))
 
+(defmethod plan/done-by :nether-access?
+  [world _]
+  (or (not= dimension/overworld (dimension/of world))
+      (not (contains? (:plan/reached world) :nether))
+      (empty? (plan/undone world (filter #(= dimension/nether (:goal/dimension %)) plan/goals)))))
+
+(defmethod plan/next-intent :return-nether
+  [world goal table]
+  (when-not (plan/done-by world goal)
+    (plan/next-intent world (assoc goal :goal/plan :build) table)))
+
 (defmethod plan/next-intent :fortress
   ;; tunnel to the nearest brick on record; with none, explore; with nowhere safe, or outside the
   ;; Nether (the planner waits there for a row of another dimension anyway), wait
