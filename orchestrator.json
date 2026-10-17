@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T05:26:58.815Z",
+  "at" : "2026-10-17T05:29:07.308Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 339,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at fortress: no-footing",
     "copilot" : true,
     "draft" : true,
