@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T02:48:53.736Z",
+  "at" : "2026-10-17T02:51:01.679Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -11,7 +11,7 @@
     "draft" : false,
     "nudges" : 8,
     "pr" : 324,
-    "session" : true
+    "session" : false
   }, {
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
@@ -105,9 +105,8 @@
   } ],
   "moves" : [ {
     "issue" : 62,
-    "move" : "wait",
-    "pr" : 324,
-    "why" : "session running"
+    "move" : "stuck",
+    "pr" : 324
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -176,5 +175,10 @@
     "move" : "nudge",
     "pr" : 324,
     "at" : "2026-10-17T02:47:48.071Z"
+  }, {
+    "issue" : 62,
+    "move" : "stuck",
+    "pr" : 324,
+    "at" : "2026-10-17T02:51:01.679Z"
   } ]
 }
