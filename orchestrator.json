@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T17:49:30.293Z",
+  "at" : "2026-10-17T17:50:39.174Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 385,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at water-bucket: needs-tool",
     "copilot" : true,
     "draft" : true,
@@ -55,10 +55,16 @@
     "pr" : 387,
     "session" : false
   }, {
-    "number" : 162,
-    "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 162,
+    "checks" : "pending",
+    "title" : "Bot stops at portal: no-path",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 388,
+    "session" : true
   }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
@@ -215,7 +221,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 162,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 388,
+    "why" : "session running"
   }, {
     "issue" : 62,
     "move" : "leave",
