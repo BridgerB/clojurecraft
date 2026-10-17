@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T16:22:54.497Z",
+  "at" : "2026-10-17T16:24:00.234Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 382,
@@ -13,7 +13,7 @@
     "checks" : "pending",
     "title" : "Bot stops at cast-one: no-station",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 381,
     "session" : false
@@ -191,8 +191,9 @@
   } ],
   "moves" : [ {
     "issue" : 380,
-    "move" : "ready",
-    "pr" : 381
+    "move" : "wait",
+    "pr" : 381,
+    "why" : "checks running"
   }, {
     "issue" : 338,
     "move" : "leave",
