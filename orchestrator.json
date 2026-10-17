@@ -1,22 +1,11 @@
 {
-  "at" : "2026-10-17T17:27:31.622Z",
+  "at" : "2026-10-17T17:28:41.363Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 385,
     "title" : "Bot stops at water-bucket: needs-tool",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 339,
-    "checks" : "green",
-    "title" : "Bot stops at fortress: no-footing",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 384,
-    "session" : false
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -185,9 +174,8 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 339,
-    "move" : "merge",
-    "pr" : 384
+    "issue" : 385,
+    "move" : "assign"
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -792,5 +780,9 @@
     "move" : "merge",
     "pr" : 384,
     "at" : "2026-10-17T17:27:31.622Z"
+  }, {
+    "issue" : 385,
+    "move" : "assign",
+    "at" : "2026-10-17T17:28:41.363Z"
   } ]
 }
