@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T10:49:11.096Z",
+  "at" : "2026-10-17T10:51:27.984Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 363,
-    "title" : "Bot stops at portal: boxed",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 363,
+    "checks" : "pending",
+    "title" : "Bot stops at portal: boxed",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 364,
+    "session" : true
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -16,17 +22,6 @@
     "title" : "Bot stops at fortress: no-pickaxe",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 286,
-    "checks" : "green",
-    "title" : "Bot stops at fortress: blocked",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 362,
-    "session" : false
   }, {
     "number" : 284,
     "title" : "Bot stops at fortress: no-path",
@@ -174,6 +169,11 @@
     "copilot" : false
   } ],
   "moves" : [ {
+    "issue" : 363,
+    "move" : "wait",
+    "pr" : 364,
+    "why" : "session running"
+  }, {
     "issue" : 338,
     "move" : "leave",
     "why" : "hands-off label"
@@ -181,10 +181,6 @@
     "issue" : 296,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 286,
-    "move" : "merge",
-    "pr" : 362
   }, {
     "issue" : 196,
     "move" : "leave",
