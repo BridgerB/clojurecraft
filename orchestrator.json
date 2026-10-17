@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T20:14:29.442Z",
+  "at" : "2026-10-17T20:21:09.993Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -11,7 +11,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 393,
-    "session" : true
+    "session" : false
   }, {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : true,
@@ -219,9 +219,8 @@
   } ],
   "moves" : [ {
     "issue" : 392,
-    "move" : "wait",
-    "pr" : 393,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 393
   }, {
     "issue" : 385,
     "move" : "leave",
@@ -952,5 +951,10 @@
     "issue" : 392,
     "move" : "assign",
     "at" : "2026-10-17T20:08:52.895Z"
+  }, {
+    "issue" : 392,
+    "move" : "ready",
+    "pr" : 393,
+    "at" : "2026-10-17T20:21:09.993Z"
   } ]
 }
