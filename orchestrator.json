@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T11:54:11.848Z",
+  "at" : "2026-10-17T11:59:34.209Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 370,
@@ -20,13 +20,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 366,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at flint-and-steel: out-of-reach",
     "copilot" : true,
     "draft" : true,
     "nudges" : 0,
     "pr" : 367,
-    "session" : true
+    "session" : false
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -185,9 +185,8 @@
   } ],
   "moves" : [ {
     "issue" : 366,
-    "move" : "wait",
-    "pr" : 367,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 367
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -587,5 +586,10 @@
     "issue" : 366,
     "move" : "assign",
     "at" : "2026-10-17T11:49:48.659Z"
+  }, {
+    "issue" : 366,
+    "move" : "ready",
+    "pr" : 367,
+    "at" : "2026-10-17T11:59:34.209Z"
   } ]
 }
