@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T04:00:17.775Z",
+  "at" : "2026-10-17T04:02:26.389Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -56,6 +56,11 @@
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 156,
+    "title" : "Bot stops at portal-kit: stuck",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 157,
