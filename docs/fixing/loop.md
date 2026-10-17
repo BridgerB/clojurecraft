@@ -83,7 +83,7 @@ bb probe log <id>                            # when done: artifact into /tmp/pro
 
 - `label` is unique: the issue and a word (`142-pool`, `142-after`); the run's title is `probe <label>` and `bb probe` refuses a taken one.
 - `command` is one shell command from the checkout root, with Java, the Clojure CLI and Babashka. Its whole output is `out/run.log`; anything else written under `out/` comes back in the artifact `probe-<id>`.
-- `worlds` (`R1,R2,R3,R4` or a subset) restores the captured sim worlds a snapshot or simrace run needs. A snapshot names its world file (`cache/sim-worlds/R4/35.edn.gz`).
+- `worlds` (`R1,R2,R3,R4` or a subset) restores the captured sim worlds a snapshot or simrace run needs, each set's Nether with them. A snapshot names its world file (`cache/sim-worlds/R4/35.edn.gz`) and, past a portal, its Nether's (`:snapshot/nether-file`).
 - `bb probe run` refuses a branch that is not pushed as it stands: the runner checks out origin's branch, nothing local.
 - Expect queueing: the rounds hold most runners. Batch every question for an issue into one script rather than dispatching one probe a question, and never dispatch the same probe twice.
 
@@ -105,7 +105,7 @@ You cannot debug interactively, and a linear script dies at its first bad call, 
 (doseq [p *command-line-args*]
   (try
     (let [snap (capture/read-world p)
-          [world _sim] (simrace/moment snap (simrace/prepared (capture/read-world (:snapshot/file snap))))]
+          [world _sim] (simrace/moment snap (simrace/world-for! snap))]
       (out "==" p (pr-str (:snapshot/signature snap)))
       (ask " feet" #(intent/feet world))
       (ask " intent" #(:plan/intent world))
