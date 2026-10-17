@@ -10,7 +10,9 @@ name: race
 # filed. The board (BOARD lines in the Race step's log) shows the bots playing each minute. Every
 # 20 minutes, staggered by runner, the runner reports the bots that ended since its last report
 # (bb churn batch): their failures to the issues, their facts to the results page on gh-pages as
-# a batch of this run (bb page), a win as a release. Nothing waits for the slowest runner.
+# a batch of this run (bb page), a win as a release. Nothing waits for the slowest runner. The
+# snapshots a batch files on go to the hour's evidence release (evidence-<day>-<hour>) before its
+# comments name them: a cancel, or the artifact's 7 days, never takes an issue's evidence.
 
 # Lanes (fleet.yml, ci/fleet.edn): each run is one lane, the runner k of the old matrix, one job's
 # worth (GitHub caps a job at 6 h). The fleet dispatches lanes into free runners, cancels the newest
@@ -205,13 +207,15 @@ jobs:
           fi
       - name: Last report
         # the bots that ended since the last batch, the cut ones among them; a cancel (a merge's push)
-        # runs it too, so nothing a round played is lost to the next round
+        # runs it too, so nothing a round played is lost to the next round. Its conversions stop
+        # after 120 s: GitHub kills a cancelled job about four minutes on (race 38962622402 lost
+        # its artifact so), and the snapshots it files go to the evidence release at once (bb churn)
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           bb churn batch real data/race "race-$GITHUB_SHA-${{ matrix.runner }}" "$GITHUB_RUN_ID" "$GITHUB_SHA" \
-            "$(git show -s --format=%cI "$GITHUB_SHA")" "${{ matrix.runner }}" || echo "churn: the last report failed"
+            "$(git show -s --format=%cI "$GITHUB_SHA")" "${{ matrix.runner }}" 120 || echo "churn: the last report failed"
       - name: Summary
         if: always()
         env:
@@ -231,12 +235,12 @@ jobs:
         run: |
           for k in $(seq 1 "$SERVERS"); do WORLD="$PWD/work/world-$k" bb server stop || true; done
       - name: Pack
-        if: always()              # a cancelled round's recordings too: the issues its batches filed name them
+        if: always()              # a cancelled round's recordings too, when the job lives long enough
         run: |
           for f in data/race/s*/*.edn; do [ -f "$f" ] && [ "$(basename "$f")" != summary.edn ] && zstd -q -3 -T0 --rm "$f"; done
           for k in $(seq 1 "$SERVERS"); do cp "work/world-$k/server.log" "data/race/s$k/server.log" 2>/dev/null || true; done
       - uses: actions/upload-artifact@v7
-        if: always()              # a cancelled round's artifact too: the issues its batches filed name it
+        if: always()              # a cancelled round's artifact too; the snapshots the issues name are in the evidence releases
         with:
           name: race-${{ github.sha }}-${{ matrix.runner }}
           retention-days: 7

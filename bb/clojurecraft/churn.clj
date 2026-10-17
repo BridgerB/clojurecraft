@@ -24,6 +24,13 @@
    recurs is :run/recurs?, and only those are filed (bb failures): an issue is open only while it
    has a reproducible snapshot, which bb issue-check fetch takes and the fix's check judges.
 
+   The snapshots a batch files on are uploaded for good before its comments are written: to the
+   release of the hour (evidence-tag, a prerelease), each under a name no other lane or run has
+   (asset-name). The comment names that asset, so the evidence is there the moment the comment
+   is, whatever happens to the job after: a merge cancels every lane, and a cancelled job often
+   never reaches its artifact's upload (race 38962622402, issue #37's evidence lost). A run
+   whose snapshot did not upload is not filed. The artifact still holds the recordings and logs.
+
    Babashka runs this; nothing here requires the bot."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
@@ -40,9 +47,14 @@
 (def fresh {:churn/offsets {} :churn/batch 0 :churn/counts {}})
 (def snapshots-dir "snapshots")        ; in data-dir: a real batch's snapshots, uploaded with the artifact
 (def budget-ms 600000)                 ; wall time a batch's conversions or judges may take: never past the job's last report
+(def release-prefix "evidence-")       ; a release an hour holds the snapshots the hour's comments name
+(def repo-default "BridgerB/clojurecraft") ; gh's repository when the workflow does not say
 (def per-signature 2)                  ; failures a batch converts or judges of each signature: the most a fix's check judges (issue-check)
 (def real-heap "-J-Xmx3g")             ; the conversion's JVM, beside two 3 GB servers and two 2 GB races on a 16 GB runner
 (def sim-heap "-J-Xmx2g")              ; the judge's JVM, beside the sim race's (ci/simrace.edn's heap)
+(def real-cpu "-J-XX:ActiveProcessorCount=1") ; the conversion's JVM sized to one core (its GC, its compilers): the race keeps the rest
+(def real-nice 0)                      ; the conversion's nice level: an equal share beside the servers and bots (see convert!)
+(def sim-nice 19)                      ; the judge's beside the sim race: judges take seconds
 
 ;; ---------------------------------------------------------------- a batch, as values
 
@@ -103,16 +115,20 @@
        "\n```\n"))
 
 (defn convertible
-  "A real batch's failures to turn into snapshots: the failed runs (failures/failed) of a real
-   bot whose recording is known (:run/bot, :run/dir), the first per-signature of each
-   signature, as its comment lists them: a fold takes from half a minute to four on the runner
-   (probe 38940300595), and a fix's check judges two at most."
+  "A real batch's failures to turn into snapshots, in the order to fold them: the failed runs
+   (failures/failed) of a real bot whose recording is known (:run/bot, :run/dir), per-signature
+   of each signature (a fix's check judges two at most), the smallest recordings (:run/bytes)
+   first, and every signature's first before any second. A fold's time grows with its recording
+   and the batch's budget stops the rest: on a race's runner they took 30 to 450 s (race
+   38962774798), so the cheap ones and the most signatures come first."
   [runs]
   (->> (failures/failed runs)
        (filter #(and (= :real (failures/source %)) (:run/bot %) (:run/dir %)))
        (group-by failures/key-of)
        vals
-       (mapcat #(take per-signature %))))
+       (mapcat #(map-indexed vector (take per-signature (sort-by (fn [r] (:run/bytes r 0)) %))))
+       (sort-by (fn [[i r]] [i (:run/bytes r 0)]))
+       (map second)))
 
 (defn snapshot-name
   "The file a real run's snapshot is kept in: real-<runner>-<server dir>-<bot>.edn.gz, one bot of
@@ -195,6 +211,45 @@
                                          :else :passed)
                                   lines)))))
 
+(defn evidence-tag
+  "The release a batch reported at now (an ISO instant) uploads its snapshots to:
+   evidence-<UTC day>-<hour>. An hour, not a day: GitHub holds 1000 assets a release, and the
+   comments of 2026-10-16 named about 2,000 snapshots in one day."
+  [now]
+  (str release-prefix (subs now 0 10) "-" (subs now 11 13)))
+
+(defn file-of "A path's last component." [path] (last (str/split (str path) #"/")))
+
+(defn asset-name
+  "The name a run's snapshot is uploaded under: <run>-<file>. The file alone repeats: a sim
+   snapshot is <set>-<world>-<seed> and a real one real-<runner>-<s>-<bot>, in every run of a
+   lane; the run id is unique to one lane's job."
+  [run r]
+  (str run "-" (file-of (:run/snapshot r))))
+
+(defn evidenced
+  "runs once their snapshots were uploaded: each reproduced run (:run/recurs?) whose asset-name
+   the release tag holds (assets, a set of names) gets :run/release and :run/asset, what its
+   comment names (failures/snapshot-note); one whose upload failed loses :run/recurs?, so no
+   comment names evidence that may vanish."
+  [runs run tag assets]
+  (mapv (fn [r]
+          (let [a (asset-name run r)]
+            (cond (not (:run/recurs? r)) r
+                  (contains? assets a) (assoc r :run/release tag :run/asset a)
+                  :else (dissoc r :run/recurs?))))
+        runs))
+
+(defn evidence-text
+  "What a batch's upload did, one line for the log and the job's summary: of the reproduced runs
+   before (evidenced's input), how many have their snapshot in release tag after, and how many
+   did not upload (not filed)."
+  [before after tag]
+  (let [up (count (filter :run/release after))]
+    (str "evidence: " up
+         " snapshots in release " tag
+         "; not uploaded (not filed) " (- (count (filter :run/recurs? before)) up))))
+
 ;;;; I/O: the record files, the batch's copy, the reports ;;;;
 
 (defn read-state
@@ -232,55 +287,119 @@
     (spit (str (fs/file data-dir held-file)) (pr-str (vec left)))))
 
 (defn budgeted!
-  "Run clojure with args, niced under the lane's own work, its output to log, stopped at
-   budget-ms (what it did not reach stays unreproduced, never filed); returns the log's lines."
-  [log args]
-  (let [proc (apply p/process {:out log :err :inherit} "nice" "-n" "19" "clojure" args)]
+  "Run clojure with args at nice level (under the lane's own work), its output to log, stopped at
+   budget (ms: what it did not reach stays unreproduced, never filed); returns the log's lines."
+  [log level budget args]
+  (let [proc (apply p/process {:out log :err :inherit} "nice" "-n" (str level) "clojure" args)]
     (when-not (.waitFor ^Process (:proc proc)
-                        (long budget-ms)
+                        (long budget)
                         java.util.concurrent.TimeUnit/MILLISECONDS)
       (p/destroy-tree proc)
-      (println "churn: out of time:" log))
+      (println "churn: out of time:" (str log)))
     (str/split-lines (slurp log))))
 
+(defn recording
+  "A real run's recording while its lane plays: <data-dir>/<dir>/<bot>.edn."
+  [data-dir r]
+  (str (fs/path data-dir (:run/dir r) (str (:run/bot r) ".edn"))))
+
 (defn convert!
-  "Turn a real batch's failures (convertible) into snapshots: one clojure -M:simrace
-   --from-recording over their recordings (<data-dir>/<dir>/<bot>.edn), its heap held to
-   real-heap, writing <data-dir>/snapshots (gaps under its gaps/) and its lines to
-   snapshots/convert-<n>.log (budgeted!). Returns the REAL and GAP lines it printed (line-of)."
-  [{:keys [data-dir run runner]} n runs]
-  (let [todo (convertible runs)
+  "Turn a real batch's failures (convertible, each recording's size read first) into snapshots:
+   one clojure -M:simrace --from-recording over their recordings, its heap held to real-heap and
+   its JVM to one core (real-cpu), at real-nice, writing <data-dir>/snapshots (gaps under its
+   gaps/) and its lines to snapshots/convert-<n>.log (budgeted!). Returns the REAL and GAP lines
+   it printed (line-of).
+
+   Not at nice 19: beside the race's servers and bots a fold at 19 gets the scraps of a busy
+   runner. Race 38962774798 (lane 8) folded Clj_r04 in 197 s and Clj_r08 in 140 s there, and four
+   of its five batches ran out of the 10 minutes with nothing kept; the same two fold in 27 and
+   37 s on an idle runner, 65 and 97 s at nice 0 beside four CPU-bound loops (probe 38982758264),
+   78 and 100 s with the JVM held to one core (probe 38983529740), 300 and 416 s at nice 10
+   (probe 38982746654), and at nice 19 beside those loops not both in 25 minutes (probe
+   38982735367)."
+  [{:keys [data-dir run runner budget]} n runs]
+  (let [todo (convertible (mapv #(cond-> %
+                                   (and (:run/dir %) (fs/exists? (recording data-dir %)))
+                                   (assoc :run/bytes (fs/size (recording data-dir %))))
+                                runs))
         out (fs/path data-dir snapshots-dir)]
     (when (seq todo)
       (fs/create-dirs out)
       (let [lines (vec (keep line-of
                              (budgeted! (fs/file out (str "convert-" n ".log"))
-                                        [real-heap "-M:simrace" "--from-recording"
-                                         (str/join ","
-                                                   (map #(str (fs/path data-dir
-                                                                       (:run/dir %)
-                                                                       (str (:run/bot %) ".edn")))
-                                                        todo)) "--name"
+                                        real-nice
+                                        budget
+                                        [real-heap real-cpu "-M:simrace" "--from-recording"
+                                         (str/join "," (map #(recording data-dir %) todo)) "--name"
                                          (str/join "," (map #(snapshot-name runner %) todo)) "--out"
                                          (str out) "--round" (str run)])))]
-        (println "churn:" (conversion-text lines))
+        (println "churn:" (conversion-text lines) "of" (count todo) "to fold")
         lines))))
 
 (defn judge!
   "Judge a sim batch's failures' snapshots (judgeable) as the fix's check will, on this commit:
-   one clojure -M:simrace --judge over them, its heap held to sim-heap, its lines to
-   <data-dir>/snapshots/judge-<n>.log (budgeted!). Returns the JUDGE lines (judge-line-of)."
-  [{:keys [data-dir]} n runs]
+   one clojure -M:simrace --judge over them, its heap held to sim-heap, at sim-nice, its lines
+   to <data-dir>/snapshots/judge-<n>.log (budgeted!). Returns the JUDGE lines (judge-line-of)."
+  [{:keys [data-dir budget]} n runs]
   (let [todo (filter #(fs/exists? (str (:run/snapshot %))) (judgeable runs)) ; one missing file would stop them all
         out (fs/path data-dir snapshots-dir)]
     (when (seq todo)
       (fs/create-dirs out)
       (let [lines (vec (keep judge-line-of
                              (budgeted! (fs/file out (str "judge-" n ".log"))
+                                        sim-nice
+                                        budget
                                         [sim-heap "-M:simrace" "--judge"
                                          (str/join "," (map #(str (:run/snapshot %)) todo))])))]
         (println "churn:" (judging-text lines))
         lines))))
+
+(defn gh-repo "The repository gh acts on." [] (or (failures/repo) repo-default))
+
+(defn release-assets
+  "The asset names release tag holds, a set; nil when there is no such release."
+  [tag]
+  (let [r (p/shell {:out :string :err :string :continue true}
+                   "gh" "release"
+                   "view" tag
+                   "--repo" (gh-repo)
+                   "--json" "assets"
+                   "--jq" ".assets[].name")]
+    (when (zero? (:exit r)) (set (str/split-lines (:out r))))))
+
+(defn upload!
+  "Upload the reproduced runs' snapshots (:run/recurs?) to release tag for good, each copied
+   under dir as its asset-name first; the release is made (a prerelease, never the latest, at
+   sha) by the hour's first batch to need it, and a second lane making it at the same moment
+   only fails to. Returns the asset names the release holds after, #{} when it holds none."
+  [dir run sha tag runs]
+  (let [copies (vec (for [r runs
+                          :when (and (:run/recurs? r) (fs/exists? (str (:run/snapshot r))))]
+                      [(str (:run/snapshot r)) (str (fs/path dir (asset-name run r)))]))
+        files (mapv second copies)]
+    (cond (empty? files) #{}
+          :else
+          (do (fs/create-dirs dir)
+              (doseq [[from to] copies] (fs/copy from to {:replace-existing true}))
+              (when-not (release-assets tag)
+                (p/shell {:continue true}
+                         "gh" "release"
+                         "create" tag
+                         "--repo" (gh-repo)
+                         "--target" sha
+                         "--prerelease" "--latest=false"
+                         "--title" tag
+                         "--notes"
+                         (str "The snapshots the bot-failure issues' comments of this hour"
+                              " name (bb churn): each a failure's moment the model"
+                              " reproduced, <run>-<file>.")))
+              (apply p/shell
+                     {:continue true}
+                     "gh" "release"
+                     "upload" tag
+                     "--repo" (gh-repo)
+                     "--clobber" files)
+              (or (release-assets tag) #{})))))
 
 (defn report!
   "Report a batch's runs: the issues, the job summary's wall, the page's batch, a win."
@@ -318,21 +437,33 @@
           (let [after (next-state state lines runs)
                 real? (= :real (:kind job))
                 said (if real? (convert! job n runs) (judge! job n runs))
-                runs (cond (empty? said) runs
-                           real? (converted runs said (:runner job))
-                           :else (judged-runs runs said))]
-            (when-let [summary (and (seq said) (System/getenv "GITHUB_STEP_SUMMARY"))]
-              (spit summary
-                    (str (if real? (conversion-text said) (judging-text said)) "\n\n")
-                    :append
-                    true))
+                reproduced (cond (empty? said) runs
+                                 real? (converted runs said (:runner job))
+                                 :else (judged-runs runs said))
+                tag (evidence-tag (str (java.time.Instant/now)))
+                runs (evidenced reproduced
+                                (:run job)
+                                tag
+                                (upload! (fs/path batches-dir (str n) "evidence")
+                                         (:run job)
+                                         (:sha job)
+                                         tag
+                                         reproduced))
+                said-text (when (seq said)
+                            (str (if real? (conversion-text said) (judging-text said))
+                                 "\n"
+                                 (evidence-text reproduced runs tag)))]
+            (when said-text (println "churn:" (evidence-text reproduced runs tag)))
+            (when-let [summary (and said-text (System/getenv "GITHUB_STEP_SUMMARY"))]
+              (spit summary (str said-text "\n\n") :append true))
             (report! job n dir runs (:churn/counts after))
             (spit (str (fs/file data-dir state-file)) (pr-str after))))))
 
 (defn -main
-  "batch <kind> <data-dir> <artifact> <run> <sha> <code-at> <runner>: report the runs ended since
-   the last batch."
-  [& [cmd kind data-dir artifact run sha code-at runner]]
+  "batch <kind> <data-dir> <artifact> <run> <sha> <code-at> <runner> [budget-s]: report the runs
+   ended since the last batch, its conversions or judges stopped after budget-s (budget-ms when
+   not given; a cancelled job's last report has a few minutes before GitHub kills it)."
+  [& [cmd kind data-dir artifact run sha code-at runner budget-s]]
   (case cmd
     "batch"
     (batch! {:kind (keyword kind)
@@ -341,7 +472,12 @@
              :run (parse-long run)
              :sha sha
              :code-at code-at
-             :runner (parse-long runner)})
-    (do (println
-         "usage: bb churn batch <real|sim> <data-dir> <artifact> <run> <sha> <code-at> <runner>")
-        (System/exit 2))))
+             :runner (parse-long runner)
+             :budget (or (some-> budget-s
+                                 parse-long
+                                 (* 1000))
+                         budget-ms)})
+    (do
+      (println
+       "usage: bb churn batch <real|sim> <data-dir> <artifact> <run> <sha> <code-at> <runner> [budget-s]")
+      (System/exit 2))))

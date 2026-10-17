@@ -6,7 +6,8 @@ name: simrace
 # next at once (issue #127). The real-server race (race.yml) has the other lanes; a code merge
 # has the fleet restart both with the merged code. Every failed run carries its signature. Every 20 minutes,
 # staggered by runner, the runner reports the runs that ended since its last report (bb churn
-# batch): failures to the issues, one per signature, facts to the results page as a batch.
+# batch): failures to the issues, one per signature, facts to the results page as a batch; the
+# snapshots it files on go to the hour's evidence release first (bb churn).
 
 # Lanes, as race.yml: each run is one lane (the runner k of the old matrix, a share of the worlds),
 # dispatched, given back and replaced by the fleet (fleet.yml, ci/fleet.edn).
@@ -150,13 +151,14 @@ jobs:
           wait "$churn" || true
           grep -E '^SIMRACE ' data/simrace/simrace.log || tail -n 40 data/simrace/simrace.log
       - name: Last report
-        # the runs that ended since the last batch; a cancel (a merge's push) runs it too
+        # the runs that ended since the last batch; a cancel (a merge's push) runs it too, its judges
+        # stopped after 120 s (GitHub kills a cancelled job about four minutes on)
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           bb churn batch sim data/simrace "simrace-$GITHUB_SHA-${{ matrix.runner }}" "$GITHUB_RUN_ID" "$GITHUB_SHA" \
-            "$(git show -s --format=%cI "$GITHUB_SHA")" "${{ matrix.runner }}" || echo "churn: the last report failed"
+            "$(git show -s --format=%cI "$GITHUB_SHA")" "${{ matrix.runner }}" 120 || echo "churn: the last report failed"
       - name: Summary
         if: always()
         run: |
@@ -167,7 +169,7 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
-        if: always()              # a cancelled round's artifact too: the issues its batches filed name its snapshots
+        if: always()              # a cancelled round's artifact too; the snapshots the issues name are in the evidence releases
         with:
           name: simrace-${{ github.sha }}-${{ matrix.runner }}
           retention-days: 7

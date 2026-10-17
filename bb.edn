@@ -9,12 +9,17 @@
   ;; ---------------------------------------------------------------- checks, as CI runs them
   test {:doc "Every test, in parallel; args select: -n ns, -v ns/var, -x ns"
         :task (apply clojure "-M:test" *command-line-args*)}
-  test:bb {:doc "The Babashka tooling's tests (test-bb/): the results' writers and the site"
-           :extra-paths ["test-bb"]
-           :requires ([clojure.test :as ct] [clojurecraft.page-test] [clojurecraft.site-test])
-           :task (let [{:keys [fail error]} (ct/run-tests 'clojurecraft.page-test
-                                                          'clojurecraft.site-test)]
-                   (when (pos? (+ fail error)) (System/exit 1)))}
+  test:bb
+  {:doc "The Babashka tooling's tests (test-bb/): the evidence, the results' writers and the site"
+   :extra-paths ["test-bb"]
+   :requires ([clojure.test :as ct]
+              [clojurecraft.evidence-test]
+              [clojurecraft.page-test]
+              [clojurecraft.site-test])
+   :task (let [{:keys [fail error]} (ct/run-tests 'clojurecraft.evidence-test
+                                                  'clojurecraft.page-test
+                                                  'clojurecraft.site-test)]
+           (when (pos? (+ fail error)) (System/exit 1)))}
   fmt {:doc "Format with zprint (.zprint.edn); args: files, else the whole repo"
        :task (apply clojure "-M:fmt" "fix" *command-line-args*)}
   fmt:check {:doc "Fail when a file is not as zprint lays it out" :task (clojure "-M:fmt" "check")}
