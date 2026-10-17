@@ -20,6 +20,7 @@
 (def far-radius 256)                  ; a trunk remembered on the way in, past the near band
 (def far-candidates 3)                ; routes planned on the way back to the surface
 (def max-trunk 8)                     ; logs followed up one trunk column
+(def descend-reach 96)                ; blocks on the plane to a trunk far below the eye a staircase down is cut toward
 (def cross-reach 48)                  ; blocks along the way to a trunk a crossing looks for open water
 (def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
 (def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
@@ -133,6 +134,34 @@
            :intent/dir dir
            :intent/for :surface})))))
 
+(defn trees-descend
+  "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk below
+   the eye by more than the near band's twelve: stairs down toward it, one length
+   (stone/stair-depth, never below the trunk's feet) at a time, the planner looking again
+   between. The way down from a height is a cut one: trees-climb's mirror. Only a trunk within
+   descend-reach on the plane, and never from a cell where a climb died :boxed. Real race
+   (issue #57, snapshot real-4-s2-Clj_r07): bot Clj_r07 cut stairs up out of a stone pocket
+   to the top of a mountain at y 238 with 844 trunks remembered, the nearest fifty-six below
+   and sixty across; the near band stops forty-eight out and twelve down, the hunt's two
+   targets were ledges no route reached, and the plan waited :no-log until it failed."
+  [world trunks]
+  (let [feet (intent/feet world)
+        fy (physics/y-of feet)]
+    (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
+      (when-let [[tx ty tz] (first (filter (fn [[tx ty tz]]
+                                             (and (> (- (physics/y-of (game/eye world)) ty) 12)
+                                                  (<= (physics/horizontal-distance (:player/pos
+                                                                                    world)
+                                                                                   [tx 0 tz])
+                                                      descend-reach)))
+                                           trunks))]
+        (let [[fx _ fz] feet]
+          {:intent/kind :stairs-down
+           :intent/to-y (max ty (- fy stone/stair-depth))
+           :intent/dir
+           (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)])
+           :intent/for :trees})))))
+
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
    a route reaches (intent/routable?), under the open sky or not. Not out of the ground
@@ -171,7 +200,8 @@
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
                  :intent/for :surface}))
-          (trees-climb world trunks)))))
+          (trees-climb world trunks)
+          (trees-descend world trunks)))))
 
 (defn near-walk
   "A walk to the nearest standing trunk in the near band (search-radius, no more than 12 above or

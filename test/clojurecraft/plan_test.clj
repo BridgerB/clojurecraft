@@ -235,6 +235,23 @@
     ;; the eye a hundred blocks off across a lake was climbed toward, a stair at a time
     (is (nil? (wood/trees-climb level [[108 69 8]])) "a trunk past the near band is no climb")))
 
+(deftest a-trunk-far-below-is-descended-toward-when-out
+  ;; real race (issue #57, snapshot real-4-s2-Clj_r07): out on a mountain top at y 238 with the
+  ;; nearest trunk fifty-six below and sixty across, no walk reaching it, the plan waited :no-log.
+  ;; Out is not at the trees: stairs down toward the trunk, a length at a time
+  (let [w (remembered {[12 9 8] 136 [12 10 8] 136} [8.5 64.0 8.5])
+        trunk (first (memory/nearest-first (game/eye w)
+                                           wood/far-radius
+                                           (memory/positions-now w blocks/log-states)))]
+    (is (stairs/out? w (intent/feet w)) "on open ground under the sky")
+    (is (= {:intent/kind :stairs-down :intent/to-y 58 :intent/dir [1 0] :intent/for :trees}
+           (wood/trees-descend w [trunk]))
+        "down toward the trunk, one length")
+    (is (nil? (wood/trees-descend w [[400 9 8]])) "a trunk past descend-reach is no descent")
+    (is (nil? (wood/trees-descend w [[12 60 8]])) "a trunk within the near band is walked to")
+    (is (nil? (wood/trees-descend (assoc w :plan/boxed-at #{(intent/feet w)}) [trunk]))
+        "never from a cell where a climb died boxed")))
+
 (deftest a-trunk-across-powder-snow-is-walked-to
   ;; sim race 38811417241 runner 2 (issue #87, world R2/20): out of the mine on one cobblestone
   ;; block in a powder-snow field, a spruce eight blocks off; powder snow was neither floor nor
