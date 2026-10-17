@@ -332,7 +332,8 @@
         at (fn [blocks]
              (let [w (assoc (standing 64 :stone_pickaxe :cobblestone)
                             :world/chunks {[0 0] (world/column blocks)}
-                            :plan/intent down)]
+                            :plan/intent down)
+                   w (assoc-in w [:player/inventory 1 :count] 64)]
                (:plan/intent (intent/run w down tick))))]
     (is (= [:open [0 1]] ((juxt :intent/stage :intent/dir) (at cave)))
         "the stair goes south into the rock, nothing laid")
@@ -345,6 +346,39 @@
                                                  :when (not= [x z] [5 5])]
                                              [[x y z] blocks/air]))))))
         "with air every way, a floor is laid as before")))
+
+(defn carrying
+  "w holding n cobblestone in hotbar slot 8, beside what it holds."
+  [w n]
+  (assoc-in w [:player/inventory 8] {:item (blocks/items :cobblestone) :count n}))
+
+(deftest a-stair-down-lays-floors-only-while-the-filler-reaches-its-depth
+  ;; race 38984748832 runner 3 bot Clj_r01 (issue #37): the mine's stairs down broke into a cave at
+  ;; y 50 holding 16 cobblestone and 25 dirt, floored thirty-one stairs down through the open cave,
+  ;; and at y 19 stood on a one-block dirt bridge with nothing left to lay, every stair refused for
+  ;; the air under it, :boxed. Here air lies every way round the feet down to y 58, six stairs
+  (let [air (into {}
+                  (for [x (range 16)
+                        y (range 58 64)
+                        z (range 16)
+                        :when (not= [x z] [5 5])]
+                    [[x y z] blocks/air]))
+        down {:intent/kind :stairs-down :intent/to-y 58 :intent/status :active}
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        at (fn [n]
+             (let [w (-> (standing 64 :stone_pickaxe)
+                         (carrying n)
+                         (assoc :world/chunks {[0 0] (world/column air)} :plan/intent down))]
+               (:plan/intent (intent/run w down tick))))
+        need (+ stairs/lay-reserve 6)]
+    (is (= :lay (:intent/stage (at need))) "enough to floor six stairs and keep the reserve: laid")
+    (is (not= :lay (:intent/stage (at (dec need)))) "one short: no floor, the staircase turns")
+    (is (= 1 (:intent/turns (at (dec need)))))
+    (is (stairs/floors-affordable? (carrying (standing 64) 1)
+                                   {:intent/kind :stairs-up :intent/to-y 90}
+                                   [5 64 5]
+                                   [[6 64 5]])
+        "a climb's step is not a cave's floor: never held back")))
 
 (deftest a-tunnel-step-the-dig-refuses-is-planned-again
   ;; sim race 38762695024 runner 8 (issue #171, world R1/40): a tunnel for gravel at y 40 ran
