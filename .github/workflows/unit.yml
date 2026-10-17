@@ -1,8 +1,8 @@
 name: unit
 
 # Every test but the forest property, all namespaces and vars in parallel on one runner's cores
-# (clojurecraft.runner, eftest), then the static checks: bb test and bb check, what bb ci runs on
-# a Mac. One definition, called by test.yml on every push and by issue.yml on a fix/<issue>-* pull
+# (clojurecraft.runner, eftest), the Babashka tooling's own tests, then the static checks: bb
+# test, bb test:bb and bb check, what bb ci runs on a Mac. One definition, called by test.yml on every push and by issue.yml on a fix/<issue>-* pull
 # request, so a fix that breaks an older assertion is seen before main is (issue #98: the bank
 # test asserted the mechanism #75 replaced, and main's suite was red after the merge).
 
@@ -40,5 +40,7 @@ jobs:
       # bb ci, in two steps so a red one says which half failed; the same tasks as on a Mac
       - name: Unit, property and simulation tests (bb test)
         run: bb test
+      - name: The Babashka tooling's tests (bb test:bb - the results' writers and the site)
+        run: bb test:bb
       - name: Static checks (bb check - format, lint, idioms, ns forms, unused vars, brain)
         run: bb check

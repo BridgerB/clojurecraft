@@ -1,0 +1,65 @@
+;; The road from spawn to a dead Ender Dragon, as the results page draws it (bb site, issue #116).
+;; The race's own chain comes from goals.edn up to ci/race.edn's :race/until (page/chain), so it
+;; follows the bot; this file adds what the races do not play yet, in the order the game forces
+;; (issue #10): the goal rows that exist only as asides (proven, if at all, in a gym), then the
+;; stages no goal row plays yet. When the race is raised past a stage, the chain takes it over and
+;; its line here is ignored. Each stage says in a few words what done means, its phase (the page
+;; colours and groups by it) and the roadmap issue that carries it.
+{:road/after [:blaze-rods :ender-pearls :eyes-of-ender :eye-throw :stronghold :portal-room]
+ :road/unbuilt [{:id :end-portal :issue 266 :says "twelve eyes in the frames: the end portal lit"}
+                {:id :the-end :issue 266 :says "through the end portal, standing in the End"}
+                {:id :dragon :issue 267 :says "crystals broken, the dragon killed: the win"}]
+ :road/phases {:wood :wood
+               :kit :wood
+               :pickaxe :wood
+               :cobblestone :stone
+               :stone-pickaxe :stone
+               :furnace :stone
+               :ingots :iron
+               :bucket :iron
+               :water-bucket :iron
+               :flint-and-steel :iron
+               :iron-kit :iron
+               :portal-kit :portal
+               :cast-one :portal
+               :portal :portal
+               :nether :nether
+               :fortress :nether
+               :blaze-rods :nether
+               :ender-pearls :stronghold
+               :eyes-of-ender :stronghold
+               :eye-throw :stronghold
+               :stronghold :stronghold
+               :portal-room :stronghold
+               :end-portal :end
+               :the-end :end
+               :dragon :end}
+ :road/says {:wood "a log in hand"
+             :kit "a crafting table and four sticks"
+             :pickaxe "a wooden pickaxe"
+             :cobblestone "three cobblestone"
+             :stone-pickaxe "a stone pickaxe"
+             :furnace "a furnace placed"
+             :ingots "four iron ingots smelted"
+             :bucket "an iron bucket"
+             :water-bucket "the bucket filled with water"
+             :flint-and-steel "flint and steel"
+             :iron-kit "flint and steel and a water bucket"
+             :portal-kit "a water bucket and an empty one, for the cast"
+             :cast-one "the first obsidian cast from lava"
+             :portal "the portal frame cast and lit"
+             :nether "stood in the portal until the Nether"
+             :fortress "at a Nether fortress"
+             :blaze-rods "seven blaze rods from the fortress's spawner"
+             :ender-pearls "twelve ender pearls from hunted endermen"
+             :eyes-of-ender "twelve eyes of ender crafted"
+             :eye-throw "an eye thrown and its line kept"
+             :stronghold "the stronghold found by two throws crossed"
+             :portal-room "in the portal room, beside the frames"}
+ :road/issues {:fortress 261
+               :blaze-rods 262
+               :ender-pearls 263
+               :eyes-of-ender 264
+               :eye-throw 265
+               :stronghold 265
+               :portal-room 265}}

@@ -1,67 +1,53 @@
 (ns clojurecraft.page
-  "The results page (issue #116): one static page that says how close the bots are to the Nether,
-   which stage stops them, how fast each stage goes and how that changes round by round, built
-   from the rounds' own facts and served by GitHub Pages from the gh-pages branch.
+  "The results' data (issue #116): a batch's facts from its runs, and where they are kept on the
+   gh-pages branch so the page reads little and the history stays whole.
 
      bb page round <dir> <kind> <run> <commit> <at>    the round's facts from the runs under dir
                                                        (what bb failures reads, and the race
                                                        logs' MILESTONE lines), as one EDN map
      bb page wall <dir>                                the round's failures ranked by how far the
                                                        bot got, then how often (the job summary)
-     bb page build <rounds.edn> <out-dir>              index.html from the rounds, one map a line
-     bb page publish <round.edn>                       the round appended to rounds.edn on
-                                                       gh-pages, the page rebuilt, pushed
+     bb page publish <round.edn>                       the round published as a batch on gh-pages
 
    A round is a map: the run, its kind (:real or :sim), the commit, when it started and ended, how
    many runs, how many won, how many reached each milestone, how fast (fastest and median seconds
    from the bot going active to each milestone: the race's MILESTONE facts, a sim run's
-   :plan/reached-after), the furthest bot's splits, the failures by signature and the issue each
-   is filed as. Every instant is an ISO-8601 string in UTC; durations are seconds. rounds.edn
-   holds one such map a line, oldest first, so the page can always be
-   rebuilt from the data and the data read without the page. The chain is goals.edn's targets in
-   priority order up to the race's target (ci/race.edn's :race/until: the fortress since issue
-   #261), both read from their files, so the page and the bot agree on what a milestone is.
+   :plan/reached-after), the deaths, the furthest bot's splits, the failures by signature and the
+   issue each is filed as. Every instant is an ISO-8601 string in UTC; durations are seconds. The
+   chain is goals.edn's targets in priority order up to the race's target (ci/race.edn's
+   :race/until: the fortress since issue #261), both read from their files, so the page and the
+   bot agree on what a milestone is.
 
-   The page borrows from steve's and ruststeve's dashboards what serves a static page: a numbered
-   ladder with a tick per milestone ever reached and split times, the funnel of how many get how
-   far, the wall with its reasons, a strip of rounds per milestone, the leader's splits. Times are
-   ISO instants in <time> elements and a few lines of script show them in the viewer's own zone;
-   the live line asks GitHub's public API what is running now. Babashka runs this (hiccup2 and
-   cheshire are bundled); nothing here requires the bot."
+   On the branch a round is a batch (batch: the same facts as JSON, plain keys), laid out by the
+   UTC day its run started (brain/bot/tooling/results-data.md says why this layout):
+     data/batches/<day>.ndjson   every batch of the runs that started that day, a line each, in
+                                 the order published: the whole record, never cut to a head
+     data/days/<day>.json        that day's runs (each run's batches combined, one row a run)
+                                 and its totals per kind, rebuilt from the day's batches
+     data/summary.json           every day's totals per kind, oldest first: what the page
+                                 loads first, small
+   A publish rewrites one day's two files and the summary, from what the branch holds when it
+   pushes; a push another writer won meanwhile is fetched and the publish applied again on top
+   (update-branch!), and a publish that never gets through is handed back to its caller to keep
+   and send with its next. The site itself (the page, its script, the road, the agents' report)
+   is built from main by pages.yml (clojurecraft.site); the branch holds only data. Babashka
+   runs this; nothing here requires the bot."
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [cheshire.core :as json]
             [clojure.edn :as edn]
             [clojure.math :as math]
             [clojure.string :as str]
-            [clojurecraft.failures :as failures]
-            [hiccup2.core :as h]))
+            [clojurecraft.failures :as failures]))
 
-(def branch "gh-pages")                ; the page's branch: index.html, agents.html, rounds.edn and the orchestrator's orchestrator.json
-(def rounds-file "rounds.edn")
+(def branch "gh-pages")                ; the data's branch: data/, orchestrator.json (bb copilot dispatch)
+(def legacy-file "rounds.edn")         ; the one-file layout before data/: absorbed by the next publish, then removed
+(def stale-files ["index.html" "agents.html"]) ; the one-file layout's pages, built on the branch: pages.yml builds the site now
+(def summary-file "data/summary.json")
+(def summary-failures 25)              ; the most frequent failures a day's totals keep, with their issues
+(def tries 8)                          ; pushes a publish attempts before it hands its batches back
 (def goals-file "resources/clojurecraft/goals.edn")
 (def race-file "ci/race.edn")          ; the race's settings: its :race/until is where the chain ends
-(def strip-rounds 30)                  ; rounds shown in each milestone's strip, newest last
-(def table-rounds 40)                  ; rounds listed in the table, newest first
-
-(def phases
-  "The phase each milestone belongs to, as steve colours its ladder: wood, stone, iron, portal."
-  {:wood :wood
-   :kit :wood
-   :pickaxe :wood
-   :cobblestone :stone
-   :stone-pickaxe :stone
-   :furnace :stone
-   :ingots :iron
-   :bucket :iron
-   :water-bucket :iron
-   :flint-and-steel :iron
-   :iron-kit :iron
-   :portal-kit :portal
-   :cast-one :portal
-   :portal :portal
-   :nether :nether
-   :fortress :nether})
 
 ;; ---------------------------------------------------------------- the chain
 
@@ -158,81 +144,37 @@
     (when-let [[bot s] (first (sort-by rank (filter (fn [[_ s]] (some place (keys s))) splits)))]
       {:bot bot :splits s})))
 
+(defn deaths
+  "How often runs died: {:deaths total :died runs with at least one}, from each RESULT's
+   :stats/deaths (the server's death screens, counted by the game reducer; the sim's model sends
+   the same)."
+  [runs]
+  (let [ds (map #(get-in % [:stats :stats/deaths] 0) runs)]
+    {:deaths (reduce + 0 ds) :died (count (filter pos? ds))}))
+
 (defn round
   "The round as a value (see the namespace): runs and marks are what the report job downloaded,
    the rest is the run's own facts."
   [runs marks milestones {:keys [kind run commit at started ended issues runner batch]}]
-  (cond-> {:round/run run
-           :round/kind kind
-           :round/commit commit
-           :round/at at
-           :round/runs (count runs)
-           :round/ok (count (filter :ok runs))
-           :round/reached (reached runs milestones)
-           :round/speed (speed (times runs marks))
-           :round/failures (mapv (fn [[sig rs]] [sig (count rs)]) (failures/grouped runs))}
-    started (assoc :round/started started)
-    ended (assoc :round/ended ended)
-    runner (assoc :round/runner runner)
-    batch (assoc :round/batch batch)
-    (seq marks) (assoc :round/first-at (first-at marks))
-    (seq issues) (assoc :round/issues issues)
-    (leader runs marks milestones) (assoc :round/leader (leader runs marks milestones))))
-
-(defn best-leader
-  "Of leaders, the one that got furthest: most milestones, then the earliest last one."
-  [leaders]
-  (first (sort-by (fn [{:keys [splits]}] [(- (count splits)) (reduce max 0 (vals splits))])
-                  leaders)))
-
-(defn combine
-  "One row from the batches of a run and kind (a churn job reports each runner's finished bots
-   every 20 minutes, issue #127): counts summed, failures summed by signature (most first),
-   each milestone's fastest the least and its median the batches' medians weighted by their runs,
-   the earliest start and first reach, the latest end, the furthest leader. One batch is itself."
-  [batches]
-  (let [speeds (keep :round/speed batches)
-        goals (distinct (mapcat keys speeds))
-        some-of (fn [k] (some k batches))]
-    (cond-> {:round/run (some-of :round/run)
-             :round/kind (some-of :round/kind)
-             :round/commit (some-of :round/commit)
-             :round/at (some-of :round/at)
-             :round/runs (reduce + (keep :round/runs batches))
-             :round/ok (reduce + (keep :round/ok batches))
-             :round/reached (apply merge-with + (keep :round/reached batches))
-             :round/speed (into {}
-                                (for [g goals
-                                      :let [xs (keep #(get % g) speeds)
-                                            n (reduce + (map :n xs))]
-                                      :when (pos? n)]
-                                  [g
-                                   {:n n
-                                    :fastest-s (apply min (map :fastest-s xs))
-                                    :median-s (/ (reduce + (map #(* (:n %) (:median-s %)) xs))
-                                                 (double n))}]))
-             :round/failures (->> (mapcat :round/failures batches)
-                                  (reduce (fn [m [sig c]] (update m sig (fnil + 0) c)) {})
-                                  (sort-by (comp - val))
-                                  (mapv vec))}
-      (seq (keep :round/started batches))
-      (assoc :round/started (first (sort (keep :round/started batches))))
-      (seq (keep :round/ended batches))
-      (assoc :round/ended (last (sort (keep :round/ended batches))))
-      (seq (keep :round/first-at batches))
-      (assoc :round/first-at
-             (apply merge-with #(first (sort [%1 %2])) (keep :round/first-at batches)))
-      (seq (keep :round/issues batches))
-      (assoc :round/issues (apply merge (keep :round/issues batches)))
-      (seq (keep :round/leader batches))
-      (assoc :round/leader (best-leader (keep :round/leader batches))))))
-
-(defn rows
-  "The page's rows from rounds.edn's entries, oldest first: the batches of each run and kind
-   combined into one row, in the order each run first appears."
-  [entries]
-  (let [groups (group-by (juxt :round/run :round/kind) entries)]
-    (mapv #(combine (groups %)) (distinct (map (juxt :round/run :round/kind) entries)))))
+  (let [{:keys [deaths died]} (deaths runs)]
+    (cond-> {:round/run run
+             :round/kind kind
+             :round/commit commit
+             :round/at at
+             :round/runs (count runs)
+             :round/ok (count (filter :ok runs))
+             :round/deaths deaths
+             :round/died died
+             :round/reached (reached runs milestones)
+             :round/speed (speed (times runs marks))
+             :round/failures (mapv (fn [[sig rs]] [sig (count rs)]) (failures/grouped runs))}
+      started (assoc :round/started started)
+      ended (assoc :round/ended ended)
+      runner (assoc :round/runner runner)
+      batch (assoc :round/batch batch)
+      (seq marks) (assoc :round/first-at (first-at marks))
+      (seq issues) (assoc :round/issues issues)
+      (leader runs marks milestones) (assoc :round/leader (leader runs marks milestones)))))
 
 (defn wall
   "The failures by the stage the bot was on, the furthest stage first: [[stage total
@@ -245,8 +187,6 @@
          (sort-by (fn [[stage total]] [(- (place stage -1)) (- total)]))
          vec)))
 
-;; ---------------------------------------------------------------- what the rounds say
-
 (defn instant
   "An ISO instant in UTC for a timestamp string with any offset, or the string unchanged."
   [s]
@@ -255,346 +195,241 @@
          (some-> s
                  str))))
 
-(defn when-of
-  "When a round started, else when its commit was made."
+;; ---------------------------------------------------------------- a round as a batch
+
+(defn sig-key
+  "A signature [stage reason] as the key a batch files its issue under: :|cast-one no-path|, the
+   JSON key \"cast-one no-path\"."
+  [[stage reason]]
+  (keyword (str (name stage) " " (name reason))))
+
+(defn batch
+  "A round as the branch keeps it and the page reads it: plain keys, every keyword value its name,
+   failures as [stage reason n] (most first), issues by sig-key, :first for :round/first-at. A
+   key the round lacks is absent (older rounds have no deaths)."
   [r]
-  (instant (or (:round/started r) (:round/at r))))
+  (let [issues (into {}
+                     (for [[k n] (:round/issues r)
+                           :let [sig (try (edn/read-string (str k)) (catch Exception _ nil))]
+                           :when (and (vector? sig) (= 2 (count sig)))]
+                       [(sig-key sig) n]))
+        speed (update-vals (:round/speed r {})
+                           (fn [{:keys [n fastest-s median-s]}]
+                             {:n n :fastest fastest-s :median median-s}))]
+    (cond-> {:run (:round/run r)
+             :kind (some-> (:round/kind r)
+                           name)
+             :commit (:round/commit r)
+             :at (instant (:round/at r))
+             :runs (:round/runs r 0)
+             :ok (:round/ok r 0)
+             :reached (:round/reached r {})
+             :speed speed
+             :failures (mapv (fn [[[stage reason] n]] [(name stage) (name reason) n])
+                             (:round/failures r))}
+      (:round/started r) (assoc :started (instant (:round/started r)))
+      (:round/ended r) (assoc :ended (instant (:round/ended r)))
+      (:round/runner r) (assoc :runner (:round/runner r))
+      (:round/batch r) (assoc :batch (:round/batch r))
+      (:round/deaths r) (assoc :deaths (:round/deaths r) :died (:round/died r 0))
+      (seq issues) (assoc :issues issues)
+      (:round/first-at r) (assoc :first (:round/first-at r))
+      (:round/leader r) (assoc :leader (:round/leader r)))))
 
-(defn share
-  "The share of a round's runs that reached milestone m, 0.0-1.0."
-  [r m]
-  (if (pos? (:round/runs r 0)) (/ (get-in r [:round/reached m] 0) (double (:round/runs r))) 0.0))
+(defn day-of
+  "The UTC day a batch belongs to, yyyy-mm-dd: its run's start's, else its commit's, else its
+   end's. Every batch of a run carries the same start, so a run is never split across days."
+  [b]
+  (let [t (str (or (:started b) (:at b) (:ended b)))]
+    (cond (re-find #"^\d{4}-\d\d-\d\d" t) (subs t 0 10)
+          :else "1970-01-01")))
 
-(defn furthest
-  "The furthest milestone a round's runs reached and how many did: [m n], or nil."
-  [r milestones]
-  (last (for [m milestones :let [n (get-in r [:round/reached m] 0)] :when (pos? n)] [m n])))
+(defn batch-key
+  "What makes a batch the same batch: run, kind, runner and batch number."
+  [b]
+  ((juxt :run :kind :runner :batch) b))
 
-(defn ever
-  "Per milestone across all rounds: {m {:first round-started-iso :fastest-s s :rounds n}} for every
-   milestone any run ever reached."
-  [rounds]
-  (reduce (fn [acc r]
-            (reduce (fn [acc [m n]]
-                      (if (pos? n)
-                        (-> acc
-                            (update-in [m :first]
-                                       #(or % (get-in r [:round/first-at m]) (when-of r)))
-                            (update-in [m :rounds] (fnil inc 0))
-                            (update-in [m :fastest-s]
-                                       (fn [f]
-                                         (let [s (get-in r [:round/speed m :fastest-s])]
-                                           (cond (nil? s) f
-                                                 (nil? f) s
-                                                 :else (min f s))))))
-                        acc))
-                    acc
-                    (:round/reached r)))
-          {}
-          rounds))
+(defn batches-path "A day's batches on the branch." [day] (str "data/batches/" day ".ndjson"))
 
-(defn clock
-  "Seconds as m:ss, or h:mm:ss from an hour."
+(defn day-path "A day's runs and totals on the branch." [day] (str "data/days/" day ".json"))
+
+;; ---------------------------------------------------------------- batches combined
+
+(defn earliest "The earlier of two ISO instants." [a b] (first (sort [a b])))
+
+(defn best-leader
+  "Of leaders, the one that got furthest: most milestones, then the earliest last one."
+  [leaders]
+  (first (sort-by (fn [{:keys [splits]}] [(- (count splits)) (reduce max 0 (vals splits))])
+                  leaders)))
+
+(defn speeds
+  "Each milestone's times over batches: the fastest the least, the median the batches' medians
+   weighted by their counts, to a tenth of a second (a median of medians: the batches keep no
+   more)."
+  [speed-maps]
+  (into {}
+        (for [g (distinct (mapcat keys speed-maps))
+              :let [xs (keep #(get % g) speed-maps)
+                    n (reduce + (map :n xs))]
+              :when (pos? n)]
+          [g
+           {:n n
+            :fastest (apply min (map :fastest xs))
+            :median (/ (math/round (/ (* 10.0 (reduce + (map #(* (:n %) (:median %)) xs))) n))
+                       10.0)}])))
+
+(defn failures-summed
+  "[stage reason n] rows summed by signature, the most frequent first (then by name, so the
+   order is the same whoever sums)."
+  [rows]
+  (->> rows
+       (reduce (fn [m [stage reason n]] (update m [stage reason] (fnil + 0) n)) {})
+       (sort-by (fn [[[stage reason] n]] [(- n) stage reason]))
+       (mapv (fn [[[stage reason] n]] [stage reason n]))))
+
+(defn combine
+  "One row from batches (a run's, or a day's of one kind): counts summed, failures summed by
+   signature, each milestone's fastest the least and its median weighted (speeds), the earliest
+   start and first reach, the latest end, the runners, the furthest leader; deaths only over the
+   batches that counted them, with the runs they cover as :death-runs."
+  [bs]
+  (let [some-of (fn [k] (some k bs))
+        sum (fn [k xs] (reduce + 0 (keep k xs)))
+        starts (sort (keep :started bs))
+        ends (sort (keep :ended bs))
+        counted (filter :deaths bs)]
+    (cond-> {:run (some-of :run)
+             :kind (some-of :kind)
+             :commit (some-of :commit)
+             :at (some-of :at)
+             :runners (vec (sort (distinct (keep :runner bs))))
+             :batches (count bs)
+             :runs (sum :runs bs)
+             :ok (sum :ok bs)
+             :reached (apply merge-with + {} (keep :reached bs))
+             :speed (speeds (keep :speed bs))
+             :failures (failures-summed (mapcat :failures bs))}
+      (seq starts) (assoc :started (first starts))
+      (seq ends) (assoc :ended (last ends))
+      (seq counted)
+      (assoc :deaths (sum :deaths counted)
+             :died (sum :died counted)
+             :death-runs (sum :runs counted))
+      (seq (keep :issues bs)) (assoc :issues (apply merge (keep :issues bs)))
+      (seq (keep :first bs)) (assoc :first (apply merge-with earliest (keep :first bs)))
+      (seq (keep :leader bs)) (assoc :leader (best-leader (keep :leader bs))))))
+
+(defn totals
+  "A day's totals for one kind's batches (combine): the counts, times, first reaches and deaths;
+   how many rounds (runs of a lane) and commits; the stops by the stage the bot was on; the
+   summary-failures most frequent failures with the issues they are filed as."
+  [bs]
+  (let [c (combine bs)
+        top (vec (take summary-failures (:failures c)))
+        t (assoc (select-keys c [:runs :ok :deaths :died :death-runs :reached :speed :first])
+                 :rounds (count (distinct (map :run bs)))
+                 :commits (vec (distinct (keep :commit bs)))
+                 :stops
+                 (reduce (fn [m [stage _ n]] (update m (keyword stage) (fnil + 0) n))
+                         {}
+                         (:failures c))
+                 :failures top)]
+    (cond-> t (:issues c) (assoc :issues (select-keys (:issues c) (map sig-key top))))))
+
+(defn day
+  "A day's file from its batches: its runs (one row a run and kind, by start), and its totals
+   per kind ({:real totals :sim totals}, a kind with no batch absent)."
+  [date bs]
+  {:date date
+   :runs (->> (group-by (juxt :run :kind) bs)
+              vals
+              (map combine)
+              (sort-by (juxt #(str (:started %)) :run :kind))
+              vec)
+   :totals (into {} (for [[k kbs] (group-by :kind bs)] [(keyword k) (totals kbs)]))})
+
+(defn with-day
+  "summary ({:days [{:date :real :sim}]}, oldest first) with a day's totals in place of its own."
+  [summary {:keys [date totals]}]
+  {:days (->> (:days summary)
+              (remove #(= date (:date %)))
+              (cons (assoc totals :date date))
+              (sort-by :date)
+              vec)})
+
+(defn with-batches
+  "A day's batches with bs added: a batch replaces an earlier one with its key (batch-key), and
+   each keeps the place of its last publish."
+  [day-batches bs]
+  (let [all (concat day-batches bs)]
+    (->> (reverse all)
+         (reduce (fn [[seen acc] b]
+                   (cond (seen (batch-key b)) [seen acc]
+                         :else [(conj seen (batch-key b)) (conj acc b)]))
+                 [#{} ()])
+         second
+         vec)))
+
+;; ---------------------------------------------------------------- the files
+
+(defn json-line "A value as one line of JSON." [x] (json/generate-string x))
+
+(defn read-json
+  "JSON text as a value with keyword keys, or nil for nil or text that does not read."
   [s]
-  (when s
-    (let [s (long (math/round (double s)))
-          h (quot s 3600)
-          m (quot (mod s 3600) 60)
-          sec (mod s 60)]
-      (if (pos? h) (format "%d:%02d:%02d" h m sec) (format "%d:%02d" m sec)))))
+  (when s (try (json/parse-string s true) (catch Exception _ nil))))
 
-(defn span
-  "A duration between two ISO instants, as clock, or nil."
-  [a b]
-  (try (clock (/ (- (.toEpochMilli (java.time.Instant/parse b))
-                    (.toEpochMilli (java.time.Instant/parse a)))
-                 1000.0))
-       (catch Exception _ nil)))
+(defn read-ndjson
+  "The values of an NDJSON text, a line each; blank or unreadable lines are skipped."
+  [s]
+  (into [] (keep #(when (seq (str/trim %)) (read-json %))) (str/split-lines (str s))))
 
-;; ---------------------------------------------------------------- the page
+(defn ndjson
+  "Values as NDJSON text, a line each."
+  [xs]
+  (str/join (map #(str (json-line %) "\n") xs)))
 
-(defn t
-  "A <time> the script shows in the viewer's zone; style :ago shows how long ago."
-  ([iso] (t iso nil))
-  ([iso style]
-   (when iso [:time (cond-> {:datetime iso} style (assoc :data-style (name style))) iso])))
+(defn read-rounds
+  "The rounds in an EDN text, a map a line (the legacy rounds.edn)."
+  [s]
+  (into []
+        (keep #(when (seq (str/trim %)) (edn/read-string {:default (fn [_ v] v)} %)))
+        (str/split-lines (str s))))
 
-(defn pct "A share as a whole percent." [x] (str (math/round (* 100.0 (double x))) "%"))
+(defn changes
+  "What publishing batches bs writes on the branch, given what it holds: {path text}, nil text
+   for a file to remove. state is {:legacy rounds from rounds.edn, or nil when there is none;
+   :days {day ndjson-text-or-nil} for every day bs and legacy touch; :summary summary.json's value
+   or nil; :now the publish's instant}. The legacy rounds join their days as batches, and
+   rounds.edn and the pages built beside it go (stale-files); each touched day's batches file and
+   day file are rewritten, and the summary takes each touched day's totals. Pure: what a retry
+   recomputes from the branch as it then is."
+  [{:keys [legacy days summary now]} bs]
+  (let [all (concat (map batch legacy) bs)
+        by-day (into (sorted-map)
+                     (for [[d dbs] (group-by day-of all)]
+                       [d (with-batches (read-ndjson (get days d)) dbs)]))
+        files (into {}
+                    (mapcat (fn [[d dbs]] [[(batches-path d) (ndjson dbs)]
+                                           [(day-path d) (json-line (day d dbs))]]))
+                    by-day)
+        summary' (reduce with-day (or summary {:days []}) (map (fn [[d dbs]] (day d dbs)) by-day))]
+    (cond-> (assoc files summary-file (json-line (assoc summary' :updated now)))
+      (some? legacy) (merge (zipmap (cons legacy-file stale-files) (repeat nil))))))
 
-(defn bar
-  "A horizontal bar of a share, its colour the phase's."
-  [x phase]
-  [:span.bar
-   [:span
-    {:class (str "fill " (name phase))
-     :style (str "width:" (format "%.1f" (* 100.0 (double x))) "%")}]])
-
-(defn sig-label "A signature in words." [[stage reason]] (str (name stage) ": " (name reason)))
-
-(defn issue-link
-  "A signature linked to its issue, when the round knew it."
-  [repo r sig]
-  (if-let [n (get (:round/issues r) (pr-str sig))]
-    [:a {:href (str "https://github.com/" repo "/issues/" n)} (sig-label sig) " #" n]
-    (sig-label sig)))
-
-(defn latest
-  "The newest round of a kind, or nil."
-  [rounds kind]
-  (last (filter #(= kind (:round/kind %)) rounds)))
-
-(defn ladder
-  "The road to the Nether: one row a milestone, numbered, its phase, ticked when any run ever
-   reached it, the latest real and sim round's funnel (share and count, and the drop from the
-   step before), the fastest time ever, the latest median and the median stage time (the gap
-   between this milestone's median and the one before), when it was first reached; the first
-   milestone never reached is the wall."
-  [rounds milestones]
-  (let [ev (ever rounds)
-        real (latest rounds :real)
-        sim (latest rounds :sim)
-        wall-m (first (remove ev milestones))
-        cell (fn [r m prev]
-               (if r
-                 (let [n (get-in r [:round/reached m] 0)
-                       before (if prev (get-in r [:round/reached prev] 0) (:round/runs r))]
-                   [:td.funnel (bar (share r m) (phases m :wood))
-                    [:span.num (str n "/" (:round/runs r))]
-                    (when (and (pos? before) (>= (/ (- before n) (double before)) 0.005))
-                      [:span.drop (str "−" (pct (/ (- before n) (double before))))])])
-                 [:td.muted "—"]))]
-    [:table.ladder
-     [:thead
-      [:tr [:th "#"] [:th "milestone"] [:th "real servers, newest round"]
-       [:th "server model, newest round"] [:th "fastest ever"] [:th "median (newest)"]
-       [:th "stage takes"] [:th "first reached"]]]
-     [:tbody
-      (for [[i m] (map-indexed vector milestones)
-            :let [prev (when (pos? i) (milestones (dec i)))
-                  e (ev m)
-                  med (fn [mm]
-                        (or (get-in real [:round/speed mm :median-s])
-                            (get-in sim [:round/speed mm :median-s])))
-                  stage (when (and prev (med m) (med prev)) (- (med m) (med prev)))]]
-        [:tr {:class (str (if e "done" "todo") (when (= m wall-m) " wall"))}
-         [:td.n (format "%02d" (inc i))]
-         [:td [:span.tick (if e "✓" (if (= m wall-m) "✗" "·"))] " "
-          [:span {:class (str "pill " (name (phases m :wood)))} (name (phases m :wood))] " "
-          [:b (name m)] (when (= m wall-m) [:span.wallmark " the wall"])] (cell real m prev)
-         (cell sim m prev) [:td.time (or (clock (:fastest-s e)) "—")]
-         [:td.time (or (clock (med m)) "—")]
-         [:td.time (if stage (str "+" (clock (max 0 stage))) "—")]
-         [:td (if e (t (:first e)) [:span.muted "never"])]])]]))
-
-(defn stops
-  "Where a round's runs stopped: the stages furthest first, each with its count and its top
-   reasons linked to their issues."
-  [repo r milestones]
-  (let [w (wall (:round/failures r) milestones)
-        top (reduce max 1 (map second w))]
-    [:div.stops
-     (for [[stage total sigs] (take 8 w)]
-       [:div.stop
-        [:div.stophead [:b (name stage)] [:span.num (str total " run" (when (not= 1 total) "s"))]]
-        (bar (/ total (double top)) (phases stage :wood))
-        [:ul
-         (for [[sig c] (take 3 sigs)] [:li (issue-link repo r sig) [:span.num (str " " c)]])]])]))
-
-(defn strip
-  "Each milestone's share round by round, oldest to newest, as a row of squares (ruststeve's
-   last-40 strip): the darker, the more runs got there."
-  [rounds milestones]
-  (let [rs (vec (take-last strip-rounds rounds))]
-    [:table.strip
-     [:thead
-      [:tr [:th "milestone"]
-       (for [r rs]
-         [:th {:title (str (name (:round/kind r)) " " (:round/run r))}
-          (if (= :real (:round/kind r)) "R" "S")])]]
-     [:tbody
-      (for [m milestones]
-        [:tr [:td (name m)]
-         (for [r rs
-               :let [s (share r m)
-                     n (get-in r [:round/reached m] 0)]]
-           [:td
-            {:class (str "sq" (when (zero? n) " zero"))
-             :style (when (pos? n)
-                      (str "background:hsl(140 55% " (format "%.0f" (- 88 (* 55 s))) "%)"))
-             :title (str (name m)
-                         ": " n
-                         "/" (:round/runs r)
-                         " (" (pct s)
-                         "), " (name (:round/kind r))
-                         " round " (:round/run r))}])])]]))
-
-(defn leader-card
-  "The furthest bot of the newest round of a kind: its splits, steve's ladder for one bot."
-  [r milestones label]
-  (when-let [{:keys [bot splits]} (:round/leader r)]
-    [:div.card [:h3 (str "Furthest " label ": ") [:span.mono bot]]
-     [:ol.splits
-      (for [m milestones
-            :let [s (get splits m)]]
-        [:li {:class (if s "done" "todo")} [:span.tick (if s "✓" "·")] [:span (name m)]
-         [:span.time (or (clock s) "")]])]]))
-
-(defn table-row
-  "One row of the rounds table."
-  [repo milestones r]
-  (let [[m n] (furthest r milestones)]
-    [:tr [:td (t (when-of r))] [:td.time (or (span (:round/started r) (:round/ended r)) "—")]
-     [:td (if (= :real (:round/kind r)) "real" "sim")]
-     [:td
-      [:a {:href (str "https://github.com/" repo "/commit/" (:round/commit r))}
-       [:code (subs (str (:round/commit r)) 0 7)]]]
-     [:td [:a {:href (str "https://github.com/" repo "/actions/runs/" (:round/run r))} "run"]]
-     [:td.num (:round/runs r)] [:td.num (if (pos? (:round/ok r 0)) [:b.win (:round/ok r)] "0")]
-     [:td (when m (str (name m) " (" n ")"))]
-     [:td.reasons
-      (interpose ", "
-       (for [[sig c] (take 3 (:round/failures r))] (list (issue-link repo r sig) (str " " c))))]]))
-
-(def agents-script
-  "The Agents tab: what the orchestrator (copilot.yml, bb copilot dispatch) last wrote to
-   orchestrator.json on gh-pages, read live, so the tab is current without a rebuild."
-  "(function(){\n  var fmt=new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'});\n  var rel=new Intl.RelativeTimeFormat(undefined,{numeric:'auto'});\n  function ago(d){var s=(d-Date.now())/1000,a=Math.abs(s);\n    if(a<90)return rel.format(Math.round(s),'second');if(a<5400)return rel.format(Math.round(s/60),'minute');\n    if(a<172800)return rel.format(Math.round(s/3600),'hour');return rel.format(Math.round(s/86400),'day');}\n  function esc(t){return String(t==null?'':t).replace(/[&<>\"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c];});}\n  var repo=document.body.dataset.repo,gh='https://github.com/'+repo;\n  function issue(n){return '<a href=\"'+gh+'/issues/'+n+'\">#'+n+'</a>';}\n  function pr(n){return n?'<a href=\"'+gh+'/pull/'+n+'\">PR #'+n+'</a>':'';}\n  var words={assign:'assigned to Copilot',reassign:'assigned again (the session never started)',ready:'marked ready for review',\n    release:'released runs held for approval',nudge:'asked Copilot to go on',merge:'merged',review:'left for a person (it changes CI)',\n    stuck:'left for a person (asked eight times)',wait:'waiting',leave:'left alone'};\n  var checks={green:'green',red:'red',pending:'running',approval:'held for approval'};\n  fetch('https://raw.githubusercontent.com/'+repo+'/gh-pages/orchestrator.json?t='+Date.now(),{cache:'no-store'})\n  .then(function(r){if(!r.ok)throw r.status;return r.json();}).then(function(st){\n    var at=new Date(st.at),fresh=(Date.now()-at)<15*60000,held=st.issues.filter(function(i){return i.copilot;}),\n        queue=st.issues.filter(function(i){return !i.copilot;});\n    document.getElementById('alive').innerHTML='<span class=\"dot'+(fresh?' on':'')+'\"></span><b>Orchestrator</b>: last pass '+ago(at)+\n      ' ('+fmt.format(at)+'); '+st.issues.length+' open bot-failure issues, Copilot on '+held.length+' of at most '+st.cap+' at once.'+\n      (fresh?'':' <b>It has not reported for 15 minutes: check the copilot workflow.</b>');\n    var w=held.map(function(i){var m=st.moves.filter(function(x){return x.issue===i.number;})[0]||{};\n      return '<tr><td>'+issue(i.number)+'</td><td>'+esc(i.title)+'</td><td>'+pr(i.pr)+'</td><td>'+(i.pr?esc(checks[i.checks]||i.checks):'')+\n        (i.draft?' (draft)':'')+'</td><td>'+(i.session?'<span class=\"dot on\"></span>running':'ended')+'</td><td class=\"num\">'+(i.nudges||0)+'/8</td><td>'+\n        esc(words[m.move]||m.move||'')+(m.why?' ('+esc(m.why)+')':'')+(i.quiet?' <b>quiet for 2 h</b>':'')+'</td></tr>';}).join('');\n    document.getElementById('working').innerHTML=w||'<tr><td colspan=\"7\" class=\"muted\">nothing held right now</td></tr>';\n    document.getElementById('queue').innerHTML=queue.map(function(i){var off=i.labels.filter(function(l){return /no-agent|agent-stuck|needs-review/.test(l);});\n      return '<tr><td>'+issue(i.number)+'</td><td>'+esc(i.title)+'</td><td class=\"muted\">'+esc(off.join(', '))+'</td></tr>';}).join('')||\n      '<tr><td colspan=\"3\" class=\"muted\">empty</td></tr>';\n    document.getElementById('log').innerHTML=st.log.slice().reverse().map(function(e){var d=new Date(e.at);\n      return '<tr><td class=\"time\" title=\"'+d+'\">'+fmt.format(d)+'</td><td>'+issue(e.issue)+'</td><td>'+esc(words[e.move]||e.move)+\n        '</td><td>'+pr(e.pr)+'</td><td class=\"muted\">'+esc(e.why||'')+'</td></tr>';}).join('')||'<tr><td colspan=\"5\" class=\"muted\">nothing yet</td></tr>';\n  }).catch(function(){document.getElementById('alive').textContent='No orchestrator status yet (orchestrator.json on gh-pages).';});\n})();")
-
-(def tabs
-  "The links between the page's two tabs."
-  [:nav.tabs [:a {:href "./"} "Race"] [:a {:href "agents.html"} "Agents"]])
-
-(def style
-  ":root{--bg:#fff;--fg:#1b1f24;--muted:#6b7280;--line:#e5e7eb;--card:#f8fafc;--wood:#a16207;--stone:#6b7280;--iron:#b45309;--portal:#7c3aed;--nether:#dc2626;--ok:#15803d}
-   @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#8b949e;--line:#30363d;--card:#161b22}}
-   *{box-sizing:border-box}body{background:var(--bg);color:var(--fg);font:14px/1.45 system-ui,-apple-system,sans-serif;max-width:1180px;margin:0 auto;padding:1.25rem}
-   h1{font-size:1.5rem;margin:.2rem 0}h2{font-size:1.1rem;margin:2rem 0 .6rem}h3{font-size:.95rem;margin:.2rem 0 .5rem}
-   a{color:inherit}.muted{color:var(--muted)}.mono,code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
-   .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem}.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.75rem .9rem}
-   .big{font-size:1.6rem;font-weight:700}.label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
-   .live{display:flex;gap:1.5rem;flex-wrap:wrap;margin:.4rem 0 1rem}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-right:6px}.dot.on{background:var(--ok);box-shadow:0 0 6px var(--ok)}
-   .tabs{display:flex;gap:1.2rem;margin:0 0 .6rem}.tabs a{color:var(--muted);text-decoration:none;font-weight:600}.tabs a:hover{color:var(--fg)}
-   table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid var(--line);padding:5px 7px;text-align:left;vertical-align:middle}th{font-size:12px;color:var(--muted);font-weight:600}
-   .n{color:var(--muted);font-family:ui-monospace,monospace}.tick{display:inline-block;width:1em;text-align:center}.done .tick{color:var(--ok);font-weight:700}.wall{background:color-mix(in srgb,var(--nether) 9%,transparent)}.wall .tick{color:var(--nether)}.wallmark{color:var(--nether);font-weight:600;font-size:12px}
-   .pill{font-size:10px;text-transform:uppercase;padding:1px 6px;border-radius:999px;color:#fff;letter-spacing:.04em}.pill.wood{background:var(--wood)}.pill.stone{background:var(--stone)}.pill.iron{background:var(--iron)}.pill.portal{background:var(--portal)}.pill.nether{background:var(--nether)}
-   .bar{display:inline-block;width:110px;height:9px;background:var(--line);border-radius:5px;overflow:hidden;vertical-align:middle;margin-right:6px}.fill{display:block;height:100%}.fill.wood{background:var(--wood)}.fill.stone{background:var(--stone)}.fill.iron{background:var(--iron)}.fill.portal{background:var(--portal)}.fill.nether{background:var(--nether)}
-   .num{font-variant-numeric:tabular-nums}.funnel .num{font-size:12px}.drop{color:var(--nether);font-size:11px;margin-left:6px}.time{font-variant-numeric:tabular-nums;white-space:nowrap}
-   .stops{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.75rem}.stop{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:.6rem .8rem}.stophead{display:flex;justify-content:space-between}.stop .bar{width:100%}.stop ul{margin:.4rem 0 0;padding-left:1.1rem;font-size:13px}
-   .strip{width:auto}.strip td,.strip th{padding:0;border:0}.strip td:first-child{padding-right:8px;font-size:12px;white-space:nowrap}.strip th{font-size:9px;text-align:center;width:16px}.sq{width:16px;height:14px;border:1px solid var(--bg)}.sq.zero{background:var(--line)}
-   .splits{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));column-gap:2rem;font-size:13px}.splits li{display:grid;grid-template-columns:1.2em 1fr auto;padding:1px 0}.splits .todo{color:var(--muted)}
-   .reasons{font-size:12px}.win{color:var(--ok)}.scroll{overflow-x:auto}footer{margin:2rem 0 1rem;color:var(--muted);font-size:12px}")
-
-(def script
-  "Times in the viewer's zone; how long ago; and what GitHub says is running now."
-  "(function(){
-  var fmt=new Intl.DateTimeFormat(undefined,{dateStyle:'medium',timeStyle:'short'});
-  var rel=new Intl.RelativeTimeFormat(undefined,{numeric:'auto'});
-  function ago(d){var s=(d-Date.now())/1000,a=Math.abs(s);
-    if(a<90)return rel.format(Math.round(s),'second');if(a<5400)return rel.format(Math.round(s/60),'minute');
-    if(a<172800)return rel.format(Math.round(s/3600),'hour');return rel.format(Math.round(s/86400),'day');}
-  function dur(ms){var m=Math.floor(ms/60000),h=Math.floor(m/60);return h?h+' h '+(m%60)+' min':m+' min';}
-  function show(root){root.querySelectorAll('time[datetime]').forEach(function(el){var d=new Date(el.getAttribute('datetime'));if(isNaN(d))return;
-    el.textContent=el.dataset.style==='ago'?ago(d):fmt.format(d);el.title=d.toString();});}
-  show(document);
-  var tz=document.getElementById('tz');if(tz)tz.textContent=Intl.DateTimeFormat().resolvedOptions().timeZone;
-  var repo=document.body.dataset.repo;if(!repo)return;
-  [['race.yml','live-real','Real servers'],['simrace.yml','live-sim','Server model']].forEach(function(w){
-    var el=document.getElementById(w[1]);if(!el)return;
-    fetch('https://api.github.com/repos/'+repo+'/actions/workflows/'+w[0]+'/runs?branch=main&per_page=1').then(function(r){return r.json();}).then(function(j){
-      var run=j.workflow_runs&&j.workflow_runs[0];if(!run){el.textContent=w[2]+': no round yet';return;}
-      var on=run.status==='in_progress',start=new Date(run.run_started_at||run.created_at);
-      var what=on?'round running for '+dur(Date.now()-start):run.status==='completed'?'last round '+run.conclusion+', ended':'round '+run.status;
-      el.innerHTML='<span class=\"dot'+(on?' on':'')+'\"></span><b>'+w[2]+'</b>: <a href=\"'+run.html_url+'\">'+what+'</a> '+
-        (on?'(since <time datetime=\"'+start.toISOString()+'\"></time>)':'<time data-style=\"ago\" datetime=\"'+run.updated_at+'\"></time>')+
-        ' on <code>'+run.head_sha.slice(0,7)+'</code>';show(el);
-    }).catch(function(){el.textContent=w[2]+': status unavailable';});});
-})();")
-
-(defn page
-  "The whole page as hiccup."
-  [rounds milestones repo]
-  (let [real (latest rounds :real)
-        sim (latest rounds :sim)
-        won (reduce + (map #(:round/ok % 0) rounds))
-        ev (ever rounds)
-        best (last (filter ev milestones))
-        nr (count milestones)]
-    [:html {:lang "en"}
-     [:head [:meta {:charset "utf-8"}]
-      [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-      [:title "clojurecraft: the race to the Nether"] [:style (h/raw style)]]
-     [:body {:data-repo repo} tabs [:h1 "clojurecraft: the race to the Nether"]
-      [:p.muted
-       "Bots play from spawn to the Nether, with nothing given, on real servers and against the server model, round after round on the newest code. Times are in "
-       [:span#tz "your zone"] "."]
-      [:div.live [:div#live-real.muted "Real servers: …"] [:div#live-sim.muted "Server model: …"]]
-      [:div.cards
-       [:div.card [:div.label "Nether"]
-        [:div.big (if (pos? won) [:span.win (str won " reached")] "not yet")]
-        [:div.muted (str (count rounds) " rounds since ") (t (when-of (first rounds)))]]
-       [:div.card [:div.label "Furthest ever"] [:div.big (if best (name best) "—")]
-        [:div.muted
-         (when best (str "milestone " (inc (.indexOf milestones best)) " of " nr ", first "))
-         (when best (t (:first (ev best)) :ago))]]
-       (for [[r label] [[real "Newest real round"] [sim "Newest sim round"]]
-             :when r
-             :let [[m n] (furthest r milestones)]]
-         [:div.card [:div.label label] [:div.big (when m (name m))]
-          [:div.muted (str n " of " (:round/runs r) " runs got there; ") (t (when-of r) :ago)]])]
-      [:h2 "The road to the Nether"]
-      [:p.muted
-       "Each milestone: ticked once any run has reached it. The bars are the newest round's funnel, how many of its runs got this far, and the red figure how many of those that reached the step before were lost on the way. Times are from the bot setting off; the stage time is the gap between this milestone's median and the one before."]
-      [:div.scroll (ladder rounds milestones)]
-      (for [[r label] [[real "real servers"] [sim "the server model"]]
-            :when r]
-        (list
-         [:h2 (str "Where they stop: " label)]
-         [:p.muted
-          "The newest round's failures by the stage the bot was on, the furthest first; each reason links to its issue."]
-         (stops repo r milestones))) [:h2 "Round by round"]
-      [:p.muted
-       "A square per round (R real, S sim), oldest to newest: the darker, the more of its runs reached the milestone. Hover for the numbers."]
-      [:div.scroll (strip rounds milestones)]
-      [:div.cards {:style "margin-top:1rem"} (leader-card real milestones "bot, real servers")
-       (leader-card sim milestones "run, server model")] [:h2 "Rounds"]
-      [:div.scroll
-       [:table
-        [:thead
-         [:tr [:th "started"] [:th "took"] [:th "kind"] [:th "commit"] [:th ""] [:th "runs"]
-          [:th "Nether"] [:th "furthest"] [:th "top reasons"]]]
-        [:tbody (for [r (take table-rounds (reverse rounds))] (table-row repo milestones r))]]]
-      [:footer "Built by " [:code "bb page"] " from " [:a {:href "rounds.edn"} "rounds.edn"]
-       ", one round a line, beside this file. Issue #116."] [:script (h/raw script)]]]))
-
-(defn agents-page
-  "The Agents tab as hiccup: a shell agents-script fills from orchestrator.json."
-  [repo]
-  [:html {:lang "en"}
-   [:head [:meta {:charset "utf-8"}]
-    [:meta {:name "viewport" :content "width=device-width, initial-scale=1"}]
-    [:title "clojurecraft: the agents"] [:style (h/raw style)]]
-   [:body {:data-repo repo} tabs [:h1 "clojurecraft: the agents"]
-    [:p.muted
-     "The orchestrator (the copilot workflow, one runner, once a minute) gives the bot-failure issues to Copilot's bot-fixer agent one at a time, releases its held runs, marks its finished drafts ready, merges what is green and asks it to go on when a check is red. This tab reads what it last wrote."]
-    [:div#alive.live.muted "…"] [:h2 "Working now"]
-    [:div.scroll
-     [:table
-      [:thead
-       [:tr [:th "issue"] [:th "failure"] [:th "pull request"] [:th "checks"] [:th "session"]
-        [:th "asks"] [:th "this minute"]]] [:tbody#working]]] [:h2 "Waiting"]
-    [:p.muted
-     "Open bot-failure issues Copilot has not been given yet, oldest first: the order it takes them."]
-    [:div.scroll [:table [:tbody#queue]]] [:h2 "What it did"]
-    [:div.scroll
-     [:table [:thead [:tr [:th "when"] [:th "issue"] [:th "action"] [:th ""] [:th "why"]]]
-      [:tbody#log]]]
-    [:footer "Written by " [:code "bb copilot dispatch"] " to " [:code "orchestrator.json"]
-     " on gh-pages."] [:script (h/raw agents-script)]]])
-
-(defn html
-  "The page as a string."
-  [rounds milestones repo]
-  (str "<!DOCTYPE html>\n" (h/html (page rounds milestones repo))))
+(defn publish-change
+  "The change a publish of bs makes (changes), reading the branch through read (a path's text,
+   or nil when the branch has none): the legacy rounds, every day they and bs touch, the summary."
+  [now bs read]
+  (let [legacy (some-> (read legacy-file)
+                       read-rounds)
+        touched (distinct (map day-of (concat (map batch legacy) bs)))]
+    (changes {:legacy legacy
+              :days (into {} (for [d touched] [d (read (batches-path d))]))
+              :summary (read-json (read summary-file))
+              :now now}
+             bs)))
 
 ;;;; I/O: the files, git, gh ;;;;
 
@@ -609,15 +444,6 @@
    own."
   []
   (:race/until (edn/read-string (slurp race-file))))
-
-(defn read-rounds
-  "The rounds in a rounds.edn, oldest first."
-  [path]
-  (if (fs/exists? path)
-    (into []
-          (keep #(when (seq (str/trim %)) (edn/read-string {:default (fn [_ v] v)} %)))
-          (str/split-lines (slurp path)))
-    []))
 
 (defn repo
   "The repository, owner/name: the workflow's, else this checkout's origin."
@@ -661,91 +487,117 @@
                   (when-let [i (failures/issue-for all sig)] [(pr-str sig) (:number i)])))
           (failures/grouped runs))))
 
-(defn build!
-  "Write index.html for the rounds in rounds-path into out-dir."
-  [rounds-path out-dir]
-  (fs/create-dirs out-dir)
-  (let [rounds (read-rounds rounds-path)]
-    (spit (str (fs/path out-dir "index.html"))
-          (html (rows rounds) (chain (goals) (race-end)) (repo)))
-    (spit (str (fs/path out-dir "agents.html"))
-          (str "<!DOCTYPE html>
-" (h/html (agents-page (repo)))))
-    (println "built" (str (fs/path out-dir "index.html")) "from" (count rounds) "rounds")))
+(defn quiet!
+  "A command's result, {:exit :out :err}, never thrown."
+  [opts & args]
+  (apply p/shell (merge {:continue true :out :string :err :string} opts) args))
 
 (defn git!
   "git with args in dir; throws when it fails."
   [dir & args]
   (apply p/shell {:dir (str dir)} "git" args))
 
-(defn entry-key
-  "What makes an entry the same entry: run, kind, runner and batch."
-  [r]
-  ((juxt :round/run :round/kind :round/runner :round/batch) r))
-
 (defn deploy!
-  "Ask GitHub to deploy gh-pages (pages.yml): the branch is the page's data, the deployment is
-   what the site serves. A failed request is printed, never thrown: the next publish asks again."
+  "Ask GitHub to deploy the site (pages.yml, which builds it from main and this branch's data). A
+   failed request is printed, never thrown: the next publish asks again."
   []
-  (let [r (p/shell {:continue true :out :string :err :string}
-                   "gh" "workflow"
-                   "run" "pages.yml"
-                   "--repo" (repo)
-                   "--ref" "main")]
+  (let [r (quiet! {} "gh" "workflow" "run" "pages.yml" "--repo" (repo) "--ref" "main")]
     (println (if (zero? (:exit r)) "deploy requested" (str "deploy request failed: " (:err r))))))
 
-(defn publish-round!
-  "Append round (a value) to rounds.edn on the gh-pages branch (replacing an earlier entry with
-   the same run, kind, runner and batch), rebuild index.html there, commit and push; a push another
-   report won meanwhile is retried on top of it, three times. The branch is worked in a worktree
-   of its own, removed after."
-  [round]
-  (let [dir (str (fs/path (fs/parent (fs/absolutize "."))
-                          (str "pages-" (:round/run round)
-                               "-" (name (:round/kind round))
-                               "-" (:round/runner round 0)
-                               "-" (:round/batch round 0))))
-        fetched (zero? (:exit (p/shell {:continue true :out :string :err :string}
-                                       "git" "fetch"
-                                       "origin" branch)))]
-    (if fetched
-      (git! "." "worktree" "add" "--detach" dir (str "origin/" branch))
-      (do (git! "." "worktree" "add" "--detach" dir "HEAD")
-          (git! dir "checkout" "--orphan" branch)
+(defn fetch!
+  "Fetch the branch's newest commit alone (no history: the lanes' checkouts are shallow, and a
+   publish needs only the tip); true when the branch exists."
+  []
+  (zero? (:exit (quiet! {} "git" "fetch" "--depth" "1" "origin" branch))))
+
+(defn apply-files!
+  "Write files ({path text}, nil text removes the file) under dir."
+  [dir files]
+  (doseq [[path text] files
+          :let [f (fs/path dir path)]]
+    (cond (some? text) (do (fs/create-dirs (fs/parent f)) (spit (str f) text))
+          (fs/exists? f) (fs/delete f))))
+
+(defn pushed-or-lost
+  "A push's result as :pushed, or :lost when git refused it."
+  [r]
+  (if (zero? (:exit r)) :pushed :lost))
+
+(defn try-push!
+  "One attempt in the worktree dir: the branch's tip, the change applied, committed and pushed.
+   :pushed, :nothing (no change to make) or :lost (another writer pushed first)."
+  [dir message change]
+  (let [fetched? (fetch!)]
+    (when fetched? (git! dir "reset" "-q" "--hard" (str "origin/" branch)))
+    (apply-files! dir
+                  (change (fn [path] (let [f (fs/file dir path)] (when (fs/exists? f) (slurp f))))))
+    (git! dir "add" "-A")
+    (cond (zero? (:exit (quiet! {:dir dir} "git" "diff" "--cached" "--quiet"))) :nothing
+          :else
+          (do (git! dir
+                    "-c" "user.name=github-actions[bot]"
+                    "-c" "user.email=41898282+github-actions[bot]@users.noreply.github.com"
+                    "commit" "-q"
+                    "-m" message)
+              (pushed-or-lost (quiet! {:dir dir} "git" "push" "origin" (str "HEAD:" branch)))))))
+
+(defn update-branch!
+  "Make change on the gh-pages branch and push it: change is a function of read (a path's text on
+   the branch, or nil) to {path text}, nil text removing the file. A push another writer won
+   meanwhile (eight lanes and the deploy write here) is retried on the new tip, the change
+   recomputed from it, tries times, a random wait growing between. The branch is worked in a
+   worktree of its own, label naming it, removed after. Returns :pushed, :nothing or :lost."
+  [label message change]
+  (let [dir (str (fs/path (fs/parent (fs/absolutize ".")) (str "pages-" label)))]
+    (when (fs/exists? dir) (quiet! {} "git" "worktree" "remove" "--force" dir))
+    (if (fetch!)
+      (git! "." "worktree" "add" "-q" "--detach" dir (str "origin/" branch))
+      (do (git! "." "worktree" "add" "-q" "--detach" dir "HEAD")
+          (git! dir "checkout" "-q" "--orphan" branch)
           (git! dir "rm" "-rfq" ".")))
-    (loop [tries 3]
-      (when fetched (git! dir "reset" "-q" "--hard" (str "origin/" branch)))
-      (let [rounds (str (fs/path dir rounds-file))
-            kept (remove #(= (entry-key %) (entry-key round)) (read-rounds rounds))]
-        (spit rounds (str/join "" (map #(str (pr-str %) "\n") (concat kept [round]))))
-        (build! rounds dir)
-        (git! dir "add" "-A")
-        (git! dir
-              "-c" "user.name=github-actions[bot]"
-              "-c" "user.email=41898282+github-actions[bot]@users.noreply.github.com"
-              "commit" "-q"
-              "-m"
-              (str "Round " (:round/run round)
-                   " (" (name (:round/kind round))
-                   ") at " (subs (str (:round/commit round)) 0 7)))
-        (let [pushed (zero? (:exit (p/shell {:dir dir :continue true}
-                                            "git" "push"
-                                            "origin" (str "HEAD:" branch))))]
-          (cond pushed
-                (do (println "published round" (:round/run round) "to" branch)
-                    (p/shell {:continue true} "git" "worktree" "remove" "--force" dir)
-                    (deploy!))
-                (and (pos? (dec tries)) fetched)
-                (do (git! "." "fetch" "origin" branch) (recur (dec tries)))
-                :else (throw (ex-info "could not push the page" {:branch branch}))))))))
+    (try (loop [n 1]
+           (let [r (try-push! dir message change)]
+             (cond (#{:pushed :nothing} r) r
+                   (< n tries)
+                   (do (println "lost the push to another writer; try" (inc n))
+                       (Thread/sleep (long (+ 1000 (rand-int (* n 4000)))))
+                       (recur (inc n)))
+                   :else :lost)))
+         (finally (quiet! {} "git" "worktree" "remove" "--force" dir)))))
+
+(defn publish-rounds!
+  "Publish rounds (values, oldest first) as batches on gh-pages (publish-change), then ask for a
+   deploy. Returns the rounds not published: none, or all of them when every push was lost or a
+   step threw, for the caller to keep and publish with its next."
+  [rounds]
+  (let [bs (mapv batch rounds)
+        {:keys [run kind runner batch commit]} (last bs)
+        label (str run "-" kind "-" (or runner 0) "-" (or batch 0))
+        message (str "Batch "
+                     batch
+                     " of run "
+                     run
+                     " ("
+                     kind
+                     ", runner "
+                     runner
+                     ") at "
+                     (subs (str commit) 0 (min 7 (count (str commit))))
+                     (when (next bs) (str ", with " (dec (count bs)) " held back")))
+        r (try (update-branch! label message #(publish-change (str (java.time.Instant/now)) bs %))
+               (catch Exception e (println "publish failed:" (ex-message e)) :lost))]
+    (cond (= :lost r)
+          (do (println "not published:" (count rounds) "batches kept for the next") rounds)
+          :else (do (println "published" (count rounds) "batches to" branch) (deploy!) []))))
 
 (defn publish!
-  "Publish the round in the EDN file at round-path (publish-round!)."
+  "Publish the round in the EDN file at round-path (publish-rounds!); exits 1 when it could not."
   [round-path]
-  (publish-round! (edn/read-string {:default (fn [_ v] v)} (slurp round-path))))
+  (when (seq (publish-rounds! [(edn/read-string {:default (fn [_ v] v)} (slurp round-path))]))
+    (System/exit 1)))
 
 (defn -main
-  "round <dir> <kind> <run> <commit> <at>, wall <dir>, build <rounds.edn> <out-dir>, publish <round.edn>."
+  "round <dir> <kind> <run> <commit> <at>, wall <dir>, publish <round.edn>."
   [& [cmd a b c d e]]
   (case cmd
     "round"
@@ -766,9 +618,7 @@
       (println (name stage)
                total
                (str/join ", " (for [[sig n] (take 3 sigs)] (str (pr-str sig) " " n)))))
-    "build" (build! a b)
     "publish" (publish! a)
-    (do
-      (println
-       "usage: bb page round <dir> <kind> <run> <commit> <at> | wall <dir> | build <rounds.edn> <out-dir> | publish <round.edn>")
-      (System/exit 2))))
+    (do (println
+         "usage: bb page round <dir> <kind> <run> <commit> <at> | wall <dir> | publish <round.edn>")
+        (System/exit 2))))
