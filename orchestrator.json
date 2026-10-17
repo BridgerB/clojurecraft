@@ -1,7 +1,12 @@
 {
-  "at" : "2026-10-17T11:52:00.820Z",
+  "at" : "2026-10-17T11:54:11.848Z",
   "cap" : 1,
   "issues" : [ {
+    "number" : 370,
+    "title" : "Bot stops at portal: no-log",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 369,
     "title" : "Bot stops at cast-one: not-held",
     "labels" : [ "bot-failure", "sim" ],
