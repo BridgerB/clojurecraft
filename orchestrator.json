@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T11:40:03.040Z",
+  "at" : "2026-10-17T11:41:09.275Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 366,
@@ -23,7 +23,7 @@
     "checks" : "pending",
     "title" : "Bot stops at fortress: no-path",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 365,
     "session" : false
@@ -183,8 +183,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 284,
-    "move" : "ready",
-    "pr" : 365
+    "move" : "wait",
+    "pr" : 365,
+    "why" : "checks running"
   }, {
     "issue" : 196,
     "move" : "leave",
