@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T13:57:30.443Z",
+  "at" : "2026-10-17T13:58:38.046Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 342,
@@ -21,17 +21,6 @@
     "title" : "Bot stops at fortress: no-pickaxe",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 231,
-    "checks" : "green",
-    "title" : "Bot stops at cast-one: no-footing",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 374,
-    "session" : false
   }, {
     "number" : 229,
     "title" : "Bot stops at cast-one: no-pickaxe",
@@ -184,6 +173,9 @@
     "copilot" : false
   } ],
   "moves" : [ {
+    "issue" : 342,
+    "move" : "assign"
+  }, {
     "issue" : 338,
     "move" : "leave",
     "why" : "hands-off label"
@@ -195,10 +187,6 @@
     "issue" : 296,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 231,
-    "move" : "merge",
-    "pr" : 374
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -671,5 +659,9 @@
     "move" : "merge",
     "pr" : 374,
     "at" : "2026-10-17T13:57:30.443Z"
+  }, {
+    "issue" : 342,
+    "move" : "assign",
+    "at" : "2026-10-17T13:58:38.046Z"
   } ]
 }
