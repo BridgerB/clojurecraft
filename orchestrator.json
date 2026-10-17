@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T02:25:21.695Z",
+  "at" : "2026-10-17T02:26:26.565Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -105,9 +105,8 @@
   } ],
   "moves" : [ {
     "issue" : 62,
-    "move" : "wait",
-    "pr" : 324,
-    "why" : "nudged recently"
+    "move" : "nudge",
+    "pr" : 324
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -151,5 +150,10 @@
     "move" : "nudge",
     "pr" : 324,
     "at" : "2026-10-17T02:21:05.017Z"
+  }, {
+    "issue" : 62,
+    "move" : "nudge",
+    "pr" : 324,
+    "at" : "2026-10-17T02:26:26.565Z"
   } ]
 }
