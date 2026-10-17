@@ -1,14 +1,14 @@
 {
-  "at" : "2026-10-17T22:04:25.380Z",
+  "at" : "2026-10-17T22:05:35.789Z",
   "cap" : 1,
   "issues" : [ {
-    "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
-    "quiet" : true,
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "quiet" : false,
     "number" : 385,
     "checks" : "green",
     "title" : "Bot stops at water-bucket: needs-tool",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 386,
     "session" : false
@@ -16,7 +16,7 @@
     "number" : 348,
     "title" : "Bot stops at flint-and-steel: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : false,
@@ -44,17 +44,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
-    "quiet" : true,
-    "number" : 228,
-    "checks" : "red",
-    "title" : "Bot stops at portal: no-footing",
-    "copilot" : true,
-    "draft" : true,
-    "nudges" : 0,
-    "pr" : 377,
-    "session" : false
-  }, {
     "number" : 196,
     "title" : "Bot stops at portal: no-stand",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -71,7 +60,7 @@
     "pr" : 387,
     "session" : false
   }, {
-    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
+    "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 161,
     "checks" : "red",
@@ -82,24 +71,13 @@
     "pr" : 391,
     "session" : false
   }, {
-    "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
-    "quiet" : false,
-    "number" : 157,
-    "checks" : "red",
-    "title" : "Bot stops at ingots: stuck",
-    "copilot" : true,
-    "draft" : true,
-    "nudges" : 0,
-    "pr" : 397,
-    "session" : false
-  }, {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 156,
     "checks" : "pending",
     "title" : "Bot stops at portal-kit: stuck",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 398,
     "session" : false
@@ -226,12 +204,8 @@
   } ],
   "moves" : [ {
     "issue" : 385,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 348,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "merge",
+    "pr" : 386
   }, {
     "issue" : 342,
     "move" : "leave",
@@ -249,10 +223,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 228,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
@@ -262,16 +232,13 @@
     "why" : "hands-off label"
   }, {
     "issue" : 161,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 157,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "move" : "stuck",
+    "pr" : 391
   }, {
     "issue" : 156,
-    "move" : "ready",
-    "pr" : 398
+    "move" : "wait",
+    "pr" : 398,
+    "why" : "checks running"
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -1045,5 +1012,15 @@
     "move" : "ready",
     "pr" : 398,
     "at" : "2026-10-17T22:04:25.380Z"
+  }, {
+    "issue" : 385,
+    "move" : "merge",
+    "pr" : 386,
+    "at" : "2026-10-17T22:05:35.789Z"
+  }, {
+    "issue" : 161,
+    "move" : "stuck",
+    "pr" : 391,
+    "at" : "2026-10-17T22:05:35.789Z"
   } ]
 }
