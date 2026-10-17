@@ -1,11 +1,11 @@
 {
-  "at" : "2026-10-17T20:22:18.236Z",
+  "at" : "2026-10-17T20:27:51.348Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 392,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at portal: no-site",
     "copilot" : true,
     "draft" : false,
@@ -219,9 +219,8 @@
   } ],
   "moves" : [ {
     "issue" : 392,
-    "move" : "wait",
-    "pr" : 393,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 393
   }, {
     "issue" : 385,
     "move" : "leave",
@@ -957,5 +956,10 @@
     "move" : "ready",
     "pr" : 393,
     "at" : "2026-10-17T20:21:09.993Z"
+  }, {
+    "issue" : 392,
+    "move" : "merge",
+    "pr" : 393,
+    "at" : "2026-10-17T20:27:51.348Z"
   } ]
 }
