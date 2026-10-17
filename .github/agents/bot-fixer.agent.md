@@ -84,4 +84,7 @@ The two checks are `unit / unit` (every test but the forest property, then the s
 
 ## When you are stuck
 
+Say it once. If a continue request finds nothing new to do (the same state, a partial fix you cannot finish, a blocker you cannot change such as the `Fixes` line GitHub appends to your pull request), reply once with what blocks you and the next step for a person, push nothing, and stop: the orchestrator sees a reply with no push and hands the issue to a person at once. Never repeat the same answer to the same request.
+
+
 AGENTS.md section 18. If after a real attempt the snapshot still recurs, or you cannot find the cause, do not open a pull request that claims a fix. Push what you learned (probe scripts, the snapshots, a failing test if you have one), set the body to `Refs #<n>` with section 14's hand-off (what the snapshots show, the cause you suspect with file:line, what you tried and why it failed), and finish. A clear hand-off is worth more than a guess that passes by luck.
