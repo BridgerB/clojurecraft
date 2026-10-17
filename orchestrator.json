@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T21:34:25.198Z",
+  "at" : "2026-10-17T21:35:36.269Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -88,10 +88,16 @@
     "pr" : 397,
     "session" : false
   }, {
-    "number" : 156,
-    "title" : "Bot stops at portal-kit: stuck",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 156,
+    "checks" : "red",
+    "title" : "Bot stops at portal-kit: stuck",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 398,
+    "session" : true
   }, {
     "number" : 151,
     "title" : "Bot stops at flint-and-steel: not-picked-up",
@@ -255,7 +261,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 156,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 398,
+    "why" : "session running"
   }, {
     "issue" : 62,
     "move" : "leave",
