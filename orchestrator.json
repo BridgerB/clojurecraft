@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T09:08:11.457Z",
+  "at" : "2026-10-17T09:09:15.770Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
@@ -11,7 +11,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 359,
-    "session" : true
+    "session" : false
   }, {
     "number" : 344,
     "title" : "Bot stops at cast-one: no-escape",
@@ -180,9 +180,8 @@
   } ],
   "moves" : [ {
     "issue" : 346,
-    "move" : "wait",
-    "pr" : 359,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 359
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -497,5 +496,10 @@
     "issue" : 346,
     "move" : "assign",
     "at" : "2026-10-17T08:55:22.677Z"
+  }, {
+    "issue" : 346,
+    "move" : "ready",
+    "pr" : 359,
+    "at" : "2026-10-17T09:09:15.770Z"
   } ]
 }
