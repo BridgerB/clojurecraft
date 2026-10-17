@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T02:37:07.638Z",
+  "at" : "2026-10-17T02:38:12.847Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -9,9 +9,9 @@
     "title" : "Bot stops at ingots: timeout",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 5,
+    "nudges" : 6,
     "pr" : 324,
-    "session" : false
+    "session" : true
   }, {
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
@@ -105,8 +105,9 @@
   } ],
   "moves" : [ {
     "issue" : 62,
-    "move" : "nudge",
-    "pr" : 324
+    "move" : "wait",
+    "pr" : 324,
+    "why" : "session running"
   }, {
     "issue" : 196,
     "move" : "leave",
