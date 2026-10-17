@@ -512,6 +512,50 @@
                    [:plan/intent :intent/reason]))
         "deepslate, fifteen seconds a block by hand: a trip out for a pickaxe beats it")))
 
+(deftest a-build-replans-for-a-broken-pickaxe-before-the-last-attempt
+  (let [origin [5 63 5]
+        w (assoc (standing-at (open-ground {[7 63 7] 1}) [5.5 63.0 5.5])
+                 :plan/attempts 2
+                 :player/controls {:control/forward? true}
+                 :player/inventory
+                 {0 {:item (recipe/item-id :stick) :count 2}
+                  1 {:item (recipe/item-id :cobblestone) :count 3}
+                  2 {:item (recipe/item-id :crafting_table) :count 1}})
+        op (build/next-op w (build/plan-for :portal origin :south 0))
+        i {:intent/kind :build
+           :intent/build :portal
+           :intent/origin origin
+           :intent/facing :south
+           :intent/status :active
+           :intent/op op}
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}]
+    (doseq [child [nil
+                   {:intent/kind :stairs-up
+                    :intent/to-y 64
+                    :intent/status :failed
+                    :intent/reason :no-pickaxe}]]
+      (let [i (cond-> i child (assoc :intent/child child))
+            yielded (intent/run (assoc w :plan/intent i) i tick)
+            replanned (plan/finish-intent yielded (:plan/intent yielded))]
+        (is (intent/done? (:plan/intent yielded)))
+        (is (nil? (get-in yielded [:plan/intent :intent/reason])))
+        (is (= {} (:player/controls yielded)))
+        (is (zero? (:plan/attempts replanned)))
+        (is (= {:site/origin origin :site/facing :south} (memory/site replanned)))
+        (is (= :place (:intent/kind (build/held-first replanned cast-one-row plan/goals nil)))
+            "the table is placed to craft the replacement before the build resumes")))
+    (let [i (assoc i
+                   :intent/child
+                   {:intent/kind :dig
+                    :intent/target (:build/pos op)
+                    :intent/status :failed
+                    :intent/reason :rejected})
+          failed (intent/run (assoc w :plan/intent i) i tick)]
+      (is (intent/failed? (:plan/intent failed)))
+      (is (= :rejected (get-in failed [:plan/intent :intent/reason])))
+      (is (= :failed (:plan/status (plan/fail-intent failed (:plan/intent failed)))))
+      (is (= :rejected (:plan/reason (plan/fail-intent failed (:plan/intent failed))))))))
+
 (deftest a-room-cell-behind-a-wall-is-cut-toward
   ;; sim race 38660819204 (issue #74): the bot stood outside its own room, every cell that
   ;; reached the next room cell inside it, no route to any, and failed :no-stand three times.
