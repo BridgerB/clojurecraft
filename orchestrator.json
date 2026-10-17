@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T08:47:49.144Z",
+  "at" : "2026-10-17T08:48:54.935Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -8,7 +8,7 @@
     "checks" : "pending",
     "title" : "Bot stops at portal: no-pickaxe",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 358,
     "session" : false
@@ -185,8 +185,9 @@
   } ],
   "moves" : [ {
     "issue" : 347,
-    "move" : "ready",
-    "pr" : 358
+    "move" : "wait",
+    "pr" : 358,
+    "why" : "checks running"
   }, {
     "issue" : 338,
     "move" : "leave",
