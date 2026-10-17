@@ -11,6 +11,47 @@
 
 (use-fixtures :once fx/instrumented)
 
+(deftest a-water-plant-is-not-a-dry-bank
+  (let [bank [5 64 5]
+        at (fn [cells] (assoc (game/init fx/opts) :world/chunks {[0 0] (world/column cells)}))]
+    (doseq [plant [:seagrass :tall_seagrass :kelp :kelp_plant :bubble_column]
+            cell [bank [5 65 5]]
+            state (blocks/states-of plant)]
+      (is (not (swim/bank? (at {cell state}) bank)) (str plant " at " cell)))
+    (is (swim/bank? (at {bank (blocks/default-state :short_grass)}) bank)
+        "a dry plant is still a bank")))
+
+(deftest a-kept-bank-containing-seagrass-is-dropped
+  (let [bank [5 64 5]
+        swim {:intent/kind :swim-out
+              :intent/for :retreat
+              :intent/bank bank
+              :intent/target bank
+              :intent/best-dist 0.0
+              :intent/best-tick 0
+              :intent/started 0
+              :intent/status :active}
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 64.0 5.5]
+                 :player/loaded? true
+                 :player/on-ground? true
+                 :player/in-water? true
+                 :time/tick 50
+                 :world/chunks {[0 0] (world/column {bank (blocks/default-state :seagrass)})}
+                 :plan/intent swim)
+        tick {:event/kind :tick :event/now 2500 :event/rand 0.5}
+        dropped (intent/run w swim tick)
+        i (:plan/intent dropped)]
+    (is (= :active (:intent/status i)) "re-plan instead of failing :stuck")
+    (is (nil? (:intent/bank i)))
+    (is (nil? (:intent/best-dist i)))
+    (let [picked (intent/run dropped i tick)
+          b (:intent/bank (:plan/intent picked))]
+      (is (some? b))
+      (is (not= bank b))
+      (is (swim/bank? picked b)))))
+
 (deftest a-bank-flooded-since-it-was-picked-is-dropped-for-another
   ;; race 38805758078 runner 1 bot Clj_r44 (issue #157) and race 38709226128 runner 8 bot
   ;; Clj_r31 (issue #156), replayed in probe 38830884734: the swim-out reached the bank it had

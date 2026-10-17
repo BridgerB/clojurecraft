@@ -17,6 +17,9 @@ sourceRefs:
   - "resources/clojurecraft/goals.edn#{:goal/id :escape-water :goal/priority 0 :goal/target? true :goal/always? true"
   - src/clojurecraft/swim.clj#defn banks
   - src/clojurecraft/swim.clj#defn bank?
+  - test/clojurecraft/swim_test.clj#a-water-plant-is-not-a-dry-bank
+  - test/clojurecraft/swim_test.clj#a-kept-bank-containing-seagrass-is-dropped
+  - test/clojurecraft/sim_test.clj#a-pond-with-seagrass-is-left-for-a-dry-bank
   - test/clojurecraft/sim_test.clj#under-a-frozen-sea-the-bot-digs-out-through-the-ice-and-stands-on-it
   - src/clojurecraft/swim.clj#defn float-top
   - src/clojurecraft/swim.clj#defn obstacle
@@ -88,6 +91,8 @@ Survival is two goal rows, a trap rule the planner applies every tick, and the e
 6. **From the floor.** `dig-or-sink`: off the ground a dig is five times slower and under water five times again, so a cap dug from the water takes 28 s with a wooden pickaxe and the breath lasts 25. When the cap is within reach of the eye standing on the floor (`dig-from-floor?`), the escape holds sneak, remembers the cell as `:intent/dig-when-down`, and starts the dig once on the ground: 5.75 s.
 
 A `:swim-out` started by the mine act's retreat (`:intent/for :retreat`, out of a flooded tunnel the bot is wading in) ends itself on dry land (`trap/dry-land?`); one started by the gather's `into-water` (`:intent/for :rise`, up a shaft dug into the sea, [[gather-chain]]) on dry land in the open, cap and notch skipped; an escape's is ended by its goal when the trap clears ([[mine-act]]).
+
+`bank?` also requires no fluid in the feet or head cell, using `terrain/fluid-kind` rather than a route's collision classification. Passable water plants (seagrass, tall seagrass, kelp) and bubble columns still contain water. Race 39007354638 runner 3 batch 2 bot Clj_r22 (issue #348) retreated to seagrass at [3204 62 3520], reached its centre and bobbed until `:stuck` at flint-and-steel. Rejecting that cell both keeps new escapes off submerged plants and lets `flooded?` discard a bank already kept in an older world value.
 
 ## :flee
 `dry-land?` reads the support cell with integer block coordinates, so a placed floor in `:world/blocks` wins over the original chunk. Issue #339 (Sim race 39005324315, R2/16 seed 1) landed on cobblestone over lava but kept the lava trap until `:no-footing`: floating-point coordinates missed the overlay's integer keys and read the old lava instead (`a-flee-clears-its-trap-on-a-placed-floor`).
