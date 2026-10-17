@@ -942,6 +942,23 @@
     (is (not= [1 0] (:intent/dir (:plan/intent w))) "it turned away from the water")
     (is (not (contains? (:sim/broken sim) [9 75 8])) "the cell beside the water was never dug")))
 
+(deftest water-beside-every-descent-is-sealed-before-digging
+  (let [terrain (reduce (fn [b [x z]] (assoc b [x 75 z] blocks/water-base))
+                        deep-stone
+                        [[10 8] [6 8] [8 10] [8 6]])
+        [w sim] (intent-run-holding {:intent/kind :stairs-down :intent/to-y 75}
+                                    terrain
+                                    76
+                                    {[:hotbar 0] {:item (blocks/items :wooden_pickaxe) :count 1}
+                                     [:hotbar 1] {:item (blocks/items :dirt) :count 1}}
+                                    60000)]
+    (is (= :done (:intent/status (:plan/intent w))))
+    (is (= [1 0] (:intent/dir (:plan/intent w))) "sealed, not turned away")
+    (is (contains? (:sim/placed sim) [10 75 8]) "the source was sealed")
+    (is (contains? (:sim/broken sim) [9 75 8]) "then the adjoining stone was dug")
+    (is (not (:player/in-water? w)))
+    (is (empty? (:sim/violations sim)))))
+
 (deftest water-under-every-stair-is-stepped-around
   ;; live iron-kit run 5 (local landing 3024,2360): an underground lake lay under the floor of
   ;; every stair the bot could cut, and the staircase failed :boxed three times in a moment. A

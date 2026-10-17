@@ -29,6 +29,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.stronghold :as stronghold]
             [clojurecraft.sword]
             [clojurecraft.terrain :as terrain]
@@ -814,11 +815,21 @@
   (s/cat :world (requires :window/grid)
          :which #{:inventory :table :furnace}))
 
+(s/fdef stairs/down-safe?
+  :args
+  (s/cat :world (requires :world/chunks)
+         :cells (s/coll-of ::block-pos)))
+(s/fdef stairs/down-lay
+  :args
+  (s/cat :world (requires :world/chunks :player/inventory)
+         :feet ::block-pos
+         :cells (s/coll-of ::block-pos)))
+
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
    `terrain/solid-fn `terrain/fluid-fn `memory/positions-now `memory/nearest-surface-water
    `memory/nearest-log `make/near `make/decide `wood/gather-next `place/spot `place/ashore
    `window/view `path/plan `path/classify `entity/hostiles `entity/gone? `eat/food-held `drops/lying
-   `blaze/blazes `pearls/endermen])
+   `blaze/blazes `pearls/endermen `stairs/down-safe? `stairs/down-lay])
 (s/def :stats/deaths pos-int?)

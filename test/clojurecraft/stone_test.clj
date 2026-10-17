@@ -28,6 +28,30 @@
          (into {} (map-indexed (fn [i n] [i {:item (blocks/items n) :count 1}])) items)
          :world/chunks {[0 0] (world/column {})}))
 
+(deftest a-stair-down-seals-water-before-opening-the-rock
+  (let [feet [5 64 5]
+        cells (stairs/stair-cells feet [1 0])
+        w (assoc (standing 64 :stone_pickaxe :dirt) :world/blocks {[7 63 5] blocks/water-base})
+        down {:intent/kind :stairs-down
+              :intent/to-y 58
+              :intent/status :active
+              :intent/visited #{[5 63 6] [4 63 5] [5 63 4]}}]
+    (is (stairs/safe? w cells) "a floor, with water beside the rock")
+    (is (not (stairs/down-safe? w cells)) "the child dig would refuse the water")
+    (is (= [[7 63 5]] (stairs/down-lay w feet cells)))
+    (is (= :lay
+           (get-in (intent/run (assoc w :plan/intent down) down {:event/kind :tick :event/now 0})
+                   [:plan/intent :intent/stage]))
+        "seal before digging, even with too little filler to floor a cave")
+    (is (stairs/down-safe? (assoc w :world/blocks {}) cells) "dry rock is cut as before")
+    (is (stairs/down-safe? (update w :world/blocks assoc [6 63 5] blocks/air) cells)
+        "an open cell beside water needs no dig")
+    (is (nil? (stairs/down-lay (assoc w :player/inventory {}) feet cells)) "no filler: turn")
+    (is (nil? (stairs/down-lay (assoc-in w [:world/blocks [6 66 5]] blocks/water-base) feet cells))
+        "water overhead cannot be sealed from below")
+    (is (nil? (stairs/down-lay (assoc w :world/blocks {[7 63 5] blocks/lava-base}) feet cells))
+        "lava is still refused")))
+
 (deftest each-row-collects-what-its-blocks-drop
   (is (= #{(blocks/items :cobblestone)} (stone/drops-of-row (row :mine-stone))))
   (is (= #{(blocks/items :coal)} (stone/drops-of-row (row :mine-coal))))

@@ -342,12 +342,30 @@
   [world feet cells]
   (or (seal world feet cells) (dry-feet world feet cells) (step-lay world feet cells)))
 
+(defn down-safe?
+  "May a stair down be cut as it stands: safe?, and none of its solid cells exposes a fluid the
+   child dig would refuse. Open cells need no dig, even beside water."
+  [world cells]
+  (and (safe? world cells)
+       (not-any? #(and (some-> (terrain/block-at world %)
+                               blocks/solid?)
+                       (intent/exposes-fluid? world %))
+                 cells)))
+
+(defn down-lay
+  "The cells to lay before a stair down: seal side water first, else lay its missing floor.
+   nil when neither can be laid. A seal uses the same support and fluid checks as a climb's.
+   Race 39007359500 runner 5 bot Clj_r06 (issue #342) turned from water beside every descent,
+   then waited :boxed on a dry shelf with no route away, five cobblestone and twenty dirt held."
+  [world feet cells]
+  (or (seal world feet cells) (lay world feet cells)))
+
 (def shapes
   "How each kind of staircase is cut: the cells a stair opens (top first, the new feet last), the
    rule that lets it be cut, which way the feet go when it is taken, and what to lay before it
-   can be: for stairs down the floor where it is missing and its holder (lay), for stairs up a
+   can be: for stairs down a seal or its missing floor and holder (down-lay), for stairs up a
    seal over the water beside its cells, else its missing step (up-lay)."
-  {:stairs-down {:cells stair-cells :safe? safe? :rise -1 :lay lay}
+  {:stairs-down {:cells stair-cells :safe? down-safe? :rise -1 :lay down-lay}
    :stairs-up {:cells up-cells :safe? up-dry? :rise 1 :lay up-lay}})
 
 (defn tool-missing
@@ -666,14 +684,16 @@
   (let [dir (or dir (first directions))
         {shape-safe? :safe? lay :lay cells-of :cells} (shapes kind)
         fresh? (fn [cells] (not (contains? visited (last cells)))) ; no stair back onto a stepped cell
-        safe? (fn [world cells] (and (fresh? cells) (shape-safe? world cells)))
+        fresh-safe? (fn [world cells] (and (fresh? cells) (shape-safe? world cells)))
         feet (intent/feet world)
         cells (cells-of feet dir)
-        needed (when (and lay (fresh? cells) (not (safe? world cells))) (lay world feet cells))
-        to-lay (when (and needed (floors-affordable? world i feet needed)) needed)
-        rock (when needed (rock-heading i #(safe? world (cells-of feet %))))]
+        needed (when (and lay (fresh? cells) (not (fresh-safe? world cells)))
+                 (lay world feet cells))
+        to-lay (when (and needed (or (safe? world cells) (floors-affordable? world i feet needed)))
+                 needed)
+        rock (when needed (rock-heading i #(fresh-safe? world (cells-of feet %))))]
     (cond (airborne? world) (assoc world :player/controls {}) ; land first
-          (safe? world cells)
+          (fresh-safe? world cells)
           (intent/assoc-intent world
                                :intent/dir dir
                                :intent/cells cells
