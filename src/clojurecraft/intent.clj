@@ -306,13 +306,19 @@
 
 (defn follow
   "Controls that walk to a waypoint: face its centre, forward, and jump only when it is above
-   the feet and near (jumping from afar bounces in open air), or when blocked."
+   the feet and near (jumping from afar bounces in open air), or when blocked. Stop horizontal
+   input once the body is wholly over a descending waypoint, so momentum does not carry the
+   feet beyond its floor and stopping on the lip cannot prevent the fall."
   [world [wx wy wz]]
   (let [[px py pz] (:player/pos world)
         centre [(+ wx 0.5) (+ wy 0.5) (+ wz 0.5)]
         near? (< (physics/horizontal-distance [px 0 pz] centre) jump-near)
         up? (> wy (+ (math/floor py) 0.5))]
-    (update (toward world centre 0.0) :control/jump? #(or % (and up? near?)))))
+    (cond (and (> py wy)
+               (<= (physics/horizontal-distance [px 0 pz] [(+ wx 0.5) 0 (+ wz 0.5)])
+                   (- 0.5 physics/half-width)))
+          {}
+          :else (update (toward world centre 0.0) :control/jump? #(or % (and up? near?))))))
 
 (defn opening
   "A walk out to the surface, or nil. The way already dug is open air: :surface climbs it

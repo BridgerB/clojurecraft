@@ -69,7 +69,7 @@
     (is (= [1 63 0] (:build/pos (first plan))) "the floor under the cell stepped into")
     (is (= [[1 63 0] [1 65 0] [1 64 0]] (map :build/pos (filter #(= :dig (:build/op %)) plan)))
         "floor repaired before opening the body cells head first")
-    (is (= [:feet [1 64 0]] (:build/done (peek plan))))
+    (is (= [:landed-centred [1 64 0]] (:build/done (peek plan))))
     (is (every? #(= [0 64 0] (:build/stand %)) (butlast plan)) "every op worked from the feet"))
   (testing "a step down opens the cell the head passes through; a step up the one over the head"
     (is (= [[1 65 0] [1 64 0] [1 63 0]] (fortress/opens [0 64 0] [1 -1 0])))
@@ -98,6 +98,42 @@
         op (peek (fortress/step-plan [0 64 0] [1 0 0]))]
     (is (= {:intent/kind :walk :intent/target [1 64 0] :intent/for :build}
            (build/op-child w {:intent/kind :tunnel-to :intent/target [9 64 0]} op)))))
+
+(deftest a-tunnel-step-lands-in-the-middle-before-counting-it
+  (let [from [0 64 0]
+        move [1 -1 0]
+        to [1 63 0]
+        op (peek (fortress/step-plan from move))
+        i {:intent/kind :tunnel-to
+           :intent/target [10 63 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/from from
+           :intent/move move
+           :intent/op (assoc op :build/done [:feet to])
+           :intent/child {:intent/kind :walk :intent/target to :intent/for :build}}
+        w (assoc (rock {[1 63 0] air [1 64 0] air [1 65 0] air})
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :plan/intent i
+                 :player/controls {:control/forward? true})
+        run-at (fn [pos grounded?]
+                 (intent/run (assoc w :player/pos pos :player/on-ground? grounded?)
+                             i
+                             {:event/kind :tick :event/now 0}))]
+    (doseq [[pos grounded?] [[[1.05 63.0 0.5] true] [[1.5 63.4 0.5] false]]]
+      (let [out (run-at pos grounded?)]
+        (is (= op (get-in out [:plan/intent :intent/op])))
+        (is (nil? (get-in out [:plan/intent :intent/taken])))
+        (is (nil? (get-in out [:plan/intent :intent/child])))
+        (is (not (build/satisfied? out op)))))
+    (let [out (run-at [1.5 63.0 0.5] true)]
+      (is (= 1 (get-in out [:plan/intent :intent/taken])))
+      (is (nil? (get-in out [:plan/intent :intent/move])))
+      (is (nil? (get-in out [:plan/intent :intent/child])))
+      (is (= {} (:player/controls out))))))
 
 (deftest a-tunnel-replaces-a-solid-floor-the-route-cannot-walk
   (let [floor [1 63 0]
@@ -163,7 +199,7 @@
                              (and (not-any? body placed)
                                   (contains? body to)
                                   (contains? body (update to 1 inc))
-                                  (= [:feet to] (:build/done (peek plan)))
+                                  (= [:landed-centred to] (:build/done (peek plan)))
                                   (= plan (fortress/step-plan feet move))))))]
     (is (:pass? r) (pr-str (select-keys r [:fail :shrunk])))))
 

@@ -52,6 +52,10 @@
 
 (defmethod build/holds? :walk-floor [world [_ p]] (path/floor? world p))
 
+(defmethod build/holds? :landed-centred
+  [world [_ p]]
+  (and (:player/on-ground? world) (intent/centred? world p)))
+
 (defn plus "Cell a moved by offset d." [a d] (mapv + a d))
 
 (defn opens
@@ -70,11 +74,13 @@
   [feet move]
   (let [to (plus feet move)
         floor (plus to [0 -1 0])]
-    (vec (concat
-          [(build/dig-op floor feet [:walk-floor floor] :floor-clear)
-           (build/place-op floor feet nil :floor)]
-          (map #(build/dig-op % feet nil :open) (opens feet move))
-          [{:build/op :stand-in :build/stand to :build/step :enter :build/done [:feet to]}]))))
+    (vec (concat [(build/dig-op floor feet [:walk-floor floor] :floor-clear)
+                  (build/place-op floor feet nil :floor)]
+                 (map #(build/dig-op % feet nil :open) (opens feet move))
+                 [{:build/op :stand-in
+                   :build/stand to
+                   :build/step :enter
+                   :build/done [:landed-centred to]}]))))
 
 (defn neighbours
   "The six cells sharing a face with c."
@@ -249,9 +255,10 @@
           :else
           (let [next (build/next-op world (step-plan from move))]
             (cond (nil? next)
-                  (reduce intent/dissoc-intent
-                          (intent/assoc-intent world :intent/taken (inc taken))
-                          step-keys)
+                  (reduce
+                   intent/dissoc-intent
+                   (intent/assoc-intent (assoc world :player/controls {}) :intent/taken (inc taken))
+                   step-keys)
                   (and (= :floor-clear (:build/step next)) (not (safe? world from move)))
                   (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
                   :else (build/work-op world i next event))))))

@@ -296,6 +296,26 @@
              (assoc w :player/pos pos :player/vel [0.0 (second vel) 0.0] :player/on-ground? false) ; the walk stops pressing forward at arrival
              (range 20)))))
 
+(deftest a-descending-walk-does-not-run-past-its-landing
+  (let [w (world-of {[6 63 5] 0 [6 62 5] stone [7 63 5] 0 [7 62 5] 0 [7 61 5] 0} [5.5 64.0 5.5])
+        target [6 63 5]
+        solid? (terrain/solid-fn w)]
+    (doseq [start [[5.5 64.0 5.5] [6.25 64.0 5.5]]]
+      (let [landed (reduce (fn [w _]
+                             (let [controls (if (and (:player/on-ground? w)
+                                                     (intent/centred? w target))
+                                              {}
+                                              (intent/follow w target))]
+                               (physics/step solid? w controls)))
+                           (assoc w :player/pos start :player/vel [0.0 0.0 0.0])
+                           (range 40))]
+        (is (:player/on-ground? landed))
+        (is (intent/centred? landed target))))
+    (is (= {} (intent/follow (assoc w :player/pos [6.5 63.8 5.5]) target))))
+  (testing "level walks and climbs still press forward"
+    (is (:control/forward? (intent/follow {:player/pos [5.5 64.0 5.5]} [6 64 5])))
+    (is (:control/jump? (intent/follow {:player/pos [5.5 64.0 5.5]} [6 65 5])))))
+
 (deftest a-found-route-is-walked-by-the-physics-and-ends-in-the-goal
   ;; issue #4's property: over generated terrain, when plan says :found, driving physics/step
   ;; with the walk's follow controller reaches every waypoint in ≤ 80 ticks each and ends in
