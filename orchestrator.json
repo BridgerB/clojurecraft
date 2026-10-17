@@ -1,11 +1,17 @@
 {
-  "at" : "2026-10-17T12:08:16.397Z",
+  "at" : "2026-10-17T12:09:24.116Z",
   "cap" : 1,
   "issues" : [ {
-    "number" : 370,
-    "title" : "Bot stops at portal: no-log",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 370,
+    "checks" : "red",
+    "title" : "Bot stops at portal: no-log",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 371,
+    "session" : true
   }, {
     "number" : 369,
     "title" : "Bot stops at cast-one: not-held",
@@ -174,7 +180,9 @@
   } ],
   "moves" : [ {
     "issue" : 370,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 371,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
