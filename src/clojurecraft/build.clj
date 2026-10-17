@@ -552,6 +552,9 @@
    and up to station-span aside of the landing's column, that the feet can stand in once opened
    (firm under it, it and the head openable, no fluid touching them, outside the footprint) and
    from which lava sources are in reach (reach-sources), with safe sight lines (safe-source?).
+   At a stand the feet already centre on, the sight lines use the actual eyes, not the cell's
+   exact centre: issue #380's R3/32 refill reached a stand slightly off centre, where the ray
+   would open higher lava, and failed :no-station although the projected ray was safe.
    As a pool's near sources are scooped the
    next stand along it is the station; the way to one runs straight out from the landing, then
    aside (refill), never along the stair. nil when none."
@@ -571,8 +574,8 @@
                      (dry? world (mapcat touching [stand head]))
                      (not (contains? (footprint origin facing h) stand)))
           :let [pos (assoc (physics/centre stand) 1 (double (second stand)))
-                srcs (filter #(safe-source? (assoc world :player/pos pos) %)
-                             (reach-sources sources stand))]
+                at (if (intent/centred? world stand) world (assoc world :player/pos pos))
+                srcs (filter #(safe-source? at %) (reach-sources sources stand))]
           :when (seq srcs)]
       {:stand stand :sources srcs :h h}))))
 
