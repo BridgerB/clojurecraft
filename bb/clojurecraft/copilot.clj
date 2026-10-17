@@ -17,9 +17,11 @@
      4. ready (not a draft), `unit / unit` and `check` green: merge. The merge closes the issue
         by its Fixes line. A pull request that changes a guarded path (the workflows, this
         dispatcher) is never merged here: the issue is labelled needs-review for a person;
-     5. a pull request that only says Refs #n (Copilot could not prove a fix and handed off):
+     5. a pull request that conflicts with main: ask Copilot to merge main and resolve it (a merge
+        would fail; it used to throw and end the pass, its status unwritten);
+     6. a pull request that only says Refs #n (Copilot could not prove a fix and handed off):
         the issue is labelled agent-stuck for a person, never reassigned;
-     6. otherwise (a red check, a draft left by a session that ended, a Refs-only body): ask
+     7. otherwise (a red check, a draft left by a session that ended, a Refs-only body): ask
         Copilot to go on, in a pull request comment that says what is wrong, at most once every
         nudge-every-ms and max-nudges times; after that the issue is labelled agent-stuck and
         left for a person.
@@ -110,6 +112,10 @@
        :issue n
        :pr (:number pr)
        :why "checks wait for approval: Settings, Copilot, cloud agent"}
+      (and pr (:conflict? pr) (>= (:nudges pr) max-nudges)) {:move :stuck :issue n :pr (:number pr)}
+      (and pr (:conflict? pr) (:last-nudge-ms pr) (< (- now (:last-nudge-ms pr)) nudge-every-ms))
+      {:move :wait :issue n :pr (:number pr) :why "conflicts; asked recently"}
+      (and pr (:conflict? pr)) {:move :nudge :issue n :pr (:number pr) :conflict? true}
       (and pr (not (:draft? pr)) (= :green (:checks pr)) (:guarded? pr))
       {:move :review :issue n :pr (:number pr)}
       (and pr (not (:draft? pr)) (= :green (:checks pr))) {:move :merge :issue n :pr (:number pr)}
@@ -180,12 +186,14 @@
 
 (defn nudge-text
   "The continue comment for a pull request in move m, saying what is left."
-  [{:keys [issue checks draft?]}]
+  [{:keys [issue checks draft? conflict?]}]
   (str
    nudge-lead
    issue
    " by your bot-fixer profile until it can merge. "
    (cond
+     conflict?
+     "It conflicts with main, so it cannot merge: merge origin/main into your branch, resolve the conflicts keeping both sides' intent (problems.edn sentences: keep both), push, and let the checks run again. "
      (= :red checks)
      "A required check is red: read its log whole (the run's failed job), fix the cause and push. "
      draft?
@@ -241,35 +249,37 @@
   "The open pull requests from copilot/* branches, by the issue each fixes:
    {n {:number :branch :draft? :held :guarded? :checks :nudges :last-nudge-ms}}."
   []
-  (into {}
-        (for
-          [pr
-           (gh-json
-            "pr" "list"
-            "--repo" repo
-            "--state" "open"
-            "--limit" "100"
-            "--json"
-            "number,headRefName,headRefOid,isDraft,body,statusCheckRollup,comments,files,updatedAt")
-           :when (str/starts-with? (:headRefName pr) "copilot/")
-           :let [ours (filter #(str/starts-with? (str (:body %)) nudge-lead) (:comments pr))]
-           :let [fixed (fixes (:body pr))]
-           n (if (seq fixed) fixed (refs (:body pr)))]
-          [n
-           {:number (:number pr)
-            :branch (:headRefName pr)
-            :draft? (:isDraft pr)
-            :gave-up? (empty? fixed)
-            :updated-ms (ms (:updatedAt pr))
-            :held (held-runs (:headRefOid pr))
-            :guarded? (boolean (some (fn [{:keys [path]}] (some #(str/starts-with? path %) guarded))
-                                     (:files pr)))
-            :checks (check-state (:statusCheckRollup pr))
-            :nudges (count ours)
-            :last-nudge-ms (some->> ours
-                                    (map (comp ms :createdAt))
-                                    seq
-                                    (apply max))}])))
+  (into
+   {}
+   (for
+     [pr
+      (gh-json
+       "pr" "list"
+       "--repo" repo
+       "--state" "open"
+       "--limit" "100"
+       "--json"
+       "number,headRefName,headRefOid,isDraft,body,statusCheckRollup,comments,files,updatedAt,mergeable")
+      :when (str/starts-with? (:headRefName pr) "copilot/")
+      :let [ours (filter #(str/starts-with? (str (:body %)) nudge-lead) (:comments pr))]
+      :let [fixed (fixes (:body pr))]
+      n (if (seq fixed) fixed (refs (:body pr)))]
+     [n
+      {:number (:number pr)
+       :branch (:headRefName pr)
+       :draft? (:isDraft pr)
+       :conflict? (= "CONFLICTING" (:mergeable pr))
+       :gave-up? (empty? fixed)
+       :updated-ms (ms (:updatedAt pr))
+       :held (held-runs (:headRefOid pr))
+       :guarded? (boolean (some (fn [{:keys [path]}] (some #(str/starts-with? path %) guarded))
+                                (:files pr)))
+       :checks (check-state (:statusCheckRollup pr))
+       :nudges (count ours)
+       :last-nudge-ms (some->> ours
+                               (map (comp ms :createdAt))
+                               seq
+                               (apply max))}])))
 
 (defn live-branches
   "The branches with a Copilot session queued or running (its runs have event dynamic)."
@@ -401,7 +411,11 @@
                            now))]
     (println (count issues) "open bot-failure issues," holding "held by Copilot, cap" cap)
     (let [made (moves each holding cap)]
-      (run! #(perform! dry? %) made)
+      (run! (fn [m]
+              (try (perform! dry? m)
+                   (catch Exception e
+                     (println (str "#" (:issue m)) (name (:move m)) "failed:" (ex-message e)))))
+            made)
       (when-not dry?
         (let [{prev :value sha :sha} (read-status)
               next (status
