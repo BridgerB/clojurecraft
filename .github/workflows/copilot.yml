@@ -64,6 +64,6 @@ jobs:
           while [ "$(date +%s)" -lt "$end" ]; do
             echo "== $(date -u +%H:%M:%SZ)"
             git fetch -q origin main && git reset -q --hard origin/main   # each pass runs the newest main: a merged change reaches the loop within a minute
-            bb copilot dispatch || echo "dispatch failed; the next pass tries again"
+            timeout 240 bb copilot dispatch || echo "dispatch failed or hung past 240 s; the next pass tries again"   # a hung gh call froze the loop for an hour (2026-10-17)
             sleep 60
           done
