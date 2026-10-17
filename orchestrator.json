@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T21:13:55.817Z",
+  "at" : "2026-10-17T21:16:10.235Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -32,7 +32,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 395,
-    "session" : true
+    "session" : false
   }, {
     "number" : 320,
     "title" : "Bot stops at cast-one: stair-not-taken",
@@ -222,9 +222,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 328,
-    "move" : "wait",
-    "pr" : 395,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 395
   }, {
     "issue" : 320,
     "move" : "leave",
@@ -980,5 +979,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-17T20:56:01.773Z"
+  }, {
+    "issue" : 328,
+    "move" : "ready",
+    "pr" : 395,
+    "at" : "2026-10-17T21:16:10.235Z"
   } ]
 }
