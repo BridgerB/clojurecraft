@@ -674,6 +674,36 @@
         "the hole's top cell is floored from the feet")
     (is (= :walk (:intent/kind (toward {}))) "nothing to place: the walk, as before")))
 
+(deftest a-climb-finishes-before-the-build-repairs-its-headroom
+  (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])
+        climb {:intent/kind :stairs-up
+               :intent/to-y 66
+               :intent/to-height? true
+               :intent/for :build
+               :intent/status :active
+               :intent/stage :open
+               :intent/started-y 63.0
+               :intent/started-tick 0
+               :intent/dir [1 0]
+               :intent/cells [[5 65 5] [6 65 5] [6 64 5]]}
+        i (assoc hill-intent :intent/op hill-op :intent/child climb)
+        floor (build/place-op [5 65 5] [5 66 5] nil :floor)
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        advance (fn [i] (build/work-op (assoc w :plan/intent i) i floor tick))
+        climbing (advance i)]
+    (is (= hill-op (get-in climbing [:plan/intent :intent/op])))
+    (is (= :step (get-in climbing [:plan/intent :intent/child :intent/stage]))
+        "opening a planned floor for headroom must not cancel the climb and replace it")
+    (doseq [status [:done :failed]]
+      (let [finished (advance (assoc-in i [:intent/child :intent/status] status))]
+        (is (= floor (get-in finished [:plan/intent :intent/op])))
+        (is (nil? (get-in finished [:plan/intent :intent/child]))
+            "after the climb ends, re-read the plan and repair the missing floor")))
+    (let [walking (advance (assoc i :intent/child {:intent/kind :walk :intent/status :active}))]
+      (is (= floor (get-in walking [:plan/intent :intent/op])))
+      (is (nil? (get-in walking [:plan/intent :intent/child]))
+          "other children still give way when the world changes"))))
+
 (deftest a-site-no-way-reaches-is-given-up
   ;; sim race 38839665459 (issue #222, world R1/11): the build kept a site 70 blocks off across an
   ;; aquifer; the walk there failed :no-path, the swim out of the water it let in :stuck, and the

@@ -182,6 +182,7 @@
    "Scooping late lets water spread and convert the lava pool"
    "Placing into a lava source destroys it; casting over a lava sea has no stance"
    "A rejected placement left as a ghost block; the pathfinder digs finished obsidian"
+   "A climb that opens a room floor for headroom must finish before the build repairs it: cancelling the climb on the changed op digs and replaces the same floor until cobblestone runs out (issue #369, R3/16)."
    "Lighting with the hitbox in the fire cell burns the bot"
    "Entering a lit portal from behind its protected back wall fails :no-path: approach through the room's landing when no route reaches the interior (issue #346, R4/1)"
    "A climb for portal wood boxed under gravel may have only a short way back: when no route reaches the retreat distance, walk to an unboxed waypoint instead of waiting :no-log (issue #370, R1/29)"
