@@ -950,7 +950,8 @@
                                     terrain
                                     76
                                     {[:hotbar 0] {:item (blocks/items :wooden_pickaxe) :count 1}
-                                     [:hotbar 1] {:item (blocks/items :dirt) :count 1}}
+                                     [:hotbar 1] {:item (blocks/items :dirt)
+                                                  :count (inc stairs/lay-reserve)}}
                                     60000)]
     (is (= :done (:intent/status (:plan/intent w))))
     (is (= [1 0] (:intent/dir (:plan/intent w))) "sealed, not turned away")

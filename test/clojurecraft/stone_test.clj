@@ -54,7 +54,9 @@
 (deftest a-stair-down-seals-water-before-opening-the-rock
   (let [feet [5 64 5]
         cells (stairs/stair-cells feet [1 0])
-        w (assoc (standing 64 :stone_pickaxe :dirt) :world/blocks {[7 63 5] blocks/water-base})
+        w (-> (standing 64 :stone_pickaxe :dirt)
+              (assoc-in [:player/inventory 1 :count] (inc stairs/lay-reserve))
+              (assoc :world/blocks {[7 63 5] blocks/water-base}))
         down {:intent/kind :stairs-down
               :intent/to-y 58
               :intent/status :active
@@ -74,6 +76,23 @@
         "water overhead cannot be sealed from below")
     (is (nil? (stairs/down-lay (assoc w :world/blocks {[7 63 5] blocks/lava-base}) feet cells))
         "lava is still refused")))
+
+(deftest a-descent-seal-keeps-filler-for-the-climb-out
+  (let [feet [5 64 5]
+        cells (stairs/stair-cells feet [1 0])
+        down {:intent/kind :stairs-down :intent/to-y 58 :intent/status :active}
+        w (-> (standing 64 :stone_pickaxe :dirt)
+              (assoc-in [:player/inventory 1 :count] stairs/lay-reserve)
+              (assoc :world/blocks {[7 63 5] blocks/water-base} :plan/intent down))
+        planned (:plan/intent (intent/run w down {:event/kind :tick :event/now 0}))]
+    (is (= [[7 63 5]] (stairs/seal w feet cells)) "the water could be sealed")
+    (is (nil? (stairs/down-lay w feet cells)) "but a descent must keep the escape reserve")
+    (is (not= :lay (:intent/stage planned)))
+    (is (= 1 (:intent/turns planned)) "turn toward dry rock instead")
+    (let [up-cells (stairs/up-cells feet [1 0])
+          climb (assoc w :world/blocks {[6 64 5] 1 [7 64 5] 1 [7 65 5] blocks/water-base})]
+      (is (= [[7 65 5]] (stairs/up-lay climb feet up-cells))
+          "a climb can still spend the reserve to leave the pocket"))))
 
 (deftest each-row-collects-what-its-blocks-drop
   (is (= #{(blocks/items :cobblestone)} (stone/drops-of-row (row :mine-stone))))
