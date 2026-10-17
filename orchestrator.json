@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T19:01:17.761Z",
+  "at" : "2026-10-17T19:05:41.089Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -63,7 +63,7 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 161,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at portal-kit: timeout",
     "copilot" : true,
     "draft" : true,
