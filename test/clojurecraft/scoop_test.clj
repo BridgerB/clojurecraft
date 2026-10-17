@@ -132,6 +132,23 @@
     (is (= west (scoop/scoop-next (remembered away)))
         "with the pool known that way, homeward toward it")))
 
+(deftest a-far-pool-no-hunt-reaches-is-cut-toward
+  ;; sim race 38811426215 runner 8 (issue #60, world R4/29): in the world's corner, pools 150
+  ;; blocks off and under it, no hunt with a route, the bot climbed its pit and waited :no-water
+  ;; with the pool remembered and no cut toward it
+  (let [far (fn [y]
+              (memory/remember-pools (standing {} [8.5 8.5]) [-8 0] (world/column {[8 y 8] water})))
+        level (scoop/scoop-next (far 63))
+        down (scoop/scoop-next (far 55))
+        deep (assoc (far 55) :plan/go-at [8.5 90.0 8.5])]
+    (is (empty? (scoop/pools-near (far 63))) "past pool-radius")
+    (is (= [:tunnel :bank [-120 63 8]] ((juxt :intent/kind :intent/for :intent/target) level))
+        "level with the bank: a tunnel toward it")
+    (is (= [:stairs-down :bank [-120 55 8]] ((juxt :intent/kind :intent/for :intent/target) down))
+        "the pool lower: stairs down toward it")
+    (is (= :stairs-down (:intent/kind (scoop/scoop-next deep)))
+        "deep under the landing, the way down is not undone by a climb")))
+
 (deftest water-the-eyes-cannot-reach-is-no-target
   ;; live iron-kit run 3 (local landing 2360,2360): three scoops at aquifer sources with stone
   ;; over them, beside the bot at y 23, each acked by the server and none filling the bucket
