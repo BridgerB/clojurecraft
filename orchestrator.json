@@ -1,17 +1,17 @@
 {
-  "at" : "2026-10-17T01:56:38.783Z",
+  "at" : "2026-10-17T02:05:04.153Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 62,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at ingots: timeout",
     "copilot" : true,
     "draft" : true,
     "nudges" : 0,
     "pr" : 324,
-    "session" : true
+    "session" : false
   }, {
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
@@ -110,9 +110,8 @@
   } ],
   "moves" : [ {
     "issue" : 62,
-    "move" : "wait",
-    "pr" : 324,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 324
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -140,5 +139,10 @@
     "issue" : 62,
     "move" : "assign",
     "at" : "2026-10-17T01:55:32.580Z"
+  }, {
+    "issue" : 62,
+    "move" : "ready",
+    "pr" : 324,
+    "at" : "2026-10-17T02:05:04.153Z"
   } ]
 }
