@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T21:33:14.535Z",
+  "at" : "2026-10-17T21:34:25.198Z",
   "cap" : 1,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
@@ -77,10 +77,10 @@
     "pr" : 391,
     "session" : false
   }, {
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 157,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at ingots: stuck",
     "copilot" : true,
     "draft" : true,
@@ -251,8 +251,11 @@
     "why" : "hands-off label"
   }, {
     "issue" : 157,
-    "move" : "gave-up",
-    "pr" : 397
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 156,
+    "move" : "assign"
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -1012,5 +1015,9 @@
     "move" : "gave-up",
     "pr" : 397,
     "at" : "2026-10-17T21:33:14.535Z"
+  }, {
+    "issue" : 156,
+    "move" : "assign",
+    "at" : "2026-10-17T21:34:25.198Z"
   } ]
 }
