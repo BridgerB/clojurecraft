@@ -349,6 +349,55 @@
       (is (= [[5 66 5] [6 66 5] [6 65 5]] (:intent/cells (:plan/intent w)))
           "the stair from the landed feet, its new feet on the wall's lower block"))))
 
+(deftest a-stair-up-replans-after-falling-below-its-launch-height
+  (let [up {:intent/kind :stairs-up
+            :intent/to-y 70
+            :intent/to-height? true
+            :intent/status :active
+            :intent/stage :step
+            :intent/dir [1 0]
+            :intent/cells (stairs/up-cells [5 65 5] [1 0])
+            :intent/started-y 65.0
+            :intent/started-tick 0}
+        w (assoc (standing 64 :stone_pickaxe)
+                 :world/blocks {[6 64 5] 1}
+                 :time/tick 20
+                 :plan/intent up
+                 :player/controls {:control/forward? true :control/jump? true})
+        tick {:event/kind :tick :event/now 1000}
+        replanned (intent/run w up tick)]
+    (is (= :plan (get-in replanned [:plan/intent :intent/stage])))
+    (is (nil? (get-in replanned [:plan/intent :intent/cells])))
+    (is (= {} (:player/controls replanned)))
+    (let [next (intent/run replanned (:plan/intent replanned) tick)]
+      (is (= (stairs/up-cells [5 64 5] [1 0]) (get-in next [:plan/intent :intent/cells]))))
+    (let [jumping (assoc w :player/pos [5.5 65.4 5.5] :player/on-ground? false)]
+      (is (= :step (get-in (intent/run jumping up tick) [:plan/intent :intent/stage]))
+          "a normal jump above the launch height keeps its step"))))
+
+(deftest a-duck-is-not-cancelled-while-supported-only-by-the-previous-cell
+  (let [duck {:intent/kind :stairs-up
+              :intent/to-y 70
+              :intent/to-height? true
+              :intent/status :active
+              :intent/stage :step
+              :intent/dir [1 0]
+              :intent/rise -1
+              :intent/cells (stairs/stair-cells [5 64 5] [1 0])
+              :intent/started-y 64.0
+              :intent/started-tick 0}
+        w (assoc (standing 64 :stone_pickaxe)
+                 :player/pos [6.05 64.0 5.5]
+                 :world/blocks {[6 63 5] blocks/air [7 64 5] 1}
+                 :time/tick 20
+                 :plan/intent duck)
+        next (intent/run w duck {:event/kind :tick :event/now 1000})]
+    (is (stairs/up-dry? w (stairs/up-cells [6 64 5] [1 0]))
+        "a higher step is visible from the edge")
+    (is (= :step (get-in next [:plan/intent :intent/stage])))
+    (is (= -1 (get-in next [:plan/intent :intent/rise])))
+    (is (= (:intent/cells duck) (get-in next [:plan/intent :intent/cells])))))
+
 (deftest a-floor-is-never-laid-over-water
   ;; sim race 38657453715 world R4/1 (issue #62): a staircase's level steps laid a floor against
   ;; the last one, twenty-six blocks out over a lake, until the cobblestone was spent; every

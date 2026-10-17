@@ -860,7 +860,8 @@
   [world {:intent/keys [kind dir cells started-y started-tick] :as i} _]
   (let [cell (last cells)
         rise (:intent/rise i (:rise (shapes kind)))]
-    (cond (taken? world rise started-y cell)
+    (cond (or (taken? world rise started-y cell)
+              (and (pos? rise) (< (physics/y-of (:player/pos world)) (- started-y 0.5))))
           (-> world
               (assoc :player/controls {})
               (intent/assoc-intent :intent/stage :plan)
@@ -1131,6 +1132,7 @@
             intent/done)
         (and (= -1 rise)
              (:player/on-ground? world)
+             (= :solid (path/classify world (update (intent/feet world) 1 dec)))
              (some (fn [d]
                      (let [cells (up-cells (intent/feet world) d)]
                        (and (up-dry? world cells) (not-any? #(too-hard? world %) cells))))
