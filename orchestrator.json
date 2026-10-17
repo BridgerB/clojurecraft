@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-17T22:06:51.635Z",
+  "at" : "2026-10-17T22:11:18.283Z",
   "cap" : 1,
   "issues" : [ {
     "number" : 348,
@@ -63,7 +63,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 156,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at portal-kit: stuck",
     "copilot" : true,
     "draft" : false,
@@ -221,9 +221,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 156,
-    "move" : "wait",
-    "pr" : 398,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 398
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -1007,5 +1006,10 @@
     "move" : "stuck",
     "pr" : 391,
     "at" : "2026-10-17T22:05:35.789Z"
+  }, {
+    "issue" : 156,
+    "move" : "merge",
+    "pr" : 398,
+    "at" : "2026-10-17T22:11:18.283Z"
   } ]
 }
