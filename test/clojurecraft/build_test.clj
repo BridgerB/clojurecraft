@@ -425,6 +425,25 @@
           (is (contains? (set (keys pool)) (build/hunt-target other))
               "a farther pool with a safe stand remains a hunt target"))))))
 
+(deftest the-lava-hunt-passes-sources-it-is-already-beside
+  (let [near [9 40 10]
+        pool (into {} (for [x [7 8 9] z [12 13 14 15]] [[x 40 z] blocks/lava-base]))
+        room {[10 41 10] blocks/air [10 42 10] blocks/air}
+        w (standing-at (open-ground (assoc (merge room pool) near blocks/lava-base))
+                       [10.5 41.0 10.5])
+        target (build/hunt-target w)
+        hunt (build/toward-lava w)]
+    (is (= near (first (build/sources-near w))) "the nearest source is already beside the feet")
+    (is (seq (build/stands-beside w near)) "it has a safe refill stand")
+    (is (build/castable? (build/lava-sources w) near) "the pool has enough sources for a frame")
+    (is (not= near target) "a zero-step tunnel must not hide farther sources")
+    (is (= :tunnel (:intent/kind hunt)))
+    (is (pos? (:intent/length hunt)))
+    (is (= target (:intent/target hunt)))
+    (let [above (assoc w :player/pos [10.5 43.0 10.5])]
+      (is (= near (build/hunt-target above)) "an adjacent source below still needs a descent")
+      (is (= {:intent/kind :stairs-down :intent/to-y 41} (build/toward-lava above))))))
+
 (deftest a-way-to-the-site-boxed-in-is-left-by-the-way-out
   ;; sim race 38806318231 (issue #130, world R3/11): the stairs down to the cast's landing met an
   ;; aquifer, every stair refused, and the build was sent down the same stairs from the same cell
