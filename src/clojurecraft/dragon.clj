@@ -112,9 +112,13 @@
             (range 1 (inc n)))))
 
 (defn on-pillar?
-  "Do the feet stand on a pillar, two pillar blocks under them: a way down the bot dug up?"
+  "Do the feet stand on a pillar, a pillar block under them: a way down the bot dug up? One
+   block, not two: the fight's dragon smashes what it flies through (cobblestone is not
+   dragon-immune), and gym dragon-c run 1 fell from its third pillar to a stump with a gap
+   under it, two pillar blocks under the feet no more, and walked for the next crystal's foot
+   from up there (:no-path) until the plan failed."
   [world]
-  (under-feet? world pillar-block? 2))
+  (under-feet? world pillar-block? 1))
 
 (defn obsidian?
   "Is the state (or nil) obsidian, a spike's?"
@@ -420,12 +424,32 @@
   [world]
   (let [[fx fz] fountain] (physics/horizontal-distance (:player/pos world) [fx 0.0 fz])))
 
+(defn endermen
+  "The endermen the server shows, alive."
+  [world]
+  (filter #(and (= :enderman (entity/kind %)) (not (entity/dead? %)))
+          (vals (:world/entities world))))
+
+(defn look-away
+  "The look [yaw pitch], unless from the eye it stares at an enderman shown (mob/stared?, the
+   server's own cone and line test), then straight down at the same yaw: the wait for the dragon
+   follows it round the sky and over the island's rim, and gym dragon-c runs 2 and 3 stared at
+   an enderman on the rim that way (its stared-at flag, then its target, then four hits) and
+   died."
+  [world look]
+  (let [eye (game/eye world)
+        s (terrain/solid-fn world)
+        solid? (fn [[x y z]] (s x y z))]
+    (if (some #(mob/stared? solid? eye look (:entity/pos %)) (endermen world))
+      [(first look) 90.0]
+      look)))
+
 (defmethod intent/run :perch
   ;; {:intent/kind :perch :intent/target eid}: the best sword in hand, then by the fountain facing
-  ;; the dragon; once it has held perched (perched?) for perch-ticks, hit it while its box is in
-  ;; reach, walking in toward the fountain while it is not (no nearer than walk-in-to). Done when
-  ;; it is gone (dead), a breath is near (the planner backs off) or after perch-hold-ms (the
-  ;; planner looks again)
+  ;; the dragon (look-away: never into an enderman's eyes); once it has held perched (perched?)
+  ;; for perch-ticks, hit it while its box is in reach, walking in toward the fountain while it
+  ;; is not (no nearer than walk-in-to). Done when it is gone (dead), a breath is near (the
+  ;; planner backs off) or after perch-hold-ms (the planner looks again)
   [world {:intent/keys [target stage perched] :or {perched 0} :as i} _]
   (let [now (:time/now world)
         e (get-in world [:world/entities target])
@@ -452,11 +476,15 @@
                   (let [[fx fz] fountain]
                     (assoc world
                            :player/controls
-                           (intent/toward world [fx (physics/y-of (game/eye world)) fz] 0.0)))
+                           (update (intent/toward world [fx (physics/y-of (game/eye world)) fz] 0.0)
+                                   :control/look
+                                   #(look-away world %))))
                   :else
                   (assoc world
                          :player/controls
-                         {:control/look (physics/look-at (game/eye world) (:entity/pos e))}))))))
+                         {:control/look (look-away world
+                                                   (physics/look-at (game/eye world)
+                                                                    (:entity/pos e)))}))))))
 
 (defn fountain-stand
   "The feet cell on the ground stand-from out from the fountain along the axis nearest the feet,

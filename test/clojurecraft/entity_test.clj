@@ -19,11 +19,15 @@
                     3 (mob :enderman [2.0 64.0 0.0])
                     4 (mob :blaze [5.0 64.0 0.0])
                     5 (mob :item [0.5 64.0 0.0])
-                    6 (mob :skeleton [3.0 64.0 0.0] :entity/died-at 100)}})
+                    6 (mob :skeleton [3.0 64.0 0.0] :entity/died-at 100)
+                    7 (mob :enderman [8.0 64.0 0.0] :entity/creepy? true)}})
 
 (deftest hostiles-are-the-living-monsters-that-attack-on-sight
-  (is (= #{1 4} (set (keys (entity/hostiles world))))
-      "a pig is a creature, an enderman neutral, an item no mob, a dead skeleton dead")
+  (is
+   (= #{1 4 7} (set (keys (entity/hostiles world))))
+   "a pig is a creature, an enderman neutral until the server says it has a target (gym
+       dragon-c: one stared at came for the bot, which never fought back), an item no mob, a
+       dead skeleton dead")
   (is (entity/living? (mob :player [0.0 0.0 0.0])))
   (is (not (entity/living? (mob :item [0.0 0.0 0.0]))))
   (is (entity/item? (mob :item [0.0 0.0 0.0]))))

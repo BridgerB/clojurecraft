@@ -48,14 +48,6 @@
   [e]
   (contains? e :entity/died-at))
 
-(defn hostile?
-  "Would the entity attack the bot on sight: alive, of the game's monster category, and not one
-   of the neutral ones."
-  [e]
-  (and (not (dead? e))
-       (= :monster (:category (blocks/mobs (kind e))))
-       (not (contains? neutral (kind e)))))
-
 (defn dragon? "Is the entity the ender dragon?" [e] (= :ender_dragon (kind e)))
 
 (defn on-fire?
@@ -98,6 +90,16 @@
    most likely the bot that stared at it or hit it."
   [e]
   (true? (:entity/creepy? e)))
+
+(defn hostile?
+  "Would the entity attack the bot: alive, of the game's monster category, and not one of the
+   neutral ones unless the server says it has a target (creepy?: gym dragon-b run 1 and dragon-c
+   runs 2 and 3 were slain by an enderman the bot had stared at while it faced the flying
+   dragon, and never fought back, the enderman being neutral)."
+  [e]
+  (and (not (dead? e))
+       (= :monster (:category (blocks/mobs (kind e))))
+       (or (not (contains? neutral (kind e))) (creepy? e))))
 
 ;; ---------------------------------------------------------------- the questions a fight asks
 

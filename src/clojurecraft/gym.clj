@@ -156,10 +156,15 @@
   (vec (repeat n (summon "enderman" d "{PersistenceRequired:1b}"))))
 
 (def dragon
-  "A dragon of known state at the fountain: any other gone first, then one summoned with full
-   health and DragonPhase 0 (circling). A summoned dragon has no fight manager and starts in
-   phase 10, hovering, so the siblings set both (ruststeve gym.rs, steve gym/registry.ts)."
+  "A dragon of known state at the fountain: any other gone first, the exit portal its death
+   opens shut again, then one summoned with full health and DragonPhase 0 (circling). A summoned
+   dragon has no fight manager and starts in phase 10, hovering, so the siblings set both
+   (ruststeve gym.rs, steve gym/registry.ts). The portal: when the End's fight has scanned the
+   world before this kill, the dragon killed is the fight's own, its death opens the exit portal
+   in the basin where the bot waits, and gym dragon-c run 1 walked into it and got the credits
+   (a win by the server's word) 25 s in, with nothing fought."
   ["kill @e[type=minecraft:ender_dragon]"
+   "fill -2 55 -2 2 70 2 minecraft:air replace minecraft:end_portal"
    "summon minecraft:ender_dragon 0 80 0 {DragonPhase:0,Health:200f}"])
 
 (defn crystals

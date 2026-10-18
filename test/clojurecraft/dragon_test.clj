@@ -14,6 +14,7 @@
             [clojurecraft.main :as main]
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -111,6 +112,26 @@
             "on the pillar's top the walk onto the spike: the pillar's own block is no spike")))
     (is (= {:plan/wait :no-blocks} (dragon/toward-crystals (standing s [8.5 64.0 5.5] {} crystal)))
         "nothing to pillar with")))
+
+(deftest a-pillar-with-a-gap-under-it-is-still-the-way-down
+  ;; gym dragon-c run 1: the fight's dragon smashed the pillar under the bot, which fell to a
+  ;; stump with a gap under it and walked for the next crystal's foot from up there (:no-path)
+  (let [gapped (merge (spike [8 8] 2 64 6) (pillar [8 5] 64 65) {[8 69 5] cobble})
+        w (standing gapped [8.5 70.0 5.5] cobblestone {})]
+    (is (dragon/on-pillar? w) "one pillar block under the feet, air under it")
+    (is (= {:intent/kind :dig-down} (dragon/toward-crystals w)))))
+
+(deftest the-wait-never-looks-an-enderman-in-the-eyes
+  ;; gym dragon-c runs 2 and 3: the wait for the dragon followed it over the island's rim, stared
+  ;; at an enderman there (its stared-at flag, then its target), and was slain four hits later
+  (let [pos [6.5 64.0 0.5]
+        w (standing {} [0.5 64.0 0.5] {} {9 {:entity/type (mob/type-id :enderman) :entity/pos pos}})
+        at-head (physics/look-at (game/eye w) (mob/head :enderman pos))
+        up [(first at-head) -60.0]]
+    (is (= [(first at-head) 90.0] (dragon/look-away w at-head)) "into its eyes: straight down")
+    (is (= up (dragon/look-away w up)) "over its head: as it was")
+    (is (= at-head (dragon/look-away (assoc w :world/entities {}) at-head))
+        "no enderman: as it was")))
 
 (deftest the-climb-jumps-and-puts-the-block-in-once-clear
   (let [w (-> (standing {} [8.5 64.0 8.5] cobblestone {})
