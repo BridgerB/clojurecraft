@@ -417,6 +417,63 @@
   [world cells]
   (and (level-clear? world cells) (safe? world cells)))
 
+(def six-around
+  "The six cells that share a face with a cell, as offsets."
+  [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
+(defn dug-cells
+  "The cells among cells that hold a solid block: what a level step has to dig. An open cell needs
+   no dig, so water beside it lets nothing in."
+  [world cells]
+  (filterv #(some-> (terrain/block-at world %)
+                    blocks/solid?)
+           cells))
+
+(defn fluids-beside-dug
+  "The fluid cells (water or lava) among the six neighbours of each cell a level step digs
+   (dug-cells), distinct: what the dig would let in (intent/exposes-fluid?), and what a seal lays
+   a block into."
+  [world cells]
+  (distinct (for [[x y z] (dug-cells world cells)
+                  [dx dy dz] six-around
+                  :let [n [(+ x dx) (+ y dy) (+ z dz)]]
+                  :when (terrain/fluid-at world n)]
+              n)))
+
+(defn level-lay
+  "The cells to lay, in order, before a level step from feet whose only fault is water beside the
+   cells it digs, which the child dig refuses (:unsafe): that water filled with a block (a block
+   placed into a source takes its place), then the floor the step lacks (floor-laying). nil when
+   the step is otherwise refused (level-clear?'s water, lava or unloaded cells, ore too hard for
+   the tools held, a fluid over gravel above a cell), when any fluid beside is lava or is the
+   cell the body stands in or breathes in, when a cell to lay has nothing solid to place against
+   (place/support) or no filler is carried for all of them, or when nothing is to lay (the step
+   is level-safe? or none can be laid). Open cells are not dug, so water beside them is left: the
+   body wades nothing, it steps onto a floor. Issue #105 (sim race 39081494214 R1/31, 39074159590
+   R3/44): the bot climbed up under a lake for its water bucket, and the water it let in stood
+   round the shaft's last cells, beside every step: each level step was refused for the water
+   beside it, the staircase failed :boxed three times in a second with 306 and 514 cobblestone
+   held, and the plan with it."
+  [world [fx fy fz :as feet] cells]
+  (let [[nx ny nz] (last cells)
+        floor [nx (dec ny) nz]
+        wet (vec (fluids-beside-dug world cells))
+        floored (if (or (= :solid (path/classify world floor)) (some #{floor} wet))
+                  []
+                  (floor-laying world feet cells))
+        laid (into wet floored)]
+    (when (and floored
+               (seq laid)
+               (clear-way? world cells)
+               (not-any? #(too-hard? world %) cells)
+               (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %))
+                         (dug-cells world cells))
+               (every? #(= :water (terrain/fluid-kind world %)) wet)
+               (not-any? #{[fx fy fz] [fx (inc fy) fz]} wet)
+               (every? #(place/support world %) wet)
+               (filler world (count laid)))
+      laid)))
+
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
   "The first of the stair's cells (top first) still solid, or nil when the stair is open."
@@ -580,7 +637,9 @@
    (:intent/visited), and a step onto one comes after every other; a climb with no fresh level
    step ducks under what refuses it (duck) first: sim race 38659291345 world R4/38 (issue #37),
    under a lake, stepped round a patch of fifteen cells a hundred times, one fresh step always
-   allowed, until it was :boxed."
+   allowed, until it was :boxed. A step whose only fault is water beside the cells it digs is
+   allowed once that water is filled (level-lay, issue #105), and an open step beside water is
+   floored."
   [world
    {:intent/keys [kind dir level-steps level-dir visited] :or {level-steps 0 visited #{}} :as i}]
   (let [[fx _ fz :as feet] (intent/feet world)
@@ -601,7 +660,8 @@
                (sort-by #(if (under-falling? world (last (level-cells feet %))) 1 0)))
         laid (fn [d]
                (let [cells (level-cells feet d)]
-                 (and (level-clear? world cells) (lay world feet cells))))
+                 (or (and (level-clear? world cells) (lay world feet cells))
+                     (level-lay world feet cells))))
         pick (fn [ws]
                (or (first (filter #(level-safe? world (level-cells feet %)) ws))
                    (first (filter laid ws))))

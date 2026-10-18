@@ -35,20 +35,27 @@ jobs:
         with:
           fetch-depth: 0                # main's history, to bring an old branch up to date
       - name: The session's branch up to date with main
+        continue-on-error: true         # never the reason the steps after it (tools, worlds, the brief) are skipped
         run: |
           # a follow-up works an older Copilot branch: without main's newest tooling it has no
           # bb verify, an old brief and an old profile (#403 ran bb ci, the forest included, for 50
           # minutes and was cut before it pushed). A conflict is left for the session to resolve.
+          # Copilot checks the branch out two commits deep, so the history is deepened first: on
+          # 2026-10-18 a shallow merge refused ("unrelated histories"), the abort after it failed,
+          # and every step after this one was skipped for two hours of sessions (#416).
+          set +e
           branch=$(git rev-parse --abbrev-ref HEAD)
           case "$branch" in copilot/*) ;; *) echo "not a Copilot branch: $branch"; exit 0;; esac
+          git fetch -q --deepen=500 origin "$branch" main 2>/dev/null || git fetch -q --unshallow origin 2>/dev/null
           git fetch -q origin main
           if git merge-base --is-ancestor origin/main HEAD; then echo "$branch has main"; exit 0; fi
           if git -c user.name=copilot-setup -c user.email=copilot-setup@users.noreply.github.com merge --no-edit -q origin/main; then
             echo "merged origin/main into $branch"
           else
-            git merge --abort
-            echo "$branch conflicts with main: the session merges it and resolves the conflicts"
+            git merge --abort 2>/dev/null
+            echo "$branch did not merge main (conflicts or no common history): the session merges it"
           fi
+          exit 0
       - name: R1's captured worlds
         uses: actions/cache/restore@v6
         with:

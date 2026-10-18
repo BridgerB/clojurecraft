@@ -738,3 +738,44 @@
     (is (= [[4 64 5]] (stairs/up-lay fed [5 64 5] cells)) "the feeding cell is filled first")
     (is (= [] (stairs/wet-feet dry cells)))
     (is (stairs/up-dry? dry cells) "dry feet: cut as before")))
+
+(deftest a-level-step-seals-the-water-beside-the-cells-it-digs
+  ;; sim races 39081494214 R1/31 and 39074159590 R3/44 (issue #105): a climb up under a lake for
+  ;; the water bucket stood in the flooded shaft with hundreds of cobblestone, water beside every
+  ;; step's cells, and failed :boxed three times; the water is filled, and an open step with a
+  ;; missing floor is floored, beside water or not
+  (let [feet [5 64 5]
+        cells (stairs/level-cells feet [1 0])
+        at (fn [blocks filler]
+             (assoc (standing 64)
+                    :player/inventory (if filler {0 {:item (blocks/items filler) :count 20}} {})
+                    :world/chunks {[0 0] (world/column blocks)}))
+        dug {[6 65 5] 1 [6 64 5] 1}
+        under (at (assoc dug [6 63 5] blocks/water-base) :cobblestone)]
+    (is (not (stairs/level-clear? under cells)) "the dig would let the water under the step in")
+    (is (= [[6 63 5]] (stairs/level-lay under feet cells)) "the water is filled first")
+    (is (= [[6 63 5]]
+           (stairs/level-lay (at (assoc dug [6 63 5] blocks/water-base) :dirt) feet cells))
+        "from any filler")
+    (is (nil? (stairs/level-lay (at (assoc dug [6 63 5] blocks/water-base) nil) feet cells))
+        "nothing to fill it with")
+    (is (nil? (stairs/level-lay (at (assoc dug [6 63 5] blocks/lava-base) :cobblestone) feet cells))
+        "lava beside is never sealed")
+    (is (= #{[6 66 5] [7 65 5]}
+           (set (stairs/level-lay
+                 (at (assoc dug [6 66 5] blocks/water-base [7 65 5] blocks/water-base) :cobblestone)
+                 feet
+                 cells)))
+        "over the head and beside it too")
+    (testing "an open step"
+      (let [open {[6 63 5] blocks/air [7 64 5] blocks/water-base}
+            w (at open :cobblestone)]
+        (is (not (stairs/level-clear? w cells)) "water beside the open feet cell")
+        (is (= [[6 63 5]] (stairs/level-lay w feet cells))
+            "its floor is laid, the water beside it left")
+        (is (nil? (stairs/level-lay (at (assoc open [6 63 5] blocks/water-base) :cobblestone)
+                                    feet
+                                    cells))
+            "no floor can be laid over water")))
+    (testing "a step with nothing wrong has nothing to lay"
+      (is (nil? (stairs/level-lay (at {} :cobblestone) feet cells))))))
