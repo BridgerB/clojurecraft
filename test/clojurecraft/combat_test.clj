@@ -172,6 +172,24 @@
     (is (empty? (combat/threats (standing {8 (mob :blaze [9.5 68.0 8.5] 20.0)})))
         "a blaze four over the feet is out of reach from the floor")))
 
+(deftest a-back-off-in-flight-is-not-ended-by-a-threat-out-of-sight
+  ;; issue #161, snapshot R3-18-1: the walk back toward the ore broke the line to the hostile, the
+  ;; threat vanished, the back-off was preempted, the next tick the threat was in sight again
+  (let [zombie {7 (mob :zombie [11.0 64.0 8.5] 20.0)}
+        walled (assoc (standing zombie)
+                      :world/chunks
+                      {[0 0] (world/column {[10 64 8] (blocks/default-state :stone)
+                                            [10 65 8] (blocks/default-state :stone)})})
+        backing
+        (assoc
+         walled
+         :plan/intent
+         {:intent/kind :back-off :intent/target 7 :intent/goal :defend :intent/status :active})]
+    (is (plan/done-by walled (row :defend)) "no back-off, no threat: safe")
+    (is (not (plan/done-by backing (row :defend))) "the back-off in flight is not abandoned")
+    (is (plan/done-by (assoc-in backing [:plan/intent :intent/goal] :wood) (row :defend))
+        "only a back-off for the defend row holds it")))
+
 (deftest a-back-off-ends-eight-blocks-away
   (let [w (assoc (standing {8 (mob :creeper [10.5 64.0 8.5] 20.0)})
                  :plan/intent
