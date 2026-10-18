@@ -275,7 +275,11 @@
    the head and nothing between would fall on the bot (blocks/falls?), is lava, is not loaded or
    is never dug; once nothing but air and water is over the head, a :swim-out for :rise up to the
    water's top (:intent/to-y), then to the shore (swim/far-shore), ending on dry land in the open;
-   the water poured in is the trap too, and the escape it starts swims the same way. Sim race 38806318231 runner 1 and 38811426215 runner 8 (issue #89, worlds
+   the water poured in is the trap too, and the escape it starts swims the same way. Only water
+   that is open at the top: air over it, or a lake's ice (stairs/lake-ice), which the rise digs;
+   water under rock is a pocket with no way up (sim world R3/13, issue #71: a tunnel at y 16
+   dug up into an aquifer seven deep under stone, and the water followed the bot along its
+   tunnel). Sim race 38806318231 runner 1 and 38811426215 runner 8 (issue #89, worlds
    R4/30, R4/21 and R1/32 at 76010d2, 146 runs) had bots mine under the sea floor until the last
    pickaxe broke: for a new one they needed a log, every climb out was :boxed under the water,
    no route led home, and each waited :no-log. nil otherwise."
@@ -291,9 +295,14 @@
         top (->> (range (+ y 2) (+ y 34))
                  (drop-while (complement water?))
                  (drop-while water?)
-                 first)]
+                 first)
+        roof (when top (terrain/block-at world [x top z]))
+        open? (or (nil? roof)
+                  (not (blocks/solid? roof))
+                  (contains? stairs/lake-ice (blocks/name-of roof)))]
     (cond (not (and (contains? (:plan/boxed-at world #{}) feet)
                     (seq more)
+                    open?
                     (every? some? ids)
                     (not-any? #(or (blocks/falls? %)
                                    (= :lava (:fluid/kind (blocks/fluid %)))

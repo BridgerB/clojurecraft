@@ -172,6 +172,15 @@
           (solid-cell? world over) over
           :else nil)))
 
+(defn iced?
+  "Is cell a lake's ice (stairs/lake-ice) that is loaded: the roof a rise through the water under a
+   frozen lake ends at, and digs?"
+  [world cell]
+  (boolean (some-> cell
+                   (->> (terrain/block-at world))
+                   blocks/name-of
+                   stairs/lake-ice)))
+
 (defn notch
   "With no bank in reach, the cell to dig toward one: a notch in the nearest wall, two cells
    over a solid at the float-top level (the floor the impulse lifts onto, as a pond's bank is
@@ -372,9 +381,12 @@
                  :player/controls
                  (shore-controls world shore (or to-y (inc (float-top world feet surface)))))
           (nil? bank)
-          (let [b (banks world feet surface (:plan/blacklist world #{}))
-                rise? (= :rise for)
-                cap (when-not (or b rise?) (obstacle world feet nil))
+          (let [rise? (= :rise for)
+                b (if rise?
+                    (banks world feet surface (:plan/blacklist world #{}) #(in-the-open? world %))
+                    (banks world feet surface (:plan/blacklist world #{})))
+                cap (when-not b
+                      (let [c (obstacle world feet nil)] (when (or (not rise?) (iced? world c)) c)))
                 wall (when-not (or b cap rise?) (notch world feet surface))]
             (cond b
                   (-> world
