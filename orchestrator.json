@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-18T10:10:51.424Z",
+  "at" : "2026-10-18T10:15:09.752Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 338,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at fortress: timeout",
     "copilot" : true,
     "draft" : true,
