@@ -388,15 +388,15 @@
                 (:player/in-water? world))))
 
 (defn redig-place
-  "The child placement in a neighbouring cell the feet can stand in, or a retreat to fresh
-   ground when none is there. Issue #151's R3/14 and real runner 8 snapshots placed gravel
-   through a wall or round a corner: within click reach, but not within pickup reach."
+  "The child placement in a neighbouring cell the feet can stand in, level or one step up or
+   down, or a retreat to fresh ground when none is there. Issue #151's R3/14 and real runner 8
+   snapshots placed gravel through a wall or round a corner: within click reach, but not within
+   pickup reach."
   [world item]
   (let [[fx fy fz] (intent/feet world)
         refused (set (for [[dx dy dz] place/around
                            :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]]
-                           :when (not (and (zero? dy)
-                                           (= 1 (+ (abs dx) (abs dz)))
+                           :when (not (and (= 1 (+ (abs dx) (abs dz)))
                                            (path/standable? world cell)))]
                        cell))
         [cell] (place/spot world true refused)]
