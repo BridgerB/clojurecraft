@@ -170,28 +170,39 @@
         (map #(summon "end_crystal" % "{ShowBottom:0b}"))
         ds))
 
-(def spike-cages
-  "A :gym/setup that takes the iron cages and any fire off the ten spikes' tops round each one's
-   middle (end/spikes, the same as the game's), so a crystal summoned on top stands on its bedrock
-   (issue #267: a strike through a cage's bars is unproven, left for a later change)."
-  (vec (for [{[x z] :spike/center} end/spikes
-             kind ["iron_bars" "fire"]]
+(def no-crystals "Kills every end crystal loaded." "kill @e[type=minecraft:end_crystal]")
+
+(defn spike-tops
+  "The fills that take blocks of kind (a name) off the ten spikes' tops round each one's middle
+   (end/spikes, the same as the game's)."
+  [kind]
+  (vec (for [{[x z] :spike/center} end/spikes]
          (str "fill " (- x 2)
               " 60 " (- z 2)
               " " (+ x 2)
               " 110 " (+ z 2)
               " minecraft:air replace minecraft:" kind))))
 
+(def spike-cages
+  "A :gym/setup, run with the island forceloaded: every crystal gone (a crystal lights fire in its
+   own cell each tick, a block over its bedrock), then the iron cages and the fire taken off the
+   spikes' tops, so a crystal summoned on top stands on its bedrock (issue #267: a strike through a
+   cage's bars is unproven, left for a later change)."
+  (into [no-crystals] (concat (spike-tops "iron_bars") (spike-tops "fire"))))
+
 (def spike-crystals
-  "Summons: the dragon and every crystal gone, then a crystal on each spike's top (the highest
-   block of its middle column, its bedrock once spike-cages ran), where the dragon fight puts
-   them: the crystals row knows exactly what it must break."
-  (into ["kill @e[type=minecraft:ender_dragon]" "kill @e[type=minecraft:end_crystal]"]
-        (for [{[x z] :spike/center} end/spikes]
-          (str "execute positioned " x
-               " 0 " z
-               " positioned over world_surface run summon minecraft:end_crystal ~0.5 ~ ~0.5"
-               " {ShowBottom:0b}"))))
+  "Summons: the dragon and every crystal gone again (the setup's kill misses one whose entities
+   have not loaded yet: gym dragon-a's killed five of ten), the fire off the tops again, then a
+   crystal on each spike's top, the highest block of its middle column, its bedrock: where the
+   dragon fight puts them. An integer x and z a positioned names is a block's middle already;
+   dragon-a's ~0.5 put every crystal on the corner of its column."
+  (into ["kill @e[type=minecraft:ender_dragon]" no-crystals]
+        (concat (spike-tops "fire")
+                (for [{[x z] :spike/center} end/spikes]
+                  (str "execute positioned " x
+                       " 0 " z
+                       " positioned over world_surface run summon minecraft:end_crystal ~ ~ ~"
+                       " {ShowBottom:0b}")))))
 
 (def night "time set midnight")       ; a :gym/summon entry: the hostiles' hour, for a row that defends
 
@@ -719,16 +730,18 @@
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:end_crystal]"
                  :truth/re "Test passed"}]}
-   ;; the crystals gone and a dragon summoned at full health circling (no fight manager, no boss
-   ;; bar: it lands on the fountain one path in three), the bot in iron with a sword; judged by
-   ;; no dragon left in the End
+   ;; the crystals gone and a dragon summoned at full health circling (the End's fight takes it
+   ;; for its own, its boss bar shown), the bot in iron with a sword, cobblestone and a pickaxe
+   ;; for any crystal left; judged by no dragon left in the End
    {:gym/goal :dragon
     :gym/until "dragon"
     :gym/land :end
     :gym/difficulty "normal"
+    :gym/setup [no-crystals]
     :gym/prereqs ["minecraft:iron_sword 1" "minecraft:iron_helmet 1" "minecraft:iron_chestplate 1"
-                  "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"]
-    :gym/summon (into ["kill @e[type=minecraft:end_crystal]"] dragon)
+                  "minecraft:iron_leggings 1" "minecraft:iron_boots 1" "minecraft:cooked_beef 16"
+                  "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"]
+    :gym/summon (into [no-crystals] dragon)
     :gym/timeout-ms 1500000
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon]"

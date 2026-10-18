@@ -67,11 +67,12 @@
 (def perch-radius 6.0)                ; blocks on the plane from the fountain the dragon perches within
 (def perch-below 70.0)                ; and under this height
 (def perch-ticks 10)                  ; ticks it holds there before it counts as perched
-(def stand-from 5)                    ; blocks from the fountain along an axis the bot waits on the ground
-(def stand-near 4.0)                  ; blocks on the plane from that stand a wait counts as there
+(def stand-from 2)                    ; blocks from the fountain along an axis the bot waits, in the exit portal's basin
+(def stand-near 1.0)                  ; blocks on the plane from that stand a wait counts as there
+(def sitting-phases #{5 6 7})         ; the dragon's phases on its perch (EnderDragonPhase: sitting flaming, scanning, attacking)
 (def walk-in-to 3.0)                  ; blocks on the plane from the fountain a perch walks in to for reach, no nearer
 (def perch-hold-ms 60000)             ; a :perch hands back to the planner this often
-(def breath-radius 4.0)               ; a breath cloud or a fireball this near is backed away from
+(def breath-radius 6.0)               ; a breath cloud (radius 5, DragonSittingFlamingPhase) or a fireball this near is backed away from
 (def breath-kinds #{:area_effect_cloud :dragon_fireball})
 
 ;; ---------------------------------------------------------------- what is shown
@@ -136,13 +137,19 @@
    at the nearest) :top the feet height level with the spike's top :stand the feet cell stand-off
    out at :top :wall the cells wall-off out at :top and over it}; nil when the spike's edge is not
    found within spike-search, or that column has something over its ground at the top or over the
-   head there, or no ground."
+   head there, or no ground. The spike's top is read off the block under the crystal (its bedrock),
+   not the crystal's height: a crystal stands in the fire it lights, and gym dragon-a's, put on the
+   highest block of the column, stood on that fire a block over the bedrock, its approach a block
+   too high, and every walk to its pillar's foot (on the spike's top) failed :no-path."
   [world [cx cy cz] [dx dz]]
   (let [x (long (math/floor cx))
         z (long (math/floor cz))
-        h (dec (long (math/floor cy)))
+        h (some-> (ground world x z (long (math/floor cy)))
+                  dec)
         at (fn [k y] [(+ x (* k dx)) y (+ z (* k dz))])
-        edge (first (remove #(place/solid-at? world (at % (dec h))) (range 1 (inc spike-search))))
+        edge (when h
+               (first (remove #(place/solid-at? world (at % (dec h)))
+                              (range 1 (inc spike-search)))))
         out (when edge (max edge stand-off))
         [px _ pz] (when out (at out h))
         base (when out (ground world px pz (+ h 2)))]
@@ -377,12 +384,15 @@
 ;; ---------------------------------------------------------------- the perched dragon
 
 (defn perched?
-  "Is entity e within perch-radius of the fountain on the plane and under perch-below: where the
-   dragon sits on the exit portal's pillar?"
+  "Does the dragon e sit on the exit portal's pillar: its phase one of sitting-phases when the
+   server has said it (:entity/phase), else within perch-radius of the fountain on the plane and
+   under perch-below (the model says no phase)?"
   [e]
   (let [[x y z] (:entity/pos e)
-        [fx fz] fountain]
-    (and (<= (math/hypot (- x fx) (- z fz)) perch-radius) (< y perch-below))))
+        [fx fz] fountain
+        phase (:entity/phase e)]
+    (cond phase (contains? sitting-phases phase)
+          :else (and (<= (math/hypot (- x fx) (- z fz)) perch-radius) (< y perch-below)))))
 
 (defn breath-near
   "[eid entity] of the breath cloud or fireball nearest the feet within breath-radius, or nil."
@@ -432,14 +442,23 @@
 
 (defn fountain-stand
   "The feet cell on the ground stand-from out from the fountain along the axis nearest the feet,
-   where the bot waits for the dragon to perch, or nil when no such column has ground loaded."
+   none within breath-radius of a breath cloud or fireball, where the bot waits for the dragon to
+   perch, or nil when no such column has ground loaded. In the exit portal's basin beside the
+   pillar: the perched dragon turns its face to the bot, its head 6.5 out from the pillar and its
+   neck 5.5, each hurting what it touches; gym dragon-a stood five out, under the head, and died
+   in two seconds of its perch, its five hits 2.5 each on the body."
   [world]
-  (let [[fx fz] fountain]
+  (let [[fx fz] fountain
+        clouds (vals (breaths world))]
     (->> [[1 0] [-1 0] [0 1] [0 -1]]
          (keep (fn [[dx dz]]
                  (let [x (long (math/floor (+ fx (* dx stand-from))))
                        z (long (math/floor (+ fz (* dz stand-from))))]
                    (when-let [y (ground world x z sky)] [x y z]))))
+         (remove (fn [c]
+                   (some #(<= (physics/horizontal-distance (physics/centre c) (:entity/pos %))
+                              breath-radius)
+                         clouds)))
          (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
          first)))
 
@@ -456,7 +475,7 @@
           breath {:intent/kind :back-off :intent/target (first breath)}
           (nil? stand) {:plan/wait :no-fountain}
           (> (physics/horizontal-distance (:player/pos world) (physics/centre stand)) stand-near)
-          {:intent/kind :walk :intent/target stand}
+          (standing-walk stand)
           (nil? eid) {:plan/wait :no-dragon}
           :else {:intent/kind :perch :intent/target eid})))
 

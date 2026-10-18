@@ -16,6 +16,7 @@
 (def health-index 9)                  ; LivingEntity.DATA_HEALTH_ID, a float (probe run 38876275250)
 (def flags-index 0)                   ; Entity.DATA_SHARED_FLAGS_ID, a byte: 0x01 on fire, 0x02 crouching, 0x20 invisible
 (def item-index 8)                    ; ItemEntity.DATA_ITEM, an item stack: what a drop holds
+(def phase-index 16)                  ; EnderDragon.DATA_PHASE, an int: its EnderDragonPhase id (gym dragon-a's recording: 0 circling, 3 landing, 6 sitting)
 (def creepy-index 17)                 ; EnderMan.DATA_CREEPY, a boolean: it has a target (probe run 38876275250)
 (def death-status 3)                  ; an entity-event's status for a living entity's death (EntityEvent.DEATH)
 (def on-fire-bit 0x01)                ; in the shared flags: burning (a blaze's state, a mob in lava)
@@ -72,13 +73,15 @@
    interaction's height and a boat's hurt direction, so health is never read off a type the game
    gives no health; the same item index is a fireball's look (issue #262: a drop is told apart by
    what it holds, a blaze rod from cobblestone); for an enderman only, its creepy flag at
-   creepy-index (issue #263: true while it has a target, the hunt's sign one is coming). An index
+   creepy-index (issue #263: true while it has a target, the hunt's sign one is coming); for the
+   dragon only, its phase at phase-index (issue #267: sitting on its perch or flying). An index
    the skim did not reach is simply absent: what was known stays."
   [type-id metadata]
   (let [flags (get metadata flags-index)
         health (get metadata health-index)
         stack (get metadata item-index)
-        creepy (get metadata creepy-index)]
+        creepy (get metadata creepy-index)
+        phase (get metadata phase-index)]
     (cond-> {}
       (and (int? flags) (<= 0 flags 255)) (assoc :entity/flags flags)
       (and (number? health) (contains? blocks/mobs (blocks/entity-names type-id)))
@@ -86,7 +89,9 @@
       (and (= blocks/item-entity-type type-id) (map? stack) (int? (:item stack)))
       (assoc :entity/item (:item stack))
       (and (= :enderman (blocks/entity-names type-id)) (boolean? creepy))
-      (assoc :entity/creepy? creepy))))
+      (assoc :entity/creepy? creepy)
+      (and (= :ender_dragon (blocks/entity-names type-id)) (int? phase))
+      (assoc :entity/phase phase))))
 
 (defn creepy?
   "Has the server said enderman e has a target (:entity/creepy?): it is coming for someone,

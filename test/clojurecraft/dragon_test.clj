@@ -8,6 +8,7 @@
             [clojurecraft.dimension :as dimension]
             [clojurecraft.dragon :as dragon]
             [clojurecraft.end :as end]
+            [clojurecraft.entity :as entity]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.main :as main]
@@ -175,6 +176,14 @@
           "answered with the respawn"))))
 
 (deftest the-dragon-perches-on-the-fountain
+  (testing "by its phase when the server said it"
+    (is (= {:entity/phase 6}
+           (entity/metadata-facts (mob/type-id :ender_dragon) {entity/phase-index 6})))
+    (is (= {} (entity/metadata-facts (mob/type-id :enderman) {entity/phase-index 6}))
+        "index 16 is the dragon's phase only")
+    (is (dragon/perched? {:entity/pos [2.5 66.0 -1.5] :entity/phase 6}))
+    (is (not (dragon/perched? {:entity/pos [2.5 66.0 -1.5] :entity/phase 3}))
+        "landing over the pillar: not yet sat"))
   (is (dragon/perched? {:entity/pos [2.5 66.0 -1.5]}))
   (is (not (dragon/perched? {:entity/pos [2.5 75.0 -1.5]})) "over y 70: flying")
   (is (not (dragon/perched? {:entity/pos [40.5 66.0 0.5]})) "away from the fountain"))

@@ -151,6 +151,9 @@
    [:entity/creepy?
     "an enderman's creepy flag, from its metadata (index 17): true while it has a target, the pearl hunt's sign one is coming (issue #263)"
     "inside :world/entities, an enderman, once its metadata said"]
+   [:entity/phase
+    "the ender dragon's phase, from its metadata (index 16): 0 circling, 3 landing, 4 taking off, 5 to 7 sitting on its perch, 9 dying (issue #267)"
+    "inside :world/entities, the dragon, once its metadata said"]
    [:sight/pos "an observation's block position" "a fact in :world/facts"]
    [:sight/state "the state id observed there" "a fact in :world/facts"]
    [:sight/at "ms of the observation" "a fact in :world/facts"]

@@ -174,6 +174,7 @@
 (s/def :entity/died-at int?)
 (s/def :entity/item int?)
 (s/def :entity/creepy? boolean?)
+(s/def :entity/phase int?)
 (s/def :world/dragon-dead? boolean?)
 (s/def :world/boss-bars (s/coll-of uuid? :kind set?))
 (s/def :pearls/shelter ::block-pos)
