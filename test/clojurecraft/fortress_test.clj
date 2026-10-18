@@ -221,6 +221,23 @@
     (testing "the tunnel goes round: up when lava is beside the level step"
       (is (= [1 1 0] (fortress/choose-move (rock {[1 64 1] lava}) [0 64 0] [4 64 0]))))))
 
+(deftest the-dry-tunnel-floors-its-way-across-a-cave
+  ;; gym batch stronghold-room-b run 3: down at the frame's height in a cave, every step toward
+  ;; the frame over air; the overworld's dry tunnel lays the floor, the Nether's never does
+  (let [cave (into {} (for [x (range 1 5) y (range 60 67) z (range -4 5)] [[x y z] air]))
+        held {0 {:item (recipe/item-id :cobblestone) :count 16}}
+        w (assoc (rock cave) :player/inventory held)]
+    (is (fortress/bridge? w [0 64 0] [1 0 0]) "air under the next cell, held by the feet's floor")
+    (is (= [1 0 0] (fortress/next-move w [0 64 0] [48 64 0] fortress/climb-past true #{})))
+    (is (not= [1 0 0] (fortress/next-move w [0 64 0] [48 64 0] fortress/climb-past false #{}))
+        "the fortress's tunnel never bridges")
+    (is (not (fortress/bridge? (rock cave) [0 64 0] [1 0 0])) "nothing to lay it from")
+    (is (not (fortress/bridge? (assoc-in w [:world/blocks [1 60 0]] blocks/water-base)
+                               [0 64 0]
+                               [1 0 0]))
+        "water under it: a causeway, not a cave's floor")
+    (is (not (fortress/bridge? w [0 64 0] [1 -1 0])) "only a level step")))
+
 (deftest no-tunnel-step-drops-a-fluid-bearing-bed
   (doseq [kind [:gravel :sand]
           height [1 3]]

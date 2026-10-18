@@ -166,14 +166,38 @@
    (first (filter #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
                   (moves feet target climb)))))
 
+(defn bridge?
+  "May the level move from feet be floored across a cave, the overworld's dry tunnel only: the
+   floor it steps onto air that the block under the feet holds (build/foundation), no water or
+   lava under it within stairs/bridge-depth (stairs/over-fluid?: a causeway over a lake is no
+   cave's floor), a filler carried, the step dry? and, with that floor laid, safe?. The fortress's
+   tunnel never bridges (the lava sea under the Nether's caves)."
+  [world feet move]
+  (let [floor (plus (plus feet move) [0 -1 0])]
+    (and (zero? (second move))
+         (build/holds? world [:solid (plus feet [0 -1 0])])
+         (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
+         (= floor (build/foundation world floor))
+         (not (stairs/over-fluid? world floor))
+         (some? (stairs/filler world 1))
+         (dry? world feet move)
+         (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
+                feet
+                move))))
+
 (defn next-move
-  "The next tunnel move: a safe unvisited cell first, then a short floored turn onto adjoining
-   ground, then a safe retreat. A turn fills one air floor from the current stand before entering;
-   it needs support on another side too and never bridges over fluid."
+  "The next tunnel move: a safe unvisited cell first (in the dry tunnel, one floored across a cave
+   as soon, bridge?, in the order of moves), then a short floored turn onto adjoining ground, then a
+   safe retreat. A turn fills one air floor from the current stand before entering; it needs
+   support on another side too and never bridges over fluid. Gym batch stronghold-room-b (plan
+   run 39132210882) run 3 of the portal room staired down through a cave to the frame's height,
+   126 blocks from it, every step toward it over the cave's air, and walked its own stairs 32
+   steps a tunnel for 23 minutes to the timeout."
   [world feet target climb dry-only? visited]
   (let [ways (moves feet target climb)
         fresh (remove #(contains? visited (plus feet %)) ways)
         allowed? #(and (safe? world feet %) (or (not dry-only?) (dry? world feet %)))
+        first-way? (if dry-only? #(or (allowed? %) (bridge? world feet %)) allowed?)
         turn? (fn [move]
                 (let [floor (plus (plus feet move) [0 -1 0])
                       own-floor (plus feet [0 -1 0])]
@@ -188,7 +212,7 @@
                                    (build/holds? world [:solid %]))
                              (neighbours floor))
                        (or (not dry-only?) (dry? world feet move)))))]
-    (or (first (filter allowed? fresh))
+    (or (first (filter first-way? fresh))
         (first (filter (fn [move]
                          (let [floor (plus (plus feet move) [0 -1 0])
                                filled (assoc-in world

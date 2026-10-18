@@ -31,9 +31,11 @@
   (fn [x y z] (fluid-at world [x y z])))
 
 (defn solid-fn
-  "Solidity oracle for physics. Unloaded counts as solid so the bot never falls out of the world."
+  "Collision oracle for physics: (fn [x y z]) → 1.0 for a full cube, the top of a flat shape's
+   box (blocks/collision-top: a carpet 0.0625), nil for nothing. Unloaded counts as a full cube
+   so the bot never falls out of the world."
   [world]
-  (fn [x y z] (let [id (block-at world [x y z])] (if (nil? id) true (blocks/solid? id)))))
+  (fn [x y z] (let [id (block-at world [x y z])] (if (nil? id) 1.0 (blocks/collision-top id)))))
 
 (defn chunk-loaded?
   "Is the chunk column holding block or feet position [x y z] in :world/chunks?"
