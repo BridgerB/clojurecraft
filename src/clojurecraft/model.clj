@@ -217,6 +217,9 @@
    [:plan/boxed-route
     "feet cells visited by descents or tunnels that ended :boxed: a retreat seeks ground outside those failed searches"
     "after a :boxed staircase or tunnel"]
+   [:plan/retreat-unreachable
+    "targets of build retreat walks that failed :no-path: later retreat searches exclude them"
+    "after a build retreat walk fails :no-path"]
    [:plan/surfaced
     "[feet ms] where and when the last climb out to the surface came out: a spare's climb is not cut again from below near it for a while"
     "after a climb out comes out"]

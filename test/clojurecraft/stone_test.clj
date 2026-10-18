@@ -271,7 +271,10 @@
         fresh [20 64 5]]
     (is (nil? (stone/retreat w)) "distance alone does not make exhausted ground new")
     (is (= fresh (:intent/target (stone/retreat (update w :plan/boxed-at disj fresh))))
-        "the search crosses boxed ground to reach an unboxed destination")))
+        "the search crosses boxed ground to reach an unboxed destination")
+    (is (nil? (stone/retreat
+               (assoc (update w :plan/boxed-at disj fresh) :plan/retreat-unreachable #{fresh})))
+        "a waypoint a retreat walk could not reach is not selected again")))
 
 (deftest a-boxed-search-does-not-retreat-to-its-start
   (let [w (assoc (standing 64)
