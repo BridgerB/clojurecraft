@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T12:07:06.060Z",
+  "at" : "2026-10-18T12:14:39.806Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -27,7 +27,7 @@
     "draft" : false,
     "nudges" : 1,
     "pr" : 444,
-    "session" : true
+    "session" : false
   }, {
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
@@ -49,9 +49,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 178,
-    "move" : "wait",
-    "pr" : 444,
-    "why" : "session running"
+    "move" : "nudge",
+    "pr" : 444
   } ],
   "log" : [ {
     "issue" : 60,
@@ -1224,5 +1223,10 @@
     "move" : "nudge",
     "pr" : 444,
     "at" : "2026-10-18T12:01:35.787Z"
+  }, {
+    "issue" : 178,
+    "move" : "nudge",
+    "pr" : 444,
+    "at" : "2026-10-18T12:14:39.806Z"
   } ]
 }
