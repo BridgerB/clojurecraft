@@ -60,15 +60,16 @@
     (let [snap (capture/read-world p)
           w0 (simrace/world-for! snap)
           [world sim] (simrace/moment snap w0)
-          r (Long/parseLong (or (System/getenv "MAPR") "20"))]
+          r (Long/parseLong (or (System/getenv "MAPR") "20"))
+          steps (Long/parseLong (or (System/getenv "STEPS") "960"))]
       (out "==" p (pr-str (:snapshot/signature snap)) "now" (:time/now world))
       (look world)
-      (mapof world (intent/feet world) r)
+      (when (pos? r) (mapof world (intent/feet world) r))
       (loop [world world
              sim sim
              k 0
              prev nil]
-        (if (and (< k 960) (not (plan/failed? world)) (not (plan/done? world)))
+        (if (and (< k steps) (not (plan/failed? world)) (not (plan/done? world)))
           (let [{world :world sim :sim}
                 (sim/play-on simrace/step world sim (constantly false) 250 (:time/now world) [] nil)
                 i (:plan/intent world)
