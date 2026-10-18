@@ -30,6 +30,8 @@ run-name: probe ${{ inputs.label || inputs.run }}
 
 permissions:
   contents: read
+  issues: read                          # bb issue-check fetch: an issue's comments name its snapshots
+  actions: read                         # and an older comment's artifact
 
 jobs:
   probe:
@@ -113,6 +115,7 @@ jobs:
       - name: Run
         env:
           RUN: ${{ inputs.run }}        # through the environment, never pasted into the script
+          GH_TOKEN: ${{ github.token }} # gh for the command: an issue's snapshots (bb issue-check fetch), read only
         run: |
           mkdir -p out
           set -o pipefail
