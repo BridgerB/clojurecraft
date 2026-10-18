@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T12:29:52.633Z",
+  "at" : "2026-10-18T12:32:02.927Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -26,13 +26,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 178,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at portal: timeout",
     "copilot" : true,
     "draft" : false,
     "nudges" : 2,
     "pr" : 444,
-    "session" : true
+    "session" : false
   }, {
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
@@ -56,7 +56,7 @@
     "issue" : 178,
     "move" : "wait",
     "pr" : 444,
-    "why" : "session running"
+    "why" : "checks running"
   } ],
   "log" : [ {
     "issue" : 60,
