@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:11:54.408Z",
+  "at" : "2026-10-18T03:13:06.720Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -51,9 +51,9 @@
     "title" : "Bot stops at portal: no-path",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 1,
+    "nudges" : 2,
     "pr" : 421,
-    "session" : false
+    "session" : true
   }, {
     "number" : 44,
     "title" : "Bot stops at cast-one: rejected",
@@ -146,8 +146,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 162,
-    "move" : "nudge",
-    "pr" : 421
+    "move" : "wait",
+    "pr" : 421,
+    "why" : "session running"
   }, {
     "issue" : 44,
     "move" : "leave",
