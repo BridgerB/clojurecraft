@@ -53,7 +53,7 @@ sourceRefs:
   - test/clojurecraft/blaze_test.clj#a-camp-ends-when-the-bot-is-hit
   - test/clojurecraft/blaze_test.clj#a-rest-ends-rested-hit-or-watched
   - test/clojurecraft/blaze_test.clj#a-fire-by-the-spawner-is-put-out
-  - test/clojurecraft/sim_test.clj#watched-by-three-of-the-models-blazes-the-bot-hides-and-rests
+  - test/clojurecraft/sim_test.clj#watched-by-three-of-the-models-blazes-the-bot-hides
   - src/clojurecraft/intent.clj#def standing-walks
   - src/clojurecraft/combat.clj#defn clear?
   - test/clojurecraft/blaze_test.clj#the-seventh-rod-from-the-models-blazes
@@ -104,7 +104,7 @@ Three rows play this one goal from three starts, each named by `:gym/name` (the 
 - `blaze-fortress`: the fortress row's pad 48 west of a located fortress, a pickaxe and cobblestone for the tunnel, the spawner found in the chunks loaded round it, iron armour and `fire-resistance` (blaze-fortress-f and -g burned to death by the spawner in four runs of six, its blazes' fire all round it). Thirty minutes.
 
 ## Against the model
-`the-seventh-rod-from-the-models-blazes`: five of the model's blazes (`mob/kinds`: 20 health, they hover still and shoot 5 a hit on Normal every three seconds with a clear line) round a Nether landing at Easy with a full bar, six rods and an iron sword given; the plan is done with seven rods held and the bot alive. The model has no spawner: the rods come from the five, each dropping one in two by the model's seed. `watched-by-three-of-the-models-blazes-the-bot-hides-and-rests` (sim_test): three blazes east of a Nether landing by the end of a wall three high, their first volley at once; the bot walks round the wall into a cell none of them sees (`:intent/for :cover`) and is at `:rest` there, alive, with no watcher.
+`the-seventh-rod-from-the-models-blazes`: five of the model's blazes (`mob/kinds`: 20 health, they hover still and shoot 5 a hit on Normal every three seconds with a clear line) round a Nether landing at Easy with a full bar, six rods and an iron sword given; the plan is done with seven rods held and the bot alive. The model has no spawner: the rods come from the five, each dropping one in two by the model's seed. `watched-by-three-of-the-models-blazes-the-bot-hides` (sim_test): three blazes east of a Nether landing by the end of a wall three high; the bot walks round the wall into a cell none of them sees (`:intent/for :cover`), alive, with no watcher.
 
 ## Limits
 - Fireballs are not dodged; the damage-event log is where to look when they kill.

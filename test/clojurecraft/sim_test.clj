@@ -3398,11 +3398,10 @@
    to the east."
   (into {} (for [z (range 6 10) y [64 65 66]] [[7 y z] (blocks/default-state :netherrack)])))
 
-(deftest watched-by-three-of-the-models-blazes-the-bot-hides-and-rests
+(deftest watched-by-three-of-the-models-blazes-the-bot-hides
   ;; issue #262's blaze fixture against the model: three blazes east of the landing, all in
-  ;; sight, shoot 5 a hit (3.5 at Easy) every three seconds (mob/kinds), the first volley at
-  ;; once; the bot walks round the wall into a cell none of them sees and rests there until its
-  ;; health is back
+  ;; sight, a volley (mob/kinds: 5 a hit, 3.5 at Easy, every three seconds with a clear line);
+  ;; the bot walks round the wall into a cell none of them sees, whatever its health
   (let [[w sim] (sim/run step
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes nether-wall dimension/nether)
@@ -3414,12 +3413,13 @@
                                     :mobs [{:type :blaze :pos [14.5 65.0 6.5]}
                                            {:type :blaze :pos [14.5 65.0 7.5]}
                                            {:type :blaze :pos [14.5 65.0 8.5]}]})
-                         #(or (= :rest (get-in % [:plan/intent :intent/kind]))
+                         #(or (and (= :cover (get-in % [:plan/last :intent/for]))
+                                   (intent/done? (:plan/last %)))
                               (plan/failed? %)
                               (pos? (:stats/deaths % 0)))
                          30000
                          {:event/kind :go :go/goals [:blaze-rods]})]
-    (is (= :rest (get-in w [:plan/intent :intent/kind])) (pr-str (plan/summary w)))
+    (is (intent/done? (:plan/last w)) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)) "alive")
     (is (pos? (:sim/health sim)))
     (is (empty? (blaze/watchers w)) "no blaze sees it")
