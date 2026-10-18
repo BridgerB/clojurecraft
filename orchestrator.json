@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-18T10:31:31.059Z",
+  "at" : "2026-10-18T10:32:37.572Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 338,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at fortress: timeout",
     "copilot" : true,
     "draft" : false,
@@ -17,7 +17,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 339,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at fortress: no-footing",
     "copilot" : true,
     "draft" : true,
@@ -33,6 +33,11 @@
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 92,
@@ -56,6 +61,10 @@
     "why" : "session running"
   }, {
     "issue" : 65,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
