@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T00:48:22.896Z",
+  "at" : "2026-10-18T00:49:30.287Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -33,13 +33,18 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 105,
-    "title" : "Bot stops at flint-and-steel: boxed",
+    "number" : 339,
+    "title" : "Bot stops at fortress: no-footing",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 41,
     "title" : "Bot stops at cast-one: no-site",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 105,
+    "title" : "Bot stops at flint-and-steel: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -79,14 +84,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 89,
-    "title" : "Bot stops at portal-kit: no-log",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 410,
     "title" : "Bot stops at fortress: not-held",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 89,
+    "title" : "Bot stops at portal-kit: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 74,
@@ -121,6 +126,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
+  }, {
     "number" : 110,
     "title" : "Bot stops at pickaxe: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -134,11 +144,6 @@
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : false
-  }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
     "number" : 171,
@@ -197,6 +202,10 @@
     "copilot" : false
   } ],
   "moves" : [ {
+    "issue" : 339,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
+  }, {
     "issue" : 342,
     "move" : "wait",
     "pr" : 403,
@@ -210,11 +219,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 62,
+    "issue" : 338,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 338,
+    "issue" : 62,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -1062,5 +1071,10 @@
     "move" : "nudge",
     "pr" : 403,
     "at" : "2026-10-18T00:35:52.637Z"
+  }, {
+    "issue" : 339,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-18T00:49:30.287Z"
   } ]
 }
