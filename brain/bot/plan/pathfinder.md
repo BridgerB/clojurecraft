@@ -18,7 +18,6 @@ sourceRefs:
   - src/clojurecraft/path.clj#def templates
   - src/clojurecraft/path.clj#defn landing
   - src/clojurecraft/path.clj#defn start-cell
-  - test/clojurecraft/path_test.clj#a-bot-on-ice-walks-off-it-to-the-solid-floor-beside
   - src/clojurecraft/path.clj#defn lava-near?
   - src/clojurecraft/path.clj#defmulti goal-done?
   - src/clojurecraft/path.clj#defmethod goal-done? :sky
@@ -67,7 +66,6 @@ The `:surface` goal is registered in `stairs`: `out?` requires usable open groun
 
 ## Gotchas
 - **A start on a block edge floors into the wrong column.** Gym landing 21280,18720 (batch path-a1 run 5): the fixture teleports to the column's `~0.5`, which on a steep hillside put the feet at x 21281.0 exactly, on the edge of a stone step; `feet-cell` floored into the step, every plan was `:none` from inside solid rock, and three `:no-path` failures in half a second killed the plan. The player's box rests on the cell beside it, which is standable; `start-cell` searches from there. The old straight-line walk never noticed because it never asked where it stood.
-- **A bot on ice has no start cell.** Plain ice is `:awkward` (it slides, the physics cannot simulate it), so no cell on it is standable and, with the feet on it and water or more ice all round, `start-cell` found nothing: every plan, the mine's retreat among them, was `:none`, and the plan waited `:boxed` to its end. Sim race 39074156402 (issue #71, world R2/35): the scoop's walk ended on a frozen lake's edge. `start-cell` now begins at the feet's own cell when the body and head are clear over an awkward floor, so a step to any solid floor beside it is a route; a lake of ice with none within a move stays `:none`.
 - Water is a wall, never a floor: the bot can swim ([[fluid-physics]]) but a route never asks it to; getting out is the escape's job ([[water-escape]]).
 - The lava rule is applied by `clear?`, so every move kind has it; ruststeve's diagonal lacked one and put a bot over lava ([[sib-pathfinder-movements]]).
 - No parkour, no digging through, no scaffolding: a one-wide gap with no ramp is `:none`, by design.

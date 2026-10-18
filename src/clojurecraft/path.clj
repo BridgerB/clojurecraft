@@ -424,21 +424,15 @@
    nearest standable cell within one block on the plane and one up or down. A player whose feet
    sit on a block edge floors into the neighbouring column, which on a hillside is inside the
    hill (recorded by the gym at landing 21280,18720: the feet at x 21281.0 on a stone edge, the
-   cell they floor into solid, every plan :none); the box rests on the cell beside it. With none,
-   the feet's own cell when the body and head are clear over an awkward floor (ice, a slab): the
-   bot is there, and any solid floor beside it is a move away. Sim race 39074156402 (issue #71,
-   world R2/35): the bot stood on a frozen lake's edge, every cell round it ice or water, so every
-   plan and every retreat was :none and the plan waited :boxed to its end. nil when nothing near
-   can be stood on and the feet are not clear on an awkward floor. world is a world or its cells."
+   cell they floor into solid, every plan :none); the box rests on the cell beside it. nil when
+   nothing near can be stood on. world is a world or its cells."
   [world [x y z :as from]]
   (let [at (cells world)]
-    (cond (standable? at from) from
-          :else
-          (or (->> (for [dy [0 -1 1] dx [0 -1 1] dz [0 -1 1]] [(+ x dx) (+ y dy) (+ z dz)])
-                   (filter #(standable? at %))
-                   first)
-              (when (and (clear? at from) (clear? at [x (inc y) z]) (= :awkward (at [x (dec y) z])))
-                from)))))
+    (if (standable? at from)
+      from
+      (->> (for [dy [0 -1 1] dx [0 -1 1] dz [0 -1 1]] [(+ x dx) (+ y dy) (+ z dz)])
+           (filter #(standable? at %))
+           first))))
 
 (defn traps-in-force
   "The traps of :world/traps younger than trap-ttl at :time/now: the only part of the clock a
