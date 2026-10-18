@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T13:40:31.254Z",
+  "at" : "2026-10-18T13:41:38.060Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -16,7 +16,7 @@
     "number" : 37,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 342,
     "title" : "Bot stops at furnace: boxed",
@@ -64,9 +64,8 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 37,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "issue" : 44,
+    "move" : "assign"
   }, {
     "issue" : 342,
     "move" : "leave",
@@ -1284,5 +1283,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-18T13:40:31.254Z"
+  }, {
+    "issue" : 44,
+    "move" : "assign",
+    "at" : "2026-10-18T13:41:38.060Z"
   } ]
 }
