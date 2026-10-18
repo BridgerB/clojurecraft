@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T00:44:58.759Z",
+  "at" : "2026-10-18T00:46:06.615Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -61,13 +61,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 342,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at furnace: boxed",
     "copilot" : true,
     "draft" : false,
     "nudges" : 6,
     "pr" : 403,
-    "session" : true
+    "session" : false
   }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
@@ -195,7 +195,7 @@
     "issue" : 342,
     "move" : "wait",
     "pr" : 403,
-    "why" : "session running"
+    "why" : "checks running"
   }, {
     "issue" : 178,
     "move" : "leave",
