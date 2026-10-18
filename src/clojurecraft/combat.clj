@@ -269,7 +269,8 @@
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
   ;; Where the target was last seen is kept (:intent/target-pos): a hunt collects its drop there.
-  ;; With :intent/yield? it ends there instead (done), and its row plans the retreat itself.
+  ;; With :intent/yield? it ends there instead (done), and its row plans the retreat itself; with
+  ;; :intent/to-the-end? it never breaks off (a blaze at hand follows any retreat).
   ;; With :intent/hold? the bot never walks: it waits for the target to come within approach-range,
   ;; never presses after it, and never breaks off (issue #263: the pearl hunt fights from a burrow
   ;; an enderman cannot reach into, where a step out is the one way to be hit)
@@ -287,6 +288,7 @@
               intent/done)
           (and (not= :retreat (:intent/stage i))
                (not (:intent/hold? i))
+               (not (:intent/to-the-end? i))
                (< (:player/health world 20.0) retreat-health))
           (-> world
               (intent/dissoc-intent :intent/child)

@@ -3427,10 +3427,11 @@
     (is (= :cover (:intent/for (:plan/last w))) "the walk there was for cover")
     (is (= [] (:sim/violations sim)))))
 
-(deftest three-of-the-models-blazes-at-hand-the-bot-hides-not-fights
-  ;; gym blaze-fire-a run 1 (run 39131023637): a spawner's burst at hand, and the :defend row
-  ;; fought it from 20 health to none; the three here are within its 4, and it leaves them to the
-  ;; blaze-rods row, which walks round the wall out of their sight
+(deftest three-of-the-models-blazes-at-hand-the-nearest-is-killed
+  ;; gym blaze-fire-b run 3 (run 39136853644): blazes at hand followed the bot into cover after
+  ;; cover and it died without a swing; the three here are within 4, the cover round the wall is
+  ;; there, and the blaze-rods row fights the nearest to the end (the :defend row leaves blazes to
+  ;; it)
   (let [[w sim] (sim/run step
                          (game/init fx/opts)
                          (sim/init {:column (world/column-bytes nether-wall dimension/nether)
@@ -3442,7 +3443,7 @@
                                     :mobs [{:type :blaze :pos [11.5 65.0 5.5]}
                                            {:type :blaze :pos [11.5 65.0 6.5]}
                                            {:type :blaze :pos [11.5 65.0 7.5]}]})
-                         #(or (and (= :cover (get-in % [:plan/last :intent/for]))
+                         #(or (and (= :fight (get-in % [:plan/last :intent/kind]))
                                    (intent/done? (:plan/last %)))
                               (plan/failed? %)
                               (pos? (:stats/deaths % 0)))
@@ -3450,6 +3451,6 @@
                          {:event/kind :go :go/goals [:blaze-rods]})]
     (is (intent/done? (:plan/last w)) (pr-str (plan/summary w)))
     (is (zero? (:stats/deaths w 0)) "alive")
-    (is (empty? (blaze/watchers w)) "no blaze sees it")
-    (is (= :cover (:intent/for (:plan/last w))) "the walk there was for cover")
+    (is (:intent/to-the-end? (:plan/last w)) "the blaze-rods row's fight on one at hand")
+    (is (= 2 (count (blaze/blazes w))) "one of the three killed")
     (is (= [] (:sim/violations sim)))))

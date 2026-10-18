@@ -158,7 +158,7 @@
    [:intention/at "ms it happened" "a fact in :world/facts"]
    [:intention/target "the intent's target" "a fact, when the intent had one"]
    [:intention/recipe "the intent's recipe" "a fact, when the intent had one"]
-   [:intention/reason "why it failed or was abandoned (:goal-met, :preempted)"
+   [:intention/reason "why it failed or was abandoned (:goal-met, :preempted, :interrupted)"
     "a :failed or :abandoned fact"]
    [:answer/kind
     "which server answer to the bot's own action: :ack, :pickup, or :death (health reached zero)"
@@ -333,6 +333,9 @@
    [:intent/hold?
     "a :fight that never walks: it waits for the target to come, never presses after it and never breaks off (the pearl hunt's burrow, issue #263)"
     "a :fight from the hunt's burrow"]
+   [:intent/to-the-end?
+    "a :fight that never breaks off under retreat-health: a blaze at hand follows any retreat or cover (issue #262)"
+    "a :fight on a blaze at hand"]
    [:intent/yield?
     "a :fight that ends (done) under retreat-health instead of walking away: its row plans the retreat itself (blaze-rods' cover, issue #262)"
     "a :fight the blaze-rods row starts"]

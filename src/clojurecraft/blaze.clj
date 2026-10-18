@@ -14,7 +14,9 @@
    out (a lit floor stops its blazes); else the remembered spawner (a spawner seen in the Nether
    is a fortress's, memory/nether-landmark-kinds) is walked to, or tunnelled to by the fortress's
    steps when no route reaches it, and camped by until its blazes come; with no spawner known, a
-   wait :no-blaze. The :defend row answers anything else hostile within 4 first; blazes it
+   wait :no-blaze. Before all of it, a blaze at hand (within 4, at-hand-blaze) is fought to the
+   end (:intent/to-the-end?), whatever the health, and ends any other running intent
+   (plan/interrupts?): it follows into any cover. The :defend row answers anything else hostile within 4 first; blazes it
    leaves to this row while it is worked (combat/answers), or its fights would override the
    cover. A fight this row starts ends under combat/retreat-health (:intent/yield?), and the
    cover, the meal or the rest follows, not combat's straight retreat.
@@ -52,6 +54,7 @@
 (def side-steps [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) ; the cells beside a spawner a stand is looked for in
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def cover-range 16.0)                ; blazes this near that see the bot are the ones a hurt bot takes cover from (they shoot that far)
+(def at-hand combat/defend-radius)    ; blocks within which a blaze is fought first and to the end: it follows the bot into any cover and round any retreat
 (def eat-under 14.0)                  ; health under which a meal comes before the next fight, the food under the healing level: one volley takes 9
 (def volley 3)                        ; blazes watching at once that send the bot to cover whatever its health: a natural spawner's burst is four, each hit 3.12 through iron armour
 (def rested 18.0)                     ; health a rest out of sight ends at: two volleys' hits over the wary line
@@ -95,6 +98,19 @@
     (->> (blazes world)
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (take candidates)
+         (some (fn [[_ e :as ee]] (when (reachable? world e) ee))))))
+
+(defn at-hand-blaze
+  "[eid entity] of the nearest blaze within at-hand of the feet that is reachable?, or nil: fought
+   before any cover, meal or rest, and to the end. A blaze that loses sight of the bot flies to
+   where it last saw it, and one within two blocks hits in melee: gym blaze-fire-b run 3 (run
+   39136853644) walked into four covers in eight seconds with blazes half a block to two off
+   following it into each, from 14 health to none, and never swung."
+  [world]
+  (let [pos (:player/pos world)]
+    (->> (blazes world)
+         (filter (fn [[_ e]] (<= (physics/distance pos (:entity/pos e)) at-hand)))
+         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (some (fn [[_ e :as ee]] (when (reachable? world e) ee))))))
 
 (defn rod-lying
@@ -341,15 +357,24 @@
 
 (defmethod combat/answers :blaze-rods [_] #{:blaze})
 
+(defmethod plan/interrupts? :blaze-rods
+  ;; any running intent but a fight ends when a blaze is at hand (at-hand-blaze), and the act
+  ;; fights it: gym blaze-fire-b run 3 (run 39136853644) tunnelled on with one hitting it in melee
+  ;; from 20 health to 13.8, since nothing else ends a running intent
+  [world _ i]
+  (and (not= :fight (:intent/kind i)) (some? (at-hand-blaze world))))
+
 (defmethod plan/next-intent :blaze-rods
   [world _ _]
-  (let [[beid] (quarry world)
+  (let [[heid] (at-hand-blaze world)
+        [beid] (quarry world)
         [_ lying] (rod-lying world)
         sp (nearest-spawner world)
         wary (delay (when (wary? world) (warily world)))
         away (delay (when (outnumbered? world) (hide world)))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
+          heid {:intent/kind :fight :intent/target heid :intent/to-the-end? true}
           (hurt? world) (healing world)
           @wary @wary
           @away @away

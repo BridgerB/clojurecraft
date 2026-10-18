@@ -179,7 +179,8 @@
   {[6 64 8] (blocks/default-state :stone) [6 65 8] (blocks/default-state :stone)})
 
 (deftest hurt-the-bot-hides-backs-away-eats-or-waits
-  (let [near (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)
+  ;; the blaze five off, past at-hand: one nearer is fought first (blaze/at-hand-blaze)
+  (let [near (entity :blaze [13.5 65.0 8.5] :entity/health 20.0)
         hurt (fn [w] (assoc w :player/health 8.0))]
     (testing
       "seen by a blaze, into the cell behind a pillar, out of its sight (gym blaze-fortress-e, f)"
@@ -190,8 +191,9 @@
         (is (= {:intent/kind :back-off :intent/target 7} (next-intent (hurt (standing {7 near}))))
             "in the open nothing hides: backed away from")))
     (is (= {:intent/kind :back-off :intent/target 7}
-           (next-intent (hurt
-                         (assoc (standing {7 near}) :world/chunks {[0 0] (world/column closet)}))))
+           (next-intent (hurt (assoc (standing {7 (entity :blaze [10.5 65.0 12.5])})
+                                     :world/chunks
+                                     {[0 0] (world/column closet)}))))
         "nowhere to hide: backed away from")
     (is (= blaze/rest-intent
            (next-intent (assoc (standing {1 (item :cooked_beef 4)} {}) :player/health 12.0)))
@@ -223,6 +225,37 @@
           "fed, it fights on"))
     (is (= {:plan/wait :other-dimension}
            (next-intent (assoc (standing {}) :player/dimension dimension/overworld))))))
+
+(deftest a-blaze-at-hand-is-fought-first
+  ;; gym blaze-fire-b run 3 (run 39136853644): blazes half a block to two off followed the bot
+  ;; into four covers in eight seconds, and it died from 14 health without a swing
+  (let [hand (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)
+        far (entity :blaze [13.5 65.0 8.5] :entity/health 20.0)
+        fight {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
+        pillar-world (fn [w] (assoc w :world/chunks {[0 0] (world/column pillar)}))]
+    (is (= [7 hand] (blaze/at-hand-blaze (standing {7 hand 8 far}))))
+    (is (nil? (blaze/at-hand-blaze (standing {8 far}))) "five off is not at hand")
+    (is (= fight (next-intent (pillar-world (assoc (standing {7 hand}) :player/health 8.0))))
+        "hurt, with cover behind the pillar: fought, to the end")
+    (is (= fight
+           (next-intent (assoc (standing {1 (item :cooked_beef 4)} {7 hand}) :player/food 15)))
+        "before the meal")
+    (is (= fight
+           (next-intent (pillar-world (standing
+                                       {7 hand 8 far 9 (assoc far :entity/pos [13.5 65.0 6.5])}))))
+        "outnumbered: the one at hand, not the cover")
+    (is (= fight
+           (next-intent (assoc (standing {7 hand}) :world/chunks {[0 0] (world/column closet)})))
+        "in the closet too")
+    (testing "it ends any other running intent, never a fight"
+      (let [w (standing {7 hand})]
+        (is (plan/interrupts? w row {:intent/kind :camp :intent/spawner [11 64 10]}))
+        (is
+         (plan/interrupts? w row {:intent/kind :walk :intent/target [5 64 8] :intent/for :cover}))
+        (is (not (plan/interrupts? w row {:intent/kind :fight :intent/target 8})))
+        (is (not (plan/interrupts? (standing {8 far})
+                                   row
+                                   {:intent/kind :camp :intent/spawner [11 64 10]})))))))
 
 (deftest watched-by-a-volley-the-bot-takes-cover
   ;; gym blazefort-k (run 38913023560) runs 3 and 4: the natural spawner's burst of four, a hit a

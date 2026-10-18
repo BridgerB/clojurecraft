@@ -465,6 +465,7 @@
 (s/def :intent/health number?)
 (s/def :intent/hold? boolean?)
 (s/def :intent/yield? boolean?)
+(s/def :intent/to-the-end? boolean?)
 (s/def :intent/mouth ::block-pos)
 (s/def :intent/eye-from ::vec3)
 (s/def :intent/eye-pos ::vec3)
