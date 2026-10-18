@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T17:06:39.257Z",
+  "at" : "2026-10-18T17:07:47.124Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,14 +18,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 344,
-    "title" : "Bot stops at cast-one: no-escape",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 284,
     "title" : "Bot stops at fortress: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 344,
+    "title" : "Bot stops at cast-one: no-escape",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
