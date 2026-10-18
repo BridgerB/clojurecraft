@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:02:54.351Z",
+  "at" : "2026-10-18T03:04:01.096Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -28,11 +28,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 162,
@@ -43,6 +38,11 @@
     "nudges" : 0,
     "pr" : 421,
     "session" : false
+  }, {
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
@@ -74,6 +74,11 @@
     "title" : "Bot stops at ingots: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 284,
+    "title" : "Bot stops at fortress: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
   }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
@@ -146,14 +151,14 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 41,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 162,
     "move" : "wait",
     "pr" : 421,
     "why" : "checks running"
+  }, {
+    "issue" : 41,
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 410,
     "move" : "leave",
@@ -170,6 +175,10 @@
     "issue" : 87,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 284,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 75,
     "move" : "leave",
@@ -1163,5 +1172,10 @@
     "move" : "ready",
     "pr" : 421,
     "at" : "2026-10-18T03:01:46.347Z"
+  }, {
+    "issue" : 284,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-18T03:04:01.096Z"
   } ]
 }
