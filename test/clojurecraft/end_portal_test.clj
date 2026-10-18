@@ -213,7 +213,8 @@
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (every? #(end/eyed? (sim/block-at sim %)) frames) "every frame took its eye")
     (is (every? #(= end/portal (sim/block-at sim %)) (end/interior middle)) "the portal lit")
-    (is (= middle (end-portal/nearest-portal w)) "and remembered")
+    (is (contains? (set (end/interior middle)) (end-portal/nearest-portal w))
+        "and remembered: the RESULT names the portal block nearest the feet")
     (is (= 2 (end-portal/eyes-held w)) "twelve spent")
     (is (empty? (:sim/violations sim)))))
 

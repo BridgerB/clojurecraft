@@ -11,6 +11,7 @@
             [clojurecraft.blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build]
+            [clojurecraft.end-portal]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress]
             [clojurecraft.game :as game]
@@ -81,8 +82,8 @@
       :throw-eye (pos? (get counts :ender_eye 0)) ; an eye thrown only when one is held (issue #265)
       nil
       (contains? #{:no-log :no-water :in-water :no-site :other-dimension :no-mob :looking :no-pearls
-                   :no-rods :no-eye}
-                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round, the eyes with no pearls or rods (issue #264, each its own stage), a throw with no eye (issue #265): wait
+                   :no-rods :no-eye :no-frames}
+                 (:plan/wait i)) ; gathering with no tree known, wading with no water or from inside it, a build with no lava near, the fortress from the overworld, the entities trial before any health is known, the attack trial looking round, the eyes with no pearls or rods (issue #264, each its own stage), a throw with no eye (issue #265), the end portal with no frame remembered (issue #266): wait
       false)))
 
 (deftest the-planner-only-picks-executable-intents
@@ -124,16 +125,18 @@
             are an item target, done by :provided?, planned by the hunt rather than the needs planner; the
             blaze rods (issue #262), done by the rods held, planned by their own rule; and the eyes (issue #264),
             done by :provided?, planned by the needs planner with its :stuck named for the stage that is short;
-            the throw trial (issue #265), done by a throw kept, the stronghold, done by a frame remembered, and its portal room, by a frame near"
+            the throw trial (issue #265), done by a throw kept, the stronghold, done by a frame remembered, and its portal room, by a frame near;
+            the end portal (issue #266), done by a portal block remembered, and the End, by the dimension"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
     (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :nether-access?
                               :fed? :dressed? :armoured? :health-seen? :safe? :cleared?
                               :provisioned? :armed? :rods-held? :thrown? :frames-seen?
-                              :in-portal-room?}
+                              :in-portal-room? :portal-lit? :in-end?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
     (is (= #{:needs :escape :wade :build :return-nether :fortress :eat :wear :armour :watch :defend
-             :attack :hunt :sword :pearls :blaze-rods :eyes :throw :stronghold :portal-room}
+             :attack :hunt :sword :pearls :blaze-rods :eyes :throw :stronghold :portal-room
+             :end-portal :enter-end}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))
