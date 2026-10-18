@@ -95,24 +95,26 @@
    block placed against a solid neighbour fills. Never air: a step over a drop is not enclosed
    (live run f1-5 stood at a cave's edge with air under the next floor, slid off while placing it
    and fell forty blocks into the lava sea). A solid floor the route cannot walk on is replaced
-   only when digging it opens no fluid and leaves support for its replacement."
+   only when digging it opens no fluid and leaves support for its replacement. No opened cell
+   may drop a gravel or sand bed carrying fluid into the tunnel."
   [world feet move]
   (let [cells (opens feet move)
         floor (plus (plus feet move) [0 -1 0])
         own (set (concat cells [floor feet (plus feet up)]))
         at #(terrain/block-at world %)
         lava? #(contains? blocks/lava-states (at %))]
-    (and (every? some? (map at (conj cells floor)))
-         (not-any? lava? cells)
-         (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %))))
-                   cells)
-         (not-any? lava? (remove own (mapcat neighbours cells)))
-         (or (path/floor? world floor)
-             (and (build/holds? world [:solid floor])
-                  (not (contains? unbreakable (blocks/name-of (at floor))))
-                  (not (intent/exposes-fluid? world floor))
-                  (= floor (build/foundation world floor)))
-             (and (lava? floor) (= floor (build/foundation world floor)))))))
+    (and
+     (every? some? (map at (conj cells floor)))
+     (not-any? lava? cells)
+     (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %)))) cells)
+     (not-any? lava? (remove own (mapcat neighbours cells)))
+     (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %)) cells)
+     (or (path/floor? world floor)
+         (and (build/holds? world [:solid floor])
+              (not (contains? unbreakable (blocks/name-of (at floor))))
+              (not (intent/exposes-fluid? world floor))
+              (= floor (build/foundation world floor)))
+         (and (lava? floor) (= floor (build/foundation world floor)))))))
 
 (defn dry?
   "Does the step from feet by move open no cell that is water or has water beside it (other than
@@ -260,7 +262,8 @@
                    intent/dissoc-intent
                    (intent/assoc-intent (assoc world :player/controls {}) :intent/taken (inc taken))
                    step-keys)
-                  (and (= :floor-clear (:build/step next)) (not (safe? world from move)))
+                  (and (#{:floor-clear :open :enter} (:build/step next))
+                       (not (safe? world from move)))
                   (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
                   :else
                   (let [world (build/work-op world i next event)
