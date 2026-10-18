@@ -15,6 +15,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.intent :as intent]
+            [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
@@ -94,24 +95,26 @@
    block placed against a solid neighbour fills. Never air: a step over a drop is not enclosed
    (live run f1-5 stood at a cave's edge with air under the next floor, slid off while placing it
    and fell forty blocks into the lava sea). A solid floor the route cannot walk on is replaced
-   only when digging it opens no fluid and leaves support for its replacement."
+   only when digging it opens no fluid and leaves support for its replacement. No opened cell
+   may drop a gravel or sand bed carrying fluid into the tunnel."
   [world feet move]
   (let [cells (opens feet move)
         floor (plus (plus feet move) [0 -1 0])
         own (set (concat cells [floor feet (plus feet up)]))
         at #(terrain/block-at world %)
         lava? #(contains? blocks/lava-states (at %))]
-    (and (every? some? (map at (conj cells floor)))
-         (not-any? lava? cells)
-         (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %))))
-                   cells)
-         (not-any? lava? (remove own (mapcat neighbours cells)))
-         (or (path/floor? world floor)
-             (and (build/holds? world [:solid floor])
-                  (not (contains? unbreakable (blocks/name-of (at floor))))
-                  (not (intent/exposes-fluid? world floor))
-                  (= floor (build/foundation world floor)))
-             (and (lava? floor) (= floor (build/foundation world floor)))))))
+    (and
+     (every? some? (map at (conj cells floor)))
+     (not-any? lava? cells)
+     (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %)))) cells)
+     (not-any? lava? (remove own (mapcat neighbours cells)))
+     (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %)) cells)
+     (or (path/floor? world floor)
+         (and (build/holds? world [:solid floor])
+              (not (contains? unbreakable (blocks/name-of (at floor))))
+              (not (intent/exposes-fluid? world floor))
+              (= floor (build/foundation world floor)))
+         (and (lava? floor) (= floor (build/foundation world floor)))))))
 
 (defn dry?
   "Does the step from feet by move open no cell that is water or has water beside it (other than
@@ -259,9 +262,18 @@
                    intent/dissoc-intent
                    (intent/assoc-intent (assoc world :player/controls {}) :intent/taken (inc taken))
                    step-keys)
-                  (and (= :floor-clear (:build/step next)) (not (safe? world from move)))
+                  (and (#{:floor-clear :open :enter} (:build/step next))
+                       (not (safe? world from move)))
                   (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
-                  :else (build/work-op world i next event))))))
+                  :else
+                  (let [world (build/work-op world i next event)
+                        i (:plan/intent world)]
+                    (cond (and (intent/failed? i) (= :no-pickaxe (:intent/reason i)))
+                          (-> world
+                              (assoc :player/controls {})
+                              (intent/dissoc-intent :intent/reason)
+                              intent/done)
+                          :else world)))))))
 
 ;; ---------------------------------------------------------------- the goal
 
@@ -302,11 +314,14 @@
     (plan/next-intent world (assoc goal :goal/plan :build) table)))
 
 (defmethod plan/next-intent :fortress
-  ;; tunnel to the nearest brick on record; with none, explore; with nowhere safe, or outside the
-  ;; Nether (the planner waits there for a row of another dimension anyway), wait
-  [world _ _]
+  ;; replace a missing pickaxe from held supplies, then tunnel to the nearest brick on record;
+  ;; with none, explore; with nowhere safe, or outside the Nether, wait
+  [world goal table]
   (let [t (when (= dimension/nether (dimension/of world))
             (or (nearest-brick world) (exploring world)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
-          t {:intent/kind :tunnel-to :intent/target t :intent/steps steps-per-tunnel}
-          :else {:plan/wait :no-way})))
+          :else
+          (or (when (build/pickaxe-at-hand? world)
+                (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
+              (when t {:intent/kind :tunnel-to :intent/target t :intent/steps steps-per-tunnel})
+              {:plan/wait :no-way}))))

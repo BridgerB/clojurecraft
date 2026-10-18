@@ -233,7 +233,9 @@
    "A blocked tunnel considers a safe retreat and passes through portal cells without digging; fresh steps and a supported, non-fluid-floored corner onto adjoining ground precede revisiting a cell (issue #286)"
    "A tunnel replaces solid floors the route cannot walk, such as soul sand, before entering; the repair needs support and must expose no fluid or protected block, including when resuming a failed entry walk (issue #284)"
    "A descending walk stops input over its waypoint; a tunnel step counts only after centring and landing, then clears controls, so neither new nor in-flight steps run past their repaired floor into lava with no footing (issue #339)"
-   "A reachable dig works from the actual eye without demanding a new stance; when no working stance is reachable, a build returns to its landing's height even nearby instead of treating distance alone as arrival at the site (issue #328)"]
+   "A tunnel never opens fluid-bearing gravel or sand beds above or beside its body cells; safety is rechecked before every body-cell dig and entry walk, dropping stale steps and their children to replan before lava leaves no escape footing (issue #339)"
+   "A reachable dig works from the actual eye without demanding a new stance; when no working stance is reachable, a build returns to its landing's height even nearby instead of treating distance alone as arrival at the site (issue #328)"
+   "A fortress tunnel replaces a lost pickaxe from held supplies before starting; a broken-tool tunnel yields without spending a failed attempt, and without replacement supplies even slow rock is cleared by hand rather than retrying no-pickaxe in the woodless Nether (issue #296)"]
   :problem/risks
   ["Stale overworld columns answer Nether lookups (a brick reported exactly 64 blocks off)"
    "Parsing a Nether chunk as 24 sections runs off the buffer"
