@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T08:52:03.099Z",
+  "at" : "2026-10-18T08:53:09.120Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -24,7 +24,7 @@
     "checks" : "pending",
     "title" : "Bot stops at cobblestone: boxed",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 437,
     "session" : false
@@ -44,8 +44,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 65,
-    "move" : "ready",
-    "pr" : 437
+    "move" : "wait",
+    "pr" : 437,
+    "why" : "checks running"
   }, {
     "issue" : 430,
     "move" : "leave",
