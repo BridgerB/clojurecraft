@@ -347,6 +347,9 @@
    [:intent/level-cells
     "the two cells a level step opens, head then feet, when every stair down was refused"
     "stairs-down, during a level step"]
+   [:intent/bore
+    "the rock cells over the head a climb out from under a lake digs through, bottom first, before it rises up the shaft (stairs/bore-cells)"
+    "a stairs-up in its :bore stage, with no pickaxe held"]
    [:intent/lay
     "the cells a block is laid in, in order, before a stair or level step is cut: a floor and its holder (a holder under the block under the feet, then the floor under the new feet) for a stair down, a missing step for a stair up, or the water cells beside a stair up (a seal, at most the four neighbours of each of three cells)"
     "a staircase, while cells are laid"]
