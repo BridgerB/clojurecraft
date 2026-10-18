@@ -1802,14 +1802,16 @@
    dug for its stance with none and failed :needs-tool three times), a crafting table when one
    can be made from what is held and none is at hand (carry-table?, issue #186), and the blocks
    plan places at the site (blocks-needed, issue #124: counted from the plan for the place
-   chosen). An intent that makes them, a wait, or nil when they are held."
+   chosen), then the spare tools it keeps (:goal/spares, make/spare). An intent that makes them,
+   a wait, or nil when they are held."
   [world goal table plan]
   (let [n (if plan (blocks-needed world plan) 0)
         holds (cond-> (or (:goal/holds goal) {})
                 (pos? n) (assoc :item/cobblestone n)
                 (carry-table? world) (assoc :item/crafting_table 1)
                 (carry-sticks? world) (assoc :item/stick kit-sticks))]
-    (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))))
+    (or (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))
+        (make/spare world goal table))))
 
 (defmethod plan/next-intent :build
   ;; what the row holds first (held-first); then the placed table taken along (make/take-table-along:

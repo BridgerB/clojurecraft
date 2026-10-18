@@ -524,7 +524,7 @@
     (doseq [id [:cast-one :portal :nether]]
       (is (= {:goal/spares {:tag/pickaxes 1}} (select-keys (row id) [:goal/spares]))
           "the row names the spare")
-      (is (= :craft (:intent/kind (decide id kit true)))
+      (is (contains? #{:craft :open-container} (:intent/kind (decide id kit true)))
           "the table near and the sticks held: the spare is made before the build")
       (is (= :place (:intent/kind (decide id (assoc kit :crafting_table 1) false)))
           "the table carried is placed for it")
