@@ -397,6 +397,36 @@
     (is (= {:path/waypoints [] :path/cost 0.0 :path/status :none}
            (path/plan w [5 64 5] {:goal/kind :block :goal/pos [2 70 5]})))))
 
+(deftest a-route-leaves-occupied-awkward-footing-without-entering-it
+  (let [from [5 64 5]
+        to [4 65 5]
+        w (world-of (merge (fill stone (range 16) [64 65 66] (range 16))
+                           {[5 63 5] (blocks/default-state :soul_sand)
+                            [5 64 5] 0
+                            [5 65 5] 0
+                            [5 66 5] 0
+                            [5 64 4] 0
+                            [5 65 4] 0
+                            [4 65 5] 0
+                            [4 66 5] 0})
+                    [5.5 64.0 5.5])
+        goal {:goal/kind :block :goal/pos to}
+        route (path/plan w from goal)]
+    (is (not (path/standable? w from)))
+    (is (= [5 64 4] (path/start-cell w from)) "the neighbouring start is isolated")
+    (is (= from (:path/from route)) "depart from the actual feet instead")
+    (is (= :found (:path/status route)))
+    (is (= [to] (:path/waypoints route)))
+    (is (sound-route? w from route))
+    (is (= [to] (first (drive w from (:path/waypoints route)))))
+    (is (not= :found (:path/status (path/plan w to {:goal/kind :block :goal/pos from}))))
+    (testing "unsupported floors, occupied body cells and lava still forbid the actual start"
+      (doseq [[pos state] [[[5 63 5] water] [[5 63 5] lava] [[5 63 5] 0] [[5 64 5] stone]
+                           [[5 65 5] stone] [[5 64 5] water] [[5 65 5] water] [[6 64 5] lava]
+                           [[6 65 5] lava]]]
+        (is (not= from (:path/from (path/plan (assoc-in w [:world/blocks pos] state) from goal)))))
+      (is (not= from (:path/from (path/plan (assoc w :world/chunks {}) from goal)))))))
+
 (deftest a-snowfield-is-crossed-through-its-one-layer-snow
   ;; race 38477665442 (issue #38): 39 bots landed on snowy ground, one layer of snow on every
   ;; block round them. The feet stood in the snow's cell, which was :awkward, so neither it

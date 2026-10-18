@@ -667,7 +667,7 @@
                          rock))
       rock)))
 
-(defn bore
+(defn bore-up
   "A climb out from under a lake with no pickaxe to cut a way along it: the stairs' stage :bore,
    digging bore-cells over the head by hand and then holding up the shaft under the water that
    comes down it, the swim-out (swim.clj) rising it to the surface. nil with a pickaxe held
@@ -734,7 +734,7 @@
                    (first (filter laid ws))))
         budget? (< level-steps (level-step-limit world kind feet))
         fresh (when budget? (pick (remove #(contains? visited (last (level-cells feet %))) ways)))
-        bored (when (= :stairs-up kind) (bore world))
+        bored (when (= :stairs-up kind) (bore-up world))
         ducked (when (and (nil? bored) budget? (nil? fresh) (= :stairs-up kind)) (duck world i))
         d (or fresh (when (and budget? (nil? ducked)) (pick ways)))
         to-lay (when (and d (not (level-safe? world (level-cells feet d)))) (laid d))]
