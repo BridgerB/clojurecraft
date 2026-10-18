@@ -2,19 +2,23 @@
   "Blaze rods (issue #262): the :blaze-rods goal, done when rods-wanted are held: six give the
    twelve blaze powder twelve eyes of ender take, and one is spare. Worked in the Nether only.
 
-   Requiring this namespace registers the row's rules and the :camp executor. Planned by
-   :blaze-rods, in order: hurt under combat/retreat-health, back away from a blaze at hand, or eat
-   when the food is under the healing level, or wait for the health to come back (ruststeve broke
-   off under 10 health: a run that fought on killed the blaze and died with it); a rod lying near
-   is picked up (:collect-drops: a blaze drops one a kill in two, so nothing lying there is no
-   failure); the nearest blaze within fight-radius is fought (combat's :fight, attacks 650 ms
-   apart, aimed at its body as it hovers); else the remembered spawner (a spawner seen in the
-   Nether is a fortress's, memory/nether-landmark-kinds) is walked to, or tunnelled to by the
-   fortress's steps when no route reaches it, and camped by until its blazes come; with no spawner
-   known, a wait :no-blaze. The :defend row still answers anything hostile within 4 first.
+   Requiring this namespace registers the row's rules and the :camp and :rest executors. Planned
+   by :blaze-rods, in order: hurt under combat/retreat-health, into a cell out of the watching
+   blazes' sight, or eat when the food is under the healing level, or back away from the nearest
+   watcher, or rest out of sight until the health is back (ruststeve broke off under 10 health: a
+   run that fought on killed the blaze and died with it); wary under eat-under, the same cover,
+   meal or rest before the next fight; watched by a volley of blazes at once, cover whatever the
+   health; a rod lying near is picked up (:collect-drops: a blaze drops one a kill in two, so
+   nothing lying there is no failure); the nearest blaze within fight-radius is fought (combat's
+   :fight, attacks 650 ms apart, aimed at its body as it hovers); a fire by the spawner is put
+   out (a lit floor stops its blazes); else the remembered spawner (a spawner seen in the Nether
+   is a fortress's, memory/nether-landmark-kinds) is walked to, or tunnelled to by the fortress's
+   steps when no route reaches it, and camped by until its blazes come; with no spawner known, a
+   wait :no-blaze. The :defend row still answers anything hostile within 4 first.
 
    Fireballs are not dodged: ruststeve never needed it with its break-off at 10 health; the
-   damage-event log is where to look if they kill."
+   damage-event log is where to look if they kill. The bot does not put itself out: no water
+   works in the Nether, and the gym rows give Fire Resistance until potions exist."
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
@@ -46,6 +50,10 @@
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def cover-range 16.0)                ; blazes this near that see the bot are the ones a hurt bot takes cover from (they shoot that far)
 (def eat-under 14.0)                  ; health under which a meal comes before the next fight, the food under the healing level: one volley takes 9
+(def volley 3)                        ; blazes watching at once that send the bot to cover whatever its health: a natural spawner's burst is four, each hit 3.12 through iron armour
+(def rested 18.0)                     ; health a rest out of sight ends at: two volleys' hits over the wary line
+(def rest-ms 90000)                   ; a rest with no health coming back this long fails :no-heal (the slow heal is one point every four seconds)
+(def fire-radius 4)                   ; cells from a spawner a fire is put out in: a fire lights its cells past 11, where a spawner's blaze no longer spawns
 
 (def rod (recipe/item-id :blaze_rod))
 (def spawner (blocks/default-state :spawner))
@@ -115,18 +123,27 @@
   [world sp]
   (and (level-with? world sp) (intent/routable? world {:intent/kind :walk :intent/target sp})))
 
+(defn top-in-sight?
+  "Is the line from the eye to the point a block over spawner sp's centre, where its blazes
+   appear, clear (combat/clear?)? A camp in a cell the spawner's top is not seen from is a camp
+   its blazes never see: gym blazefort-k (run 38913023560) hid from a volley in its tunnel,
+   and a camp there would wait on blazes hovering unseen in the room."
+  [world sp]
+  (combat/clear? world (game/eye world) (update (physics/centre sp) 1 + 1.0)))
+
 (defn at-spawner?
   "Is the bot where it camps by spawner sp: the feet within spawner-reach of it and level-with?
-   it (where a tunnel to it ends), or the eye within camp-range and the spawner walkable? (on its
-   floor, not in a tunnel beside its room). Gym blaze-fortress-b (run 38893941350) tunnelled to
-   within 6 of its spawner, four blocks over it in the wall, and camped there ten minutes: the
-   blazes the spawner made in its room below were out of reach, every run; blaze-fortress-c
-   (run 38895759229) run 3 came up under its spawner, three below its floor, killed eight blazes
-   from there and every rod lay on the floor over it."
+   it (where a tunnel to it ends), or the eye within camp-range with the spawner walkable? (on its
+   floor, not in a tunnel beside its room) and its top-in-sight?. Gym blaze-fortress-b (run
+   38893941350) tunnelled to within 6 of its spawner, four blocks over it in the wall, and
+   camped there ten minutes: the blazes the spawner made in its room below were out of reach,
+   every run; blaze-fortress-c (run 38895759229) run 3 came up under its spawner, three below
+   its floor, killed eight blazes from there and every rod lay on the floor over it."
   [world sp]
   (or (and (fortress/arrived? world sp spawner-reach) (level-with? world sp))
       (and (<= (physics/distance (game/eye world) (physics/centre sp)) camp-range)
-           (walkable? world sp))))
+           (walkable? world sp)
+           (top-in-sight? world sp))))
 
 (defn open?
   "Are cell c and the one over it loaded and not solid: room for the body?"
@@ -157,63 +174,93 @@
                        (eat/food-held world))]
     {:intent/kind :eat :intent/item food}))
 
-(defn watcher
-  "[eid entity] of the nearest blaze alive within cover-range that has the bot in sight
-   (combat/seen?: a clear line from the eye to it), or nil: what a hurt bot hides from."
+(defn watchers
+  "{eid entity} of the blazes alive within cover-range of the feet that have the bot in sight
+   (combat/seen?: a clear line from the eye to each): what shoots at it, and what a bot in
+   cover is out of the sight of."
   [world]
   (let [pos (:player/pos world)]
-    (entity/nearest (into {}
-                          (filter (fn [[_ e]]
-                                    (and (= :blaze (entity/kind e))
-                                         (not (entity/dead? e))
-                                         (combat/seen? world e))))
-                          (:world/entities world))
-                    pos
-                    cover-range)))
+    (into {}
+          (filter (fn [[_ e]]
+                    (and (= :blaze (entity/kind e))
+                         (not (entity/dead? e))
+                         (<= (physics/distance pos (:entity/pos e)) cover-range)
+                         (combat/seen? world e))))
+          (:world/entities world))))
+
+(defn watcher
+  "[eid entity] of the nearest of the watchers, or nil: what a hurt bot hides from first."
+  [world]
+  (entity/nearest (watchers world) (:player/pos world)))
+
+(defn outnumbered?
+  "Do volley blazes or more watch the bot: more volleys than its armour and its sword answer,
+   whatever its health. Gym blazefort-k (run 38913023560) runs 3 and 4 died at the spawner from
+   over 14 health in four seconds, a hit a second from the natural spawner's burst of four."
+  [world]
+  (>= (count (watchers world)) volley))
 
 (def body-over-cell 0.4)               ; blocks over its cell's centre a blaze's body is looked for (its aim, combat/aim-height over its feet)
 
-(defmethod path/goal-done? :unseen
-  ;; a cell from whose eye height the line to the body of the blaze in the cell :goal/pos is
-  ;; blocked: out of its sight
-  [world {:goal/keys [pos]} [x y z]]
+(defn unseen-from?
+  "Is the line from the eye height over cell [x y z] to the body of a blaze in cell c blocked:
+   the cell out of its sight?"
+  [world [x y z] c]
   (not (combat/clear? world
                       [(+ x 0.5) (+ y physics/eye-height) (+ z 0.5)]
-                      (update (physics/centre pos) 1 + body-over-cell))))
+                      (update (physics/centre c) 1 + body-over-cell))))
+
+(defmethod path/goal-done? :unseen
+  ;; a cell from whose eye height the line to the body of the blaze in the cell :goal/pos, and
+  ;; of each in :goal/cells, is blocked: out of all their sight
+  [world {:goal/keys [pos cells]} node]
+  (every? #(unseen-from? world node %) (cons pos cells)))
 
 (defmethod path/heuristic :unseen [_ _] 0.0)
 
 (defn cover
-  "A walk into the nearest cell out of the sight of blaze e (path's :unseen goal; back round the
-   tunnel's corner the bot came by), stood in, or nil when no route finds one. Gym
-   blaze-fortress-e (run 38900794167) stood by its spawner under 10 health, waiting to heal while
-   burning and shot, and every run died there; blaze-fortress-f (run 38902306126) walked to a
-   cell ten off on the plane that the blazes still saw, the walk done at once in reach of it,
-   twenty times a second. A route found with no step (the feet's own cell counted unseen, its
-   line a touch apart from the eye's to the blaze) is none: blaze-fortress-g run 3 (run
-   38904048480) walked to nothing and the run threw."
-  [world e]
-  (let [r (path/plan world
-                     (path/feet-cell (:player/pos world))
-                     {:goal/kind :unseen :goal/pos (hunt/cell (:entity/pos e))})
+  "A walk into the nearest cell out of the sight of every blaze in es, the nearest first
+   (path's :unseen goal; back round the tunnel's corner the bot came by), stood in, or nil when
+   no route finds one or es is empty. Gym blaze-fortress-e (run 38900794167) stood by its spawner
+   under 10 health, waiting to heal while burning and shot, and every run died there;
+   blaze-fortress-f (run 38902306126) walked to a cell ten off on the plane that the blazes
+   still saw, the walk done at once in reach of it, twenty times a second. A route found with
+   no step (the feet's own cell counted unseen, its line a touch apart from the eye's to the
+   blaze) is none: blaze-fortress-g run 3 (run 38904048480) walked to nothing and the run threw."
+  [world es]
+  (let [pos (:player/pos world)
+        [c & cs] (map #(hunt/cell (:entity/pos %))
+                      (sort-by #(physics/distance pos (:entity/pos %)) es))
+        r (when c
+            (path/plan world
+                       (path/feet-cell pos)
+                       {:goal/kind :unseen :goal/pos c :goal/cells (vec cs)}))
         to (last (:path/waypoints r))]
-    (when (and (= :found (:path/status r)) to (not= to (intent/feet world)))
+    (when (and r (= :found (:path/status r)) to (not= to (intent/feet world)))
       {:intent/kind :walk :intent/target to :intent/for :cover})))
 
-(defn healing
-  "What a hurt bot does: the meal; else out of a watching blaze's sight (watcher, cover); else
-   back away from the nearest blaze within combat/back-off-to; else wait :healing. The meal
-   first: gym blaze-7 run 1 (run 38891910129) backed away three times round a room seven square
-   with the food at 17, where no back-off gets away, and burned to death without eating."
+(defn hide
+  "The cover walk from every watcher, or nil: none watching, or no cell out of their sight."
   [world]
-  (let [[eid e] (quarry world)
-        [_ w] (watcher world)
-        hide (when w (cover world w))]
-    (cond (meal world) (meal world)
-          hide hide
-          (and e (< (physics/distance (:player/pos world) (:entity/pos e)) combat/back-off-to))
-          {:intent/kind :back-off :intent/target eid}
-          :else {:plan/wait :healing})))
+  (cover world (vals (watchers world))))
+
+(def rest-intent {:intent/kind :rest})
+
+(defn healing
+  "What a hurt bot does: out of the watching blazes' sight (hide); else the meal; else back away
+   from the nearest watcher; else, with none watching, a :rest. Cover before the meal where
+   there is cover: a meal takes a second and a half standing still, two hits from a burst, and
+   gym blazefort-k run 3 (run 38913023560) ate at 9.4 by its spawner and was dead before the
+   food came. The meal before the back-off where there is none: gym blaze-7 run 1 (run
+   38891910129) backed away three times round a room seven square with the food at 17, where no
+   back-off gets away, and burned to death without eating."
+  [world]
+  (let [[weid] (watcher world)
+        away (hide world)]
+    (cond away away
+          (meal world) (meal world)
+          weid {:intent/kind :back-off :intent/target weid}
+          :else rest-intent)))
 
 (defn wary?
   "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run
@@ -221,6 +268,49 @@
    two seconds, under combat/retreat-health only on the way down."
   [world]
   (< (:player/health world 20.0) eat-under))
+
+(defn warily
+  "What a wary bot does before the next fight: out of the watching blazes' sight (hide); else
+   the meal; else, with no blaze watching, a :rest until rested; else nil, and it fights on.
+   Gym blazefort-k run 3 (run 38913023560) fought on at 11.5, watched by the spawner's burst,
+   and was under 10 a second later."
+  [world]
+  (let [away (hide world)]
+    (cond away away
+          (meal world) (meal world)
+          (empty? (watchers world)) rest-intent
+          :else nil)))
+
+(defn fires
+  "The cells within fire-radius of spawner sp on the plane, from a block under its height to two
+   over, that hold fire (fire or soul fire), none blacklisted (a dig of it failed): a fire lights
+   its cells past 11, and a spawner's blaze spawns only at 11 or less (gym blaze-7a run 3, run
+   38891910129, made none for three minutes once the floor by it burned)."
+  [world [sx sy sz]]
+  (let [bl (:plan/blacklist world #{})]
+    (for [x (range (- sx fire-radius) (+ sx fire-radius 1))
+          y (range (dec sy) (+ sy 3))
+          z (range (- sz fire-radius) (+ sz fire-radius 1))
+          :let [c [x y z]]
+          :when (and (not (contains? bl c))
+                     (contains? #{:fire :soul_fire}
+                                (some-> (terrain/block-at world c)
+                                        blocks/name-of)))]
+      c)))
+
+(defn put-out
+  "The way to put out the fire by spawner sp nearest the feet, or nil when none burns: a :dig of
+   it (a left click, the server breaks fire on the first) when its cell is within intent/reach of
+   the eye, else a walk to it with a route, else nil (the fire is left)."
+  [world sp]
+  (when-let [c (memory/nearest-of (physics/centre (intent/feet world))
+                                  Double/POSITIVE_INFINITY
+                                  (fires world sp))]
+    (let [walk {:intent/kind :walk :intent/target c :intent/for :fire}]
+      (cond (<= (physics/distance (game/eye world) (physics/centre c)) intent/reach)
+            {:intent/kind :dig :intent/target c}
+            (intent/routable? world walk) walk
+            :else nil))))
 
 (defn to-spawner
   "The way to spawner sp: a walk when it is walkable?, else a tunnel by the fortress's steps
@@ -249,16 +339,20 @@
   [world _ _]
   (let [[beid] (quarry world)
         [_ lying] (rod-lying world)
-        sp (nearest-spawner world)]
+        sp (nearest-spawner world)
+        wary (delay (when (wary? world) (warily world)))
+        away (delay (when (outnumbered? world) (hide world)))
+        fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
           (hurt? world) (healing world)
-          (and (wary? world) (meal world)) (meal world)
-          (and (wary? world) (nil? (watcher world))) {:plan/wait :healing}
+          @wary @wary
+          @away @away
           lying
           {:intent/kind :collect-drops
            :intent/item :blaze_rod
            :intent/target (hunt/cell (:entity/pos lying))}
           beid {:intent/kind :fight :intent/target beid}
+          @fire @fire
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
           sp {:intent/kind :camp :intent/spawner sp}
           :else {:plan/wait :no-blaze})))
@@ -268,18 +362,49 @@
 (defmethod intent/run :camp
   ;; {:intent/kind :camp :intent/spawner cell}: stand by the spawner until a blaze comes within
   ;; fight-radius that was not there when the camp began (:intent/blazes: one there then could not
-  ;; be fought, or the act would have chosen it) or a rod lies near (done), failed :no-blaze after
+  ;; be fought, or the act would have chosen it), a rod lies near, or the health falls under what
+  ;; it was when the camp began (:intent/health: something shoots the bot, and the act must look
+  ;; again; gym blazefort-k run 3, run 38913023560, camped on from 11.5 health to none in four
+  ;; seconds, since nothing ends a running intent but itself) (done), failed :no-blaze after
   ;; camp-ms. A camp is an intent, not a planner wait: a wait fails the plan after
   ;; plan/wait-ticks (20 s), shorter than a natural spawner's delay. Its spawner is not its
   ;; :intent/target, so a camp that saw nothing never blacklists it; three in a row fail the plan
-  [world {:intent/keys [since] seen :intent/blazes} _]
+  [world {:intent/keys [since health] seen :intent/blazes} _]
   (let [now (:time/now world)
         here (set (keys (blazes world)))
         seen (or seen here)
         since (or since now)
-        world (-> world
-                  (assoc :player/controls {})
-                  (intent/assoc-intent :intent/since since :intent/blazes seen))]
-    (cond (or (seq (remove seen here)) (rod-lying world)) (intent/done world)
+        health (or health (:player/health world 20.0))
+        world
+        (-> world
+            (assoc :player/controls {})
+            (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
+    (cond (or (seq (remove seen here)) (rod-lying world) (< (:player/health world 20.0) health))
+          (intent/done world)
           (> (- now since) camp-ms) (intent/fail world :no-blaze)
+          :else world)))
+
+;; ---------------------------------------------------------------- the :rest intent
+
+(defmethod intent/run :rest
+  ;; {:intent/kind :rest}: stand still out of sight until the health is back to rested, or a
+  ;; blaze watches the bot that did not when the rest began (:intent/blazes), or the health
+  ;; falls under what it was then (:intent/health: shot from somewhere unseen) (done, and the
+  ;; act looks again), failed :no-heal after rest-ms (no food in the bar, nothing comes back).
+  ;; An intent, not a planner wait: the slow heal brings a point every four seconds, and a wait
+  ;; fails the plan after plan/wait-ticks (20 s)
+  [world {:intent/keys [since health] seen :intent/blazes} _]
+  (let [now (:time/now world)
+        here (set (keys (watchers world)))
+        seen (or seen here)
+        since (or since now)
+        health (or health (:player/health world 20.0))
+        now-health (:player/health world 20.0)
+        world
+        (-> world
+            (assoc :player/controls {})
+            (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
+    (cond (or (>= now-health rested) (< now-health health) (seq (remove seen here)))
+          (intent/done world)
+          (> (- now since) rest-ms) (intent/fail world :no-heal)
           :else world)))

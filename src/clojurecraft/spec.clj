@@ -462,6 +462,7 @@
 (s/def :intent/target-pos ::vec3)
 (s/def :intent/spawner ::block-pos)
 (s/def :intent/blazes (s/coll-of int? :kind set?))
+(s/def :intent/health number?)
 (s/def :intent/hold? boolean?)
 (s/def :intent/mouth ::block-pos)
 (s/def :intent/eye-from ::vec3)
@@ -515,10 +516,11 @@
 (s/def :goal/rise nat-int?)
 (s/def :goal/step-down? boolean?)
 (s/def :goal/boxed (s/coll-of ::block-pos :kind set?))
+(s/def :goal/cells (s/coll-of ::block-pos :kind vector?)) ; :unseen: the other blazes a cover is out of the sight of
 (s/def ::path-goal
   ;; :sky and :surface have no :goal/pos: the mouth is wherever their terrain predicate holds
   (s/and (s/keys :req [:goal/kind]
-                 :opt [:goal/pos :goal/range :goal/rise :goal/step-down? :goal/boxed])
+                 :opt [:goal/pos :goal/range :goal/rise :goal/step-down? :goal/boxed :goal/cells])
          #(or (contains? #{:sky :surface} (:goal/kind %)) (contains? % :goal/pos))))
 (s/def :intent/logs-before nat-int?)
 (s/def :intent/drops (s/coll-of int? :kind set?))

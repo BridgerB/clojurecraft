@@ -324,7 +324,12 @@
    [:intent/target-pos "where a :fight last saw its target; a hunt picks the drop up there"
     "fight, while its target is seen"]
    [:intent/spawner "the remembered spawner a :camp waits by for its blazes (issue #262)" "camp"]
-   [:intent/blazes "the blazes within fight range when a :camp began; a new one ends it" "camp"]
+   [:intent/blazes
+    "the blazes within fight range when a :camp began, or watching when a :rest began; a new one ends it"
+    "camp, rest"]
+   [:intent/health
+    "the health when a :camp or a :rest began; a fall under it ends it, since nothing else ends a running intent (issue #262)"
+    "camp, rest"]
    [:intent/hold?
     "a :fight that never walks: it waits for the target to come, never presses after it and never breaks off (the pearl hunt's burrow, issue #263)"
     "a :fight from the hunt's burrow"]

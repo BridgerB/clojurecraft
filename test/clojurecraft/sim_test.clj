@@ -7,6 +7,7 @@
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.chunk :as chunk]
@@ -3387,4 +3388,41 @@
     (is (zero? (get (held w) :ender_pearl 0)))
     (is (empty? (:window/grid w)) "nothing left in the grid")
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (= [] (:sim/violations sim)))))
+
+;; ---------------------------------------------------------------- blaze rods (issue #262)
+
+(def nether-wall
+  "A wall of netherrack one thick and three high at x 7, z 6 to 9, west of a Nether landing at
+   [8.5 64 6.5] by its end: round that end, the cells behind it are out of the sight of blazes
+   to the east."
+  (into {} (for [z (range 6 10) y [64 65 66]] [[7 y z] (blocks/default-state :netherrack)])))
+
+(deftest watched-by-three-of-the-models-blazes-the-bot-hides-and-rests
+  ;; issue #262's blaze fixture against the model: three blazes east of the landing, all in
+  ;; sight, shoot 5 a hit (3.5 at Easy) every three seconds (mob/kinds), the first volley at
+  ;; once; the bot walks round the wall into a cell none of them sees and rests there until its
+  ;; health is back
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes nether-wall dimension/nether)
+                                    :spawn [8.5 64.0 6.5]
+                                    :dimension dimension/nether
+                                    :difficulty :easy
+                                    :food 20
+                                    :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}}
+                                    :mobs [{:type :blaze :pos [14.5 65.0 6.5]}
+                                           {:type :blaze :pos [14.5 65.0 7.5]}
+                                           {:type :blaze :pos [14.5 65.0 8.5]}]})
+                         #(or (= :rest (get-in % [:plan/intent :intent/kind]))
+                              (plan/failed? %)
+                              (pos? (:stats/deaths % 0)))
+                         30000
+                         {:event/kind :go :go/goals [:blaze-rods]})]
+    (is (= :rest (get-in w [:plan/intent :intent/kind])) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)) "alive")
+    (is (pos? (:sim/health sim)))
+    (is (empty? (blaze/watchers w)) "no blaze sees it")
+    (is (< (first (:player/pos w)) 7.0) "behind the wall")
+    (is (= :cover (:intent/for (:plan/last w))) "the walk there was for cover")
     (is (= [] (:sim/violations sim)))))
