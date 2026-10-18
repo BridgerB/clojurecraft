@@ -14,6 +14,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (def netherrack (blocks/default-state :netherrack))
@@ -719,3 +720,18 @@
                 [0 64 0]
                 [10 64 0]))
             "chosen when it is the way")))))
+
+(deftest a-tunnel-floors-from-the-rock-it-digs
+  ;; sim runs of R1/43 (issue #338) bridged their cavern with all their stone and failed :not-held
+  ;; with netherrack by the hundred in hand
+  (let [held (fn [item n]
+               (assoc (rock {}) :player/inventory {0 {:item (recipe/item-id item) :count n}}))]
+    (is (= :netherrack (stairs/filler (held :netherrack 100) 1)))
+    (is (= :cobblestone
+           (stairs/filler (assoc-in (held :netherrack 100)
+                           [:player/inventory 1]
+                           {:item (recipe/item-id :cobblestone) :count 1})
+                          1))
+        "cobblestone first")
+    (is (nil? (stairs/filler (held :gravel 100) 1)) "never what falls")
+    (is (= 100 (stairs/carried-filler (held :basalt 100))))))
