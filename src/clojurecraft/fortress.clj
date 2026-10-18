@@ -36,6 +36,8 @@
 (def hop-nodes 6000)                  ; expansions a look for open ground toward the target may spend
 (def hop-gain 8)                      ; blocks nearer the target a route over open ground must end to be walked
 (def hop-longest 96)                  ; waypoints of a route one hop walks before the planner looks again
+(def idle-gain 12)                    ; blocks nearer the leg's end the feet must come to count as moving
+(def idle-ms 900000)                  ; ms a leg may go without gaining idle-gain before the spiral turns: fifteen minutes
 (def hop-tries 2)                     ; failed hops a tunnel forgives before it only digs
 
 (def fortress-kinds
@@ -391,6 +393,24 @@
   [world feet [dx dz]]
   (some? (terrain/block-at world (plus feet [(* look-ahead dx) 0 (* look-ahead dz)]))))
 
+(defn to-end
+  "The distance on the plane from the feet to the end of search's leg."
+  [world search]
+  (physics/horizontal-distance (physics/centre (intent/feet world))
+                               (physics/centre (leg-target search))))
+
+(defn gaining
+  "search with its best distance to the leg's end moved on when the feet are idle-gain nearer than
+   it was, and the time that happened: a leg that stays where it is for idle-ms is over
+   (leg-over?). Issue #338: a leg turned at a cavern's edge paced it for forty minutes, the
+   tunnels it was allowed, before the spiral turned."
+  [world search]
+  (let [d (to-end world search)
+        {:search/keys [best]} search]
+    (cond (or (nil? best) (< d (- best idle-gain)))
+          (assoc search :search/best d :search/best-at (:time/now world 0))
+          :else search)))
+
 (defn new-leg
   "The search whose leg-th leg begins at feet along the first of headings that has a way to go:
    the world goes on ahead (open-ahead?) and a step toward the leg's end is safe (choose-move);
@@ -398,18 +418,20 @@
   [world feet leg headings]
   (some (fn [h]
           (let [s {:search/from feet :search/heading h :search/leg leg :search/tunnels 0}]
-            (when (and (open-ahead? world feet h) (choose-move world feet (leg-target s))) s)))
+            (when (and (open-ahead? world feet h) (choose-move world feet (leg-target s)))
+              (gaining world s))))
         headings))
 
 (defn leg-over?
   "Is the leg of search finished: its end within reach (by the ground, a tunnel's height may stay
    short of it), the world ending ahead, more tunnels spent on it than its length asks (a wall it
    cannot go round), or the feet so far from where it began that it is another trip's?"
-  [world {:search/keys [from heading leg tunnels] :as search}]
+  [world {:search/keys [from heading leg tunnels best-at] :as search}]
   (let [feet (intent/feet world)
         at (physics/centre feet)]
     (or (<= (physics/horizontal-distance at (physics/centre (leg-target search))) reach)
         (not (open-ahead? world feet heading))
+        (and best-at (> (- (:time/now world 0) best-at) idle-ms))
         (> tunnels (+ 2 (* 2 (quot (leg-length leg) steps-per-tunnel))))
         (> (physics/horizontal-distance at (physics/centre from)) (+ (leg-length leg) 64)))))
 
@@ -428,7 +450,7 @@
     (cond (nil? search) (new-leg world feet 0 (headings [1 0]))
           (leg-over? world search)
           (new-leg world feet (inc (long leg)) (headings (turn-right heading)))
-          :else (update search :search/tunnels inc))))
+          :else (gaining world (update search :search/tunnels inc)))))
 
 (defmethod plan/done-by :at-fortress?
   [world _]
