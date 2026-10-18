@@ -1,18 +1,18 @@
 {
-  "at" : "2026-10-18T01:13:12.590Z",
+  "at" : "2026-10-18T01:15:27.615Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 296,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at fortress: no-pickaxe",
     "copilot" : true,
     "draft" : true,
     "nudges" : 0,
     "pr" : 411,
-    "session" : true
+    "session" : false
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -198,9 +198,8 @@
   } ],
   "moves" : [ {
     "issue" : 296,
-    "move" : "wait",
-    "pr" : 411,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 411
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -1076,5 +1075,10 @@
     "issue" : 296,
     "move" : "assign",
     "at" : "2026-10-18T00:54:05.826Z"
+  }, {
+    "issue" : 296,
+    "move" : "ready",
+    "pr" : 411,
+    "at" : "2026-10-18T01:15:27.615Z"
   } ]
 }
