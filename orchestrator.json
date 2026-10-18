@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T00:34:44.476Z",
+  "at" : "2026-10-18T00:35:52.637Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -72,7 +72,7 @@
     "draft" : false,
     "nudges" : 5,
     "pr" : 403,
-    "session" : true
+    "session" : false
   }, {
     "number" : 74,
     "title" : "Bot stops at cast-one: no-stand",
@@ -188,9 +188,8 @@
   } ],
   "moves" : [ {
     "issue" : 342,
-    "move" : "wait",
-    "pr" : 403,
-    "why" : "session running"
+    "move" : "nudge",
+    "pr" : 403
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -1043,5 +1042,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-17T23:36:17.317Z"
+  }, {
+    "issue" : 342,
+    "move" : "nudge",
+    "pr" : 403,
+    "at" : "2026-10-18T00:35:52.637Z"
   } ]
 }
