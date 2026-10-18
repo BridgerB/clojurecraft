@@ -18,6 +18,7 @@
 (def item-index 8)                    ; ItemEntity.DATA_ITEM, an item stack: what a drop holds
 (def phase-index 16)                  ; EnderDragon.DATA_PHASE, an int: its EnderDragonPhase id (gym dragon-a's recording: 0 circling, 3 landing, 6 sitting)
 (def creepy-index 17)                 ; EnderMan.DATA_CREEPY, a boolean: it has a target (probe run 38876275250)
+(def radius-index 8)                  ; AreaEffectCloud.DATA_RADIUS, a float: a dragon's breath cloud grows from 3 to 7 (gym dragon-d's recordings)
 (def death-status 3)                  ; an entity-event's status for a living entity's death (EntityEvent.DEATH)
 (def on-fire-bit 0x01)                ; in the shared flags: burning (a blaze's state, a mob in lava)
 (def dragon-seen-radius 96.0)         ; blocks from the bot within which the dragon's removal is its death, not a flight out of sight
@@ -66,15 +67,20 @@
    gives no health; the same item index is a fireball's look (issue #262: a drop is told apart by
    what it holds, a blaze rod from cobblestone); for an enderman only, its creepy flag at
    creepy-index (issue #263: true while it has a target, the hunt's sign one is coming); for the
-   dragon only, its phase at phase-index (issue #267: sitting on its perch or flying). An index
-   the skim did not reach is simply absent: what was known stays."
+   dragon only, its phase at phase-index (issue #267: sitting on its perch or flying); for an
+   area effect cloud only, its radius at radius-index (the same index as a drop's stack: a
+   dragon's breath grows, and the bot keeps out of all of it). An index the skim did not reach
+   is simply absent: what was known stays."
   [type-id metadata]
   (let [flags (get metadata flags-index)
         health (get metadata health-index)
         stack (get metadata item-index)
         creepy (get metadata creepy-index)
-        phase (get metadata phase-index)]
+        phase (get metadata phase-index)
+        radius (get metadata radius-index)]
     (cond-> {}
+      (and (= :area_effect_cloud (blocks/entity-names type-id)) (number? radius))
+      (assoc :entity/radius (double radius))
       (and (int? flags) (<= 0 flags 255)) (assoc :entity/flags flags)
       (and (number? health) (contains? blocks/mobs (blocks/entity-names type-id)))
       (assoc :entity/health (double health))

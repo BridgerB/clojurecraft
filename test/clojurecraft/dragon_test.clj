@@ -226,6 +226,36 @@
            (dragon/toward-dragon (standing {} [3.5 64.0 0.5] {} (merge d cloud))))
         "in it: away")))
 
+(deftest a-breath-on-the-way-to-the-stand-is-waited-out-where-the-feet-are
+  ;; gym dragon-d runs 1 and 3: the walk back to the stand went through a fireball's cloud lying
+  ;; between (grown to 5.7) and died in it, six a second
+  (let [d {dragon-eid {:entity/type (mob/type-id :ender_dragon) :entity/pos [0.5 90.0 0.5]}}
+        cloud
+        (fn [pos]
+          {50 {:entity/type (mob/type-id :area_effect_cloud) :entity/pos pos :entity/radius 3.0}})
+        w (fn [c] (standing {} [12.5 64.0 0.5] {} (merge d c)))]
+    (is (= {:entity/radius 3.0}
+           (entity/metadata-facts (mob/type-id :area_effect_cloud) {entity/radius-index 3.0}))
+        "a cloud's radius from its metadata")
+    (is (= {} (entity/metadata-facts (mob/type-id :zombie) {entity/radius-index 3.0}))
+        "index 8 is a cloud's radius only")
+    (is (= {:intent/kind :perch :intent/target dragon-eid}
+           (dragon/toward-dragon (w (cloud [7.5 64.0 0.5]))))
+        "the cloud on the straight way: the perch from here")
+    (is (= (dragon/standing-walk [2 64 0]) (dragon/toward-dragon (w (cloud [7.5 64.0 9.5]))))
+        "the cloud five off the way: the walk")
+    (is (true? (dragon/breath-on-way? (w (cloud [7.5 64.0 4.9])) [12.5 64.0 0.5] [2.5 64.0 0.5]))
+        "its reach, radius and margin, counts")
+    (is (plan/interrupts? (w (cloud [10.5 64.0 0.5])) {:goal/plan :dragon} {:intent/kind :walk})
+        "a breath near ends a walk")
+    (is (not (plan/interrupts? (w (cloud [10.5 64.0 0.5]))
+                               {:goal/plan :dragon}
+                               {:intent/kind :back-off}))
+        "never the back-off from it")
+    (is (not
+         (plan/interrupts? (w (cloud [7.5 64.0 9.5])) {:goal/plan :dragon} {:intent/kind :walk}))
+        "none near: the walk goes on")))
+
 ;; ---------------------------------------------------------------- against the model's End
 
 (def floor

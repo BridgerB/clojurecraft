@@ -154,6 +154,9 @@
    [:entity/phase
     "the ender dragon's phase, from its metadata (index 16): 0 circling, 3 landing, 4 taking off, 5 to 7 sitting on its perch, 9 dying (issue #267)"
     "inside :world/entities, the dragon, once its metadata said"]
+   [:entity/radius
+    "an area effect cloud's radius in blocks, from its metadata (index 8): a dragon's breath cloud grows from 3 to 7 over its life, and the bot keeps out of all of it (issue #267)"
+    "inside :world/entities, an area effect cloud, once its metadata said"]
    [:sight/pos "an observation's block position" "a fact in :world/facts"]
    [:sight/state "the state id observed there" "a fact in :world/facts"]
    [:sight/at "ms of the observation" "a fact in :world/facts"]

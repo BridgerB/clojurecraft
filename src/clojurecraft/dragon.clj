@@ -22,7 +22,7 @@
    for perch-ticks, it is struck every combat/swing-every while its box is in strike-reach (a
    16 by 8 box whose feet are on the fountain's pillar: :fight's reach to an aim point over its
    feet is never met from a floor, the server's own test is to the box). The dragon's breath and
-   fireballs (area_effect_cloud, dragon_fireball) within breath-radius are backed away from
+   fireballs (area_effect_cloud, dragon_fireball) within their breath-reach are backed away from
    (combat's :back-off). Not done: the cages round two spikes (the strike through their bars is
    unproven; the gym takes them away), the bridge from the End's platform to the main island,
    and the exit portal."
@@ -72,7 +72,8 @@
 (def sitting-phases #{5 6 7})         ; the dragon's phases on its perch (EnderDragonPhase: sitting flaming, scanning, attacking)
 (def walk-in-to 3.0)                  ; blocks on the plane from the fountain a perch walks in to for reach, no nearer
 (def perch-hold-ms 60000)             ; a :perch hands back to the planner this often
-(def breath-radius 6.0)               ; a breath cloud (radius 5, DragonSittingFlamingPhase) or a fireball this near is backed away from
+(def breath-radius 5.0)               ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
+(def breath-margin 1.5)               ; blocks beyond a breath cloud's radius (:entity/radius: a fireball's grows from 3 to 7) the bot keeps
 (def breath-kinds #{:area_effect_cloud :dragon_fireball})
 
 ;; ---------------------------------------------------------------- what is shown
@@ -408,15 +409,39 @@
     (cond phase (contains? sitting-phases phase)
           :else (and (<= (math/hypot (- x fx) (- z fz)) perch-radius) (< y perch-below)))))
 
-(defn breath-near
-  "[eid entity] of the breath cloud or fireball nearest the feet within breath-radius, or nil."
-  [world]
-  (entity/nearest (breaths world) (:player/pos world) breath-radius))
+(defn breath-reach
+  "Blocks on the plane from breath e's centre the bot keeps out of: its radius (:entity/radius,
+   breath-radius when its metadata has not said) and breath-margin. Gym dragon-d runs 1 and 3
+   walked through a fireball's cloud grown to 5.7, six a second of magic through iron, and died."
+  [e]
+  (+ (:entity/radius e breath-radius) breath-margin))
 
-(defn breath-over?
-  "Is a breath cloud or fireball within breath-radius of point p on the plane?"
-  [world p]
-  (boolean (some #(<= (physics/horizontal-distance p (:entity/pos %)) breath-radius)
+(defn breath-near
+  "[eid entity] of the breath cloud or fireball nearest the feet within its breath-reach, or
+   nil."
+  [world]
+  (let [pos (:player/pos world)
+        off (fn [[_ e]] (physics/horizontal-distance pos (:entity/pos e)))]
+    (->> (breaths world)
+         (filter (fn [[_ e :as b]] (<= (off b) (breath-reach e))))
+         (sort-by off)
+         first)))
+
+(defn segment-distance
+  "Blocks on the plane from point p to the nearest point of the segment from a to b."
+  [[px _ pz] [ax _ az] [bx _ bz]]
+  (let [dx (- bx ax)
+        dz (- bz az)
+        l2 (+ (* dx dx) (* dz dz))
+        t (if (< l2 1.0e-9) 0.0 (min 1.0 (max 0.0 (/ (+ (* (- px ax) dx) (* (- pz az) dz)) l2))))]
+    (math/hypot (- px (+ ax (* t dx))) (- pz (+ az (* t dz))))))
+
+(defn breath-on-way?
+  "Does a breath cloud or fireball reach (breath-reach) the straight way on the plane from point
+   a to point b? A walk crosses it: gym dragon-d runs 1 and 3 walked back to the fountain's stand
+   through a fireball's cloud lying between and died in it, nothing ending a walk but itself."
+  [world a b]
+  (boolean (some #(<= (segment-distance (:entity/pos %) a b) (breath-reach %))
                  (vals (breaths world)))))
 
 (defn from-fountain
@@ -472,7 +497,9 @@
                   (and sat? (<= (reach world e) strike-reach)) (hit world target e)
                   (and sat?
                        (> (from-fountain world) walk-in-to)
-                       (not (breath-over? world (let [[fx fz] fountain] [fx 0.0 fz]))))
+                       (not (breath-on-way? world
+                                            (:player/pos world)
+                                            (let [[fx fz] fountain] [fx 0.0 fz]))))
                   (let [[fx fz] fountain]
                     (assoc world
                            :player/controls
@@ -488,7 +515,7 @@
 
 (defn fountain-stand
   "The feet cell on the ground stand-from out from the fountain along the axis nearest the feet,
-   none within breath-radius of a breath cloud or fireball, where the bot waits for the dragon to
+   none within breath-reach of a breath cloud or fireball, where the bot waits for the dragon to
    perch, or nil when no such column has ground loaded. In the exit portal's basin beside the
    pillar: the perched dragon turns its face to the bot, its head 6.5 out from the pillar and its
    neck 5.5, each hurting what it touches; gym dragon-a stood five out, under the head, and died
@@ -503,7 +530,7 @@
                    (when-let [y (ground world x z sky)] [x y z]))))
          (remove (fn [c]
                    (some #(<= (physics/horizontal-distance (physics/centre c) (:entity/pos %))
-                              breath-radius)
+                              (breath-reach %))
                          clouds)))
          (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
          first)))
@@ -512,20 +539,25 @@
   "The next intent toward the dragon dead: while a crystal stands or the feet are up a pillar or
    a spike, the crystals' (toward-crystals); a breath near, combat's :back-off from it; away from
    the fountain's stand (fountain-stand), the walk there; there, the :perch, and with every stand
-   under a breath the :perch where the feet are (gym dragon-b: a fireball's cloud on the basin
-   after the dragon took off, and the plan waited :no-fountain until it failed). A wait
-   :no-fountain with no ground round the fountain loaded, :no-dragon with no dragon shown."
+   under a breath, or one on the straight way to the stand (breath-on-way?), the :perch where
+   the feet are (gym dragon-b: a fireball's cloud on the basin after the dragon took off, and
+   the plan waited :no-fountain until it failed; gym dragon-d: the walk back to the stand went
+   through a fireball's cloud lying between and died in it). A wait :no-fountain with no ground
+   round the fountain loaded, :no-dragon with no dragon shown."
   [world]
   (let [[eid] (dragon world)
+        pos (:player/pos world)
         breath (breath-near world)
-        stand (fountain-stand world)]
+        stand (fountain-stand world)
+        far? (and stand (> (physics/horizontal-distance pos (physics/centre stand)) stand-near))
+        blocked? (and far? (breath-on-way? world pos (physics/centre stand)))]
     (cond (or (seq (crystals world)) (on-pillar? world) (on-spike? world)) (toward-crystals world)
           breath {:intent/kind :back-off :intent/target (first breath)}
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
           {:intent/kind :perch :intent/target eid}
           (nil? stand) {:plan/wait :no-fountain}
-          (> (physics/horizontal-distance (:player/pos world) (physics/centre stand)) stand-near)
-          (standing-walk stand)
+          (and blocked? eid) {:intent/kind :perch :intent/target eid}
+          far? (standing-walk stand)
           (nil? eid) {:plan/wait :no-dragon}
           :else {:intent/kind :perch :intent/target eid})))
 
@@ -551,6 +583,16 @@
   ;; outside the End, a wait :other-dimension
   [world _ _]
   (if (= dimension/end (dimension/of world)) (toward-crystals world) {:plan/wait :other-dimension}))
+
+(defmethod plan/interrupts? :dragon
+  ;; any running intent but a :back-off ends when a breath is near (breath-near) and the feet are
+  ;; down off the pillars and spikes: gym dragon-d runs 1 and 3 walked into a fireball's cloud
+  ;; and died in it, six a second, nothing else ending a walk
+  [world _ i]
+  (and (not= :back-off (:intent/kind i))
+       (not (on-pillar? world))
+       (not (on-spike? world))
+       (some? (breath-near world))))
 
 (defmethod plan/next-intent :dragon
   [world _ _]
