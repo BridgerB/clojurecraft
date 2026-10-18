@@ -199,6 +199,9 @@
    [:plan/unreached
     "targets log walks failed :no-path toward; a log within unreached-radius of one is not chosen: the trees round a place no route reaches are as far from the feet"
     "after a walk fails :no-path"]
+   [:plan/backed-off
+    "per creeper entity id {:pos where it stood the first time :times back-offs from it there}: a creeper that stands within a block of :pos through shun-after of them is shunned, a threat only within shunned-radius (combat/creeper-reach)"
+    "after a back-off from a creeper began"]
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]

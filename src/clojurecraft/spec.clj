@@ -254,6 +254,10 @@
 (s/def :plan/retreat-unreachable (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unreached (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unwalkable nat-int?)
+(s/def :backed-off/times pos-int?)
+(s/def :backed-off/pos (s/coll-of number? :count 3))
+(s/def :plan/backed-off ; creeper entity id → where it stood when first backed away from, and how often
+  (s/map-of int? (s/keys :req-un [:backed-off/pos :backed-off/times])))
 (s/def :plan/surfaced (s/tuple ::block-pos int?)) ; where and when the last climb out came out
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :plan/chain? boolean?)
@@ -311,7 +315,7 @@
            :window/state-id :window/grid :window/cursor :window/open :player/held-slot :plan/intent
            :plan/status :plan/blacklist :plan/trunk-failures :plan/chain? :plan/reached
            :plan/boxed-at :plan/boxed-route :plan/retreat-unreachable :plan/unreached
-           :plan/unwalkable]))
+           :plan/unwalkable :plan/backed-off]))
 
 (s/fdef game/step
   :args
