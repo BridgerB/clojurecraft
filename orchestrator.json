@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:42:44.215Z",
+  "at" : "2026-10-18T01:48:20.620Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -95,6 +95,11 @@
     "pr" : 391,
     "session" : false
   }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "quiet" : true,
     "number" : 178,
@@ -111,11 +116,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -126,14 +126,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 69,
-    "title" : "Bot stops at water-bucket: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 110,
     "title" : "Bot stops at pickaxe: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 69,
+    "title" : "Bot stops at water-bucket: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 163,
@@ -230,11 +230,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 69,
+    "issue" : 110,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 110,
+    "issue" : 69,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
