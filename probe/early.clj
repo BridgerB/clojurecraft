@@ -1,7 +1,9 @@
 (require '[clojure.string :as str]
          '[clojurecraft.blocks :as blocks]
          '[clojurecraft.capture :as capture]
+         '[clojurecraft.entity :as entity]
          '[clojurecraft.game :as game]
+         '[clojurecraft.physics :as physics]
          '[clojurecraft.intent :as intent]
          '[clojurecraft.make :as make]
          '[clojurecraft.memory :as memory]
@@ -86,6 +88,24 @@
                              :lava "L"
                              "~")))))))))
 
+(defn route-asks
+  "The route the planner finds to each of the nearest standing trunks, and the mobs near."
+  [world tag]
+  (ask (str tag " routes")
+       #(for [p (->> (memory/positions-now world blocks/log-states)
+                     (memory/nearest-first (game/eye world) 48)
+                     (filter (fn [q] (wood/standing-trunk? world q)))
+                     (take 3))]
+          (let [i (wood/log-walk world p)
+                r (path/plan world (path/feet-cell (:player/pos world)) (intent/goal-of i) {})]
+            [p (intent/goal-of i) (:path/status r) (count (:path/waypoints r))
+             (last (:path/waypoints r))])))
+  (ask (str tag " hostiles")
+       #(for [[eid e] (entity/hostiles world)
+              :let [d (physics/distance (:player/pos world) (:entity/pos e))]
+              :when (< d 12)]
+          [eid (entity/kind e) (long d) (:entity/pos e)])))
+
 (defn facts
   [world tag]
   (ask (str tag " pos") #(:player/pos world))
@@ -108,6 +128,7 @@
   (ask (str tag " reason") #(:plan/reason world))
   (ask (str tag " wait") #(:plan/wait world))
   (ask (str tag " names") #(names-round world))
+  (route-asks world tag)
   (ask (str tag " map") #(map-round world 10)))
 
 (defn play
