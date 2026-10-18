@@ -450,17 +450,26 @@
            256
            (fn [chunks blocks traps from goal max-nodes]
              ;; every trap here is in force, so the clock is not needed: trap-factor counts them all at 0
-             (let [world {:world/chunks chunks :world/blocks blocks :world/traps traps}]
-               (if-let [start (start-cell world from)]
-                 (assoc (search world start goal max-nodes) :path/from start)
-                 {:path/waypoints [] :path/cost 0.0 :path/status :none})))))
+             (let [world {:world/chunks chunks :world/blocks blocks :world/traps traps}
+                   start (start-cell world from)
+                   [x y z] from
+                   departure (when (and (not= start from)
+                                        (blocks/solid? (terrain/block-at world [x (dec y) z]))
+                                        (clear? world from)
+                                        (clear? world [x (inc y) z]))
+                               (search world from goal max-nodes))]
+               (cond (= :found (:path/status departure)) (assoc departure :path/from from)
+                     start (assoc (search world start goal max-nodes) :path/from start)
+                     :else {:path/waypoints [] :path/cost 0.0 :path/status :none})))))
 
 (defn plan
   "A route for the feet from the cell `from` toward goal: {:path/waypoints [[x y z] ...]
    :path/cost n :path/status :found|:partial|:none :path/from start}. opts: {:path/max-nodes n} (default
    default-max-nodes). Pure and deterministic: equal inputs, equal output. The search begins at
    start-cell (from, or the standable cell beside it the player's box rests on); with none, the
-   answer is :none with no waypoints. A goal in an unloaded chunk comes back :partial or :none
+   answer is :none with no waypoints. Before snapping to a neighbouring start, a route may leave
+   the actual supported, clear feet cell if it reaches the goal; awkward floors remain forbidden
+   as waypoints. A goal in an unloaded chunk comes back :partial or :none
    toward it, which is the walker's cue to move and plan again."
   ([world from goal] (plan world from goal {}))
   ([world from goal {:path/keys [max-nodes] :or {max-nodes default-max-nodes}}]

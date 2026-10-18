@@ -369,6 +369,54 @@
         (is (= :not-held (get-in out [:plan/intent :intent/child :intent/reason])))
         (is (empty? (:bot/effects out)))))))
 
+(deftest a-tunnel-resumes-a-reachable-entry-after-a-no-path
+  (let [from [0 64 0]
+        move [-1 1 0]
+        to [-1 65 0]
+        w (assoc (rock {[0 63 0] (blocks/default-state :soul_sand)
+                        [0 66 0] air
+                        [-1 65 0] air
+                        [-1 66 0] air})
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/controls {:control/forward? true})
+        i {:intent/kind :tunnel-to
+           :intent/target [-10 80 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/from from
+           :intent/move move
+           :intent/op (peek (fortress/step-plan from move))
+           :intent/child {:intent/kind :walk
+                          :intent/for :build
+                          :intent/target to
+                          :intent/status :failed
+                          :intent/reason :no-path
+                          :intent/route :none
+                          :intent/waypoints []}}
+        tick {:event/kind :tick :event/now 0}
+        out (intent/run (assoc w :plan/intent i) i tick)
+        restarted (intent/run out (:plan/intent out) tick)
+        walking (intent/run restarted (:plan/intent restarted) tick)]
+    (is (= :active (get-in out [:plan/intent :intent/status])))
+    (is (= {} (:player/controls out)))
+    (is (nil? (get-in out [:plan/intent :intent/child])))
+    (is (= move (get-in out [:plan/intent :intent/move])))
+    (is (= :walk (get-in restarted [:plan/intent :intent/child :intent/kind])))
+    (is (= :found (get-in walking [:plan/intent :intent/child :intent/route])))
+    (testing "a route that could not be followed still exhausts its attempts"
+      (let [i (assoc-in i [:intent/child :intent/route] :found)
+            out (intent/run (assoc w :plan/intent i) i tick)]
+        (is (intent/failed? (:plan/intent out)))
+        (is (= :no-path (get-in out [:plan/intent :intent/reason])))))
+    (testing "an entry that still has no route does not retry forever"
+      (let [blocked (assoc-in w [:world/blocks [0 63 0]] air)
+            out (intent/run (assoc blocked :plan/intent i) i tick)]
+        (is (intent/failed? (:plan/intent out)))
+        (is (= :no-path (get-in out [:plan/intent :intent/reason])))))))
+
 (def gen-move
   (gen/elements (for [d [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [(first d) dy (second d)])))
 (def gen-feet (gen/tuple (gen/choose -1000 1000) (gen/choose 1 250) (gen/choose -1000 1000)))

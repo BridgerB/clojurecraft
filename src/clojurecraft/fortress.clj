@@ -235,7 +235,7 @@
   ;; is safe. Steps go up or down first past :intent/climb blocks off (climb-past when absent);
   ;; with :intent/dry? only steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
-   {:intent/keys [target steps taken move from climb dry? tunnel-visited]
+   {:intent/keys [target steps taken move from climb dry? tunnel-visited child]
     r :intent/reach
     :or {taken 0 r reach climb climb-past tunnel-visited #{}}
     :as i} event]
@@ -268,6 +268,14 @@
                   (and (#{:floor-clear :open :enter} (:build/step next))
                        (not (safe? world from move)))
                   (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
+                  (and (= :enter (:build/step next))
+                       (= :walk (:intent/kind child))
+                       (intent/failed? child)
+                       (= :no-path (:intent/reason child))
+                       (= :none (:intent/route child))
+                       (empty? (:intent/waypoints child))
+                       (intent/routable? world child))
+                  (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
                   :else
                   (let [world (build/work-op world i next event)
                         i (:plan/intent world)]
