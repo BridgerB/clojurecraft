@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:19:59.214Z",
+  "at" : "2026-10-18T02:21:07.063Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,13 +18,13 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 130,
-    "title" : "Bot stops at cast-one: boxed",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
+    "number" : 130,
+    "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -95,22 +95,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 286,
-    "checks" : "pending",
-    "title" : "Bot stops at fortress: blocked",
-    "copilot" : true,
-    "draft" : true,
-    "nudges" : 0,
-    "pr" : 418,
-    "session" : true
-  }, {
-    "number" : 110,
-    "title" : "Bot stops at pickaxe: no-log",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 69,
     "title" : "Bot stops at water-bucket: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -121,10 +105,26 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
+    "number" : 110,
+    "title" : "Bot stops at pickaxe: no-log",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 163,
     "title" : "Bot stops at portal: needs-tool",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "quiet" : false,
+    "number" : 286,
+    "checks" : "red",
+    "title" : "Bot stops at fortress: blocked",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 418,
+    "session" : true
   }, {
     "number" : 108,
     "title" : "Bot stops at water-bucket: no-log",
@@ -154,11 +154,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 130,
+    "issue" : 44,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 44,
+    "issue" : 130,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -206,15 +206,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 286,
-    "move" : "wait",
-    "pr" : 418,
-    "why" : "session running"
-  }, {
-    "issue" : 110,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 69,
     "move" : "leave",
     "why" : "hands-off label"
@@ -223,9 +214,18 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 110,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 163,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 286,
+    "move" : "wait",
+    "pr" : 418,
+    "why" : "session running"
   }, {
     "issue" : 108,
     "move" : "leave",
