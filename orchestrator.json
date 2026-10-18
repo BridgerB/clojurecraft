@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T11:59:23.450Z",
+  "at" : "2026-10-18T12:00:28.764Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -22,7 +22,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 444,
-    "session" : true
+    "session" : false
   }, {
     "number" : 342,
     "title" : "Bot stops at furnace: boxed",
@@ -45,9 +45,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 178,
-    "move" : "wait",
-    "pr" : 444,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 444
   }, {
     "issue" : 342,
     "move" : "leave",
@@ -1214,5 +1213,10 @@
     "issue" : 178,
     "move" : "assign",
     "at" : "2026-10-18T11:24:48.195Z"
+  }, {
+    "issue" : 178,
+    "move" : "ready",
+    "pr" : 444,
+    "at" : "2026-10-18T12:00:28.764Z"
   } ]
 }
