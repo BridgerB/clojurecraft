@@ -42,6 +42,7 @@ sourceRefs:
   - src/clojurecraft/plan.clj#defn elsewhere?
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-cell-beside-lava
   - test/clojurecraft/fortress_test.clj#no-tunnel-step-drops-a-fluid-bearing-bed
+  - test/clojurecraft/fortress_test.clj#no-tunnel-step-drops-a-bed-beside-fluid
   - test/clojurecraft/fortress_test.clj#a-tunnel-drops-an-unsafe-in-flight-step
   - test/clojurecraft/fortress_test.clj#a-tunnel-replaces-a-solid-floor-the-route-cannot-walk
   - test/clojurecraft/fortress_test.clj#a-tunnel-floors-with-carried-stone-after-cobblestone-is-spent
@@ -92,6 +93,8 @@ Solid does not mean walkable: issue #284's two real snapshots chose soul-sand fl
 The later R1/6 reproduction of #284 stood on soul sand while its repaired destination was already walkable. The [[pathfinder]] snapped the departure to an isolated gravel neighbour and returned no route. It now searches from the actual supported, clear feet cell without allowing awkward floors as waypoints. A tunnel with an already failed, empty-route `:no-path` entry drops that child only when a route now exists, retaining the step and stopping controls before retrying; an entry still unreachable, or a found route that could not be followed, remains a failure.
 
 Issue #339's R1/5 and R2/23 snapshots opened gravel beds below lava, then repeatedly cleared the gravel falling into the headroom until lava reached the bot and no escape footing remained. `safe?` also checks `intent/fluid-over-falling?` and `intent/bed-over-fluid?` for every opened cell: a fluid-bearing roof or neighbouring bed must stay sealed. Before each body-cell dig and entry walk, as before a floor repair, the tunnel rechecks safety and drops an unsafe step and its child with controls stopped, so an in-flight step replans instead of finishing a stale dig.
+
+Sim race 39113082582's R3/33 reproduction had lava beside the gravel higher up, not directly over it. `intent/fluid-over-falling?` now checks every face of the falling stack, including its sides: both a new step and an in-flight dig or entry leave that bed sealed and choose another way. Dry falling roofs remain allowed, and a non-falling roof still seals fluid above it.
 
 Issue #286 exposed two false dead ends: R3/10 had a safe retreat behind the feet that `moves` omitted, and the real portal at [256 97 464] was passable but rejected. Merely adding those moves paced between the portal's two cells. `next-move` prefers cells not yet left by this tunnel (`:intent/tunnel-visited`). Before retreating it can floor a level turn onto adjoining ground: the air floor must have immediate placement support and another solid horizontal neighbour besides the floor under the feet, and `stairs/over-fluid?` must find no fluid below it. The step must satisfy the same lava and optional water rules with that floor filled. Controls stop when the step is chosen, and its ordinary floor op must be confirmed before the walk begins; this is a short corner onto ground, not permission to enter an air floor or extend a causeway over lava.
 

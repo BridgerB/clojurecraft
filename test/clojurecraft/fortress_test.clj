@@ -195,6 +195,23 @@
     (is (not (fortress/safe? w [0 64 0] [1 1 0]))
         "updating a neighbouring gravel bed over lava drops it too")))
 
+(deftest no-tunnel-step-drops-a-bed-beside-fluid
+  ;; Issue #339, Sim race 39113082582 R3/33: lava beside the falling roof, not above it,
+  ;; followed the gravel into the tunnel until no dry footing remained.
+  (doseq [kind [:gravel :sand]
+          height [1 3 intent/falling-reach]
+          [dx dz] [[1 0] [-1 0] [0 1] [0 -1]]
+          fluid [blocks/lava-base blocks/water-base]]
+    (let [bed (blocks/default-state kind)
+          w (rock (merge (into {} (for [y (range 66 (+ 66 height))] [[1 y 0] bed]))
+                         {[1 (+ 66 height) 0] netherrack}))
+          flooded (assoc-in w [:world/blocks [(inc dx) (+ 65 height) dz]] fluid)]
+      (is (fortress/safe? w [0 64 0] [1 0 0]) "a dry falling roof is still safe")
+      (is (intent/exposes-fluid? flooded [1 65 0]) "a dig sees fluid beside the falling stack")
+      (is (not (fortress/safe? flooded [0 64 0] [1 0 0])) "the step leaves the bed sealed")
+      (is (fortress/safe? (assoc-in flooded [:world/blocks [1 66 0]] netherrack) [0 64 0] [1 0 0])
+          "a non-falling roof keeps the fluid sealed"))))
+
 (deftest a-tunnel-drops-an-unsafe-in-flight-step
   (let [from [0 64 0]
         move [1 0 0]
@@ -202,7 +219,9 @@
         tick {:event/kind :tick :event/now 0}]
     (doseq [op [(nth ops 2) (peek ops)]
             hazard [{[1 66 0] (blocks/default-state :gravel) [1 67 0] blocks/lava-base}
-                    {[2 65 0] blocks/lava-base}]]
+                    {[1 66 0] (blocks/default-state :gravel)
+                     [1 67 0] (blocks/default-state :gravel)
+                     [2 67 0] blocks/lava-base} {[2 65 0] blocks/lava-base}]]
       (let [enter? (= :stand-in (:build/op op))
             w (assoc (rock (merge (when enter? {[1 64 0] air [1 65 0] air}) hazard))
                      :bot/phase :play
