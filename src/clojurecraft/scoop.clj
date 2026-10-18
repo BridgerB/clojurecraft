@@ -379,7 +379,7 @@
                      {:intent/kind :scoop :intent/target src :intent/aim aim})))
            first))))
 
-(def bed-depth 2)                      ; rock over the head a scoop from below digs through at most
+(def bed-depth 3)                      ; rock over the head a scoop from below digs through at most
 
 (defn overhead
   "The water source over the feet's column, under at most bed-depth blocks of rock over the head

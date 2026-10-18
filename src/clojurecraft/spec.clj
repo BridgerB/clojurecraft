@@ -474,6 +474,7 @@
 (s/def :intent/rejections pos-int?)
 (s/def :intent/cells (s/coll-of ::block-pos :kind vector? :count 3))
 (s/def :intent/level-cells (s/coll-of ::block-pos :kind vector? :count 2))
+(s/def :intent/bore (s/coll-of ::block-pos :kind vector? :min-count 1))
 (s/def :intent/lay (s/coll-of ::block-pos :kind vector? :min-count 1 :max-count 12)) ; a floor and its holder, a step, or a seal over the water beside three cells
 (s/def :intent/level-steps pos-int?)
 (s/def :intent/length pos-int?)
