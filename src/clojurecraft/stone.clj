@@ -9,6 +9,7 @@
    intents, and the planner starts another until the drop is held. Requiring this namespace
    registers both acts and the :redig executor."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.chunk :as chunk]
             [clojurecraft.dig :as dig]
@@ -122,15 +123,14 @@
                            (filter #(exposed? at %)))
                      (chunk/find-blocks (near-chunks chunks feet-chunk) #(contains? states %)))))))
 
-(defn exposed-of-states
+(defn exposed-near
   "The blocks of states within search-radius of the eye and search-height of its height that
-   the bot can stand beside, not blacklisted, nearest first. Read from the loaded terrain
-   (the live view), not memory: stone is most of the world and ore is in every chunk, and only
-   what is exposed now is worth a route. The chunks are scanned as they arrived, so each
-   candidate is asked again through the overlay of block updates and the bot's own breaks: a
-   block just dug is air. Never one whose dig would expose a fluid (intent/exposes-fluid?),
-   nor one beside a lava trap still in force (path/near-lava-trap?):
-   the lava that caught the bot there is still coming down."
+   the bot can stand beside, not blacklisted, nearest first, fluid or no fluid beside them (see
+   exposed-of-states). Read from the loaded terrain (the live view), not memory: stone is most of
+   the world and ore is in every chunk, and only what is exposed now is worth a route. The chunks
+   are scanned as they arrived, so each candidate is asked again through the overlay of block
+   updates and the bot's own breaks: a block just dug is air. Never one beside a lava trap still
+   in force (path/near-lava-trap?): the lava that caught the bot there is still coming down."
   [world states]
   (let [eye (game/eye world)
         ey (physics/y-of eye)]
@@ -142,8 +142,66 @@
                         (long (math/ceil (- ey search-height)))
                         (long (math/floor (+ ey search-height))))
          (remove #(path/near-lava-trap? world %))
-         (memory/nearest-first eye search-radius)
-         (remove #(intent/exposes-fluid? world %)))))
+         (memory/nearest-first eye search-radius))))
+
+(defn exposed-of-states
+  "The blocks of states (exposed-near) whose dig would expose no fluid (intent/exposes-fluid?),
+   nearest first."
+  [world states]
+  (remove #(intent/exposes-fluid? world %) (exposed-near world states)))
+
+(def six-around [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
+(defn planks-held
+  "The first planks item the inventory holds n or more of, or nil: a block that does not fall,
+   the last thing a seal is laid from."
+  [world n]
+  (->> (recipe/counts (:player/inventory world))
+       (filter (fn [[item c]] (and (str/ends-with? (name item) "_planks") (<= n c))))
+       (map first)
+       first))
+
+(defn seal-stone
+  "A :place of a filler into the water beside the nearest stone of the row in sight that the dig
+   refuses only for that water, or nil: the stone has one to three water cells beside it (six
+   neighbours; no lava, no gravel or sand over a fluid), each within the place reach of the eye with
+   a solid neighbour to place against (place/support) and not given up (:plan/blacklist), a route
+   reaches it once sealed (routable?), and a filler is held for all of them (stairs/filler, else
+   planks). Once the water is a block the stone is exposed to the walk, dig and collect chain as
+   any other. Issue #342 (the R1/30 sim moment): the bot stood on the west bank of a cave lake
+   beside two stones whose north sides were water, held three planks and no filler, and the dig
+   refused both; it cut stairs down and climbed out again for the whole window, and its filler,
+   the cobblestone, was what the stone would have given it."
+  [world row]
+  (let [eye (game/eye world)
+        blacklist (:plan/blacklist world #{})
+        reachable? (fn [w] (<= (physics/distance eye (physics/centre w)) place/place-reach))]
+    (some
+     (fn [c]
+       (let [wet (vec (for [d six-around :let [n (mapv + c d)] :when (terrain/fluid-at world n)] n))
+             item (when (seq wet)
+                    (or (stairs/filler world (count wet)) (planks-held world (count wet))))
+             target (first wet)]
+         (when (and item
+                    (<= (count wet) 3)
+                    (every? #(= :water (terrain/fluid-kind world %)) wet)
+                    (not (intent/fluid-over-falling? world c))
+                    (not (intent/bed-over-fluid? world c))
+                    (every?
+                     #(and (reachable? %) (place/support world %) (not (contains? blacklist %)))
+                     wet)
+                    (intent/routable? world
+                                      {:intent/kind :walk
+                                       :intent/target c
+                                       :intent/for (:goal/id row)
+                                       :intent/pickup? true}))
+           {:intent/kind :place
+            :intent/item item
+            :intent/cell target
+            :intent/target target
+            :intent/for :seal-stone})))
+     (take max-candidates
+           (filter #(intent/exposes-fluid? world %) (exposed-near world (states-of-row row)))))))
 
 (defn continue-mine
   "The next intent of the row's chain in flight, or nil: walk → dig → collect, tagged
@@ -375,6 +433,7 @@
               :else
               (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
                   (off-ice world)
+                  (seal-stone world row)
                   (over-stone world row)
                   (stairs world row)
                   (when-let [d (tunnel-heading world)]
