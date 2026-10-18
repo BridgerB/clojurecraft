@@ -2,6 +2,7 @@
   "Portal-kit batch (issues #161 #94 #75 #71): a snapshot judged as the check does, with the bot's
    log lines (intent failures with their attempts) and the plan's failure memory printed at the end."
   (:require [clojurecraft.capture :as capture]
+            [clojurecraft.entity :as entity]
             [clojurecraft.plan :as plan]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as sr]))
