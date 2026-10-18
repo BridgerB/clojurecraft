@@ -903,6 +903,26 @@
       (is (not (build/lost-way? w i (assoc child :intent/reason :stuck))))
       (is (not (build/lost-way? w (assoc i :intent/kind :tunnel-to) child))))))
 
+(deftest an-unreachable-retreat-waypoint-is-not-retried
+  (let [target [10 63 7]
+        child {:intent/kind :walk
+               :intent/for :retreat
+               :intent/target target
+               :intent/status :failed
+               :intent/reason :no-path}
+        i (assoc hill-intent :intent/op hill-op :intent/child child)
+        w (assoc (standing-at (open-ground {}) feet-pos)
+                 :plan/intent i
+                 :plan/attempts 2
+                 :player/controls {:control/forward? true})
+        out (build/work-op w i hill-op {:event/kind :tick})]
+    (is (= #{target} (:plan/retreat-unreachable out)))
+    (is (nil? (get-in out [:plan/intent :intent/child])))
+    (is (not (intent/done? (:plan/intent out))))
+    (is (= 2 (:plan/attempts out)))
+    (is (= {} (:player/controls out)))
+    (is (empty? (memory/given-up-sites out)))))
+
 (deftest the-lava-hunt-passes-over-a-given-up-pool
   (let [deeper [8 40 12]
         w (standing-at (open-ground (assoc trench deeper blocks/lava-base)) feet-pos)

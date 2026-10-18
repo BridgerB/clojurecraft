@@ -251,6 +251,7 @@
 (s/def :plan/trunk-failures (s/map-of (s/tuple int? int?) pos-int?))
 (s/def :plan/boxed-at (s/coll-of ::block-pos :kind set?)) ; feet cells where a staircase died :boxed
 (s/def :plan/boxed-route (s/coll-of ::block-pos :kind set?))
+(s/def :plan/retreat-unreachable (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unreached (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unwalkable nat-int?)
 (s/def :plan/surfaced (s/tuple ::block-pos int?)) ; where and when the last climb out came out
@@ -309,7 +310,8 @@
            :world/chunks :world/blocks :world/unconfirmed :world/facts :world/entities
            :window/state-id :window/grid :window/cursor :window/open :player/held-slot :plan/intent
            :plan/status :plan/blacklist :plan/trunk-failures :plan/chain? :plan/reached
-           :plan/boxed-at :plan/boxed-route :plan/unreached :plan/unwalkable]))
+           :plan/boxed-at :plan/boxed-route :plan/retreat-unreachable :plan/unreached
+           :plan/unwalkable]))
 
 (s/fdef game/step
   :args
@@ -797,6 +799,9 @@
   :args
   (s/cat :world (requires :player/pos :world/chunks)
          :item keyword?))
+(s/fdef stone/retreat
+  :args
+  (s/cat :world (requires :player/pos :world/chunks)))
 (s/fdef path/plan
   :args
   (s/cat :world (requires :world/chunks)
@@ -881,5 +886,6 @@
    `memory/nearest-log `make/near `make/decide `wood/gather-next `wood/return-walk `place/spot
    `place/ashore `stone/redig-place `window/view `path/plan `path/classify `entity/hostiles
    `entity/gone? `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe?
-   `stairs/down-lay `build/safe-source? `build/scoop-blocked? `build/lit-entry `fortress/next-move])
+   `stairs/down-lay `stone/retreat `build/safe-source? `build/scoop-blocked? `build/lit-entry
+   `fortress/next-move])
 (s/def :stats/deaths pos-int?)

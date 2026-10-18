@@ -1377,6 +1377,18 @@
             (assoc :player/controls {})
             (intent/dissoc-intent :intent/child)
             (game/say "build: the scoop's sight line filled, opening it again"))
+        (and (= :build (:intent/kind i))
+             (= :walk (:intent/kind child))
+             (= :retreat (:intent/for child))
+             (intent/failed? child)
+             (= :no-path (:intent/reason child))
+             (:intent/target child))
+        ;; avoid retrying the same failed waypoint when the build recalculates its way out
+        (-> world
+            (assoc :player/controls {})
+            (update :plan/retreat-unreachable (fnil conj #{}) (:intent/target child))
+            (intent/dissoc-intent :intent/child)
+            (game/say "build: retreat waypoint failed, finding another"))
         (and child (lost-way? world i child))
         ;; no way reaches the site from here: it is given up and the planner chooses another
         (-> world

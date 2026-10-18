@@ -207,6 +207,8 @@ A site so far off that its landing's chunk is not loaded (a death sent the feet 
 
 An exhausted fixed-stance walk (`:no-path`, not a pickup approach) gives up a nearby site even when the target is dry and has sound footing. The route may be blocked between the feet and the stance; classifying only the target as water or awkward misses this case and retries the same site until the plan fails (issue #162, R1/17 and R3/23). `lost-way?` records the site through the existing `work-op` recovery, so resumed failed children recover too and site selection excludes the same pool. Falling blocks in the way are still cleared first, and nearby pickup walks, dry-stance `:stuck` failures and non-build executors retain their previous handling (`an-exhausted-walk-to-a-nearby-build-stand-gives-up-the-site`).
 
+If the build's way to its landing uses a retreat walk that fails `:no-path`, remember that failed waypoint in `:plan/retreat-unreachable` and recompute the escape before giving up the site. Otherwise replanning can choose another site that asks for the same unreachable waypoint and exhausts the portal attempt budget (issue #162, R2/43; `an-unreachable-retreat-waypoint-is-not-retried`).
+
 ## The targets
 
 A lit portal's next operation is entry, not another pass through the casting room (`lit-entry`, `next-op`). The build planner skips the casting kit and table collection when a route reaches that entry; a blocked way still needs its tools. Issue #389 (R2/38) had reached `:portal`, but filled room cells and a broken pickaxe sent `:nether` climbing through deepslate by hand for wood instead of stepping into the existing portal.
