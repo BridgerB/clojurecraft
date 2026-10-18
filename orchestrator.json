@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:15:25.880Z",
+  "at" : "2026-10-18T02:16:32.533Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,18 +18,13 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 130,
     "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 196,
-    "title" : "Bot stops at portal: no-stand",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -40,6 +35,11 @@
   }, {
     "number" : 41,
     "title" : "Bot stops at cast-one: no-site",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 196,
+    "title" : "Bot stops at portal: no-stand",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -78,7 +78,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 417,
-    "session" : true
+    "session" : false
   }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
@@ -88,11 +88,6 @@
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : false
-  }, {
-    "number" : 62,
-    "title" : "Bot stops at ingots: timeout",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
     "number" : 75,
@@ -113,6 +108,11 @@
     "number" : 69,
     "title" : "Bot stops at water-bucket: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 62,
+    "title" : "Bot stops at ingots: timeout",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
     "number" : 163,
@@ -148,15 +148,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 44,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 130,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 196,
+    "issue" : 44,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -165,6 +161,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 41,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -185,19 +185,14 @@
     "why" : "hands-off label"
   }, {
     "issue" : 338,
-    "move" : "wait",
-    "pr" : 417,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 417
   }, {
     "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 161,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 62,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -210,6 +205,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 69,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 62,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -1136,5 +1135,10 @@
     "issue" : 338,
     "move" : "assign",
     "at" : "2026-10-18T02:07:39.805Z"
+  }, {
+    "issue" : 338,
+    "move" : "ready",
+    "pr" : 417,
+    "at" : "2026-10-18T02:16:32.533Z"
   } ]
 }
