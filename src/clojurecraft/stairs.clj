@@ -42,6 +42,7 @@
             [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
@@ -507,15 +508,28 @@
    cave, 80 under its landing, tunnel toward cave water 15 blocks off across the cave's floor,
    and bot Clj_r22 tunnel at y 63 from the top of the steps its climb to that height had laid in
    a cavern, toward pools 55 blocks off through the air; each tunnel was :boxed three times in a
-   row, the cut toward the water keeping the climb out from being chosen, and the plan failed."
+   row, the cut toward the water keeping the climb out from being chosen, and the plan failed.
+   A cut toward lava (:intent/for :lava, build/toward-lava) ends too, its feet cell in
+   :plan/boxed-at and the source it headed for given up (memory/give-up-site, which the hunt's
+   sources-near leaves out, with the pool round it): sim races 39085720764 and 39085577169 (issue #130, worlds R1/19
+   and R1/25) had the tunnel :boxed three times in a tick toward the one source, and the plan
+   failed."
   [world]
   (let [{:intent/keys [kind for target]} (:plan/intent world)]
     (cond (and (= :stairs-up kind) (= :surface for))
           (-> world
               (assoc :player/controls {})
-              (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+              (intent/box (intent/feet world))
               intent/done
               (game/say "stairs: boxed in, no way out from here"))
+          (and (= :lava for) target)
+          (-> world
+              (assoc :player/controls {})
+              (intent/box (intent/feet world))
+              (memory/give-up-site target)
+              intent/done
+              (game/say
+               (str "stairs: boxed in on the way to the lava at " target ", other lava next")))
           (and (= :bank for) target)
           (-> world
               (assoc :player/controls {})
@@ -605,7 +619,7 @@
         ways (sort-by #(or (dry-head-distance world feet %) Long/MAX_VALUE) directions)]
     (when-let [d (first (filter #(level-safe? world (stair-cells feet %)) ways))]
       (-> world
-          (update :plan/boxed-at (fnil conj #{}) feet)
+          (intent/box feet)
           (intent/assoc-intent :intent/dir d
                                :intent/level-dir d
                                :intent/turns 0

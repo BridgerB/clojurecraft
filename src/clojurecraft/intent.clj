@@ -171,6 +171,15 @@
   (let [[x y z] (:player/pos world)]
     [(long (math/floor x)) (long (math/floor (+ y 0.5))) (long (math/floor z))]))
 
+(defn box
+  "world with the cell a staircase or tunnel died :boxed in kept in :plan/boxed-at, and when
+   (:plan/boxed-last): the pocket is a fact about the place as the bot then was, which plan/step
+   forgets (plan/forget-boxed) once no new one has been added for boxed-ttl-ms."
+  [world cell]
+  (-> world
+      (update :plan/boxed-at (fnil conj #{}) cell)
+      (assoc :plan/boxed-last (:time/now world))))
+
 (defn child-dig
   "A fresh :dig intent for one cell, to be run by the dig executor as another intent's child."
   [target]

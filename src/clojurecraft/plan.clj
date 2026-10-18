@@ -258,7 +258,7 @@
         (cond-> (and (:intent/target i) (not (contains? placing-kinds (:intent/kind i))))
                 (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (cond-> (and (contains? boxing-kinds (:intent/kind i)) (= :boxed (:intent/reason i)))
-                (-> (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+                (-> (intent/box (intent/feet world))
                     (update :plan/boxed-route (fnil into #{}) (:intent/visited i))))
         (cond-> (and unwalkable? (= :log (:intent/for i)))
                 (update :plan/unreached (fnil conj #{}) (:intent/target i)))
@@ -271,6 +271,22 @@
          (str "intent " (:intent/kind i) " failed: " (:intent/reason i) " (attempt " attempts ")"))
         (cond-> (or (>= attempts max-attempts) (>= unwalkable max-unwalkable))
                 (assoc :plan/status :failed :plan/reason (:intent/reason i))))))
+
+(def boxed-ttl-ms 300000)             ; ms with no new pocket (intent/box) after which every one is forgotten
+
+(defn forget-boxed
+  "world with :plan/boxed-at forgotten when none was added for boxed-ttl-ms (:plan/boxed-last,
+   absent as long ago): a pocket where a staircase died :boxed is a fact about the place as the
+   bot then was, its pickaxe, its filler, the water round it, and never forgotten it kept the
+   bot from every descent near it, the retreat out of one pocket walking into the next. Sim race
+   39081559409 (issue #135, world R3/30): eighty cells were kept round a ravine's lip, the hunt's
+   retreat walked between two of them for fifteen minutes, and with them forgotten the same bot
+   was at y -35 in fifteen."
+  [world]
+  (cond-> world
+    (and (seq (:plan/boxed-at world))
+         (> (- (:time/now world) (:plan/boxed-last world 0)) boxed-ttl-ms))
+    (dissoc :plan/boxed-at :plan/boxed-last :plan/boxed-route)))
 
 (declare plan-tick)
 
@@ -350,6 +366,7 @@
   [world event table]
   (let [world (cond-> world
                 (:player/pos world) trap/trapped-tick
+                true forget-boxed
                 true (reach table))
         i (:plan/intent world)
         active? (= :active (:plan/status world))

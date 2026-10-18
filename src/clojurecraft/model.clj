@@ -212,7 +212,10 @@
    [:throw/dir "the unit [dx dz] on the plane the eye flew, toward the stronghold"
     "inside :stronghold/throws"] [:throw/at "ms the eye was first seen" "inside :stronghold/throws"]
    [:plan/boxed-at
-    "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
+    "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one; all forgotten once :plan/boxed-last is older than plan/boxed-ttl-ms"
+    "after a :boxed staircase or tunnel"]
+   [:plan/boxed-last
+    "ms the last cell was added to :plan/boxed-at (intent/box): the pockets are forgotten when it is old (plan/forget-boxed, issue #135)"
     "after a :boxed staircase or tunnel"]
    [:plan/boxed-route
     "feet cells visited by descents or tunnels that ended :boxed: a retreat seeks ground outside those failed searches"
@@ -239,7 +242,7 @@
     "intents the planner starts"]
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
    [:intent/target
-    "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265) (issue #259: a widening, a position is still one)"
+    "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265); for a :tunnel for :bank or :lava, the water or the lava source it heads for (issue #130) (issue #259: a widening, a position is still one)"
     "most intents"]
    [:intent/for
     "what the intent serves (:log, :log-hunt, a mining row's id), so chains continue only their own"
