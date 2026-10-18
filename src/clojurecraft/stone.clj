@@ -152,19 +152,36 @@
   [world row]
   (intent/chain-next (:plan/last world) (:goal/id row) (drops-of-row row) {}))
 
+(defn heading-toward
+  "The heading of the four along the larger axis from the feet toward the nearest stone of the row
+   in sight, or nil when it lies within a block and a half of the feet on the plane (the stairs
+   go down from over it, whichever way they turn first)."
+  [world row]
+  (when-let [[x _ z] (first (exposed-of-states world (states-of-row row)))]
+    (let [[fx _ fz] (intent/feet world)
+          dx (- x fx)
+          dz (- z fz)]
+      (when (<= 2 (+ (abs dx) (abs dz)))
+        (if (>= (abs dx) (abs dz))
+          [(long (math/signum (double dx))) 0]
+          [0 (long (math/signum (double dz)))])))))
+
 (defn stairs
   "The staircase to cut when nothing is in sight: stair-depth down from the feet, never below
    the row's :goal/depth, which a mine row's staircase carries as :intent/floor-to (how far a
    floor laid through a cave must go on, stairs/floors-affordable?; the build's lava hunt passes
    a depth that is a floor, not a target, and carries none); nil when the feet are already there, or when the feet cell is in
    :plan/boxed-at, a stairs-down having died :boxed there. Another one from that cell dies the
-   same way; the act tunnels, goes deeper, retreats or climbs out instead."
-  [world {:goal/keys [depth act]}]
+   same way; the act tunnels, goes deeper, retreats or climbs out instead. The first heading is
+   toward the nearest stone in sight (heading-toward), which no route reaches: the staircase meets
+   it, where the default +x led into the lake beside it (issue #342)."
+  [world {:goal/keys [depth act] :as row}]
   (let [feet (long (math/floor (physics/y-of (:player/pos world))))
         to (cond-> (- feet stair-depth) depth (max depth))]
     (when (and (< to feet) (not (contains? (:plan/boxed-at world #{}) (intent/feet world))))
       (cond-> {:intent/kind :stairs-down :intent/to-y to}
-        (and depth (= :mine act)) (assoc :intent/floor-to depth)))))
+        (and depth (= :mine act)) (assoc :intent/floor-to depth)
+        (heading-toward world row) (assoc :intent/dir (heading-toward world row))))))
 
 (def over-radius 3)                   ; blocks on the plane round the surface over stone within which the feet count as over it
 
@@ -247,11 +264,32 @@
                                     cells))))
                      ranked)))))
 
+(def spent-boxed 1)                   ; cells of :plan/boxed-at round a place before the mine cuts no more stairs there
+(def spent-radius 8)                  ; blocks on the plane round the feet they are counted over, and a retreat from them goes
+
+(defn spent?
+  "Have spent-boxed or more cells of :plan/boxed-at, the pockets staircases and climbs died :boxed
+   in, been recorded within spent-radius of the feet on the plane: is this place one the mine
+   has been boxed out of? Issue #342 (a real bot, Clj_r15, and the R1/30 sim moments): stone lay in
+   the wall of a cave lake, every stair cut at its bank was refused for the water beside it, and
+   the mine cut the next staircase from the surface beside the last, each its own feet cell and so
+   none in :plan/boxed-at, down the same open stairs to the same pocket (whose own cell is, so the
+   act could only climb) and up again, every eleven seconds in the sim moment with no filler, a
+   descent that ended :done and so counted no failure, until the plan failed :boxed."
+  [world]
+  (let [[fx _ fz] (intent/feet world)]
+    (<= spent-boxed
+        (count (filter (fn [[x _ z]]
+                         (<= (physics/horizontal-distance [x 0 z] [fx 0 fz]) spent-radius))
+                       (:plan/boxed-at world #{}))))))
+
 (def retreat-distance 12)             ; blocks a retreat walks from where nothing could be cut
 
 (defmethod path/goal-done? :unboxed-away
-  [_ {:goal/keys [pos range boxed]} node]
-  (and (not (contains? boxed node)) (> (path/flat-distance node pos) range)))
+  [_ {:goal/keys [pos range boxed avoid]} node]
+  (and (not (contains? boxed node))
+       (> (path/flat-distance node pos) range)
+       (every? #(> (path/flat-distance node %) spent-radius) avoid)))
 
 (defmethod path/heuristic :unboxed-away
   [{:goal/keys [pos range]} node]
@@ -291,24 +329,30 @@
    box rests on the shore beside the ice it stands on: sim race 39074156402, issue #71, world
    R2/35, a cove between a cliff and a frozen lake); nil when there is no way. Gym batch iron-a6
    run 3's tunnel at y 16 ran along an aquifer until water filled its floor, and every tunnel and
-   stair from there was refused."
-  [world]
-  (if (:player/in-water? world)
-    {:intent/kind :swim-out :intent/for :retreat}
-    (let [feet (intent/feet world)
-          boxed (into (:plan/boxed-at world #{})
-                      (concat (:plan/boxed-route world) (:plan/retreat-unreachable world)))
-          r
-          (path/plan
-           world
-           (path/feet-cell (:player/pos world))
-           {:goal/kind :unboxed-away :goal/pos feet :goal/range retreat-distance :goal/boxed boxed})
-          start (:path/from r)
-          target (cond (= :found (:path/status r)) (last (:path/waypoints r))
-                       (and (= :none (:path/status r)) (contains? boxed feet))
-                       (or (last (remove boxed (:path/waypoints r)))
-                           (when-not (or (= feet start) (contains? boxed start)) start)))]
-      (when target {:intent/kind :walk :intent/target target :intent/for :retreat}))))
+   stair from there was refused. With away-from (the boxed cells of a spent place) the new ground
+   is more than spent-radius from each of them and only a found route counts: the first
+   retreat of issue #342's real bot walked between two targets inside the bank for the whole
+   window."
+  ([world] (retreat world nil))
+  ([world away-from]
+   (if (:player/in-water? world)
+     {:intent/kind :swim-out :intent/for :retreat}
+     (let [feet (intent/feet world)
+           boxed (into (:plan/boxed-at world #{})
+                       (concat (:plan/boxed-route world) (:plan/retreat-unreachable world)))
+           r (path/plan world
+                        (path/feet-cell (:player/pos world))
+                        (cond-> {:goal/kind :unboxed-away
+                                 :goal/pos feet
+                                 :goal/range retreat-distance
+                                 :goal/boxed boxed}
+                          away-from (assoc :goal/avoid away-from)))
+           start (:path/from r)
+           target (cond (= :found (:path/status r)) (last (:path/waypoints r))
+                        (and (nil? away-from) (= :none (:path/status r)) (contains? boxed feet))
+                        (or (last (remove boxed (:path/waypoints r)))
+                            (when-not (or (= feet start) (contains? boxed start)) start)))]
+       (when target {:intent/kind :walk :intent/target target :intent/for :retreat})))))
 
 (defn climb
   "Stairs up out of the ground, climb-stairs at a time (stairs/climb-to), when nothing can be
@@ -376,7 +420,7 @@
               (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
                   (off-ice world)
                   (over-stone world row)
-                  (stairs world row)
+                  (if (spent? world) (retreat world (:plan/boxed-at world)) (stairs world row))
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
                   (deeper world)

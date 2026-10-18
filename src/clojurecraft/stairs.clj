@@ -726,9 +726,13 @@
                (= :stairs-up kind)
                (sort-by #(if (under-falling? world (last (level-cells feet %))) 1 0)))
         laid (fn [d]
-               (let [cells (level-cells feet d)]
-                 (or (and (level-clear? world cells) (lay world feet cells))
-                     (level-lay world feet cells))))
+               (let [cells (level-cells feet d)
+                     to-lay (or (and (level-clear? world cells) (lay world feet cells))
+                                (level-lay world feet cells))]
+                 (when (and to-lay
+                            (or (not= :stairs-down kind)
+                                (>= (- (carried-filler world) (count to-lay)) lay-reserve)))
+                   to-lay)))
         pick (fn [ws]
                (or (first (filter #(level-safe? world (level-cells feet %)) ws))
                    (first (filter laid ws))))
