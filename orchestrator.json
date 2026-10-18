@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T17:11:08.457Z",
+  "at" : "2026-10-18T17:15:36.199Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -68,6 +68,11 @@
     "title" : "Bot stops at cast-one: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
+  }, {
+    "number" : 62,
+    "title" : "Bot stops at ingots: timeout",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
   } ],
   "moves" : [ {
     "issue" : 338,
@@ -75,8 +80,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 37,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -1375,5 +1380,10 @@
     "issue" : 37,
     "move" : "assign",
     "at" : "2026-10-18T16:55:23.258Z"
+  }, {
+    "issue" : 37,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-18T17:15:36.199Z"
   } ]
 }
