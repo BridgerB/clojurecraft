@@ -88,6 +88,20 @@
   [world pos]
   (classify-id (terrain/block-at world pos)))
 
+(def ice-states
+  "Every state of the blocks of a lake's sheet: ice, frosted ice, packed ice, blue ice."
+  (into #{} (mapcat blocks/states-of) [:ice :frosted_ice :packed_ice :blue_ice]))
+
+(defn on-ice?
+  "Do the feet stand on ice: is the block under the feet's cell (a touch under the position, as
+   intent/feet reads it) a sheet of ice? false with no position."
+  [world]
+  (boolean (when-let [[x y z] (:player/pos world)]
+             (contains? ice-states
+                        (terrain/block-at world
+                                          [(long (math/floor x)) (dec (long (math/floor (+ y 0.5))))
+                                           (long (math/floor z))])))))
+
 (defn cell-key
   "One long naming the cell [x y z]: x and z in 26 bits each, y in 12, which holds every cell
    inside the world border (±30,000,000) at any height a dimension has, each to its own key."
@@ -98,8 +112,10 @@
 
 (defn cells
   "The cells of w as a route sees them: a function of [x y z] to classify's answer. w is a world,
-   or such a function already, returned as it is, so every predicate below takes either. Made
-   from a world, each cell is read through the terrain once and its answer held for the life of
+   or such a function already, returned as it is, so every predicate below takes either. Of a
+   world whose bot stands on ice (on-ice?) the sheet is floor: a route never steps onto ice from
+   land, but a bot a swim out put on one (issue #71) must be able to walk off it. Made from a
+   world, each cell is read through the terrain once and its answer held for the life of
    the function: one search or one scan asks about the same few thousand cells hundreds of
    thousands of times (a race's profile: the route search a fifth of all the bots' CPU, nearly
    all of it reading cells it had read). It answers about one world value, so what it holds is
@@ -108,13 +124,19 @@
   [w]
   (cond (fn? w) w
         :else
-        (let [held (java.util.HashMap.)]
+        (let [held (java.util.HashMap.)
+              ice? (on-ice? w)]
           (fn [[x y z :as pos]]
             (let [k (cell-key x y z)
                   known (.get held k)]
               (cond known known
                     :else
-                    (let [c (classify w pos)]
+                    (let [c (classify w pos)
+                          c (if (and ice?
+                                     (= :awkward c)
+                                     (contains? ice-states (terrain/block-at w pos)))
+                              :solid
+                              c)]
                       (.put held k c)
                       c)))))))
 
@@ -450,17 +472,27 @@
            256
            (fn [chunks blocks traps from goal max-nodes]
              ;; every trap here is in force, so the clock is not needed: trap-factor counts them all at 0
-             (let [world {:world/chunks chunks :world/blocks blocks :world/traps traps}]
-               (if-let [start (start-cell world from)]
-                 (assoc (search world start goal max-nodes) :path/from start)
-                 {:path/waypoints [] :path/cost 0.0 :path/status :none})))))
+             (let [world {:world/chunks chunks :world/blocks blocks :world/traps traps}
+                   start (start-cell world from)
+                   [x y z] from
+                   departure (when (and (not= start from)
+                                        (blocks/solid? (terrain/block-at world [x (dec y) z]))
+                                        (clear? world from)
+                                        (clear? world [x (inc y) z]))
+                               (search world from goal max-nodes))]
+               (cond (= :found (:path/status departure)) (assoc departure :path/from from)
+                     start (assoc (search world start goal max-nodes) :path/from start)
+                     :else {:path/waypoints [] :path/cost 0.0 :path/status :none})))))
 
 (defn plan
   "A route for the feet from the cell `from` toward goal: {:path/waypoints [[x y z] ...]
    :path/cost n :path/status :found|:partial|:none :path/from start}. opts: {:path/max-nodes n} (default
-   default-max-nodes). Pure and deterministic: equal inputs, equal output. The search begins at
-   start-cell (from, or the standable cell beside it the player's box rests on); with none, the
-   answer is :none with no waypoints. A goal in an unloaded chunk comes back :partial or :none
+   default-max-nodes). Pure and deterministic: equal inputs, equal output. The search normally
+   begins at start-cell (from, or the standable cell beside it the player's box rests on).
+   Before borrowing a neighbouring start, a route may leave the actual supported, clear feet
+   cell if it reaches the goal; awkward floors remain forbidden as waypoints. With neither
+   departure nor a start-cell, the answer is :none with no waypoints.
+   A goal in an unloaded chunk comes back :partial or :none
    toward it, which is the walker's cue to move and plan again."
   ([world from goal] (plan world from goal {}))
   ([world from goal {:path/keys [max-nodes] :or {max-nodes default-max-nodes}}]
