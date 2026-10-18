@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:49:28.116Z",
+  "at" : "2026-10-18T01:50:39.525Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,26 +18,15 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 130,
-    "title" : "Bot stops at cast-one: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 44,
     "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 339,
-    "checks" : "green",
-    "title" : "Bot stops at fortress: no-footing",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 414,
-    "session" : false
+    "number" : 130,
+    "title" : "Bot stops at cast-one: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "number" : 105,
     "title" : "Bot stops at flint-and-steel: boxed",
@@ -164,17 +153,13 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 130,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 44,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 339,
-    "move" : "merge",
-    "pr" : 414
+    "issue" : 130,
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 105,
     "move" : "leave",
@@ -191,6 +176,9 @@
     "issue" : 196,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 410,
+    "move" : "assign"
   }, {
     "issue" : 60,
     "move" : "leave",
@@ -1127,5 +1115,9 @@
     "move" : "merge",
     "pr" : 414,
     "at" : "2026-10-18T01:49:28.116Z"
+  }, {
+    "issue" : 410,
+    "move" : "assign",
+    "at" : "2026-10-18T01:50:39.525Z"
   } ]
 }
