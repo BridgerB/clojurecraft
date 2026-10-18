@@ -887,3 +887,30 @@
         "over it already: the stairs are cut from here")
     (is (nil? (stone/over-stone (assoc w :plan/boxed-at #{[12 57 5]}) (row :mine-stone)))
         "not back to where a staircase died boxed")))
+
+(deftest stone-beside-water-is-sealed-with-what-is-held-before-it-is-dug
+  ;; issue #342 (the R1/30 sim moment): stones on the west bank of a cave lake had water on their
+  ;; north side, the dig refused them, and the bot held planks and no filler
+  (let [dirt (blocks/default-state :dirt)
+        stone (blocks/default-state :stone)
+        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+        lake (assoc ground [7 64 6] blocks/water-base [7 63 6] blocks/water-base [7 64 5] stone)
+        at (fn [& items]
+             (assoc (apply standing 64 :stone_pickaxe items)
+                    :world/chunks
+                    {[0 0] (world/column lake)}))
+        w (at :cobblestone)]
+    (is (empty? (stone/exposed-of-states w (stone/states-of-row (row :mine-stone))))
+        "the dig refuses the stone for the water beside it")
+    (is (= {:intent/kind :place
+            :intent/item :cobblestone
+            :intent/cell [7 64 6]
+            :intent/target [7 64 6]
+            :intent/for :seal-stone}
+           (stone/seal-stone w (row :mine-stone)))
+        "a filler laid into the water")
+    (is (= :oak_planks (:intent/item (stone/seal-stone (at :oak_planks) (row :mine-stone))))
+        "planks when there is no filler")
+    (is (nil? (stone/seal-stone (at) (row :mine-stone))) "nothing to lay")
+    (is (nil? (stone/seal-stone (assoc w :plan/blacklist #{[7 64 6]}) (row :mine-stone)))
+        "not a cell a lay was given up on")))
