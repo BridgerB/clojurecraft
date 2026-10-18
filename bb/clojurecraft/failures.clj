@@ -362,12 +362,27 @@
        "-f" "state=closed"
        "-f" "state_reason=not_planned"))
 
+(defn fresh!
+  "A reopened issue's stale hold on Copilot taken off: the agent-stuck label and Copilot's
+   assignment from before it closed. They are a verdict on the old evidence, and with them the
+   orchestrator would leave the issue alone (hands-off) or count it held: #228 reopened with new
+   snapshots and sat untouched under a label from the day before. A no-agent label stays (a
+   person or a Claude session may hold the issue). Neither removal failing stops the report."
+  [n]
+  (try (gh! "-X" "DELETE" (str "repos/" (repo) "/issues/" n "/labels/agent-stuck"))
+       (catch Exception _ nil))
+  (try (gh! "-X"
+            "DELETE" (str "repos/" (repo) "/issues/" n "/assignees")
+            "-f" "assignees[]=copilot-swe-agent[bot]")
+       (catch Exception _ nil)))
+
 (defn file!
   "One signature's round, runs with a reproducible snapshot among them: one comment on its issue
    (reopened when closed and come back, regressed?) with the body's tally brought up to date
    (reproduced now), or a new issue with its first comment. The body is the summary (first seen,
    last seen, last reproduced, rounds, runs), the comments are the rounds, so every round
-   notifies (issue #116). Returns :added, :reopened or :opened."
+   notifies (issue #116). A reopened issue loses its stale Copilot hold (fresh!). Returns :added,
+   :reopened or :opened."
   [report-title sig runs code-at now]
   (let [existing (issue-for (issues) sig) ; read again now: another report may have just opened it
         closed? (regressed? existing code-at)
@@ -382,6 +397,7 @@
                      (str "body=" (with-tally (:body existing) tally))
                      (when closed? ["-f" "state=open" "-f" "state_reason=reopened"]))
               (comment! (:number existing) text)
+              (when closed? (fresh! (:number existing)))
               (doseq [l (labels runs)]
                 (gh! "-X"
                      "POST" (str "repos/" (repo) "/issues/" (:number existing) "/labels")
