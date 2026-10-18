@@ -159,6 +159,7 @@
    "Sim race 39028867619 R1/38 (issue #366) escaped from y 39 by selecting a wall notch at y 55 and failed flint-and-steel :out-of-reach; notch digs must be within reach of the current eye, and an unreachable child must be dropped while the escape rises"
    "Race 39007354638 runner 3 batch 2 (issue #348) retreated from gravel to a seagrass cell and bobbed until flint-and-steel failed :stuck; an escape bank must have no fluid at the feet or head, even when its plants are passable"
    "Sim race 39007353160 R4/2 (issue #349) climbed eight stairs for wood, then walked back down to a sky-lit pit every eleven seconds until flint-and-steel timed out; an exit walk must reach the same usable open ground as the climb, not merely open sky"
+   "Sim races 39081494214 R1/31 and 39074159590 R3/44 (issue #105) climbed up under a lake for the water bucket and stood in a flooded shaft with hundreds of cobblestone, where water beside every cell a level step digs refused each step and the climb failed :boxed three times; a level step seals that water (stairs/level-lay) and floors an open step instead"
    "Sim race 39004332220 R2/2 (issue #323) died while smelting and the model retained the old furnace menu, refusing every equip click until :stale-window; respawn now drops that menu reference while keeping the inventory and furnace contents"]
   :problem/done
   "RCON Inventory shows a filled water_bucket and flint_and_steel after a live run on the local server, with RESULT :ok true."
