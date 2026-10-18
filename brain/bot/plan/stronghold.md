@@ -3,9 +3,9 @@ title: Stronghold
 description: How the bot finds the stronghold (issue #265) - an eye of ender's flight read from the entity it becomes, a throw as a fact, and two throws' lines crossed on the plane by a pure function that answers nothing when they are parallel or cross behind a throw.
 type: reference
 tags: [bot, plan, stronghold, eyes, goals]
-aliases: [stronghold.clj, triangulate, :stronghold/throws, :throw/from, :throw/dir, min-crossing, :throw-eye, :eye-throw, :thrown?, :no-eye, :eye-unmoved, throw, bearing, :stronghold, :frames-seen?, stronghold-next, second-spot, crossing, hop, explore, :near-stronghold, :no-way, :no-frame, :truth/at, :frame, :portal-room, :in-portal-room?, :intent/dry?, dry?, portal-room]
+aliases: [stronghold.clj, triangulate, :stronghold/throws, :throw/from, :throw/dir, min-crossing, :throw-eye, :eye-throw, :thrown?, :no-eye, :eye-unmoved, throw, bearing, :stronghold, :frames-seen?, stronghold-next, second-spot, crossing, hop, explore, :near-stronghold, :no-way, :no-frame, :truth/at, :frame, :portal-room, :in-portal-room?, :intent/dry?, dry?, portal-room, to-room, dry-start, dry-cell?, stairs-toward, tunnel-spent?, room-over, deep, stair-leg, shore]
 status: verified
-lastUpdated: 2026-10-16
+lastUpdated: 2026-10-18
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/stronghold.clj#def min-crossing 0.035
@@ -41,6 +41,12 @@ sourceRefs:
   - src/clojurecraft/stronghold.clj#defn spots
   - src/clojurecraft/stronghold.clj#defn side
   - src/clojurecraft/stronghold.clj#defn to-room
+  - src/clojurecraft/stronghold.clj#defn dry-cell?
+  - src/clojurecraft/stronghold.clj#defn dry-start
+  - src/clojurecraft/stronghold.clj#defn stairs-toward
+  - src/clojurecraft/stronghold.clj#defn tunnel-spent?
+  - src/clojurecraft/stronghold.clj#def room-over 1
+  - src/clojurecraft/stronghold.clj#def deep 8
   - test/clojurecraft/stronghold_test.clj#the-next-throws-spot-is-on-the-side-the-feet-are-on
   - test/clojurecraft/stronghold_test.clj#a-way-swims-what-no-walk-crosses-and-tunnels-where-no-route-goes
   - src/clojurecraft/stronghold.clj#defn stronghold-next
@@ -115,4 +121,14 @@ The gym row `stronghold` lands the bot 250 blocks (`gym/stronghold-off`) from th
 Against the model (#260's eyes, `sim/init :stronghold`), `the-stronghold-is-found-by-throws-and-walks-against-the-model` plays the whole search: a frame deep in stone 113 blocks off, columns streamed two chunks round the player, six eyes; a throw, the walk off the line, a second throw, the walk to the crossing, the frame seen as its chunk loads.
 
 ## The portal room
-The `:portal-room` row (`--until portal-room`, priority 23, an aside, overworld only) is done by `:in-portal-room?`: the feet cell's centre within `fortress/reach` (6) of the nearest remembered frame. Its plan (`to-room`): in water, out to the nearest bank first (swim's `:swim-out :retreat`); with a frame remembered, the fortress's `:tunnel-to` to it ([[fortress-tunnel]]: one step at a time, each a plan of ops, never opening a cell beside lava, never digging a frame, which `fortress/unbreakable` holds) with `:intent/dry? true`: `fortress/dry?` refuses a step that opens a cell that is water or has water beside it, since the overworld's way down runs through aquifers and under oceans. When no first step of that tunnel can be taken from the feet and they are more than `room-over` (4) over the frame, a staircase down toward it (`:stairs-down` to that height, which turns where water is): batch stronghold-265b's portal-room run 2 saw the frame at y 0 under a lake while swimming it and failed `:blocked` twice from the water. With none remembered, the search above. No corridor is walked: the frame is the tunnel's target from wherever the bot stands, down through the ground and the stronghold's walls. The gym row `portal-room` lands as `stronghold` does, with two pickaxes and cobblestone for the floors, and is judged by the frame at the RESULT's `:frame` and the bot within 7 of it, asked at the frame's coordinates (`execute positioned {at} if entity @a[name=...]`), never as the bot. Against the model, `the-portal-room-is-reached-against-the-model` tunnels from the surface to a frame 24 blocks down.
+The `:portal-room` row (`--until portal-room`, priority 23, an aside, overworld only) is done by `:in-portal-room?`: the feet cell's centre within `fortress/reach` (6) of the nearest remembered frame. Its plan (`to-room`), in order:
+
+1. in water, out to the nearest bank first (swim's `:swim-out :retreat`);
+2. more than `deep` (8) over the frame and not standing dry, a walk to a dry start (`dry-start`: the nearest cell on the plane within `start-reach`, 16, a body stands in with no water or lava within `shore`, 2, of it from three under to one over, `dry-cell?`, not one a walk failed at, one a route reaches). A shore's every stair opens a cell by water: batch stronghold-265c's portal-room run 2 swam out onto the lake's bank over the frame and had every stair refused there, `:boxed`; batch 265b's run 2 the tunnel's every first step from the bank, `:blocked`;
+3. more than `deep` over the frame, or after a tunnel that took every step it had without arriving (`tunnel-spent?`), a staircase down toward it (`stairs-toward`: `:stairs-down` heading along the axis with the farther way to go) a leg of `stair-leg` (8) at a time, so each leg turns toward the frame, never under `room-over` (1) over it. The stairs lay a floor over a cave from the cobblestone carried and turn where water is ([[stairs-down]]); the tunnel steps down only onto a floor: batch 265c's run 3 stood over the frame at y 84 with a cave under it, every step down refused for the air under the next cell, and stepped level between two cells 32 times a tunnel for eighteen minutes to the timeout;
+4. the fortress's `:tunnel-to` to the frame ([[fortress-tunnel]]: one step at a time, each a plan of ops, never opening a cell beside lava, never digging a frame, which `fortress/unbreakable` holds) with `:intent/dry? true`: `fortress/dry?` refuses a step that opens a cell that is water or has water beside it, since the overworld's way down runs through aquifers and under oceans;
+5. no first step of that tunnel from the feet, still over `room-over`: the stairs; else the wait `:no-way`.
+
+With no frame remembered, the search above. No corridor is walked: the frame is the target from wherever the bot stands, down through the ground and the stronghold's walls. The gym row `portal-room` lands as `stronghold` does, with two pickaxes and cobblestone for the floors, and is judged by the frame at the RESULT's `:frame` and the bot within 7 of it, asked at the frame's coordinates (`execute positioned {at} if entity @a[name=...]`), never as the bot. Against the model, `the-portal-room-is-reached-against-the-model` lands two blocks from a pond with a frame 24 blocks down and a cave between: the walk to a dry start, the staircase in legs through the cave, the tunnel the last blocks.
+
+A third wall of the same batches was the bot's own physics: a landing in a pale garden stood on pale moss carpet, whose sixteenth of a block the physics did not collide with, so the server refused every move ([[land-physics]], `blocks/collision-top`, `physics/rise-onto`); every walk there failed `:no-path` (the stronghold row's third landing, 0/3 in three batches).

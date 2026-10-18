@@ -43,6 +43,7 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
 
@@ -63,7 +64,11 @@
 (def travel-turn 60.0)                ; degrees off a throw's line the way to the next turns, either side: ahead and well aside
 (def min-offset 32.0)                 ; blocks off the last throw's line from which the next throw is made, wherever the way got to
 (def pickup-rise 2)                   ; blocks over or under the feet a dropped eye is picked up within
-(def room-over 4)                     ; blocks over a frame the feet may stand and the tunnel to it start; higher, stairs down first
+(def room-over 1)                     ; blocks over a frame a staircase down to it ends: the feet at the frames' standing level, the tunnel the rest of the way; a stand higher over the portal room's air has no tunnel step down
+(def deep 8)                          ; blocks over a frame past which the way down is stairs, not the tunnel: a tunnel steps down only onto a floor, the stairs lay one over a cave
+(def stair-leg 8)                     ; blocks a staircase toward the frame goes down before the planner looks again, so each leg turns toward the frame
+(def start-reach 16)                  ; blocks round the feet a dry start for the way down is looked for
+(def shore 2)                         ; blocks round a dry start, on the plane, no water or lava lies within from three under it to one over: the first stairs' cells and what they expose
 (def tunnel-y 30)                     ; feet height a tunnel toward the crossing goes down to: under lakes and seas, where strongholds lie
 (def hop-reach 32)                    ; blocks a walk toward somewhere far goes at a time
 (def hop-rise 12)                     ; blocks over and under the feet a hop's end is looked for in its column
@@ -474,31 +479,94 @@
   (boolean (some->> (nearest-frame world)
                     (fortress/arrived? world))))
 
+(defn dry-cell?
+  "Is cell c a dry start for a way down: every cell within shore blocks of it on the plane, from
+   three under it to one over (the cells the first stairs open and expose, stairs/exposed),
+   loaded and neither water nor lava?"
+  [world [x y z]]
+  (every? (fn [c] (let [id (terrain/block-at world c)] (and id (not (blocks/fluid id)))))
+          (for [dx (range (- shore) (inc shore))
+                dz (range (- shore) (inc shore))
+                dy (range -3 2)]
+            [(+ x dx) (+ y dy) (+ z dz)])))
+
+(defn dry-start
+  "Where the way down to frame f starts: the feet when they stand dry (dry-cell?); else the
+   nearest cell on the plane within start-reach a body stands in (stand-in, within hop-rise of the
+   feet's height) that is dry, not one a walk failed at (:plan/blacklist) and one a route reaches
+   (intent/routable?), the nearer f first among those as near; nil when none is. On a shore every
+   stair opens a cell by water: gym batch stronghold-265c (plan run 38934412014) run 2 of the
+   portal room swam out onto the lake's bank over the frame, had every stair refused there and
+   failed :boxed; batch 265b run 2 the tunnel's every first step from the bank, :blocked."
+  [world [x _ z]]
+  (let [[fx fy fz :as feet] (intent/feet world)]
+    (if (dry-cell? world feet)
+      feet
+      (->> (for [dx (range (- start-reach) (inc start-reach))
+                 dz (range (- start-reach) (inc start-reach))
+                 :let [r (max (abs dx) (abs dz))]
+                 :when (pos? r)]
+             [r (math/hypot (- (+ fx dx) x) (- (+ fz dz) z)) [(+ fx dx) (+ fz dz)]])
+           (sort-by (fn [[r d _]] [r d]))
+           (some (fn [[_ _ [cx cz]]]
+                   (let [c (stand-in world cx cz fy)]
+                     (when (and c
+                                (dry-cell? world c)
+                                (not (contains? (:plan/blacklist world #{}) c))
+                                (intent/routable? world {:intent/kind :walk :intent/target c}))
+                       c))))))))
+
+(defn stairs-toward
+  "A staircase down toward frame f from feet, to height to-y: the stairs' heading is the axis
+   with the farther way to go (stairs.clj: it turns where water or lava is, steps aside, and lays
+   a floor over a cave from the cobblestone carried)."
+  [[fx _ fz] [x _ z] to-y]
+  {:intent/kind :stairs-down
+   :intent/to-y to-y
+   :intent/dir (if (>= (abs (- x fx)) (abs (- z fz)))
+                 [(if (neg? (- x fx)) -1 1) 0]
+                 [0 (if (neg? (- z fz)) -1 1)])
+   :intent/for :stronghold})
+
+(defn tunnel-spent?
+  "Did the last intent, a dry tunnel toward f, take every step it had without arriving? It went
+   round and round: gym batch stronghold-265c (plan run 38934412014) run 3 of the portal room
+   stood over the frame at y 84, a cave under it, every step down refused for the air under the
+   next cell (fortress/safe? never steps onto air), stepped level between two cells 32 times a
+   tunnel for eighteen minutes to the timeout."
+  [world f]
+  (let [l (:plan/last world)]
+    (boolean (and (= :tunnel-to (:intent/kind l))
+                  (= f (:intent/target l))
+                  (intent/done? l)
+                  (>= (:intent/taken l 0) (:intent/steps l 0))))))
+
 (defn to-room
-  "The way to the portal room's frame f: the fortress's tunnel to it, its steps opening no cell by
-   water (fortress/dry?), when its first step can be taken from the feet (down through the
-   ground, through the stronghold's walls, never into its frames: fortress/unbreakable); else,
-   more than room-over above the frame, a staircase down to that height toward it (stairs.clj,
-   which turns where water or lava is, and steps aside), the issue's dig down at the crossing;
-   else the wait :no-way. In water, first out to the nearest bank (swim's :swim-out :retreat).
-   Gym batch stronghold-265b (plan run 38930188463) run 2 of the portal room: the frame at y 0
+  "The way to the portal room's frame f, in order: in water, out to the nearest bank first
+   (swim's :swim-out :retreat); from a shore, a walk to a dry start (dry-start); more than deep
+   over the frame, or after a tunnel that got nowhere (tunnel-spent?), a staircase down toward
+   it a leg of stair-leg at a time (stairs-toward), never under room-over over the frame; then
+   the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?), when its
+   first step can be taken from the feet (through the stronghold's walls, never into its frames:
+   fortress/unbreakable); else, still over room-over, the stairs; else the wait :no-way. Gym
+   batch stronghold-265b (plan run 38930188463) run 2 of the portal room: the frame at y 0
    under a lake, seen while the bot swam it, every first step of the tunnel from the water opened
    a cell by water and it failed :blocked."
-  [world [x y z :as f]]
-  (let [[fx fy fz :as feet] (intent/feet world)]
+  [world [_ y _ :as f]]
+  (let [[_ fy _ :as feet] (intent/feet world)
+        high? (> fy (+ y deep))
+        start (when (and high? (not (:player/in-water? world))) (dry-start world f))
+        stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
+          (and start (not= start feet))
+          {:intent/kind :walk :intent/target start :intent/for :stronghold}
+          (and (> fy (+ y room-over)) (or high? (tunnel-spent? world f))) stairs
           (fortress/choose-move world feet f fortress/climb-past true)
           {:intent/kind :tunnel-to
            :intent/target f
            :intent/steps fortress/steps-per-tunnel
            :intent/dry? true}
-          (> fy (+ y room-over))
-          {:intent/kind :stairs-down
-           :intent/to-y (+ y room-over)
-           :intent/dir (if (>= (abs (- x fx)) (abs (- z fz)))
-                         [(if (neg? (- x fx)) -1 1) 0]
-                         [0 (if (neg? (- z fz)) -1 1)])
-           :intent/for :stronghold}
+          (> fy (+ y room-over)) stairs
           :else {:plan/wait :no-way})))
 
 (defmethod plan/next-intent :portal-room
