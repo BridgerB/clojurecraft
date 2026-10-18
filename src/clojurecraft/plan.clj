@@ -267,7 +267,7 @@
                      (not (contains? crossing-kinds (:intent/kind i))))
                 (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (cond-> (and (contains? boxing-kinds (:intent/kind i)) (= :boxed (:intent/reason i)))
-                (-> (intent/box-at (intent/feet world))
+                (-> (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
                     (update :plan/boxed-route (fnil into #{}) (:intent/visited i))))
         (cond-> (and unwalkable? (= :log (:intent/for i)))
                 (update :plan/unreached (fnil conj #{}) (:intent/target i)))
