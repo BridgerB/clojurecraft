@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T11:24:48.195Z",
+  "at" : "2026-10-18T11:25:55.682Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -8,10 +8,16 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 178,
+    "checks" : "pending",
+    "title" : "Bot stops at portal: timeout",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 444,
+    "session" : true
   }, {
     "number" : 342,
     "title" : "Bot stops at furnace: boxed",
@@ -24,7 +30,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 178,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 444,
+    "why" : "session running"
   }, {
     "issue" : 342,
     "move" : "leave",
