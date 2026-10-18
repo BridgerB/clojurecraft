@@ -64,7 +64,8 @@
   (is (= :water (path/classify-id water)))
   (is (= :lava (path/classify-id lava)))
   (is (= :awkward (path/classify-id oak-slab)))
-  (is (= :awkward (path/classify-id oak-stairs)))
+  (is (= :solid (path/classify-id oak-stairs))
+      "stairs are a floor, climbed a block at a time as the physics takes them (issue #266)")
   (is
    (= :awkward (path/classify-id (blocks/default-state :cocoa)))
    "a cocoa pod collides though nothing listed it: gym batch iron-a9 run 5 walked into one on a
