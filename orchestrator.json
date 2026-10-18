@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:20:56.825Z",
+  "at" : "2026-10-18T03:22:03.777Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -39,6 +39,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 162,
@@ -49,11 +54,6 @@
     "nudges" : 3,
     "pr" : 421,
     "session" : true
-  }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
   }, {
     "number" : 41,
     "title" : "Bot stops at cast-one: no-site",
@@ -141,14 +141,14 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 44,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 162,
     "move" : "wait",
     "pr" : 421,
     "why" : "session running"
-  }, {
-    "issue" : 44,
-    "move" : "leave",
-    "why" : "hands-off label"
   }, {
     "issue" : 41,
     "move" : "leave",
