@@ -331,7 +331,50 @@
     (is (=
          {:intent/kind :lookout :intent/for :pearls}
          (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])}) row plan/goals))
-        "a calm one three blocks from the mouth: it waits for it to wander off")))
+        "a calm one three blocks from the mouth: it waits for it to wander off")
+    ;; batch pearls-warped-c (plan run 39152813557, probe 39157605071) run 1: forty minutes in the
+    ;; burrow over one angry, blacklisted and seventeen blocks below the mouth, in another cave
+    (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+           (plan/next-intent (assoc (burrowed [8.5 61.0 8.5]
+                                              {7 (assoc angry :entity/pos [8.5 47.0 8.5])})
+                                    :plan/blacklist
+                                    #{7})
+                             row
+                             plan/goals))
+        "an angry one far below the mouth cannot come to it: out to the mouth")))
+
+(def ledge-wall
+  "Stone three high (y 64 to 66) along x 4, the burrow's first stair left open: from the mouth at
+   x 3 the only way east is down through the burrow."
+  (into {} (for [z (range 16) :when (not= z 8) y (range 64 67)] [[4 y z] stone])))
+
+(deftest one-far-below-no-route-reaches-is-descended-to-by-stairs
+  ;; batch pearls-warped-c (plan run 39152813557, probe 39157605071): both landings that lived
+  ;; stood on a ledge over the forest floor, every enderman 14 to 50 blocks below, no route down
+  ;; and none in sight; run 2 walked from its burrow's mouth to its end, three lower and nearer by
+  ;; the route's measure of height, and out again for forty minutes
+  (let [below (enderman [8.5 40.0 8.5])
+        w (assoc-in (standing {7 below}) [:player/inventory 1] (item :iron_pickaxe 1))]
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals))
+        "a lookout first: a stare it turns onto provokes one")
+    (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [-1 0] :intent/for :pearls}
+           (plan/next-intent (looked-out w) row plan/goals))
+        "then a flight of stairs toward it, descend-step down")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (looked-out (standing {7 below})) row plan/goals))
+        "no pickaxe: no stairs")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (looked-out (assoc w :world/entities {7 (enderman [8.5 59.0 8.5])}))
+                             row
+                             plan/goals))
+        "five below is a slope's worth, not another level")
+    (let [w (-> (burrowed [3.5 64.0 8.5] {7 (enderman [12.5 40.0 8.5])})
+                (assoc :world/chunks {[0 0] (world/column (merge burrow ledge-wall))}))]
+      (is (nil? (pearls/toward w (pearls/endermen w pearls/seek-radius)))
+          "the only route east ends in the burrow, five nearer on the plane: never into it")
+      (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [1 0] :intent/for :pearls}
+             (plan/next-intent (looked-out w) row plan/goals))
+          "stairs down toward it from the mouth"))))
 
 (deftest a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
   (let [kill {:intent/kind :fight
