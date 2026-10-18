@@ -3,6 +3,7 @@
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.scene :as scene]
@@ -50,6 +51,15 @@
      :seal (stairs/seal world feet cells)
      :shore (stairs/shore-distance world feet d)
      :dry-head (stairs/dry-head-distance world feet d)}))
+
+(defn above
+  "The standable cell on top of the column of cell c, or nil."
+  [world [x _ z]]
+  (some (fn [y]
+          (when (some-> (terrain/block-at world [x y z])
+                        blocks/solid?)
+            (let [c [x (inc y) z]] (when (path/standable? world c) c))))
+        (range terrain/top-y -65 -1)))
 
 (defn chain
   "The intent and its children, small values."
@@ -141,6 +151,14 @@
                         cands (take 12 (stone/exposed-of-states world (stone/states-of-row row)))]
                     (println "  CANDS"
                              (pr-str (mapv (fn [c] [c
+                                                    (let [up (above world c)]
+                                                      [up
+                                                       (when up
+                                                         (intent/routable? world
+                                                                           {:intent/kind :walk
+                                                                            :intent/target up
+                                                                            :intent/for
+                                                                            :mine-stone}))])
                                                     (intent/routable? world
                                                                       {:intent/kind :walk
                                                                        :intent/target c
