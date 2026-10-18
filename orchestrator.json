@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:36:51.167Z",
+  "at" : "2026-10-18T02:42:26.344Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -41,11 +41,6 @@
     "number" : 162,
     "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 196,
-    "title" : "Bot stops at portal: no-stand",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 60,
@@ -95,11 +90,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : false
-  }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
@@ -115,11 +105,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
-    "number" : 163,
-    "title" : "Bot stops at portal: needs-tool",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 286,
@@ -129,7 +114,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 418,
-    "session" : true
+    "session" : false
   }, {
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
@@ -180,10 +165,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 196,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 60,
     "move" : "leave",
     "why" : "hands-off label"
@@ -212,10 +193,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
@@ -228,14 +205,9 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 163,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 286,
-    "move" : "wait",
-    "pr" : 418,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 418
   }, {
     "issue" : 108,
     "move" : "leave",
@@ -1175,5 +1147,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-18T02:32:20.714Z"
+  }, {
+    "issue" : 286,
+    "move" : "ready",
+    "pr" : 418,
+    "at" : "2026-10-18T02:42:26.344Z"
   } ]
 }
