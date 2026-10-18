@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T07:35:41.194Z",
+  "at" : "2026-10-18T07:37:49.881Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -20,8 +20,8 @@
   }, {
     "number" : 228,
     "title" : "Bot stops at portal: no-footing",
-    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
-    "copilot" : true
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
   }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
@@ -42,8 +42,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 228,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "move" : "assign"
   }, {
     "issue" : 161,
     "move" : "leave",
@@ -1101,5 +1100,9 @@
     "move" : "gave-up",
     "pr" : 431,
     "at" : "2026-10-18T05:35:13.896Z"
+  }, {
+    "issue" : 228,
+    "move" : "assign",
+    "at" : "2026-10-18T07:37:49.881Z"
   } ]
 }
