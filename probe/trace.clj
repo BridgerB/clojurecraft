@@ -48,6 +48,11 @@
                  (:player/food world)
                  (pr-str (brief i))
                  "child" (pr-str (brief (:intent/child i)))
+                 "wait"
+                 (pr-str (select-keys world
+                                      [:plan/waiting :plan/waiting-ticks :plan/status :plan/trap
+                                       :player/in-water? :player/on-ground? :player/controls]))
+                 "op" (subs (pr-str (:intent/op i)) 0 (min 300 (count (pr-str (:intent/op i)))))
                  "bore" (pr-str (stairs/bore-cells world (intent/feet world)))
                  "handed" (stairs/handed? world)
                  "boxed" (count (:plan/boxed-at world #{}))
