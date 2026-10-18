@@ -1,12 +1,39 @@
 (ns probe.fortress-trace
   "Issue #338: a sim run's road to the fortress, sampled: where the bot is, its spiral leg, its food."
   (:require [clojure.string :as str]
+            [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
+            [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
+            [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.scene :as scene]
             [clojurecraft.sim :as sim]
-            [clojurecraft.simrace :as sr]))
+            [clojurecraft.simrace :as sr]
+            [clojurecraft.terrain :as terrain]))
+
+(defn why
+  "The reasons the step from feet by move is refused, as fortress/safe? reads them."
+  [world feet move]
+  (let [cells (fortress/opens feet move)
+        floor (fortress/plus (fortress/plus feet move) [0 -1 0])
+        own (set (concat cells [floor feet (fortress/plus feet fortress/up)]))
+        at #(terrain/block-at world %)
+        nm #(some-> (at %)
+                    blocks/name-of)
+        lava? #(contains? blocks/lava-states (at %))]
+    {:move move
+     :safe? (fortress/safe? world feet move)
+     :cells (mapv nm cells)
+     :unloaded (into [] (remove at) (conj cells floor))
+     :lava (filterv lava? cells)
+     :unbreakable
+     (filterv #(and (at %) (blocks/solid? (at %)) (contains? fortress/unbreakable (nm %))) cells)
+     :lava-beside (filterv lava? (remove own (mapcat fortress/neighbours cells)))
+     :falling (filterv #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %))
+                       cells)
+     :floor [(nm floor) (path/floor? world floor)]}))
 
 (defn -main
   "file seed until every slices: print REACHED lines as stages are reached, an AT line every
@@ -36,6 +63,10 @@
                              (:fortress/search world))
                     (when (contains? slice-at m)
                       (println "FACTS" m (pr-str (scene/facts world)))
+                      (when-let [sr (:fortress/search world)]
+                        (let [feet (intent/feet world)]
+                          (doseq [mv (take 6 (fortress/moves feet (fortress/leg-target sr) 3))]
+                            (println "WHY" m (pr-str (why world feet mv))))))
                       (doseq [l (scene/slice world)] (println "SLICE" m l))))
                   (or (plan/done? world) (plan/failed? world))))
         r (sim/run+ sr/step
