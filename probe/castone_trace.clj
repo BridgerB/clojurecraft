@@ -118,6 +118,7 @@
         stage (simrace/stage-of snap)
         t0 (:time/now world)
         last-t (atom -1000000)
+        wall0 (System/currentTimeMillis)
         step (fn [world event]
                (let [w' (simrace/step world event)
                      t (:time/now w')]
@@ -127,6 +128,8 @@
                      (println
                       "T+"
                       (quot (- t t0) 1000)
+                      "wall"
+                      (quot (- (System/currentTimeMillis) wall0) 1000)
                       (pr-str (mapv #(math/round (double %)) (:player/pos w')))
                       (pr-str (select-keys i [:intent/kind :intent/goal :intent/for :intent/stage]))
                       (pr-str (select-keys (:intent/child i) [:intent/kind :intent/for]))
