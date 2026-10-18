@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T05:31:56.477Z",
+  "at" : "2026-10-18T05:33:02.053Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -26,7 +26,7 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 363,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at portal: boxed",
     "copilot" : true,
     "draft" : true,
