@@ -3,6 +3,8 @@
          '[clojurecraft.intent :as intent]
          '[clojurecraft.path :as path]
          '[clojurecraft.stairs :as stairs]
+         '[clojurecraft.terrain :as terrain]
+         '[clojurecraft.blocks :as blocks]
          '[clojure.string :as str])
 (defn runs
   [xs]
@@ -14,6 +16,11 @@
         [x y z] (intent/feet world)]
     (println "==" p "feet" [x y z] "go-at" (:plan/go-at world) "handed?" (stairs/handed? world))
     (println " bore-cells" (stairs/bore-cells world [x y z]))
+    (println " names"
+             (mapv (fn [dy]
+                     (some-> (terrain/block-at world [x (+ y dy) z])
+                             blocks/name-of))
+                   (range 0 8)))
     (println " column" (runs (map (fn [dy] (path/classify world [x (+ y dy) z])) (range 0 80))))
     (doseq [[dx dz] [[0 0] [1 0] [-1 0] [0 1] [0 -1] [3 0] [-3 0] [0 3] [0 -3] [6 0] [-6 0] [0 6]
                      [0 -6]]]
