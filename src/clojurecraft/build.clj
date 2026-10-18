@@ -667,31 +667,40 @@
          (not (contains? intent/never-dug (blocks/name-of id)))
          (contains? #{:solid :awkward} (path/classify-id id)))))
 
+(defn way-columns
+  "The columns [x z] of the straight way from the feet's column to stand's, both ends included,
+   as stance-block walks it: along x first, then along z; with z-first? along z first, then x."
+  ([from stand] (way-columns from stand false))
+  ([[fx _ fz] [sx _ sz] z-first?]
+   (let [span (fn [a b] (let [d (if (> a b) -1 1)] (range a (+ b d) d)))]
+     (if z-first?
+       (concat (for [z (span fz sz)] [fx z]) (for [x (rest (span fx sx))] [x sz]))
+       (concat (for [x (span fx sx)] [x fz]) (for [z (rest (span fz sz))] [sx z]))))))
+
 (defn stance-block
   "The first solid cell in the way of standing at stand: from the feet toward it, one cell
    at a time, the body at the stand's height or the head over that. nil when that line is
-   already clear. Full run 4e59246 stood at a pond and the pad's stand, four blocks east, was
-   stone inside the hill; the walk at it was :none."
+   already clear. The line goes along x first, then z, unless a cell of it is solid and may not
+   be dug (the frame's rock, cobblestone the plan places, a cell beside lava) while the line along
+   z first has none: then that one, since a way a wall bars is not the way to dig. Full run
+   4e59246 stood at a pond and the pad's stand, four blocks east, was stone inside the hill; the
+   walk at it was :none. Real snapshot real-6-s2-Clj_r05 (issue #45): the lava's stand one block
+   aside and one on from the feet, the cell between them on the x-first line a stair's floor
+   the plan places, so the line was called clear, nothing was dug and the walk failed :no-path,
+   with stone on the z-first line to dig."
   [world stand build origin facing]
   (let [placed? (place-cells build origin facing)
         kept? (kept origin facing)
-        [fx _ fz] (intent/feet world)
-        [sx sy sz] stand]
-    (loop [x fx
-           z fz]
-      (let [body [x sy z]]
-        (cond (diggable? world body placed? kept?) body
-              (diggable? world (update body 1 inc) placed? kept?) (update body 1 inc)
-              (and (= x sx) (= z sz)) nil
-              :else
-              (recur (cond (< x sx) (inc x)
-                           (> x sx) (dec x)
-                           :else x)
-                     (if (= x sx)
-                       (cond (< z sz) (inc z)
-                             (> z sz) (dec z)
-                             :else z)
-                       z)))))))
+        feet (intent/feet world)
+        sy (second stand)
+        digs? #(diggable? world % placed? kept?)
+        walled? #(and (some-> (terrain/block-at world %)
+                              blocks/solid?)
+                      (not (digs? %)))
+        cells (fn [cols] (mapcat (fn [[x z]] [[x sy z] [x (inc sy) z]]) cols))
+        lines (map #(cells (way-columns feet stand %)) [false true])
+        line (or (first (remove #(some walled? %) lines)) (first lines))]
+    (first (filter digs? line))))
 
 (defn within-reach?
   "Can a dig of pos be started from here: the eye within reach of its centre, the same gate
@@ -883,14 +892,6 @@
            (sort-by (fn [[cx _ cz]]
                       (+ (abs (- cx fx)) (abs (- cz fz)) (abs (- sx cx)) (abs (- sz cz)))))
            first))))
-(defn way-columns
-  "The columns [x z] of the straight way from the feet's column to stand's, as stance-block
-   walks it: along x first, then along z, both ends included."
-  [[fx _ fz] [sx _ sz]]
-  (let [step (fn [a b] (if (> a b) -1 1))]
-    (concat (for [x (range fx (+ sx (step fx sx)) (step fx sx))] [x fz])
-            (for [z (range (+ fz (step fz sz)) (+ sz (step fz sz)) (step fz sz))] [sx z]))))
-
 (defn floor-gap
   "The cell under the first cell of the straight way to stand, at the stand's height and past
    the feet's own column, that nothing holds the feet up over: no solid under it, it and the
@@ -1103,8 +1104,12 @@
    the stairs down toward its landing at y 24 were refused for the water beside them, the swim
    out of the water let in dug down a staircase it flooded until :stuck, and the escape from
    that water failed :stuck too: three failures, all toward the one site the planner kept. Only
-   a :build has a site: a :tunnel-to (fortress) works its steps through work-op too."
-  [world {:intent/keys [kind origin facing access]} {:intent/keys [reason target] :as child}]
+   a :build has a site: a :tunnel-to (fortress) works its steps through work-op too. A cast-one's
+   walk to a stand that failed :no-path anywhere gives its site up too: what the build offers
+   before it, a way dug, a corner, a bridge, is exhausted when it is the plain walk left, and a
+   site no way reaches is better left than failed (issue #45: real snapshot real-3-s2-Clj_r05
+   stood in the rock behind its frame, the landing four blocks off, and failed :no-path)."
+  [world {:intent/keys [kind build origin facing access]} {:intent/keys [reason target] :as child}]
   (boolean
    (and (= :build kind)
         (intent/failed? child)
@@ -1112,6 +1117,10 @@
         (or (> (physics/distance (physics/centre (intent/feet world))
                                  (physics/centre (cell origin facing (landing (or access 0)))))
                site-reach)
+            (and (= :cast-one build)
+                 (= :walk (:intent/kind child))
+                 (= :no-path reason)
+                 (not (:intent/pickup? child)))
             (and (= :walk (:intent/kind child))
                  (not (:intent/pickup? child))
                  target
@@ -1122,8 +1131,11 @@
 (defn way-back
   "The way back to the build's site from far off: toward the room's landing (landing for the
    build's access h) as a landing op goes (toward-stand: a walk, else stairs to its height and a
-   level way dug), or nil when the feet are within site-reach at its height. Nearby feet above
-   or below the landing still need a way to its height when no working stance is reachable.
+   level way dug), or nil when the feet are within site-reach at its height with a route to it.
+   Nearby feet above or below the landing still need a way to its height when no working stance
+   is reachable, and so do nearby feet with rock between: sim races 39076911005 and 39070979444
+   (issue #74, worlds R3/22 and R1/38) stood six blocks from the landing at its height, the
+   room dug and the way to it not, and failed :no-stand three times.
    Sim race 38806318231 (issue #196, 75 runs in 37 rounds, world R2/3):
    the cast's room at y 23, the bot climbed out to y 64 for the wood of a pickaxe, made it, and
    the build's next op, a room cell 41 below and 34 away, found no stand and no cut at the feet's
@@ -1132,7 +1144,9 @@
   (let [to (cell origin facing (landing (or access 0)))
         feet (intent/feet world)]
     (when (or (not= (second feet) (second to))
-              (> (physics/distance (physics/centre feet) (physics/centre to)) site-reach))
+              (> (physics/distance (physics/centre feet) (physics/centre to)) site-reach)
+              (not (intent/routable? world
+                                     {:intent/kind :walk :intent/target to :intent/for :build})))
       (toward-stand world to build origin facing))))
 
 (defn approach-stand
@@ -1383,7 +1397,7 @@
         ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's
         (-> world
             (assoc :player/controls {})
-            (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+            (intent/box (intent/feet world))
             (intent/dissoc-intent :intent/child)
             (game/say (str "build: " (:intent/kind child) " boxed in, the way out")))
         (and child (intent/failed? child))
@@ -1405,6 +1419,13 @@
                     (memory/give-up-site (:intent/origin i))
                     intent/done
                     (game/say "build: no safe lava station at the site, a new site"))
+                (and (= :no-stand c) (= :cast-one (:intent/build i)))
+                ;; no cell reaches the op and none can be cut: the site is no use, a new one
+                (-> world
+                    (assoc :player/controls {})
+                    (memory/give-up-site (:intent/origin i))
+                    intent/done
+                    (game/say "build: no stand at the site, a new site"))
                 (keyword? c) (intent/fail world c)
                 :else
                 (intent/run-child

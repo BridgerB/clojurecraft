@@ -206,7 +206,10 @@
    [:throw/dir "the unit [dx dz] on the plane the eye flew, toward the stronghold"
     "inside :stronghold/throws"] [:throw/at "ms the eye was first seen" "inside :stronghold/throws"]
    [:plan/boxed-at
-    "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
+    "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one; all forgotten once :plan/boxed-last is older than plan/boxed-ttl-ms"
+    "after a :boxed staircase or tunnel"]
+   [:plan/boxed-last
+    "ms the last cell was added to :plan/boxed-at (intent/box): the pockets are forgotten when it is old (plan/forget-boxed, issue #135)"
     "after a :boxed staircase or tunnel"]
    [:plan/surfaced
     "[feet ms] where and when the last climb out to the surface came out: a spare's climb is not cut again from below near it for a while"

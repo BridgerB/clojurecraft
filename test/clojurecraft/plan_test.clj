@@ -1108,3 +1108,27 @@
                                              (sent fx))]
       (is (>= (- t-finish t-start) (intent/finish-delay 3000 2.6)))
       (is (> (intent/finish-delay 3000 2.6) (* 2 (intent/finish-delay 3000)))))))
+
+(deftest a-pocket-is-forgotten-when-no-new-one-comes
+  ;; sim race 39081559409 (issue #135, world R3/30): eighty boxed cells round a ravine's lip, the
+  ;; lava hunt's retreat walked between two of them for fifteen minutes; with them forgotten the
+  ;; same bot was at y -35 in fifteen
+  (let [w (-> (game/init fx/opts)
+              (assoc :time/now 1000)
+              (intent/box [1 2 3]))
+        later #(assoc w :time/now (+ 1000 %))]
+    (is (= #{[1 2 3]} (:plan/boxed-at w)))
+    (is (= 1000 (:plan/boxed-last w)) "when it was added")
+    (is (= #{[1 2 3]} (:plan/boxed-at (plan/forget-boxed (later plan/boxed-ttl-ms))))
+        "kept until the ttl has passed")
+    (is (nil? (:plan/boxed-at (plan/forget-boxed (later (inc plan/boxed-ttl-ms)))))
+        "forgotten with the time")
+    (is (nil? (:plan/boxed-last (plan/forget-boxed (later (inc plan/boxed-ttl-ms))))))
+    (is (= #{[1 2 3] [4 5 6]}
+           (:plan/boxed-at (plan/forget-boxed (intent/box (later (dec plan/boxed-ttl-ms))
+                                                          [4 5 6]))))
+        "a new pocket starts the time again")
+    (is (nil? (:plan/boxed-at (plan/forget-boxed (-> (game/init fx/opts)
+                                                     (assoc :time/now (inc plan/boxed-ttl-ms)
+                                                            :plan/boxed-at #{[1 2 3]})))))
+        "pockets with no time (a snapshot from before it) are long forgotten")))

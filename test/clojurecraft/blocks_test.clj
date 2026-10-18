@@ -44,3 +44,12 @@
   (is (blocks/source? 86))
   (is (not (blocks/source? 93)))
   (is (not (blocks/source? 1))))
+
+(deftest a-bubble-column-takes-a-block
+  ;; sim race 39068773618 (issue #44, world R4/37): the cast bridged a stream over magma with
+  ;; cobblestone into its bubble column, which the model refused three times, :rejected
+  (is (blocks/placeable-into? (blocks/default-state :bubble_column))
+      "the game's replaceable column")
+  (is (blocks/placeable-into? 86) "water still")
+  (is (not (blocks/placeable-into? (blocks/default-state :stone))) "stone is no place")
+  (is (not (blocks/placeable-into? (blocks/default-state :kelp))) "kelp keeps its cell"))

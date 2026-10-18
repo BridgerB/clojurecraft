@@ -249,6 +249,7 @@
 (s/def :plan/blacklist (s/coll-of ::target :kind set?)) ; a ghost's entity id too
 (s/def :plan/trunk-failures (s/map-of (s/tuple int? int?) pos-int?))
 (s/def :plan/boxed-at (s/coll-of ::block-pos :kind set?)) ; feet cells where a staircase died :boxed
+(s/def :plan/boxed-last int?) ; ms the last was added
 (s/def :plan/unwalkable nat-int?)
 (s/def :plan/surfaced (s/tuple ::block-pos int?)) ; where and when the last climb out came out
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
@@ -306,7 +307,7 @@
            :world/chunks :world/blocks :world/unconfirmed :world/facts :world/entities
            :window/state-id :window/grid :window/cursor :window/open :player/held-slot :plan/intent
            :plan/status :plan/blacklist :plan/trunk-failures :plan/chain? :plan/reached
-           :plan/boxed-at :plan/unwalkable]))
+           :plan/boxed-at :plan/boxed-last :plan/unwalkable]))
 
 (s/fdef game/step
   :args
