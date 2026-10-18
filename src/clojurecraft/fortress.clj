@@ -254,6 +254,16 @@
        (intent/failed? child)
        (= :no-path (:intent/reason child))))
 
+(defn buried
+  "The dig that frees the body when a block stands in it (gravel fallen into the tunnel): of the
+   head's cell first, then the feet's, worked from the feet; nil when both are open. A walk has no
+   route from inside a block, so a step's stand-in waited on a walk that failed :no-path every
+   tick and was dropped and asked again: sim snapshot R1-33-1 (issue #338) stood in gravel at y 34
+   for its whole fifteen-minute window."
+  [world feet]
+  (some #(when (build/holds? world [:solid %]) (build/dig-op % feet nil :unbury))
+        [(plus feet up) feet]))
+
 (defmethod intent/run :tunnel-to
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
@@ -273,6 +283,8 @@
               intent/done)
           (and move (or (off-step? feet from move) (lost-way? i)))
           (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
+          (buried world feet)
+          (build/work-op (assoc world :player/controls {}) i (buried world feet) event)
           (nil? move)
           (if-let [m (next-move world feet target climb (boolean dry?) tunnel-visited)]
             (intent/assoc-intent (assoc world :player/controls {})
