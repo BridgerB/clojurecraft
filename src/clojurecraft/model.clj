@@ -214,6 +214,18 @@
     "inside :stronghold/throws"]
    [:throw/dir "the unit [dx dz] on the plane the eye flew, toward the stronghold"
     "inside :stronghold/throws"] [:throw/at "ms the eye was first seen" "inside :stronghold/throws"]
+   [:fortress/search
+    "the leg of the spiral search a fortress tunnel with no brick on record is on: {:search/from :search/heading :search/leg :search/tunnels}; the planner turns it a quarter right when the leg is over (fortress/exploring, issue #338)"
+    "after an exploring :tunnel-to's first tick"]
+   [:search/from "the feet cell the leg began at" "inside :fortress/search"]
+   [:search/heading "the unit [dx dz] the leg goes along: east, south, west or north"
+    "inside :fortress/search"]
+   [:search/leg
+    "which leg of the spiral, from 0; a leg's length grows a spacing every two legs (fortress/leg-length)"
+    "inside :fortress/search"]
+   [:search/tunnels
+    "the tunnels the leg has taken, one more at each look of the planner; too many end the leg"
+    "inside :fortress/search"]
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
     "after a :boxed staircase or tunnel"]
@@ -284,6 +296,9 @@
    [:intent/dry?
     "a :tunnel-to that takes only steps opening no cell by water (fortress/dry?): the overworld's way toward the stronghold and down to its portal room (issue #265)"
     "a :tunnel-to to a stronghold's frame"]
+   [:intent/search
+    "the fortress search leg an exploring :tunnel-to works for (fortress/exploring): the executor keeps it as :fortress/search"
+    "a :tunnel-to with no brick on record to go to"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/tunnel-visited
     "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"

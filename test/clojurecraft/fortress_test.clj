@@ -582,3 +582,73 @@
     (is (fortress/dry? w [0 64 0] [-1 0 0]))
     (is (= [1 0 0] (fortress/choose-move w [0 64 0] [4 64 0])))
     (is (not= [1 0 0] (fortress/choose-move w [0 64 0] [4 64 0] fortress/climb-past true)))))
+
+(defn field
+  "A world of netherrack for x from x0 to x1 and z -20..20 (y 60..70), the bot's two cells at
+   [0 64 0] open: the Nether with an edge at x1, where the model's captured region ends."
+  [x0 x1]
+  {:world/chunks {}
+   :world/blocks
+   (merge (into {}
+                (for [x (range x0 (inc x1)) y (range 60 71) z (range -20 21)] [[x y z] netherrack]))
+          {[0 64 0] air [0 65 0] air})
+   :player/pos [0.5 64.0 0.5]
+   :player/dimension dimension/nether})
+
+(def east-leg {:search/from [0 64 0] :search/heading [1 0] :search/leg 0 :search/tunnels 0})
+
+(deftest the-spiral-turns-right-and-its-legs-grow
+  ;; issue #338: a tunnel that aimed 48 blocks east for ever went 630 blocks along the bedrock
+  ;; past a fortress 150 blocks north; the legs now sweep strips a spacing apart
+  (is (= [[1 0] [0 1] [-1 0] [0 -1] [1 0]] (take 5 (iterate fortress/turn-right [1 0]))))
+  (is (= [160 160 320 320 480] (map fortress/leg-length (range 5))))
+  (is (= [160 64 0] (fortress/leg-target east-leg)))
+  (is (= [0 64 -320]
+         (fortress/leg-target {:search/from [0 64 0] :search/heading [0 -1] :search/leg 2}))))
+
+(deftest a-leg-keeps-to-the-heights-over-the-lava-sea-and-under-the-roof
+  (is (= 52 (fortress/explore-y [0 2 0])) "a tunnel in the bedrock climbs")
+  (is (= 64 (fortress/explore-y [0 64 0])))
+  (is (= 90 (fortress/explore-y [0 120 0])) "and one in the roof comes down")
+  (is (= [160 52 0] (fortress/leg-target (assoc east-leg :search/from [0 7 0])))))
+
+(deftest the-first-leg-goes-east-and-the-edge-of-the-world-turns-it
+  (let [w (field -20 40)]
+    (is (= east-leg (fortress/exploring w)) "east when it can go")
+    (is (= [0 1] (:search/heading (fortress/exploring (field -20 1))))
+        "the world ends two blocks east: south")
+    (is (nil? (fortress/exploring (field 0 0))) "no heading has a way to go")))
+
+(deftest a-leg-goes-on-until-its-end-then-the-spiral-turns
+  (let [w (assoc (field -20 40) :fortress/search east-leg)
+        ending {:search/from [-160 64 0] :search/heading [1 0] :search/leg 0 :search/tunnels 3}]
+    (is (= (assoc east-leg :search/tunnels 1) (fortress/exploring w)) "one more tunnel on the leg")
+    (is (not (fortress/leg-over? w east-leg)))
+    (is (fortress/leg-over? w ending) "its end within reach of the feet")
+    (is (= {:search/from [0 64 0] :search/heading [0 1] :search/leg 1 :search/tunnels 0}
+           (fortress/exploring (assoc w :fortress/search ending)))
+        "a quarter turn right from the feet, the next leg")
+    (is (fortress/leg-over? w (assoc east-leg :search/tunnels 13))
+        "more tunnels than a leg of 160 asks: a wall it cannot go round")
+    (is (fortress/leg-over? w (assoc east-leg :search/from [-700 64 0]))
+        "far from where it began: another trip's")
+    (is (fortress/leg-over? (field -20 1) east-leg) "the world ending ahead")))
+
+(deftest an-exploring-tunnel-keeps-its-leg-for-the-planner
+  (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        w (assoc (field -20 40)
+                 :world/facts (memory/empty-facts)
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/inventory {})
+        i (plan/next-intent w goal plan/goals)
+        out (intent/run (assoc w :plan/intent i) i {:event/kind :tick :event/now 0})]
+    (is (= :tunnel-to (:intent/kind i)))
+    (is (= east-leg (:intent/search i)))
+    (is (= [160 64 0] (:intent/target i)))
+    (is (= east-leg (:fortress/search out)) "the executor keeps the leg the planner chose")
+    (is (= (assoc east-leg :search/tunnels 1)
+           (:intent/search (plan/next-intent out goal plan/goals)))
+        "and the next look goes on along it")))
