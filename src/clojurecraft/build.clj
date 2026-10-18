@@ -1689,7 +1689,9 @@
   "The lava source the hunt cuts toward (toward-lava): the nearest loaded within hunt-radius
    (sources-near) whose cell over it is not above the feet, since the hunt's stairs go down and
    its tunnel goes level, with a safe stand to open beside it (stands-beside), and round which
-   a frame could be cast (castable?); nil when none.
+   a frame could be cast (castable?). At its height a source must be more than one cell away on
+   the plane: the tunnel stops beside it, so an adjacent source leaves no step to cut and must
+   not hide farther sources. nil when none.
    Sim race 38811561269 runner 6 (issue #41, worlds R1/38, R2/8 and R2/32 round after round,
    R2/26 on runner 8): the hunt took the nearest source whatever its height, tunnelled under a
    lone source six blocks over the feet (R1/38) and under a small pool eleven over (R2/26),
@@ -1699,10 +1701,13 @@
    race 38929353563 (issue #41, Clj_r13 and Clj_r14) stood at y -54 over six thousand sources
    loaded, the nearest farther than hunt-radius, and waited :no-site out."
   [world]
-  (let [fy (physics/y-of (intent/feet world))
+  (let [[fx fy fz] (intent/feet world)
         sources (lava-sources world)
-        target?
-        #(and (<= (inc (physics/y-of %)) fy) (seq (stands-beside world %)) (castable? sources %))]
+        target? (fn [[x y z :as src]]
+                  (and (<= (inc y) fy)
+                       (or (> fy (inc y)) (> (max (abs (- x fx)) (abs (- z fz))) 1))
+                       (seq (stands-beside world src))
+                       (castable? sources src)))]
     (or (first (filter target? (sources-near world)))
         (first (filter target? (take hunt-checked (sources-near world far-radius)))))))
 
