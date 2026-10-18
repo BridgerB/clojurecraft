@@ -260,6 +260,40 @@
                    block)
    :truth/re re})
 
+(defn piece
+  "The fill-in placeholders for cell [px py pz] of the stronghold's portal room piece
+   (StrongholdPieces.PortalRoom, 11 by 8 by 16): the bot lands at its (5, 1, 2), on the room's
+   floor inside its door, so the piece's origin is [-5 -1 -2] from the landing."
+  [[px py pz]]
+  (at-offset [(- px 5) (dec py) (- pz 2)]))
+
+(defn piece-fill
+  "The fill command from piece cell a to piece cell b with block (a name, with its states and
+   fill mode as the command takes them)."
+  [a b block]
+  (str "fill " (piece a) " " (piece b) " minecraft:" block))
+
+(def portal-room
+  "The vanilla portal room round the landing, block for block from StrongholdPieces.PortalRoom
+   (issue #266): a hollow box of stone bricks, the staircase of three stairs blocks up to the
+   frames' height with the spawner in the middle of its top step (a bare spawner spawns
+   nothing), the platform with the 3x3 lava pit, the two lava troughs by the door, and the
+   twelve frames floating two over the floor, each facing inward as the game's own do (the
+   northern three face south: EndPortalFrameBlock's pattern takes no other facing). The
+   iron bars are left out: nothing need look in."
+  [(piece-fill [0 0 0] [10 7 15] "stone_bricks hollow") (piece-fill [4 1 5] [6 1 7] "stone_bricks")
+   (piece-fill [4 2 6] [6 2 7] "stone_bricks") (piece-fill [4 3 7] [6 3 7] "stone_bricks")
+   (piece-fill [4 1 4] [6 1 4] "stone_brick_stairs[facing=south]")
+   (piece-fill [4 2 5] [6 2 5] "stone_brick_stairs[facing=south]")
+   (piece-fill [4 3 6] [6 3 6] "stone_brick_stairs[facing=south]")
+   (piece-fill [3 1 8] [7 1 12] "stone_bricks") (piece-fill [4 1 9] [6 1 11] "lava")
+   (piece-fill [1 1 1] [1 1 3] "lava") (piece-fill [9 1 1] [9 1 3] "lava")
+   (piece-fill [4 3 8] [6 3 8] "end_portal_frame[facing=south]")
+   (piece-fill [4 3 12] [6 3 12] "end_portal_frame[facing=north]")
+   (piece-fill [3 3 9] [3 3 11] "end_portal_frame[facing=east]")
+   (piece-fill [7 3 9] [7 3 11] "end_portal_frame[facing=west]")
+   (str "setblock " (piece [5 3 6]) " minecraft:spawner")])
+
 (def gyms
   "The gym registry. Truth commands count items without removing any (`clear <name> <item> 0`
    answers \"Found N matching item(s)...\"); {name} is the bot's name; patterns are strings so
@@ -622,7 +656,30 @@
                  :truth/at [:frame]}
                 {:truth/cmd "execute positioned {at} if entity @a[name={name},distance=..7]"
                  :truth/re "Test passed"
-                 :truth/at [:frame]}]}])
+                 :truth/at [:frame]}]}
+   ;; issue #266: the vanilla portal room built round the landing (portal-room), the bot on its
+   ;; floor inside the door with fourteen eyes (twelve for the frames, two to spare), judged by
+   ;; an end portal block at the cell the bot remembers one (its RESULT's :portal)
+   {:gym/goal :end-portal
+    :gym/until "end-portal"
+    :gym/land :portal-room
+    :gym/difficulty "normal"
+    :gym/setup portal-room
+    :gym/prereqs ["minecraft:ender_eye 14"]
+    :gym/timeout-ms 300000
+    :gym/truth [{:truth/cmd "execute if block {at} minecraft:end_portal"
+                 :truth/re "Test passed"
+                 :truth/at [:portal]}]}
+   ;; then through it: the same room and kit, judged by the server finding the bot in the End
+   {:gym/goal :enter-end
+    :gym/until "enter-end"
+    :gym/land :portal-room
+    :gym/difficulty "normal"
+    :gym/setup portal-room
+    :gym/prereqs ["minecraft:ender_eye 14"]
+    :gym/timeout-ms 300000
+    :gym/truth [{:truth/cmd "execute as {name} at @s if dimension minecraft:the_end"
+                 :truth/re "Test passed"}]}])
 
 (def counted
   "Outcomes that say something about the goal; :harness and :disconnect do not."
@@ -1023,6 +1080,23 @@
     (cli/log "stronghold:" [sx sz] "landing:" [lx ly lz])
     (rcon/command! rc (str "spawnpoint " name " " lx " " ly " " lz))
     [lx lz ly]))
+
+(def room-reach 16)                     ; blocks round the landing the portal room's chunks are forceloaded over while it is built
+
+(defmethod land! :portal-room
+  ;; issue #266: the row's room (its :gym/setup, portal-room) built round the landing with its
+  ;; chunks loaded, the bot teleported onto the room's floor at the landing itself, the spawn
+  ;; pinned there. Not on the surface (land! :surface): the surface over the landing is now the
+  ;; room's roof
+  [rc row name [x z y :as landing]]
+  (fixture/with-forceload
+   rc
+   [(- x room-reach) (- z room-reach) (+ x room-reach) (+ z room-reach)]
+   (fn []
+     (doseq [c (:gym/setup row)] (rcon/command! rc (fill-in c name landing)))
+     (cli/log "tp:" (rcon/command! rc (str "tp " name " " (+ x 0.5) " " y " " (+ z 0.5))))))
+  (rcon/command! rc (str "spawnpoint " name " " x " " y " " z))
+  landing)
 
 (defmethod land! :warped-forest
   ;; the warped forest nearest the landing's Nether coordinates (an eighth of the overworld's, so

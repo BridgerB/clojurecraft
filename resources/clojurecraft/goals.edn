@@ -399,4 +399,23 @@
   "the stronghold's portal room reached (issue #265): with an end portal frame remembered, the fortress's tunnel to it, one step at a time, each a plan of ops, down through the ground and the stronghold's walls, no step opening a cell beside lava or water, the frames never dug; with none remembered yet, the stronghold's search first (throws, walks, the crossing). Done within 6 blocks of a frame. In the overworld only. An aside until the eyes (#264) are proven and the chain is raised to it"
   :goal/dimension "minecraft:overworld"
   :goal/done? :in-portal-room?
-  :goal/plan :portal-room}]
+  :goal/plan :portal-room}
+ {:goal/id :end-portal
+  :goal/priority 24
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "end-portal"
+  :goal/doc
+  "the end portal lit (issue #266): an eye of ender into each remembered end portal frame whose state has none, each a use-on of the frame's top from a cell within reach that a route reaches, the frames walked on to reach the far side of the ring as a player walks them; done when an end portal block is remembered, which the server places the moment the twelfth eye goes in. Waits :no-frames with no frame on record, :no-eyes with fewer eyes held than frames lack them (the eyes stage, issue #264, is the one to look at). In the overworld only. An aside until the stronghold (#265) is proven and the chain is raised to it"
+  :goal/dimension "minecraft:overworld"
+  :goal/done? :portal-lit?
+  :goal/plan :end-portal}
+ {:goal/id :enter-end
+  :goal/priority 25
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "enter-end"
+  :goal/doc
+  "the End entered (issue #266): the frames eyed as the end portal row does, the portal's nine blocks awaited, then the feet brought over the portal's middle, where the body drops into it and the server sends the End's respawn at once; done when the dimension is the End. On arrival the bot stands on the obsidian platform: a route never steps off it, since a column open to the void has no landing within three blocks (path/landing). An aside until the stronghold (#265) is proven and the chain is raised to it"
+  :goal/done? :in-end?
+  :goal/plan :enter-end}]

@@ -511,6 +511,37 @@
   "clojurecraft has never thrown an eye. steve's find.ts is a stub (\"TODO: Track the eye entity, calculate direction, triangulate\"), it throws one eye and reports success after 3 s; ruststeve never got past the blazes' rods to need one. Gym batch stronghold-265a (plan run 38927120252): the throw row passed 5/5, every line within ten degrees of the stronghold locate found 6000 to 8300 blocks off; the stronghold and portal-room rows, landed 250 blocks from it, failed 0/6 in three minutes: two landings on a lake's shore had the stronghold across the water and every hop toward the second throw's spot ended in it, one on a mountainside walked at one cell twelve times; each waited :no-way (probe 38929010443). The way now swims open water (swim's :cross) and tunnels where no route goes, and the second throw is made once 32 blocks off the first line. Batch stronghold-265b (plan run 38930188463): the stronghold row passed 2/3, a frame at y 0 remembered under the lake both times; the third, in a pale garden on a mountain, stood with its step's walk making no way into a cell of moss carpet, :no-path (open); the portal room 0/3: the frame seen while swimming the lake, the tunnel from the water :blocked (the bot now leaves the water first, and stairs down where no tunnel step starts), and four eyes picked up from a tree six over the feet :not-picked-up (an eye is picked up only within two of the feet's height now)."
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
                     "brain/siblings/sib-end-and-dragon.md" "brain/bot/plan/stronghold.md"]}
+ {:problem/stage :end-portal
+  :problem/issue 266
+  :problem/goals [:end-portal :enter-end]
+  :problem/statement
+  "Split from :end-and-dragon. In the stronghold's portal room, with eyes of ender held, put an eye into each of the twelve frames that lacks one so the portal lights, then step into it and arrive in the End on the obsidian platform without walking off it into the void."
+  :problem/needs
+  ["Which frames lack an eye: the frame's state (end/eyed?), read from the loaded block, else the last sighting"
+   "A cell the feet can stand in within reach of each frame that a route reaches: the frames float two blocks over the room's floor round a 3x3 pit of lava, so the far side of the ring is reached by walking on the frames themselves, 13/16 high, which a route must take for floors"
+   "The way up to the frames from the room's floor: three stairs blocks with a silverfish spawner in the middle of the top step, so a route must climb stairs, a block at a time, up a side"
+   "When the portal is lit: the server places the nine end portal blocks the moment the twelfth eye goes in (EndPortalFrameBlock.useItemOn); they are remembered like the frames"
+   "When the End is reached: the respawn packet naming minecraft:the_end sets :player/dimension"
+   "What takes the body into the portal: the end portal block has no collision, so feet over it drop into its cell, and the server moves the player at once (no four-second wait as at a nether portal)"]
+  :problem/risks
+  ["A use-item while looking at a frame fills it: the throw trial looks up; here the look is at the frame on purpose, and a use-item-on on a frame that has its eye only acks"
+   "Walking the ring: a misstep into the interior before the portal is lit is a fall of two into lava; the route refuses cells beside or over lava (path/clear?), and the frames are its only floors there"
+   "A frame reached from under it, from the room's floor, is out of reach: the eye is 2.6 under the frame's top"
+   "The ring on record is not whole: a frame's chunk unloaded or a frame unseen; the enter row waits :no-ring"
+   "In the End the platform stands over the void: a route off its edge finds no landing and is refused, and the bot stands still once the row is done"
+   "Endermen in the End and the dragon's first flight: nothing of this stage fights; the dragon is #267's"]
+  :problem/decisions
+  ["The work is a plan of ops read against the world each tick (build/work-op), as the nether portal's cast: the first frame without an eye is worked, so a death or a reload resumes where the world says, and nothing records progress"
+   "The frames, the end portal and stairs are floors to a route (path/stood-on), since the physics' oracle already takes each for a full cube and the feet read their cell a half block up: a player walks the frames and climbs the stairs, and so does the bot"
+   "The gym builds the vanilla portal room itself (gym/portal-room, StrongholdPieces.PortalRoom block for block, the frames facing inward as the game's own do) round a surface landing and lands the bot on the room's floor inside its door: locate structure names a stronghold's start, not its portal room, and no command finds the room; the real room is the stronghold stage's to reach (#265)"
+   "The enter row's ops are the end portal row's and then a wait for the nine portal blocks and the step in: one plan builder with an enter? flag, as frame-plan takes one"]
+  :problem/done
+  "RCON: an end_portal block at the cell the bot remembers one (gym end-portal, :truth/at [:portal]); the bot in minecraft:the_end (gym enter-end, gym/dimension-test). sim_test: against the model's End, every frame eyed and nine portal cells placed; the dimension flips and the player stands on the platform."
+  :problem/last-failure
+  "clojurecraft has never put an eye into a frame nor entered the End. steve's End attempts (f7 1/3/5) were slain by endermen before a single bed, with no kit server-side; ruststeve started its End gyms in the End by teleport and never crossed a portal. Batch end-portal-a (plan run 39132430055, c26ccd5): end-portal passed 3/3 (27 to 31 s from the room's floor to the lit portal), enter-end 3/3 (28 to 34 s to the End), the first eyes in frames and the first End of any clojurecraft bot; from the gym's own room, not a stronghold's: the way to a real room is #265's."
+  :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
+                    "brain/siblings/sib-end-and-dragon.md" "brain/bot/plan/end-portal.md"
+                    "brain/bot/plan/stronghold.md"]}
  {:problem/stage :real-snapshots
   :problem/issue 299
   :problem/goals []

@@ -1,0 +1,17 @@
+;; issue #266, batch a: the end portal lit and the End entered from the vanilla portal room the
+;; gym builds (gym/portal-room), fourteen eyes given, three runs a row.
+{:plans/label "end-portal-a"
+ :plans/jobs 2
+ :plans/issue 266
+ :plans/experiments [{:exp/name "end-portal"
+                      :exp/kind :gym
+                      :exp/goal "end-portal"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 400}
+                     {:exp/name "enter-end"
+                      :exp/kind :gym
+                      :exp/goal "enter-end"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 400}]}

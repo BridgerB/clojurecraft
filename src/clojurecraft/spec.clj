@@ -11,6 +11,7 @@
             [clojurecraft.combat]
             [clojurecraft.drops :as drops]
             [clojurecraft.eat :as eat]
+            [clojurecraft.end-portal :as end-portal]
             [clojurecraft.entity :as entity]
             [clojurecraft.eyes]
             [clojurecraft.fortress :as fortress]
@@ -429,6 +430,7 @@
 (s/def :plan/wait some?)
 (s/def :intent/reason some?)
 (s/def :intent/for keyword?)
+(s/def :intent/enter? boolean?)
 (s/def :intent/pickup? boolean?)
 (s/def :intent/step-down? boolean?)
 (s/def :intent/cell ::block-pos)
@@ -892,6 +894,14 @@
          :visited :intent/tunnel-visited)
   :ret (s/nilable :intent/move))
 
+(s/fdef end-portal/next-op
+  :args
+  (s/cat :world (requires :player/pos :world/facts :world/chunks)
+         :enter? boolean?)
+  :ret
+  (s/nilable (s/or :op ::op
+                   :why keyword?)))
+
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
@@ -900,5 +910,5 @@
    `place/ashore `stone/redig-place `window/view `path/plan `path/classify `entity/hostiles
    `entity/gone? `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe?
    `stairs/down-lay `stone/retreat `build/safe-source? `build/scoop-blocked? `build/lit-entry
-   `fortress/next-move])
+   `fortress/next-move `end-portal/next-op])
 (s/def :stats/deaths pos-int?)
