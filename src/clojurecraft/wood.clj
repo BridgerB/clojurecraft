@@ -55,6 +55,7 @@
 
 (def max-trunk-failures 2)            ; a trunk that failed twice is given up; once is chance
 (def max-clears 6)                    ; leaf blocks broken to reach one drop
+(def unreached-radius 8)              ; blocks on the plane round a place no walk reached that no log is chosen in
 
 (defn continue-gather
   "The next intent of a log-gathering chain already in flight, or nil. Chains are marked
@@ -80,13 +81,20 @@
           :else (intent/chain-next last :log blocks/log-items extra))))
 
 (defn skipped
-  "The logs not to choose: blacklisted positions, and every log in a trunk column that has failed
-   max-trunk-failures times."
+  "The logs not to choose: blacklisted positions, every log in a trunk column that has failed
+   max-trunk-failures times, and every log within unreached-radius of a place a log walk
+   failed :no-path toward (:plan/unreached). A grove across water no route crosses is one failure, not
+   one for each of its trunks: real race 39042120284 bot Clj_r14 (issue #75) stood on a shore with
+   the trees two hundred blocks off across the sea, tried twelve trunks of one grove a walk each,
+   and the plan failed :no-path before the hunt or the crossing had their turn."
   [world]
   (let [blacklist (:plan/blacklist world #{})
-        failures (:plan/trunk-failures world {})]
+        failures (:plan/trunk-failures world {})
+        unreached (:plan/unreached world #{})]
     (fn [[x _ z :as pos]]
-      (or (contains? blacklist pos) (>= (get failures [x z] 0) max-trunk-failures)))))
+      (or (contains? blacklist pos)
+          (>= (get failures [x z] 0) max-trunk-failures)
+          (some #(<= (physics/horizontal-distance pos %) unreached-radius) unreached)))))
 
 (defn log-walk
   "A walk to the log of bottom nearest the feet, tagged as the gather chain. When even that log

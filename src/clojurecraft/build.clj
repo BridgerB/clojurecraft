@@ -34,7 +34,8 @@
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]
-            [clojurecraft.window :as window]))
+            [clojurecraft.window :as window]
+            [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
 
@@ -649,9 +650,17 @@
           (range 1 (inc foundation-depth)))))
 
 (defn place-cells
-  "Every cell the plan places a block in."
+  "Every cell the plan places a block in, whatever the room's access h (0 to max-access): the
+   floor under a landing at h is another cell for each h, and a way dug for the lava's stand
+   must keep the cobblestone of the one the build has. Sim race 39076908669 (issue #178, world
+   R1/11 seed 5): the build's access was 4, the cells were read for access 0, and the way to the
+   lava's stand dug the landing's floor each time it was placed, a floor, a pour and a dig
+   every twelve seconds for the run's last quarter hour."
   [build origin facing]
-  (set (keep #(when (= :place (:build/op %)) (:build/pos %)) (plan-for build origin facing 0))))
+  (set (for [h (range (inc max-access))
+             op (plan-for build origin facing h)
+             :when (= :place (:build/op op))]
+         (:build/pos op))))
 
 (defn diggable?
   "Is pos a solid or awkward block a clear may dig: not unloaded, not obsidian, not the frame's
@@ -1089,8 +1098,9 @@
 (defn lost-way?
   "Did child, the way to the site from far off (a walk, a swim out, stairs), fail for want of a
    way (:no-path, :stuck, or a climb :boxed) beyond site-reach of the room's landing? Then it is
-   the site that no way reaches, not an op. A nearby walk whose target is flooded or has awkward
-   footing also gives up the site: its fixed stance is no walking destination (issue #162).
+   the site that no way reaches, not an op. A nearby fixed-stance walk that exhausted its routes
+   (:no-path), or whose target is flooded or has awkward footing, also gives up the site:
+   dry footing alone does not mean a route reaches it (issue #162).
    Sim race 38839665459 (issue #222, world R1/11, six runs in two rounds) chose a site 70 blocks
    off across an aquifer, the walk there failed :no-path,
    the stairs down toward its landing at y 24 were refused for the water beside them, the swim
@@ -1108,7 +1118,8 @@
             (and (= :walk (:intent/kind child))
                  (not (:intent/pickup? child))
                  target
-                 (or (= :water (path/classify world target))
+                 (or (= :no-path reason)
+                     (= :water (path/classify world target))
                      (= :water (path/classify world (update target 1 inc)))
                      (= :awkward (path/classify world (update target 1 dec)))))))))
 
@@ -1128,6 +1139,26 @@
               (> (physics/distance (physics/centre feet) (physics/centre to)) site-reach))
       (toward-stand world to build origin facing))))
 
+(def far-site 48)                     ; blocks on the plane from the landing past which its unloaded chunk means far off, not still arriving
+
+(defn far-way
+  "The way to the build's site from so far off that its landing's chunk is not loaded (a death
+   sent the feet back to spawn): a walk toward the landing's column at the feet's height, as far
+   as the loaded terrain leads (intent/routable?), so the stairs and the dug way (toward-stand)
+   start at the site and not at these feet. nil when the landing's chunk is loaded, when it is
+   within far-site of the feet (the chunks of a start are still arriving), or no walk leads
+   toward it. Sim race 39076908669 (issue #196, world R3/13 seed 2): the bot died at its
+   cast at y 48, woke at spawn 190 blocks off, made a pickaxe for the build's next op, a floor
+   cell that is no dig, and found no stand at the feet: :no-stand three times in three ticks."
+  [world {:intent/keys [origin facing access]}]
+  (let [[lx _ lz] (cell origin facing (landing (or access 0)))
+        walk
+        {:intent/kind :walk :intent/target [lx (second (intent/feet world)) lz] :intent/for :site}]
+    (when (and (not (terrain/chunk-loaded? world [lx 0 lz]))
+               (> (physics/horizontal-distance (:player/pos world) [lx 0 lz]) far-site)
+               (intent/routable? world walk))
+      walk)))
+
 (defn approach-stand
   "The child that gets the feet where op is worked from, or nil when they are there: the room's
    landing is gone to at its height (toward-stand: stairs to it first, then a level way dug); a
@@ -1140,8 +1171,10 @@
    no such cell exists. Ground in the way is dug only for a :build, whose plan says which rock to
    keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
   [world i {:build/keys [op stand pos step]}]
-  (let [{:intent/keys [build origin facing]} i]
+  (let [{:intent/keys [build origin facing]} i
+        far (when build (far-way world i))]
     (cond
+      far far
       (and (= :landing step) build) (toward-stand world stand build origin facing)
       (and (= :dig op) (within-reach? world pos)) nil
       (and (= :dig op) (= stand pos))
@@ -1170,7 +1203,7 @@
               (let [work (cond (= :place op) (or (foundation world pos) pos)
                                :else pos)
                     alt (reachable-stand world stand work)]
-                (cond (nil? alt) :no-stand
+                (cond (nil? alt) (or (when build (way-back world i)) :no-stand)
                       (intent/centred? world alt) nil
                       :else {:intent/kind :walk :intent/target alt :intent/for :build})))))))
 
@@ -1344,6 +1377,18 @@
             (assoc :player/controls {})
             (intent/dissoc-intent :intent/child)
             (game/say "build: the scoop's sight line filled, opening it again"))
+        (and (= :build (:intent/kind i))
+             (= :walk (:intent/kind child))
+             (= :retreat (:intent/for child))
+             (intent/failed? child)
+             (= :no-path (:intent/reason child))
+             (:intent/target child))
+        ;; avoid retrying the same failed waypoint when the build recalculates its way out
+        (-> world
+            (assoc :player/controls {})
+            (update :plan/retreat-unreachable (fnil conj #{}) (:intent/target child))
+            (intent/dissoc-intent :intent/child)
+            (game/say "build: retreat waypoint failed, finding another"))
         (and child (lost-way? world i child))
         ;; no way reaches the site from here: it is given up and the planner chooses another
         (-> world
@@ -1506,7 +1551,6 @@
 (def lava-depth -54)                  ; the feet a block over the lava sea: below y -54 the game fills its aquifers with lava (ruststeve cast at y -50, the sea's surface at -55)
 (def hunt-radius 48)                  ; blocks from the feet a lava source is walked, dug or tunnelled toward
 (def max-candidates 3)                ; the nearest sources a route is planned to
-(def here-radius 2)                   ; a stand this near the feet is where the bot is: not walked to
 
 (defn sources-near
   "The lava sources loaded within hunt-radius of the feet, nearest first, outside given-up
@@ -1522,15 +1566,20 @@
 (defn lava-walk
   "A walk to a cell beside an exposed source's air (stands-beside), from which a site has its
    station: the first of the max-candidates nearest scoopable sources a route reaches; nil when
-   none, and never to a stand within here-radius of the feet, where the bot already is."
+   none, and never to a stand the walk would call arrived at once (intent/arrived?: the eye
+   within reach of it), where the bot already is. Real race 39076909951 (issue #163, bot Clj_r02):
+   the stand a block over the roof just dug was beyond the two blocks the feet had to be from it
+   and within the walk's reach, so the walk ended at once, the planner chose it again, and the
+   build did nothing else, a walk every fifty milliseconds."
   [world]
-  (let [feet (physics/centre (intent/feet world))]
+  (let [eye (game/eye world)]
     (->> (sources-near world)
          (filter #(scoop/scoopable? world % :lava))
          (take max-candidates)
          (mapcat #(stands-beside world %))
          (map (fn [[stand _]] {:intent/kind :walk :intent/target stand :intent/for :lava}))
-         (remove #(<= (physics/distance (physics/centre (:intent/target %)) feet) here-radius))
+         (remove
+          #(intent/arrived? world % (physics/distance eye (physics/centre (:intent/target %)))))
          (filter #(intent/routable? world %))
          first)))
 
@@ -1539,8 +1588,11 @@
    cell to stand in beside the roof (stands-beside: the station the dig makes), so it can be
    scooped: a solid the tools can take (never obsidian or bedrock), never the cell under the
    feet. The deep sea lies under a ceiling of deepslate (ruststeve: 'roofed sources ... scooped
-   by digging the roof'); the dig is allowed to expose the lava under it, which flows no higher.
-   nil when none."
+   by digging the roof'); the dig is allowed to expose the lava under it, which flows no higher,
+   and its drop is not wanted (way-dig): a roof of ore the pickaxe cannot harvest is broken for
+   nothing, not refused. Real race 39076909951 (issue #163, bot Clj_r02): the roof over the sea at
+   y -59 was deepslate diamond ore, a stone pickaxe in hand, and the dig failed :needs-tool three
+   times in a moment. nil when none."
   [world]
   (let [under (update (intent/feet world) 1 dec)
         roof-of (fn [[x y z :as src]]
@@ -1554,7 +1606,7 @@
                                (seq (stands-beside world src)))
                       roof)))]
     (when-let [roof (first (keep roof-of (sources-near world)))]
-      (assoc (intent/child-dig roof) :intent/exposes-ok? true :intent/for :lava))))
+      (assoc (way-dig roof) :intent/for :lava))))
 
 (defn heading-to
   "The cardinal [dx dz] from feet toward pos, along the longer of the two plane distances."
@@ -1637,9 +1689,20 @@
                            plan/goals)]
     (boolean (and (map? row) (not (make/fetch? row))))))
 
+(defn wood-near?
+  "Is the kit's wood a short trip: the feet out of the ground (stairs/out?) and a standing trunk a
+   route reaches (wood/near-walk)? Underground it is the climb out from the lava, and the build
+   goes on with what it holds. Sim race 39076908669 (issue #178, world R2/21 seed 2): the last
+   pickaxe broke at the cast at y -52 with one stick, no planks and no table, and the stairs up
+   through deepslate by hand, three digs of seventeen seconds a block, ran the run's last hour
+   for the log: the wood was a short walk from the surface the build began at."
+  [world]
+  (and (stairs/out? world (intent/feet world)) (some? (wood/near-walk world))))
+
 (defn carry-table?
   "Should a build take a crafting table into its kit: none held, none placed within reach to take
-   along (make/take-table-along), and one can be made from what is held (table-at-hand?). A cast
+   along (make/take-table-along), and one can be made from what is held (table-at-hand?) or its
+   wood is a short trip (wood-near?). A cast
    wears out every pickaxe it holds; with a table, sticks and cobblestone the next is made where
    the bot stands. Sim races 38806318231 and 38843552659 (issue #186, worlds R1/25, R2/11, R1/18,
    R4/39): the pickaxes broke in the cast with sticks and four hundred cobblestone in hand and no
@@ -1647,7 +1710,7 @@
   [world]
   (and (zero? (get (make/counts world) :crafting_table 0))
        (nil? (make/take-table-along world))
-       (table-at-hand? world)))
+       (or (table-at-hand? world) (wood-near? world))))
 
 (def kit-sticks 2)                    ; sticks a build carries: one pickaxe's worth, made again where the cast wore the last out
 
@@ -1663,7 +1726,8 @@
 (defn carry-sticks?
   "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or placed
    within reach already (the table first: carry-table?, so the planks a table needs are never
-   spent on sticks), and they can be made from what is held (sticks-at-hand?). A table and
+   spent on sticks), and they can be made from what is held (sticks-at-hand?) or their wood is a
+   short trip (wood-near?). A table and
    cobblestone make no pickaxe without sticks: a probe of world R3/12 seed 1 from spawn on main
    (Refs #178) wore out its pickaxes in the cast holding a table, 684 cobblestone and one plank,
    no sticks, and cut stairs up through deepslate by hand for a log, fifteen seconds a block,
@@ -1671,7 +1735,7 @@
   [world]
   (and (< (get (make/counts world) :stick 0) kit-sticks)
        (or (pos? (get (make/counts world) :crafting_table 0)) (some? (make/take-table-along world)))
-       (sticks-at-hand? world)))
+       (or (sticks-at-hand? world) (wood-near? world))))
 
 (defn held-first
   "What the needs planner does for what a build row holds before it starts: the tools of

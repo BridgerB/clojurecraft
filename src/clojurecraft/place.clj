@@ -194,6 +194,38 @@
   [world id]
   (boolean (or (intent/stowed-tool world id) (not= :needs-tool (intent/choose-tool world id)))))
 
+(defn powder-snow-at?
+  "Is the block at pos loaded powder snow: no collision for the player, so it is not solid, yet
+   no block can be placed into it, and the bare hand breaks it?"
+  [world pos]
+  (= :powder_snow
+     (some-> (terrain/block-at world pos)
+             blocks/name-of)))
+
+(defn dug-spot
+  "[target support] for the niche the bot has cut (the intent's :intent/niche) once it is empty:
+   the cell itself, against the solid under it, where spot would refuse it as a passage (a niche
+   under powder snow is one the feet could stand in, and a way through nothing). nil when no niche
+   was cut, the cell is not yet air the server confirmed, a body or the refused cells are in the
+   way, or it is out of reach."
+  [world cell refused]
+  (let [support (some-> cell
+                        (update 1 dec))
+        t (some->> cell
+                   (terrain/block-at world))
+        s (some->> support
+                   (terrain/block-at world))]
+    (when (and t
+               s
+               (not (contains? refused cell))
+               (blocks/replaceable? t)
+               (terrain/confirmed? world cell)
+               (blocks/solid? s)
+               (not (contains? memory/placed-kinds (blocks/name-of s)))
+               (not (inside-player? world cell))
+               (<= (physics/distance (game/eye world) (physics/centre cell)) place-reach))
+      [cell support])))
+
 (defn niche
   "A cell beside the feet at their level, or beside the head when none is there (the block
    goes into the wall at head height, still in reach to open: race 38477665442 bot Clj_r12 at
@@ -207,26 +239,31 @@
    that is never dug nor one the bot placed (a table in the last niche); nil when none. Where a
    staircase has no spot, the wall gives one: the side nearest the landing (:plan/go-at), never
    the wall ahead, where the way goes on (batch iron-a2 run 1 put its table there, and its
-   tunnel dug through it)."
+   tunnel dug through it). Powder snow may be the niche itself or lie over it: no block can be
+   placed into it, so it is dug out first like stone (race 39031393203 bot Clj_r12, issue #94: a
+   pocket under a powder-snow field, every cell beside the feet powder snow or stone under
+   powder snow, and the table failed :no-spot three times)."
   [world]
   (let [[fx fy fz] (intent/feet world)
         home (:plan/go-at world)]
-    (first (for [dy [0 1]
-                 [dx dz] (cond->> sides
-                           home
-                           (sort-by (fn [[dx dz]]
-                                      (physics/horizontal-distance [(+ fx dx 0.5) 0 (+ fz dz 0.5)]
-                                                                   home))))
-                 :let [c [(+ fx dx) (+ fy dy) (+ fz dz)]]
-                 :when (and (solid-at? world c)
-                            (solid-at? world (update c 1 dec))
-                            (solid-at? world (update c 1 inc))
-                            (not (blocks/falls? (terrain/block-at world (update c 1 inc))))
-                            (not (intent/exposes-fluid? world c))
-                            (droppable? world (terrain/block-at world c))
-                            (not (contains? (into intent/never-dug memory/placed-kinds)
-                                            (blocks/name-of (terrain/block-at world c)))))]
-             c))))
+    (first
+     (for [dy [0 1]
+           [dx dz] (cond->> sides
+                     home
+                     (sort-by (fn [[dx dz]]
+                                (physics/horizontal-distance [(+ fx dx 0.5) 0 (+ fz dz 0.5)]
+                                                             home))))
+           :let [c [(+ fx dx) (+ fy dy) (+ fz dz)]]
+           :when (and (or (solid-at? world c) (powder-snow-at? world c))
+                      (solid-at? world (update c 1 dec))
+                      (or (solid-at? world (update c 1 inc))
+                          (powder-snow-at? world (update c 1 inc)))
+                      (not (blocks/falls? (terrain/block-at world (update c 1 inc))))
+                      (not (intent/exposes-fluid? world c))
+                      (droppable? world (terrain/block-at world c))
+                      (not (contains? (into intent/never-dug memory/placed-kinds)
+                                      (blocks/name-of (terrain/block-at world c)))))]
+       c))))
 
 (def face-cursors
   "Where on each face of the clicked block a placement clicks: its middle."
@@ -289,12 +326,16 @@
          :intent/status :active}))))
 
 (defmethod place-stage :spot
-  ;; a given cell (:intent/cell, a build's) against a solid neighbour; else a plain spot, else a
-  ;; niche cut in the wall, else (passage-ok?) a spot in the passage: a table or a gravel to dig
-  ;; again leaves the way open when the bot goes on
-  [world {:intent/keys [passage-ok? refused retreated?] at :intent/cell :or {refused #{}}}]
+  ;; a given cell (:intent/cell, a build's) against a solid neighbour; else the niche already cut
+  ;; (:intent/niche, dug-spot), else a plain spot, else a niche cut in the wall, else (passage-ok?)
+  ;; a spot in the passage: a table or a gravel to dig again leaves the way open when the bot goes on
+  [world
+   {:intent/keys [passage-ok? refused retreated?]
+    at :intent/cell
+    cut :intent/niche
+    :or {refused #{}}}]
   (let [[against face :as given] (when at (support world at))
-        found (when-not at (spot world false refused))
+        found (when-not at (or (dug-spot world cut refused) (spot world false refused)))
         n (when-not (or at found) (niche world))
         [_ stowed-item :as stowed] (when n (intent/stowed-tool world (terrain/block-at world n)))
         [target from] (or found
@@ -306,11 +347,16 @@
           stowed
           (intent/assoc-intent world
                                :intent/stage :niche
+                               :intent/niche n
                                :intent/child
                                {:intent/kind :equip
                                 :intent/item (recipe/item-name stowed-item)
                                 :intent/status :active})
-          n (intent/assoc-intent world :intent/stage :niche :intent/child (intent/child-dig n))
+          n
+          (intent/assoc-intent world
+                               :intent/stage :niche
+                               :intent/niche n
+                               :intent/child (intent/child-dig n))
           :else
           (if-let [walk (when-not retreated? (fresh-rock world))]
             (intent/assoc-intent world

@@ -209,6 +209,58 @@
                  :plan/go-at [2.5 64.0 8.0])]
     (is (#{[8 65 9] [8 65 7]} (place/niche w)) "a side wall at head height")))
 
+(deftest a-niche-is-cut-where-powder-snow-lies-over-it-and-is-the-spot-once-dug
+  ;; race 38998997695 bot Clj_r12 (issue #94): after smelting it stood in a one-cell pocket, the
+  ;; rock round its feet under powder snow, and the table found no spot three times: the niche
+  ;; wanted solid over it, and the cell dug out is a place the feet could stand in (a passage), which
+  ;; spot refuses
+  (let [powder (blocks/default-state :powder_snow)
+        pocket {[8 64 8] 0 [8 65 8] 0}
+        rock
+        (merge
+         (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] 1]))
+         (into
+          {}
+          (for [x (range 16) y [65 66] z (range 16) :when (not= [x z] [8 8])] [[x y z] powder]))
+         pocket)
+        world-of (fn [rock]
+                   (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column rock)}))
+        w (world-of rock)
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        spot (fn [w i]
+               (let [i (merge {:intent/kind :place
+                               :intent/item :crafting_table
+                               :intent/status :active
+                               :intent/stage :spot}
+                              i)]
+                 (:plan/intent (intent/run (assoc w :plan/intent i) i tick))))
+        cut (place/niche w)]
+    (is (#{[9 64 8] [7 64 8] [8 64 9] [8 64 7]} cut)
+        "the stone beside the feet, powder snow over it")
+    (is (nil? (place/spot w)) "no air to place into")
+    (let [started (spot w {})]
+      (is (= :niche (:intent/stage started)))
+      (is (= cut (:intent/niche started)) "the cell is kept for after the dig"))
+    (let [dug (world-of (assoc rock cut 0))
+          settled (spot dug {:intent/niche cut})]
+      (is (nil? (place/spot dug)) "the dug cell is a passage to spot")
+      (is (= [cut (update cut 1 dec)] (place/dug-spot dug cut #{})))
+      (is (= :settle (:intent/stage settled)))
+      (is (= cut (:intent/target settled)) "the block goes into the niche that was cut")
+      (is (nil? (place/dug-spot w cut #{})) "not before it is dug out")
+      (is (nil? (place/dug-spot dug cut #{cut})) "nor where the server refused one"))))
+
+(deftest powder-snow-beside-the-feet-is-dug-for-the-niche
+  ;; race 39031393203 bot Clj_r12 (issue #94): entombed in a powder-snow field, every cell beside
+  ;; its feet and head powder snow, which no block is placed into; the hand breaks it
+  (let [powder (blocks/default-state :powder_snow)
+        rock (merge (into {} (for [x (range 16) y (range 60 64) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 16) y (range 64 70) z (range 16)] [[x y z] powder]))
+                    {[8 64 8] 0 [8 65 8] 0})
+        w (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column rock)})]
+    (is (nil? (place/spot w)) "no air round the feet")
+    (is (#{[9 64 8] [7 64 8] [8 64 9] [8 64 7]} (place/niche w)) "a powder-snow cell on stone")))
+
 (deftest a-block-is-never-placed-on-a-table
   ;; gym batch iron-a5 run 4: the only spot was on its crafting table, and a right-click on a
   ;; table opens it, so the gravel was never placed and the intent failed :rejected three times
