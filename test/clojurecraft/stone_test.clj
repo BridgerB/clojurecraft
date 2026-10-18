@@ -248,6 +248,22 @@
     (is (nil? (stone/retreat (assoc boxed :plan/boxed-at (set (for [x (range 5 10)] [x 48 5])))))
         "a corridor whose every cell is boxed is not retried")))
 
+(deftest a-boxed-bot-on-ice-steps-to-the-standable-cell-beside-it
+  ;; sim race 39074156402 (issue #71, world R2/35): a cove between a cliff and a frozen lake, the
+  ;; feet on the ice's edge in a cell no route stands in, the one standable cell beside them a
+  ;; dead end; the stairs died :boxed there and every plan after found no way, so the plan waited
+  ;; :boxed to its end
+  (let [pocket (merge (into {} (for [y [48 49]] [[5 y 5] blocks/air]))
+                      (into {} (for [y [48 49]] [[6 y 6] blocks/air]))
+                      {[5 47 5] (blocks/default-state :ice)})
+        w (assoc (standing 48) :world/chunks {[0 0] (world/column pocket)})
+        boxed (assoc w :plan/boxed-at #{[5 48 5]})]
+    (is (nil? (stone/retreat w)) "not boxed: an ordinary retreat seeks twelve blocks of distance")
+    (is (= {:intent/kind :walk :intent/target [6 48 6] :intent/for :retreat} (stone/retreat boxed))
+        "boxed, with no route from the cell the search begins on: that cell itself")
+    (is (nil? (stone/retreat (update boxed :plan/boxed-at conj [6 48 6])))
+        "unless it is boxed too")))
+
 (deftest a-long-retreat-does-not-end-on-boxed-ground
   (let [w (assoc (standing 64)
                  :world/chunks {[0 0] (world/column {}) [1 0] (world/column {})}
