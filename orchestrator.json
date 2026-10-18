@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:42:26.344Z",
+  "at" : "2026-10-18T02:43:34.913Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,11 +43,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 60,
-    "title" : "Bot stops at water-bucket: no-water",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 410,
@@ -59,8 +54,8 @@
     "pr" : 416,
     "session" : false
   }, {
-    "number" : 87,
-    "title" : "Bot stops at ingots: no-log",
+    "number" : 60,
+    "title" : "Bot stops at water-bucket: no-water",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -75,6 +70,11 @@
     "pr" : 417,
     "session" : false
   }, {
+    "number" : 87,
+    "title" : "Bot stops at ingots: no-log",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 74,
     "title" : "Bot stops at cast-one: no-stand",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -85,14 +85,14 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 110,
-    "title" : "Bot stops at pickaxe: no-log",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
+  }, {
+    "number" : 110,
+    "title" : "Bot stops at pickaxe: no-log",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 69,
@@ -111,7 +111,7 @@
     "checks" : "pending",
     "title" : "Bot stops at fortress: blocked",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 418,
     "session" : false
@@ -165,19 +165,19 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 60,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 410,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 87,
+    "issue" : 60,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 338,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 87,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -189,11 +189,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 110,
+    "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 161,
+    "issue" : 110,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -206,8 +206,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 286,
-    "move" : "ready",
-    "pr" : 418
+    "move" : "wait",
+    "pr" : 418,
+    "why" : "checks running"
   }, {
     "issue" : 108,
     "move" : "leave",
