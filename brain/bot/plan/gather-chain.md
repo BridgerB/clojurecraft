@@ -20,6 +20,8 @@ sourceRefs:
   - src/clojurecraft/stone.clj#defn retreat
   - test/clojurecraft/plan_test.clj#a-climb-for-wood-boxed-under-gravel-takes-the-short-way-away
   - test/clojurecraft/plan_test.clj#a-bot-wading-with-no-log-in-reach-swims-out
+  - test/clojurecraft/plan_test.clj#a-failed-crossing-keeps-its-trunk-for-a-climb
+  - src/clojurecraft/plan.clj#defn fail-intent
   - src/clojurecraft/wood.clj#defn trees-climb
   - src/clojurecraft/wood.clj#defn trees-descend
   - test/clojurecraft/plan_test.clj#a-trunk-far-below-is-descended-toward-when-out
@@ -81,6 +83,7 @@ Getting a log is a chain of three intents, each started by the planner after the
 ## Gotchas
 - A boxed climb under gravel must not wait just because its way back is shorter than `stone/retreat-distance`. The gather act's `way-out` uses `stone/retreat`, which accepts the last unboxed waypoint of an exhausted search from boxed feet when the full distance is unreachable. Issue #370 (R1/29) had eight reachable tunnel cells, none twelve blocks away; gathering now walks away and re-plans a climb while the gravel and boxed-cell guards remain intact.
 - Wading is no trap, so nothing swims a wader out. `way-out` answers a bot with its feet in water (`:player/in-water?`, never a trapped one: the escape preempts that) with a `:swim-out` for `:retreat`, done on dry land, where the routes to the trunks start again. Sim world R1/30 (issue #110): the bot dropped from a canopy into a lake a block deep with the trunks a step from the bank, no route started from the water, and the plan waited `:no-log` out (`a-bot-wading-with-no-log-in-reach-swims-out`).
+- A failed `:cross` blacklists nothing. Its target is the trunk across the water, and a failed swim is not a failed trunk: `plan/fail-intent` counts it against the trunk's column in `:plan/trunk-failures` (two give the trunk up, as for a log's walk) and leaves it in `climb-out`'s candidates. Sim worlds R3/45 (issues #87 and #108) crossed a lake toward the only trunk in reach, met the foot of a cliff with the trunk on its top and failed `:stuck`; the blacklisted trunk left the staircase up the cliff nothing to climb for, and standing by the tree there was no trunk to walk to (`a-failed-crossing-keeps-its-trunk-for-a-climb`).
 - The tag exists so a walk for another purpose (to a crafting table) is never continued as a dig; before it, any finished walk or dig was assumed to be part of a log chain.
 - The chain lives entirely in `:plan/last` and the intent maps; nothing else remembers it. A failed intent clears `:plan/last`, so a failure restarts the chain from a fresh search with the target blacklisted.
 - The sim test drops a 2x2 oak canopy one block above the ground between bot and trunk; the bot breaks the leaf at `[3 65 0]` and finishes with no failed attempts.

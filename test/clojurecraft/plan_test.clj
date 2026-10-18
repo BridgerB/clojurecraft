@@ -989,6 +989,25 @@
              (:intention/reason (last (filter #(= :failed (:intention/event %))
                                               (memory/intentions w2)))))))))
 
+(deftest a-failed-crossing-keeps-its-trunk-for-a-climb
+  ;; sim worlds R3/45 (issues #87 and #108): the cross toward the only trunk in reach met a cliff
+  ;; and failed :stuck; blacklisting the trunk left the climb up the cliff nothing to climb for
+  (let [w (assoc (world-state [0.5 64.0 0.5])
+                 :plan/status :active
+                 :plan/blacklist #{}
+                 :plan/attempts 0)
+        cross
+        {:intent/kind :cross :intent/target [3 64 0] :intent/status :failed :intent/reason :stuck}
+        once (plan/fail-intent w cross)
+        twice (plan/fail-intent once cross)
+        skipped (wood/skipped twice)]
+    (is (= #{} (:plan/blacklist once)) "the trunk is not blacklisted")
+    (is (= {[3 0] 1} (:plan/trunk-failures once)) "the failure counts against its column")
+    (is (not ((wood/skipped once) [3 64 0])) "one failed cross is chance")
+    (is (skipped [3 64 0]) "a second gives the trunk up")
+    (is (= #{[3 64 0]} (:plan/blacklist (plan/fail-intent w (assoc cross :intent/kind :walk))))
+        "a walk that failed there still blacklists it")))
+
 (deftest a-cell-a-place-or-a-redig-chose-is-never-blacklisted
   ;; race 38477665442 bot Clj_r04 (issue #43): a redig failed :not-picked-up at the cell before
   ;; its feet, the table for a spare pickaxe went into that cell, make/near skipped it as
