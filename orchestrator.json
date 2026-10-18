@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T21:18:27.623Z",
+  "at" : "2026-10-18T21:23:57.207Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,6 +23,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 446,
+    "title" : "Bot stops at fortress: inventory-full",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : true,
     "number" : 178,
@@ -34,18 +39,13 @@
     "pr" : 444,
     "session" : false
   }, {
-    "number" : 446,
-    "title" : "Bot stops at fortress: inventory-full",
-    "labels" : [ "bot-failure", "sim" ],
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 284,
     "title" : "Bot stops at fortress: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -57,11 +57,6 @@
     "number" : 344,
     "title" : "Bot stops at cast-one: no-escape",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 162,
-    "title" : "Bot stops at portal: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 161,
@@ -79,6 +74,16 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 162,
+    "title" : "Bot stops at portal: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 130,
+    "title" : "Bot stops at cast-one: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -89,18 +94,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 130,
-    "title" : "Bot stops at cast-one: boxed",
+    "number" : 85,
+    "title" : "Bot stops at cobblestone: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 41,
     "title" : "Bot stops at cast-one: no-site",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 85,
-    "title" : "Bot stops at cobblestone: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
