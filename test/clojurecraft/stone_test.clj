@@ -902,9 +902,10 @@
   (let [w (wide 64 :stone_pickaxe)
         boxed #{[3 58 5] [4 57 6] [6 56 5]}]
     (is (not (stone/spent? w)))
-    (is (not (stone/spent? (assoc w :plan/boxed-at (disj boxed [6 56 5])))) "two are not enough")
+    (is (stone/spent? (assoc w :plan/boxed-at #{[6 56 5]}))
+        "one pocket within eight blocks is enough")
     (is (not (stone/spent? (assoc w :plan/boxed-at #{[40 58 5] [41 57 6] [42 56 5]})))
-        "three far away are another place")
+        "pockets far away are another place")
     (is (stone/spent? (assoc w :plan/boxed-at boxed)))
     (is (= :stairs-down (:intent/kind (stone/mine-next w (row :mine-iron)))) "a fresh place")
     (let [r (stone/mine-next (assoc w :plan/boxed-at boxed) (row :mine-iron))

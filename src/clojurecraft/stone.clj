@@ -264,7 +264,7 @@
                                     cells))))
                      ranked)))))
 
-(def spent-boxed 3)                   ; cells of :plan/boxed-at round a place before the mine cuts no more stairs there
+(def spent-boxed 1)                   ; cells of :plan/boxed-at round a place before the mine cuts no more stairs there
 (def spent-radius 8)                  ; blocks on the plane round the feet they are counted over, and a retreat from them goes
 
 (defn spent?
@@ -273,8 +273,9 @@
    has been boxed out of? Issue #342 (a real bot, Clj_r15, and the R1/30 sim moments): stone lay in
    the wall of a cave lake, every stair cut at its bank was refused for the water beside it, and
    the mine cut the next staircase from the surface beside the last, each its own feet cell and so
-   none in :plan/boxed-at, down the same open stairs to the same pocket and up again, with the
-   filler spent each time, until the plan failed :boxed."
+   none in :plan/boxed-at, down the same open stairs to the same pocket (whose own cell is, so the
+   act could only climb) and up again, every eleven seconds in the sim moment with no filler, a
+   descent that ended :done and so counted no failure, until the plan failed :boxed."
   [world]
   (let [[fx _ fz] (intent/feet world)]
     (<= spent-boxed
