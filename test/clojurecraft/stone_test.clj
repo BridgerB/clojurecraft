@@ -887,3 +887,44 @@
         "over it already: the stairs are cut from here")
     (is (nil? (stone/over-stone (assoc w :plan/boxed-at #{[12 57 5]}) (row :mine-stone)))
         "not back to where a staircase died boxed")))
+
+(defn wide
+  "standing, on a bare stone floor five chunks across, so a retreat has ground to walk to."
+  [y & items]
+  (assoc (apply standing y items)
+         :world/chunks
+         (into {} (for [cx (range -2 3) cz (range -2 3)] [[cx cz] (world/column {})]))))
+
+(deftest a-place-three-staircases-were-boxed-in-is-left-by-a-retreat-not-cut-again
+  ;; issue #342 (the R1/30 sim moment): each staircase from the surface beside a cave lake died
+  ;; boxed in a pocket, none of their feet cells at the top in :plan/boxed-at, and the mine cut the
+  ;; next from the same bank, eleven seconds a turn, until the plan failed
+  (let [w (wide 64 :stone_pickaxe)
+        boxed #{[3 58 5] [4 57 6] [6 56 5]}]
+    (is (not (stone/spent? w)))
+    (is (not (stone/spent? (assoc w :plan/boxed-at (disj boxed [6 56 5])))) "two are not enough")
+    (is (not (stone/spent? (assoc w :plan/boxed-at #{[40 58 5] [41 57 6] [42 56 5]})))
+        "three far away are another place")
+    (is (stone/spent? (assoc w :plan/boxed-at boxed)))
+    (is (= :stairs-down (:intent/kind (stone/mine-next w (row :mine-iron)))) "a fresh place")
+    (let [r (stone/mine-next (assoc w :plan/boxed-at boxed) (row :mine-iron))
+          [x _ z] (:intent/target r)]
+      (is (= [:walk :retreat] [(:intent/kind r) (:intent/for r)]) (pr-str r))
+      (is (every? (fn [[bx _ bz]]
+                    (< (* stone/spent-radius stone/spent-radius)
+                       (+ (* (- x bx) (- x bx)) (* (- z bz) (- z bz)))))
+                  boxed)
+          "new ground clear of every boxed cell"))))
+
+(deftest the-first-stairs-head-toward-the-nearest-stone-in-sight
+  ;; issue #342: the stone lay across a lake and the default heading, +x, led into its water
+  (let [dirt (blocks/default-state :dirt)
+        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+        cave (into {} (for [x (range 4 8) z (range 9 13) y (range 55 58)] [[x y z] blocks/air]))
+        w (assoc (standing 64 :wooden_pickaxe)
+                 :world/chunks
+                 {[0 0] (world/column (merge ground cave))})]
+    (is (= [0 1] (stone/heading-toward w (row :mine-stone))) "south, where the cave is")
+    (is (= [0 1] (:intent/dir (stone/stairs w (row :mine-stone)))))
+    (is (nil? (stone/heading-toward (standing 64 :wooden_pickaxe) (row :mine-iron)))
+        "no stone of the row in sight")))
