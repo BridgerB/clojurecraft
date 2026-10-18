@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:53:10.807Z",
+  "at" : "2026-10-18T03:54:17.155Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -10,11 +10,6 @@
   }, {
     "number" : 45,
     "title" : "Bot stops at cast-one: no-path",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 37,
-    "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -85,14 +80,9 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 110,
-    "title" : "Bot stops at pickaxe: no-log",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
-    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
     "number" : 74,
@@ -114,11 +104,6 @@
     "title" : "Bot stops at water-bucket: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "number" : 68,
-    "title" : "Bot stops at ingots: no-spot",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
   } ],
   "moves" : [ {
     "issue" : 135,
@@ -126,10 +111,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 45,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 37,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -162,10 +143,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 110,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
@@ -183,10 +160,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 108,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 68,
     "move" : "leave",
     "why" : "hands-off label"
   } ],
