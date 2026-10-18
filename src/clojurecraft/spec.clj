@@ -182,11 +182,7 @@
 (s/def :search/heading (s/tuple #{-1 0 1} #{-1 0 1}))
 (s/def :search/leg nat-int?)
 (s/def :search/tunnels nat-int?)
-(s/def :search/best number?)
-(s/def :search/best-at int?)
-(s/def :fortress/search
-  (s/keys :req [:search/from :search/heading :search/leg :search/tunnels]
-          :opt [:search/best :search/best-at]))
+(s/def :fortress/search (s/keys :req [:search/from :search/heading :search/leg :search/tunnels]))
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)

@@ -226,12 +226,6 @@
    [:search/tunnels
     "the tunnels the leg has taken, one more at each look of the planner; too many end the leg"
     "inside :fortress/search"]
-   [:search/best
-    "the least distance on the plane the feet have been from the leg's end, moved on when they came idle-gain nearer"
-    "inside :fortress/search, once the leg is looked at"]
-   [:search/best-at
-    "ms :search/best was last moved on; a leg idle for idle-ms is over (fortress/leg-over?)"
-    "inside :fortress/search, once the leg is looked at"]
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
     "after a :boxed staircase or tunnel"]
