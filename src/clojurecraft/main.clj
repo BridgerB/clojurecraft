@@ -23,6 +23,7 @@
             [clojurecraft.cli :as cli]
             [clojurecraft.combat]
             [clojurecraft.conn :as conn]
+            [clojurecraft.dragon]
             [clojurecraft.drops]
             [clojurecraft.eat]
             [clojurecraft.end-portal :as end-portal]

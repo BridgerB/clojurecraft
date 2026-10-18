@@ -33,9 +33,11 @@
    :face {:down 0 :up 1 :north 2 :south 3 :west 4 :east 5}  ; Direction
    :next-state {:status 1 :login 2 :transfer 3}             ; intention, the handshake
    :client-command {:perform-respawn 0 :request-stats 1}    ; client-command's action
-   :chat-mode {:enabled 0 :commands-only 1 :hidden 2}       ; ChatVisiblity
-   :main-hand {:left 0 :right 1}                            ; HumanoidArm
-   :particle-status {:all 0 :decreased 1 :minimal 2}        ; ParticleStatus
+   :game-event {:win-game 4}      ; game-event's event: the credits after the exit portal (the rest unread)
+   :boss-event {:add 0 :remove 1} ; boss-event's action (BossEvent operation ordinals; the rest unread)
+   :chat-mode {:enabled 0 :commands-only 1 :hidden 2} ; ChatVisiblity
+   :main-hand {:left 0 :right 1}                      ; HumanoidArm
+   :particle-status {:all 0 :decreased 1 :minimal 2}  ; ParticleStatus
    :game-type {:none -1 :survival 0 :creative 1 :adventure 2 :spectator 3}}) ; GameType
 
 (defn value
@@ -138,6 +140,9 @@
                                [:source-direct :varint]]
    [:play :s2c :player-combat-kill] [[:player-id :varint]]
    [:play :s2c :game-event] [[:event :u8] [:param :f32]]
+   ;; a boss bar shown or taken away: its id and the operation; what follows each operation (the
+   ;; name, an NBT component) is an unmodelled tail (ClientboundBossEventPacket, issue #267)
+   [:play :s2c :boss-event] [[:uuid :uuid] [:action :varint]]
    ;; play, client → server
    [:play :c2s :keep-alive] [[:id :i64]]
    [:play :c2s :pong] [[:id :i32]]

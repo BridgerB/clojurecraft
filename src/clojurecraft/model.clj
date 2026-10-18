@@ -125,6 +125,12 @@
     "{entity-id {:entity/type :entity/pos :entity/seen-at ...}}: every entity the server added and has not removed (items only before issue #258: a widening, an item is still one)"
     "always"]
    [:world/facts "memory: DataScript value of append-only observations, never retracted" "always"]
+   [:world/dragon-dead?
+    "the server said the ender dragon died: its death event (entity-event status 3), its removal near the bot with no boss bar shown (entity/dragon-gone?), or the credits (game-event win_game) (issue #267)"
+    "once the dragon died"]
+   [:world/boss-bars
+    "ids of the boss bars the server shows (boss-event add, gone at remove): the dragon fight's"
+    "after the first boss bar"]
    [:entity/type "entity type id (71 is an item)" "inside :world/entities"]
    [:entity/pos "last known entity position" "inside :world/entities"]
    [:entity/seen-at "ms the entity was added" "inside :world/entities"]
@@ -252,8 +258,17 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal :pillar :dig-down :strike :perch"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
+   [:intent/top "feet height a :pillar climbs to (issue #267)" "a :pillar intent"]
+   [:intent/under
+    "the feet cell a :pillar's jump left, which its block fills once the body is clear of it"
+    "a :pillar, between a jump and its block"]
+   [:intent/refusals "placements under the feet the server answered with the cell still empty"
+    "a :pillar, after one"]
+   [:intent/perched
+    "ticks in a row the dragon has held within dragon/perch-radius of the fountain under dragon/perch-below, perched (issue #267)"
+    "a :perch intent"]
    [:intent/enter?
     "does the :end-portal intent step into the portal once every frame is eyed (the :enter-end row's) or stop at the lit portal (the :end-portal row's) (issue #266)"
     "an :end-portal intent"]

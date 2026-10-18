@@ -11,6 +11,7 @@
             [clojurecraft.blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build]
+            [clojurecraft.dragon]
             [clojurecraft.end-portal]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress]
@@ -126,17 +127,18 @@
             blaze rods (issue #262), done by the rods held, planned by their own rule; and the eyes (issue #264),
             done by :provided?, planned by the needs planner with its :stuck named for the stage that is short;
             the throw trial (issue #265), done by a throw kept, the stronghold, done by a frame remembered, and its portal room, by a frame near;
-            the end portal (issue #266), done by a portal block remembered, and the End, by the dimension"
+            the end portal (issue #266), done by a portal block remembered, and the End, by the dimension;
+            the crystals (issue #267), done by none shown and the feet down, and the dragon, by the server's word it died"
     (is (every? #(= :provided? (:goal/done? %)) (filter :goal/provides plan/targets)))
     (is (every? #(contains? #{:not-trapped-in :escaped-water? :built? :at-fortress? :nether-access?
                               :fed? :dressed? :armoured? :health-seen? :safe? :cleared?
                               :provisioned? :armed? :rods-held? :thrown? :frames-seen?
-                              :in-portal-room? :portal-lit? :in-end?}
+                              :in-portal-room? :portal-lit? :in-end? :crystals-gone? :dragon-dead?}
                             (:goal/done? %))
                 (remove :goal/provides plan/targets)))
     (is (= #{:needs :escape :wade :build :return-nether :fortress :eat :wear :armour :watch :defend
              :attack :hunt :sword :pearls :blaze-rods :eyes :throw :stronghold :portal-room
-             :end-portal :enter-end}
+             :end-portal :enter-end :crystals :dragon}
            (set (keys (dissoc (methods plan/next-intent) :default)))))))
 
 (def kit (first (filter #(= :kit (:goal/id %)) plan/goals)))

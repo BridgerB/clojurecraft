@@ -19,6 +19,7 @@
 (def creepy-index 17)                 ; EnderMan.DATA_CREEPY, a boolean: it has a target (probe run 38876275250)
 (def death-status 3)                  ; an entity-event's status for a living entity's death (EntityEvent.DEATH)
 (def on-fire-bit 0x01)                ; in the shared flags: burning (a blaze's state, a mob in lava)
+(def dragon-seen-radius 96.0)         ; blocks from the bot within which the dragon's removal is its death, not a flight out of sight
 
 (def neutral
   "Monsters that leave a player alone until it provokes them, so they are not hostile on sight:
@@ -53,6 +54,8 @@
   (and (not (dead? e))
        (= :monster (:category (blocks/mobs (kind e))))
        (not (contains? neutral (kind e)))))
+
+(defn dragon? "Is the entity the ender dragon?" [e] (= :ender_dragon (kind e)))
 
 (defn on-fire?
   "Do its shared flags say the entity burns?"
@@ -127,3 +130,16 @@
        (group-by (fn [[_ e]] (kind e)))
        (map (fn [[k es]] [k (:entity/health (second (nearest es from)))]))
        (into {})))
+
+(defn dragon-gone?
+  "Does the removal of entity eid say the dragon died (issue #267): it is the dragon, no boss bar
+   is shown (:world/boss-bars: the fight's bar goes with its dragon, and a summoned dragon has
+   none), and it was last seen within dragon-seen-radius of the bot, so a dragon that flew out of
+   the bot's tracking is not taken for dead."
+  [world eid]
+  (let [e (get-in world [:world/entities eid])
+        pos (:player/pos world)]
+    (boolean (and (dragon? e)
+                  (empty? (:world/boss-bars world))
+                  pos
+                  (<= (physics/distance pos (:entity/pos e)) dragon-seen-radius)))))
