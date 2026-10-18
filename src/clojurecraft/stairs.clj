@@ -519,13 +519,13 @@
     (cond (and (= :stairs-up kind) (= :surface for))
           (-> world
               (assoc :player/controls {})
-              (intent/box (intent/feet world))
+              (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
               intent/done
               (game/say "stairs: boxed in, no way out from here"))
           (and (= :lava for) target)
           (-> world
               (assoc :player/controls {})
-              (intent/box (intent/feet world))
+              (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
               (memory/give-up-site target)
               intent/done
               (game/say
@@ -619,7 +619,7 @@
         ways (sort-by #(or (dry-head-distance world feet %) Long/MAX_VALUE) directions)]
     (when-let [d (first (filter #(level-safe? world (stair-cells feet %)) ways))]
       (-> world
-          (intent/box feet)
+          (update :plan/boxed-at (fnil conj #{}) feet)
           (intent/assoc-intent :intent/dir d
                                :intent/level-dir d
                                :intent/turns 0

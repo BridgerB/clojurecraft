@@ -1424,7 +1424,7 @@
         ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's
         (-> world
             (assoc :player/controls {})
-            (intent/box (intent/feet world))
+            (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
             (intent/dissoc-intent :intent/child)
             (game/say (str "build: " (:intent/kind child) " boxed in, the way out")))
         (and child (intent/failed? child))
