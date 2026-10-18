@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:01:54.672Z",
+  "at" : "2026-10-18T02:03:02.167Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -46,13 +46,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 410,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at fortress: not-held",
     "copilot" : true,
     "draft" : true,
     "nudges" : 0,
     "pr" : 416,
-    "session" : true
+    "session" : false
   }, {
     "number" : 60,
     "title" : "Bot stops at water-bucket: no-water",
@@ -80,6 +80,11 @@
     "pr" : 391,
     "session" : false
   }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "quiet" : true,
     "number" : 178,
@@ -96,11 +101,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -111,14 +111,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 69,
-    "title" : "Bot stops at water-bucket: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 110,
     "title" : "Bot stops at pickaxe: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 69,
+    "title" : "Bot stops at water-bucket: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 163,
@@ -175,9 +175,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 410,
-    "move" : "wait",
-    "pr" : 416,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 416
   }, {
     "issue" : 60,
     "move" : "leave",
@@ -207,11 +206,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 69,
+    "issue" : 110,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 110,
+    "issue" : 69,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -1118,5 +1117,10 @@
     "issue" : 410,
     "move" : "assign",
     "at" : "2026-10-18T01:50:39.525Z"
+  }, {
+    "issue" : 410,
+    "move" : "ready",
+    "pr" : 416,
+    "at" : "2026-10-18T02:03:02.167Z"
   } ]
 }
