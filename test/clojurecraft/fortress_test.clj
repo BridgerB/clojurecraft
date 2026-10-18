@@ -14,7 +14,6 @@
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
-            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (def netherrack (blocks/default-state :netherrack))
@@ -596,13 +595,7 @@
    :player/pos [0.5 64.0 0.5]
    :player/dimension dimension/nether})
 
-(def east-leg
-  {:search/from [0 64 0]
-   :search/heading [1 0]
-   :search/leg 0
-   :search/tunnels 0
-   :search/best 0
-   :search/idle 0})
+(def east-leg {:search/from [0 64 0] :search/heading [1 0] :search/leg 0 :search/tunnels 0})
 
 (deftest the-spiral-turns-right-and-its-legs-grow
   ;; issue #338: a tunnel that aimed 48 blocks east for ever went 630 blocks along the bedrock
@@ -630,43 +623,17 @@
 (deftest a-leg-goes-on-until-its-end-then-the-spiral-turns
   (let [w (assoc (field -20 40) :fortress/search east-leg)
         ending {:search/from [-160 64 0] :search/heading [1 0] :search/leg 0 :search/tunnels 3}]
-    (is (= (assoc east-leg :search/tunnels 1 :search/idle 1) (fortress/exploring w))
-        "one more tunnel on the leg, and a look that gained nothing")
+    (is (= (assoc east-leg :search/tunnels 1) (fortress/exploring w)) "one more tunnel on the leg")
     (is (not (fortress/leg-over? w east-leg)))
     (is (fortress/leg-over? w ending) "its end within reach of the feet")
-    (is (= {:search/from [0 64 0]
-            :search/heading [0 1]
-            :search/leg 1
-            :search/tunnels 0
-            :search/best 0
-            :search/idle 0}
+    (is (= {:search/from [0 64 0] :search/heading [0 1] :search/leg 1 :search/tunnels 0}
            (fortress/exploring (assoc w :fortress/search ending)))
         "a quarter turn right from the feet, the next leg")
     (is (fortress/leg-over? w (assoc east-leg :search/tunnels 13))
         "more tunnels than a leg of 160 asks: a wall it cannot go round")
     (is (fortress/leg-over? w (assoc east-leg :search/from [-700 64 0]))
         "far from where it began: another trip's")
-    (is (fortress/leg-over? (field -20 1) east-leg) "the world ending ahead")
-    (is
-     (fortress/leg-over? w (assoc east-leg :search/idle fortress/idle-looks))
-     "no gain along the heading for idle-looks looks: a cavern or a wall it goes round in place")))
-
-(deftest a-leg-that-gains-ground-is-not-idle
-  (let [w (assoc (field -20 40) :player/pos [10.5 64.0 0.5])
-        seen (fortress/looked w (assoc east-leg :search/idle 2))]
-    (is (= 10 (fortress/progress (intent/feet w) east-leg)))
-    (is (= 10 (:search/best seen)) "the best moves on")
-    (is (zero? (:search/idle seen)) "and the idle looks start again")
-    (is (= 1 (:search/tunnels seen)))
-    (is (= 3
-           (:search/idle (fortress/looked (assoc w :player/pos [2.5 64.0 0.5])
-                                          (assoc east-leg :search/idle 2))))
-        "two blocks is not a gain")
-    (testing "the third look with no gain turns the spiral"
-      (let [stuck
-            (assoc w :player/pos [2.5 64.0 0.5] :fortress/search (assoc east-leg :search/idle 2))]
-        (is (= [0 1] (:search/heading (fortress/exploring stuck))))
-        (is (= 1 (:search/leg (fortress/exploring stuck))))))))
+    (is (fortress/leg-over? (field -20 1) east-leg) "the world ending ahead")))
 
 (deftest an-exploring-tunnel-keeps-its-leg-for-the-planner
   (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
@@ -683,55 +650,6 @@
     (is (= east-leg (:intent/search i)))
     (is (= [160 64 0] (:intent/target i)))
     (is (= east-leg (:fortress/search out)) "the executor keeps the leg the planner chose")
-    (is (= (assoc east-leg :search/tunnels 1 :search/idle 1)
+    (is (= (assoc east-leg :search/tunnels 1)
            (:intent/search (plan/next-intent out goal plan/goals)))
         "and the next look goes on along it")))
-
-(deftest a-cavern-floor-is-bridged-only-over-ground-a-fall-survives
-  ;; issue #338: a tunnel in a Nether cavern paced for half an hour on a ledge, every step ahead an
-  ;; air floor; one over solid ground within bridge-fall is bridged, over lava or a drop never
-  (let [floor [1 63 0]
-        step #(fortress/safe? (rock %) [0 64 0] [1 0 0] true)]
-    (is (step {floor air [1 62 0] air}) "air, then solid one below the floor cell: a fall of two")
-    (is (step {floor air}) "solid right under the floor cell")
-    (is (not (step {floor air [1 62 0] air [1 61 0] air})) "three of air: a drop")
-    (is (not (step {floor (blocks/default-state :crimson_fungus)}))
-        "a fungus is no air: the server keeps it and refuses the block")
-    (is (not (step {floor air [1 62 0] blocks/lava-base})) "lava under the floor")
-    (is (not (step {floor air [1 62 0] blocks/water-base})) "water under the floor")
-    (is (not (step {floor air [1 62 0] nil [1 61 0] nil})) "ground not loaded")
-    (is (not (step {floor air [1 62 0] air [1 61 0] air [1 60 0] air [1 59 0] air}))
-        "no ground within reach of a fall")
-    (is (not (fortress/safe? (rock {floor air}) [0 64 0] [1 0 0])) "never unless it is to bridge")
-    (testing "a bridge is taken toward the target, and with filler to spare"
-      (let [held (fn [n]
-                   (assoc (rock {})
-                          :player/inventory
-                          {0 {:item (recipe/item-id :cobblestone) :count n}}))]
-        (is (fortress/bridge-ok? (held 30) [0 64 0] [1 0 0] [10 64 0]) "toward")
-        (is (not (fortress/bridge-ok? (held 30) [0 64 0] [-1 0 0] [10 64 0])) "away")
-        (is (not (fortress/bridge-ok? (held 30) [0 64 0] [0 0 1] [10 64 0])) "beside")
-        (is (not (fortress/bridge-ok? (held 24) [0 64 0] [1 0 0] [10 64 0])) "the reserve is kept")
-        (is (= [1 0 0]
-               (fortress/choose-move
-                (assoc (held 30)
-                       :world/blocks
-                       (assoc (:world/blocks (rock {floor air})) [1 62 0] netherrack))
-                [0 64 0]
-                [10 64 0]))
-            "chosen when it is the way")))))
-
-(deftest a-tunnel-floors-from-the-rock-it-digs
-  ;; sim runs of R1/43 (issue #338) bridged their cavern with all their stone and failed :not-held
-  ;; with netherrack by the hundred in hand
-  (let [held (fn [item n]
-               (assoc (rock {}) :player/inventory {0 {:item (recipe/item-id item) :count n}}))]
-    (is (= :netherrack (stairs/filler (held :netherrack 100) 1)))
-    (is (= :cobblestone
-           (stairs/filler (assoc-in (held :netherrack 100)
-                           [:player/inventory 1]
-                           {:item (recipe/item-id :cobblestone) :count 1})
-                          1))
-        "cobblestone first")
-    (is (nil? (stairs/filler (held :gravel 100) 1)) "never what falls")
-    (is (= 100 (stairs/carried-filler (held :basalt 100))))))
