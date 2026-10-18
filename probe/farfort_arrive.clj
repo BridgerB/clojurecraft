@@ -78,7 +78,10 @@
 (defn -main
   "world-file seed minutes every [looks]: run and print AT lines every every simulated minutes, a
    look at the minutes of looks (comma separated), and END."
-  [file seed minutes every & [looks]]
+  [file seed minutes every & [looks band]]
+  (when (and band (not= "-" band))
+    (alter-var-root #'fortress/explore-band
+                    (constantly (mapv #(Long/parseLong %) (str/split band #",")))))
   (let [looks (set (map #(Long/parseLong %) (remove empty? (str/split (or looks "") #","))))
         seed (Long/parseLong seed)
         every (Long/parseLong every)
