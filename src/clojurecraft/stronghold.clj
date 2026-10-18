@@ -43,6 +43,7 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]))
@@ -68,6 +69,7 @@
 (def deep 8)                          ; blocks over a frame past which the way down is stairs, not the tunnel: a tunnel steps down only onto a floor, the stairs lay one over a cave
 (def stair-leg 8)                     ; blocks a staircase toward the frame goes down before the planner looks again, so each leg turns toward the frame
 (def start-reach 16)                  ; blocks round the feet a dry start for the way down is looked for
+(def far-reach 80)                    ; blocks along a bearing a dry start past start-reach is looked for: inside the six chunks the server shows round the feet
 (def shore 2)                         ; blocks round a dry start, on the plane, no water or lava lies within from three under it to one over: the first stairs' cells and what they expose
 (def tunnel-y 30)                     ; feet height a tunnel toward the crossing goes down to: under lakes and seas, where strongholds lie
 (def hop-reach 32)                    ; blocks a walk toward somewhere far goes at a time
@@ -516,6 +518,34 @@
                                 (intent/routable? world {:intent/kind :walk :intent/target c}))
                        c))))))))
 
+(defn far-start
+  "With no dry start within start-reach: the nearest cell along eight bearings from the feet,
+   from past start-reach out to far-reach, in a column whose top is ground (stairs/dry-top?: not
+   a lake, nor a cave under one) that a body stands in (stand-in) dry (dry-cell?), not one a walk
+   failed at (:plan/blacklist); nil when none is. Its way is a swim (swim's :cross), no route:
+   gym batch stronghold-room-b (plan run 39132210882) run 2 of the portal room ended its swim
+   toward the crossing on a block in the lake over the frame, nothing dry within 48 of it (probe
+   39134431529), every stair from it into the water, and failed :boxed."
+  [world]
+  (let [[fx fy fz] (intent/feet world)]
+    (some (fn [[d k]]
+            (let [a (* k (/ math/PI 4))
+                  x (long (math/floor (+ fx 0.5 (* d (math/cos a)))))
+                  z (long (math/floor (+ fz 0.5 (* d (math/sin a)))))
+                  c (when (stairs/dry-top? world [x z]) (stand-in world x z fy))]
+              (when (and c (dry-cell? world c) (not (contains? (:plan/blacklist world #{}) c))) c)))
+          (for [d (range (inc start-reach) (inc far-reach)) k (range 8)] [d k]))))
+
+(defn walked-ground
+  "Where the newest walk that arrived ended (memory/last-done), ground the bot stood on, when it
+   is farther than start-reach from the feet on the plane; nil otherwise. The way back to land
+   from water with nothing dry in sight: batch stronghold-room-b run 2 had walked the lake's far
+   shore before its swim."
+  [world]
+  (let [[fx _ fz] (intent/feet world)
+        [x _ z :as c] (:intention/target (memory/last-done world :walk))]
+    (when (and c (> (max (abs (- x fx)) (abs (- z fz))) start-reach)) c)))
+
 (defn stairs-toward
   "A staircase down toward frame f from feet, to height to-y: the stairs' heading is the axis
    with the farther way to go (stairs.clj: it turns where water or lava is, steps aside, and lays
@@ -545,7 +575,9 @@
   "The way to the portal room's frame f, in order: in water, out to the nearest bank first
    (swim's :swim-out :retreat); from a shore, a walk to a dry start (dry-start) that ends
    standing in that cell (a :retreat walk, intent/standing-walks: one ending near it was chosen
-   again from the wet cell it ended in, twelve thousand times a model run); more than deep
+   again from the wet cell it ended in, twelve thousand times a model run); with none within
+   start-reach, a swim (:cross) to one farther (far-start), else back to the ground last walked
+   (walked-ground), never stairs from a block in a lake; more than deep
    over the frame, or after a tunnel that got nowhere (tunnel-spent?), a staircase down toward
    it a leg of stair-leg at a time (stairs-toward), never under room-over over the frame; then
    the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?), when its
@@ -558,10 +590,13 @@
   (let [[_ fy _ :as feet] (intent/feet world)
         high? (> fy (+ y deep))
         start (when (and high? (not (:player/in-water? world))) (dry-start world f))
+        far (when (and high? (not (:player/in-water? world)) (nil? start))
+              (or (far-start world) (walked-ground world)))
         stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
           (and start (not= start feet))
           {:intent/kind :walk :intent/target start :intent/for :retreat}
+          far {:intent/kind :cross :intent/target far :intent/for :stronghold}
           (and (> fy (+ y room-over)) (or high? (tunnel-spent? world f))) stairs
           (fortress/choose-move world feet f fortress/climb-past true)
           {:intent/kind :tunnel-to

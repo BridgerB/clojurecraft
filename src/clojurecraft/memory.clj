@@ -338,6 +338,18 @@
          sort
          (mapv #(into {} (d/touch (d/entity db %)))))))
 
+(defn last-done
+  "The newest :done fact of an intention of kind k (:walk), as a map of :intention/* keys; nil
+   when none is. A Datalog over the facts: where the last walk that arrived ended is ground the
+   bot stood on."
+  [world k]
+  (let [db (:world/facts world)
+        e (d/q '[:find (max ?e) . :in $ ?k :where [?e :intention/kind ?k]
+                 [?e :intention/event :done]]
+               db
+               k)]
+    (when e (into {} (d/touch (d/entity db e))))))
+
 (defn intention-as-of
   "What the bot was trying to do at time t: the newest intention whose latest fact by then is
    :started, as that fact; nil when it was doing nothing. A Datalog over the facts, so the same

@@ -427,8 +427,33 @@
                                                         :when (not= [x z] [8 8])]
                                                     [[x y z] blocks/water-base])))})]
         (is (nil? (stronghold/dry-start wet [40 20 60])))
+        (is (nil? (stronghold/far-start wet)) "nothing loaded past the lake")
         (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [0 1] :intent/for :stronghold}
-               (plan/next-intent wet room-row plan/goals)))))))
+               (plan/next-intent wet room-row plan/goals)))
+        (testing "with ground walked to 92 off: a swim back to it"
+          (let [walked (memory/remember-intention
+                        wet
+                        {:intent/id 7 :intent/kind :walk :intent/target [100 64 8]}
+                        :done)]
+            (is (= [100 64 8] (stronghold/walked-ground walked)))
+            (is (= {:intent/kind :cross :intent/target [100 64 8] :intent/for :stronghold}
+                   (plan/next-intent walked room-row plan/goals)))))))
+    (testing "a lake round, dry ground 24 off: a swim to the nearest dry cell past it"
+      (let [lake (fn [x z]
+                   (for [x (range x (+ x 16))
+                         z (range z (+ z 16))
+                         y [64 65]
+                         :when (not= [x z] [8 8])]
+                     [[x y z] blocks/water-base]))
+            far (assoc seen
+                       :world/chunks
+                       {[0 0] (world/column (into {} (lake 0 0)))
+                        [1 0] (world/column (into {} (lake 16 0)))
+                        [2 0] (world/column {})})]
+        (is (nil? (stronghold/dry-start far [40 20 60])))
+        (is (= [34 64 8] (stronghold/far-start far)) "two clear of the lake's water")
+        (is (= {:intent/kind :cross :intent/target [34 64 8] :intent/for :stronghold}
+               (plan/next-intent far room-row plan/goals)))))))
 
 (deftest the-portal-room-is-reached-against-the-model
   ;; a frame 24 blocks under the feet in stone, a pond two blocks from the landing and a cave
