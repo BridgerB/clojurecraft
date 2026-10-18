@@ -50,15 +50,19 @@
 (def falling-reach 16)                ; gravel or sand stacked over a cell that a fluid on top is looked for through
 
 (defn fluid-over-falling?
-  "Is there water or lava resting on gravel or sand stacked straight over pos: opening pos lets
-   the stack fall and the fluid follow it down. Gym batch iron-a4 run 1 tunnelled under a
-   riverbed, the gravel over a cell it cut fell into it, and the river came down the tunnel."
+  "Is there water or lava over or beside gravel or sand stacked straight over pos: opening pos
+   lets the stack fall and the fluid follow it down. Gym batch iron-a4 run 1 tunnelled under a
+   riverbed, the gravel over a cell it cut fell into it, and the river came down the tunnel.
+   Sim race 39113082582 (issue #339, R3/33) opened gravel beside lava higher up the stack, flooding
+   the fortress tunnel until no escape footing remained."
   [world [x y z]]
   (let [over (map (fn [dy] [x (+ y dy) z]) (range 1 (inc falling-reach)))
         stack (take-while #(some-> (terrain/block-at world %)
                                    blocks/falls?)
                           over)]
-    (boolean (and (seq stack) (terrain/fluid-at world (nth over (count stack)))))))
+    (boolean (some (fn [cell]
+                     (some #(terrain/fluid-at world (mapv + cell %)) (vals physics/face-offsets)))
+                   stack))))
 
 (defn bed-over-fluid?
   "Is a horizontal neighbour of pos gravel or sand resting, through any stack of such under it,
