@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T00:00:56.457Z",
+  "at" : "2026-10-18T00:02:04.158Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -126,6 +126,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 110,
+    "title" : "Bot stops at pickaxe: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
@@ -138,11 +143,6 @@
   }, {
     "number" : 163,
     "title" : "Bot stops at portal: needs-tool",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 110,
-    "title" : "Bot stops at pickaxe: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
