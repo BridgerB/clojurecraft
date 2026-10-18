@@ -9,6 +9,7 @@
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as sr]
             [clojurecraft.stairs :as stairs]
+            [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]))
 
 (defn nm
@@ -131,6 +132,19 @@
                   (println "  boxed-at" (pr-str (:plan/boxed-at world))
                            "visited" (pr-str (:intent/visited (:plan/intent world)))
                            "go-at" (pr-str (:plan/go-at world))))
+                (when (and in?
+                           (zero? (mod (quot (- (:time/now world) t0) 1000) 5))
+                           (zero? (mod k 1)))
+                  (let [row (first (filter #(= :mine-stone (:goal/id %)) plan/goals))
+                        cands (take 12 (stone/exposed-of-states world (stone/states-of-row row)))]
+                    (println "  CANDS"
+                             (pr-str (mapv (fn [c] [c
+                                                    (intent/routable? world
+                                                                      {:intent/kind :walk
+                                                                       :intent/target c
+                                                                       :intent/for :mine-stone
+                                                                       :intent/pickup? true})])
+                                           cands)))))
                 (when (and in? (zero? (mod k 4)))
                   (doseq [l (scene/slice world)] (println "  SLICE" l))))))
           (or (plan/done? world) (plan/failed? world)))
