@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:22:23.471Z",
+  "at" : "2026-10-18T01:23:32.235Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,28 +18,34 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 130,
     "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 339,
-    "title" : "Bot stops at fortress: no-footing",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "real", "sim" ],
+    "quiet" : false,
+    "number" : 339,
+    "checks" : "pending",
+    "title" : "Bot stops at fortress: no-footing",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 414,
+    "session" : true
+  }, {
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 105,
     "title" : "Bot stops at flint-and-steel: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -100,11 +106,6 @@
     "pr" : 387,
     "session" : false
   }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 69,
     "title" : "Bot stops at water-bucket: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -113,6 +114,11 @@
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
+  }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 75,
@@ -163,22 +169,24 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 44,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 130,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 339,
-    "move" : "assign"
-  }, {
-    "issue" : 105,
+    "issue" : 44,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 339,
+    "move" : "wait",
+    "pr" : 414,
+    "why" : "session running"
+  }, {
     "issue" : 41,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 105,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
