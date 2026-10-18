@@ -3,7 +3,6 @@
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
-            [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.scene :as scene]
             [clojurecraft.sim :as sim]
@@ -35,6 +34,21 @@
      :llay (stairs/level-lay world feet lc)
      :exp (mapv #(intent/exposes-fluid? world %) lc)}))
 
+(defn up-heading
+  "What a climb sees toward d from feet."
+  [world feet d]
+  (let [cells (stairs/up-cells feet d)]
+    {:d d
+     :up (mapv #(nm world %) cells)
+     :up-safe (stairs/up-safe? world cells)
+     :sealed (stairs/up-sealed? world cells)
+     :dry (stairs/up-dry? world cells)
+     :water-over (stairs/water-over? world cells)
+     :up-lay (stairs/up-lay world feet cells)
+     :seal (stairs/seal world feet cells)
+     :shore (stairs/shore-distance world feet d)
+     :dry-head (stairs/dry-head-distance world feet d)}))
+
 (defn chain
   "The intent and its children, small values."
   [world]
@@ -49,22 +63,27 @@
                (take-while some? (iterate :intent/child (:plan/intent world))))))
 
 (defn -main
-  "snapshot seconds every-s: play the moment on, print the bot each every-s."
-  [path seconds every]
+  "snapshot seconds every-ms from-s to-s: play the moment on, print the bot each every-ms, the
+   staircase's analysis between from-s and to-s."
+  [path seconds every from to]
   (let [snap (capture/read-world path)
         w (sr/world-for! snap)
         m (sr/moment-of snap w)
         t0 (:t m)
-        every (* 1000 (Long/parseLong every))
+        every (Long/parseLong every)
+        from (* 1000 (Long/parseLong from))
+        to (* 1000 (Long/parseLong to))
         last-at (volatile! -1)
         stop? (fn [world]
-                (let [k (quot (- (:time/now world) t0) every)]
+                (let [el (- (:time/now world) t0)
+                      k (quot el every)]
                   (when (not= k @last-at)
                     (vreset! last-at k)
                     (let [feet (intent/feet world)
-                          kind (:intent/kind (:plan/intent world))]
+                          kind (:intent/kind (:plan/intent world))
+                          in? (<= from el to)]
                       (println "AT"
-                               (quot (- (:time/now world) t0) 1000)
+                               (/ el 1000.0)
                                (mapv #(/ (long (* 10.0 %)) 10.0) (:player/pos world))
                                "feet"
                                feet
@@ -72,14 +91,17 @@
                                                     [:player/in-water? :player/on-ground?
                                                      :player/controls]))
                                (chain world))
-                      (when (#{:stairs-down :stairs-up} kind)
+                      (when (and in? (#{:stairs-down :stairs-up} kind))
                         (doseq [d stairs/directions]
-                          (println "  HEAD" (pr-str (heading world feet d))))
+                          (println "  HEAD" (pr-str (heading world feet d)))
+                          (when (= :stairs-up kind)
+                            (println "  UP" (pr-str (up-heading world feet d)))))
                         (println "  boxed-at" (pr-str (:plan/boxed-at world))
-                                 "visited" (pr-str (:intent/visited (:plan/intent world)))))
-                      (when (or (zero? k) (zero? (mod k 4)))
-                        (doseq [l (scene/slice world)] (println "  SLICE" l)))))
-                  (or (plan/done? world) (plan/failed? world))))
+                                 "visited" (pr-str (:intent/visited (:plan/intent world)))
+                                 "go-at" (pr-str (:plan/go-at world))))
+                      (when (and in? (zero? (mod k 4)))
+                        (doseq [l (scene/slice world)] (println "  SLICE" l))))))
+                (or (plan/done? world) (plan/failed? world)))
         r (sim/play-from sr/step
                          m
                          stop?
