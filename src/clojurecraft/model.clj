@@ -55,6 +55,9 @@
     "while a :wade has an entry"]
    [:intent/dig-when-down "the cell a :swim-out or :cross will dig once it has sunk to the floor"
     "while a :swim-out sinks"]
+   [:intent/no-lay
+    "a :swim-out whose block laid for a bank was refused: it notches the wall instead"
+    "after a refused lay"]
    [:intent/next-search "the tick a :swim-out with no bank yet looks for one again"
     "while a :swim-out rises with no bank"]
    [:intent/shore "the point at the water's surface a :swim-out with no bank swims toward"
