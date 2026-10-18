@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T07:42:10.650Z",
+  "at" : "2026-10-18T07:44:20.635Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -21,7 +21,7 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 228,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at portal: no-footing",
     "copilot" : true,
     "draft" : true,
