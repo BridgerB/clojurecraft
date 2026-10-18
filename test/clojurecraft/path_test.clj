@@ -397,6 +397,26 @@
     (is (= {:path/waypoints [] :path/cost 0.0 :path/status :none}
            (path/plan w [5 64 5] {:goal/kind :block :goal/pos [2 70 5]})))))
 
+(deftest a-bot-on-ice-walks-off-it-to-the-solid-floor-beside
+  ;; sim race 39074156402 (issue #71, world R2/35): the feet on a frozen lake's edge, the floor
+  ;; under them ice (awkward: it slides), no cell within a block standable, so every plan was
+  ;; :none and the mine's retreat found no way off
+  (let [ground (merge (fill stone (range 0 4) [63] (range 0 16)) ; the shore, stone to x 3
+                      (fill (blocks/default-state :ice) [4] [63] (range 0 16))) ; one strip of ice
+        w (world-of ground [4.5 64.0 8.5])
+        from (path/feet-cell [4.5 64.0 8.5])
+        r (path/plan w from {:goal/kind :block :goal/pos [2 64 8]})]
+    (is (not (path/standable? w from)) "ice is no floor to a route")
+    (is (= from (path/start-cell w from))
+        "the feet are clear on an awkward floor: the search begins there")
+    (is (= :found (:path/status r)))
+    (is (= [3 64 8] (first (:path/waypoints r))) "a step to the stone beside")
+    (is (every? #(path/standable? w %) (:path/waypoints r))))
+  (let [w (world-of (fill (blocks/default-state :ice) (range 0 16) [63] (range 0 16))
+                    [4.5 64.0 8.5])]
+    (is (= :none (:path/status (path/plan w [4 64 8] {:goal/kind :block :goal/pos [12 64 8]})))
+        "a lake of ice has no way off: nothing solid within a move")))
+
 (deftest a-snowfield-is-crossed-through-its-one-layer-snow
   ;; race 38477665442 (issue #38): 39 bots landed on snowy ground, one layer of snow on every
   ;; block round them. The feet stood in the snow's cell, which was :awkward, so neither it
