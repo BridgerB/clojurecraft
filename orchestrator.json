@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T17:44:53.418Z",
+  "at" : "2026-10-18T17:49:24.060Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -64,13 +64,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
+    "number" : 62,
+    "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 62,
-    "title" : "Bot stops at ingots: timeout",
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
