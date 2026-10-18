@@ -12,7 +12,9 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
-            [clojurecraft.plan :as plan]))
+            [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.terrain :as terrain]))
 
 (def netherrack (blocks/default-state :netherrack))
 (def air (blocks/default-state :air))
@@ -62,6 +64,95 @@
           {[0 64 0] air [0 65 0] air}
           overrides)
    :player/pos [0.5 64.0 0.5]})
+
+(deftest a-fortress-tunnel-makes-a-pickaxe-from-held-supplies
+  (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        w (assoc (rock {})
+                 :world/facts (memory/empty-facts)
+                 :player/dimension dimension/nether
+                 :player/inventory
+                 {0 {:item (recipe/item-id :stick) :count 2}
+                  1 {:item (recipe/item-id :cobblestone) :count 3}
+                  2 {:item (recipe/item-id :crafting_table) :count 1}})
+        next #(plan/next-intent % goal plan/goals)]
+    (is (= :place (:intent/kind (next w))) "place the table before tunneling without a tool")
+    (is (= :tunnel-to
+           (:intent/kind (next (assoc-in w
+                                [:player/inventory 3]
+                                {:item (recipe/item-id :stone_pickaxe) :count 1})))))
+    (is (= :tunnel-to (:intent/kind (next (assoc w :player/inventory {}))))
+        "no supplies: keep clearing the way by hand, not a hunt for overworld wood")
+    (is (= {:plan/wait :other-dimension} (next (assoc w :player/dimension dimension/overworld))))))
+
+(deftest a-tunnel-replans-when-its-pickaxe-breaks
+  (let [w (assoc (rock {})
+                 :world/facts (memory/empty-facts)
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :plan/attempts 2
+                 :player/controls {:control/forward? true}
+                 :player/inventory
+                 {0 {:item (recipe/item-id :stick) :count 2}
+                  1 {:item (recipe/item-id :cobblestone) :count 3}
+                  2 {:item (recipe/item-id :crafting_table) :count 1}})
+        op (build/next-op w (fortress/step-plan [0 64 0] [1 0 0]))
+        i {:intent/kind :tunnel-to
+           :intent/target [48 64 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/from [0 64 0]
+           :intent/move [1 0 0]
+           :intent/op op}
+        tick {:event/kind :tick :event/now 0}]
+    (doseq [child [nil
+                   {:intent/kind :dig
+                    :intent/target (:build/pos op)
+                    :intent/status :failed
+                    :intent/reason :no-pickaxe}]]
+      (let [i (cond-> i child (assoc :intent/child child))
+            out (intent/run (assoc w :plan/intent i) i tick)
+            finished (plan/finish-intent out (:plan/intent out))]
+        (is (intent/done? (:plan/intent out)))
+        (is (nil? (get-in out [:plan/intent :intent/reason])))
+        (is (= {} (:player/controls out)))
+        (is (zero? (:plan/attempts finished)))))
+    (let [i (assoc i
+                   :intent/child
+                   {:intent/kind :dig
+                    :intent/target (:build/pos op)
+                    :intent/status :failed
+                    :intent/reason :rejected})
+          out (intent/run (assoc w :plan/intent i) i tick)]
+      (is (intent/failed? (:plan/intent out)))
+      (is (= :rejected (get-in out [:plan/intent :intent/reason]))))))
+
+(deftest a-tunnel-with-no-replacement-clears-slow-rock-by-hand
+  (let [cell [1 65 0]
+        w (assoc (rock {cell (blocks/default-state :nether_quartz_ore)})
+                 :world/facts (memory/empty-facts)
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/on-ground? true
+                 :player/vel [0.0 0.0 0.0]
+                 :player/inventory {})
+        op (build/next-op w (fortress/step-plan [0 64 0] [1 0 0]))
+        i {:intent/kind :tunnel-to
+           :intent/target [48 64 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/from [0 64 0]
+           :intent/move [1 0 0]
+           :intent/op op}
+        out (intent/run (assoc w :plan/intent i) i {:event/kind :tick :event/now 0})]
+    (is (> (intent/dig-time (terrain/block-at w cell)) build/hand-dig-limit))
+    (is (= :active (get-in out [:plan/intent :intent/status])))
+    (is (= :dig (get-in out [:plan/intent :intent/child :intent/kind])))
+    (is (= cell (get-in out [:plan/intent :intent/child :intent/target])))
+    (is (nil? (get-in out [:plan/intent :intent/reason])))))
 
 (deftest a-step-is-a-floor-the-cells-it-opens-and-standing-there
   (let [plan (fortress/step-plan [0 64 0] [1 0 0])]
