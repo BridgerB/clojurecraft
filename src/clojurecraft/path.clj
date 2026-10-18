@@ -93,14 +93,18 @@
   (into #{} (mapcat blocks/states-of) [:ice :frosted_ice :packed_ice :blue_ice]))
 
 (defn on-ice?
-  "Do the feet stand on ice: is the block under the feet's cell (a touch under the position, as
-   intent/feet reads it) a sheet of ice? false with no position."
+  "Do the feet stand on a sheet of ice: is one of the two blocks under the feet's cell (a touch
+   under the position, as intent/feet reads it) ice, the second for a floor laid over the sheet?
+   false with no position."
   [world]
   (boolean (when-let [[x y z] (:player/pos world)]
-             (contains? ice-states
-                        (terrain/block-at world
-                                          [(long (math/floor x)) (dec (long (math/floor (+ y 0.5))))
-                                           (long (math/floor z))])))))
+             (some (fn [d]
+                     (contains? ice-states
+                                (terrain/block-at world
+                                                  [(long (math/floor x))
+                                                   (- (long (math/floor (+ y 0.5))) d)
+                                                   (long (math/floor z))])))
+                   [1 2]))))
 
 (defn cell-key
   "One long naming the cell [x y z]: x and z in 26 bits each, y in 12, which holds every cell

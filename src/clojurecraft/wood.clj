@@ -437,6 +437,7 @@
   [world]
   (or (continue-gather world)
       (near-walk world)
+      (stone/off-ice world)
       (climb-out world)
       (hunt world)
       (into-water world)
