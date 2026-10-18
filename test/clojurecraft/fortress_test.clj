@@ -617,7 +617,8 @@
     (is (= east-leg (fortress/exploring w)) "east when it can go")
     (is (= [0 1] (:search/heading (fortress/exploring (field -20 1))))
         "the world ends two blocks east: south")
-    (is (nil? (fortress/exploring (field 0 0))) "no heading has a way to go")))
+    (is (nil? (fortress/exploring (assoc w :world/blocks {[0 64 0] air [0 65 0] air})))
+        "no heading has a way to go")))
 
 (deftest a-leg-goes-on-until-its-end-then-the-spiral-turns
   (let [w (assoc (field -20 40) :fortress/search east-leg)
