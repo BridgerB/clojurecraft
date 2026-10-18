@@ -167,6 +167,40 @@
     (is (= {:plan/wait :no-log} (wood/gather-next (boxed (bed :gravel))))
         "never under gravel, which would fall on the bot")))
 
+(deftest a-trunk-across-a-chasm-is-bridged-by-stairs-up
+  ;; sim worlds R3/45 (issues #87 and #108): the only trunk in reach stood across two blocks of air
+  ;; from the pillar the bot had climbed out on, no route reached it, and the plan waited :no-log
+  (let [chasm (into {} (for [x (range 16) y (range 40 64) z (range 16)] [[x y z] blocks/air]))
+        platforms (fn [& boxes]
+                    (into {}
+                          (for [[x0 x1] boxes x (range x0 (inc x1)) z (range 6 11)] [[x 63 z] 1])))
+        near (remembered (merge chasm (platforms [7 10] [0 1]) {[1 64 8] 136 [1 65 8] 136})
+                         [8.5 64.0 8.5])
+        far (remembered (merge chasm (platforms [0 2] [13 15]) {[15 64 8] 136 [15 65 8] 136})
+                        [1.5 64.0 8.5])]
+    (is (nil? (wood/near-walk near)) "no route reaches the trunk across the chasm")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y 66
+            :intent/to-height? true
+            :intent/dir [-1 0]
+            :intent/for :surface}
+           (wood/gather-next near))
+        "two stairs up toward it")
+    (is (not= :stairs-up (:intent/kind (wood/gather-next (assoc near :plan/boxed-at #{[8 64 8]}))))
+        "never from a cell where a climb died boxed")
+    (is (not= :stairs-up (:intent/kind (wood/gather-next (assoc near :player/pos [8.5 67.0 8.5]))))
+        "bounded: once three over the trunk's bottom no more stairs")
+    (is (not= :stairs-up (:intent/kind (wood/gather-next far)))
+        "a trunk past bridge-reach is not climbed toward")))
+
+(deftest a-mouth-below-the-feet-is-the-way-down-not-out
+  ;; sim world R2/16 (issue #87): stairs cut up from the mouth at y 83 toward trees on a cliff
+  ;; ended on a ledge at y 99 that was not out of the ground; the opening walked the bot back
+  ;; down to the mouth, where the climb began again, every twenty seconds
+  (is (wood/mouth-below? [2312 99 2655] [2327 83 2656]) "sixteen under the feet")
+  (is (not (wood/mouth-below? [2312 99 2655] [2327 98 2656])) "a step down is the way out")
+  (is (not (wood/mouth-below? [2312 20 2655] [2327 70 2656])) "a mouth above is the way out"))
+
 (deftest a-climb-for-wood-boxed-under-gravel-takes-the-short-way-away
   (let [corridor (into {[12 64 8] 136} (for [x (range 5 10) y [48 49]] [[x y 5] blocks/air]))
         bed (into corridor (for [x (range 5 10)] [[x 51 5] (blocks/default-state :gravel)]))
@@ -453,6 +487,13 @@
     (let [out (assoc w :player/pos [8.5 56.0 8.5])]
       (is (intent/arrived? out i 2.0))
       (is (nil? (intent/opening out))))))
+
+(deftest the-opening-up-the-shaft-is-kept
+  ;; the mouth is above the pocket: the walk up the shaft already dug, as intent/opening says
+  (let [surface (into {} (for [x (range 8 16) y (range 56 64) z (range 16)] [[x y z] blocks/air]))
+        w (remembered (merge sky-shaft surface) [2.5 50.0 8.5])]
+    (is (= :walk (:intent/kind (wood/opening-up w))))
+    (is (= (intent/opening w) (wood/opening-up w)))))
 
 (deftest a-shaft-open-to-the-sky-is-not-a-way-out
   (let [w (remembered sky-shaft [2.5 50.0 8.5])
