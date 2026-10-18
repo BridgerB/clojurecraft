@@ -55,6 +55,8 @@ sourceRefs:
   - src/clojurecraft/combat.clj#defmethod intent/run :fight
   - src/clojurecraft/combat.clj#defmethod intent/run :back-off
   - src/clojurecraft/combat.clj#defn threats
+  - src/clojurecraft/combat.clj#defn backing-off?
+  - test/clojurecraft/combat_test.clj#a-back-off-in-flight-is-not-ended-by-a-threat-out-of-sight
   - src/clojurecraft/combat.clj#defn seen?
   - src/clojurecraft/combat.clj#defn hittable?
   - test/clojurecraft/combat_test.clj#only-a-hostile-in-sight-and-in-reach-of-the-floor-is-a-threat
@@ -139,6 +141,8 @@ Gym row `armour`: the portal's iron, a table and 13 ingots given; judged by `exe
 **`:defend`** (goals.edn): an always row at priority 0, inserted after the two escapes and so before the meal and the armour (`plan/in-play` sorts stably). Done by `:safe?`: no `threats`, the hostiles (`entity/hostiles`: the game's monsters, never an enderman or a zombified piglin) within `defend-radius` 4, a creeper within `creeper-radius` 6, none blacklisted, and each `hittable?`: in sight (`seen?`, the line from the eye to its aim clear of solid cells, an unloaded one solid) with its feet no more than `over-feet` 3 over the bot's nor `under-feet` 2 under. Gym blaze-fortress-c, from a tunnel beside a fortress, went after blazes through the walls and hovering over it, failed `:unreachable`, and switched every half second between one of them and the blaze the blaze-rods row was fighting until the plan failed (issue #262). Planned by `:defend`: the nearest threat, backed away from when it is a creeper or the health is under 10, else fought. No sword is made first: a zombie at hand is answered with what is held.
 
 **`:attack`** (`--until attack`): the gym's trial, every hostile within `attack-radius` 16 fought (`quarry`, done by `:cleared?`, and not before `look-ms` 3000 after the plan went active: the server shows a landing's entities a moment after its chunks, and gym attack-259a run 3 was done 0.2 s after the go with its husk unseen). It is the first row marked `:goal/aside?`: `plan/through`, `plan/current-until` and the results page's chain leave asides out, as they leave out the water trial, so no chained run ever takes it as a step.
+
+**A back-off in flight holds the row (`backing-off?`).** `:safe?` is false while a `:back-off` for `:defend` runs, so the planner does not drop it for the row under it when `threats` empties for a tick (`hittable?` asks for a line of sight, and one step back turns a corner). Without it the back-off and the mine's walk toward the ore took turns every few ticks and the bot stood where it began: issue #161, snapshot R3-18-1 (starved to one health, a hostile at the edge of its sight, fifteen minutes).
 
 **The model's mobs** are issue #258's ([[sim-mobs]]): `sim/init` takes `:mobs [{:type :pos}]`, zombies walk at the bot and hit it, and an `attack` in reach hurts by the held item. The fight tests kill a zombie at hand with `:defend` and one coming from afar with the `:attack` trial against it.
 
