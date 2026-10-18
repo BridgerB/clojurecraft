@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T04:05:29.439Z",
+  "at" : "2026-10-18T04:06:35.481Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -11,7 +11,7 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 410,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at fortress: not-held",
     "copilot" : true,
     "draft" : false,
