@@ -38,7 +38,7 @@
 (defn -main
   "file seed until every slices: print REACHED lines as stages are reached, an AT line every
    every simulated minutes and the blocks round the feet at the minutes of slices (comma separated)."
-  [file seed until every slices]
+  [file seed until every slices & [cap]]
   (let [w0 (assoc (sr/prepared (capture/read-world file)) :capture/file file)
         nf (sr/nether-file file)
         w (cond-> w0 (.exists (java.io.File. ^String nf)) (sr/with-nether (sr/read-nether nf) nf))
@@ -50,6 +50,8 @@
         stop? (fn [world]
                 (let [m (quot (:time/now world) 60000)
                       reached (:plan/reached world)]
+                  (when (and (contains? reached :nether) (not (contains? @last-reached :nether)))
+                    (println "ARRIVAL" m (pr-str (scene/facts world))))
                   (when (not= reached @last-reached)
                     (vreset! last-reached reached)
                     (println "REACHED" m (sort reached)))
@@ -80,7 +82,7 @@
                                        :day-time (sr/day-time-of seed)}
                                 (:capture/nether w) (assoc :nether (:capture/nether w))))
                     stop?
-                    (* 60000 330)
+                    (* 60000 (Long/parseLong (or cap "330")))
                     (sr/go-of w until))]
     (println "END"
              (quot (:time/now (:world r)) 60000)
