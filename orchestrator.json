@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T04:53:45.905Z",
+  "at" : "2026-10-18T04:54:52.139Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -19,7 +19,7 @@
     "checks" : "pending",
     "title" : "Bot stops at portal: target-gone",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 427,
     "session" : false
@@ -64,8 +64,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 419,
-    "move" : "ready",
-    "pr" : 427
+    "move" : "wait",
+    "pr" : 427,
+    "why" : "checks running"
   }, {
     "issue" : 71,
     "move" : "leave",
