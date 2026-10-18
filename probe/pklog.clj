@@ -20,6 +20,15 @@
                      i (:plan/intent wd')]
                  (when (and i (not= (:intent/id i) @last-id))
                    (vreset! last-id (:intent/id i))
+                   (when (= :back-off (:intent/kind i))
+                     (let [e (get-in wd' [:world/entities (:intent/target i)])]
+                       (println "ENTITY"
+                                (:time/now wd')
+                                (some-> e
+                                        entity/kind)
+                                (:entity/pos e)
+                                "bot"
+                                (:player/pos wd'))))
                    (println "INTENT"
                             (:time/now wd')
                             (select-keys i
