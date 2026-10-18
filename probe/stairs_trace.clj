@@ -3,6 +3,7 @@
   (:require [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.scene :as scene]
             [clojurecraft.sim :as sim]
@@ -74,34 +75,65 @@
         from (* 1000 (Long/parseLong from))
         to (* 1000 (Long/parseLong to))
         last-at (volatile! -1)
-        stop? (fn [world]
-                (let [el (- (:time/now world) t0)
-                      k (quot el every)]
-                  (when (not= k @last-at)
-                    (vreset! last-at k)
-                    (let [feet (intent/feet world)
-                          kind (:intent/kind (:plan/intent world))
-                          in? (<= from el to)]
-                      (println "AT"
-                               (/ el 1000.0)
-                               (mapv #(/ (long (* 10.0 %)) 10.0) (:player/pos world))
-                               "feet"
-                               feet
-                               (pr-str (select-keys world
-                                                    [:player/in-water? :player/on-ground?
-                                                     :player/controls]))
-                               (chain world))
-                      (when (and in? (#{:stairs-down :stairs-up} kind))
-                        (doseq [d stairs/directions]
-                          (println "  HEAD" (pr-str (heading world feet d)))
-                          (when (= :stairs-up kind)
-                            (println "  UP" (pr-str (up-heading world feet d)))))
-                        (println "  boxed-at" (pr-str (:plan/boxed-at world))
-                                 "visited" (pr-str (:intent/visited (:plan/intent world)))
-                                 "go-at" (pr-str (:plan/go-at world))))
-                      (when (and in? (zero? (mod k 4)))
-                        (doseq [l (scene/slice world)] (println "  SLICE" l))))))
-                (or (plan/done? world) (plan/failed? world)))
+        stop?
+        (fn [world]
+          (let [el (- (:time/now world) t0)
+                k (quot el every)]
+            (when (not= k @last-at)
+              (vreset! last-at k)
+              (let [feet (intent/feet world)
+                    kind (:intent/kind (:plan/intent world))
+                    in? (<= from el to)]
+                (println "AT"
+                         (/ el 1000.0)
+                         (mapv #(/ (long (* 10.0 %)) 10.0) (:player/pos world))
+                         "feet"
+                         feet
+                         (pr-str (select-keys world
+                                              [:player/in-water? :player/on-ground?
+                                               :player/controls]))
+                         (chain world))
+                (when (and in? (#{:collect :walk} kind))
+                  (let [i (:plan/intent world)
+                        near (intent/nearest-item world
+                                                  (some-> (:intent/target i)
+                                                          physics/centre))
+                        goal (or (:entity/pos near)
+                                 (some-> (:intent/target i)
+                                         physics/centre))]
+                    (println
+                     "  COLLECT goal" (pr-str goal)
+                     "item"
+                     (pr-str (some-> near
+                                     (select-keys [:entity/pos :entity/item])))
+                     "ledge?" (when goal (intent/ledge-ahead? world goal))
+                     "straddle?"
+                     (when (and goal (pos? (physics/horizontal-distance (:player/pos world) goal)))
+                       (let [[px _ pz] (:player/pos world)
+                             [gx _ gz] goal
+                             d (physics/horizontal-distance [px 0 pz] [gx 0 gz])]
+                         (intent/straddling-ahead? world [(/ (- gx px) d) (/ (- gz pz) d)])))
+                     "ground" (:player/on-ground? world)))
+                  (let [[fx fy fz] feet]
+                    (doseq [y (range (- fy 4) (inc fy))]
+                      (println "  COL y"
+                               y
+                               (pr-str (for [z (range (dec fz) (+ fz 2))]
+                                         (for [x (range (- fx 2) (+ fx 2))]
+                                           (let [[n f] (nm world [x y z])]
+                                             (cond f (str "~" (name f))
+                                                   n (subs (name n) 0 (min 3 (count (name n))))
+                                                   :else "nil")))))))))
+                (when (and in? (#{:stairs-down :stairs-up} kind))
+                  (doseq [d stairs/directions]
+                    (println "  HEAD" (pr-str (heading world feet d)))
+                    (when (= :stairs-up kind) (println "  UP" (pr-str (up-heading world feet d)))))
+                  (println "  boxed-at" (pr-str (:plan/boxed-at world))
+                           "visited" (pr-str (:intent/visited (:plan/intent world)))
+                           "go-at" (pr-str (:plan/go-at world))))
+                (when (and in? (zero? (mod k 4)))
+                  (doseq [l (scene/slice world)] (println "  SLICE" l))))))
+          (or (plan/done? world) (plan/failed? world)))
         r (sim/play-from sr/step
                          m
                          stop?
