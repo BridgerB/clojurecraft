@@ -465,11 +465,12 @@
 (defn plan
   "A route for the feet from the cell `from` toward goal: {:path/waypoints [[x y z] ...]
    :path/cost n :path/status :found|:partial|:none :path/from start}. opts: {:path/max-nodes n} (default
-   default-max-nodes). Pure and deterministic: equal inputs, equal output. The search begins at
-   start-cell (from, or the standable cell beside it the player's box rests on); with none, the
-   answer is :none with no waypoints. Before snapping to a neighbouring start, a route may leave
-   the actual supported, clear feet cell if it reaches the goal; awkward floors remain forbidden
-   as waypoints. A goal in an unloaded chunk comes back :partial or :none
+   default-max-nodes). Pure and deterministic: equal inputs, equal output. The search normally
+   begins at start-cell (from, or the standable cell beside it the player's box rests on).
+   Before borrowing a neighbouring start, a route may leave the actual supported, clear feet
+   cell if it reaches the goal; awkward floors remain forbidden as waypoints. With neither
+   departure nor a start-cell, the answer is :none with no waypoints.
+   A goal in an unloaded chunk comes back :partial or :none
    toward it, which is the walker's cue to move and plan again."
   ([world from goal] (plan world from goal {}))
   ([world from goal {:path/keys [max-nodes] :or {max-nodes default-max-nodes}}]
