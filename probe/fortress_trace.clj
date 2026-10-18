@@ -91,6 +91,7 @@
              (pr-str (select-keys (:plan/last (:world r))
                                   [:intent/kind :intent/reason :intent/target]))
              (pr-str (:crashed r)))
+    (println "FINAL" (pr-str (scene/facts (:world r))))
     (println "VIOLATIONS" (pr-str (take 12 (:sim/violations (:sim r)))))
     (doseq [l (take-last 10 (sr/story (:world r) 0))] (println "STORY" (pr-str l)))
     (shutdown-agents)))
