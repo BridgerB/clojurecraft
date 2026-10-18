@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T12:32:02.927Z",
+  "at" : "2026-10-18T12:35:17.697Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -26,7 +26,7 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 178,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at portal: timeout",
     "copilot" : true,
     "draft" : false,
@@ -54,9 +54,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 178,
-    "move" : "wait",
-    "pr" : 444,
-    "why" : "checks running"
+    "move" : "nudge",
+    "pr" : 444
   } ],
   "log" : [ {
     "issue" : 60,
@@ -1234,5 +1233,10 @@
     "move" : "nudge",
     "pr" : 444,
     "at" : "2026-10-18T12:14:39.806Z"
+  }, {
+    "issue" : 178,
+    "move" : "nudge",
+    "pr" : 444,
+    "at" : "2026-10-18T12:35:17.697Z"
   } ]
 }
