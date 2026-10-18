@@ -1,0 +1,18 @@
+;; Issue #265, the way down to the portal room (branch feat/265-room): carpets collide and are
+;; stepped onto, a dry start from a shore, the stairs in legs through caves, the tunnel last.
+;; The two rows the issue's acceptance still lacks, three landings each; batch e: a tunnel spent only when it got no nearer, the swim never once the way down began; merged with main.
+{:plans/label "stronghold-room-e"
+ :plans/jobs 2
+ :plans/issue 265
+ :plans/experiments [{:exp/name "portal-room"
+                      :exp/kind :gym
+                      :exp/goal "portal-room"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 900}
+                     {:exp/name "stronghold"
+                      :exp/kind :gym
+                      :exp/goal "stronghold"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 600}]}

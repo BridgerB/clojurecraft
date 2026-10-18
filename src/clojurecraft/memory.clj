@@ -64,11 +64,13 @@
 (def landmark-kinds
   "Blocks that say where something is: a fortress (its bricks, fences and stairs), a lit portal,
    the way back (issue #11), and an end portal frame, the stronghold's portal room (issue #265:
-   the room is found in the chunk data as its chunk loads, however deep). Only blocks a forest
-   never generates, so watching them changes nothing a forest run remembers (obsidian and
-   spawners do: the wood recording's 1098 sightings became 1121); a frame is only ever in a
-   stronghold."
-  #{:nether_bricks :nether_brick_fence :nether_brick_stairs :nether_portal :end_portal_frame})
+   the room is found in the chunk data as its chunk loads, however deep), and the lit end
+   portal, the way to the End (issue #266: the :end-portal goal is done when one is on record).
+   Only blocks a forest never generates, so watching them changes nothing a forest run
+   remembers (obsidian and spawners do: the wood recording's 1098 sightings became 1121); a
+   frame is only ever in a stronghold."
+  #{:nether_bricks :nether_brick_fence :nether_brick_stairs :nether_portal :end_portal_frame
+    :end_portal})
 
 (def nether-landmark-kinds
   "Blocks that say where something is only in the Nether: a spawner there is a fortress's, a blaze
@@ -337,6 +339,18 @@
          (map :e)
          sort
          (mapv #(into {} (d/touch (d/entity db %)))))))
+
+(defn last-done
+  "The newest :done fact of an intention of kind k (:walk), as a map of :intention/* keys; nil
+   when none is. A Datalog over the facts: where the last walk that arrived ended is ground the
+   bot stood on."
+  [world k]
+  (let [db (:world/facts world)
+        e (d/q '[:find (max ?e) . :in $ ?k :where [?e :intention/kind ?k]
+                 [?e :intention/event :done]]
+               db
+               k)]
+    (when e (into {} (d/touch (d/entity db e))))))
 
 (defn intention-as-of
   "What the bot was trying to do at time t: the newest intention whose latest fact by then is

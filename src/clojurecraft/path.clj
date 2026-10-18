@@ -24,8 +24,7 @@
 
 (set! *warn-on-reflection* true)
 
-(def flat-shape 0.125)                ; a shape no taller is walked over like the floor (a carpet; one layer of snow has none, see one-layer-snow)
-(def max-fall 3)                      ; blocks a drop may fall; vanilla damage starts above 3
+(def max-fall 3)                     ; blocks a drop may fall; vanilla damage starts above 3
 (def default-max-nodes 6000)          ; expansions one plan may spend
 (def sky-weight 4.0)                  ; a block of height in the :sky heuristic, more than a jump costs
 (def walk-cost 1.0)                   ; one cell on the level
@@ -39,7 +38,8 @@
   "Block definition types the physics cannot simulate though their collision shape is a full cube
    or nothing (slime and honey bounce and stick, ice slides, a web slows, a berry
    bush or magma hurts), and the shapes listed before the game's own were read
-   (blocks/partial-shapes, but for those no taller than flat-shape): a route treats them as
+   (blocks/partial-shapes, but for those no taller than blocks/flat-shape, a carpet, which the
+   physics stands on and steps onto): a route treats them as
    neither floor nor clear. Not powder snow: no collision for a player, it is clear (blocks/
    passable-types), and a route goes through it to the floor below (issue #87)."
   #{:slab :stair :fence :wall :fence_gate :trapdoor :door :iron_bars :stained_glass_pane :chain
@@ -67,17 +67,30 @@
    :no-path in a second (issue #38)."
   (blocks/default-state :snow))
 
+(def stood-on
+  "Block definition types and block names a route stands on though the game gives them no full
+   cube (issue #266), since the physics' oracle (blocks/solid?) takes each for one and
+   intent/feet reads the feet's cell a half block up: a stairs block, half a block or a whole
+   one under the feet, climbed a block at a time like a step (the stronghold's portal room is
+   reached up three); an end portal frame, 13/16 high; and the end portal, which has no
+   collision at all but takes the body to the End the moment the feet are in its cell
+   (sim/through-end-portal), so a route may end on it as on a floor and the body never falls
+   through."
+  #{:stair :end_portal_frame :end_portal})
+
 (defn classify-id
   "What a block state means to a route: :water, :lava, :awkward (a shape the physics cannot
-   simulate), :solid (a full cube), or :clear (passable, not a liquid; one layer of snow is).
-   nil → :unknown."
+   simulate), :solid (a full cube, or one of stood-on), or :clear (passable, not a liquid; one
+   layer of snow is). nil → :unknown."
   [id]
   (cond (nil? id) :unknown
         (contains? blocks/water-states id) :water
         (contains? blocks/lava-states id) :lava
         (= id one-layer-snow) :clear
+        (or (contains? stood-on (blocks/type-of id)) (contains? stood-on (blocks/name-of id)))
+        :solid
         (or (contains? awkward-types (blocks/type-of id))
-            (> (get blocks/partial-shapes (blocks/name-of id) 0.0) flat-shape))
+            (> (get blocks/partial-shapes (blocks/name-of id) 0.0) blocks/flat-shape))
         :awkward
         (blocks/solid? id) :solid
         :else :clear))

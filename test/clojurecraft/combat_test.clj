@@ -140,6 +140,40 @@
     (is (>= (physics/horizontal-distance (:player/pos w) [10.5 64.0 8.5])
             combat/retreat-distance))))
 
+(deftest a-yielding-fight-ends-under-ten-health
+  ;; issue #262: the blaze-rods row plans its own retreat (cover, a meal, a rest), so its fights
+  ;; end where combat's would walk straight away
+  (let [[w fx] (fx/fold intent-step
+                        (assoc-in (fighting 2.0) [:plan/intent :intent/yield?] true)
+                        (concat (map tick (range 50 200 50))
+                                [(packet
+                                  {:packet/name :set-health :health 8.0 :food 20 :saturation 5.0})
+                                 (tick 200)]))]
+    (is (= 1 (count (attacks fx))))
+    (is (= :done (:intent/status (:plan/intent w))) "done at once, not a failure")
+    (is (= {} (:player/controls w)) "standing: no retreat")))
+
+(def fence
+  "A nether brick fence across the column at x 10, one high: the eye sees over it, no route
+   crosses it (path/awkward-types)."
+  (into {} (for [z (range 16)] [[10 64 z] (blocks/default-state :nether_brick_fence)])))
+
+(deftest a-target-the-approach-cannot-come-to-is-not-approachable
+  ;; gym blaze-fire-a (run 39131023637) runs 2 and 4: fights chosen on blazes a walk's route came
+  ;; within three of failed :unreachable in a second each, the approach's route finding none
+  (let [w (assoc (standing {}) :world/chunks {[0 0] (world/column fence)})
+        beyond (mob :blaze [12.5 64.0 8.5] 20.0)]
+    (is (combat/hittable? w beyond) "seen over the fence")
+    (is (intent/routable? w {:intent/kind :walk :intent/target [12 64 8]})
+        "a walk's route ends within three of it, at the fence")
+    (is (not (combat/approachable? w beyond)) "the approach's, within two, finds none")
+    (is (combat/approachable? (standing {}) beyond) "no fence: walked to")
+    (is (combat/approachable? w (mob :blaze [11.0 64.0 8.5] 20.0)) "near on the plane"))
+  (testing "a blaze two over its floor is walked under on the bot's own floor"
+    (is (= [12 64 8] (combat/under-cell (standing {}) (mob :blaze [12.5 66.0 8.5] 20.0))))
+    (is (= [12 63 8] (combat/under-cell (standing {}) (mob :blaze [12.5 63.0 8.5] 20.0)))
+        "one under the feet stays where it is")))
+
 (deftest a-zombie-at-hand-is-fought-a-creeper-backed-away-from
   (let [zombie (standing {7 (mob :zombie [11.0 64.0 8.5] 20.0)})
         creeper (standing {8 (mob :creeper [13.0 64.0 8.5] 20.0)})

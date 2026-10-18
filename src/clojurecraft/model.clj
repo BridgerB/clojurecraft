@@ -158,7 +158,7 @@
    [:intention/at "ms it happened" "a fact in :world/facts"]
    [:intention/target "the intent's target" "a fact, when the intent had one"]
    [:intention/recipe "the intent's recipe" "a fact, when the intent had one"]
-   [:intention/reason "why it failed or was abandoned (:goal-met, :preempted)"
+   [:intention/reason "why it failed or was abandoned (:goal-met, :preempted, :interrupted)"
     "a :failed or :abandoned fact"]
    [:answer/kind
     "which server answer to the bot's own action: :ack, :pickup, or :death (health reached zero)"
@@ -252,8 +252,11 @@
    [:plan/wait "a planner answer meaning: nothing to do yet, for this reason"
     "returned by next-intent, never stored"]
    [:intent/kind
-    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye"
+    "executor: :walk :dig :collect :craft :place :open-container :stairs-down :stairs-up :tunnel :tunnel-to :smelt :redig :scoop :equip :build :pour :use-on :await :toss :eat :wear :fight :back-off :provoke :burrow :lookout :throw-eye :end-portal"
     "every intent"] [:intent/status ":active, :done or :failed" "every intent"]
+   [:intent/enter?
+    "does the :end-portal intent step into the portal once every frame is eyed (the :enter-end row's) or stop at the lit portal (the :end-portal row's) (issue #266)"
+    "an :end-portal intent"]
    [:intent/id "the intent's number in this run, linking its facts in memory"
     "every started intent"]
    [:intent/goal "the target goal id the intent serves; another target chosen preempts it"
@@ -310,7 +313,7 @@
     ":tunnel-to, during a step"]
    [:intent/from-feet
     "the feet a tunnel toward a bank (scoop/to-bank) began at, to judge whether it came nearer"
-    ":tunnel for :bank"]
+    ":tunnel for :bank; a :tunnel-to toward a portal room's frame (stronghold/to-room)"]
    [:intent/from "the feet a :tunnel-to's step started from, where its ops are worked"
     ":tunnel-to, during a step"]
    [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"
@@ -324,10 +327,21 @@
    [:intent/target-pos "where a :fight last saw its target; a hunt picks the drop up there"
     "fight, while its target is seen"]
    [:intent/spawner "the remembered spawner a :camp waits by for its blazes (issue #262)" "camp"]
-   [:intent/blazes "the blazes within fight range when a :camp began; a new one ends it" "camp"]
+   [:intent/blazes
+    "the blazes within fight range when a :camp began, or watching when a :rest began; a new one ends it"
+    "camp, rest"]
+   [:intent/health
+    "the health when a :camp or a :rest began; a fall under it ends it, since nothing else ends a running intent (issue #262)"
+    "camp, rest"]
    [:intent/hold?
     "a :fight that never walks: it waits for the target to come, never presses after it and never breaks off (the pearl hunt's burrow, issue #263)"
     "a :fight from the hunt's burrow"]
+   [:intent/to-the-end?
+    "a :fight that never breaks off under retreat-health: a blaze at hand follows any retreat or cover (issue #262)"
+    "a :fight on a blaze at hand"]
+   [:intent/yield?
+    "a :fight that ends (done) under retreat-health instead of walking away: its row plans the retreat itself (blaze-rods' cover, issue #262)"
+    "a :fight the blaze-rods row starts"]
    [:intent/mouth "where a :burrow began: the stairs go down from it"
     ":burrow, from its first tick"]
    [:intent/eye-from "where the eye a :throw-eye follows was first seen [x y z]"

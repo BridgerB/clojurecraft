@@ -373,16 +373,62 @@
     (testing "no frame yet: the search"
       (is (= {:intent/kind :throw-eye :intent/for :stronghold}
              (plan/next-intent w room-row plan/goals))))
-    (testing "a frame remembered: a dry tunnel to it"
-      (is (= {:intent/kind :tunnel-to :intent/target [40 20 60] :intent/steps 32 :intent/dry? true}
+    (testing "a frame remembered 44 under the feet: a staircase toward it, a leg of 8 down"
+      (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [0 1] :intent/for :stronghold}
              (plan/next-intent seen room-row plan/goals)))
       (is (not (plan/done-by seen room-row))))
+    (testing "the last leg ends a block over the frame"
+      (is (= 21
+             (:intent/to-y
+              (plan/next-intent (assoc seen :player/pos [8.5 29.0 8.5]) room-row plan/goals)))))
+    (testing "within 8 of it: the dry tunnel"
+      (is (= {:intent/kind :tunnel-to
+              :intent/target [40 20 60]
+              :intent/steps 32
+              :intent/dry? true
+              :intent/from-feet [8 26 8]}
+             (plan/next-intent (assoc seen :player/pos [8.5 26.0 8.5]) room-row plan/goals))))
+    (testing "a tunnel that took every step without arriving: the stairs"
+      (let [spent (assoc seen
+                         :player/pos [8.5 26.0 8.5]
+                         :plan/last
+                         {:intent/kind :tunnel-to
+                          :intent/target [40 20 60]
+                          :intent/status :done
+                          :intent/taken 32
+                          :intent/steps 32})]
+        (is (stronghold/tunnel-spent? spent [40 20 60]))
+        (is (= {:intent/kind :stairs-down :intent/to-y 21 :intent/dir [0 1] :intent/for :stronghold}
+               (plan/next-intent spent room-row plan/goals)))
+        (testing "one that came nearer is the way on, not spent"
+          (let [on (assoc-in spent [:plan/last :intent/from-feet] [0 26 0])]
+            (is (not (stronghold/tunnel-spent? on [40 20 60])))
+            (is (= :tunnel-to (:intent/kind (plan/next-intent on room-row plan/goals))))))
+        (is (stronghold/tunnel-spent? (assoc-in spent [:plan/last :intent/from-feet] [8 26 9])
+                                      [40 20 60])
+            "a block nearer is nowhere")))
     (testing "within 6 of it: there"
       (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
     (testing "in water: out to the nearest bank first"
       (is (= {:intent/kind :swim-out :intent/for :retreat}
              (plan/next-intent (assoc seen :player/in-water? true) room-row plan/goals))))
-    (testing "on a shore where every first step opens a cell by water: stairs down toward it"
+    (testing "on a shore: a walk to a dry start first, water two off the feet no start"
+      (let [shore (assoc seen
+                         :world/chunks
+                         {[0 0] (world/column (into {}
+                                                    (for [x (range 10 16)
+                                                          z (range 16)]
+                                                      [[x 64 z] blocks/water-base])))})
+            start (stronghold/dry-start shore [40 20 60])]
+        (is (not (stronghold/dry-cell? shore [8 64 8])))
+        (is (= [7 64 9] start) "the nearest dry cell, the one nearer the frame first")
+        (is (= {:intent/kind :walk :intent/target [7 64 9] :intent/for :retreat}
+               (plan/next-intent shore room-row plan/goals)))
+        (is (= :stairs-down
+               (:intent/kind
+                (plan/next-intent (assoc shore :player/pos [7.5 64.0 9.5]) room-row plan/goals)))
+            "standing dry: the stairs")))
+    (testing "water everywhere round: no dry start, the stairs where the feet are"
       (let [wet (assoc seen
                        :world/chunks
                        {[0 0] (world/column (into {}
@@ -391,25 +437,65 @@
                                                         y [64 65]
                                                         :when (not= [x z] [8 8])]
                                                     [[x y z] blocks/water-base])))})]
-        (is (= {:intent/kind :stairs-down :intent/to-y 24 :intent/dir [0 1] :intent/for :stronghold}
-               (plan/next-intent wet room-row plan/goals)))))))
+        (is (nil? (stronghold/dry-start wet [40 20 60])))
+        (is (nil? (stronghold/far-start wet)) "nothing loaded past the lake")
+        (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [0 1] :intent/for :stronghold}
+               (plan/next-intent wet room-row plan/goals)))
+        (testing "with ground walked to 92 off: a swim back to it"
+          (let [walked (memory/remember-intention
+                        wet
+                        {:intent/id 7 :intent/kind :walk :intent/target [100 64 8]}
+                        :done)]
+            (is (= [100 64 8] (stronghold/walked-ground walked)))
+            (is (= {:intent/kind :cross :intent/target [100 64 8] :intent/for :stronghold}
+                   (plan/next-intent walked room-row plan/goals)))
+            (is (= :stairs-down
+                   (:intent/kind
+                    (plan/next-intent
+                     (assoc walked :plan/last {:intent/kind :stairs-down :intent/status :done})
+                     room-row
+                     plan/goals)))
+                "the way down begun: the stairs go on")))))
+    (testing "a lake round, dry ground 24 off: a swim to the nearest dry cell past it"
+      (let [lake (fn [x z]
+                   (for [x (range x (+ x 16))
+                         z (range z (+ z 16))
+                         y [64 65]
+                         :when (not= [x z] [8 8])]
+                     [[x y z] blocks/water-base]))
+            far (assoc seen
+                       :world/chunks
+                       {[0 0] (world/column (into {} (lake 0 0)))
+                        [1 0] (world/column (into {} (lake 16 0)))
+                        [2 0] (world/column {})})]
+        (is (nil? (stronghold/dry-start far [40 20 60])))
+        (is (= [34 64 8] (stronghold/far-start far)) "two clear of the lake's water")
+        (is (= {:intent/kind :cross :intent/target [34 64 8] :intent/for :stronghold}
+               (plan/next-intent far room-row plan/goals)))))))
 
 (deftest the-portal-room-is-reached-against-the-model
-  ;; a frame 24 blocks under the feet in stone: the tunnel down to within 6 of it, an iron pickaxe
-  ;; for the digs, its cobblestone for the floors
+  ;; a frame 24 blocks under the feet in stone, a pond two blocks from the landing and a cave
+  ;; between: the walk to a dry start, the staircase in legs (its floors laid over the cave from
+  ;; the cobblestone carried), the tunnel the last blocks to within 6 of the frame; an iron
+  ;; pickaxe for the digs
   (let [frame (blocks/default-state :end_portal_frame)
         plain (world/column-bytes {})
+        pond (for [x (range 10 13) z (range 7 10)] [[x 63 z] blocks/water-base])
+        cave (for [x (range 2 14) z (range 2 14) y (range 50 54)] [[x y z] blocks/air])
         columns (into {}
                       (for [cx (range -1 2)
                             cz (range -1 2)]
                         [[cx cz]
-                         (if (= [cx cz] [0 0]) (world/column-bytes {[8 40 8] frame}) plain)]))
+                         (if (= [cx cz] [0 0])
+                           (world/column-bytes (into {[8 40 8] frame} (concat pond cave)))
+                           plain)]))
         [w sim] (sim/run main/step
                          (game/init fx/opts)
                          (sim/init {:columns columns
                                     :spawn [8.5 64.0 8.5]
-                                    :inventory {[:hotbar 0] {:item (recipe/item-id :iron_pickaxe)
-                                                             :count 1}}})
+                                    :inventory
+                                    {[:hotbar 0] {:item (recipe/item-id :iron_pickaxe) :count 1}
+                                     [:hotbar 1] {:item (recipe/item-id :cobblestone) :count 64}}})
                          #(or (plan/done? %) (plan/failed? %))
                          600000
                          {:event/kind :go :go/goals [:portal-room]})]

@@ -15,7 +15,9 @@
    flood, sent forty in 66 ms, all but one inside the mob's 10-tick hurt invulnerability. A kill
    is the target gone (entity/gone?: removed, or dead by the server's word); a target that
    survives max-swings swings in reach is a ghost (ruststeve tasks/nether.rs), failed :ghost and
-   blacklisted by the planner; below retreat-health the fight breaks off and walks away."
+   blacklisted by the planner; below retreat-health the fight breaks off and walks away, or ends
+   for its row to retreat (:intent/yield?). A row whose act answers a kind of hostile itself
+   (answers) has the :defend row leave that kind to it."
   (:require [clojure.math :as math]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
@@ -128,6 +130,13 @@
 
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
 
+(defn under-cell
+  "Entity e's cell, brought down to the feet's height when it is over them: a hovering target is
+   walked under on the bot's own floor (path's :near counts the height apart in its range, so a
+   blaze two over its floor was near only from the one cell under it)."
+  [world e]
+  (let [[x y z] (cell (:entity/pos e))] [x (min y (second (intent/feet world))) z]))
+
 (defn route-walk
   "A walk to the end of a route to within approach-range of entity e's cell on the plane (path's
    :near goal), stood in (intent/standing-walks: a walk near a cell ends within reach of it in a
@@ -138,11 +147,21 @@
   [world e]
   (let [r (path/plan world
                      (path/feet-cell (:player/pos world))
-                     {:goal/kind :near :goal/pos (cell (:entity/pos e)) :goal/range route-range})
+                     {:goal/kind :near :goal/pos (under-cell world e) :goal/range route-range})
         to (last (:path/waypoints r))]
     (cond (not= :found (:path/status r)) nil
           (or (nil? to) (= to (intent/feet world))) :here
           :else {:intent/kind :walk :intent/target to :intent/for :fight})))
+
+(defn approachable?
+  "Can a fight's approach come to entity e: within approach-range on the plane, or by a route
+   (route-walk: a walk, or :here)? An act that chooses a target asks this, so it never starts a
+   fight the approach can only fail :unreachable: gym blaze-fire-a (run 39131023637) runs 2 and
+   4 chose blazes a walk's route came within three of, from the end of a tunnel not yet into the
+   spawner's room, and failed three fights in a row :unreachable in four seconds, the approach's
+   own route, within two, finding none."
+  [world e]
+  (or (<= (horizontal world e) approach-range) (some? (route-walk world e))))
 
 (defmethod fight-stage :approach
   ;; toward the target until approach-range: straight at it while that brings it nearer, and once
@@ -251,6 +270,8 @@
   ;; {:intent/kind :fight :intent/target eid}: done when the target is gone (a kill); below
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
   ;; Where the target was last seen is kept (:intent/target-pos): a hunt collects its drop there.
+  ;; With :intent/yield? it ends there instead (done), and its row plans the retreat itself; with
+  ;; :intent/to-the-end? it never breaks off (a blaze at hand follows any retreat).
   ;; With :intent/hold? the bot never walks: it waits for the target to come within approach-range,
   ;; never presses after it, and never breaks off (issue #263: the pearl hunt fights from a burrow
   ;; an enderman cannot reach into, where a step out is the one way to be hit)
@@ -261,12 +282,14 @@
             (nil? (:intent/stage i)) (assoc :intent/stage :arm :intent/since now)
             e (assoc :intent/target-pos (:entity/pos e)))
         world (assoc world :plan/intent i)]
-    (cond (entity/gone? world (:intent/target i))
+    (cond (or (entity/gone? world (:intent/target i))
+              (and (:intent/yield? i) (< (:player/health world 20.0) retreat-health)))
           (-> world
               (assoc :player/controls {})
               intent/done)
           (and (not= :retreat (:intent/stage i))
                (not (:intent/hold? i))
+               (not (:intent/to-the-end? i))
                (< (:player/health world 20.0) retreat-health))
           (-> world
               (intent/dissoc-intent :intent/child)
@@ -373,17 +396,42 @@
           (>= times shun-after) shunned-radius
           :else creeper-radius)))
 
+(defmulti answers
+  "The hostile kinds a goal row's act fights and hides from itself, by the row's :goal/plan: the
+   :defend row leaves them to it while the row is worked (answered-kinds). None by default."
+  {:arglists '([plan])}
+  identity)
+
+(defmethod answers :default [_] #{})
+
+(defn answered-kinds
+  "The hostile kinds (answers) of the targets in play that are worked here, not reached and not
+   done. Gym blaze-fire-a run 1 (run 39131023637): the :defend row fought a spawner's burst at
+   hand, six blazes, from 20 health to 7 in four seconds and died backing away, while the
+   blaze-rods row, which takes cover from three, was never asked."
+  [world]
+  (into #{}
+        (comp (filter #(seq (answers (:goal/plan %))))
+              (filter #(plan/here? world %))
+              (remove #(contains? (:plan/reached world #{}) (:goal/id %)))
+              (remove #(plan/done-by world %))
+              (mapcat #(answers (:goal/plan %))))
+        (plan/in-play world plan/goals)))
+
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers: within defend-radius of
-   the feet, a creeper within creeper-reach; none the plan blacklisted (a ghost), and only what
-   can be fought from here (hittable?)."
+   the feet, a creeper within creeper-reach; none the plan blacklisted (a ghost), none of a kind
+   a row in play answers itself (answered-kinds), and only what can be fought from here
+   (hittable?)."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
+        bl (:plan/blacklist world #{})
+        left (answered-kinds world)]
     (into {}
           (filter
            (fn [[eid e]]
              (and (not (contains? bl eid))
+                  (not (contains? left (entity/kind e)))
                   (<= (physics/distance pos (:entity/pos e))
                       (if (= :creeper (entity/kind e)) (creeper-reach world eid e) defend-radius))
                   (hittable? world e))))

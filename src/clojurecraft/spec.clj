@@ -11,6 +11,7 @@
             [clojurecraft.combat]
             [clojurecraft.drops :as drops]
             [clojurecraft.eat :as eat]
+            [clojurecraft.end-portal :as end-portal]
             [clojurecraft.entity :as entity]
             [clojurecraft.eyes]
             [clojurecraft.fortress :as fortress]
@@ -429,6 +430,7 @@
 (s/def :plan/wait some?)
 (s/def :intent/reason some?)
 (s/def :intent/for keyword?)
+(s/def :intent/enter? boolean?)
 (s/def :intent/pickup? boolean?)
 (s/def :intent/step-down? boolean?)
 (s/def :intent/cell ::block-pos)
@@ -462,7 +464,10 @@
 (s/def :intent/target-pos ::vec3)
 (s/def :intent/spawner ::block-pos)
 (s/def :intent/blazes (s/coll-of int? :kind set?))
+(s/def :intent/health number?)
 (s/def :intent/hold? boolean?)
+(s/def :intent/yield? boolean?)
+(s/def :intent/to-the-end? boolean?)
 (s/def :intent/mouth ::block-pos)
 (s/def :intent/eye-from ::vec3)
 (s/def :intent/eye-pos ::vec3)
@@ -515,10 +520,11 @@
 (s/def :goal/rise nat-int?)
 (s/def :goal/step-down? boolean?)
 (s/def :goal/boxed (s/coll-of ::block-pos :kind set?))
+(s/def :goal/cells (s/coll-of ::block-pos :kind vector?)) ; :unseen: the other blazes a cover is out of the sight of
 (s/def ::path-goal
   ;; :sky and :surface have no :goal/pos: the mouth is wherever their terrain predicate holds
   (s/and (s/keys :req [:goal/kind]
-                 :opt [:goal/pos :goal/range :goal/rise :goal/step-down? :goal/boxed])
+                 :opt [:goal/pos :goal/range :goal/rise :goal/step-down? :goal/boxed :goal/cells])
          #(or (contains? #{:sky :surface} (:goal/kind %)) (contains? % :goal/pos))))
 (s/def :intent/logs-before nat-int?)
 (s/def :intent/drops (s/coll-of int? :kind set?))
@@ -892,6 +898,14 @@
          :visited :intent/tunnel-visited)
   :ret (s/nilable :intent/move))
 
+(s/fdef end-portal/next-op
+  :args
+  (s/cat :world (requires :player/pos :world/facts :world/chunks)
+         :enter? boolean?)
+  :ret
+  (s/nilable (s/or :op ::op
+                   :why keyword?)))
+
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
@@ -900,5 +914,5 @@
    `place/ashore `stone/redig-place `window/view `path/plan `path/classify `entity/hostiles
    `entity/gone? `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe?
    `stairs/down-lay `stone/retreat `build/safe-source? `build/scoop-blocked? `build/lit-entry
-   `fortress/next-move])
+   `fortress/next-move `end-portal/next-op])
 (s/def :stats/deaths pos-int?)
