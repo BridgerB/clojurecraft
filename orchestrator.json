@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:32:20.714Z",
+  "at" : "2026-10-18T02:33:29.947Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -23,13 +23,13 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
+    "number" : 130,
+    "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 130,
-    "title" : "Bot stops at cast-one: boxed",
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -41,7 +41,7 @@
     "number" : 162,
     "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 196,
     "title" : "Bot stops at portal: no-stand",
@@ -50,11 +50,6 @@
   }, {
     "number" : 60,
     "title" : "Bot stops at water-bucket: no-water",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 87,
-    "title" : "Bot stops at ingots: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -68,6 +63,11 @@
     "nudges" : 1,
     "pr" : 416,
     "session" : false
+  }, {
+    "number" : 87,
+    "title" : "Bot stops at ingots: no-log",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
@@ -131,6 +131,11 @@
     "pr" : 418,
     "session" : true
   }, {
+    "number" : 419,
+    "title" : "Bot stops at portal: target-gone",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 108,
     "title" : "Bot stops at water-bucket: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -163,21 +168,17 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 41,
+    "issue" : 130,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 130,
+    "issue" : 41,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 44,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 162,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 196,
     "move" : "leave",
@@ -187,11 +188,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 87,
+    "issue" : 410,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 410,
+    "issue" : 87,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
