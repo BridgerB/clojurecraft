@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T04:59:11.233Z",
+  "at" : "2026-10-18T05:00:20.992Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -12,17 +12,6 @@
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 419,
-    "checks" : "green",
-    "title" : "Bot stops at portal: target-gone",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 427,
-    "session" : false
   }, {
     "number" : 284,
     "title" : "Bot stops at fortress: no-path",
@@ -63,9 +52,8 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 419,
-    "move" : "merge",
-    "pr" : 427
+    "issue" : 284,
+    "move" : "assign"
   }, {
     "issue" : 71,
     "move" : "leave",
@@ -1106,5 +1094,9 @@
     "move" : "merge",
     "pr" : 427,
     "at" : "2026-10-18T04:59:11.233Z"
+  }, {
+    "issue" : 284,
+    "move" : "assign",
+    "at" : "2026-10-18T05:00:20.992Z"
   } ]
 }
