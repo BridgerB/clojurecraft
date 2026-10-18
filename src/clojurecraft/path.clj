@@ -88,6 +88,20 @@
   [world pos]
   (classify-id (terrain/block-at world pos)))
 
+(def ice-states
+  "Every state of the blocks of a lake's sheet: ice, frosted ice, packed ice, blue ice."
+  (into #{} (mapcat blocks/states-of) [:ice :frosted_ice :packed_ice :blue_ice]))
+
+(defn on-ice?
+  "Do the feet stand on ice: is the block under the feet's cell (a touch under the position, as
+   intent/feet reads it) a sheet of ice? false with no position."
+  [world]
+  (boolean (when-let [[x y z] (:player/pos world)]
+             (contains? ice-states
+                        (terrain/block-at world
+                                          [(long (math/floor x)) (dec (long (math/floor (+ y 0.5))))
+                                           (long (math/floor z))])))))
+
 (defn cell-key
   "One long naming the cell [x y z]: x and z in 26 bits each, y in 12, which holds every cell
    inside the world border (±30,000,000) at any height a dimension has, each to its own key."
@@ -98,8 +112,10 @@
 
 (defn cells
   "The cells of w as a route sees them: a function of [x y z] to classify's answer. w is a world,
-   or such a function already, returned as it is, so every predicate below takes either. Made
-   from a world, each cell is read through the terrain once and its answer held for the life of
+   or such a function already, returned as it is, so every predicate below takes either. Of a
+   world whose bot stands on ice (on-ice?) the sheet is floor: a route never steps onto ice from
+   land, but a bot a swim out put on one (issue #71) must be able to walk off it. Made from a
+   world, each cell is read through the terrain once and its answer held for the life of
    the function: one search or one scan asks about the same few thousand cells hundreds of
    thousands of times (a race's profile: the route search a fifth of all the bots' CPU, nearly
    all of it reading cells it had read). It answers about one world value, so what it holds is
@@ -108,13 +124,19 @@
   [w]
   (cond (fn? w) w
         :else
-        (let [held (java.util.HashMap.)]
+        (let [held (java.util.HashMap.)
+              ice? (on-ice? w)]
           (fn [[x y z :as pos]]
             (let [k (cell-key x y z)
                   known (.get held k)]
               (cond known known
                     :else
-                    (let [c (classify w pos)]
+                    (let [c (classify w pos)
+                          c (if (and ice?
+                                     (= :awkward c)
+                                     (contains? ice-states (terrain/block-at w pos)))
+                              :solid
+                              c)]
                       (.put held k c)
                       c)))))))
 
