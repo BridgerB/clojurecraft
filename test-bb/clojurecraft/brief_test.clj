@@ -121,3 +121,10 @@
                            :judged {:main {:sha "s" :out "JUDGE {:path \"a\", :recurs? true}"}}})]
     (is (str/includes? fixed "No snapshot recurs on main"))
     (is (not (str/includes? live "No snapshot recurs on main")))))
+
+(deftest snapshots-are-copied-under-new-names
+  (let [b (brief/brief {:number 342 :title "Bot stops at furnace: boxed" :body "" :comments []}
+                       {:snapshots ["cache/issues/342/real-1-s2-Clj_r15.edn.gz"]
+                        :stamp "10180034"})]
+    (is (str/includes? b "test/issues/342/10180034-$(basename \"$f\")")
+        "an earlier fix's file of the same name never hides this session's evidence (#403)")))

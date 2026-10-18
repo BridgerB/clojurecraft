@@ -32,6 +32,23 @@ jobs:
     timeout-minutes: 59                 # the whole Copilot session, setup included (59 is the most it allows; 30 cut the first one off)
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0                # main's history, to bring an old branch up to date
+      - name: The session's branch up to date with main
+        run: |
+          # a follow-up works an older Copilot branch: without main's newest tooling it has no
+          # bb verify, an old brief and an old profile (#403 ran bb ci, the forest included, for 50
+          # minutes and was cut before it pushed). A conflict is left for the session to resolve.
+          branch=$(git rev-parse --abbrev-ref HEAD)
+          case "$branch" in copilot/*) ;; *) echo "not a Copilot branch: $branch"; exit 0;; esac
+          git fetch -q origin main
+          if git merge-base --is-ancestor origin/main HEAD; then echo "$branch has main"; exit 0; fi
+          if git -c user.name=copilot-setup -c user.email=copilot-setup@users.noreply.github.com merge --no-edit -q origin/main; then
+            echo "merged origin/main into $branch"
+          else
+            git merge --abort
+            echo "$branch conflicts with main: the session merges it and resolves the conflicts"
+          fi
       - name: R1's captured worlds
         uses: actions/cache/restore@v6
         with:

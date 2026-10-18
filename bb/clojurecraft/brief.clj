@@ -147,7 +147,7 @@
    notes citing those files, the stage's goal and problem rows (grep-hits), and the closed issues
    with the same reason ([{:number :title :prs}])."
   [{:keys [number title body comments]}
-   {:keys [snapshots judged raised forms red notes rows related]}]
+   {:keys [snapshots judged raised forms red notes rows related stamp]}]
   (str
    "# Brief for #"
    number
@@ -157,22 +157,32 @@
    "Written by copilot-setup-steps before your session (bb brief write). It replaces fetching the "
    "issue, searching issues and pull requests, judging the snapshots on main and finding where "
    "the reason is raised: do none of those again. Read the files it names, at the lines it names.\n\n"
-   (section "Snapshots"
-            (cond
-              (empty? snapshots)
-              [(str "None in cache/issues/"
-                    number
-                    "/: stop at once as the profile's budget says (no evidence on disk).")]
-              :else
-              (concat
-               (for [s snapshots] (str "- `" s "`"))
-               ["" (str "Copy these into `test/issues/" number "/` (the check judges them there).")]
-               (when (and (get-in judged [:main :out])
-                          (not (re-find #":recurs\? true" (get-in judged [:main :out]))))
-                 [""
-                  (str "**No snapshot recurs on main: the failure is fixed already. Write `Refs #"
-                       number
-                       "`, say so, and stop.**")]))))
+   (section
+    "Snapshots"
+    (cond (empty? snapshots)
+          [(str "None in cache/issues/"
+                number
+                "/: stop at once as the profile's budget says (no evidence on disk).")]
+          :else
+          (concat
+           (for [s snapshots] (str "- `" s "`"))
+           [""
+            (str "Copy them as new files (an earlier fix may have committed one of the same name, "
+                 "and an unchanged file is no evidence to the check): `mkdir -p test/issues/"
+                 number
+                 " && for f in cache/issues/"
+                 number
+                 "/*.edn.gz; do cp \"$f\" test/issues/"
+                 number
+                 "/"
+                 stamp
+                 "-$(basename \"$f\"); done`")]
+           (when (and (get-in judged [:main :out])
+                      (not (re-find #":recurs\? true" (get-in judged [:main :out]))))
+             [""
+              (str "**No snapshot recurs on main: the failure is fixed already. Write `Refs #"
+                   number
+                   "`, say so, and stop.**")]))))
    (section (str "Judged on main (" (get-in judged [:main :sha]) "), where each must recur")
             (some-> (get-in judged [:main :out])
                     judged-lines
@@ -369,6 +379,8 @@
         files (distinct (map :file raised))
         read (memoize (fn [file] (vec (str/split-lines (slurp file)))))]
     {:snapshots snapshots
+     :stamp (.format (java.time.format.DateTimeFormatter/ofPattern "MMddHHmm")
+                     (java.time.LocalDateTime/now java.time.ZoneOffset/UTC))
      :red (vec (red-checks))
      :forms (when reason (excerpts raised reason read))
      :judged (when (seq paths) (judged paths))

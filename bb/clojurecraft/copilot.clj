@@ -509,7 +509,11 @@
   (let [text (nudge-text m)
         model (model-of "COPILOT_FOLLOW_MODEL" follow-model)
         r (post! (str "agents/repos/" repo "/tasks")
-                 {:prompt text :base_ref "main" :head_ref (:branch m) :model model})]
+                 {:prompt text
+                  :base_ref "main"
+                  :head_ref (:branch m)
+                  :model model
+                  :custom_agent custom-agent})] ; without it a follow-up ran as plain Copilot, no profile (#403)
     (cond (zero? (:exit r))
           (gh "pr" "comment" (str (:pr m)) "--repo" repo "--body" (str text " (model " model ")"))
           :else
