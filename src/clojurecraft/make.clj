@@ -398,13 +398,18 @@
 
 (defn take-table-along
   "A dig of the bot's placed crafting table, to carry it on, when no table is held and the
-   remembered one is within reach; nil otherwise."
+   remembered one is within reach; first a toss when the inventory has no room for its drop,
+   or a wait when nothing can be thrown. nil otherwise."
   [world]
-  (let [pos (near world :crafting_table)]
+  (let [pos (near world :crafting_table)
+        v (window/view world :inventory)]
     (when (and pos
                (zero? (get (counts world) :crafting_table 0))
                (<= (physics/distance (game/eye world) (physics/centre pos)) intent/reach))
-      {:intent/kind :dig :intent/target pos :intent/for :take-table})))
+      (cond (window/free-slot world v)
+            {:intent/kind :dig :intent/target pos :intent/for :take-table}
+            (window/tossable world v) {:intent/kind :toss}
+            :else {:plan/wait :inventory-full}))))
 
 (defn take-table
   "A dig of the bot's placed crafting table, to carry it on (take-table-along), when row goes out

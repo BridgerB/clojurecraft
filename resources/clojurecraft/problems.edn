@@ -226,7 +226,8 @@
    "Sim races 39076911005 and 39070979444 (issue #74, R3/22 and R1/38): six blocks from the landing at its height with rock between, the way back called itself near and gave none, :no-stand three times; a way is cut to the landing, and a cast-one with no stand gives its site up."
    "Sim race 39068773618 (issue #44, R4/37): the model refused cobblestone into a bubble column over magma, :rejected three times; the game's bubble column is replaceable."
    "A death at the site wakes the bot at spawn, far enough that the landing's chunk is not loaded: the build walks toward the landing first (build/far-way) before any stairs or dig, and a place or pour with no stance reachable goes back to the landing as a dig does (sim race 39076908669 runner 3, issue #196, R3/13 seed 2, 190 blocks off, :no-stand)"
-   "The roof over a lava source is ore the held pickaxe cannot harvest: it is broken for nothing (build/way-dig), never refused :needs-tool three times (real race 39076909951, issue #163, deepslate diamond ore at y -59 under a stone pickaxe)"]
+   "The roof over a lava source is ore the held pickaxe cannot harvest: it is broken for nothing (build/way-dig), never refused :needs-tool three times (real race 39076909951, issue #163, deepslate diamond ore at y -59 under a stone pickaxe)"
+   "A pickaxe craft fills the slot freed by placing the table, so digging it up with a full inventory loses its drop and the next broken pickaxe sends the build climbing for wood by hand (issue #178, R2/23 and R3/23): make room before taking the table along, or leave it standing when nothing can be discarded."]
   :problem/done
   "Ten obsidian frame blocks and nether_portal blocks inside exist (RCON execute if block), and after standing in the portal RCON data get entity Dimension reads the Nether."
   :problem/last-failure

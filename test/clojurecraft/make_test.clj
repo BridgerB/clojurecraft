@@ -436,6 +436,32 @@
                              plan/goals)))
         "a table already held is not dug for")))
 
+(deftest a-table-is-not-dug-up-with-nowhere-for-its-drop
+  (let [sand {:item (recipe/item-id :sand) :count 64}
+        w (assoc (world-holding {} true) :player/inventory (zipmap (range 36) (repeat sand)))]
+    (is (= {:intent/kind :toss} (make/take-table-along w)))
+    (is (= {:intent/kind :dig :intent/target [7 64 5] :intent/for :take-table}
+           (make/take-table-along (update w :player/inventory dissoc 35))))
+    (is (nil? (make/take-table-along (assoc-in w
+                                      [:player/inventory 0]
+                                      {:item (recipe/item-id :crafting_table) :count 1}))))
+    (is (nil? (make/take-table-along (assoc w :player/pos [15.5 64.0 5.5]))))))
+
+(deftest a-table-with-no-room-and-no-junk-is-left-standing
+  (let [w (assoc (world-holding {} true)
+                 :player/inventory
+                 (zipmap (range 36) (repeat {:item (recipe/item-id :iron_ingot) :count 64})))]
+    (is (= {:plan/wait :inventory-full} (make/take-table-along w)))))
+
+(deftest a-toss-closes-the-crafting-window-before-clicking-inventory
+  (let [w (assoc (world-holding {} true)
+                 :window/open
+                 {:window/id 3 :window/menu-type 12 :window/state-id 1})
+        w' (intent/run w {:intent/kind :toss :intent/status :active} {:event/kind :tick})]
+    (is (nil? (:window/open w')))
+    (is (= [{:effect/kind :send :effect/packet {:packet/name :container-close :window-id 3}}]
+           (:bot/effects w')))))
+
 (defn worn
   "w with its first tool of item name n carrying damage: the server's :damage component."
   [w n damage]

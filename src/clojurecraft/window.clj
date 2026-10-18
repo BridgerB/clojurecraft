@@ -199,6 +199,11 @@
       :overdue (lost world i :toss)
       :waiting world
       (cond (:intent/resync i) (resync world v)
+            (:window/open world)
+            (-> world
+                (game/emit {:packet/name :container-close
+                            :window-id (get-in world [:window/open :window/id])})
+                (dissoc :window/open))
             (tossable world v) (toss world v (tossable world v))
             :else
             (-> world

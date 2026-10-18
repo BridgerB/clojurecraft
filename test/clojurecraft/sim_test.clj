@@ -2309,6 +2309,31 @@
     (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-full-inventory-makes-room-before-taking-the-table
+  (let [sand {:item (item :sand) :count 64}
+        inv (merge (zipmap (concat (map #(vector :hotbar %) (range 9))
+                                   (map #(vector :main %) (range 27)))
+                           (repeat sand))
+                   {[:hotbar 0] {:item (item :wooden_pickaxe) :count 1}
+                    [:hotbar 1] {:item (item :oak_planks) :count 1}
+                    [:hotbar 2] {:item (item :stick) :count 3}})
+        [w model]
+        (sim/run step
+                 (game/init fx/opts)
+                 (sim/init {:column (world/column-bytes
+                                     (assoc (into {} (for [x (range 16) z (range 16)] [[x 63 z] 1]))
+                                            [9 64 8]
+                                            (blocks/default-state :crafting_table)))
+                            :spawn [8.5 64.0 8.5]
+                            :inventory inv})
+                 #(or (plan/done? %) (plan/failed? %))
+                 120000
+                 {:event/kind :go :go/goals [:cobblestone]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (= 1 (:crafting_table (held w))))
+    (is (not-any? #(= :failed (:intention/event %)) (memory/intentions w)))
+    (is (empty? (:sim/violations model)))))
+
 (deftest a-pickaxe-in-the-main-inventory-is-put-in-hand
   ;; gym batch iron-a3 runs 1 and 3 held a stone pickaxe in the main inventory (the hotbar was full
   ;; of what mining picked up) and their stairs stopped :no-pickaxe; the dig chooses from the
