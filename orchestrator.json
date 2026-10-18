@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:41:35.537Z",
+  "at" : "2026-10-18T01:42:44.215Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -34,18 +34,18 @@
     "checks" : "pending",
     "title" : "Bot stops at fortress: no-footing",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 414,
     "session" : false
   }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
+    "number" : 105,
+    "title" : "Bot stops at flint-and-steel: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 105,
-    "title" : "Bot stops at flint-and-steel: boxed",
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -95,11 +95,6 @@
     "pr" : 391,
     "session" : false
   }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "quiet" : true,
     "number" : 178,
@@ -116,6 +111,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -126,14 +126,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 110,
-    "title" : "Bot stops at pickaxe: no-log",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 69,
     "title" : "Bot stops at water-bucket: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 110,
+    "title" : "Bot stops at pickaxe: no-log",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 163,
@@ -178,14 +178,15 @@
     "why" : "hands-off label"
   }, {
     "issue" : 339,
-    "move" : "ready",
-    "pr" : 414
+    "move" : "wait",
+    "pr" : 414,
+    "why" : "checks running"
   }, {
-    "issue" : 41,
+    "issue" : 105,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 105,
+    "issue" : 41,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -229,11 +230,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 110,
+    "issue" : 69,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 69,
+    "issue" : 110,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
