@@ -837,18 +837,11 @@
    #231, world R1/31): the way to a landing 72 blocks off at the lava sea's height was dug along
    the sea's edge, a cell beside a source opened (a build's dig may expose fluid), the lava
    flowed in, and no footing was in
-   reach: :no-footing three times in a tick. The frame's rock bars a way only where it is still
-   rock: a kept cell already open (the bot's own staircase came down through it) is a cell to
-   walk through, never a wall. Real snapshot real-3-s2-Clj_r05 (issue #45): the staircase
-   ended in the rock behind the frame, the feet's own cell kept, so no corner was clear of the
-   rock, round-corner found none and three walks to the landing failed :no-path."
+   reach: :no-footing three times in a tick."
   [world origin facing]
-  (let [kept? (kept origin facing)
-        open? #(some-> (terrain/block-at world %)
-                       blocks/solid?
-                       not)]
+  (let [kept? (kept origin facing)]
     (fn [c]
-      (or (and (kept? c) (not (open? c)))
+      (or (kept? c)
           (lava-touching? world c)
           (= :water (path/classify world c))
           (= :awkward (path/classify world (update c 1 dec)))))))
@@ -1105,10 +1098,11 @@
    out of the water let in dug down a staircase it flooded until :stuck, and the escape from
    that water failed :stuck too: three failures, all toward the one site the planner kept. Only
    a :build has a site: a :tunnel-to (fortress) works its steps through work-op too. A cast-one's
-   walk to a stand that failed :no-path anywhere gives its site up too: what the build offers
-   before it, a way dug, a corner, a bridge, is exhausted when it is the plain walk left, and a
-   site no way reaches is better left than failed (issue #45: real snapshot real-3-s2-Clj_r05
-   stood in the rock behind its frame, the landing four blocks off, and failed :no-path)."
+   walk to a stand that failed :no-path anywhere gives its site up too, from the second failure
+   on (:plan/attempts): what the build offers before it, a way dug, a corner, a bridge, is
+   exhausted when it is the plain walk left, and a site no way reaches is better left than
+   failed (issue #45: real snapshot real-3-s2-Clj_r05 stood in the rock behind its frame, the
+   frame's rock all round a way to the landing four blocks off, and failed :no-path three times)."
   [world {:intent/keys [kind build origin facing access]} {:intent/keys [reason target] :as child}]
   (boolean
    (and (= :build kind)
@@ -1120,7 +1114,8 @@
             (and (= :cast-one build)
                  (= :walk (:intent/kind child))
                  (= :no-path reason)
-                 (not (:intent/pickup? child)))
+                 (not (:intent/pickup? child))
+                 (pos? (:plan/attempts world 0)))
             (and (= :walk (:intent/kind child))
                  (not (:intent/pickup? child))
                  target

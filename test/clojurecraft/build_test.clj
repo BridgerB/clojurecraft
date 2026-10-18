@@ -1109,18 +1109,6 @@
     (is (not (build/wading-out? dry walk)) "on dry land it is the walk's to fail")
     (is (not (build/wading-out? wet open-walk)) "a route from the water: the walk goes")))
 
-(deftest opened-frame-rock-is-no-wall-for-a-way-round
-  ;; real snapshot real-3-s2-Clj_r05 (issue #45): the staircase ended in the rock behind the
-  ;; frame, so the feet's own cell was kept and no corner was clear of the rock
-  (let [origin [4 63 4]
-        cell (build/cell origin :south [1 0 0])
-        stone (build/cell origin :south [1 -1 0])
-        w (standing-at (open-ground {}) [8.5 63.0 8.5])]
-    (is (contains? (build/kept origin :south) cell) "the cell is the frame's rock")
-    (is (not ((build/barred w origin :south) cell)) "open now: not a wall")
-    (is (contains? (build/kept origin :south) stone))
-    (is ((build/barred w origin :south) stone) "still rock: a wall")))
-
 (deftest a-way-a-wall-bars-is-not-the-way-to-dig
   ;; real snapshot real-6-s2-Clj_r05 (issue #45): the lava's stand one block aside and one on from
   ;; the feet, the cell between them on the x-first line a wall the plan keeps, so the line was
@@ -1152,12 +1140,14 @@
                :intent/reason :no-path
                :intent/for :build}
         i (assoc hill-intent :intent/origin site :intent/access 1)
-        w (assoc (standing-at (open-ground {}) [8.5 63.0 7.5]) :plan/intent i)]
-    (is (build/lost-way? w i child) "a cast-one's plain walk no route follows")
-    (is (not (build/lost-way? w i (assoc child :intent/pickup? true)))
+        w (assoc (standing-at (open-ground {}) [8.5 63.0 7.5]) :plan/intent i)
+        again (assoc w :plan/attempts 1)]
+    (is (not (build/lost-way? w i child)) "the first time the build fails, as before")
+    (is (build/lost-way? again i child) "the second: a cast-one's plain walk no route follows")
+    (is (not (build/lost-way? again i (assoc child :intent/pickup? true)))
         "a walk to pick something up")
-    (is (not (build/lost-way? w i (assoc child :intent/reason :stuck))) "only :no-path")
-    (is (not (build/lost-way? w (assoc i :intent/build :portal) child))
+    (is (not (build/lost-way? again i (assoc child :intent/reason :stuck))) "only :no-path")
+    (is (not (build/lost-way? again (assoc i :intent/build :portal) child))
         "a portal's site holds a cast: not given up for a walk")))
 
 (deftest a-cast-one-with-no-stand-gives-its-site-up
