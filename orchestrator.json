@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:35:54.247Z",
+  "at" : "2026-10-18T01:37:02.175Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -64,14 +64,14 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 60,
-    "title" : "Bot stops at water-bucket: no-water",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 410,
     "title" : "Bot stops at fortress: not-held",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 60,
+    "title" : "Bot stops at water-bucket: no-water",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 87,
