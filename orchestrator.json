@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T00:35:52.637Z",
+  "at" : "2026-10-18T00:37:06.328Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -70,9 +70,9 @@
     "title" : "Bot stops at furnace: boxed",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 5,
+    "nudges" : 6,
     "pr" : 403,
-    "session" : false
+    "session" : true
   }, {
     "number" : 74,
     "title" : "Bot stops at cast-one: no-stand",
@@ -188,8 +188,9 @@
   } ],
   "moves" : [ {
     "issue" : 342,
-    "move" : "nudge",
-    "pr" : 403
+    "move" : "wait",
+    "pr" : 403,
+    "why" : "session running"
   }, {
     "issue" : 178,
     "move" : "leave",
