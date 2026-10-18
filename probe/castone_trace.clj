@@ -6,7 +6,8 @@
    (probe.yml), never the Mac:
 
      clojure -M -i probe/castone_trace.clj -e '(probe.castone-trace/-main \"test/issues/41/x.edn.gz\")'"
-  (:require [clojurecraft.build :as build]
+  (:require [clojure.math :as math]
+            [clojurecraft.build :as build]
             [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
@@ -105,4 +106,42 @@
   "Trace each path given with the moment's pockets forgotten."
   [& paths]
   (doseq [p paths] (trace! p {:unboxed? true}))
+  (shutdown-agents))
+
+(defn timeline!
+  "Play the snapshot at path on from its moment, one line every 15 s of what the bot is doing:
+   where, and the kind, goal and child of its intent."
+  [path]
+  (let [snap (capture/read-world path)
+        w (simrace/world-for! snap)
+        {:keys [world] :as m} (simrace/moment-of snap w)
+        stage (simrace/stage-of snap)
+        t0 (:time/now world)
+        last-t (atom -1000000)
+        step (fn [world event]
+               (let [w' (simrace/step world event)
+                     t (:time/now w')]
+                 (when (and (= :tick (:event/kind event)) (> (- t @last-t) 15000))
+                   (reset! last-t t)
+                   (let [i (:plan/intent w')]
+                     (println
+                      "T+"
+                      (quot (- t t0) 1000)
+                      (pr-str (mapv #(math/round (double %)) (:player/pos w')))
+                      (pr-str (select-keys i [:intent/kind :intent/goal :intent/for :intent/stage]))
+                      (pr-str (select-keys (:intent/child i) [:intent/kind :intent/for]))
+                      (pr-str (select-keys (:intent/op i) [:build/op :build/step])))))
+                 w'))]
+    (println "TIMELINE" path)
+    (sim/play-from step
+                   m
+                   #(or (plan/done? %) (plan/failed? %) (contains? (:plan/reached %) stage))
+                   (simrace/window-of snap)
+                   (simrace/go-of w (:snapshot/until snap))
+                   nil)))
+
+(defn -main-timeline
+  "A timeline of each path given."
+  [& paths]
+  (doseq [p paths] (timeline! p))
   (shutdown-agents))
