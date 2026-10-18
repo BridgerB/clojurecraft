@@ -35,7 +35,7 @@
         "a supported neighbour, not the first diagonal cell within click reach")
     (is (= [5 64 4] (:intent/cell (stone/redig-place (assoc w :world/blocks {[4 65 5] 1}) :gravel)))
         "a niche with no headroom cannot be entered for the drop")
-    (let [walls (into {} (for [cell [[4 64 5] [6 64 5] [5 64 4] [5 64 6]]] [cell 1]))
+    (let [walls (into {} (for [y [63 64 65] cell [[4 y 5] [6 y 5] [5 y 4] [5 y 6]]] [cell 1]))
           child (stone/redig-place (assoc w :world/blocks walls) :gravel)]
       (is (contains? #{:walk :stairs-up} (:intent/kind child))
           "no pickup cell: leave, never cut a niche"))))
