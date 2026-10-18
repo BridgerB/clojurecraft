@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:25:35.899Z",
+  "at" : "2026-10-18T02:26:43.593Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -48,6 +48,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 87,
+    "title" : "Bot stops at ingots: no-log",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 410,
@@ -58,11 +63,6 @@
     "nudges" : 1,
     "pr" : 416,
     "session" : false
-  }, {
-    "number" : 87,
-    "title" : "Bot stops at ingots: no-log",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
   }, {
     "number" : 74,
     "title" : "Bot stops at cast-one: no-stand",
@@ -95,9 +95,9 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 69,
-    "title" : "Bot stops at water-bucket: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "number" : 110,
+    "title" : "Bot stops at pickaxe: no-log",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 62,
@@ -105,9 +105,9 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
-    "number" : 110,
-    "title" : "Bot stops at pickaxe: no-log",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "number" : 69,
+    "title" : "Bot stops at water-bucket: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 163,
@@ -178,11 +178,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 410,
+    "issue" : 87,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 87,
+    "issue" : 410,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -206,7 +206,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 69,
+    "issue" : 110,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -214,7 +214,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 110,
+    "issue" : 69,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
