@@ -160,6 +160,7 @@
   (let [gravel (blocks/default-state :gravel)
         from [0 64 0]
         move [-1 1 0]
+        tick {:event/kind :tick :event/now 0}
         i {:intent/kind :tunnel-to
            :intent/target [-48 70 0]
            :intent/steps 32
@@ -177,8 +178,10 @@
                              :player/on-ground? true
                              :player/vel [0.0 0.0 0.0]
                              :player/inventory {})]
-                (:plan/intent
-                 (intent/run (assoc w :plan/intent i) i {:event/kind :tick :event/now 0}))))]
+                ;; two ticks: the first takes the dig as the op, the second starts its child
+                (:plan/intent (nth (iterate #(intent/run % (:plan/intent %) tick)
+                                            (assoc w :plan/intent i))
+                                   2))))]
     (testing "the head's cell first, then the feet's"
       (let [out (run {[0 64 0] gravel [0 65 0] gravel})]
         (is (= :active (:intent/status out)))
