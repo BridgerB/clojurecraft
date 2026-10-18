@@ -8,7 +8,9 @@
    drowned in), scoops it when it is in reach, else walks to it, else walks to the nearest
    remembered pool (one per chunk, memory/pools), else hunts: a walk of hunt-distance along
    one of eight bearings, downhill first and never back toward the landing, so new chunks load
-   and their water is remembered. With nowhere left to hunt it waits :no-water.
+   and their water is remembered. A frozen lake's sheet is no surface to scoop: its ice is dug
+   (ice-water), and the game leaves a source where it was. With nowhere left to hunt it waits
+   :no-water.
 
    The intent puts the bucket in hand, looks at the source, and sends use-item with that look:
    a bucket is used by where the eyes point, not on a block face (use-item-on with a bucket does
@@ -37,7 +39,7 @@
 
 (def search-radius 24)                ; blocks from the eye searched for water in the loaded terrain
 (def pool-radius 96)                  ; blocks from the eye a remembered pool is walked to from
-(def far-pool-radius 256)             ; blocks from the eye a remembered pool still steers a hunt toward it
+(def far-pool-radius 400)             ; blocks from the eye a remembered pool still steers a hunt toward it
 (def settle-ms 300)                   ; standing still this long, looking at the source, before using the bucket
 (def answer-ms 3000)                  ; ms a scoop waits for the water bucket before it is tried again
 (def max-tries 3)                     ; scoops sent at one source before it fails :no-scoop
@@ -172,26 +174,57 @@
 
 (defn sources
   "The surface water sources in the loaded terrain within search-radius of the eye
-   (surface-water?), not blacklisted, nearest first. Asked of the terrain through the block
-   overlay, so a source just scooped is air."
+   (surface-water?), not blacklisted, nearest first: the sources the chunks held, and those the
+   block overlay made since (:world/blocks: the water a broken sheet of ice leaves, ice-water).
+   Asked of the terrain through the overlay, so a source just scooped is air."
   [world]
   (let [eye (game/eye world)
         blacklist (:plan/blacklist world #{})]
-    (memory/nearest-first eye
-                          search-radius
-                          (->> (chunk/find-blocks (stone/near-chunks (:world/chunks world)
-                                                                     (stone/feet-chunk world))
-                                                  #{blocks/water-base})
-                               (map (fn [[x y z _]] [x y z]))
-                               (remove blacklist)
-                               (filter #(surface-source? world %))
-                               (filter #(surface-water? world % (physics/y-of eye)))))))
+    (memory/nearest-first
+     eye
+     search-radius
+     (->> (concat (map (fn [[x y z _]] [x y z])
+                       (chunk/find-blocks (stone/near-chunks (:world/chunks world)
+                                                             (stone/feet-chunk world))
+                                          #{blocks/water-base}))
+                  (for [[pos id] (:world/blocks world) :when (= blocks/water-base id)] pos))
+          distinct
+          (remove blacklist)
+          (filter #(surface-source? world %))
+          (filter #(surface-water? world % (physics/y-of eye)))))))
+
+(def ice-states
+  "Every state of the blocks the game's IceBlock turns to a water source when a player breaks them
+   (stairs/lake-ice)."
+  (into #{} (mapcat blocks/states-of) stairs/lake-ice))
+
+(defn melts?
+  "Does breaking the ice cell at pos leave a water source (sim/melts?, the game's
+   IceBlock.playerDestroy) that a bucket's ray can look down into: pos is ice with air over it and
+   water or a solid block under it?"
+  [world [x y z :as pos]]
+  (let [above (terrain/block-at world [x (inc y) z])
+        below (terrain/block-at world [x (dec y) z])]
+    (boolean (and (contains? ice-states (terrain/block-at world pos))
+                  (some? above)
+                  (blocks/air? above)
+                  (some? below)
+                  (or (blocks/fluid below) (blocks/solid? below))))))
+
+(defn iced?
+  "Is the pool at [x y z] the water of a lake under ice, a source whose cell over it breaks back to
+   one (melts?)? Sim race 39081494214 (issue #60, world R2/33) and race 39088700340 bot Clj_r10 had
+   hundreds of pools remembered, 59 and 18 of them under a frozen lake's ice, and none was surface
+   water to scoop: the sheet is the lake's surface, and the bucket needs the ice broken."
+  [world [x y z]]
+  (melts? world [x (inc y) z]))
 
 (defn pools-near
   "The remembered water pools within pool-radius, not blacklisted, nearest first, leaving out one
    in a loaded chunk that is not surface water to scoop (surface-source? and surface-water?:
    memory's pool is the highest source with no water above it, which may be under stone or deep
-   in a cave): what is loaded near it, the terrain search sees. With radius, those within it."
+   in a cave) or the water of a lake under ice (iced?): what is loaded near it, the terrain search
+   sees. With radius, those within it."
   ([world] (pools-near world pool-radius))
   ([world radius]
    (let [eye (game/eye world)
@@ -202,6 +235,7 @@
       (->> (vals (memory/pools world :water))
            (remove blacklist)
            (remove #(and (terrain/chunk-loaded? world %)
+                         (not (iced? world %))
                          (not (and (surface-source? world %)
                                    (surface-water? world % (physics/y-of eye)))))))))))
 
@@ -269,6 +303,51 @@
        (take max-candidates)
        (filter #(intent/routable? world %))
        first))
+
+(def ice-looked 200)                  ; the nearest ice cells ice-water looks at for the open sky over them
+
+(defn ice-cells
+  "The ice cells in the loaded terrain within search-radius of the eye that break to a water source
+   (melts?) under the open sky (terrain/under-sky?: a lake's own sheet, not ice in a cave), not
+   blacklisted, nearest first, at most ice-looked of them."
+  [world]
+  (let [blacklist (:plan/blacklist world #{})]
+    (->> (memory/nearest-first (game/eye world)
+                               search-radius
+                               (->> (chunk/find-blocks (stone/near-chunks (:world/chunks world)
+                                                                          (stone/feet-chunk world))
+                                                       ice-states)
+                                    (map (fn [[x y z _]] [x y z]))
+                                    (remove blacklist)
+                                    (filter #(melts? world %))))
+         (take ice-looked)
+         (filter #(terrain/under-sky? world %)))))
+
+(defn ice-water
+  "Water under a lake's ice: a dig of the nearest ice cell in reach (ice-cells), the water it
+   leaves is the scoop's next source (its drop is nothing and its fluid is the point:
+   :intent/exposes-ok?, :intent/drop-ok?), else a walk to the first of the nearest max-candidates
+   a route reaches, to stand where the cell lies at the feet's height or in the floor beside them
+   (a :pickup goal with step-down); nil with no such ice. Race 39088700340 bot Clj_r10 stood in a
+   frozen sea with a stone pickaxe, the water a block under the sheet all round it, cut stairs
+   toward nine pools it had remembered 180 blocks off and as many levels down, each :boxed in
+   four seconds, and waited :no-water; a sheet is water the first dig opens."
+  [world]
+  (let [cells (ice-cells world)]
+    (if-let [cell (first (filter #(in-reach? world %) cells))]
+      (assoc (intent/child-dig cell)
+             :intent/exposes-ok? true
+             :intent/drop-ok? true
+             :intent/for :water-ice)
+      (->> (take max-candidates cells)
+           (map (fn [c]
+                  {:intent/kind :walk
+                   :intent/target c
+                   :intent/for :water-ice
+                   :intent/pickup? true
+                   :intent/step-down? true}))
+           (filter #(intent/routable? world %))
+           first))))
 
 (defn hunt
   "A water hunt's walk (:intent/for :water-hunt) to the first of hunt-targets a route reaches
@@ -499,7 +578,8 @@
 
 (defn scoop-next
   "The next step toward a filled bucket: scoop the nearest surface source in reach and in sight,
-   else walk to the bank of the nearest one a route reaches, or to such a remembered pool, or climb
+   else walk to the bank of the nearest one a route reaches, or break the ice of a frozen lake
+   (ice-water: the dig leaves the source), or walk to such a remembered pool, or climb
    out (to the landing, or by stairs cut up) when deep under it, or hunt for one (hunt-targets),
    toward the nearest remembered pool when one is known (hunt), or climb out of a pit under the
    sky when deep under the landing (pit-climb), or up or down
@@ -521,6 +601,7 @@
     (cond src {:intent/kind :scoop :intent/target src}
           :else
           (or (first-walk world :scoop srcs)
+              (ice-water world)
               (first-walk world :scoop (pools-near world))
               (seen-source world)
               (from-below world)
