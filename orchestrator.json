@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T08:54:14.585Z",
+  "at" : "2026-10-18T08:55:24.947Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -25,9 +25,9 @@
     "title" : "Bot stops at cobblestone: boxed",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 0,
+    "nudges" : 1,
     "pr" : 437,
-    "session" : false
+    "session" : true
   }, {
     "number" : 430,
     "title" : "Bot stops at fortress: boxed",
@@ -44,8 +44,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 65,
-    "move" : "nudge",
-    "pr" : 437
+    "move" : "wait",
+    "pr" : 437,
+    "why" : "session running"
   }, {
     "issue" : 430,
     "move" : "leave",
