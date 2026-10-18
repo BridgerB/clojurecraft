@@ -25,6 +25,10 @@
 (def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
 (def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
 (def return-max-nodes 120000)         ; expansions for a complete way back to trees when local routes and hunts fail
+(def bridge-reach 12)                 ; blocks on the plane to a trunk no route reaches that a staircase is cut toward
+(def bridge-rise 3)                   ; blocks the trunk's bottom may lie over or under the feet for that staircase
+(def bridge-climb 2)                  ; stairs up that staircase cuts before the planner looks again
+(def opening-drop 2)                  ; blocks under the feet a mouth may lie and still be the way out, not the way down
 
 (defn ground?
   "Can a drop come to rest on this block where a player stands beside it: solid, and neither a log
@@ -55,6 +59,7 @@
 
 (def max-trunk-failures 2)            ; a trunk that failed twice is given up; once is chance
 (def max-clears 6)                    ; leaf blocks broken to reach one drop
+(def unreached-radius 8)              ; blocks on the plane round a place no walk reached that no log is chosen in
 
 (defn continue-gather
   "The next intent of a log-gathering chain already in flight, or nil. Chains are marked
@@ -80,13 +85,20 @@
           :else (intent/chain-next last :log blocks/log-items extra))))
 
 (defn skipped
-  "The logs not to choose: blacklisted positions, and every log in a trunk column that has failed
-   max-trunk-failures times."
+  "The logs not to choose: blacklisted positions, every log in a trunk column that has failed
+   max-trunk-failures times, and every log within unreached-radius of a place a log walk
+   failed :no-path toward (:plan/unreached). A grove across water no route crosses is one failure, not
+   one for each of its trunks: real race 39042120284 bot Clj_r14 (issue #75) stood on a shore with
+   the trees two hundred blocks off across the sea, tried twelve trunks of one grove a walk each,
+   and the plan failed :no-path before the hunt or the crossing had their turn."
   [world]
   (let [blacklist (:plan/blacklist world #{})
-        failures (:plan/trunk-failures world {})]
+        failures (:plan/trunk-failures world {})
+        unreached (:plan/unreached world #{})]
     (fn [[x _ z :as pos]]
-      (or (contains? blacklist pos) (>= (get failures [x z] 0) max-trunk-failures)))))
+      (or (contains? blacklist pos)
+          (>= (get failures [x z] 0) max-trunk-failures)
+          (some #(<= (physics/horizontal-distance pos %) unreached-radius) unreached)))))
 
 (defn log-walk
   "A walk to the log of bottom nearest the feet, tagged as the gather chain. When even that log
@@ -163,6 +175,55 @@
            (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)])
            :intent/for :trees})))))
 
+(declare water-toward?)
+
+(defn trees-bridge
+  "Out of the ground (stairs/out?) with a standing trunk close by and level with the feet that no
+   route reaches (nothing before it in climb-out did): stairs up toward it, bridge-climb of
+   them, to-height only, laid from carried filler where the air has no step (stairs/step-lay), so
+   the next look from a little higher finds a way down onto the far side. Only a trunk within
+   bridge-reach on the plane, no more than bridge-rise over the feet or under (and the feet less
+   than bridge-rise over its bottom: the climb is bounded, it goes up twice at most), no open
+   water on the way (water-toward?: crossing is for that), never from a cell where a climb died
+   :boxed. Sim worlds R3/45 (issues #87 and #108, seeds 1 and 3): the bot climbed out of its pit
+   on a pillar of its own cobblestone and stood eight blocks from the only trunk in reach, on a
+   hill across two blocks of air the path search does not bridge, and the open sky, the trunk
+   below the eye, said there was nothing to cut: the plan waited :no-log."
+  [world trunks]
+  (let [[fx fy fz :as feet] (intent/feet world)
+        eye-y (physics/y-of (game/eye world))]
+    (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
+      (when-let [[tx _ tz] (first (filter (fn [[tx ty tz :as trunk]]
+                                            (let [d (physics/horizontal-distance [fx 0 fz]
+                                                                                 [tx 0 tz])]
+                                              (and (<= (abs (- ty fy)) bridge-rise)
+                                                   (< fy (+ ty bridge-rise))
+                                                   (< 2.0 d bridge-reach)
+                                                   (not (water-toward? world feet trunk eye-y)))))
+                                          trunks))]
+        {:intent/kind :stairs-up
+         :intent/to-y (+ fy bridge-climb)
+         :intent/to-height? true
+         :intent/dir
+         (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)])
+         :intent/for :surface}))))
+
+(defn mouth-below?
+  "Is a walk to target, [x y z], a way down from feet: its cell more than opening-drop under the
+   feet's?"
+  [[_ fy _] [_ ty _]]
+  (< (+ ty opening-drop) fy))
+
+(defn opening-up
+  "intent/opening, the walk up the air already dug, unless its mouth lies below the feet
+   (mouth-below?): that is the way down, and the staircase cut up from here goes on instead. Sim
+   world R2/16 (issue #87): the bot cut stairs up from its mouth at y 83 toward the trees on a
+   cliff to y 99, a ledge that is not out of the ground, and the opening walked it back down to
+   the mouth, where the climb began again, every twenty seconds until the plan waited :no-log."
+  [world]
+  (let [o (intent/opening world)]
+    (when (and o (not (mouth-below? (intent/feet world) (:intent/target o)))) o)))
+
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
    a route reaches (intent/routable?), under the open sky or not. Not out of the ground
@@ -197,12 +258,13 @@
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
           (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
-            (or (intent/opening world)
+            (or (opening-up world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
                  :intent/for :surface}))
           (trees-climb world trunks)
-          (trees-descend world trunks)))))
+          (trees-descend world trunks)
+          (trees-bridge world trunks)))))
 
 (defn near-walk
   "A walk to the nearest standing trunk in the near band (search-radius, no more than 12 above or
@@ -267,7 +329,11 @@
    the head and nothing between would fall on the bot (blocks/falls?), is lava, is not loaded or
    is never dug; once nothing but air and water is over the head, a :swim-out for :rise up to the
    water's top (:intent/to-y), then to the shore (swim/far-shore), ending on dry land in the open;
-   the water poured in is the trap too, and the escape it starts swims the same way. Sim race 38806318231 runner 1 and 38811426215 runner 8 (issue #89, worlds
+   the water poured in is the trap too, and the escape it starts swims the same way. Only water
+   that is open at the top: air over it, or a lake's ice (stairs/lake-ice: the rise digs
+   its cap, swim/:swim-out, issue #71's frozen sea); water under rock is a pocket with no way up (sim world R3/13, issue #71: a tunnel at y 16
+   dug up into an aquifer seven deep under stone, and the water followed the bot along its
+   tunnel). Sim race 38806318231 runner 1 and 38811426215 runner 8 (issue #89, worlds
    R4/30, R4/21 and R1/32 at 76010d2, 146 runs) had bots mine under the sea floor until the last
    pickaxe broke: for a new one they needed a log, every climb out was :boxed under the water,
    no route led home, and each waited :no-log. nil otherwise."
@@ -283,9 +349,14 @@
         top (->> (range (+ y 2) (+ y 34))
                  (drop-while (complement water?))
                  (drop-while water?)
-                 first)]
+                 first)
+        roof (when top (terrain/block-at world [x top z]))
+        open? (or (nil? roof)
+                  (not (blocks/solid? roof))
+                  (contains? stairs/lake-ice (blocks/name-of roof)))]
     (cond (not (and (contains? (:plan/boxed-at world #{}) feet)
                     (seq more)
+                    open?
                     (every? some? ids)
                     (not-any? #(or (blocks/falls? %)
                                    (= :lava (:fluid/kind (blocks/fluid %)))
@@ -366,6 +437,7 @@
   [world]
   (or (continue-gather world)
       (near-walk world)
+      (stone/off-ice world)
       (climb-out world)
       (hunt world)
       (into-water world)

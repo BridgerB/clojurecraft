@@ -5,10 +5,12 @@ type: reference
 tags: [bot, plan, path, intents]
 aliases: [path/plan, A*, route, waypoints, :awkward, lava rule, node budget, path.clj]
 status: verified
-lastUpdated: 2026-10-17
+lastUpdated: 2026-10-18
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/path.clj#defn plan
+  - src/clojurecraft/path.clj#defn on-ice?
+  - test/clojurecraft/path_test.clj#a-bot-on-a-sheet-of-ice-walks-off-it-but-never-onto-it
   - src/clojurecraft/path.clj#defn search
   - src/clojurecraft/path.clj#defn classify-id
   - src/clojurecraft/path.clj#defn cells
@@ -18,6 +20,7 @@ sourceRefs:
   - src/clojurecraft/path.clj#def templates
   - src/clojurecraft/path.clj#defn landing
   - src/clojurecraft/path.clj#defn start-cell
+  - test/clojurecraft/path_test.clj#a-route-leaves-occupied-awkward-footing-without-entering-it
   - src/clojurecraft/path.clj#defn lava-near?
   - src/clojurecraft/path.clj#defmulti goal-done?
   - src/clojurecraft/path.clj#defmethod goal-done? :sky
@@ -41,12 +44,13 @@ related:
 `(path/plan world from goal opts)` returns `{:path/waypoints [[x y z] ...] :path/cost n :path/status :found|:partial|:none}`: a route for the feet over the block grid, as a pure function of the world value (issue #4). Nothing in it reads a clock or the atom; the budget is in node expansions, so a recording replays to the same route on any machine ([[sib-astar-budget]] is why not milliseconds).
 
 ## Key files
+- `path.clj`, `on-ice?` / `cells` - ice is `:awkward` (the physics does not slide), so a route never steps onto a sheet from land; but of a world whose bot stands on one (`on-ice?`: ice in one of the two blocks under the feet, the second for a floor laid on it, passed to `plan-on` as `ice?` since it builds its own world from the chunks) the sheet is floor, so a bot a swim out put on a frozen lake can walk off it. Issue #71, race 39088700340 bot Clj_r02 (`a-bot-on-a-sheet-of-ice-walks-off-it-but-never-onto-it`, `stone/off-ice`).
 - `path.clj`, `classify-id` / `classify` - what a block state is to a route: `:water`, `:lava`, `:awkward` (a block whose collision shape the game says is neither nothing nor a full cube and stands taller than `flat-shape`, 0.125, read from the game into `shapes.edn`, `blocks/partial-shapes`: a cocoa pod, a slab, a lantern, but not a carpet; or a definition type in `awkward-types`, the hand list kept for full cubes the physics cannot simulate, slime, ice, magma, cobwebs. Gym batch iron-a9 run 5 walked into a cocoa pod on a jungle log the hand list lacked and never moved again), `:solid` (a full cube), `:clear` (passable, not a liquid; one layer of snow is, `one-layer-snow`: the game gives the block's default state no collision shape at all and the physics passes through it, so the feet stand in its cell on the block under it; deeper layers collide and stay `:awkward`), `:unknown` (the chunk is not loaded).
 - `path.clj`, `cells` / `cell-key` - one search's view of the cells: a function from a cell to its class that reads each cell through the terrain once and holds the answer under one long key. Every cell predicate below takes a world or its cells; the search and the stone scan make one and pass it down, so a cell asked a hundred times is read once ([[remembered-by-identity]]).
 - `path.clj`, `templates` / `moves` - four move templates along +x, rotated to the eight directions: `:walk` (cost 1), `:jump-up` (2), `:diagonal` (√2, both corner columns clear), `:drop` (1 + 0.5 per block fallen, at most `max-fall` 3). Each template lists what cells must be what; `neighbors` interprets them.
 - `path.clj`, `floor?` / `clear?` / `standable?` - a floor is `:solid`; a clear cell is `:clear` with no lava in its four horizontal neighbours or under it (`lava-near?`); a node is standable with a floor below and body and head clear.
 - `path.clj`, `landing` - where a drop comes to rest: the first floor within `max-fall`, with only clear cells on the way; water, lava, an awkward block or an unloaded chunk under the fall refuse it.
-- `path.clj`, `start-cell` - where the search begins: the feet cell when it is standable, else the nearest standable cell within one block on the plane and one up or down; `plan` reports it as `:path/from`.
+- `path.clj`, `start-cell` - where the search ordinarily begins: the feet cell when it is standable, else the nearest standable cell within one block on the plane and one up or down; `plan` reports it as `:path/from`. Before snapping to a neighbour, `plan-on` prefers a found route from the actual supported, clear feet cell. An occupied awkward floor can be left but remains forbidden as a waypoint; when no route leaves it, the neighbouring-start fallback remains.
 - `path.clj`, `goal-done?` / `heuristic` - multimethods on `:goal/kind`: `:near` (within `:goal/range`, default 3), `:block`, `:xz` (any height), `:away` (farther than range), `:pickup` (within range on the plane with the target at the feet's height or up to `:goal/rise` above: where a dug block's drop lands in reach; with `:goal/step-down?`, also a straight neighbour a block up, `step-down-node?`: the block in the floor beside the feet, whose drop lands in the hole it leaves), `:sky` (a standable cell `terrain/under-sky?` accepts). `goal-done?` takes the world, `(goal-done? world goal node)`, so a goal stays data and one that asks about the terrain reads the world it is given. The heuristic for a point is octile on the plane plus the height difference. `:sky` weights the height deficit by `sky-weight` (4), more than a jump costs, so the air already dug is climbed before a mine is filled. That heuristic is not admissible.
 - `path.clj`, `search` - A* with a sorted set of `[f g node]` (ties break on the node, so the search is deterministic), g and parent maps, a closed set, and the nearest node seen by the heuristic. Each move's cost is multiplied by `trap-factor`: 10 within two columns of a trap in `:world/traps` younger than ten minutes ([[water-escape]]).
 
@@ -65,6 +69,7 @@ The `:surface` goal is registered in `stairs`: `out?` requires usable open groun
 - A property over 200 generated terrains (heightmap steps of -3..+1, water pools): when the route is `:found`, driving `physics/step` with the walk's own follow controller reaches every waypoint in at most 80 ticks and ends in the goal.
 
 ## Gotchas
+- **Departure is not entry.** Issue #284's R1/6 snapshot repaired the next tunnel step but stood on soul sand. Snapping its start to gravel beside the feet chose an isolated cell with no route to the repaired step. Searches now depart from the actual supported, clear feet cell; every entered waypoint still needs an ordinary walkable floor, so this does not permit crossing a soul-sand field.
 - **A start on a block edge floors into the wrong column.** Gym landing 21280,18720 (batch path-a1 run 5): the fixture teleports to the column's `~0.5`, which on a steep hillside put the feet at x 21281.0 exactly, on the edge of a stone step; `feet-cell` floored into the step, every plan was `:none` from inside solid rock, and three `:no-path` failures in half a second killed the plan. The player's box rests on the cell beside it, which is standable; `start-cell` searches from there. The old straight-line walk never noticed because it never asked where it stood.
 - Water is a wall, never a floor: the bot can swim ([[fluid-physics]]) but a route never asks it to; getting out is the escape's job ([[water-escape]]).
 - The lava rule is applied by `clear?`, so every move kind has it; ruststeve's diagonal lacked one and put a bot over lava ([[sib-pathfinder-movements]]).

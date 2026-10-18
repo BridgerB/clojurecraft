@@ -187,6 +187,58 @@
     (is (= [[10 64 8]] (vals (memory/pools w :water))) "memory keeps it: no water above it")
     (is (= {:plan/wait :no-water} (scoop/scoop-next w)))))
 
+(def ice (blocks/default-state :ice))
+
+(def frozen-pond
+  "A pond frozen over: ice where the surface was, at y 63 (x 10-12 at z 8), water under it, open
+   to the sky."
+  {[10 63 8] ice [11 63 8] ice [12 63 8] ice [10 62 8] water [11 62 8] water [12 62 8] water})
+
+(deftest water-under-ice-is-won-by-digging-the-ice
+  ;; race 39088700340 bot Clj_r10 stood in a frozen sea with the water a block under the sheet all
+  ;; round it and no surface to scoop: the game leaves a source where broken ice was
+  (let [dig {:intent/kind :dig
+             :intent/target [10 63 8]
+             :intent/status :active
+             :intent/exposes-ok? true
+             :intent/drop-ok? true
+             :intent/for :water-ice}]
+    (is (empty? (scoop/sources (standing frozen-pond [8.5 8.5]))) "the sheet is no surface")
+    (is (= dig (scoop/scoop-next (standing frozen-pond [8.5 8.5]))) "ice in reach: dig it")
+    (is (= {:intent/kind :walk
+            :intent/target [10 63 8]
+            :intent/for :water-ice
+            :intent/pickup? true
+            :intent/step-down? true}
+           (scoop/scoop-next (standing frozen-pond [2.5 8.5])))
+        "out of reach: to the bank beside it, the ice in the floor")
+    (is (= {:plan/wait :no-water}
+           (scoop/scoop-next (assoc (standing frozen-pond [8.5 8.5])
+                                    :plan/blacklist
+                                    #{[10 63 8] [11 63 8] [12 63 8]})))
+        "ice whose dig failed is not chosen again")
+    (is (= {:intent/kind :scoop :intent/target [10 63 8]}
+           (scoop/scoop-next (terrain/set-block (standing frozen-pond [8.5 8.5]) [10 63 8] water)))
+        "the server's word that the ice broke to a source (the overlay, not the chunk): scoop it")
+    (is (= {:plan/wait :no-water}
+           (scoop/scoop-next (standing (into frozen-pond (for [x [10 11 12]] [[x 70 8] 1]))
+                                       [8.5 8.5])))
+        "ice under a roof is no lake's")
+    (is (= {:plan/wait :no-water}
+           (scoop/scoop-next (standing (into frozen-pond (for [x [10 11 12]] [[x 62 8] blocks/air]))
+                                       [8.5 8.5])))
+        "ice over air breaks to nothing")))
+
+(deftest a-lake-under-ice-is-a-pool-to-walk-toward
+  ;; sim race 39081494214 (issue #60, world R2/33): 59 of the 398 pools remembered were under a
+  ;; frozen lake's ice and each was dropped as not surface water, so the hunt had no pool to steer by
+  (let [w (memory/remember-pools (standing frozen-pond [8.5 8.5]) [0 0] (world/column frozen-pond))
+        roofed (assoc frozen-pond [10 64 8] 1)
+        r (memory/remember-pools (standing roofed [8.5 8.5]) [0 0] (world/column roofed))]
+    (is (= [[10 62 8]] (vals (memory/pools w :water))) "memory keeps the water under the ice")
+    (is (= [[10 62 8]] (scoop/pools-near w)) "a pool under ice that breaks to a source")
+    (is (empty? (scoop/pools-near r)) "stone over the ice is no ice to break")))
+
 (def mine
   "A stone hill from y 64 to 75 with a one-wide staircase cut down it along +x from [4 76 8] to
    [14 66 8]: feet cells [x (80 - x) 8] with the two above each, as stairs-down opens them."

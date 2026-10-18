@@ -50,15 +50,19 @@
 (def falling-reach 16)                ; gravel or sand stacked over a cell that a fluid on top is looked for through
 
 (defn fluid-over-falling?
-  "Is there water or lava resting on gravel or sand stacked straight over pos: opening pos lets
-   the stack fall and the fluid follow it down. Gym batch iron-a4 run 1 tunnelled under a
-   riverbed, the gravel over a cell it cut fell into it, and the river came down the tunnel."
+  "Is there water or lava over or beside gravel or sand stacked straight over pos: opening pos
+   lets the stack fall and the fluid follow it down. Gym batch iron-a4 run 1 tunnelled under a
+   riverbed, the gravel over a cell it cut fell into it, and the river came down the tunnel.
+   Sim race 39113082582 (issue #339, R3/33) opened gravel beside lava higher up the stack, flooding
+   the fortress tunnel until no escape footing remained."
   [world [x y z]]
   (let [over (map (fn [dy] [x (+ y dy) z]) (range 1 (inc falling-reach)))
         stack (take-while #(some-> (terrain/block-at world %)
                                    blocks/falls?)
                           over)]
-    (boolean (and (seq stack) (terrain/fluid-at world (nth over (count stack)))))))
+    (boolean (some (fn [cell]
+                     (some #(terrain/fluid-at world (mapv + cell %)) (vals physics/face-offsets)))
+                   stack))))
 
 (defn bed-over-fluid?
   "Is a horizontal neighbour of pos gravel or sand resting, through any stack of such under it,
@@ -654,24 +658,68 @@
                             blocks/leaves?)
                    spots))))
 
+(defn unsupported?
+  "Would a body standing at feet level fy with its feet centre at [x _ z] have nothing under its
+   box: every cell under the cells the box overlaps at that level clear (path/classify :clear: air,
+   a plant)? A floor, a slab, a fluid or an unloaded cell is something to stand on or in."
+  [world [x _ z] fy]
+  (let [half physics/half-width
+        cells (for [cx (distinct [(long (math/floor (- x half))) (long (math/floor (+ x half)))])
+                    cz (distinct [(long (math/floor (- z half))) (long (math/floor (+ z half)))])]
+                [cx (dec fy) cz])]
+    (every? #(= :clear (path/classify world %)) cells)))
+
+(defn off-the-rim?
+  "Would moving the body [dx dz] blocks on the plane leave it on the ground with nothing under its
+   box (unsupported?) and no landing within path/max-fall below the cell its feet centre is then
+   in?"
+  [world [dx dz]]
+  (let [[px py pz] (:player/pos world)
+        [_ fy _] (feet world)
+        edge [(+ px dx) py (+ pz dz)]
+        cell [(long (math/floor (first edge))) fy (long (math/floor (nth edge 2)))]]
+    (boolean (and (:player/on-ground? world)
+                  (= :clear (path/classify world cell))
+                  (unsupported? world edge fy)
+                  (nil? (path/landing world cell))))))
+
+(defn straddling-ahead?
+  "Would a half-width step toward unit direction [ux uz], or along either axis of it a block in the
+   way would slide the body (a wall the diagonal runs into), leave the body off the rim it
+   stands on (off-the-rim?): the bot stands on a floor whose own cell has none (its box overlaps
+   the cell beside it), and the first step toward the drop takes it off the edge. The cell
+   ahead is the feet's own, which ledge-ahead? skips."
+  [world [ux uz]]
+  (let [w physics/half-width]
+    (boolean (some #(off-the-rim? world %)
+                   (cond-> [[(* w ux) (* w uz)]]
+                     (> (abs ux) 0.1) (conj [(* w (math/signum ux)) 0.0])
+                     (> (abs uz) 0.1) (conj [0.0 (* w (math/signum uz))]))))))
+
 (defn ledge-ahead?
   "Would a step toward goal take the body over a drop: the cell ledge-look ahead on the plane (not
-   the feet's own) open, with no floor under it nor within path/max-fall below that (path/landing)? Gym batch
-   iron-a9 run 3's collect walked after a drop at a ravine's edge at y -7 and the bot fell from
-   a high place."
+   the feet's own) open, with no floor under it nor within path/max-fall below that (path/landing),
+   or the body on the rim of a floor whose own cell has none, about to step off it
+   (straddling-ahead?)? Gym batch iron-a9 run 3's collect walked after a drop at a ravine's edge at
+   y -7 and the bot fell from a high place. Race 39110733219 runner 1 bot Clj_r15 (issue #65)
+   dug stone at the wall of a cave lake, stood on the rim of its stair's last floor with its feet
+   cell open, and the collect walked after the drop off it into the lake three blocks down, where
+   the nearest bank was a pocket it could not climb out of."
   [world goal]
   (let [[px _ pz] (:player/pos world)
         [gx _ gz] goal
         d (physics/horizontal-distance [px 0 pz] [gx 0 gz])
         [_ fy _ :as at] (feet world)
-        cell (when (pos? d)
-               [(long (math/floor (+ px (* ledge-look (/ (- gx px) d))))) fy
-                (long (math/floor (+ pz (* ledge-look (/ (- gz pz) d)))))])]
+        unit (when (pos? d) [(/ (- gx px) d) (/ (- gz pz) d)])
+        cell (when unit
+               [(long (math/floor (+ px (* ledge-look (first unit))))) fy
+                (long (math/floor (+ pz (* ledge-look (second unit)))))])]
     (boolean (and cell
-                  (not= cell at)
-                  (= :clear (path/classify world cell))
-                  (not (path/floor? world (update cell 1 dec)))
-                  (nil? (path/landing world cell))))))
+                  (or (and (not= cell at)
+                           (= :clear (path/classify world cell))
+                           (not (path/floor? world (update cell 1 dec)))
+                           (nil? (path/landing world cell)))
+                      (straddling-ahead? world unit))))))
 
 (defmethod run :collect
   [world

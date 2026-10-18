@@ -42,6 +42,7 @@
             [clojurecraft.dig :as dig]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
@@ -417,6 +418,63 @@
   [world cells]
   (and (level-clear? world cells) (safe? world cells)))
 
+(def six-around
+  "The six cells that share a face with a cell, as offsets."
+  [[1 0 0] [-1 0 0] [0 1 0] [0 -1 0] [0 0 1] [0 0 -1]])
+
+(defn dug-cells
+  "The cells among cells that hold a solid block: what a level step has to dig. An open cell needs
+   no dig, so water beside it lets nothing in."
+  [world cells]
+  (filterv #(some-> (terrain/block-at world %)
+                    blocks/solid?)
+           cells))
+
+(defn fluids-beside-dug
+  "The fluid cells (water or lava) among the six neighbours of each cell a level step digs
+   (dug-cells), distinct: what the dig would let in (intent/exposes-fluid?), and what a seal lays
+   a block into."
+  [world cells]
+  (distinct (for [[x y z] (dug-cells world cells)
+                  [dx dy dz] six-around
+                  :let [n [(+ x dx) (+ y dy) (+ z dz)]]
+                  :when (terrain/fluid-at world n)]
+              n)))
+
+(defn level-lay
+  "The cells to lay, in order, before a level step from feet whose only fault is water beside the
+   cells it digs, which the child dig refuses (:unsafe): that water filled with a block (a block
+   placed into a source takes its place), then the floor the step lacks (floor-laying). nil when
+   the step is otherwise refused (level-clear?'s water, lava or unloaded cells, ore too hard for
+   the tools held, a fluid over gravel above a cell), when any fluid beside is lava or is the
+   cell the body stands in or breathes in, when a cell to lay has nothing solid to place against
+   (place/support) or no filler is carried for all of them, or when nothing is to lay (the step
+   is level-safe? or none can be laid). Open cells are not dug, so water beside them is left: the
+   body wades nothing, it steps onto a floor. Issue #105 (sim race 39081494214 R1/31, 39074159590
+   R3/44): the bot climbed up under a lake for its water bucket, and the water it let in stood
+   round the shaft's last cells, beside every step: each level step was refused for the water
+   beside it, the staircase failed :boxed three times in a second with 306 and 514 cobblestone
+   held, and the plan with it."
+  [world [fx fy fz :as feet] cells]
+  (let [[nx ny nz] (last cells)
+        floor [nx (dec ny) nz]
+        wet (vec (fluids-beside-dug world cells))
+        floored (if (or (= :solid (path/classify world floor)) (some #{floor} wet))
+                  []
+                  (floor-laying world feet cells))
+        laid (into wet floored)]
+    (when (and floored
+               (seq laid)
+               (clear-way? world cells)
+               (not-any? #(too-hard? world %) cells)
+               (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %))
+                         (dug-cells world cells))
+               (every? #(= :water (terrain/fluid-kind world %)) wet)
+               (not-any? #{[fx fy fz] [fx (inc fy) fz]} wet)
+               (every? #(place/support world %) wet)
+               (filler world (count laid)))
+      laid)))
+
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
   "The first of the stair's cells (top first) still solid, or nil when the stair is open."
@@ -450,7 +508,12 @@
    cave, 80 under its landing, tunnel toward cave water 15 blocks off across the cave's floor,
    and bot Clj_r22 tunnel at y 63 from the top of the steps its climb to that height had laid in
    a cavern, toward pools 55 blocks off through the air; each tunnel was :boxed three times in a
-   row, the cut toward the water keeping the climb out from being chosen, and the plan failed."
+   row, the cut toward the water keeping the climb out from being chosen, and the plan failed.
+   A cut toward lava (:intent/for :lava, build/toward-lava) ends too, its feet cell in
+   :plan/boxed-at and the source it headed for given up (memory/give-up-site, which the hunt's
+   sources-near leaves out, with the pool round it): sim races 39085720764 and 39085577169 (issue #130, worlds R1/19
+   and R1/25) had the tunnel :boxed three times in a tick toward the one source, and the plan
+   failed."
   [world]
   (let [{:intent/keys [kind for target]} (:plan/intent world)]
     (cond (and (= :stairs-up kind) (= :surface for))
@@ -459,6 +522,14 @@
               (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
               intent/done
               (game/say "stairs: boxed in, no way out from here"))
+          (and (= :lava for) target)
+          (-> world
+              (assoc :player/controls {})
+              (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+              (memory/give-up-site target)
+              intent/done
+              (game/say
+               (str "stairs: boxed in on the way to the lava at " target ", other lava next")))
           (and (= :bank for) target)
           (-> world
               (assoc :player/controls {})
@@ -562,6 +633,59 @@
           (intent/dissoc-intent :intent/child :intent/lay :intent/level-cells)
           (game/say (str "stairs: boxed under water, a stair down toward " d))))))
 
+(def bore-bed 3)                       ; rock blocks over the head a bore digs through at most (the eyes' reach to the water over them)
+(def bore-depth 24)                    ; blocks of water over that rock a bore swims up through at most: 2.7 a second, nine of the fifteen seconds of breath
+
+(defn handed?
+  "Does the inventory hold no pickaxe at all: a bot that digs by hand, a block of stone 7500 ms?"
+  [world]
+  (not-any? (fn [[_ {:keys [item]}]] (= :pickaxe (:kind (blocks/tool item))))
+            (:player/inventory world)))
+
+(defn bore-cells
+  "The cells a bore from feet [x y z] opens, bottom first: one to bore-bed blocks of rock over the
+   head (from y + 2: none never dug; the gravel and sand of a lake's bed count, which fall into the
+   cell below as it is dug, and are dug again) under a lake, whose water runs up from the rock for
+   at most bore-depth blocks to open air. nil when the column over the head is not that: rock too
+   thick, no water over it, or an aquifer's sheet with rock over it. The three bots of issues #69,
+   #62 and #161 stood under beds of stone, then gravel or sand, under fourteen to twenty-three
+   blocks of water."
+  [world [x y z]]
+  (let [cell (fn [dy] [x (+ y dy) z])
+        kind #(path/classify world %)
+        rock (vec (take-while #(= :solid (kind %)) (map cell (range 2 (+ 3 bore-bed)))))
+        n (count rock)
+        above (map cell (range (+ 2 n) (+ 3 n bore-depth)))
+        [wet top] (split-with #(= :water (kind %)) above)]
+    (when (and (<= 1 n bore-bed)
+               (seq wet)
+               (some-> top
+                       first
+                       kind
+                       (= :clear))
+               (not-any? #(contains? intent/never-dug (blocks/name-of (terrain/block-at world %)))
+                         rock))
+      rock)))
+
+(defn bore-up
+  "A climb out from under a lake with no pickaxe to cut a way along it: the stairs' stage :bore,
+   digging bore-cells over the head by hand and then holding up the shaft under the water that
+   comes down it, the swim-out (swim.clj) rising it to the surface. nil with a pickaxe held
+   (its level steps are quick), or without a bed bore-cells accepts. Sim races (issues #69, #62,
+   #161, #135; worlds R1/17, R3/45, R4/19, R3/30): bots with the pickaxe broken stood in a pocket
+   under a lake bed two blocks thick and cut level steps toward a shore by hand all window,
+   182 of them in a quarter of an hour, a block of stone 7500 ms."
+  [world]
+  (when (handed? world)
+    (when-let [cells (bore-cells world (intent/feet world))]
+      (-> world
+          (assoc :player/controls {})
+          (intent/assoc-intent :intent/bore cells
+                               :intent/stage :bore
+                               :intent/started-tick (:time/tick world))
+          (intent/dissoc-intent :intent/child :intent/cells :intent/lay :intent/level-cells)
+          (game/say (str "stairs: under a lake with no pickaxe, a bore up through " cells))))))
+
 (defn step-aside
   "Every stair refused: a level step, the turns counted afresh, or :boxed when none is allowed
    or max-level-steps are spent. The step keeps the last one's way (:intent/level-dir) while it
@@ -580,7 +704,9 @@
    (:intent/visited), and a step onto one comes after every other; a climb with no fresh level
    step ducks under what refuses it (duck) first: sim race 38659291345 world R4/38 (issue #37),
    under a lake, stepped round a patch of fifteen cells a hundred times, one fresh step always
-   allowed, until it was :boxed."
+   allowed, until it was :boxed. A step whose only fault is water beside the cells it digs is
+   allowed once that water is filled (level-lay, issue #105), and an open step beside water is
+   floored."
   [world
    {:intent/keys [kind dir level-steps level-dir visited] :or {level-steps 0 visited #{}} :as i}]
   (let [[fx _ fz :as feet] (intent/feet world)
@@ -601,16 +727,19 @@
                (sort-by #(if (under-falling? world (last (level-cells feet %))) 1 0)))
         laid (fn [d]
                (let [cells (level-cells feet d)]
-                 (and (level-clear? world cells) (lay world feet cells))))
+                 (or (and (level-clear? world cells) (lay world feet cells))
+                     (level-lay world feet cells))))
         pick (fn [ws]
                (or (first (filter #(level-safe? world (level-cells feet %)) ws))
                    (first (filter laid ws))))
         budget? (< level-steps (level-step-limit world kind feet))
         fresh (when budget? (pick (remove #(contains? visited (last (level-cells feet %))) ways)))
-        ducked (when (and budget? (nil? fresh) (= :stairs-up kind)) (duck world i))
+        bored (when (= :stairs-up kind) (bore-up world))
+        ducked (when (and (nil? bored) budget? (nil? fresh) (= :stairs-up kind)) (duck world i))
         d (or fresh (when (and budget? (nil? ducked)) (pick ways)))
         to-lay (when (and d (not (level-safe? world (level-cells feet d)))) (laid d))]
-    (cond ducked ducked
+    (cond bored bored
+          ducked ducked
           d
           (-> world
               (intent/assoc-intent :intent/dir d
@@ -879,6 +1008,41 @@
               (assoc :player/controls {})
               (intent/fail :stair-not-taken))
           :else (assoc world :player/controls (onto world rise cell dir)))))
+
+(def bore-timeout-ticks 1200)           ; ticks (a minute) a bore may take, digging and rising
+
+(defmethod stairs-stage :bore
+  ;; dig each of :intent/bore, bottom first, one child at a time (the water over the last may
+  ;; come in: :intent/exposes-ok?; the rock's drop is not wanted: :intent/drop-ok?), then hold
+  ;; under the shaft's centre with the jump held, rising as the water allows; the swim-out takes
+  ;; over when the bot is trapped, and the climb ends at the surface (intent/run :stairs-up)
+  [world {:intent/keys [child bore started-tick]} event]
+  (let [[x y z] (intent/feet world)
+        next (next-to-open world bore)]
+    (cond (and child (or (intent/done? child) (fell? child)))
+          (intent/dissoc-intent world :intent/child)
+          (and child (intent/failed? child))
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail (:intent/reason child)))
+          child (intent/run-child world event)
+          next
+          (intent/run-child (intent/assoc-intent world
+                                                 :intent/child
+                                                 (assoc (intent/child-dig next)
+                                                        :intent/exposes-ok? true
+                                                        :intent/drop-ok? true))
+                            event)
+          (> (- (:time/tick world) started-tick) bore-timeout-ticks)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :stair-not-taken))
+          :else
+          (assoc world
+                 :player/controls
+                 (assoc (intent/toward world [(+ x 0.5) (double y) (+ z 0.5)] 0.0)
+                        :control/jump?
+                        true)))))
 
 (defn level-refused
   "A level step whose cell a child dig would not cut (refusals) after the step was chosen: a

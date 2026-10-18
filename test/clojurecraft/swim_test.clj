@@ -402,3 +402,74 @@
       (is (nil? (:plan/trap (trap/trapped-tick w))) "dry land clears the escape goal")
       (is (not (trap/dry-land? (assoc w :world/blocks {floor blocks/air})))
           "a missing floor is not dry land"))))
+
+(deftest a-rise-under-a-frozen-lake-digs-the-ice-and-leaves-other-roofs
+  ;; race 39088700340 bot Clj_r02 (issue #71) rose from an air pocket up a shaft under a frozen
+  ;; sea; a rise never dug its cap, so it swam sideways into the ice and drowned
+  (let [rise {:intent/kind :swim-out :intent/for :rise :intent/to-y 62 :intent/status :active}
+        under (fn [roof]
+                (assoc (game/init fx/opts)
+                       :bot/phase :play
+                       :player/pos [5.5 60.0 5.5]
+                       :player/loaded? true
+                       :player/in-water? true
+                       :player/eye-in-water? true
+                       :world/chunks
+                       {[0 0] (world/column
+                               (merge (into {} (for [y (range 55 62)] [[5 y 5] blocks/water-base]))
+                                      {[5 62 5] roof}))}
+                       :plan/intent rise))
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        child #(:intent/child (:plan/intent (intent/run % (:plan/intent %) tick)))]
+    (is (= [5 62 5] (:intent/target (child (under (blocks/default-state :ice)))))
+        "the lake's ice over the head: dug")
+    (is (nil? (child (under 1))) "any other roof is left alone")))
+
+(deftest a-sea-against-a-cliff-is-left-by-a-block-laid-for-a-bank
+  ;; race 39109674329 runner 4 bot Clj_r16 (issue #92): a bot with 489 cobblestone and no pickaxe
+  ;; swam to a cliff three blocks over the water, dug a notch in it by hand (75 s a block under
+  ;; water) and was :no-escape three times in six minutes. A notch under the sky is never a bank;
+  ;; a block laid into the water against the wall is one
+  (let [sea (into {}
+                  (for [x (range 3 16) z (range 16) y (range 56 64)] [[x y z] blocks/water-base]))
+        cliff
+        (into
+         {}
+         (for [x (range 3) z (range 16) y (range 64 72)] [[x y z] (blocks/default-state :stone)]))
+        swim {:intent/kind :swim-out :intent/status :active}
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [6.5 62.97 8.5]
+                 :player/loaded? true
+                 :player/in-water? true
+                 :player/eye-in-water? false
+                 :player/inventory {0 {:item (blocks/items :cobblestone) :count 20}}
+                 :time/tick 10
+                 :world/chunks {[0 0] (world/column (merge sea cliff))}
+                 :plan/intent swim)
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        feet (intent/feet w)]
+    (is (= [3 63 8] (swim/bank-block w feet 64)) "the water cell against the wall nearest the feet")
+    (is (= [3 63 7]
+           (swim/bank-block (assoc-in w
+                             [:world/chunks [0 0]]
+                             (world/column
+                              (merge sea cliff {[3 65 8] (blocks/default-state :stone)})))
+                            feet
+                            64))
+        "not under a roof: the next cell along")
+    (let [laid (:plan/intent (intent/run w swim tick))]
+      (is
+       (=
+        {:intent/kind :place :intent/item :cobblestone :intent/cell [3 63 8] :intent/status :active}
+        (select-keys (:intent/child laid) [:intent/kind :intent/item :intent/cell :intent/status]))
+       "a cobblestone laid there, not a notch dug")
+      (let [refused (assoc swim
+                           :intent/child
+                           {:intent/kind :place :intent/status :failed :intent/reason :rejected})
+            next (:plan/intent (intent/run (assoc w :plan/intent refused) refused tick))]
+        (is (= :active (:intent/status next)) "a refused lay does not fail the escape")
+        (is (true? (:intent/no-lay next)))
+        (is (nil? (:intent/child next)))))
+    (let [far (assoc w :player/pos [10.5 62.97 8.5])]
+      (is (nil? (swim/bank-block far (intent/feet far) 64)) "no wall within reach"))))

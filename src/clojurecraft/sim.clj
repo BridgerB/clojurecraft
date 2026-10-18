@@ -1355,23 +1355,37 @@
         head (at [x (inc y) z])]
     (boolean (and floor feet head (blocks/solid? floor) (blocks/air? feet) (blocks/air? head)))))
 
+(defn portal-space?
+  "Can a linked portal's frame fit at feet in either horizontal axis: four solid floor cells
+   with four air cells over each, as PortalForcer.canHostFrame checks? A single standing? cell
+   is not enough: issue #286's arrival was gravel suspended over the lava sea."
+  [at [x y z :as feet]]
+  (boolean (and (standing? at feet)
+                (some (fn [[dx dz]]
+                        (every? (fn [n]
+                                  (let [p [(+ x (* n dx)) y (+ z (* n dz))]]
+                                    (and (standing? at p)
+                                         (every? #(blocks/air? (at (update p 1 + %))) [2 3]))))
+                                (range -1 3)))
+                      [[1 0] [0 1]]))))
+
 (defn exit-spot
   "The cell a player arrives in through a portal whose exit point is target, in a Nether read by
-   at: of the standing? cells within exit-search blocks of target across (x and z) whose heads
+   at: of the portal-space? cells within exit-search blocks of target across (x and z) whose frames
    are under top (the Nether's logical height, 128: over it is the bedrock roof), the nearest to
    target, by distance squared and then position, so a world and a target give one cell; nil
    when there is none. PortalForcer.createPortal's search, as the server places a new linked
-   portal, made smaller: one cell to stand in, not the frame's four by five, and no frame built."
+   portal, with room for the frame's four by five, though no frame is built."
   [at [tx _ tz :as target] top]
   (let [d2 (fn [c] (reduce + (map #(let [d (- %1 %2)] (* d d)) c target)))]
     (reduce (fn [best c]
-              (cond (not (standing? at c)) best
+              (cond (not (portal-space? at c)) best
                     (or (nil? best) (neg? (compare (into [(d2 c)] c) (into [(d2 best)] best)))) c
                     :else best))
             nil
             (for [x (range (- tx exit-search) (inc (+ tx exit-search)))
                   z (range (- tz exit-search) (inc (+ tz exit-search)))
-                  y (range 1 (dec top))]
+                  y (range 1 (- top 3))]
               [x y z]))))
 
 (defn platform

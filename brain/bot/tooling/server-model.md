@@ -5,7 +5,7 @@ type: reference
 tags: [bot, tooling, sim, tests]
 aliases: [sim.clj, fake server, socket-free test, sim/run]
 status: verified
-lastUpdated: 2026-10-17
+lastUpdated: 2026-10-18
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/sim.clj#defn init
@@ -32,6 +32,8 @@ sourceRefs:
   - src/clojurecraft/sim.clj#defn stream-from
   - src/clojurecraft/sim.clj#defn exit-point
   - src/clojurecraft/sim.clj#defn exit-spot
+  - src/clojurecraft/sim.clj#defn portal-space?
+  - test/clojurecraft/sim_test.clj#a-nether-arrival-needs-room-for-the-portal-not-an-isolated-foothold
   - src/clojurecraft/sim.clj#defn platform
   - "src/clojurecraft/sim.clj#With no :at, the player stands where"
   - test/clojurecraft/sim_test.clj#the-arrival-is-the-standing-cell-nearest-the-exit-point
@@ -69,7 +71,9 @@ related:
 - `sim/connect!` puts the model on a thread of its own behind a bounded channel pair shaped like `conn/open!`'s (`:in`, `:out`, `:close!`), ticking every 50 ms of wall time. `main`'s own loop (`run-loop!`, `apply-event!`, `go-when-loaded!`) then runs against it unchanged: the essay's "bot and server model composed through a channel pair", a complete run of the real process with no Java server. `main's-own-loop-against-the-model-through-channels` gets a log that way in about 6 s, with the model's keep-alives answered; a model that never forwards its packets fails it.
 
 ## Arriving in the Nether
-`arrive` makes a `:sim/nether` the world: one `:column` and its `:at` (the fixtures'), or `:columns` (a real race's recorded Nether, [[real-snapshots]], or a race set's captured one, [[sim-race]]), decoded on arrival unless they come `:decoded`, streamed round the player when they come with a `:view-distance`. With no `:at` the player arrives where the server would place a new linked portal (`arrival`, a pure function of the decoded columns and the portal's position, issue #353): `exit-point` scales the position as `NetherPortalBlock.getExitPortal` does (x and z over 8, floored, y kept), and `exit-spot` takes, of the cells within `exit-search` (16) across whose floor is solid and whose cell and the one over it are air, with the head under the logical height (128: the bedrock roof), the nearest to that point in three dimensions, ties by position, as `PortalForcer.createPortal` searches; with none, `platform` is its forced one, an obsidian floor two by three with three cells of air over it at the point's y held between 70 and 118. Smaller than the game's: one cell to stand in, not the frame's four by five, and no frame or portal built round the player. A portal deep in the overworld comes out in the Nether's lowest open cells, as the game's does (`the-arrival-is-the-standing-cell-nearest-the-exit-point`).
+`arrive` makes a `:sim/nether` the world: one `:column` and its `:at` (the fixtures'), or `:columns` (a real race's recorded Nether, [[real-snapshots]], or a race set's captured one, [[sim-race]]), decoded on arrival unless they come `:decoded`, streamed round the player when they come with a `:view-distance`. With no `:at` the player arrives where the server would place a new linked portal (`arrival`, a pure function of the decoded columns and the portal's position, issue #353): `exit-point` scales the position as `NetherPortalBlock.getExitPortal` does (x and z over 8, floored, y kept), and `exit-spot` takes, of the cells within `exit-search` (16) across with `portal-space?` for a four-by-five frame in either horizontal axis, entirely under the logical height (128: the bedrock roof), the nearest to that point in three dimensions, ties by position, as `PortalForcer.createPortal` searches; with none, `platform` is its forced one, an obsidian floor two by three with three cells of air over it at the point's y held between 70 and 118. The natural site's four floor cells must be solid, with four air cells over each; no frame or portal is built round the player. A portal deep in the overworld comes out in a cave large enough for its frame (`the-arrival-is-the-standing-cell-nearest-the-exit-point`).
+
+Issue #286's R4/12 and R4/4 snapshots entered the Nether on one gravel block at [352 33 226], suspended over lava. The old single-cell search chose it because it held the player, though it could not hold a portal. The fortress tunnel correctly refused every step from there. Checking the frame footprint before arrival selects actual ground instead; tunnel drop and lava rules remain unchanged.
 
 ## Streamed chunks
 `stream-from` sends the captured columns first, then the model's changed blocks in those fresh columns, before the batch finishes. Broken cells are air unless a later placement occupies them (`block-at`); changes outside the fresh view are not sent. The column bytes and decoded values stay shared, never rewritten. Sim race 38999010135 (issue #328, R1/7 seed 2) crossed the portal after digging its room at y -25: the dimension change dropped the client's overlay, but the model resent only the original columns, putting its feet and head back in deepslate while the model still held the open room. The first fortress tunnel failed `:no-stand` twice in 300 ms. Resending the changed blocks keeps the two terrain views in agreement after a dimension change or an ordinary chunk reload.

@@ -396,21 +396,48 @@
                             "resources/clojurecraft/problems.edn")))
      :related (when reason (related reason))}))
 
+(defn named
+  "The open or closed issues numbered ns, with their body and comments."
+  [ns]
+  (for [n ns]
+    (copilot/gh-json "issue"
+                     "view" (str n)
+                     "--repo" copilot/repo
+                     "--json" "number,title,body,comments")))
+
+(defn fetch!
+  "Bring issue n's snapshots into cache/issues/<n>/ (bb issue-check fetch, as copilot-setup-steps
+   does: every file it names, then test/issues/<n>/ restored)."
+  [n]
+  (let [out (sh {:err? true} "bb" "issue-check" "fetch" (str n))]
+    (doseq [f (keep #(second (re-matches #"fetched (.*)" %)) (str/split-lines out))]
+      (fs/create-dirs (str "cache/issues/" n))
+      (fs/copy f (str "cache/issues/" n "/" (fs/file-name f)) {:replace-existing true}))
+    (sh {} "git" "checkout" "-q" "--" (str "test/issues/" n))
+    (sh {} "git" "clean" "-qfd" "--" (str "test/issues/" n))))
+
+(defn write-each!
+  "Write cache/issues/<n>/brief.md for each issue, printing each."
+  [issues]
+  (doseq [i issues]
+    (let [text (brief i (found i))
+          file (fs/path "cache/issues" (str (:number i)) "brief.md")]
+      (fs/create-dirs (fs/parent file))
+      (spit (str file) text)
+      (println (str "== " file))
+      (println text))))
+
 (defn write!
   "Write cache/issues/<n>/brief.md for each issue Copilot holds, printing each."
   []
   (let [issues (held)]
     (when (empty? issues) (println "no issue held by Copilot: no brief"))
-    (doseq [i issues]
-      (let [text (brief i (found i))
-            file (fs/path "cache/issues" (str (:number i)) "brief.md")]
-        (fs/create-dirs (fs/parent file))
-        (spit (str file) text)
-        (println (str "== " file))
-        (println text)))))
+    (write-each! issues)))
 
 (defn -main
-  "bb brief write."
-  [& [command]]
+  "bb brief write (the issues Copilot holds, their snapshots already fetched) | bb brief issue <n>...
+   (any issues, their snapshots fetched first: a Claude session's batch, on a runner by probe)."
+  [& [command & args]]
   (cond (= "write" command) (write!)
-        :else (println "usage: bb brief write")))
+        (and (= "issue" command) (seq args)) (do (run! fetch! args) (write-each! (named args)))
+        :else (println "usage: bb brief write | bb brief issue <n>...")))

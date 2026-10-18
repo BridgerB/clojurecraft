@@ -159,10 +159,13 @@
 (defn placeable-into?
   "Does the server let a block take the place of state id: replaceable? (air, a grass), or a
    fluid? The game's replaceable tag lists water and lava beside the plants: a block placed
-   into a source or a flow replaces it (the portal's pad is cast into the pond's edge). The bot
-   chooses its own spots among replaceable? cells; this is the server's wider rule, the model's."
+   into a source or a flow replaces it (the portal's pad is cast into the pond's edge). A bubble
+   column is replaceable too (the game's block properties say .replaceable()): sim race
+   39068773618 runner 8 (issue #44, world R4/37) bridged a stream over magma with cobblestone
+   into its bubble column, which the model refused three times, :rejected. The bot chooses its own
+   spots among replaceable? cells; this is the server's wider rule, the model's."
   [id]
-  (or (replaceable? id) (= :liquid (type-of id))))
+  (or (replaceable? id) (= :liquid (type-of id)) (= :bubble_column (type-of id))))
 
 (defn log-name?
   "Does a block or item name end in _log (every species, stripped ones too)?"

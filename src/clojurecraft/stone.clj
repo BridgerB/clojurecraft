@@ -212,6 +212,14 @@
 
 (def retreat-distance 12)             ; blocks a retreat walks from where nothing could be cut
 
+(defmethod path/goal-done? :unboxed-away
+  [_ {:goal/keys [pos range boxed]} node]
+  (and (not (contains? boxed node)) (> (path/flat-distance node pos) range)))
+
+(defmethod path/heuristic :unboxed-away
+  [{:goal/keys [pos range]} node]
+  (max 0.0 (- range (path/flat-distance node pos))))
+
 (defn deeper
   "Stairs stair-depth below the feet when no tunnel can be cut here, the row's depth notwithstanding
    (ore lies below it too), when a stair from here can be cut at all and the bottom of the world is
@@ -237,22 +245,32 @@
 (defn retreat
   "Away from where nothing can be cut: out of water first when the feet are in it (a :swim-out for
    :retreat, done on dry land), else a walk to the end of a route at least retreat-distance
-   away (path's :away goal), where the rock is new. From a boxed cell, when the search exhausts
-   the reachable ground short of that distance, use its last unboxed waypoint instead;
-   nil when there is no way. Gym batch iron-a6
+   away (path's :unboxed-away goal), never onto cells already in :plan/boxed-at or
+   :plan/boxed-route, or a retreat waypoint already marked :plan/retreat-unreachable.
+   Sim race 39044508577 (issue #161, R1/29) retreated between two boxed cells for hours.
+   From a boxed cell, when the search exhausts
+   the reachable ground short of that distance, use its last unboxed waypoint instead, or with
+   no waypoint at all the cell the search began on when that is another unboxed cell (the
+   box rests on the shore beside the ice it stands on: sim race 39074156402, issue #71, world
+   R2/35, a cove between a cliff and a frozen lake); nil when there is no way. Gym batch iron-a6
    run 3's tunnel at y 16 ran along an aquifer until water filled its floor, and every tunnel and
    stair from there was refused."
   [world]
   (if (:player/in-water? world)
     {:intent/kind :swim-out :intent/for :retreat}
     (let [feet (intent/feet world)
-          boxed (:plan/boxed-at world #{})
-          r (path/plan world
-                       (path/feet-cell (:player/pos world))
-                       {:goal/kind :away :goal/pos feet :goal/range retreat-distance})
+          boxed (into (:plan/boxed-at world #{})
+                      (concat (:plan/boxed-route world) (:plan/retreat-unreachable world)))
+          r
+          (path/plan
+           world
+           (path/feet-cell (:player/pos world))
+           {:goal/kind :unboxed-away :goal/pos feet :goal/range retreat-distance :goal/boxed boxed})
+          start (:path/from r)
           target (cond (= :found (:path/status r)) (last (:path/waypoints r))
                        (and (= :none (:path/status r)) (contains? boxed feet))
-                       (last (remove boxed (:path/waypoints r))))]
+                       (or (last (remove boxed (:path/waypoints r)))
+                           (when-not (or (= feet start) (contains? boxed start)) start)))]
       (when target {:intent/kind :walk :intent/target target :intent/for :retreat}))))
 
 (defn climb
@@ -272,6 +290,20 @@
       {:intent/kind :stairs-up
        :intent/to-y (stairs/climb-to world terrain/top-y)
        :intent/for :boxed})))
+
+(defn off-ice
+  "On a sheet of ice (path/on-ice?), a walk toward the landing (:plan/go-at) over it, the route
+   search taking the sheet for floor of a bot that stands on one; nil off ice, with no landing or
+   no route toward it. Issue #71, race 39088700340 bot Clj_r02 rose out of the sea floor under a
+   frozen sea onto the ice, and every act that followed (stairs down for the mine, level steps
+   over the water) cut and laid on the sheet until it was :boxed."
+  [world]
+  (when-let [[hx hy hz] (and (path/on-ice? world) (:plan/go-at world))]
+    (let [walk {:intent/kind :walk
+                :intent/target [(long (math/floor hx)) (long (math/floor hy))
+                                (long (math/floor hz))]
+                :intent/for :off-ice}]
+      (when (intent/routable? world walk) walk))))
 
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
@@ -305,6 +337,7 @@
               walk walk
               :else
               (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
+                  (off-ice world)
                   (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
@@ -355,15 +388,15 @@
                 (:player/in-water? world))))
 
 (defn redig-place
-  "The child placement in a neighbouring cell the feet can stand in, or a retreat to fresh
-   ground when none is there. Issue #151's R3/14 and real runner 8 snapshots placed gravel
-   through a wall or round a corner: within click reach, but not within pickup reach."
+  "The child placement in a neighbouring cell the feet can stand in, level or one step up or
+   down, or a retreat to fresh ground when none is there. Issue #151's R3/14 and real runner 8
+   snapshots placed gravel through a wall or round a corner: within click reach, but not within
+   pickup reach."
   [world item]
   (let [[fx fy fz] (intent/feet world)
         refused (set (for [[dx dy dz] place/around
                            :let [cell [(+ fx dx) (+ fy dy) (+ fz dz)]]
-                           :when (not (and (zero? dy)
-                                           (= 1 (+ (abs dx) (abs dz)))
+                           :when (not (and (= 1 (+ (abs dx) (abs dz)))
                                            (path/standable? world cell)))]
                        cell))
         [cell] (place/spot world true refused)]

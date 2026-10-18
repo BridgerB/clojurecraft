@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, mining, goals]
 aliases: [:mine, stone.clj, mine-next, :goal/blocks, :goal/depth, mine-stone, mine-coal, mine-iron, dig-gravel, none-in-sight, intent/pickup?, step-down?, :redig, flint-from-gravel, flint]
 status: verified
-lastUpdated: 2026-10-17
+lastUpdated: 2026-10-18
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/stone.clj#defn mine-next
@@ -30,6 +30,11 @@ sourceRefs:
   - src/clojurecraft/stone.clj#defn deeper
   - test/clojurecraft/stone_test.clj#deeper-only-where-a-stair-can-be-dug
   - src/clojurecraft/stone.clj#defn retreat
+  - src/clojurecraft/stone.clj#defn off-ice
+  - test/clojurecraft/stone_test.clj#a-boxed-bot-on-ice-steps-to-the-standable-cell-beside-it
+  - src/clojurecraft/stone.clj#defmethod path/goal-done? :unboxed-away
+  - test/clojurecraft/stone_test.clj#a-long-retreat-does-not-end-on-boxed-ground
+  - test/clojurecraft/stone_test.clj#a-boxed-search-does-not-retreat-to-its-start
   - test/clojurecraft/stone_test.clj#a-boxed-pocket-retreats-along-a-short-route-to-new-rock
   - src/clojurecraft/stone.clj#defn climb
   - src/clojurecraft/plan.clj#def boxing-kinds
@@ -43,6 +48,7 @@ sourceRefs:
   - src/clojurecraft/stone.clj#defn link
   - src/clojurecraft/stone.clj#defn redig-place
   - test/clojurecraft/stone_test.clj#redig-places-only-where-the-drop-can-be-collected
+  - test/clojurecraft/stone_test.clj#redig-places-on-the-neighbouring-stair
   - test/clojurecraft/stone_test.clj#redig-tries-placement-again-after-reaching-fresh-ground
   - src/clojurecraft/stone.clj#defmethod intent/run :redig
   - test/clojurecraft/sim_test.clj#one-gravel-is-placed-and-dug-again-until-it-drops-flint
@@ -70,6 +76,10 @@ A mining row is data: `:goal/act :mine`, the blocks it digs (`:goal/blocks`) and
 
 `stone/retreat` still prefers a route more than twelve blocks away. When the feet are in `:plan/boxed-at` and the search exhausts the reachable ground before that distance (`:path/status :none`), it instead walks to the last unboxed waypoint on the returned route. An empty route or one with only boxed cells still yields nil; a search that merely spent its budget is not exhaustion. Retreat walks end standing on that destination (`intent/standing-walks`), never merely within reach of it, which could leave a short retreat in its boxed starting cell. Sim race 39028864642 (issue #370, R1/29) finished a climb for portal wood under gravel at y 48 with an eight-cell route back through its tunnel, all shorter than twelve blocks away, and waited `:no-log`. The short retreat leaves that pocket so gathering can re-plan from new rock without relaxing the gravel or boxed-cell guards.
 
+A boxed pocket whose search finds no waypoint at all still has a way when the cell the search began on (`:path/from`: the feet's own cell, or the standable cell beside it, `path/start-cell`) is another cell not in `:plan/boxed-at`: the retreat is one step there, and the next descent starts from it. Sim race 39074156402 (issue #71, world R2/35): the bot stood on the edge of a frozen lake in a cove under a cliff, the stairs died `:boxed` on the ice's edge, the retreat had nothing to walk to, and the plan waited `:boxed` to its end. A cell it has already died on is never the step, so the walk ends.
+
+The `:unboxed-away` route goal excludes both boxed cells and `:plan/boxed-route`, the cells visited by descents or tunnels that failed `:boxed` (`plan/fail-intent`). Routes may cross those cells but cannot end on them. Issue #161's R1/29 snapshot repeatedly walked between boxed cells; excluding only the final boxed cells then repeated short descents from their still-unmarked starting cells. Remembering the failed searches' visited cells lets the bot leave that area and finish the portal kit.
+
 ## How it works (`mine-next`)
 1. A chain in flight continues: walk → dig → collect via `intent/chain-next`, tagged `:intent/for` the row's id, so another row's chain (a coal walk when iron is now wanted) is never continued as this one's dig.
 2. A tool the row needs that only the main inventory holds is put in hand first, with an `:equip` intent (`intent/stowed-tool`). `tool-missing`: a block that drops only to its tool (`blocks/drops-need-tool?`, [[hardness-and-tools]]) with no such tool held waits `:no-pickaxe`; gravel drops to a hand and never waits.
@@ -78,11 +88,14 @@ A mining row is data: `:goal/act :mine`, the blocks it digs (`:goal/blocks`) and
    A tunnel never heads back under the staircase just cut (`tunnel-heading`: with `:plan/last` a `:stairs-down`, its heading turned round is left out): its first steps would dig the floors of the stairs, the only way back up. Sim race 38839665459 runner 3 (issue #71, every seed of world R1/19 at 3f836ff) cut stairs west down to y 1 and tunnelled east under them; boxed beside an aquifer under gravel, its retreat found no route up the stairs it had undermined, every climb was `:boxed`, and the plan failed (`stone_test`, "never back under the stairs just cut").
 5. The collect waits for one more of any item the row's blocks can drop (`drops-of-row`, every try of their loot tables: flint and gravel both for gravel).
 
+**On a sheet of ice**, `off-ice` comes before any stair: a walk toward the landing over the sheet (`path/on-ice?`, [[pathfinder]]), tried before the mine row's stairs and the gather's climbs. Race 39088700340 bot Clj_r02 (issue #71) climbed out of a frozen sea onto the ice and cut stairs and laid floors on it until `:boxed`.
+
 ## Flint: dig a held gravel again (`:redig`)
 Gravel's loot table drops flint one time in ten, else the gravel itself. The `:flint-from-gravel` row needs one gravel and provides flint; its act starts a `:redig` intent, which runs three child intents in its own place (`link`, as stairs runs its digs): `:place` the held gravel in the pickup cell chosen by `redig-place` (in a passage if need be, since it is dug again at once), `:dig` what it placed, `:collect` with the row's drops (flint and gravel). One intent from placing to picking up matters: as three separate intents, the placing spent the gravel the row needs, and on the next tick the planner went for more gravel with `:dig-gravel` instead of digging the one it had just placed. When gravel comes back, the planner simply starts another `:redig`; there is no counter. In the sim, seed 4 rolls gravel four times and flint on the fifth dig, and the run replays to the same tick.
 
 ## Gotchas
 - **Click reach is not pickup reach.** `redig-place` chooses a supported, clear cell immediately beside the feet, including a passage, and gives that cell to the child placement. With none, it retreats to fresh ground and tries placement again; it never cuts a placement niche. Issue #151's R3/14 and real runner 8 snapshots placed gravel through rock or round a corner, then walked into the intervening wall until three collects failed `:not-picked-up`. Both now collect gravel repeatedly and reach flint-and-steel within their kept windows.
+- **A stair is pickup ground too.** The neighbouring cell may be one step up or down, not only level with the feet. Issue #349's R1/4 and R4/42 snapshots held gravel but retreated along stairs indefinitely because no same-height neighbour had headroom; the next placement search must accept a standable stair.
 - **Exposed is not safe to dig.** `exposed-of-states` excludes blocks whose dig would expose a fluid (`intent/exposes-fluid?`), using the live terrain rather than permanently blacklisting them. Race 39037024176 runner 1 (issue #342) repeatedly walked to stone beside water, received `:unsafe`, and descended into another boxed pocket. A dry observation makes those blocks candidates again. Together with resetting turns after each completed stair, the kept snapshot reaches the furnace 363.3 seconds after its moment instead of failing `[:furnace :boxed]` after 54.15 seconds.
 - **Lava that caught the bot is still coming.** Ore within `path/lava-trap-reach` (4) on the plane of a lava trap still in force (`:world/traps`, ten minutes) is left alone (`path/near-lava-trap?`): sim race 38844683780 (issue #230, world R2/9) fled lava falling from ten blocks up, then mined the iron two blocks off under the same flow and was caught again until the flee found no footing; and where it was caught, the mine retreats before it cuts a stair, which the flow followed down (`ore-beside-a-lava-trap-is-left-alone`).
 - **A tunnel shows its floor too.** Live run 14 (local landing 2360,2360, 58fc6aa) held an ingot and needed flint, tunnelled for gravel at y 18 and walked over five gravel blocks in its own floor, none counted because a block a level under the feet was never reachable (`gravel-in-the-tunnel-floor-is-dug-and-picked-up-from-its-hole`).

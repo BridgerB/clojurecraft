@@ -25,24 +25,37 @@
 (def meats "The item ids of what game-kinds drop." (set (map recipe/item-id (vals game-kinds))))
 
 (def hunt-radius 24)                  ; blocks from the feet an animal is hunted within
+(def starving-below 6)                ; food at or under this is starving: the bar is nearly empty and health no longer comes back
+(def starving-radius 48)              ; blocks a starving bot hunts within (a server shows animals this far, and the model populates three chunks round the player)
 (def strike-range 4.5)                ; blocks on the plane from which a hunt fights instead of walking: past a walk's reach (intent/reach 4), so a walk that arrived is never asked again
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
 
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
 
+(defn reach
+  "Blocks from the feet within which an animal is hunted: hunt-radius, and starving-radius once the
+   food the server sent is at or under starving-below (issues #69, #62, #135: bots at food 0 and
+   one health, nothing to eat within 24 blocks, starving for hours)."
+  [world]
+  (if (some-> (:player/food world)
+              (<= starving-below))
+    starving-radius
+    hunt-radius))
+
 (defn game
-  "[eid entity] of the nearest animal of game-kinds, alive, not blacklisted, within hunt-radius,
-   the first of the candidates nearest that a route reaches (intent/routable?); nil when there is
-   none."
+  "[eid entity] of the nearest animal of game-kinds, alive, not blacklisted, within reach
+   (hunt-radius, starving-radius when starving), the first of the candidates nearest that a route
+   reaches (intent/routable?); nil when there is none."
   [world]
   (let [pos (:player/pos world)
-        bl (:plan/blacklist world #{})]
+        bl (:plan/blacklist world #{})
+        radius (reach world)]
     (->> (:world/entities world)
          (filter (fn [[eid e]]
                    (and (game-kinds (entity/kind e))
                         (not (entity/dead? e))
                         (not (contains? bl eid))
-                        (<= (physics/distance pos (:entity/pos e)) hunt-radius))))
+                        (<= (physics/distance pos (:entity/pos e)) radius))))
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (take candidates)
          (some (fn [[_ e :as ee]]

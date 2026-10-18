@@ -55,6 +55,9 @@
     "while a :wade has an entry"]
    [:intent/dig-when-down "the cell a :swim-out or :cross will dig once it has sunk to the floor"
     "while a :swim-out sinks"]
+   [:intent/no-lay
+    "a :swim-out whose block laid for a bank was refused: it notches the wall instead"
+    "after a refused lay"]
    [:intent/next-search "the tick a :swim-out with no bank yet looks for one again"
     "while a :swim-out rises with no bank"]
    [:intent/shore "the point at the water's surface a :swim-out with no bank swims toward"
@@ -71,6 +74,9 @@
    [:intent/retreated?
     "a :place that has walked off to fresh rock once (place/fresh-rock) and fails :no-spot next"
     "on a :place after its walk to fresh rock"]
+   [:intent/niche
+    "the cell a :place chose to cut out of the wall for its block (place/niche): once empty it is the spot, even where a route could run through it (powder snow over it)"
+    "on a :place from the tick it starts cutting its niche"]
    [:player/air "breath left, 0-300 ticks: an estimate, down 1 under water, up 4 out"
     "after the first physics tick"]
    [:player/dead? "health reached zero; cleared by the server's respawn" "while dead"]
@@ -193,6 +199,12 @@
     "from the :go event"]
    [:plan/unwalkable "walks in a row that failed :no-path; max-unwalkable of them fail the plan"
     "from the :go event"]
+   [:plan/unreached
+    "targets log walks failed :no-path toward; a log within unreached-radius of one is not chosen: the trees round a place no route reaches are as far from the feet"
+    "after a walk fails :no-path"]
+   [:plan/backed-off
+    "per creeper entity id {:pos where it stood the first time :times back-offs from it there}: a creeper that stands within a block of :pos through shun-after of them is shunned, a threat only within shunned-radius (combat/creeper-reach)"
+    "after a back-off from a creeper began"]
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]
@@ -205,9 +217,27 @@
     "inside :stronghold/throws"]
    [:throw/dir "the unit [dx dz] on the plane the eye flew, toward the stronghold"
     "inside :stronghold/throws"] [:throw/at "ms the eye was first seen" "inside :stronghold/throws"]
+   [:fortress/search
+    "the leg of the spiral search a fortress tunnel with no brick on record is on: {:search/from :search/heading :search/leg :search/tunnels}; the planner turns it a quarter right when the leg is over (fortress/exploring, issue #338)"
+    "after an exploring :tunnel-to's first tick"]
+   [:search/from "the feet cell the leg began at" "inside :fortress/search"]
+   [:search/heading "the unit [dx dz] the leg goes along: east, south, west or north"
+    "inside :fortress/search"]
+   [:search/leg
+    "which leg of the spiral, from 0; a leg's length grows a spacing every two legs (fortress/leg-length)"
+    "inside :fortress/search"]
+   [:search/tunnels
+    "the tunnels the leg has taken, one more at each look of the planner; too many end the leg"
+    "inside :fortress/search"]
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
     "after a :boxed staircase or tunnel"]
+   [:plan/boxed-route
+    "feet cells visited by descents or tunnels that ended :boxed: a retreat seeks ground outside those failed searches"
+    "after a :boxed staircase or tunnel"]
+   [:plan/retreat-unreachable
+    "targets of build retreat walks that failed :no-path: later retreat searches exclude them"
+    "after a build retreat walk fails :no-path"]
    [:plan/surfaced
     "[feet ms] where and when the last climb out to the surface came out: a spare's climb is not cut again from below near it for a while"
     "after a climb out comes out"]
@@ -230,7 +260,7 @@
     "intents the planner starts"]
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
    [:intent/target
-    "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265) (issue #259: a widening, a position is still one)"
+    "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265); for a :tunnel for :bank or :lava, the water or the lava source it heads for (issue #130) (issue #259: a widening, a position is still one)"
     "most intents"]
    [:intent/for
     "what the intent serves (:log, :log-hunt, a mining row's id), so chains continue only their own"
@@ -269,6 +299,9 @@
    [:intent/dry?
     "a :tunnel-to that takes only steps opening no cell by water (fortress/dry?): the overworld's way toward the stronghold and down to its portal room (issue #265)"
     "a :tunnel-to to a stronghold's frame"]
+   [:intent/search
+    "the fortress search leg an exploring :tunnel-to works for (fortress/exploring): the executor keeps it as :fortress/search"
+    "a :tunnel-to with no brick on record to go to"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/tunnel-visited
     "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"
@@ -332,6 +365,9 @@
    [:intent/level-cells
     "the two cells a level step opens, head then feet, when every stair down was refused"
     "stairs-down, during a level step"]
+   [:intent/bore
+    "the rock cells over the head a climb out from under a lake digs through, bottom first, before it rises up the shaft (stairs/bore-cells)"
+    "a stairs-up in its :bore stage, with no pickaxe held"]
    [:intent/lay
     "the cells a block is laid in, in order, before a stair or level step is cut: a floor and its holder (a holder under the block under the feet, then the floor under the new feet) for a stair down, a missing step for a stair up, or the water cells beside a stair up (a seal, at most the four neighbours of each of three cells)"
     "a staircase, while cells are laid"]
@@ -408,6 +444,9 @@
    [:intent/refused
     "cells the server refused a placement into with nothing in them (a body stood there); the next spot is another, place/max-refusals of them fail :rejected"
     "place, after such a refusal"]
+   [:intent/nudges
+    "ticks a placement into a given cell has walked toward the middle of the feet's cell, the body clipping the cell's edge (place/nudge-off); place/max-nudges of them, then the server is asked anyway"
+    "place into a given cell the body clips"]
    [:intent/sequence "sequence number of the placement, or of the bucket's use"
     "place and scoop, after sending"]
    [:intent/tries "scoops sent at this source; the last of scoop/max-tries fails :no-scoop"

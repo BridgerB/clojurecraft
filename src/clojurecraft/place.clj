@@ -29,6 +29,7 @@
 (def answer-ms 3000)                  ; ms to wait for the server to answer a placement or an open
 (def fresh-rock-distance 12)          ; blocks a place with nowhere to put its block walks off before it looks again
 (def fresh-rock-climb 4)              ; stairs up a place with nowhere and no route away cuts before it looks again
+(def max-nudges 40)                   ; ticks a placement into a given cell steps off its edge for before it asks the server anyway
 (def max-refusals 3)                  ; spots the server refused with nothing in them before a placement fails :rejected
 
 (defn- now [world] (:time/now world))
@@ -194,6 +195,38 @@
   [world id]
   (boolean (or (intent/stowed-tool world id) (not= :needs-tool (intent/choose-tool world id)))))
 
+(defn powder-snow-at?
+  "Is the block at pos loaded powder snow: no collision for the player, so it is not solid, yet
+   no block can be placed into it, and the bare hand breaks it?"
+  [world pos]
+  (= :powder_snow
+     (some-> (terrain/block-at world pos)
+             blocks/name-of)))
+
+(defn dug-spot
+  "[target support] for the niche the bot has cut (the intent's :intent/niche) once it is empty:
+   the cell itself, against the solid under it, where spot would refuse it as a passage (a niche
+   under powder snow is one the feet could stand in, and a way through nothing). nil when no niche
+   was cut, the cell is not yet air the server confirmed, a body or the refused cells are in the
+   way, or it is out of reach."
+  [world cell refused]
+  (let [support (some-> cell
+                        (update 1 dec))
+        t (some->> cell
+                   (terrain/block-at world))
+        s (some->> support
+                   (terrain/block-at world))]
+    (when (and t
+               s
+               (not (contains? refused cell))
+               (blocks/replaceable? t)
+               (terrain/confirmed? world cell)
+               (blocks/solid? s)
+               (not (contains? memory/placed-kinds (blocks/name-of s)))
+               (not (inside-player? world cell))
+               (<= (physics/distance (game/eye world) (physics/centre cell)) place-reach))
+      [cell support])))
+
 (defn niche
   "A cell beside the feet at their level, or beside the head when none is there (the block
    goes into the wall at head height, still in reach to open: race 38477665442 bot Clj_r12 at
@@ -207,26 +240,31 @@
    that is never dug nor one the bot placed (a table in the last niche); nil when none. Where a
    staircase has no spot, the wall gives one: the side nearest the landing (:plan/go-at), never
    the wall ahead, where the way goes on (batch iron-a2 run 1 put its table there, and its
-   tunnel dug through it)."
+   tunnel dug through it). Powder snow may be the niche itself or lie over it: no block can be
+   placed into it, so it is dug out first like stone (race 39031393203 bot Clj_r12, issue #94: a
+   pocket under a powder-snow field, every cell beside the feet powder snow or stone under
+   powder snow, and the table failed :no-spot three times)."
   [world]
   (let [[fx fy fz] (intent/feet world)
         home (:plan/go-at world)]
-    (first (for [dy [0 1]
-                 [dx dz] (cond->> sides
-                           home
-                           (sort-by (fn [[dx dz]]
-                                      (physics/horizontal-distance [(+ fx dx 0.5) 0 (+ fz dz 0.5)]
-                                                                   home))))
-                 :let [c [(+ fx dx) (+ fy dy) (+ fz dz)]]
-                 :when (and (solid-at? world c)
-                            (solid-at? world (update c 1 dec))
-                            (solid-at? world (update c 1 inc))
-                            (not (blocks/falls? (terrain/block-at world (update c 1 inc))))
-                            (not (intent/exposes-fluid? world c))
-                            (droppable? world (terrain/block-at world c))
-                            (not (contains? (into intent/never-dug memory/placed-kinds)
-                                            (blocks/name-of (terrain/block-at world c)))))]
-             c))))
+    (first
+     (for [dy [0 1]
+           [dx dz] (cond->> sides
+                     home
+                     (sort-by (fn [[dx dz]]
+                                (physics/horizontal-distance [(+ fx dx 0.5) 0 (+ fz dz 0.5)]
+                                                             home))))
+           :let [c [(+ fx dx) (+ fy dy) (+ fz dz)]]
+           :when (and (or (solid-at? world c) (powder-snow-at? world c))
+                      (solid-at? world (update c 1 dec))
+                      (or (solid-at? world (update c 1 inc))
+                          (powder-snow-at? world (update c 1 inc)))
+                      (not (blocks/falls? (terrain/block-at world (update c 1 inc))))
+                      (not (intent/exposes-fluid? world c))
+                      (droppable? world (terrain/block-at world c))
+                      (not (contains? (into intent/never-dug memory/placed-kinds)
+                                      (blocks/name-of (terrain/block-at world c)))))]
+       c))))
 
 (def face-cursors
   "Where on each face of the clicked block a placement clicks: its middle."
@@ -250,6 +288,18 @@
                           (blocks/solid? id)
                           (not (contains? memory/placed-kinds (blocks/name-of id))))]
            [s face])))
+
+(defn nudge-off
+  "The world with one tick's controls toward the middle of the feet's cell and :intent/nudges one
+   more: a given cell (a stair's seal against the water beside the feet) that the body clips at the
+   edge, the feet a few hundredths over the line, is a placement the server refuses with the cell
+   empty (the game refuses a block into any player), as often as it is tried. Race 39095700271
+   runner 3 bot Clj_r04 (issue #430) stood at x 2838.74 and sealed the water at 2839 three times
+   in turn, each stair :boxed."
+  [world nudges]
+  (-> world
+      (assoc :player/controls (intent/toward world (physics/centre (intent/feet world)) 0.0))
+      (intent/assoc-intent :intent/nudges (inc nudges))))
 
 (defn settle-at
   "On to :settle to place into target by a click on face of against."
@@ -289,28 +339,38 @@
          :intent/status :active}))))
 
 (defmethod place-stage :spot
-  ;; a given cell (:intent/cell, a build's) against a solid neighbour; else a plain spot, else a
-  ;; niche cut in the wall, else (passage-ok?) a spot in the passage: a table or a gravel to dig
-  ;; again leaves the way open when the bot goes on
-  [world {:intent/keys [passage-ok? refused retreated?] at :intent/cell :or {refused #{}}}]
+  ;; a given cell (:intent/cell, a build's) against a solid neighbour; else the niche already cut
+  ;; (:intent/niche, dug-spot), else a plain spot, else a niche cut in the wall, else (passage-ok?)
+  ;; a spot in the passage: a table or a gravel to dig again leaves the way open when the bot goes on
+  [world
+   {:intent/keys [passage-ok? refused retreated? nudges]
+    at :intent/cell
+    cut :intent/niche
+    :or {refused #{} nudges 0}}]
   (let [[against face :as given] (when at (support world at))
-        found (when-not at (spot world false refused))
+        found (when-not at (or (dug-spot world cut refused) (spot world false refused)))
         n (when-not (or at found) (niche world))
         [_ stowed-item :as stowed] (when n (intent/stowed-tool world (terrain/block-at world n)))
         [target from] (or found
                           (when (and (nil? at) (nil? n) passage-ok?) (spot world true refused)))]
-    (cond given (settle-at world at against face)
+    (cond (and given (inside-player? world at) (< nudges max-nudges)) (nudge-off world nudges)
+          given (settle-at world at against face)
           at (intent/fail world :no-support)
           target (settle-at world target from :up)
           ;; the tool the niche needs is in the main inventory: in the hand first, then the dig
           stowed
           (intent/assoc-intent world
                                :intent/stage :niche
+                               :intent/niche n
                                :intent/child
                                {:intent/kind :equip
                                 :intent/item (recipe/item-name stowed-item)
                                 :intent/status :active})
-          n (intent/assoc-intent world :intent/stage :niche :intent/child (intent/child-dig n))
+          n
+          (intent/assoc-intent world
+                               :intent/stage :niche
+                               :intent/niche n
+                               :intent/child (intent/child-dig n))
           :else
           (if-let [walk (when-not retreated? (fresh-rock world))]
             (intent/assoc-intent world
@@ -361,7 +421,9 @@
   ;; put back) is given up for another spot before anything is sent; a given cell (a build's)
   ;; is sent and judged by the server
   [world
-   {:intent/keys [target against click-face since still] at :intent/cell :or {click-face :up}}]
+   {:intent/keys [target against click-face since still nudges]
+    at :intent/cell
+    :or {click-face :up nudges 0}}]
   (let [look (physics/look-at (game/eye world) (physics/centre target))
         still (if (intent/still? world) (inc still) 0)
         world (assoc world :player/controls {:control/look look})]
@@ -369,6 +431,8 @@
           (-> world
               (intent/assoc-intent :intent/stage :spot)
               (intent/dissoc-intent :intent/target :intent/against :intent/click-face))
+          (and at (inside-player? world at) (< nudges max-nudges))
+          (intent/assoc-intent world :intent/stage :spot)
           (and (>= still 3) (> (- (now world) since) settle-ms))
           (-> world
               (use-item-on against (packet/value :face click-face) (face-cursors click-face))

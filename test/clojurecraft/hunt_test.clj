@@ -105,3 +105,19 @@
                  :held (recipe/counts (:player/inventory w))}))
     (is (= (:sim/food sim) (:player/food w)) "the bot's food is the server's")
     (is (= [] (:sim/violations sim)))))
+
+(deftest a-starving-bot-hunts-further-afield
+  ;; issues #69, #62, #135: food 0, one health, and the nearest game thirty blocks off was never
+  ;; looked for beyond hunt-radius
+  (let [col (world/column {})
+        far {5 (animal :cow [38.5 64.0 8.5])}
+        wide (fn [food]
+               (assoc (standing food {} far)
+                      :world/chunks
+                      (zipmap [[0 0] [1 0] [2 0] [3 0]] (repeat col))))]
+    (is (= hunt/hunt-radius (hunt/reach (wide 8))))
+    (is (= hunt/starving-radius (hunt/reach (wide hunt/starving-below))))
+    (is (plan/done-by (wide 8) hunt-row) "hungry only: a cow thirty blocks off is out of reach")
+    (is (not (plan/done-by (wide 4) hunt-row)) "starving: it is hunted")
+    (is (= {:intent/kind :walk :intent/target [38 64 8] :intent/for :hunt}
+           (plan/next-intent (wide 4) hunt-row plan/goals)))))

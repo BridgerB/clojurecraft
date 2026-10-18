@@ -180,6 +180,46 @@
     (is (= :done (:intent/status (:plan/intent w))))
     (is (>= (physics/horizontal-distance (:player/pos w) [10.5 64.0 8.5]) combat/back-off-to))))
 
+(deftest a-creeper-that-stands-still-is-shunned-not-fled-from-for-ever
+  ;; issues #69, #62, #161: a starving bot at one health backed away from a creeper five blocks
+  ;; off that never moved, again and again, and the walk it was on never finished
+  (let [creeper (mob :creeper [12.0 64.0 8.5] 20.0)
+        seen (fn [times pos] {:plan/backed-off {8 {:pos pos :times times}}})
+        world (fn [times pos] (merge (standing {8 creeper}) (seen times pos)))]
+    (is (= #{8} (set (keys (combat/threats (world 1 [12.0 64.0 8.5])))))
+        "backed away from once: still a threat at three and a half blocks")
+    (is (empty? (combat/threats (world combat/shun-after [12.0 64.0 8.5])))
+        "backed away from twice and it stood: only within shunned-radius")
+    (is (= #{8}
+           (set (keys (combat/threats (-> (standing {8 (mob :creeper [10.5 64.0 8.5] 20.0)})
+                                          (merge (seen combat/shun-after [10.5 64.0 8.5])))))))
+        "two blocks off, a shunned creeper is a threat again")
+    (is (empty? (combat/threats (-> (standing {8 (mob :creeper [10.5 64.0 8.5] 20.0)})
+                                    (merge (seen combat/given-up-after [10.5 64.0 8.5])))))
+        "given up on, only one at the feet is")
+    (is (= #{8} (set (keys (combat/threats (world combat/given-up-after [20.0 64.0 8.5])))))
+        "a creeper that came on from where it stood is counted afresh")))
+
+(deftest back-offs-from-a-creeper-count-where-it-stood
+  (let [w (assoc (standing {8 (mob :creeper [13.0 64.0 8.5] 20.0)})
+                 :plan/intent
+                 {:intent/kind :back-off :intent/target 8 :intent/status :active})
+        e (get-in w [:world/entities 8])
+        once (combat/noted w 8 e)
+        twice (combat/noted once 8 e)
+        moved (combat/noted twice 8 (assoc e :entity/pos [9.5 64.0 8.5]))
+        zombie (mob :zombie [11.0 64.0 8.5] 20.0)]
+    (is (= {8 {:pos [13.0 64.0 8.5] :times 1}} (:plan/backed-off once)))
+    (is (= 2 (get-in twice [:plan/backed-off 8 :times])))
+    (is (= {:pos [9.5 64.0 8.5] :times 1} (get-in moved [:plan/backed-off 8]))
+        "a creeper that came on starts its count again")
+    (is (nil? (:plan/backed-off (combat/noted w 7 zombie))) "only creepers are kept"))
+  (let [w (assoc (standing {8 (mob :creeper [13.0 64.0 8.5] 20.0)})
+                 :plan/intent
+                 {:intent/kind :back-off :intent/target 8 :intent/status :active})
+        [w _] (fx/fold intent-step w [(tick 50)])]
+    (is (= 1 (get-in w [:plan/backed-off 8 :times])) "the first tick of a back-off notes it")))
+
 (deftest no-two-attacks-within-600-ms
   ;; the property the issue asks for: whatever the clock does between ticks (a starved loop, a
   ;; burst), the attacks keep their distance

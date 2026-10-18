@@ -120,9 +120,11 @@
 (s/def :intent/wet? boolean?)
 (s/def :intent/from-dist number?)
 (s/def :intent/exposes-ok? boolean?)
+(s/def :intent/no-lay boolean?)
 (s/def :intent/drop-ok? boolean?)
 (s/def :intent/passage-ok? boolean?)
 (s/def :intent/retreated? boolean?)
+(s/def :intent/niche ::block-pos)
 (s/def :player/dead? boolean?)
 (s/def :player/in-lava? boolean?)
 (s/def :player/eye-in-water? boolean?)
@@ -177,6 +179,11 @@
 (s/def :throw/at int?)
 (s/def ::throw (s/keys :req [:throw/from :throw/dir :throw/at]))
 (s/def :stronghold/throws (s/coll-of ::throw :kind vector?))
+(s/def :search/from ::block-pos)
+(s/def :search/heading (s/tuple #{-1 0 1} #{-1 0 1}))
+(s/def :search/leg nat-int?)
+(s/def :search/tunnels nat-int?)
+(s/def :fortress/search (s/keys :req [:search/from :search/heading :search/leg :search/tunnels]))
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
@@ -249,7 +256,14 @@
 (s/def :plan/blacklist (s/coll-of ::target :kind set?)) ; a ghost's entity id too
 (s/def :plan/trunk-failures (s/map-of (s/tuple int? int?) pos-int?))
 (s/def :plan/boxed-at (s/coll-of ::block-pos :kind set?)) ; feet cells where a staircase died :boxed
+(s/def :plan/boxed-route (s/coll-of ::block-pos :kind set?))
+(s/def :plan/retreat-unreachable (s/coll-of ::block-pos :kind set?))
+(s/def :plan/unreached (s/coll-of ::block-pos :kind set?))
 (s/def :plan/unwalkable nat-int?)
+(s/def :backed-off/times pos-int?)
+(s/def :backed-off/pos (s/coll-of number? :count 3))
+(s/def :plan/backed-off ; creeper entity id → where it stood when first backed away from, and how often
+  (s/map-of int? (s/keys :req-un [:backed-off/pos :backed-off/times])))
 (s/def :plan/surfaced (s/tuple ::block-pos int?)) ; where and when the last climb out came out
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :plan/chain? boolean?)
@@ -306,7 +320,8 @@
            :world/chunks :world/blocks :world/unconfirmed :world/facts :world/entities
            :window/state-id :window/grid :window/cursor :window/open :player/held-slot :plan/intent
            :plan/status :plan/blacklist :plan/trunk-failures :plan/chain? :plan/reached
-           :plan/boxed-at :plan/unwalkable]))
+           :plan/boxed-at :plan/boxed-route :plan/retreat-unreachable :plan/unreached
+           :plan/unwalkable :plan/backed-off]))
 
 (s/fdef game/step
   :args
@@ -435,6 +450,7 @@
 (s/def :intent/reach (s/and number? pos?))
 (s/def :intent/climb nat-int?)
 (s/def :intent/dry? boolean?)
+(s/def :intent/search :fortress/search)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
 (s/def :intent/since int?)
@@ -465,6 +481,7 @@
 (s/def :intent/rejections pos-int?)
 (s/def :intent/cells (s/coll-of ::block-pos :kind vector? :count 3))
 (s/def :intent/level-cells (s/coll-of ::block-pos :kind vector? :count 2))
+(s/def :intent/bore (s/coll-of ::block-pos :kind vector? :min-count 1))
 (s/def :intent/lay (s/coll-of ::block-pos :kind vector? :min-count 1 :max-count 12)) ; a floor and its holder, a step, or a seal over the water beside three cells
 (s/def :intent/level-steps pos-int?)
 (s/def :intent/length pos-int?)
@@ -492,14 +509,16 @@
 (s/def :path/max-nodes pos-int?)
 (s/def :path/from ::block-pos)
 (s/def ::route (s/keys :req [:path/waypoints :path/cost :path/status] :opt [:path/from]))
-(s/def :goal/kind #{:near :block :xz :away :pickup :sky :surface :unseen}) ; :unseen is blaze.clj's: out of a blaze's sight
+(s/def :goal/kind #{:near :block :xz :away :unboxed-away :pickup :sky :surface :unseen}) ; :unseen is blaze.clj's: out of a blaze's sight
 (s/def :goal/pos ::block-pos)
 (s/def :goal/range number?)
 (s/def :goal/rise nat-int?)
 (s/def :goal/step-down? boolean?)
+(s/def :goal/boxed (s/coll-of ::block-pos :kind set?))
 (s/def ::path-goal
   ;; :sky and :surface have no :goal/pos: the mouth is wherever their terrain predicate holds
-  (s/and (s/keys :req [:goal/kind] :opt [:goal/pos :goal/range :goal/rise :goal/step-down?])
+  (s/and (s/keys :req [:goal/kind]
+                 :opt [:goal/pos :goal/range :goal/rise :goal/step-down? :goal/boxed])
          #(or (contains? #{:sky :surface} (:goal/kind %)) (contains? % :goal/pos))))
 (s/def :intent/logs-before nat-int?)
 (s/def :intent/drops (s/coll-of int? :kind set?))
@@ -516,6 +535,7 @@
 (s/def :intent/sent-at int?)
 (s/def :intent/against ::block-pos)
 (s/def :intent/refused (s/coll-of ::block-pos :kind set?))
+(s/def :intent/nudges nat-int?)
 (s/def :intent/sequence int?)
 (s/def :chunk/column map?)
 (s/def :chunk/min-y #{-64 0})
@@ -792,6 +812,9 @@
   :args
   (s/cat :world (requires :player/pos :world/chunks)
          :item keyword?))
+(s/fdef stone/retreat
+  :args
+  (s/cat :world (requires :player/pos :world/chunks)))
 (s/fdef path/plan
   :args
   (s/cat :world (requires :world/chunks)
@@ -876,5 +899,6 @@
    `memory/nearest-log `make/near `make/decide `wood/gather-next `wood/return-walk `place/spot
    `place/ashore `stone/redig-place `window/view `path/plan `path/classify `entity/hostiles
    `entity/gone? `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe?
-   `stairs/down-lay `build/safe-source? `build/scoop-blocked? `build/lit-entry `fortress/next-move])
+   `stairs/down-lay `stone/retreat `build/safe-source? `build/scoop-blocked? `build/lit-entry
+   `fortress/next-move])
 (s/def :stats/deaths pos-int?)

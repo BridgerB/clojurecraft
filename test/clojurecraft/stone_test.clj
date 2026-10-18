@@ -35,10 +35,31 @@
         "a supported neighbour, not the first diagonal cell within click reach")
     (is (= [5 64 4] (:intent/cell (stone/redig-place (assoc w :world/blocks {[4 65 5] 1}) :gravel)))
         "a niche with no headroom cannot be entered for the drop")
-    (let [walls (into {} (for [cell [[4 64 5] [6 64 5] [5 64 4] [5 64 6]]] [cell 1]))
+    (let [walls (into {} (for [y [63 64 65] cell [[4 y 5] [6 y 5] [5 y 4] [5 y 6]]] [cell 1]))
           child (stone/redig-place (assoc w :world/blocks walls) :gravel)]
       (is (contains? #{:walk :stairs-up} (:intent/kind child))
           "no pickup cell: leave, never cut a niche"))))
+
+(deftest redig-places-on-the-neighbouring-stair
+  (doseq [dy [-1 1]]
+    (let [cell [4 (+ 64 dy) 5]
+          walls (into {} (for [p [[4 64 5] [6 64 5] [5 64 4] [5 64 6]]] [p 1]))
+          w (assoc (standing 64 :gravel)
+                   :world/blocks
+                   (merge walls {cell blocks/air [4 (+ 65 dy) 5] blocks/air [4 (+ 63 dy) 5] 1}))]
+      (is (= {:intent/kind :place :intent/item :gravel :intent/cell cell}
+             (stone/redig-place w :gravel))
+          "the drop can be reached by stepping up or down, without another retreat")
+      (let [i {:intent/kind :redig
+               :intent/item :gravel
+               :intent/status :active
+               :intent/child {:intent/kind :walk :intent/status :done}}
+            event {:event/kind :tick}
+            resumed (stone/redig-stage (assoc w :plan/intent i) i event)
+            next (stone/redig-stage resumed (:plan/intent resumed) event)]
+        (is (= :place (get-in next [:plan/intent :intent/child :intent/kind])))
+        (is (= cell (get-in next [:plan/intent :intent/child :intent/cell]))
+            "a redig already retreating retries placement on the stair")))))
 
 (deftest redig-tries-placement-again-after-reaching-fresh-ground
   (doseq [kind [:walk :stairs-up]]
@@ -247,6 +268,56 @@
       (is (intent/arrived? away walk 1.5) "the retreat ends standing on its unboxed destination"))
     (is (nil? (stone/retreat (assoc boxed :plan/boxed-at (set (for [x (range 5 10)] [x 48 5])))))
         "a corridor whose every cell is boxed is not retried")))
+
+(deftest a-boxed-bot-on-ice-steps-to-the-standable-cell-beside-it
+  ;; sim race 39074156402 (issue #71, world R2/35): a cove between a cliff and a frozen lake, the
+  ;; feet on the ice's edge in a cell no route stands in, the one standable cell beside them a
+  ;; dead end; the stairs died :boxed there and every plan after found no way, so the plan waited
+  ;; :boxed to its end (the floor here is awkward sand of souls: a bot on ice plans over it now)
+  (let [pocket (merge (into {} (for [y [48 49]] [[5 y 5] blocks/air]))
+                      (into {} (for [y [48 49]] [[6 y 6] blocks/air]))
+                      {[5 47 5] (blocks/default-state :soul_sand)})
+        w (assoc (standing 48) :world/chunks {[0 0] (world/column pocket)})
+        boxed (assoc w :plan/boxed-at #{[5 48 5]})
+        iced (assoc-in boxed
+              [:world/chunks [0 0]]
+              (world/column (assoc pocket [5 47 5] (blocks/default-state :ice))))]
+    (is (nil? (stone/retreat w)) "not boxed: an ordinary retreat seeks twelve blocks of distance")
+    (is (= {:intent/kind :walk :intent/target [6 48 6] :intent/for :retreat} (stone/retreat boxed))
+        "boxed, with no route from the cell the search begins on: that cell itself")
+    (is (nil? (stone/retreat (update boxed :plan/boxed-at conj [6 48 6]))) "unless it is boxed too")
+    (is
+     (nil? (stone/retreat iced))
+     "on ice the sheet is floor (issue #71): the feet cell is the search's own start, no other")))
+
+(deftest a-long-retreat-does-not-end-on-boxed-ground
+  (let [w (assoc (standing 64)
+                 :world/chunks {[0 0] (world/column {}) [1 0] (world/column {})}
+                 :plan/boxed-at (set (for [x (range 32) z (range 16)] [x 64 z])))
+        fresh [20 64 5]]
+    (is (nil? (stone/retreat w)) "distance alone does not make exhausted ground new")
+    (is (= fresh (:intent/target (stone/retreat (update w :plan/boxed-at disj fresh))))
+        "the search crosses boxed ground to reach an unboxed destination")
+    (is (nil? (stone/retreat
+               (assoc (update w :plan/boxed-at disj fresh) :plan/retreat-unreachable #{fresh})))
+        "a waypoint a retreat walk could not reach is not selected again")))
+
+(deftest a-boxed-search-does-not-retreat-to-its-start
+  (let [w (assoc (standing 64)
+                 :plan/boxed-route #{[19 64 5]}
+                 :plan/boxed-at (disj (set (for [x (range 32) z (range 16)] [x 64 z])) [20 64 5])
+                 :world/chunks {[0 0] (world/column {}) [1 0] (world/column {})})]
+    (doseq [kind [:stairs-down :tunnel]]
+      (let [i {:intent/kind kind
+               :intent/id 7
+               :intent/reason :boxed
+               :intent/visited #{[20 64 5] [6 63 5]}}
+            died (plan/fail-intent w i)]
+        (is (= #{[19 64 5] [20 64 5] [6 63 5]} (:plan/boxed-route died)))
+        (is (nil? (stone/retreat died)) "the failed route is no new destination")
+        (is (= (:plan/boxed-route w)
+               (:plan/boxed-route (plan/fail-intent w (assoc i :intent/reason :rejected))))
+            "an unrelated failure does not exhaust the search route")))))
 
 (deftest boxed-in-by-water-with-no-way-away-the-mine-climbs-out
   ;; race 38515209959 (issue #105): runner 3 bot Clj_r19 and runner 9 bot Clj_r18 tunnelled for
@@ -696,3 +767,102 @@
     (is (= [[4 64 5]] (stairs/up-lay fed [5 64 5] cells)) "the feeding cell is filled first")
     (is (= [] (stairs/wet-feet dry cells)))
     (is (stairs/up-dry? dry cells) "dry feet: cut as before")))
+
+(deftest a-level-step-seals-the-water-beside-the-cells-it-digs
+  ;; sim races 39081494214 R1/31 and 39074159590 R3/44 (issue #105): a climb up under a lake for
+  ;; the water bucket stood in the flooded shaft with hundreds of cobblestone, water beside every
+  ;; step's cells, and failed :boxed three times; the water is filled, and an open step with a
+  ;; missing floor is floored, beside water or not
+  (let [feet [5 64 5]
+        cells (stairs/level-cells feet [1 0])
+        at (fn [blocks filler]
+             (assoc (standing 64)
+                    :player/inventory (if filler {0 {:item (blocks/items filler) :count 20}} {})
+                    :world/chunks {[0 0] (world/column blocks)}))
+        dug {[6 65 5] 1 [6 64 5] 1}
+        under (at (assoc dug [6 63 5] blocks/water-base) :cobblestone)]
+    (is (not (stairs/level-clear? under cells)) "the dig would let the water under the step in")
+    (is (= [[6 63 5]] (stairs/level-lay under feet cells)) "the water is filled first")
+    (is (= [[6 63 5]]
+           (stairs/level-lay (at (assoc dug [6 63 5] blocks/water-base) :dirt) feet cells))
+        "from any filler")
+    (is (nil? (stairs/level-lay (at (assoc dug [6 63 5] blocks/water-base) nil) feet cells))
+        "nothing to fill it with")
+    (is (nil? (stairs/level-lay (at (assoc dug [6 63 5] blocks/lava-base) :cobblestone) feet cells))
+        "lava beside is never sealed")
+    (is (= #{[6 66 5] [7 65 5]}
+           (set (stairs/level-lay
+                 (at (assoc dug [6 66 5] blocks/water-base [7 65 5] blocks/water-base) :cobblestone)
+                 feet
+                 cells)))
+        "over the head and beside it too")
+    (testing "an open step"
+      (let [open {[6 63 5] blocks/air [7 64 5] blocks/water-base}
+            w (at open :cobblestone)]
+        (is (not (stairs/level-clear? w cells)) "water beside the open feet cell")
+        (is (= [[6 63 5]] (stairs/level-lay w feet cells))
+            "its floor is laid, the water beside it left")
+        (is (nil? (stairs/level-lay (at (assoc open [6 63 5] blocks/water-base) :cobblestone)
+                                    feet
+                                    cells))
+            "no floor can be laid over water")))
+    (testing "a step with nothing wrong has nothing to lay"
+      (is (nil? (stairs/level-lay (at {} :cobblestone) feet cells))))))
+
+(defn under-a-lake
+  "Standing at [5 64 5] (feet) with rock rock blocks over the head from y 66, then water for wet
+   blocks, then air, holding items by name."
+  [rock wet & items]
+  (let [stone (blocks/default-state :stone)
+        cells (concat (for [dy (range rock)] [[5 (+ 66 dy) 5] stone])
+                      (for [dy (range wet)] [[5 (+ 66 rock dy) 5] blocks/water-base]))]
+    (assoc (apply standing 64 items)
+           :world/blocks (into {} cells)
+           :plan/intent {:intent/kind :stairs-up :intent/to-y 90 :intent/status :active})))
+
+(deftest a-bore-is-the-bed-over-the-head-under-a-lake-of-open-air
+  (let [feet [5 64 5]]
+    (is (= [[5 66 5] [5 67 5]] (stairs/bore-cells (under-a-lake 2 4) feet)))
+    (is (= 3 (count (stairs/bore-cells (under-a-lake 3 4) feet))) "the thickest bed the eyes reach")
+    (is (nil? (stairs/bore-cells (under-a-lake 4 4) feet)) "rock too thick")
+    (is (nil? (stairs/bore-cells (under-a-lake 2 0) feet)) "no water over the rock")
+    (is (nil? (stairs/bore-cells (under-a-lake 2 (inc stairs/bore-depth)) feet))
+        "water that runs on past the swim: an aquifer, not a lake")))
+
+(deftest a-climb-with-no-pickaxe-under-a-lake-bores-up-rather-than-step-aside
+  (let [i {:intent/kind :stairs-up :intent/dir [1 0]}
+        by-hand (under-a-lake 2 4 :cobblestone)
+        armed (under-a-lake 2 4 :stone_pickaxe)]
+    (is (= :bore (:intent/stage (:plan/intent (stairs/step-aside by-hand i)))))
+    (is (= [[5 66 5] [5 67 5]] (:intent/bore (:plan/intent (stairs/step-aside by-hand i)))))
+    (is (not= :bore (:intent/stage (:plan/intent (stairs/step-aside armed i))))
+        "with a pickaxe the level steps are quick")))
+
+(deftest a-bore-digs-its-cells-bottom-first-letting-the-water-in
+  (let [w (-> (under-a-lake 2 4 :cobblestone)
+              (assoc :plan/intent
+                     {:intent/kind :stairs-up
+                      :intent/stage :bore
+                      :intent/bore [[5 66 5] [5 67 5]]
+                      :intent/started-tick 0
+                      :intent/status :active})
+              (assoc :time/tick 1))
+        next (stairs/stairs-stage w (:plan/intent w) {:event/kind :tick})
+        child (:intent/child (:plan/intent next))]
+    (is (= [5 66 5] (:intent/target child)))
+    (is (true? (:intent/exposes-ok? child)))))
+
+(deftest a-collect-stops-on-the-rim-of-a-floor-its-own-cell-lacks
+  ;; Race 39110733219 runner 1 bot Clj_r15 (issue #65): the stair's last floor was one block wide
+  ;; and the bot stood on its rim with its feet cell over a cave's drop; the collect walked after
+  ;; the drop, off the rim into the lake three blocks down.
+  (let [pit (into {} (for [x (range 2 6) y (range 50 64) z (range 4 7)] [[x y z] blocks/air]))
+        rim (assoc (standing 64) :player/pos [5.8 64.0 5.5] :world/blocks pit)
+        drop [2.5 64.0 5.5]]
+    (is (intent/ledge-ahead? rim drop) "the first step west leaves the floor with no landing")
+    (is (not (intent/ledge-ahead? (assoc-in rim [:world/blocks [5 63 5]] 1) drop))
+        "a floor under its own cell")
+    (is (not (intent/ledge-ahead? (assoc rim :player/on-ground? false) drop)) "not in the air")
+    (is (not (intent/ledge-ahead? rim [8.5 64.0 5.5])) "toward the floor, not off it")
+    (is (intent/ledge-ahead? (assoc-in rim [:world/blocks [5 63 4]] 1) [4.5 64.0 3.5])
+        "a wall in the way of the diagonal slides it west along the rim, off its side")))
