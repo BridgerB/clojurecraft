@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-18T18:42:14.553Z",
+  "at" : "2026-10-18T18:43:25.096Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 44,
     "title" : "Bot stops at cast-one: rejected",
@@ -96,7 +96,8 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 178,
     "move" : "leave",
