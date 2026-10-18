@@ -3218,6 +3218,34 @@
   (is (= [10 64 -2] (sim/exit-point [80.7 64.0 -9.2])))
   (is (= [0 -25 0] (sim/exit-point [7.9 -25.0 0.5]))))
 
+(deftest a-nether-arrival-needs-room-for-the-portal-not-an-isolated-foothold
+  (let [gravel (blocks/default-state :gravel)
+        column (nether-column
+                (assoc (into {}
+                             (for [x (range 16) z (range 16) y (range 32 60)] [[x y z] blocks/air]))
+                       [1 33 1]
+                       gravel))
+        decoded (decoded-of (assoc captured-nether [0 0] column))
+        at #(chunk/block-at decoded %)]
+    (is (sim/standing? at [1 34 1]) "one gravel block can hold the player")
+    (is (= [1.5 64.0 1.5] (:at (sim/arrival decoded [8.5 18.0 8.5])))
+        "the linked portal needs ground for its whole frame, not gravel suspended over lava")))
+
+(deftest a-natural-nether-portal-needs-its-whole-frame-in-either-axis
+  (doseq [[dx dz] [[1 0] [0 1]]]
+    (let [cells (into {}
+                      (for [n (range -1 3)
+                            y (range 63 68)]
+                        [[(* n dx) y (* n dz)] (if (= y 63) netherrack blocks/air)]))
+          fits? #(sim/portal-space? (fn [p] (get % p)) [0 64 0])]
+      (is (fits? cells))
+      (doseq [state [nil blocks/air lava]]
+        (is (not (fits? (assoc cells [(* 2 dx) 63 (* 2 dz)] state)))
+            "every floor cell must be solid and loaded"))
+      (doseq [state [nil netherrack lava]]
+        (is (not (fits? (assoc cells [(* 2 dx) 67 (* 2 dz)] state)))
+            "the top of the frame needs clearance too")))))
+
 (deftest the-arrival-is-the-standing-cell-nearest-the-exit-point
   (let [decoded (decoded-of captured-nether)]
     (is (= {:at [1.5 64.0 1.5] :placed {}} (sim/arrival decoded [8.5 64.0 8.5]))
@@ -3226,9 +3254,11 @@
       (let [pool (decoded-of (assoc captured-nether [0 0] (nether-column {[1 63 1] lava})))]
         (is (= [0.5 64.0 1.5] (:at (sim/arrival pool [8.5 64.0 8.5]))))))
     (testing "nearest in height too: a portal deep in the overworld comes out in a cave under it"
-      (let [cave (decoded-of (assoc captured-nether
-                                    [0 0]
-                                    (nether-column {[5 40 1] blocks/air [5 41 1] blocks/air})))]
+      (let [cave (decoded-of
+                  (assoc captured-nether
+                         [0 0]
+                         (nether-column
+                          (into {} (for [x (range 4 8) y (range 40 44)] [[x y 1] blocks/air])))))]
         (is (= [5.5 40.0 1.5] (:at (sim/arrival cave [8.5 -20.0 8.5]))))))
     (testing "the bedrock roof is never stood under: no cell with its head at 128 or over"
       (is (nil? (sim/exit-spot (fn [[_ y _]] (if (< y 128) netherrack blocks/air)) [0 120 0] 128))))
