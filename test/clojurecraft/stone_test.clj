@@ -825,3 +825,11 @@
         child (:intent/child (:plan/intent next))]
     (is (= [5 66 5] (:intent/target child)))
     (is (true? (:intent/exposes-ok? child)))))
+
+(deftest boxed-cells-are-kept-to-the-nearest-boxed-cap
+  (let [w (reduce (fn [w x] (intent/box-at w [x 40 0])) {} (range (+ intent/boxed-cap 36)))
+        boxed (:plan/boxed-at w)]
+    (is (= intent/boxed-cap (count boxed)))
+    (is (contains? boxed [(dec (+ intent/boxed-cap 36)) 40 0]) "the latest is always kept")
+    (is (not (contains? boxed [0 40 0])) "the farthest is forgotten")
+    (is (= #{[1 2 3]} (:plan/boxed-at (intent/box-at {} [1 2 3]))))))
