@@ -1,0 +1,125 @@
+(require '[clojure.string :as str]
+         '[clojurecraft.blocks :as blocks]
+         '[clojurecraft.capture :as capture]
+         '[clojurecraft.game :as game]
+         '[clojurecraft.intent :as intent]
+         '[clojurecraft.memory :as memory]
+         '[clojurecraft.place :as place]
+         '[clojurecraft.plan :as plan]
+         '[clojurecraft.recipe :as recipe]
+         '[clojurecraft.sim :as sim]
+         '[clojurecraft.simrace :as simrace]
+         '[clojurecraft.stairs :as stairs]
+         '[clojurecraft.terrain :as terrain]
+         '[clojurecraft.wood :as wood])
+
+(defn out [& xs] (println (str/join " " xs)))
+
+(defn ask
+  [label f]
+  (try (out label (pr-str (f)))
+       (catch Exception e (out label "THREW" (.getName (class e)) (ex-message e)))))
+
+(defn names-round
+  "The block names in the cells round the feet, a layer a line, dy from 2 down to -1, rows z."
+  [world]
+  (let [[fx fy fz] (intent/feet world)]
+    (doseq [dy [2 1 0 -1]]
+      (out "  y" (+ fy dy))
+      (doseq [dz [-1 0 1]]
+        (out "   "
+             (str/join " "
+                       (for [dx [-1 0 1]]
+                         (or (some-> (terrain/block-at world [(+ fx dx) (+ fy dy) (+ fz dz)])
+                                     blocks/name-of
+                                     name)
+                             "nil"))))))))
+
+(defn wood-asks
+  "Every candidate of wood/gather-next, and the logs remembered near the eye."
+  [world tag]
+  (ask (str tag " feet") #(intent/feet world))
+  (ask (str tag " out?") #(stairs/out? world (intent/feet world)))
+  (ask (str tag " under-sky?") #(terrain/under-sky? world (intent/feet world)))
+  (ask (str tag " in-water?") #(:player/in-water? world))
+  (ask (str tag " boxed-at") #(:plan/boxed-at world))
+  (ask (str tag " blacklist") #(:plan/blacklist world))
+  (ask (str tag " trunk-failures") #(:plan/trunk-failures world))
+  (ask (str tag " logs")
+       #(->> (memory/positions-now world blocks/log-states)
+             (memory/nearest-first (game/eye world) 48)
+             (take 10)
+             (map (fn [p] [p :standing (wood/standing-trunk? world p) :skipped
+                           ((wood/skipped world) p) :below
+                           (some-> (terrain/block-at world (update p 1 dec))
+                                   blocks/name-of)]))))
+  (ask (str tag " continue-gather") #(wood/continue-gather world))
+  (ask (str tag " near-walk") #(wood/near-walk world))
+  (ask (str tag " climb-out") #(wood/climb-out world))
+  (ask (str tag " hunt") #(wood/hunt world))
+  (ask (str tag " into-water") #(wood/into-water world))
+  (ask (str tag " crossing") #(wood/crossing world))
+  (ask (str tag " return-walk") #(wood/return-walk world))
+  (ask (str tag " gather-next") #(wood/gather-next world))
+  (ask (str tag " way-out") #(wood/way-out world)))
+
+(defn facts
+  [world tag]
+  (ask (str tag " pos") #(:player/pos world))
+  (ask (str tag " health/food") #((juxt :player/health :player/food) world))
+  (ask (str tag " held") #(recipe/counts (:player/inventory world)))
+  (ask (str tag " intent")
+       #(select-keys (:plan/intent world)
+                     [:intent/kind :intent/for :intent/stage :intent/target :intent/status]))
+  (ask (str tag " child")
+       #(select-keys (:intent/child (:plan/intent world))
+                     [:intent/kind :intent/for :intent/target :intent/status :intent/reason]))
+  (ask (str tag " last") #(:plan/last world))
+  (ask (str tag " reason") #(:plan/reason world))
+  (ask (str tag " wait") #(:plan/wait world))
+  (ask (str tag " names") #(names-round world)))
+
+(defn play
+  "The snapshot played as judged, printing the intent's changes (the first 70) as they come;
+   the world it ended in."
+  [snap w]
+  (let [m (simrace/moment-of snap w)
+        stage (simrace/stage-of snap)
+        until (:snapshot/until snap)
+        seen (atom nil)
+        n (atom 0)
+        stop?
+        (fn [world]
+          (let [i (:plan/intent world)
+                c (:intent/child i)
+                cur [(try (intent/feet world) (catch Exception _ nil))
+                     (select-keys i [:intent/kind :intent/for :intent/stage :intent/target])
+                     (select-keys c [:intent/kind :intent/target :intent/status :intent/reason])]]
+            (when (and (not= cur @seen) (< @n 70))
+              (reset! seen cur)
+              (swap! n inc)
+              (out (:time/now world) (pr-str cur)))
+            (or (plan/done? world) (plan/failed? world) (contains? (:plan/reached world) stage))))
+        r (sim/play-from simrace/step m stop? (simrace/window-of snap) (simrace/go-of w until) nil)]
+    (:world r)))
+
+(def wood? #{:no-log})
+
+(doseq [p *command-line-args*]
+  (try (let [snap (capture/read-world p)
+             w (simrace/world-for! snap)
+             [world _sim] (simrace/moment snap w)
+             sig (:snapshot/signature snap)]
+         (out "==" p (pr-str sig) (pr-str (:snapshot/moment snap)))
+         (facts world "start")
+         (when (wood? (second sig)) (wood-asks world "start"))
+         (let [end (play snap w)]
+           (out "-- end")
+           (facts end "end")
+           (when (wood? (second sig)) (wood-asks end "end"))
+           (ask "end place/spot" #(place/spot end))
+           (ask "end place/niche" #(place/niche end))
+           (ask "end place/fresh-rock" #(place/fresh-rock end))))
+       (catch Exception e (out "==" p "THREW" (ex-message e)))))
+
+(shutdown-agents)
