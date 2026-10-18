@@ -4,7 +4,7 @@
    A plan is a vector of ops, flat maps. Every op says what it does (:build/op :place :dig :pour
    :scoop :use-on :stand-in), where (:build/pos, and :build/stand where the bot stands to do it),
    with what (:build/item), and when it is done (:build/done, a predicate over the world as data:
-   [:solid p] [:not-solid p] [:filled p] [:block p name] [:lava-source p] [:no-water p]
+   [:solid p] [:not-solid p] [:filled p] [:block p name] [:lava-source p] [:no-water p] [:no-water-source p]
    [:dimension name] [:or & preds] [:and & preds]). `satisfied?` reads a predicate against the
    world. Nothing about progress is stored: the op to work on is the first one not satisfied, so
    a build resumes after a death, a chunk reload or a relaunch by reading the world again.
@@ -80,6 +80,7 @@
 (defmethod holds? :no-water
   [world [_ p]]
   (not (contains? blocks/water-states (terrain/block-at world p))))
+(defmethod holds? :no-water-source [world [_ p]] (not (scoop/source? world p :water)))
 (defmethod holds? :dimension [world [_ d]] (= d (:player/dimension world)))
 (defmethod holds? :feet [world [_ p]] (= p (intent/feet world)))
 (defmethod holds? :no-lava
@@ -207,8 +208,10 @@
    face the water is placed against), dig the hole and the cell over it, pour lava low against the
    hole's back wall, pour water into the cell directly over the lava against the same wall (it
    lands on the source: obsidian), and scoop the water straight back from there. Every op but the
-   scoop is done once the cell is obsidian. Water is never poured beside the lava: a source with a
-   side open flows within about 1.5 s on a server, and flow meeting water is cobblestone."
+   scoop is done once the cell is obsidian; the scoop is done when no water source remains,
+   even if another cast's water flows through that cell. Water is never poured beside the lava:
+   a source with a side open flows within about 1.5 s on a server, and flow meeting water is
+   cobblestone."
   [at origin facing [dx dy :as c]]
   (let [[sx _ _ :as s] (stands c)
         stand (at s)
@@ -242,7 +245,7 @@
               :build/aim (aim origin facing [dx (inc dy) 0] [(side-aim side) 0.4 0.5])
               :build/cell c
               :build/step :scoop
-              :build/done [:no-water over]}])))
+              :build/done [:no-water-source over]}])))
 
 (def max-access 6)                    ; the lava's stand at most this far over the room's floor
 
@@ -345,7 +348,7 @@
                   [{:build/op :verify
                     :build/stand (at (stands first-cell))
                     :build/step :verify
-                    :build/done [:and done [:no-water (at [dx (inc dy) 0])]]}])))))
+                    :build/done [:and done [:no-water-source (at [dx (inc dy) 0])]]}])))))
 
 (defn frame-plan
   "The whole frame from origin facing cut into the rock: the room, the ten cells bottom up in

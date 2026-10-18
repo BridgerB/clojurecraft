@@ -12,6 +12,8 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-lit-portal-is-entered-without-rebuilding-or-fetching-tools
   - src/clojurecraft/build.clj#defmulti holds?
   - src/clojurecraft/build.clj#defn satisfied?
+  - src/clojurecraft/build.clj#defmethod holds? :no-water-source
+  - test/clojurecraft/build_test.clj#a-cast-scoops-sources-not-flow-from-later-cells
   - src/clojurecraft/build.clj#defn portal-plan
   - src/clojurecraft/build.clj#defn cell-ops
   - src/clojurecraft/build.clj#defn firm-ops
@@ -185,6 +187,8 @@ Issue #124 replaced ruststeve's template mold (a pad, a rim, platforms, walled c
 3. `interior-ops` (the 2x3 inside dug out, never obsidian), `light-op` (flint and steel on the top of cell (1,0) from two in front), `enter-op` (stand in the portal until the dimension is the Nether).
 
 In solid rock the cast places four blocks: the walls its own digging opened (the bottom cells' over cells are the columns' side walls; the columns' top over cells are the top cells' side walls). `cast-one-plan` is the room and the first cell, with a `:verify` that it is obsidian and the water taken back.
+
+Water cleanup and the first-cast verification use `:no-water-source`, not `:no-water`: only a source can be scooped. A later cast's water can flow through an earlier, already-scooped cell (issue #419, R1/20), which must not select that earlier scoop again and fail `:target-gone`. Re-reading these predicates also drops a failed scoop child when the plan moves on to the remaining source. `:no-water` still means no water of any level.
 
 ## The site and the station
 `choose-site` looks beside the `max-sources` lava sources nearest the feet, loaded, at any depth. For each cell beside the cell over a source (`stands-beside`: firm under it, it and the head openable, no fluid touching them, the cell over the source openable with no fluid round it but the source), each facing and each of `station-spots` (the lava's stand seven in front of the frame, 1 to `max-access` over the room's floor), the origin follows; `site-ok?` wants the footprint (the frame's rock `frame-box`, the room and its floors) loaded and no fluid in it or touching it, and a pool that can finish the frame (`spent?` false: `pool`, the sources any lava stand of the site could scoop, every height up to `max-access`, at least as many as the frame's cells still to cast). Sim race 38664661309 (issue #142, 89 runs in 18 rounds) chose sites beside a lone source in five worlds, cast one cell and failed `:no-station` with nine to go (`a-lone-lava-source-is-no-site`). Each candidate's checks look only at the sources near its own source (`build-near`, within `pool-radius` of any origin it may take): over the lava sea, with thirty thousand sources loaded, a choice took forty seconds. Of those, the fewest blocks to place (`blocks-needed`, at most `site-blocks`), then the nearest. The lava's stand is always over the room's floor: water spilled on the floor never runs up to the pool.

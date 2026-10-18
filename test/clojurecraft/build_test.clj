@@ -126,6 +126,45 @@
       (assoc :bot/phase :play :player/pos pos :player/loaded? true :player/on-ground? true)
       (assoc :world/chunks {[0 0] (world/column blocks)})))
 
+(deftest a-cast-scoops-sources-not-flow-from-later-cells
+  (let [origin [4 63 4]
+        at #(build/cell origin :south %)
+        ops (vec (ops-of (build/portal-plan origin :south) :scoop))
+        [early later] [(first ops) (nth ops 2)]
+        target (:build/pos early)
+        later-target (:build/pos later)
+        event {:event/kind :tick :event/now 1000 :event/rand 0.5}]
+    (doseq [level (range 1 16)]
+      (let [w (standing-at (open-ground {target (+ blocks/water-base level)
+                                         later-target blocks/water-base})
+                           [5.5 63.0 6.5])
+            i (assoc hill-intent
+                     :intent/status :active
+                     :intent/op early
+                     :intent/child
+                     {:intent/kind :scoop
+                      :intent/target target
+                      :intent/status :failed
+                      :intent/reason :target-gone})
+            next (build/next-op w [early later])
+            result (build/work-op (assoc w :plan/intent i) i next event)]
+        (is (build/satisfied? w early) "flow cannot be scooped")
+        (is (not (build/holds? w [:no-water target])) "flow is still water")
+        (is (= later next) "reach the source feeding an earlier cell")
+        (is (= :active (get-in result [:plan/intent :intent/status])))
+        (is (= later (get-in result [:plan/intent :intent/op])))
+        (is (nil? (get-in result [:plan/intent :intent/child])))))
+    (let [w (standing-at (open-ground {target blocks/water-base}) [5.5 63.0 6.5])]
+      (is (not (build/satisfied? w early)) "a source still needs its scoop"))
+    (doseq [id [blocks/air (blocks/default-state :obsidian)]]
+      (is (build/satisfied? {:world/chunks {} :world/blocks {target id}} early)))
+    (let [plan (build/cast-one-plan origin :south)
+          w (standing-at (open-ground {(at [1 0 0]) (blocks/default-state :obsidian)
+                                       (at [1 1 0]) (inc blocks/water-base)})
+                         [5.5 63.0 6.5])]
+      (is (build/satisfied? w (peek plan))
+          "the first cast is verified after its source is taken back"))))
+
 (deftest a-lit-portal-is-entered-without-rebuilding-or-fetching-tools
   (let [origin [4 63 4]
         at #(build/cell origin :south %)
