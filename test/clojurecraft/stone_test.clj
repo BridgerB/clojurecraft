@@ -200,7 +200,7 @@
                       {0 {:item (blocks/items :iron_pickaxe) :count 1}
                        1 {:item (blocks/items :cobblestone) :count 64}}
                       :world/chunks
-                      {[0 0] (world/column (into {[8 59 8] 1} (concat cave lake blocks)))}))
+                      {[0 0] (world/column (into {} (concat cave lake blocks [[[8 59 8] 1]])))}))
         w (over ledge)
         i {:intent/kind :stairs-down :intent/dir [0 1]}]
     (is (= 4 (stairs/floor-distance w [8 60 8] [1 0])) "the ledge's stone, four columns east")
