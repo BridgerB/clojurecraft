@@ -382,7 +382,11 @@
              (:intent/to-y
               (plan/next-intent (assoc seen :player/pos [8.5 29.0 8.5]) room-row plan/goals)))))
     (testing "within 8 of it: the dry tunnel"
-      (is (= {:intent/kind :tunnel-to :intent/target [40 20 60] :intent/steps 32 :intent/dry? true}
+      (is (= {:intent/kind :tunnel-to
+              :intent/target [40 20 60]
+              :intent/steps 32
+              :intent/dry? true
+              :intent/from-feet [8 26 8]}
              (plan/next-intent (assoc seen :player/pos [8.5 26.0 8.5]) room-row plan/goals))))
     (testing "a tunnel that took every step without arriving: the stairs"
       (let [spent (assoc seen
@@ -395,7 +399,14 @@
                           :intent/steps 32})]
         (is (stronghold/tunnel-spent? spent [40 20 60]))
         (is (= {:intent/kind :stairs-down :intent/to-y 21 :intent/dir [0 1] :intent/for :stronghold}
-               (plan/next-intent spent room-row plan/goals)))))
+               (plan/next-intent spent room-row plan/goals)))
+        (testing "one that came nearer is the way on, not spent"
+          (let [on (assoc-in spent [:plan/last :intent/from-feet] [0 26 0])]
+            (is (not (stronghold/tunnel-spent? on [40 20 60])))
+            (is (= :tunnel-to (:intent/kind (plan/next-intent on room-row plan/goals))))))
+        (is (stronghold/tunnel-spent? (assoc-in spent [:plan/last :intent/from-feet] [8 26 9])
+                                      [40 20 60])
+            "a block nearer is nowhere")))
     (testing "within 6 of it: there"
       (is (plan/done-by (assoc seen :player/pos [40.5 22.0 58.5]) room-row)))
     (testing "in water: out to the nearest bank first"
@@ -437,7 +448,14 @@
                         :done)]
             (is (= [100 64 8] (stronghold/walked-ground walked)))
             (is (= {:intent/kind :cross :intent/target [100 64 8] :intent/for :stronghold}
-                   (plan/next-intent walked room-row plan/goals)))))))
+                   (plan/next-intent walked room-row plan/goals)))
+            (is (= :stairs-down
+                   (:intent/kind
+                    (plan/next-intent
+                     (assoc walked :plan/last {:intent/kind :stairs-down :intent/status :done})
+                     room-row
+                     plan/goals)))
+                "the way down begun: the stairs go on")))))
     (testing "a lake round, dry ground 24 off: a swim to the nearest dry cell past it"
       (let [lake (fn [x z]
                    (for [x (range x (+ x 16))

@@ -69,6 +69,7 @@
 (def deep 8)                          ; blocks over a frame past which the way down is stairs, not the tunnel: a tunnel steps down only onto a floor, the stairs lay one over a cave
 (def stair-leg 8)                     ; blocks a staircase toward the frame goes down before the planner looks again, so each leg turns toward the frame
 (def start-reach 16)                  ; blocks round the feet a dry start for the way down is looked for
+(def tunnel-gain 4.0)                 ; blocks nearer a frame a tunnel that took every step must end, else it is spent
 (def far-reach 80)                    ; blocks along a bearing a dry start past start-reach is looked for: inside the six chunks the server shows round the feet
 (def shore 2)                         ; blocks round a dry start, on the plane, no water or lava lies within from three under it to one over: the first stairs' cells and what they expose
 (def tunnel-y 30)                     ; feet height a tunnel toward the crossing goes down to: under lakes and seas, where strongholds lie
@@ -561,17 +562,24 @@
    :intent/for :stronghold})
 
 (defn tunnel-spent?
-  "Did the last intent, a dry tunnel toward f, take every step it had without arriving? It went
-   round and round: gym batch stronghold-265c (plan run 38934412014) run 3 of the portal room
-   stood over the frame at y 84, a cave under it, every step down refused for the air under the
-   next cell (fortress/safe? never steps onto air), stepped level between two cells 32 times a
-   tunnel for eighteen minutes to the timeout."
+  "Did the last intent, a dry tunnel toward f, take every step it had without arriving, and end
+   less than tunnel-gain nearer f than it began (:intent/from-feet)? It went round and round:
+   gym batch stronghold-265c (plan run 38934412014) run 3 of the portal room stood over the frame
+   at y 84, a cave under it, every step down refused for the air under the next cell
+   (fortress/safe? never steps onto air), stepped level between two cells 32 times a tunnel for
+   eighteen minutes to the timeout. One that came nearer is the way on, not spent: batch
+   stronghold-room-d (plan run 39138341075) run 1, three over the frame 135 blocks off, had the
+   stairs cut after every tunnel, away from the frame into the rock, and the next tunnel walked
+   back up them, fifteen minutes to the timeout."
   [world f]
-  (let [l (:plan/last world)]
+  (let [l (:plan/last world)
+        from (:intent/from-feet l)
+        gone (fn [c] (physics/distance (physics/centre c) (physics/centre f)))]
     (boolean (and (= :tunnel-to (:intent/kind l))
                   (= f (:intent/target l))
                   (intent/done? l)
-                  (>= (:intent/taken l 0) (:intent/steps l 0))))))
+                  (>= (:intent/taken l 0) (:intent/steps l 0))
+                  (or (nil? from) (< (- (gone from) (gone (intent/feet world))) tunnel-gain))))))
 
 (defn to-room
   "The way to the portal room's frame f, in order: in water, out to the nearest bank first
@@ -580,7 +588,8 @@
    again from the wet cell it ended in, twelve thousand times a model run); with none within
    start-reach and the open sky over the feet (a lake's, not a cave's), a swim (:cross) to one
    farther (far-start), else back to the ground last walked (walked-ground), never stairs from a
-   block in a lake; more than deep
+   block in a lake, nor once the way down has begun (the last intent the stairs or the tunnel:
+   batch stronghold-room-d run 2 swam back up from its first leg of stairs); more than deep
    over the frame, or after a tunnel that got nowhere (tunnel-spent?), a staircase down toward
    it a leg of stair-leg at a time (stairs-toward), never under room-over over the frame; then
    the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?), when its
@@ -593,10 +602,12 @@
   (let [[_ fy _ :as feet] (intent/feet world)
         high? (> fy (+ y deep))
         start (when (and high? (not (:player/in-water? world))) (dry-start world f))
-        far
-        (when
-          (and high? (not (:player/in-water? world)) (nil? start) (terrain/under-sky? world feet))
-          (or (far-start world) (walked-ground world)))
+        far (when (and high?
+                       (not (:player/in-water? world))
+                       (nil? start)
+                       (terrain/under-sky? world feet)
+                       (not (#{:stairs-down :tunnel-to} (:intent/kind (:plan/last world)))))
+              (or (far-start world) (walked-ground world)))
         stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
           (and start (not= start feet))
@@ -607,7 +618,8 @@
           {:intent/kind :tunnel-to
            :intent/target f
            :intent/steps fortress/steps-per-tunnel
-           :intent/dry? true}
+           :intent/dry? true
+           :intent/from-feet feet}
           (> fy (+ y room-over)) stairs
           :else {:plan/wait :no-way})))
 
