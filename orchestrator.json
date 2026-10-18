@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-18T00:55:15.057Z",
+  "at" : "2026-10-18T00:56:22.666Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 296,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at fortress: no-pickaxe",
     "copilot" : true,
     "draft" : true,
@@ -64,14 +64,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 196,
-    "title" : "Bot stops at portal: no-stand",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 349,
     "title" : "Bot stops at flint-and-steel: timeout",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 196,
+    "title" : "Bot stops at portal: no-stand",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 87,
