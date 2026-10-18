@@ -19,6 +19,13 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
   - src/clojurecraft/stone.clj#defn retreat
   - test/clojurecraft/plan_test.clj#a-climb-for-wood-boxed-under-gravel-takes-the-short-way-away
+  - src/clojurecraft/wood.clj#defn opening-up
+  - src/clojurecraft/wood.clj#defn trees-bridge
+  - test/clojurecraft/plan_test.clj#a-trunk-across-a-chasm-is-bridged-by-stairs-up
+  - test/clojurecraft/plan_test.clj#a-failed-crossing-keeps-its-trunk-for-the-bridge
+  - test/clojurecraft/plan_test.clj#a-mouth-below-the-feet-is-the-way-down-not-out
+  - test/clojurecraft/plan_test.clj#the-opening-up-the-shaft-is-kept
+  - src/clojurecraft/plan.clj#defn fail-intent
   - src/clojurecraft/wood.clj#defn trees-climb
   - src/clojurecraft/wood.clj#defn trees-descend
   - test/clojurecraft/plan_test.clj#a-trunk-far-below-is-descended-toward-when-out
@@ -81,6 +88,9 @@ Getting a log is a chain of three intents, each started by the planner after the
 
 ## Gotchas
 - A boxed climb under gravel must not wait just because its way back is shorter than `stone/retreat-distance`. The gather act's `way-out` uses `stone/retreat`, which accepts the last unboxed waypoint of an exhausted search from boxed feet when the full distance is unreachable. Issue #370 (R1/29) had eight reachable tunnel cells, none twelve blocks away; gathering now walks away and re-plans a climb while the gravel and boxed-cell guards remain intact.
+- A mouth below the feet is the way down, not out. `climb-out` walks the opening (`intent/opening`) only when `opening-up` finds its mouth no more than `opening-drop` (2) under the feet (`mouth-below?`); else the staircase up is cut on from where the feet are. Sim world R2/16 (issue #87): stairs cut up from the mouth at y 83 toward the trees on a cliff ended on a ledge at y 99 that is not out of the ground (`pit-rim`), the opening walked the bot back down to the mouth, and the climb began again every twenty seconds until the plan waited `:no-log` (`a-mouth-below-the-feet-is-the-way-down-not-out`).
+- A close trunk no route reaches is climbed toward. `trees-bridge`, the last of `climb-out`'s branches (after `trees-climb` and `trees-descend`, so a trunk above the eye keeps its climb): out of the ground, a standing trunk within `bridge-reach` (12) on the plane and `bridge-rise` (3) of the feet's height, the feet less than `bridge-rise` over its bottom, no open water on the way (`water-toward?`: crossing's), never from a cell where a climb died `:boxed`, gets `bridge-climb` (2) stairs up toward it, `:intent/to-height?`; the steps are laid from carried filler where the air has none, and the next look from higher finds the way down onto the far side. At most two such climbs per trunk height. Sim worlds R3/45 (issues #87 and #108): the bot climbed out of its pit on a pillar of its own cobblestone and stood eight blocks from the only trunk in reach, across two blocks of air the path search does not bridge, and waited `:no-log` (`a-trunk-across-a-chasm-is-bridged-by-stairs-up`).
+- A failed `:cross` blacklists nothing. Its target is the trunk across the water, and a failed swim is not a failed trunk: `plan/fail-intent` counts it against the trunk's column in `:plan/trunk-failures` (two give the trunk up, as for a log's walk) and leaves it among `climb-out`'s candidates, where `trees-bridge` climbs toward it. Sim worlds R3/45 (issues #87 and #108) crossed a lake toward the only trunk in reach, met the foot of a cliff with the trunk on its top and failed `:stuck`; the blacklisted trunk left the stairs up the cliff nothing to climb toward (`a-failed-crossing-keeps-its-trunk-for-the-bridge`).
 - The tag exists so a walk for another purpose (to a crafting table) is never continued as a dig; before it, any finished walk or dig was assumed to be part of a log chain.
 - The chain lives entirely in `:plan/last` and the intent maps; nothing else remembers it. A failed intent clears `:plan/last`, so a failure restarts the chain from a fresh search with the target blacklisted.
 - The sim test drops a 2x2 oak canopy one block above the ground between bot and trunk; the bot breaks the leaf at `[3 65 0]` and finishes with no failed attempts.
