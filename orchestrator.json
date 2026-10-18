@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T00:49:30.287Z",
+  "at" : "2026-10-18T00:50:38.919Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -36,15 +36,15 @@
     "number" : 339,
     "title" : "Bot stops at fortress: no-footing",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
-  }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 105,
     "title" : "Bot stops at flint-and-steel: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -202,10 +202,6 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 339,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
-  }, {
     "issue" : 342,
     "move" : "wait",
     "pr" : 403,
