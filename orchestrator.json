@@ -1,19 +1,8 @@
 {
-  "at" : "2026-10-18T01:21:09.137Z",
+  "at" : "2026-10-18T01:22:23.471Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 296,
-    "checks" : "green",
-    "title" : "Bot stops at fortress: no-pickaxe",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 411,
-    "session" : false
-  }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -29,13 +18,13 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 130,
-    "title" : "Bot stops at cast-one: boxed",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
+    "number" : 130,
+    "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -162,10 +151,6 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 296,
-    "move" : "merge",
-    "pr" : 411
-  }, {
     "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
@@ -178,13 +163,16 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 44,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 130,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 44,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "issue" : 339,
+    "move" : "assign"
   }, {
     "issue" : 105,
     "move" : "leave",
@@ -1127,5 +1115,9 @@
     "move" : "merge",
     "pr" : 411,
     "at" : "2026-10-18T01:21:09.137Z"
+  }, {
+    "issue" : 339,
+    "move" : "assign",
+    "at" : "2026-10-18T01:22:23.471Z"
   } ]
 }
