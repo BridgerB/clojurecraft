@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T16:45:17.671Z",
+  "at" : "2026-10-18T16:53:05.946Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -52,6 +52,11 @@
     "number" : 446,
     "title" : "Bot stops at fortress: inventory-full",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 419,
