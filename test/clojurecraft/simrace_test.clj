@@ -51,8 +51,13 @@
         tunnelling (assoc-in r [:plan :plan/last :intent/kind] :tunnel)]
     (is (= :ingots (failure/stage "nether" (get-in r [:plan :plan/reached]))))
     (is (= [:ingots :no-pickaxe] (failure/signature r) (failure/signature tunnelling)))
-    (is (= #:simrace{:runs 3 :ok 1 :failures [[[:ingots :no-pickaxe] 2]]}
-           (simrace/tally [r tunnelling {:ok true}])))))
+    (is (= #:simrace{:runs 3 :ok 1 :respawns 0 :eaten 0 :failures [[[:ingots :no-pickaxe] 2]]}
+           (simrace/tally [r tunnelling {:ok true}])))
+    (is (= #:simrace{:respawns 3 :eaten 2}
+           (select-keys (simrace/tally [{:ok true :run/respawns 1 :run/eaten 2}
+                                        (assoc r :run/respawns 2)])
+                        [:simrace/respawns :simrace/eaten]))
+        "the lanes show deaths and eating as totals too (issue #260)")))
 
 (deftest a-failure-the-server-caused-is-marked-not-the-bots
   (is (:run/infra? (failure/mark {:ok false :until "nether" :reason :disconnected})))
@@ -89,6 +94,16 @@
                              :capture/columns {[0 0] (world/column-bytes {})}})
         r (simrace/run w 1 "wood" 2000)]
     (is (= (simrace/spawn-of w) (get-in r [:plan :plan/go-at])))))
+
+(deftest a-run-may-start-hungry
+  ;; issue #260: a lane from a full bar seldom reaches the hunger rows (21 runs of up to 330
+  ;; simulated minutes on 8f50709a ended at food 19 or 20 but one), so --food starts the bar low
+  ;; and the model tells the client so at login
+  (let [hungry (simrace/run two-columns 1 "wood" 2000 4)
+        fed (simrace/run two-columns 1 "wood" 2000)]
+    (is (= 4 (get-in hungry [:run/end :player/food])))
+    (is (= 20 (get-in fed [:run/end :player/food])))
+    (is (= 0 (:run/eaten hungry)) "hungry with nothing held, nothing is eaten")))
 
 (def bare
   "One column of bare stone with no tree: a run for wood waits :no-log and fails."
