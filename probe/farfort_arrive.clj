@@ -1,14 +1,18 @@
 (ns probe.farfort-arrive
   "Issue #338: the fortress search alone, from where a portal on a world's landing leads, in the
    set's captured Nether, with a kit: no overworld. One END line a run."
-  (:require [clojurecraft.capture :as capture]
+  (:require [clojure.string :as str]
+            [clojurecraft.blocks :as blocks]
+            [clojurecraft.capture :as capture]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
+            [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
-            [clojurecraft.simrace :as sr]))
+            [clojurecraft.simrace :as sr]
+            [clojurecraft.terrain :as terrain]))
 
 (defn kit
   "What the bot carries through its portal: pickaxes, a stack of stone in every main slot, food."
@@ -25,10 +29,58 @@
             [:hotbar 8] (it :iron_ingot 6)}
            (into {} (for [slot (range 9 27)] [slot (it :cobblestone 64)])))))
 
+(defn glyph
+  "One character for the column [x z] at the height of feet y: o standable here, ^ a block up,
+   v a block down, L lava in the column, # solid at the feet, . air with no floor within 3."
+  [world [x y z]]
+  (let [at #(terrain/block-at world %)
+        lava? (fn [c] (contains? blocks/lava-states (at c)))]
+    (cond (nil? (at [x y z])) "?"
+          (some lava? [[x y z] [x (dec y) z] [x (- y 2) z]]) "L"
+          (path/standable? world [x y z]) "o"
+          (path/standable? world [x (inc y) z]) "^"
+          (path/standable? world [x (dec y) z]) "v"
+          (blocks/solid? (at [x y z])) "#"
+          :else ".")))
+
+(defn look
+  "Print what the bot at world sees: its target, the routes A* finds toward it, a map of radius 30."
+  [world minute]
+  (let [feet (path/feet-cell (:player/pos world))
+        target (:intent/target (:plan/intent world))
+        goal {:goal/kind :near :goal/pos target :goal/range 8}
+        d (fn [c] (long (path/octile c target)))]
+    (println "LOOK" minute feet "target" target "dist" (d feet))
+    (doseq [nodes [6000 30000]]
+      (let [r (path/plan world feet goal {:path/max-nodes nodes})
+            ws (:path/waypoints r)]
+        (println "ASTAR"
+                 minute
+                 nodes
+                 (:path/status r)
+                 "waypoints" (count ws)
+                 "end" (last ws)
+                 "dist"
+                 (some-> (last ws)
+                         d))))
+    (let [route (set (:path/waypoints (path/plan world feet goal {:path/max-nodes 6000})))
+          [fx fy fz] feet]
+      (doseq [z (range (- fz 30) (+ fz 31))]
+        (println "MAP"
+                 minute
+                 (str/join (for [x (range (- fx 30) (+ fx 31))]
+                             (cond (= [x fy z] feet) "@"
+                                   (some #(contains? route [x % z])
+                                         [(dec fy) fy (inc fy) (+ fy 2) (- fy 2)])
+                                   "*"
+                                   :else (glyph world [x fy z])))))))))
+
 (defn -main
-  "world-file seed minutes every: run and print AT lines every every simulated minutes and END."
-  [file seed minutes every]
-  (let [seed (Long/parseLong seed)
+  "world-file seed minutes every [looks]: run and print AT lines every every simulated minutes, a
+   look at the minutes of looks (comma separated), and END."
+  [file seed minutes every & [looks]]
+  (let [looks (set (map #(Long/parseLong %) (remove empty? (str/split (or looks "") #","))))
+        seed (Long/parseLong seed)
         every (Long/parseLong every)
         nf (sr/nether-file file)
         w (capture/read-world file)
@@ -51,6 +103,7 @@
                              (> (second tk) (second @last-taken)))
                     (vswap! steps inc))
                   (vreset! last-taken tk)
+                  (when (and (not= m @last-min) (contains? looks m)) (look world m))
                   (when (and (not= m @last-min) (zero? (mod m every)))
                     (vreset! last-min m)
                     (println "AT"
