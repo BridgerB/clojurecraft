@@ -560,6 +560,9 @@
     (is (not (skip [40 65 0])) "one far from it")
     (is (not (contains? (plan/fail-intent w (assoc walk :intent/reason :stuck)) :plan/unreached))
         "only a walk with no route puts a place aside")
+    (is (not (contains? (plan/fail-intent w (assoc walk :intent/reason :no-path :intent/for :stone))
+                        :plan/unreached))
+        "and only a walk for a log: a stone no route reaches says nothing of the trees")
     (is (not ((wood/skipped w) [17 70 6])) "before any walk failed")))
 
 (deftest digs-the-log-at-feet-height

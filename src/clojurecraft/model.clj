@@ -197,7 +197,7 @@
    [:plan/unwalkable "walks in a row that failed :no-path; max-unwalkable of them fail the plan"
     "from the :go event"]
    [:plan/unreached
-    "targets walks failed :no-path toward; a log within unreached-radius of one is not chosen: the trees round a place no route reaches are as far from the feet"
+    "targets log walks failed :no-path toward; a log within unreached-radius of one is not chosen: the trees round a place no route reaches are as far from the feet"
     "after a walk fails :no-path"]
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"

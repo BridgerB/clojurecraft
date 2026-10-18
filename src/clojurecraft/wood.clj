@@ -82,8 +82,8 @@
 
 (defn skipped
   "The logs not to choose: blacklisted positions, every log in a trunk column that has failed
-   max-trunk-failures times, and every log within unreached-radius of a place a walk failed
-   :no-path toward (:plan/unreached). A grove across water no route crosses is one failure, not
+   max-trunk-failures times, and every log within unreached-radius of a place a log walk
+   failed :no-path toward (:plan/unreached). A grove across water no route crosses is one failure, not
    one for each of its trunks: real race 39042120284 bot Clj_r14 (issue #75) stood on a shore with
    the trees two hundred blocks off across the sea, tried twelve trunks of one grove a walk each,
    and the plan failed :no-path before the hunt or the crossing had their turn."
