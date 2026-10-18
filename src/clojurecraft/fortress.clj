@@ -29,7 +29,9 @@
 (def brick-min-y 32)                  ; bricks under this are below the lava sea's surface (y 31): never tunnel to them
 (def sight-radius 512)                ; how far a remembered brick may be and still be the target
 (def steps-per-tunnel 32)             ; steps a :tunnel-to takes before the planner looks again
-(def explore 48)                      ; blocks ahead an exploring tunnel aims, when no brick is on record
+(def explore-spacing 160)             ; blocks between the strips an exploring tunnel sweeps: a server shows 96 either side of the feet
+(def explore-band [52 90])            ; the heights an exploring tunnel keeps to: over the lava sea (y 31) and its lakes, under the roof
+(def look-ahead 2)                    ; blocks ahead that must be loaded for a leg to go on: the world's edge turns it
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
 
 (def fortress-kinds
@@ -235,11 +237,12 @@
   ;; is safe. Steps go up or down first past :intent/climb blocks off (climb-past when absent);
   ;; with :intent/dry? only steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
-   {:intent/keys [target steps taken move from climb dry? tunnel-visited child]
+   {:intent/keys [target steps taken move from climb dry? tunnel-visited child search]
     r :intent/reach
     :or {taken 0 r reach climb climb-past tunnel-visited #{}}
     :as i} event]
-  (let [feet (intent/feet world)]
+  (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
+        feet (intent/feet world)]
     (cond (or (arrived? world target r) (>= taken steps))
           (-> world
               (assoc :player/controls {})
@@ -300,13 +303,81 @@
   [world]
   (memory/nearest-of (physics/centre (intent/feet world)) sight-radius (bricks world)))
 
+;; ---------------------------------------------------------------- exploring: a spiral
+
+(defn leg-length
+  "Blocks of the leg-th leg (from 0) of an exploring spiral: explore-spacing for the first two, then
+   each pair one spacing longer, so the strips the legs sweep lie a spacing apart."
+  [leg]
+  (* explore-spacing (inc (quot (long leg) 2))))
+
+(defn turn-right
+  "The horizontal direction [dx dz] a quarter turn clockwise from heading: east, south, west, north."
+  [[dx dz]]
+  [(- dz) dx])
+
+(defn explore-y
+  "The height an exploring leg from feet aims at: the feet's own, kept within explore-band, so a
+   tunnel that drifted down toward the bedrock climbs back and one in the roof's rock comes down."
+  [[_ y _]]
+  (let [[lo hi] explore-band]
+    (-> (long y)
+        (max (long lo))
+        (min (long hi)))))
+
+(defn leg-target
+  "The cell the leg of search ({:search/from :search/heading :search/leg :search/tunnels}) aims
+   at: its length along its heading from where it began, at that cell's explore-y."
+  [{:search/keys [from heading leg]}]
+  (let [[x _ z] from
+        [dx dz] heading
+        n (leg-length leg)]
+    [(+ x (* n dx)) (explore-y from) (+ z (* n dz))]))
+
+(defn open-ahead?
+  "Is the cell look-ahead blocks from feet along heading [dx dz] loaded? A real server shows 96
+   blocks round the feet, so only the model's captured Nether ends in front of a tunnel."
+  [world feet [dx dz]]
+  (some? (terrain/block-at world (plus feet [(* look-ahead dx) 0 (* look-ahead dz)]))))
+
+(defn new-leg
+  "The search whose leg-th leg begins at feet along the first of headings that has a way to go:
+   the world goes on ahead (open-ahead?) and a step toward the leg's end is safe (choose-move);
+   nil when none has."
+  [world feet leg headings]
+  (some (fn [h]
+          (let [s {:search/from feet :search/heading h :search/leg leg :search/tunnels 0}]
+            (when (and (open-ahead? world feet h) (choose-move world feet (leg-target s))) s)))
+        headings))
+
+(defn leg-over?
+  "Is the leg of search finished: its end within reach (by the ground, a tunnel's height may stay
+   short of it), the world ending ahead, more tunnels spent on it than its length asks (a wall it
+   cannot go round), or the feet so far from where it began that it is another trip's?"
+  [world {:search/keys [from heading leg tunnels] :as search}]
+  (let [feet (intent/feet world)
+        at (physics/centre feet)]
+    (or (<= (physics/horizontal-distance at (physics/centre (leg-target search))) reach)
+        (not (open-ahead? world feet heading))
+        (> tunnels (+ 2 (* 2 (quot (leg-length leg) steps-per-tunnel))))
+        (> (physics/horizontal-distance at (physics/centre from)) (+ (leg-length leg) 64)))))
+
 (defn exploring
-  "Where to tunnel with no brick on record: explore blocks along the first axis (east, west,
-   south, north) whose first step is safe, at the feet's height; nil when none is."
+  "The search an exploring tunnel carries, with no brick on record: the world's :fortress/search
+   while its leg goes on (one more tunnel spent), else the next leg, a quarter turn right from the
+   last one's heading and a longer one, from the feet; the first leg, east when it can go, with no
+   search. A leg that cannot go the way it turns tries the next heading, so the model's edge
+   turns the tunnel. nil when no heading has a way to go. Replaces the tunnel that aimed 48 blocks
+   east for ever: sim race 39095704051 runner 4 (issue #338) went 630 blocks east along the
+   bedrock past a fortress 150 blocks north."
   [world]
-  (let [feet (intent/feet world)]
-    (some (fn [d] (let [t (plus feet (mapv #(* explore %) d))] (when (choose-move world feet t) t)))
-          [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]])))
+  (let [feet (intent/feet world)
+        {:search/keys [heading leg] :as search} (:fortress/search world)
+        headings #(take 4 (iterate turn-right %))]
+    (cond (nil? search) (new-leg world feet 0 (headings [1 0]))
+          (leg-over? world search)
+          (new-leg world feet (inc (long leg)) (headings (turn-right heading)))
+          :else (update search :search/tunnels inc))))
 
 (defmethod plan/done-by :at-fortress?
   [world _]
@@ -326,13 +397,21 @@
 
 (defmethod plan/next-intent :fortress
   ;; replace a missing pickaxe from held supplies, then tunnel to the nearest brick on record;
-  ;; with none, explore; with nowhere safe, or outside the Nether, wait
+  ;; with none, the next leg of the spiral search (exploring); with nowhere safe, or outside the
+  ;; Nether, wait
   [world goal table]
-  (let [t (when (= dimension/nether (dimension/of world))
-            (or (nearest-brick world) (exploring world)))]
-    (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
+  (let [nether? (= dimension/nether (dimension/of world))
+        brick (when nether? (nearest-brick world))
+        search (when (and nether? (not brick)) (exploring world))]
+    (cond (not nether?) {:plan/wait :other-dimension}
           :else
           (or (when (build/pickaxe-at-hand? world)
                 (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
-              (when t {:intent/kind :tunnel-to :intent/target t :intent/steps steps-per-tunnel})
+              (when brick
+                {:intent/kind :tunnel-to :intent/target brick :intent/steps steps-per-tunnel})
+              (when search
+                {:intent/kind :tunnel-to
+                 :intent/target (leg-target search)
+                 :intent/steps steps-per-tunnel
+                 :intent/search search})
               {:plan/wait :no-way}))))

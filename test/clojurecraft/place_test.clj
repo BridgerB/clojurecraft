@@ -410,3 +410,39 @@
     (let [[w fx] (fx/fold intent-step w [{:event/kind :tick :event/now 100 :event/rand 0.5}])]
       (is (= [[:container-click 0]] (windowed fx)) "then the swap goes to window 0")
       (is (= :active (:intent/status (:plan/intent w)))))))
+
+(deftest a-given-cell-the-body-clips-is-stepped-off-before-it-is-placed-into
+  ;; race 39095700271 runner 3 bot Clj_r04 (issue #430): the stairs' seal into the water beside
+  ;; the feet was sent from x 2838.74, the body over the cell's edge, and refused three times
+  (let [floor (into {} (for [x (range 3 10) z (range 3 10)] [[x 63 z] 1]))
+        at (fn [x nudges]
+             (-> (standing [x 64.0 5.5])
+                 (assoc :world/chunks {[0 0] (world/column floor)})
+                 (assoc :plan/intent
+                        (cond-> {:intent/kind :place
+                                 :intent/item :cobblestone
+                                 :intent/status :active
+                                 :intent/stage :spot
+                                 :intent/cell [6 64 5]}
+                          nudges (assoc :intent/nudges nudges)))))
+        run (fn [w]
+              (first (fx/fold intent-step w [{:event/kind :tick :event/now 0 :event/rand 0.5}])))]
+    (is (place/inside-player? (at 5.74 nil) [6 64 5]))
+    (let [w (run (at 5.74 nil))]
+      (is (= :spot (:intent/stage (:plan/intent w))))
+      (is (= 1 (:intent/nudges (:plan/intent w))))
+      (is (:control/forward? (:player/controls w)) "toward the middle of its own cell"))
+    (is (= :settle (:intent/stage (:plan/intent (run (at 5.5 nil)))))
+        "clear of the cell: placed as before")
+    (is (= :settle (:intent/stage (:plan/intent (run (at 5.74 place/max-nudges)))))
+        "after max-nudges the server decides")
+    (is (= :spot
+           (:intent/stage (:plan/intent (run (update (at 5.74 nil)
+                                                     :plan/intent
+                                                     merge
+                                                     {:intent/stage :settle
+                                                      :intent/target [6 64 5]
+                                                      :intent/against [6 63 5]
+                                                      :intent/since 0
+                                                      :intent/still 0})))))
+        "a body drifted onto the edge while settling goes back to the spot stage")))
