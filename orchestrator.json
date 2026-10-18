@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T08:41:12.863Z",
+  "at" : "2026-10-18T08:43:23.609Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -11,7 +11,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 65,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at cobblestone: boxed",
     "copilot" : true,
     "draft" : true,
