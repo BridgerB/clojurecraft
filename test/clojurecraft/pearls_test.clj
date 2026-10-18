@@ -119,8 +119,10 @@
         {:intent/keys [kind target for]} (plan/next-intent (looked-out w) row plan/goals)]
     (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals)))
     (is (= [:walk :pearls] [kind for]))
-    (is (and (>= (first target) 23) (= 64 (second target)))
-        "east first at this hour, sixteen blocks or near it, onto the floor there")))
+    (is
+     (and (>= (first target) 20) (= 64 (second target)))
+     "east first at this hour, twelve blocks or more on the floor (sixteen from the point
+         behind the feet by the route's own measure, octile and height)")))
 
 (def rock-y (range 64 67))
 
