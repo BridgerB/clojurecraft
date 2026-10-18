@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-18T01:20:00.876Z",
+  "at" : "2026-10-18T01:21:09.137Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 296,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at fortress: no-pickaxe",
     "copilot" : true,
     "draft" : false,
@@ -163,9 +163,8 @@
   } ],
   "moves" : [ {
     "issue" : 296,
-    "move" : "wait",
-    "pr" : 411,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 411
   }, {
     "issue" : 135,
     "move" : "leave",
@@ -1123,5 +1122,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-18T01:18:52.305Z"
+  }, {
+    "issue" : 296,
+    "move" : "merge",
+    "pr" : 411,
+    "at" : "2026-10-18T01:21:09.137Z"
   } ]
 }
