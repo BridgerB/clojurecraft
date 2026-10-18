@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:07:28.879Z",
+  "at" : "2026-10-18T03:10:47.673Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -53,7 +53,7 @@
     "draft" : false,
     "nudges" : 1,
     "pr" : 421,
-    "session" : true
+    "session" : false
   }, {
     "number" : 44,
     "title" : "Bot stops at cast-one: rejected",
@@ -148,7 +148,7 @@
     "issue" : 162,
     "move" : "wait",
     "pr" : 421,
-    "why" : "session running"
+    "why" : "nudged recently"
   }, {
     "issue" : 44,
     "move" : "leave",
