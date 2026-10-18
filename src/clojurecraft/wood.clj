@@ -25,6 +25,9 @@
 (def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
 (def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
 (def return-max-nodes 120000)         ; expansions for a complete way back to trees when local routes and hunts fail
+(def bridge-reach 12)                 ; blocks on the plane to a trunk no route reaches that a staircase is cut toward
+(def bridge-rise 3)                   ; blocks the trunk's bottom may lie over or under the feet for that staircase
+(def bridge-climb 2)                  ; stairs up that staircase cuts before the planner looks again
 (def opening-drop 2)                  ; blocks under the feet a mouth may lie and still be the way out, not the way down
 
 (defn ground?
@@ -172,6 +175,39 @@
            (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)])
            :intent/for :trees})))))
 
+(declare water-toward?)
+
+(defn trees-bridge
+  "Out of the ground (stairs/out?) with a standing trunk close by and level with the feet that no
+   route reaches (nothing before it in climb-out did): stairs up toward it, bridge-climb of
+   them, to-height only, laid from carried filler where the air has no step (stairs/step-lay), so
+   the next look from a little higher finds a way down onto the far side. Only a trunk within
+   bridge-reach on the plane, no more than bridge-rise over the feet or under (and the feet less
+   than bridge-rise over its bottom: the climb is bounded, it goes up twice at most), no open
+   water on the way (water-toward?: crossing is for that), never from a cell where a climb died
+   :boxed. Sim worlds R3/45 (issues #87 and #108, seeds 1 and 3): the bot climbed out of its pit
+   on a pillar of its own cobblestone and stood eight blocks from the only trunk in reach, on a
+   hill across two blocks of air the path search does not bridge, and the open sky, the trunk
+   below the eye, said there was nothing to cut: the plan waited :no-log."
+  [world trunks]
+  (let [[fx fy fz :as feet] (intent/feet world)
+        eye-y (physics/y-of (game/eye world))]
+    (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
+      (when-let [[tx _ tz] (first (filter (fn [[tx ty tz :as trunk]]
+                                            (let [d (physics/horizontal-distance [fx 0 fz]
+                                                                                 [tx 0 tz])]
+                                              (and (<= (abs (- ty fy)) bridge-rise)
+                                                   (< fy (+ ty bridge-rise))
+                                                   (< 2.0 d bridge-reach)
+                                                   (not (water-toward? world feet trunk eye-y)))))
+                                          trunks))]
+        {:intent/kind :stairs-up
+         :intent/to-y (+ fy bridge-climb)
+         :intent/to-height? true
+         :intent/dir
+         (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)])
+         :intent/for :surface}))))
+
 (defn mouth-below?
   "Is a walk to target, [x y z], a way down from feet: its cell more than opening-drop under the
    feet's?"
@@ -227,7 +263,8 @@
                  :intent/to-y (stairs/climb-to world terrain/top-y)
                  :intent/for :surface}))
           (trees-climb world trunks)
-          (trees-descend world trunks)))))
+          (trees-descend world trunks)
+          (trees-bridge world trunks)))))
 
 (defn near-walk
   "A walk to the nearest standing trunk in the near band (search-radius, no more than 12 above or
@@ -400,26 +437,18 @@
 
 (defn way-out
   "With no log to set out for (gather-next waits :no-log), the way out the water hunt takes from
-   where the feet are. Wading (:player/in-water? with the eye in air, no trap: the escape owns a
-   bot once its eye has been under water for trap-after-ticks, never one wading), a :swim-out for
-   :retreat, done on dry land, from where a route to the trunks starts again; nil with the eye
-   under, for the escape. Out of water: out of a pit under the open sky deep under the landing
-   (scoop/pit-climb), else from a cell under rock where a climb out died :boxed
+   where the feet are, never in water (the escape owns it): out of a pit under the open sky deep
+   under the landing (scoop/pit-climb), else from a cell under rock where a climb out died :boxed
    (scoop/boxed-here?) a retreat to new rock (stone/retreat), the next climb from there; nil when
    neither. Sim race 38843552659 (issue #186): world R1/18 stood at y 6 on a ravine's floor
    sixty under its landing, the sky open and no hunt target in its band, and world R4/39 under
    rock at y 47 where its climb out had died :boxed, and both waited :no-log with trees
-   remembered sixty blocks off. Sim world R1/30 (issue #110): the bot dropped from a canopy into
-   a lake a block deep, the two trunks left standing a step from the bank, and with its feet in
-   the water no route started: it waited :no-log until the plan failed."
+   remembered sixty blocks off."
   [world]
-  (cond (:player/eye-in-water? world) nil
-        (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
-        :else
-        (or (scoop/pit-climb world)
-            (when (and (scoop/boxed-here? world)
-                       (not (terrain/under-sky? world (intent/feet world))))
-              (stone/retreat world)))))
+  (when-not (:player/in-water? world)
+    (or (scoop/pit-climb world)
+        (when (and (scoop/boxed-here? world) (not (terrain/under-sky? world (intent/feet world))))
+          (stone/retreat world)))))
 
 (defn gather-or-out
   "The :gather act: gather-next, or when it waits :no-log the way out (way-out) before the wait.

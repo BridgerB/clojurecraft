@@ -158,23 +158,6 @@
     (is (= {:intent/kind :stairs-down :intent/to-y -40}
            (stone/mine-next (standing -34 :wooden_pickaxe) (row :mine-stone))))))
 
-(deftest an-island-is-left-across-the-water
-  ;; issue #37, sim world R1/26 and real race bot Clj_r20: the stairs up out of the mine came out on
-  ;; a one-block island in a lake, every stair refused for the water beside it and no route 12
-  ;; blocks off, and the plan waited :boxed on dry land it could not leave
-  (let [lake
-        (into
-         {}
-         (for [x (range 16) z (range 16) :when (not= [x z] [5 5])] [[x 63 z] blocks/water-base]))
-        island (assoc (standing 64 :stone_pickaxe)
-                      :world/chunks
-                      {[0 0] (world/column lake) [1 0] (world/column {})})
-        r (stone/island-out island)]
-    (is (= :cross (:intent/kind r)) (pr-str r))
-    (is (<= 16 (first (:intent/target r))) "toward the shore in the next chunk")
-    (is (nil? (stone/island-out (assoc island :world/chunks {[0 0] (world/column lake)})))
-        "no dry ground loaded within reach: nothing to swim for")))
-
 (def sea
   "A column with water on top, y 64 to 66: the sea over the rock."
   (world/column

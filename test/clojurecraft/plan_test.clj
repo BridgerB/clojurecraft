@@ -167,19 +167,31 @@
     (is (= {:plan/wait :no-log} (wood/gather-next (boxed (bed :gravel))))
         "never under gravel, which would fall on the bot")))
 
-(deftest a-bot-wading-with-no-log-in-reach-swims-out
-  ;; sim world R1/30 (issue #110): dropped from a canopy into a lake one block deep, the trunks
-  ;; left a step from the bank, no route started from the water, and the plan waited :no-log
-  ;; out with the wading no trap
-  (let [w (assoc (remembered {[8 50 8] blocks/water-base} [8.5 50.0 8.5]) :player/in-water? true)]
-    (is (= {:plan/wait :no-log} (wood/gather-next w)) "no log to set out for")
-    (is (= {:intent/kind :swim-out :intent/for :retreat} (wood/gather-or-out w))
-        "swim out to the bank instead of waiting in the water")
-    (is (not= {:intent/kind :swim-out :intent/for :retreat}
-              (wood/gather-or-out (assoc w :player/in-water? false)))
-        "on land it waits as before")
-    (is (= {:plan/wait :no-log} (wood/gather-or-out (assoc w :player/eye-in-water? true)))
-        "with the eye under the escape owns it, not the way out")))
+(deftest a-trunk-across-a-chasm-is-bridged-by-stairs-up
+  ;; sim worlds R3/45 (issues #87 and #108): the only trunk in reach stood across two blocks of air
+  ;; from the pillar the bot had climbed out on, no route reached it, and the plan waited :no-log
+  (let [chasm (into {} (for [x (range 16) y (range 40 64) z (range 16)] [[x y z] blocks/air]))
+        platforms (fn [& boxes]
+                    (into {}
+                          (for [[x0 x1] boxes x (range x0 (inc x1)) z (range 6 11)] [[x 63 z] 1])))
+        near (remembered (merge chasm (platforms [7 10] [0 1]) {[1 64 8] 136 [1 65 8] 136})
+                         [8.5 64.0 8.5])
+        far (remembered (merge chasm (platforms [0 2] [13 15]) {[15 64 8] 136 [15 65 8] 136})
+                        [1.5 64.0 8.5])]
+    (is (nil? (wood/near-walk near)) "no route reaches the trunk across the chasm")
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y 66
+            :intent/to-height? true
+            :intent/dir [-1 0]
+            :intent/for :surface}
+           (wood/gather-next near))
+        "two stairs up toward it")
+    (is (not= :stairs-up (:intent/kind (wood/gather-next (assoc near :plan/boxed-at #{[8 64 8]}))))
+        "never from a cell where a climb died boxed")
+    (is (not= :stairs-up (:intent/kind (wood/gather-next (assoc near :player/pos [8.5 67.0 8.5]))))
+        "bounded: once three over the trunk's bottom no more stairs")
+    (is (not= :stairs-up (:intent/kind (wood/gather-next far)))
+        "a trunk past bridge-reach is not climbed toward")))
 
 (deftest a-mouth-below-the-feet-is-the-way-down-not-out
   ;; sim world R2/16 (issue #87): stairs cut up from the mouth at y 83 toward trees on a cliff
