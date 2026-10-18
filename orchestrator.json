@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T11:16:02.871Z",
+  "at" : "2026-10-18T11:17:09.518Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -14,7 +14,7 @@
     "checks" : "pending",
     "title" : "Bot stops at portal: no-site",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 443,
     "session" : false
@@ -35,8 +35,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 392,
-    "move" : "ready",
-    "pr" : 443
+    "move" : "wait",
+    "pr" : 443,
+    "why" : "checks running"
   }, {
     "issue" : 342,
     "move" : "leave",
