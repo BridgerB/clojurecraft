@@ -1525,7 +1525,6 @@
 (def lava-depth -54)                  ; the feet a block over the lava sea: below y -54 the game fills its aquifers with lava (ruststeve cast at y -50, the sea's surface at -55)
 (def hunt-radius 48)                  ; blocks from the feet a lava source is walked, dug or tunnelled toward
 (def max-candidates 3)                ; the nearest sources a route is planned to
-(def here-radius 2)                   ; a stand this near the feet is where the bot is: not walked to
 
 (defn sources-near
   "The lava sources loaded within hunt-radius of the feet, nearest first, outside given-up
@@ -1541,15 +1540,20 @@
 (defn lava-walk
   "A walk to a cell beside an exposed source's air (stands-beside), from which a site has its
    station: the first of the max-candidates nearest scoopable sources a route reaches; nil when
-   none, and never to a stand within here-radius of the feet, where the bot already is."
+   none, and never to a stand the walk would call arrived at once (intent/arrived?: the eye
+   within reach of it), where the bot already is. Real race 39076909951 (issue #163, bot Clj_r02):
+   the stand a block over the roof just dug was beyond the two blocks the feet had to be from it
+   and within the walk's reach, so the walk ended at once, the planner chose it again, and the
+   build did nothing else, a walk every fifty milliseconds."
   [world]
-  (let [feet (physics/centre (intent/feet world))]
+  (let [eye (game/eye world)]
     (->> (sources-near world)
          (filter #(scoop/scoopable? world % :lava))
          (take max-candidates)
          (mapcat #(stands-beside world %))
          (map (fn [[stand _]] {:intent/kind :walk :intent/target stand :intent/for :lava}))
-         (remove #(<= (physics/distance (physics/centre (:intent/target %)) feet) here-radius))
+         (remove
+          #(intent/arrived? world % (physics/distance eye (physics/centre (:intent/target %)))))
          (filter #(intent/routable? world %))
          first)))
 

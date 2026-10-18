@@ -906,6 +906,13 @@
             :when (= :place (:build/op op))]
       (is (contains? cells (:build/pos op)) (str "access " h " places in " (:build/pos op))))))
 
+(deftest a-stand-within-reach-is-not-walked-to
+  ;; real race 39076909951 (issue #163): a stand within the walk's reach but beyond two blocks was
+  ;; walked to again every tick, the walk ending as it began
+  (let [walk-at (fn [pos] (build/lava-walk (standing-at (open-ground trench) pos)))]
+    (is (= :lava (:intent/for (walk-at [10.5 63.0 8.5]))) "far from every stand: walked to")
+    (is (nil? (walk-at [10.5 63.0 11.5])) "the eye within reach of the stands: already there")))
+
 (deftest a-refill-never-opens-lava-over-its-stand
   ;; Issue #231, R1/32: the ray to a low source opened the wall under higher lava,
   ;; which flowed onto the stand before the next dig finished.
