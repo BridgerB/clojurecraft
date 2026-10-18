@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T09:33:55.636Z",
+  "at" : "2026-10-18T09:35:01.893Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -31,25 +31,23 @@
   }, {
     "number" : 92,
     "title" : "Bot stops at portal-kit: no-escape",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "labels" : [ "bot-failure", "real", "sim", "agent-stuck" ],
-    "quiet" : false,
     "number" : 65,
-    "checks" : "red",
     "title" : "Bot stops at cobblestone: boxed",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 1,
-    "pr" : 437,
-    "session" : false
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   } ],
   "moves" : [ {
     "issue" : 349,
     "move" : "wait",
     "pr" : 438,
     "why" : "session running"
+  }, {
+    "issue" : 92,
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 65,
     "move" : "leave",
