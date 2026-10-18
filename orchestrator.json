@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:57:42.570Z",
+  "at" : "2026-10-18T03:59:56.359Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -29,14 +29,20 @@
     "pr" : 416,
     "session" : false
   }, {
+    "labels" : [ "bot-failure", "sim" ],
+    "quiet" : false,
+    "number" : 338,
+    "checks" : "pending",
+    "title" : "Bot stops at fortress: timeout",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 426,
+    "session" : true
+  }, {
     "number" : 44,
     "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 41,
@@ -49,14 +55,14 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 60,
-    "title" : "Bot stops at water-bucket: no-water",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 60,
+    "title" : "Bot stops at water-bucket: no-water",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 284,
@@ -111,12 +117,14 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 338,
+    "move" : "wait",
+    "pr" : 426,
+    "why" : "session running"
+  }, {
     "issue" : 44,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 338,
-    "move" : "assign"
   }, {
     "issue" : 41,
     "move" : "leave",
