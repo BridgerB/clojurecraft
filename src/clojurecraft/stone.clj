@@ -212,6 +212,14 @@
 
 (def retreat-distance 12)             ; blocks a retreat walks from where nothing could be cut
 
+(defmethod path/goal-done? :unboxed-away
+  [_ {:goal/keys [pos range boxed]} node]
+  (and (not (contains? boxed node)) (> (path/flat-distance node pos) range)))
+
+(defmethod path/heuristic :unboxed-away
+  [{:goal/keys [pos range]} node]
+  (max 0.0 (- range (path/flat-distance node pos))))
+
 (defn deeper
   "Stairs stair-depth below the feet when no tunnel can be cut here, the row's depth notwithstanding
    (ore lies below it too), when a stair from here can be cut at all and the bottom of the world is
@@ -237,22 +245,30 @@
 (defn retreat
   "Away from where nothing can be cut: out of water first when the feet are in it (a :swim-out for
    :retreat, done on dry land), else a walk to the end of a route at least retreat-distance
-   away (path's :away goal), where the rock is new. From a boxed cell, when the search exhausts
-   the reachable ground short of that distance, use its last unboxed waypoint instead;
-   nil when there is no way. Gym batch iron-a6
+   away (path's :unboxed-away goal), never onto a cell already in :plan/boxed-at.
+   Sim race 39044508577 (issue #161, R1/29) retreated between two boxed cells for hours.
+   From a boxed cell, when the search exhausts
+   the reachable ground short of that distance, use its last unboxed waypoint instead, or with
+   no waypoint at all the cell the search began on when that is another unboxed cell (the
+   box rests on the shore beside the ice it stands on: sim race 39074156402, issue #71, world
+   R2/35, a cove between a cliff and a frozen lake); nil when there is no way. Gym batch iron-a6
    run 3's tunnel at y 16 ran along an aquifer until water filled its floor, and every tunnel and
    stair from there was refused."
   [world]
   (if (:player/in-water? world)
     {:intent/kind :swim-out :intent/for :retreat}
     (let [feet (intent/feet world)
-          boxed (:plan/boxed-at world #{})
-          r (path/plan world
-                       (path/feet-cell (:player/pos world))
-                       {:goal/kind :away :goal/pos feet :goal/range retreat-distance})
+          boxed (into (:plan/boxed-at world #{}) (:plan/boxed-route world))
+          r
+          (path/plan
+           world
+           (path/feet-cell (:player/pos world))
+           {:goal/kind :unboxed-away :goal/pos feet :goal/range retreat-distance :goal/boxed boxed})
+          start (:path/from r)
           target (cond (= :found (:path/status r)) (last (:path/waypoints r))
                        (and (= :none (:path/status r)) (contains? boxed feet))
-                       (last (remove boxed (:path/waypoints r))))]
+                       (or (last (remove boxed (:path/waypoints r)))
+                           (when-not (or (= feet start) (contains? boxed start)) start)))]
       (when target {:intent/kind :walk :intent/target target :intent/for :retreat}))))
 
 (defn climb

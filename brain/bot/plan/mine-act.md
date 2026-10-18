@@ -30,6 +30,10 @@ sourceRefs:
   - src/clojurecraft/stone.clj#defn deeper
   - test/clojurecraft/stone_test.clj#deeper-only-where-a-stair-can-be-dug
   - src/clojurecraft/stone.clj#defn retreat
+  - test/clojurecraft/stone_test.clj#a-boxed-bot-on-ice-steps-to-the-standable-cell-beside-it
+  - src/clojurecraft/stone.clj#defmethod path/goal-done? :unboxed-away
+  - test/clojurecraft/stone_test.clj#a-long-retreat-does-not-end-on-boxed-ground
+  - test/clojurecraft/stone_test.clj#a-boxed-search-does-not-retreat-to-its-start
   - test/clojurecraft/stone_test.clj#a-boxed-pocket-retreats-along-a-short-route-to-new-rock
   - src/clojurecraft/stone.clj#defn climb
   - src/clojurecraft/plan.clj#def boxing-kinds
@@ -69,6 +73,10 @@ A mining row is data: `:goal/act :mine`, the blocks it digs (`:goal/blocks`) and
 ## Short retreats from boxed ground
 
 `stone/retreat` still prefers a route more than twelve blocks away. When the feet are in `:plan/boxed-at` and the search exhausts the reachable ground before that distance (`:path/status :none`), it instead walks to the last unboxed waypoint on the returned route. An empty route or one with only boxed cells still yields nil; a search that merely spent its budget is not exhaustion. Retreat walks end standing on that destination (`intent/standing-walks`), never merely within reach of it, which could leave a short retreat in its boxed starting cell. Sim race 39028864642 (issue #370, R1/29) finished a climb for portal wood under gravel at y 48 with an eight-cell route back through its tunnel, all shorter than twelve blocks away, and waited `:no-log`. The short retreat leaves that pocket so gathering can re-plan from new rock without relaxing the gravel or boxed-cell guards.
+
+A boxed pocket whose search finds no waypoint at all still has a way when the cell the search began on (`:path/from`: the feet's own cell, or the standable cell beside it, `path/start-cell`) is another cell not in `:plan/boxed-at`: the retreat is one step there, and the next descent starts from it. Sim race 39074156402 (issue #71, world R2/35): the bot stood on the edge of a frozen lake in a cove under a cliff, the stairs died `:boxed` on the ice's edge, the retreat had nothing to walk to, and the plan waited `:boxed` to its end. A cell it has already died on is never the step, so the walk ends.
+
+The `:unboxed-away` route goal excludes both boxed cells and `:plan/boxed-route`, the cells visited by descents or tunnels that failed `:boxed` (`plan/fail-intent`). Routes may cross those cells but cannot end on them. Issue #161's R1/29 snapshot repeatedly walked between boxed cells; excluding only the final boxed cells then repeated short descents from their still-unmarked starting cells. Remembering the failed searches' visited cells lets the bot leave that area and finish the portal kit.
 
 ## How it works (`mine-next`)
 1. A chain in flight continues: walk → dig → collect via `intent/chain-next`, tagged `:intent/for` the row's id, so another row's chain (a coal walk when iron is now wanted) is never continued as this one's dig.
