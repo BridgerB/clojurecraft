@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, mining, goals]
 aliases: [:mine, stone.clj, mine-next, :goal/blocks, :goal/depth, mine-stone, mine-coal, mine-iron, dig-gravel, none-in-sight, intent/pickup?, step-down?, :redig, flint-from-gravel, flint]
 status: verified
-lastUpdated: 2026-10-17
+lastUpdated: 2026-10-18
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/stone.clj#defn mine-next
@@ -48,6 +48,7 @@ sourceRefs:
   - src/clojurecraft/stone.clj#defn link
   - src/clojurecraft/stone.clj#defn redig-place
   - test/clojurecraft/stone_test.clj#redig-places-only-where-the-drop-can-be-collected
+  - test/clojurecraft/stone_test.clj#redig-places-on-the-neighbouring-stair
   - test/clojurecraft/stone_test.clj#redig-tries-placement-again-after-reaching-fresh-ground
   - src/clojurecraft/stone.clj#defmethod intent/run :redig
   - test/clojurecraft/sim_test.clj#one-gravel-is-placed-and-dug-again-until-it-drops-flint
@@ -94,6 +95,7 @@ Gravel's loot table drops flint one time in ten, else the gravel itself. The `:f
 
 ## Gotchas
 - **Click reach is not pickup reach.** `redig-place` chooses a supported, clear cell immediately beside the feet, including a passage, and gives that cell to the child placement. With none, it retreats to fresh ground and tries placement again; it never cuts a placement niche. Issue #151's R3/14 and real runner 8 snapshots placed gravel through rock or round a corner, then walked into the intervening wall until three collects failed `:not-picked-up`. Both now collect gravel repeatedly and reach flint-and-steel within their kept windows.
+- **A stair is pickup ground too.** The neighbouring cell may be one step up or down, not only level with the feet. Issue #349's R1/4 and R4/42 snapshots held gravel but retreated along stairs indefinitely because no same-height neighbour had headroom; the next placement search must accept a standable stair.
 - **Exposed is not safe to dig.** `exposed-of-states` excludes blocks whose dig would expose a fluid (`intent/exposes-fluid?`), using the live terrain rather than permanently blacklisting them. Race 39037024176 runner 1 (issue #342) repeatedly walked to stone beside water, received `:unsafe`, and descended into another boxed pocket. A dry observation makes those blocks candidates again. Together with resetting turns after each completed stair, the kept snapshot reaches the furnace 363.3 seconds after its moment instead of failing `[:furnace :boxed]` after 54.15 seconds.
 - **Lava that caught the bot is still coming.** Ore within `path/lava-trap-reach` (4) on the plane of a lava trap still in force (`:world/traps`, ten minutes) is left alone (`path/near-lava-trap?`): sim race 38844683780 (issue #230, world R2/9) fled lava falling from ten blocks up, then mined the iron two blocks off under the same flow and was caught again until the flee found no footing; and where it was caught, the mine retreats before it cuts a stair, which the flow followed down (`ore-beside-a-lava-trap-is-left-alone`).
 - **A tunnel shows its floor too.** Live run 14 (local landing 2360,2360, 58fc6aa) held an ingot and needed flint, tunnelled for gravel at y 18 and walked over five gravel blocks in its own floor, none counted because a block a level under the feet was never reachable (`gravel-in-the-tunnel-floor-is-dug-and-picked-up-from-its-hole`).

@@ -35,10 +35,31 @@
         "a supported neighbour, not the first diagonal cell within click reach")
     (is (= [5 64 4] (:intent/cell (stone/redig-place (assoc w :world/blocks {[4 65 5] 1}) :gravel)))
         "a niche with no headroom cannot be entered for the drop")
-    (let [walls (into {} (for [cell [[4 64 5] [6 64 5] [5 64 4] [5 64 6]]] [cell 1]))
+    (let [walls (into {} (for [y [63 64 65] cell [[4 y 5] [6 y 5] [5 y 4] [5 y 6]]] [cell 1]))
           child (stone/redig-place (assoc w :world/blocks walls) :gravel)]
       (is (contains? #{:walk :stairs-up} (:intent/kind child))
           "no pickup cell: leave, never cut a niche"))))
+
+(deftest redig-places-on-the-neighbouring-stair
+  (doseq [dy [-1 1]]
+    (let [cell [4 (+ 64 dy) 5]
+          walls (into {} (for [p [[4 64 5] [6 64 5] [5 64 4] [5 64 6]]] [p 1]))
+          w (assoc (standing 64 :gravel)
+                   :world/blocks
+                   (merge walls {cell blocks/air [4 (+ 65 dy) 5] blocks/air [4 (+ 63 dy) 5] 1}))]
+      (is (= {:intent/kind :place :intent/item :gravel :intent/cell cell}
+             (stone/redig-place w :gravel))
+          "the drop can be reached by stepping up or down, without another retreat")
+      (let [i {:intent/kind :redig
+               :intent/item :gravel
+               :intent/status :active
+               :intent/child {:intent/kind :walk :intent/status :done}}
+            event {:event/kind :tick}
+            resumed (stone/redig-stage (assoc w :plan/intent i) i event)
+            next (stone/redig-stage resumed (:plan/intent resumed) event)]
+        (is (= :place (get-in next [:plan/intent :intent/child :intent/kind])))
+        (is (= cell (get-in next [:plan/intent :intent/child :intent/cell]))
+            "a redig already retreating retries placement on the stair")))))
 
 (deftest redig-tries-placement-again-after-reaching-fresh-ground
   (doseq [kind [:walk :stairs-up]]
