@@ -442,6 +442,18 @@
               (= :stuck row) {:plan/wait :stuck}
               :else (or (take-table world row) (make-room world row) (plan/act world row))))))
 
+(defn spare
+  "The next intent toward the spare tools a row keeps (:goal/spares, resolve-spares) beside what
+   it holds: the table taken along (take-table), room made (make-room) or the act of the producer
+   the planner reaches, when that is worth a spare (spare-worth?); nil when the row keeps none,
+   holds them, or the way to them is not worth it. A build row has no provides of its own for
+   the needs planner to net, so its spares are asked for here: issues #135 and #161, bots that
+   went down to the lava with one pickaxe and no table, and climbed by hand when it broke."
+  [world goal table]
+  (let [[_ action] (resolve-spares world table (counts world) goal [])]
+    (when (map? action)
+      (or (take-table world action) (make-room world action) (plan/act world action)))))
+
 (defmethod plan/next-intent :needs [world goal table] (decide world goal table))
 
 (defmethod plan/done-by :provided?
