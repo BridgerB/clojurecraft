@@ -1,12 +1,18 @@
 {
-  "at" : "2026-10-18T00:54:05.826Z",
+  "at" : "2026-10-18T00:55:15.057Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
-    "number" : 296,
-    "title" : "Bot stops at fortress: no-pickaxe",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 296,
+    "checks" : "pending",
+    "title" : "Bot stops at fortress: no-pickaxe",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 411,
+    "session" : true
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -192,7 +198,9 @@
   } ],
   "moves" : [ {
     "issue" : 296,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 411,
+    "why" : "session running"
   }, {
     "issue" : 178,
     "move" : "leave",
