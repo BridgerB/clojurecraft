@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T09:21:28.340Z",
+  "at" : "2026-10-18T09:22:35.332Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -11,7 +11,7 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 349,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at flint-and-steel: timeout",
     "copilot" : true,
     "draft" : true,
