@@ -125,35 +125,41 @@
    the seed picks (day-time-of), as the real servers
    do (issue #260: before it the sim lanes had no hunger and were easier than the real ones). Its
    portal leads to w's Nether (:capture/nether, with-nether) when w has one: before issue #353
-   none had, and a bot through its portal tunnelled the overworld's stone for bricks."
-  [w seed until max-ms]
-  (let [opts {:host "sim" :port 0 :name "Clj_sim"}
-        {:keys [world sim last moments crashed]}
-        (sim/run+ step
-                  (game/init opts)
-                  (sim/init (cond-> {:columns (:capture/columns w)
-                                     :decoded (:capture/decoded w)
-                                     :spawn (spawn-of w)
-                                     :seed seed
-                                     :tick-seed seed
-                                     :difficulty difficulty
-                                     :day-time (day-time-of seed)}
-                              (:capture/nether w) (assoc :nether (:capture/nether w))))
-                  #(or (plan/done? %) (plan/failed? %))
-                  max-ms
-                  (go-of w until))
-        ok (and (nil? crashed) (main/ok? world until))]
-    (assoc (cond-> (main/result world until ok)
-             crashed (assoc :reason :crashed :error (str crashed)))
-           :run/world (select-keys w [:capture/set :capture/landing])
-           :run/seed seed
-           :run/ms (:time/now world)
-           :run/violations (:sim/violations sim)
-           :run/respawns (:sim/respawns sim 0)
-           :run/eaten (:sim/eaten sim 0)
-           :run/end world
-           :run/last last
-           :run/moments moments)))
+   none had, and a bot through its portal tunnelled the overworld's stone for bricks. With food
+   (0-20) the player's bar starts there instead of full (the lane's --food): a hungry
+   start, for the hunger rows (:eat, :hunt) that a lane from a full bar seldom reaches (issue
+   #260: 21 lane runs of up to 330 simulated minutes on 8f50709a ended at food 19 or 20 but one,
+   as a bot that never sprints and is seldom hurt drains under a point an hour)."
+  ([w seed until max-ms] (run w seed until max-ms nil))
+  ([w seed until max-ms food]
+   (let [opts {:host "sim" :port 0 :name "Clj_sim"}
+         {:keys [world sim last moments crashed]}
+         (sim/run+ step
+                   (game/init opts)
+                   (sim/init (cond-> {:columns (:capture/columns w)
+                                      :decoded (:capture/decoded w)
+                                      :spawn (spawn-of w)
+                                      :seed seed
+                                      :tick-seed seed
+                                      :difficulty difficulty
+                                      :day-time (day-time-of seed)}
+                               (:capture/nether w) (assoc :nether (:capture/nether w))
+                               food (assoc :food food)))
+                   #(or (plan/done? %) (plan/failed? %))
+                   max-ms
+                   (go-of w until))
+         ok (and (nil? crashed) (main/ok? world until))]
+     (assoc (cond-> (main/result world until ok)
+              crashed (assoc :reason :crashed :error (str crashed)))
+            :run/world (select-keys w [:capture/set :capture/landing])
+            :run/seed seed
+            :run/ms (:time/now world)
+            :run/violations (:sim/violations sim)
+            :run/respawns (:sim/respawns sim 0)
+            :run/eaten (:sim/eaten sim 0)
+            :run/end world
+            :run/last last
+            :run/moments moments))))
 
 ;; ---------------------------------------------------------------- a failing moment, as a value
 
@@ -380,11 +386,15 @@
      :run/moments)))
 
 (defn tally
-  "The runs as a value: how many, how many reached the target, and the failures counted by
+  "The runs as a value: how many, how many reached the target, the lives given after deaths and
+   the foods eaten over them all (issue #260: the lanes show deaths and eating), and the failures
+   counted by
    signature, most first."
   [runs]
   {:simrace/runs (count runs)
    :simrace/ok (count (filter :ok runs))
+   :simrace/respawns (reduce + (keep :run/respawns runs))
+   :simrace/eaten (reduce + (keep :run/eaten runs))
    :simrace/failures (->> (remove :ok runs)
                           (map failure/signature)
                           frequencies
@@ -428,8 +438,8 @@
    :run/commit) and, when it failed, what bb failures reads (failure/mark) and a moment from
    before the choice that failed kept as a snapshot beside out (:run/snapshot, chosen-moment,
    issue #77); returns it."
-  [w seed until max-ms commit out]
-  (let [r (try (run w seed until max-ms)
+  [w seed until max-ms commit out food]
+  (let [r (try (run w seed until max-ms food)
                (catch Exception e
                  {:ok false
                   :until until
@@ -532,6 +542,8 @@
         o
         world (get o :world)
         budget (get o :budget-minutes)
+        food (some-> (get o :food)
+                     Long/parseLong)
         given (some-> (get o :runs)
                       slurp
                       edn/read-string)
@@ -570,7 +582,7 @@
                    (let [job (when (or (nil? deadline) (< (System/currentTimeMillis) deadline))
                                (take!))]
                      (if-let [[i s] job]
-                       (recur (conj done (play! (ws i) s until max-ms commit runs-file)))
+                       (recur (conj done (play! (ws i) s until max-ms commit runs-file food)))
                        done))))]
     (io/make-parents runs-file)
     (cli/log "simrace:" (count ws) "worlds," n-threads "threads, until" until)
@@ -584,7 +596,8 @@
    --runner k --runners n) on --threads threads (the cores when absent): each world with seeds
    from --seed (1) up, round the worlds, until --budget-minutes of wall time have passed (or
    --seeds each when no budget is given). --world f plays one file. --runs f plays exactly the
-   runs an EDN file lists, [[world-file seed] ...] (an issue's reproductions). Prints a SIMRUN
+   runs an EDN file lists, [[world-file seed] ...] (an issue's reproductions). --food n starts
+   every run's bar at n instead of full (run), a hungry start for the hunger rows. Prints a SIMRUN
    line per run and the SIMRACE tally; keeps every run in <out>/runs.edn and each failed run's
    snapshot in <out>/snapshots. A portal leads to the set's captured Nether when there is one
    (nether-file: cache/sim-nether/<set>.edn.gz beside cache/sim-worlds/<set>).

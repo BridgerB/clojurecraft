@@ -303,7 +303,7 @@
   :problem/done
   "RCON: the bot's foodLevel at 14 or more after landing hungry with bread, and fewer breads held; a NoAI zombie gone with the attacks 650 ms apart; three zombies at night survived."
   :problem/last-failure
-  "clojurecraft has never eaten or fought: every server ran Peaceful until #257 set Normal. ruststeve spent sessions dealing no damage (interact instead of attack, 40 swings in 66 ms) before its blaze kills."
+  "clojurecraft has never eaten or fought: every server ran Peaceful until #257 set Normal. ruststeve spent sessions dealing no damage (interact instead of attack, 40 swings in 66 ms) before its blaze kills. Sim lanes on 8f50709a (issue #260): 21 runs, 11 with a death, none eating; the bars ended at 19 or 20 after up to 330 simulated minutes, one at 11 in the Nether with nothing edible and no animal, so eating in a lane is unseen until a bot is hurt and heals or starts hungry (simrace --food)."
   :problem/sources ["docs/RICH-HICKEY.md" "brain/siblings/sib-775-attack-packet.md"
                     "brain/siblings/sib-blaze-combat.md"]}
  {:problem/stage :end-and-dragon
