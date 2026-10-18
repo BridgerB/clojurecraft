@@ -929,3 +929,13 @@
     (is (= [0 1] (:intent/dir (stone/stairs w (row :mine-stone)))))
     (is (nil? (stone/heading-toward (standing 64 :wooden_pickaxe) (row :mine-iron)))
         "no stone of the row in sight")))
+
+(deftest a-spent-place-with-no-retreat-clear-of-its-pockets-goes-back-to-the-landing
+  ;; issue #342 (the R1/30 sim moment): the retreat found no ground clear of twenty boxed cells and
+  ;; the mine fell through to deeper, cutting the same stairs again
+  (let [w (wide 64 :stone_pickaxe)]
+    (is (= {:intent/kind :walk :intent/target [30 64 5] :intent/for :retreat}
+           (stone/toward-home (assoc w :plan/go-at [30.5 64.0 5.5]))))
+    (is (nil? (stone/toward-home (assoc w :plan/go-at [9.5 64.0 5.5])))
+        "within eight blocks of the feet")
+    (is (nil? (stone/toward-home w)) "no landing known")))
