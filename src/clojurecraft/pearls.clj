@@ -56,7 +56,7 @@
 (def roam-turn-ms 10000)              ; ms after which a roam sets out a heading further round
 (def headings ; the eight ways a roam may go, a quarter turn of each other in pairs
   [[1 0] [1 1] [0 1] [-1 1] [-1 0] [-1 -1] [0 -1] [1 -1]])
-(def strike-range 4.5)                ; blocks on the plane within which the hunt fights (hunt/strike-range: past a walk's reach)
+(def strike-range 4.5)                ; blocks from the feet, height counted, within which an enderman is at hand (hunt/strike-range: past a walk's reach)
 (def stare-range 64.0)                ; blocks to the head within which a provoke stares, with a clear line: the enderman's follow range
 (def stare-from 6.0)                  ; never stare nearer: an angry enderman stared at within 4 teleports away
 (def stare-ms 3000)                   ; ms a provoke stares at most before the enderman says it has a target (creepy)
@@ -430,7 +430,10 @@
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
    coming (creepy), one at hand, or under 10 health, back to it (gym batch pearls-263b: a bot
    that met one in the open, or backed away hurt, died); in it, the one coming or one at hand
-   fought where the bot stands (:fight :intent/hold?); with no burrow, one at hand backed away
+   fought where the bot stands (:fight :intent/hold?; at hand by the distance in three, never on
+   the plane alone: batch pearls-warped-b's run 3 held a fight twenty minutes on one two blocks
+   off on the plane and fourteen below, and batch pearls-warped-c's run 1 stood over one
+   fourteen below for forty); with no burrow, one at hand backed away
    from under 10 health, fought when it is coming or no pickaxe is held (batch
    pearls-warped-a, plan run 39131478416: two landings in three walked up to a calm one, struck
    it in the open and died); hurt, a meal when the food is under hunger/heal-level (blaze/meal:
@@ -456,7 +459,7 @@
         [ceid ce] (entity/nearest
                    (into {} (filter (comp entity/creepy? val)) (endermen world stare-range))
                    pos)
-        near? (and e (<= (combat/horizontal world e) strike-range))
+        near? (and e (<= (physics/distance pos (:entity/pos e)) strike-range))
         hurt? (< (:player/health world 20.0) combat/retreat-health)
         meal (when hurt? (blaze/meal world))
         home (shelter world)

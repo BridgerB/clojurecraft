@@ -1,6 +1,7 @@
 ;; Issue #263, branch feat/263-warped: an angry enderman far below the mouth no longer pins the bot
 ;; in its burrow; a walk toward one gains on the plane and never ends inside the burrow; after a
-;; lookout the hunt cuts stairs down toward endermen on the forest floor below its ledge.
+;; lookout the hunt cuts stairs down toward endermen on the forest floor below its ledge; one at hand
+;; is at hand by the distance in three, never on the plane alone.
 ;; pearls-12 is the stage (pearls-warped-c: 0/3, two standoffs over the floor); pearls-1-live guards the arena.
 {:plans/label "pearls-warped-d"
  :plans/jobs 4

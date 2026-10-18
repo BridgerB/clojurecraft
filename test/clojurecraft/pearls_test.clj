@@ -356,7 +356,7 @@
   (let [below (enderman [8.5 40.0 8.5])
         w (assoc-in (standing {7 below}) [:player/inventory 1] (item :iron_pickaxe 1))]
     (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals))
-        "a lookout first: a stare it turns onto provokes one")
+        "a lookout first: a stare it turns onto provokes one; one straight below is not at hand")
     (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [-1 0] :intent/for :pearls}
            (plan/next-intent (looked-out w) row plan/goals))
         "then a flight of stairs toward it, descend-step down")
