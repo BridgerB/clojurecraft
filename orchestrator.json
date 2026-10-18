@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T10:53:14.679Z",
+  "at" : "2026-10-18T10:54:21.192Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -14,7 +14,7 @@
     "checks" : "pending",
     "title" : "Bot stops at fortress: no-footing",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 441,
     "session" : false
@@ -50,8 +50,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 339,
-    "move" : "ready",
-    "pr" : 441
+    "move" : "wait",
+    "pr" : 441,
+    "why" : "checks running"
   }, {
     "issue" : 65,
     "move" : "leave",
