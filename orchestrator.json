@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T05:40:40.466Z",
+  "at" : "2026-10-18T05:51:27.209Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -28,11 +28,6 @@
     "nudges" : 0,
     "pr" : 431,
     "session" : false
-  }, {
-    "number" : 60,
-    "title" : "Bot stops at water-bucket: no-water",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
   }, {
     "number" : 430,
     "title" : "Bot stops at fortress: boxed",
@@ -68,10 +63,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 363,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 60,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
