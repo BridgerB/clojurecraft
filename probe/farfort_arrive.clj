@@ -15,19 +15,19 @@
             [clojurecraft.terrain :as terrain]))
 
 (defn kit
-  "What the bot carries through its portal: pickaxes, a stack of stone in every main slot, food."
+  "What a whole run carries through its portal (measured, races R2/5 and R2/4): one stone pickaxe,
+   a few planks and sticks and a crafting table, stone for floors, a bucket, no food."
   []
   (let [it (fn [n c] {:item (recipe/item-id n) :count c})]
-    (merge {[:hotbar 0] (it :iron_pickaxe 1)
-            [:hotbar 1] (it :iron_pickaxe 1)
-            [:hotbar 2] (it :iron_pickaxe 1)
-            [:hotbar 3] (it :iron_pickaxe 1)
-            [:hotbar 4] (it :iron_pickaxe 1)
-            [:hotbar 5] (it :iron_pickaxe 1)
-            [:hotbar 6] (it :cooked_beef 32)
-            [:hotbar 7] (it :stick 8)
-            [:hotbar 8] (it :iron_ingot 6)}
-           (into {} (for [slot (range 9 27)] [slot (it :cobblestone 64)])))))
+    (merge {[:hotbar 0] (it :stone_pickaxe 1)
+            [:hotbar 1] (it :stone_sword 1)
+            [:hotbar 2] (it :stick 2)
+            [:hotbar 3] (it :dark_oak_planks 3)
+            [:hotbar 4] (it :crafting_table 1)
+            [:hotbar 5] (it :bucket 1)
+            [:hotbar 6] (it :flint_and_steel 1)}
+           (into {} (for [slot (range 9 16)] [slot (it :cobblestone 64)]))
+           (into {} (for [slot (range 16 21)] [slot (it :cobbled_deepslate 64)])))))
 
 (defn glyph
   "One character for the column [x z] at the height of feet y: o standable here, ^ a block up,
