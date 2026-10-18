@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T18:05:10.862Z",
+  "at" : "2026-10-18T18:09:39.808Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -81,6 +81,11 @@
   }, {
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 85,
+    "title" : "Bot stops at cobblestone: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
