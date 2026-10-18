@@ -111,6 +111,8 @@ A `:tunnel-to` is done at its target from `reach` 6 (`arrived?`, from the feet c
 ## A step the feet left
 A step's move and the cell it started from are kept on the intent until the step is stood in. When the feet are in none of its cells (`off-step?`: knocked back by a fireball, or moved by a fight or a cover walk between its ticks), or its walk back to the cell it started from fails `:no-path` (`lost-way?`), the step is dropped and chosen again from where the feet are, never failed. Gym blaze-fortress-h run 1 failed its tunnel into the spawner's room `:no-path` twice, and the plan with it (issue #262).
 
+A block in the body's own cells (gravel fallen into the tunnel) is dug out first (`buried`: the head's cell, then the feet's, from the feet), before any step is chosen or worked. A walk has no route from inside a block: issue #338's snapshot R1-33-1 stood in gravel at y 34 mid-step, its stand-in's walk failed `:no-path` with no route, was dropped as unreachable-but-routable and asked again, every tick of its fifteen-minute window.
+
 ## Gotchas
 - The sightings are passive: a brick is remembered when its chunk loads (`memory/landmark-kinds`), in the dimension it was seen in, so no scan and no line of sight.
 - The gym row (`fortress`, `:gym/land :nether-fortress`) carves a pocket of netherrack 48 blocks west of `locate structure minecraft:fortress` at y 72 and judges with `execute as {name} at @s if dimension minecraft:the_nether` and a filtered clone that counts bricks within 6.

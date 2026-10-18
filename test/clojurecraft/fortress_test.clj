@@ -154,6 +154,45 @@
     (is (= cell (get-in out [:plan/intent :intent/child :intent/target])))
     (is (nil? (get-in out [:plan/intent :intent/reason])))))
 
+(deftest a-tunnel-buried-in-gravel-digs-itself-out
+  ;; Issue #338's R1-33-1: gravel fell into the feet's and head's cells mid-step; the stand-in's
+  ;; walk had no route from inside a block and was asked again every tick for fifteen minutes.
+  (let [gravel (blocks/default-state :gravel)
+        from [0 64 0]
+        move [-1 1 0]
+        tick {:event/kind :tick :event/now 0}
+        i {:intent/kind :tunnel-to
+           :intent/target [-48 70 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/from from
+           :intent/move move
+           :intent/op (peek (fortress/step-plan from move))}
+        run (fn [overrides]
+              (let [w (assoc (rock (merge {[-1 65 0] air [-1 66 0] air [0 66 0] air} overrides))
+                             :world/facts (memory/empty-facts)
+                             :bot/phase :play
+                             :bot/effects []
+                             :time/now 0
+                             :time/tick 0
+                             :player/on-ground? true
+                             :player/vel [0.0 0.0 0.0]
+                             :player/inventory {})]
+                ;; two ticks: the first takes the dig as the op, the second starts its child
+                (:plan/intent (nth (iterate #(intent/run % (:plan/intent %) tick)
+                                            (assoc w :plan/intent i))
+                                   2))))]
+    (testing "the head's cell first, then the feet's"
+      (let [out (run {[0 64 0] gravel [0 65 0] gravel})]
+        (is (= :active (:intent/status out)))
+        (is (= [0 65 0] (get-in out [:intent/op :build/pos])))
+        (is (= :dig (get-in out [:intent/child :intent/kind])))
+        (is (= [0 65 0] (get-in out [:intent/child :intent/target]))))
+      (is (= [0 64 0] (get-in (run {[0 64 0] gravel}) [:intent/child :intent/target]))))
+    (is (nil? (fortress/buried (rock {}) from)) "open body cells: the step goes on")
+    (is (= move (:intent/move (run {[0 64 0] gravel})))
+        "the step is kept for when the body is free")))
+
 (deftest a-step-is-a-floor-the-cells-it-opens-and-standing-there
   (let [plan (fortress/step-plan [0 64 0] [1 0 0])]
     (is (= [:dig :place :dig :dig :stand-in] (map :build/op plan)))
