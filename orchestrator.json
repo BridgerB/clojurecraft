@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T09:12:41.506Z",
+  "at" : "2026-10-18T09:17:01.150Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -27,7 +27,7 @@
     "draft" : false,
     "nudges" : 1,
     "pr" : 437,
-    "session" : true
+    "session" : false
   }, {
     "number" : 430,
     "title" : "Bot stops at fortress: boxed",
@@ -40,9 +40,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 65,
-    "move" : "wait",
+    "move" : "stuck",
     "pr" : 437,
-    "why" : "session running"
+    "why" : "answered with no push"
   }, {
     "issue" : 430,
     "move" : "leave",
@@ -1133,5 +1133,11 @@
     "move" : "nudge",
     "pr" : 437,
     "at" : "2026-10-18T08:54:14.585Z"
+  }, {
+    "issue" : 65,
+    "move" : "stuck",
+    "pr" : 437,
+    "why" : "answered with no push",
+    "at" : "2026-10-18T09:17:01.150Z"
   } ]
 }
