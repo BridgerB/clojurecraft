@@ -171,26 +171,28 @@
   ;; sim worlds R3/45 (issues #87 and #108): the only trunk in reach stood across two blocks of air
   ;; from the pillar the bot had climbed out on, no route reached it, and the plan waited :no-log
   (let [chasm (into {} (for [x (range 16) y (range 40 64) z (range 16)] [[x y z] blocks/air]))
-        platforms (fn [& boxes]
+        platforms (fn [y & boxes]
                     (into {}
-                          (for [[x0 x1] boxes x (range x0 (inc x1)) z (range 6 11)] [[x 63 z] 1])))
-        near (remembered (merge chasm (platforms [7 10] [0 1]) {[1 64 8] 136 [1 65 8] 136})
-                         [8.5 64.0 8.5])
-        far (remembered (merge chasm (platforms [0 2] [13 15]) {[15 64 8] 136 [15 65 8] 136})
-                        [1.5 64.0 8.5])]
+                          (for [[x0 x1] boxes x (range x0 (inc x1)) z (range 6 11)] [[x y z] 1])))
+        trunk {[1 64 8] 136 [1 65 8] 136}
+        near (remembered (merge chasm (platforms 63 [7 10] [0 1]) trunk) [8.5 64.0 8.5])
+        high (remembered (merge chasm (platforms 63 [0 1]) (platforms 66 [7 10]) trunk)
+                         [8.5 67.0 8.5])
+        far (remembered (merge chasm (platforms 63 [0 2] [13 15]) {[15 64 8] 136 [15 65 8] 136})
+                        [1.5 64.0 8.5])
+        bridge {:intent/kind :stairs-up
+                :intent/to-y 66
+                :intent/to-height? true
+                :intent/dir [-1 0]
+                :intent/for :surface}]
     (is (nil? (wood/near-walk near)) "no route reaches the trunk across the chasm")
-    (is (= {:intent/kind :stairs-up
-            :intent/to-y 66
-            :intent/to-height? true
-            :intent/dir [-1 0]
-            :intent/for :surface}
-           (wood/gather-next near))
-        "two stairs up toward it")
-    (is (not= :stairs-up (:intent/kind (wood/gather-next (assoc near :plan/boxed-at #{[8 64 8]}))))
+    (is (= bridge (wood/gather-next near)) "two stairs up toward it")
+    (is (= bridge (wood/trees-bridge near [[1 64 8]])))
+    (is (nil? (wood/trees-bridge (assoc near :plan/boxed-at #{[8 64 8]}) [[1 64 8]]))
         "never from a cell where a climb died boxed")
-    (is (not= :stairs-up (:intent/kind (wood/gather-next (assoc near :player/pos [8.5 67.0 8.5]))))
-        "bounded: once three over the trunk's bottom no more stairs")
-    (is (not= :stairs-up (:intent/kind (wood/gather-next far)))
+    (is (nil? (wood/trees-bridge high [[1 64 8]]))
+        "bounded: three over the trunk's bottom, no more")
+    (is (nil? (wood/trees-bridge far [[15 64 8]]))
         "a trunk past bridge-reach is not climbed toward")))
 
 (deftest a-mouth-below-the-feet-is-the-way-down-not-out
