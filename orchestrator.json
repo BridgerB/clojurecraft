@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T21:35:02.272Z",
+  "at" : "2026-10-18T21:37:14.743Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -28,6 +28,11 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
+    "number" : 284,
+    "title" : "Bot stops at fortress: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : true,
     "number" : 178,
@@ -38,11 +43,6 @@
     "nudges" : 2,
     "pr" : 444,
     "session" : false
-  }, {
-    "number" : 284,
-    "title" : "Bot stops at fortress: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -59,6 +59,11 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
+    "number" : 62,
+    "title" : "Bot stops at ingots: timeout",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim" ],
@@ -67,11 +72,6 @@
     "number" : 148,
     "title" : "Bot stops at water-bucket: no-spot",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 62,
-    "title" : "Bot stops at ingots: timeout",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 162,
