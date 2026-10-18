@@ -411,7 +411,7 @@
             start (stronghold/dry-start shore [40 20 60])]
         (is (not (stronghold/dry-cell? shore [8 64 8])))
         (is (= [7 64 9] start) "the nearest dry cell, the one nearer the frame first")
-        (is (= {:intent/kind :walk :intent/target [7 64 9] :intent/for :stronghold}
+        (is (= {:intent/kind :walk :intent/target [7 64 9] :intent/for :retreat}
                (plan/next-intent shore room-row plan/goals)))
         (is (= :stairs-down
                (:intent/kind

@@ -543,7 +543,9 @@
 
 (defn to-room
   "The way to the portal room's frame f, in order: in water, out to the nearest bank first
-   (swim's :swim-out :retreat); from a shore, a walk to a dry start (dry-start); more than deep
+   (swim's :swim-out :retreat); from a shore, a walk to a dry start (dry-start) that ends
+   standing in that cell (a :retreat walk, intent/standing-walks: one ending near it was chosen
+   again from the wet cell it ended in, twelve thousand times a model run); more than deep
    over the frame, or after a tunnel that got nowhere (tunnel-spent?), a staircase down toward
    it a leg of stair-leg at a time (stairs-toward), never under room-over over the frame; then
    the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?), when its
@@ -559,7 +561,7 @@
         stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
           (and start (not= start feet))
-          {:intent/kind :walk :intent/target start :intent/for :stronghold}
+          {:intent/kind :walk :intent/target start :intent/for :retreat}
           (and (> fy (+ y room-over)) (or high? (tunnel-spent? world f))) stairs
           (fortress/choose-move world feet f fortress/climb-past true)
           {:intent/kind :tunnel-to
