@@ -897,6 +897,15 @@
         "its drop is not wanted: ore the pickaxe cannot take is broken")
     (is (= :lava (:intent/for c)))))
 
+(deftest the-cells-a-build-places-in-are-those-of-every-access
+  ;; sim race 39076908669 (issue #178, world R1/11 seed 5): access 4's floor was not among the
+  ;; cells kept, and the way to the lava's stand dug it as fast as it was placed
+  (let [cells (build/place-cells :portal origin :south)]
+    (doseq [h (range (inc build/max-access))
+            op (build/plan-for :portal origin :south h)
+            :when (= :place (:build/op op))]
+      (is (contains? cells (:build/pos op)) (str "access " h " places in " (:build/pos op))))))
+
 (deftest a-refill-never-opens-lava-over-its-stand
   ;; Issue #231, R1/32: the ray to a low source opened the wall under higher lava,
   ;; which flowed onto the stand before the next dig finished.

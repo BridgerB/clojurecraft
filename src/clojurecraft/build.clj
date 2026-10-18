@@ -649,9 +649,17 @@
           (range 1 (inc foundation-depth)))))
 
 (defn place-cells
-  "Every cell the plan places a block in."
+  "Every cell the plan places a block in, whatever the room's access h (0 to max-access): the
+   floor under a landing at h is another cell for each h, and a way dug for the lava's stand
+   must keep the cobblestone of the one the build has. Sim race 39076908669 (issue #178, world
+   R1/11 seed 5): the build's access was 4, the cells were read for access 0, and the way to the
+   lava's stand dug the landing's floor each time it was placed, a floor, a pour and a dig
+   every twelve seconds for the run's last quarter hour."
   [build origin facing]
-  (set (keep #(when (= :place (:build/op %)) (:build/pos %)) (plan-for build origin facing 0))))
+  (set (for [h (range (inc max-access))
+             op (plan-for build origin facing h)
+             :when (= :place (:build/op op))]
+         (:build/pos op))))
 
 (defn diggable?
   "Is pos a solid or awkward block a clear may dig: not unloaded, not obsidian, not the frame's
