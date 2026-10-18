@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:52:04.113Z",
+  "at" : "2026-10-18T03:53:10.807Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -58,7 +58,7 @@
     "draft" : false,
     "nudges" : 3,
     "pr" : 421,
-    "session" : true
+    "session" : false
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -152,7 +152,7 @@
     "issue" : 162,
     "move" : "wait",
     "pr" : 421,
-    "why" : "session running"
+    "why" : "checks running"
   }, {
     "issue" : 60,
     "move" : "leave",
