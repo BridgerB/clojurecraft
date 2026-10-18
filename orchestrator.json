@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T05:35:13.896Z",
+  "at" : "2026-10-18T05:36:20.456Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,7 +18,7 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 363,
     "checks" : "red",
@@ -68,8 +68,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 363,
-    "move" : "gave-up",
-    "pr" : 431
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 60,
     "move" : "leave",
