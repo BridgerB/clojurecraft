@@ -159,6 +159,7 @@
    "Sim race 39028867619 R1/38 (issue #366) escaped from y 39 by selecting a wall notch at y 55 and failed flint-and-steel :out-of-reach; notch digs must be within reach of the current eye, and an unreachable child must be dropped while the escape rises"
    "Race 39007354638 runner 3 batch 2 (issue #348) retreated from gravel to a seagrass cell and bobbed until flint-and-steel failed :stuck; an escape bank must have no fluid at the feet or head, even when its plants are passable"
    "Sim race 39007353160 R4/2 (issue #349) climbed eight stairs for wood, then walked back down to a sky-lit pit every eleven seconds until flint-and-steel timed out; an exit walk must reach the same usable open ground as the climb, not merely open sky"
+   "Sim races 39081494214 R1/31 and 39074159590 R3/44 (issue #105) climbed up under a lake for the water bucket and stood in a flooded shaft with hundreds of cobblestone, where water beside every cell a level step digs refused each step and the climb failed :boxed three times; a level step seals that water (stairs/level-lay) and floors an open step instead"
    "Sim race 39004332220 R2/2 (issue #323) died while smelting and the model retained the old furnace menu, refusing every equip click until :stale-window; respawn now drops that menu reference while keeping the inventory and furnace contents"]
   :problem/done
   "RCON Inventory shows a filled water_bucket and flint_and_steel after a live run on the local server, with RESULT :ok true."
@@ -234,7 +235,9 @@
    "A blocked tunnel considers a safe retreat and passes through portal cells without digging; fresh steps and a supported, non-fluid-floored corner onto adjoining ground precede revisiting a cell (issue #286)"
    "A tunnel replaces solid floors the route cannot walk, such as soul sand, before entering; the repair needs support and must expose no fluid or protected block, including when resuming a failed entry walk (issue #284)"
    "A descending walk stops input over its waypoint; a tunnel step counts only after centring and landing, then clears controls, so neither new nor in-flight steps run past their repaired floor into lava with no footing (issue #339)"
-   "A reachable dig works from the actual eye without demanding a new stance; when no working stance is reachable, a build returns to its landing's height even nearby instead of treating distance alone as arrival at the site (issue #328)"]
+   "A tunnel never opens fluid-bearing gravel or sand beds above or beside its body cells; safety is rechecked before every body-cell dig and entry walk, dropping stale steps and their children to replan before lava leaves no escape footing (issue #339)"
+   "A reachable dig works from the actual eye without demanding a new stance; when no working stance is reachable, a build returns to its landing's height even nearby instead of treating distance alone as arrival at the site (issue #328)"
+   "A fortress tunnel replaces a lost pickaxe from held supplies before starting; a broken-tool tunnel yields without spending a failed attempt, and without replacement supplies even slow rock is cleared by hand rather than retrying no-pickaxe in the woodless Nether (issue #296)"]
   :problem/risks
   ["Stale overworld columns answer Nether lookups (a brick reported exactly 64 blocks off)"
    "Parsing a Nether chunk as 24 sections runs off the buffer"

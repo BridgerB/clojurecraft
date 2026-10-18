@@ -12,7 +12,9 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
-            [clojurecraft.plan :as plan]))
+            [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
+            [clojurecraft.terrain :as terrain]))
 
 (def netherrack (blocks/default-state :netherrack))
 (def air (blocks/default-state :air))
@@ -63,6 +65,95 @@
           overrides)
    :player/pos [0.5 64.0 0.5]})
 
+(deftest a-fortress-tunnel-makes-a-pickaxe-from-held-supplies
+  (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        w (assoc (rock {})
+                 :world/facts (memory/empty-facts)
+                 :player/dimension dimension/nether
+                 :player/inventory
+                 {0 {:item (recipe/item-id :stick) :count 2}
+                  1 {:item (recipe/item-id :cobblestone) :count 3}
+                  2 {:item (recipe/item-id :crafting_table) :count 1}})
+        next #(plan/next-intent % goal plan/goals)]
+    (is (= :place (:intent/kind (next w))) "place the table before tunneling without a tool")
+    (is (= :tunnel-to
+           (:intent/kind (next (assoc-in w
+                                [:player/inventory 3]
+                                {:item (recipe/item-id :stone_pickaxe) :count 1})))))
+    (is (= :tunnel-to (:intent/kind (next (assoc w :player/inventory {}))))
+        "no supplies: keep clearing the way by hand, not a hunt for overworld wood")
+    (is (= {:plan/wait :other-dimension} (next (assoc w :player/dimension dimension/overworld))))))
+
+(deftest a-tunnel-replans-when-its-pickaxe-breaks
+  (let [w (assoc (rock {})
+                 :world/facts (memory/empty-facts)
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :plan/attempts 2
+                 :player/controls {:control/forward? true}
+                 :player/inventory
+                 {0 {:item (recipe/item-id :stick) :count 2}
+                  1 {:item (recipe/item-id :cobblestone) :count 3}
+                  2 {:item (recipe/item-id :crafting_table) :count 1}})
+        op (build/next-op w (fortress/step-plan [0 64 0] [1 0 0]))
+        i {:intent/kind :tunnel-to
+           :intent/target [48 64 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/from [0 64 0]
+           :intent/move [1 0 0]
+           :intent/op op}
+        tick {:event/kind :tick :event/now 0}]
+    (doseq [child [nil
+                   {:intent/kind :dig
+                    :intent/target (:build/pos op)
+                    :intent/status :failed
+                    :intent/reason :no-pickaxe}]]
+      (let [i (cond-> i child (assoc :intent/child child))
+            out (intent/run (assoc w :plan/intent i) i tick)
+            finished (plan/finish-intent out (:plan/intent out))]
+        (is (intent/done? (:plan/intent out)))
+        (is (nil? (get-in out [:plan/intent :intent/reason])))
+        (is (= {} (:player/controls out)))
+        (is (zero? (:plan/attempts finished)))))
+    (let [i (assoc i
+                   :intent/child
+                   {:intent/kind :dig
+                    :intent/target (:build/pos op)
+                    :intent/status :failed
+                    :intent/reason :rejected})
+          out (intent/run (assoc w :plan/intent i) i tick)]
+      (is (intent/failed? (:plan/intent out)))
+      (is (= :rejected (get-in out [:plan/intent :intent/reason]))))))
+
+(deftest a-tunnel-with-no-replacement-clears-slow-rock-by-hand
+  (let [cell [1 65 0]
+        w (assoc (rock {cell (blocks/default-state :nether_quartz_ore)})
+                 :world/facts (memory/empty-facts)
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/on-ground? true
+                 :player/vel [0.0 0.0 0.0]
+                 :player/inventory {})
+        op (build/next-op w (fortress/step-plan [0 64 0] [1 0 0]))
+        i {:intent/kind :tunnel-to
+           :intent/target [48 64 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/from [0 64 0]
+           :intent/move [1 0 0]
+           :intent/op op}
+        out (intent/run (assoc w :plan/intent i) i {:event/kind :tick :event/now 0})]
+    (is (> (intent/dig-time (terrain/block-at w cell)) build/hand-dig-limit))
+    (is (= :active (get-in out [:plan/intent :intent/status])))
+    (is (= :dig (get-in out [:plan/intent :intent/child :intent/kind])))
+    (is (= cell (get-in out [:plan/intent :intent/child :intent/target])))
+    (is (nil? (get-in out [:plan/intent :intent/reason])))))
+
 (deftest a-step-is-a-floor-the-cells-it-opens-and-standing-there
   (let [plan (fortress/step-plan [0 64 0] [1 0 0])]
     (is (= [:dig :place :dig :dig :stand-in] (map :build/op plan)))
@@ -90,6 +181,52 @@
     (is (not (fortress/safe? (rock {[1 64 0] nil}) [0 64 0] [1 0 0])) "never into the unknown")
     (testing "the tunnel goes round: up when lava is beside the level step"
       (is (= [1 1 0] (fortress/choose-move (rock {[1 64 1] lava}) [0 64 0] [4 64 0]))))))
+
+(deftest no-tunnel-step-drops-a-fluid-bearing-bed
+  (doseq [kind [:gravel :sand]
+          height [1 3]]
+    (let [bed (blocks/default-state kind)
+          w (rock (merge (into {} (for [y (range 66 (+ 66 height))] [[1 y 0] bed]))
+                         {[1 (+ 66 height) 0] blocks/lava-base}))]
+      (is (not (fortress/safe? w [0 64 0] [1 0 0])) "fluid over a falling roof")
+      (is (fortress/safe? (assoc-in w [:world/blocks [1 66 0]] netherrack) [0 64 0] [1 0 0])
+          "a solid roof seals the fluid")))
+  (let [w (rock {[2 65 0] (blocks/default-state :gravel) [2 64 0] blocks/lava-base})]
+    (is (not (fortress/safe? w [0 64 0] [1 1 0]))
+        "updating a neighbouring gravel bed over lava drops it too")))
+
+(deftest a-tunnel-drops-an-unsafe-in-flight-step
+  (let [from [0 64 0]
+        move [1 0 0]
+        ops (fortress/step-plan from move)
+        tick {:event/kind :tick :event/now 0}]
+    (doseq [op [(nth ops 2) (peek ops)]
+            hazard [{[1 66 0] (blocks/default-state :gravel) [1 67 0] blocks/lava-base}
+                    {[2 65 0] blocks/lava-base}]]
+      (let [enter? (= :stand-in (:build/op op))
+            w (assoc (rock (merge (when enter? {[1 64 0] air [1 65 0] air}) hazard))
+                     :bot/phase :play
+                     :bot/effects []
+                     :time/now 0
+                     :time/tick 0
+                     :player/controls {:control/forward? true})
+            i {:intent/kind :tunnel-to
+               :intent/target [10 64 0]
+               :intent/steps 32
+               :intent/status :active
+               :intent/from from
+               :intent/move move
+               :intent/op op
+               :intent/child {:intent/kind (if enter? :walk :dig)
+                              :intent/target (if enter? [1 64 0] [1 65 0])
+                              :intent/status :active}}
+            out (intent/run (assoc w :plan/intent i) i tick)
+            replanned (intent/run out (:plan/intent out) tick)]
+        (is (= :active (get-in out [:plan/intent :intent/status])))
+        (is (= {} (:player/controls out)))
+        (is (every? #(not (contains? (:plan/intent out) %)) fortress/step-keys))
+        (is (not= move (get-in replanned [:plan/intent :intent/move])))
+        (is (fortress/safe? replanned from (get-in replanned [:plan/intent :intent/move])))))))
 
 (deftest a-step-is-walked-into-with-no-build-of-its-own
   ;; build/approach-stand digs ground in the way of a :build's stand using its mold; a tunnel

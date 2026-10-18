@@ -1347,7 +1347,8 @@
    pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand when one can be
    made without going out for anything (pickaxe-at-hand?), so the build's row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
    in the cast's room at y -20 and dug deepslate by hand, fifteen seconds a block, for the last
-   half hour of its ninety minutes."
+   half hour of its ninety minutes. A tunnel-to only refuses the hand when a replacement is at
+   hand: without wood in the Nether, even slow rock must be cleared to reach the fortress."
   [world {:intent/keys [child op] :as i} next event]
   (cond (not= next op)
         (if (and (= :stairs-up (:intent/kind child))
@@ -1399,7 +1400,11 @@
               missing (when (= :dig (:intent/kind c))
                         (stairs/tool-missing world (:intent/target c)))
               ;; the needs planner is asked only when no pickaxe is held
-              c (or (when (and missing (hand-dig-refused? world (:intent/target c))) missing)
+              c (or (when (and missing
+                               (if (= :tunnel-to (:intent/kind i))
+                                 (pickaxe-at-hand? world)
+                                 (hand-dig-refused? world (:intent/target c))))
+                      missing)
                     (tool-first world c))]
           (cond (and (= :no-station c) (= :build (:intent/kind i)))
                 ;; lava remains but no safe station reaches it: do not choose this site again
