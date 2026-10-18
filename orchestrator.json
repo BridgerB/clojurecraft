@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T09:49:03.626Z",
+  "at" : "2026-10-18T09:50:13.480Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -15,9 +15,9 @@
     "title" : "Bot stops at flint-and-steel: timeout",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 1,
+    "nudges" : 2,
     "pr" : 438,
-    "session" : false
+    "session" : true
   }, {
     "number" : 339,
     "title" : "Bot stops at fortress: no-footing",
@@ -46,8 +46,9 @@
   } ],
   "moves" : [ {
     "issue" : 349,
-    "move" : "nudge",
-    "pr" : 438
+    "move" : "wait",
+    "pr" : 438,
+    "why" : "session running"
   }, {
     "issue" : 92,
     "move" : "leave",
