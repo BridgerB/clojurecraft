@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:17:44.200Z",
+  "at" : "2026-10-18T01:18:52.305Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -46,7 +46,7 @@
   }, {
     "number" : 105,
     "title" : "Bot stops at flint-and-steel: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 41,
@@ -66,7 +66,7 @@
   }, {
     "number" : 349,
     "title" : "Bot stops at flint-and-steel: timeout",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 60,
@@ -111,6 +111,16 @@
     "pr" : 391,
     "session" : false
   }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 69,
+    "title" : "Bot stops at water-bucket: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
@@ -121,24 +131,19 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 69,
-    "title" : "Bot stops at water-bucket: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : false
-  }, {
     "number" : 110,
     "title" : "Bot stops at pickaxe: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 286,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
+  }, {
     "number" : 163,
     "title" : "Bot stops at portal: needs-tool",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 68,
@@ -182,6 +187,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 105,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 41,
     "move" : "leave",
     "why" : "hands-off label"
@@ -191,6 +200,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 196,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 349,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -214,6 +227,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 69,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 62,
     "move" : "leave",
     "why" : "hands-off label"
@@ -222,15 +239,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 69,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 338,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 110,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 286,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
+  }, {
+    "issue" : 163,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -1105,5 +1122,10 @@
     "move" : "ready",
     "pr" : 411,
     "at" : "2026-10-18T01:15:27.615Z"
+  }, {
+    "issue" : 286,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-18T01:18:52.305Z"
   } ]
 }
