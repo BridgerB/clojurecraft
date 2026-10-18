@@ -149,6 +149,11 @@
                            (zero? (mod k 1)))
                   (let [row (first (filter #(= :mine-stone (:goal/id %)) plan/goals))
                         cands (take 12 (stone/exposed-of-states world (stone/states-of-row row)))]
+                    (println "  SPENT" (stone/spent? world)
+                             "boxed-count" (count (:plan/boxed-at world))
+                             "retreat" (pr-str (stone/retreat world (:plan/boxed-at world)))
+                             "over" (pr-str (stone/over-stone world row))
+                             "stairs" (pr-str (stone/stairs world row)))
                     (println "  CANDS"
                              (pr-str (mapv (fn [c] [c
                                                     (let [up (above world c)]
