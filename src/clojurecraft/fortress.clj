@@ -108,10 +108,12 @@
    the floor, which is filled first, and the body's own), and a floor that is solid, or lava a
    block placed against a solid neighbour fills. Never air: a step over a drop is not enclosed
    (live run f1-5 stood at a cave's edge with air under the next floor, slid off while placing it
-   and fell forty blocks into the lava sea), unless bridge? and the air floor hangs over solid ground
-   within bridge-fall (shallow?) and a solid neighbour holds the block laid in it: a cavern's floor
-   is bridged a block at a time, from the floor the feet stand on (sim race 39099976057 runner 2,
-   world R2/4: thirty minutes at a time paced on a ledge, every step ahead an air floor). A solid floor the route cannot walk on is replaced
+   and fell forty blocks into the lava sea), unless bridge? and the floor is air (a cell a block
+   may take the place of, blocks/replaceable?: a fungus or a wart is not, and the server refused
+   the block) hanging over solid ground within bridge-fall (shallow?), with a solid neighbour to
+   hold the block laid in it: a cavern's floor is bridged a block at a time, from the floor the
+   feet stand on (sim race 39099976057 runner 2, world R2/4: thirty minutes at a time paced on a
+   ledge, every step ahead an air floor). A solid floor the route cannot walk on is replaced
    only when digging it opens no fluid and leaves support for its replacement. No opened cell
    may drop a gravel or sand bed carrying fluid into the tunnel."
   ([world feet move] (safe? world feet move false))
@@ -134,7 +136,7 @@
                (= floor (build/foundation world floor)))
           (and (lava? floor) (= floor (build/foundation world floor)))
           (and bridge?
-               (= :clear (path/classify world floor))
+               (blocks/replaceable? (at floor))
                (shallow? world floor)
                (= floor (build/foundation world floor))))))))
 

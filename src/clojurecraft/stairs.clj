@@ -123,8 +123,12 @@
 
 (def fillers
   "The items a floor is laid from, what a mine carries most of first: cobblestone, the stones
-   that drop themselves, then dirt. Never gravel or sand, which fall out of a floor."
-  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt])
+   that drop themselves, then dirt, then what the Nether's rock drops (netherrack, basalt,
+   blackstone: a tunnel there digs more than it lays; sim runs of R1/43 failed :not-held at 197
+   minutes with 400 blocks bridged and no cobblestone left). Never gravel or sand, which fall out
+   of a floor."
+  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack :basalt
+   :blackstone])
 
 (defn filler
   "The first of fillers the inventory holds n or more of, or nil."
