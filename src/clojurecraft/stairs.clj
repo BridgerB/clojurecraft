@@ -519,13 +519,13 @@
     (cond (and (= :stairs-up kind) (= :surface for))
           (-> world
               (assoc :player/controls {})
-              (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+              (intent/box-at (intent/feet world))
               intent/done
               (game/say "stairs: boxed in, no way out from here"))
           (and (= :lava for) target)
           (-> world
               (assoc :player/controls {})
-              (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+              (intent/box-at (intent/feet world))
               (memory/give-up-site target)
               intent/done
               (game/say
@@ -619,7 +619,7 @@
         ways (sort-by #(or (dry-head-distance world feet %) Long/MAX_VALUE) directions)]
     (when-let [d (first (filter #(level-safe? world (stair-cells feet %)) ways))]
       (-> world
-          (update :plan/boxed-at (fnil conj #{}) feet)
+          (intent/box-at feet)
           (intent/assoc-intent :intent/dir d
                                :intent/level-dir d
                                :intent/turns 0
@@ -634,7 +634,7 @@
           (game/say (str "stairs: boxed under water, a stair down toward " d))))))
 
 (def bore-bed 3)                       ; rock blocks over the head a bore digs through at most (the eyes' reach to the water over them)
-(def bore-depth 12)                    ; blocks of water over that rock a bore swims up through at most
+(def bore-depth 24)                    ; blocks of water over that rock a bore swims up through at most: 2.7 a second, nine of the fifteen seconds of breath
 
 (defn handed?
   "Does the inventory hold no pickaxe at all: a bot that digs by hand, a block of stone 7500 ms?"

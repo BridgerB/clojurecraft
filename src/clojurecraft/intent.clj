@@ -171,6 +171,27 @@
   (let [[x y z] (:player/pos world)]
     [(long (math/floor x)) (long (math/floor (+ y 0.5))) (long (math/floor z))]))
 
+(def boxed-cap 64)                     ; cells :plan/boxed-at keeps: the nearest to the latest
+
+(defn box-at
+  "The world with cell added to :plan/boxed-at, the set kept to the boxed-cap cells nearest cell:
+   a climb that walks a cave for a quarter of an hour (issues #69, #62, #161, #135: two hundred
+   and more cells, each refusing a stair or a retreat onto it) forgets the pockets it left far
+   behind, and no clock is needed for it."
+  [world cell]
+  (update world
+          :plan/boxed-at
+          (fn [boxed]
+            (let [boxed (conj (or boxed #{}) cell)
+                  [cx cy cz] cell
+                  near (fn [[x y z]]
+                         (+ (* (- x cx) (- x cx)) (* (- y cy) (- y cy)) (* (- z cz) (- z cz))))]
+              (cond-> boxed
+                (> (count boxed) boxed-cap)
+                (->> (sort-by near)
+                     (take boxed-cap)
+                     (into #{})))))))
+
 (defn child-dig
   "A fresh :dig intent for one cell, to be run by the dig executor as another intent's child."
   [target]
