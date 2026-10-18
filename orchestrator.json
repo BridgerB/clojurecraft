@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:16:32.533Z",
+  "at" : "2026-10-18T02:17:40.848Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -72,10 +72,10 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 338,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at fortress: timeout",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 417,
     "session" : false
@@ -185,7 +185,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 338,
-    "move" : "ready",
+    "move" : "gave-up",
     "pr" : 417
   }, {
     "issue" : 178,
@@ -1140,5 +1140,10 @@
     "move" : "ready",
     "pr" : 417,
     "at" : "2026-10-18T02:16:32.533Z"
+  }, {
+    "issue" : 338,
+    "move" : "gave-up",
+    "pr" : 417,
+    "at" : "2026-10-18T02:17:40.848Z"
   } ]
 }
