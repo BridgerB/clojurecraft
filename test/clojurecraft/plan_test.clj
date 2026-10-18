@@ -177,7 +177,26 @@
         "swim out to the bank instead of waiting in the water")
     (is (not= {:intent/kind :swim-out :intent/for :retreat}
               (wood/gather-or-out (assoc w :player/in-water? false)))
-        "on land it waits as before")))
+        "on land it waits as before")
+    (is (= {:plan/wait :no-log} (wood/gather-or-out (assoc w :player/eye-in-water? true)))
+        "with the eye under the escape owns it, not the way out")))
+
+(deftest a-trunk-across-a-chasm-is-tunnelled-toward
+  ;; sim worlds R3/45 and R2/16 (issues #87 and #108): the only trunk in reach stood across a gap
+  ;; the bot could not walk (two blocks of air, a cliff), at its own height and a few blocks off;
+  ;; one bot walked back down to its shaft and climbed again forever, the other waited :no-log
+  (let [chasm (fn [x0 x1]
+                (into {} (for [x (range x0 x1) y (range 40 64) z (range 16)] [[x y z] blocks/air])))
+        w (remembered (merge (chasm 2 8) {[1 64 8] 136 [1 65 8] 136}) [8.5 64.0 8.5])
+        far (remembered (merge (chasm 3 15) {[15 64 8] 136 [15 65 8] 136}) [1.5 64.0 8.5])]
+    (is (nil? (wood/near-walk w)) "no route reaches the trunk across the chasm")
+    (is (= {:intent/kind :tunnel :intent/dir [-1 0] :intent/length 6 :intent/for :trees}
+           (wood/gather-next w))
+        "a tunnel toward it, one short of the trunk")
+    (is (not= :tunnel (:intent/kind (wood/gather-next (assoc w :plan/boxed-at #{[8 64 8]}))))
+        "never from a cell where a tunnel died boxed")
+    (is (not= :tunnel (:intent/kind (wood/gather-next far)))
+        "a trunk past tunnel-reach is not tunnelled toward")))
 
 (deftest a-climb-for-wood-boxed-under-gravel-takes-the-short-way-away
   (let [corridor (into {[12 64 8] 136} (for [x (range 5 10) y [48 49]] [[x y 5] blocks/air]))
