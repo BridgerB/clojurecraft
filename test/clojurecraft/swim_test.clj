@@ -402,3 +402,25 @@
       (is (nil? (:plan/trap (trap/trapped-tick w))) "dry land clears the escape goal")
       (is (not (trap/dry-land? (assoc w :world/blocks {floor blocks/air})))
           "a missing floor is not dry land"))))
+
+(deftest a-rise-under-a-frozen-lake-digs-the-ice-and-leaves-other-roofs
+  ;; race 39088700340 bot Clj_r02 (issue #71) rose from an air pocket up a shaft under a frozen
+  ;; sea; a rise never dug its cap, so it swam sideways into the ice and drowned
+  (let [rise {:intent/kind :swim-out :intent/for :rise :intent/to-y 62 :intent/status :active}
+        under (fn [roof]
+                (assoc (game/init fx/opts)
+                       :bot/phase :play
+                       :player/pos [5.5 60.0 5.5]
+                       :player/loaded? true
+                       :player/in-water? true
+                       :player/eye-in-water? true
+                       :world/chunks
+                       {[0 0] (world/column
+                               (merge (into {} (for [y (range 55 62)] [[5 y 5] blocks/water-base]))
+                                      {[5 62 5] roof}))}
+                       :plan/intent rise))
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        child #(:intent/child (:plan/intent (intent/run % (:plan/intent %) tick)))]
+    (is (= [5 62 5] (:intent/target (child (under (blocks/default-state :ice)))))
+        "the lake's ice over the head: dug")
+    (is (nil? (child (under 1))) "any other roof is left alone")))
