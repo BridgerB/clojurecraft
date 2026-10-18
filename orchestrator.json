@@ -1,9 +1,9 @@
 {
-  "at" : "2026-10-18T10:29:16.602Z",
+  "at" : "2026-10-18T10:30:23.840Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 338,
     "checks" : "pending",
@@ -41,8 +41,11 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "gave-up",
-    "pr" : 440
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 339,
+    "move" : "assign"
   }, {
     "issue" : 65,
     "move" : "leave",
@@ -1185,5 +1188,9 @@
     "move" : "gave-up",
     "pr" : 440,
     "at" : "2026-10-18T10:29:16.602Z"
+  }, {
+    "issue" : 339,
+    "move" : "assign",
+    "at" : "2026-10-18T10:30:23.840Z"
   } ]
 }
