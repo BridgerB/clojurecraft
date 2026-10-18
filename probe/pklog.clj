@@ -13,9 +13,18 @@
         m (sr/moment-of snap w)
         world (:world m)
         until (:snapshot/until snap)
+        last-id (volatile! nil)
         step (fn [wd ev]
                (let [n0 (count (:bot/effects wd))
-                     wd' (sr/step wd ev)]
+                     wd' (sr/step wd ev)
+                     i (:plan/intent wd')]
+                 (when (and i (not= (:intent/id i) @last-id))
+                   (vreset! last-id (:intent/id i))
+                   (println "INTENT"
+                            (:time/now wd')
+                            (select-keys i
+                                         [:intent/kind :intent/goal :intent/for :intent/target
+                                          :intent/pickup? :intent/stage])))
                  (doseq [fx (drop n0 (:bot/effects wd'))
                          :when (= :log (:effect/kind fx))]
                    (println "LOG" (:time/now wd') (:effect/message fx)))
