@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:48:44.554Z",
+  "at" : "2026-10-18T03:49:51.055Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -39,6 +39,16 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 162,
@@ -49,16 +59,6 @@
     "nudges" : 3,
     "pr" : 421,
     "session" : true
-  }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -75,14 +75,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 419,
-    "title" : "Bot stops at portal: target-gone",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 419,
+    "title" : "Bot stops at portal: target-gone",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 110,
@@ -145,14 +145,14 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 41,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 162,
     "move" : "wait",
     "pr" : 421,
     "why" : "session running"
-  }, {
-    "issue" : 41,
-    "move" : "leave",
-    "why" : "hands-off label"
   }, {
     "issue" : 60,
     "move" : "leave",
