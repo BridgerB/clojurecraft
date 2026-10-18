@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T09:25:53.773Z",
+  "at" : "2026-10-18T09:28:17.251Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -17,7 +17,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 438,
-    "session" : true
+    "session" : false
   }, {
     "number" : 392,
     "title" : "Bot stops at portal: no-site",
@@ -51,9 +51,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 349,
-    "move" : "wait",
-    "pr" : 438,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 438
   }, {
     "issue" : 65,
     "move" : "leave",
@@ -1158,5 +1157,10 @@
     "issue" : 349,
     "move" : "assign",
     "at" : "2026-10-18T09:18:09.074Z"
+  }, {
+    "issue" : 349,
+    "move" : "ready",
+    "pr" : 438,
+    "at" : "2026-10-18T09:28:17.251Z"
   } ]
 }
