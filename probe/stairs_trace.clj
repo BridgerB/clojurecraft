@@ -38,9 +38,14 @@
 (defn chain
   "The intent and its children, small values."
   [world]
-  (pr-str (map #(select-keys %
-                             [:intent/kind :intent/stage :intent/reason :intent/status :intent/turns
-                              :intent/dir :intent/level-steps :intent/for])
+  (pr-str (map (fn [i]
+                 (into {}
+                       (filter (fn [[_ v]]
+                                 (or (keyword? v)
+                                     (number? v)
+                                     (boolean? v)
+                                     (and (vector? v) (< (count v) 5) (every? number? v)))))
+                       i))
                (take-while some? (iterate :intent/child (:plan/intent world))))))
 
 (defn -main
@@ -63,6 +68,9 @@
                                (mapv #(/ (long (* 10.0 %)) 10.0) (:player/pos world))
                                "feet"
                                feet
+                               (pr-str (select-keys world
+                                                    [:player/in-water? :player/on-ground?
+                                                     :player/controls]))
                                (chain world))
                       (when (#{:stairs-down :stairs-up} kind)
                         (doseq [d stairs/directions]
