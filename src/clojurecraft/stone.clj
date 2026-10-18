@@ -210,6 +210,25 @@
                                     cells))))
                      ranked)))))
 
+(def spent-boxed 3)                   ; staircases that died :boxed round a place before the mine cuts no more there
+(def spent-radius 8)                  ; blocks on the plane round the feet those cells are counted over
+
+(defn spent?
+  "Have spent-boxed or more cells of :plan/boxed-at, a staircase's or a climb's pocket, been
+   recorded within spent-radius of the feet on the plane: is this place one the mine has been
+   boxed out of? Issue #342 (a real bot, Clj_r15, landed at R1/30): stone lay in
+   the wall of a cave lake, every stair cut at its bank was refused for the water beside it, and the
+   mine cut the next staircase from the surface beside the last, each its own feet cell and so none
+   in :plan/boxed-at, down the same open stairs to the same pocket and up again, again and again in
+   eighty seconds with the filler spent each time, until the plan failed :boxed. A spent place is
+   left by a retreat, not cut again."
+  [world]
+  (let [[fx _ fz] (intent/feet world)]
+    (<= spent-boxed
+        (count (filter (fn [[x _ z]]
+                         (<= (physics/horizontal-distance [x 0 z] [fx 0 fz]) spent-radius))
+                       (:plan/boxed-at world #{}))))))
+
 (def retreat-distance 12)             ; blocks a retreat walks from where nothing could be cut
 
 (defmethod path/goal-done? :unboxed-away
@@ -338,7 +357,7 @@
               :else
               (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
                   (off-ice world)
-                  (stairs world row)
+                  (if (spent? world) (retreat world) (stairs world row))
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
                   (deeper world)

@@ -866,3 +866,18 @@
     (is (not (intent/ledge-ahead? rim [8.5 64.0 5.5])) "toward the floor, not off it")
     (is (intent/ledge-ahead? (assoc-in rim [:world/blocks [5 63 4]] 1) [4.5 64.0 3.5])
         "a wall in the way of the diagonal slides it west along the rim, off its side")))
+
+(deftest a-place-three-staircases-were-boxed-in-is-left-not-cut-again
+  ;; issue #342 (a real bot, Clj_r15, landed at R1/30): the mine cut staircase after staircase from
+  ;; the surface beside a cave lake, each died :boxed in a pocket at its bottom, and none of their
+  ;; feet cells at the top was in :plan/boxed-at
+  (let [w (standing 64 :stone_pickaxe)
+        boxed #{[3 58 5] [4 57 6] [6 56 5]}]
+    (is (not (stone/spent? w)))
+    (is (not (stone/spent? (assoc w :plan/boxed-at (disj boxed [6 56 5])))) "two are not enough")
+    (is (not (stone/spent? (assoc w :plan/boxed-at #{[40 58 5] [41 57 6] [42 56 5]})))
+        "three far away are another place")
+    (is (stone/spent? (assoc w :plan/boxed-at boxed)))
+    (is (= :stairs-down (:intent/kind (stone/mine-next w (row :mine-iron)))) "a fresh place")
+    (let [r (stone/mine-next (assoc w :plan/boxed-at boxed) (row :mine-iron))]
+      (is (= [:walk :retreat] [(:intent/kind r) (:intent/for r)]) (pr-str r)))))
