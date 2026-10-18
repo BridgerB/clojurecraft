@@ -569,7 +569,7 @@
   (let [op {:build/op :dig :build/pos [5 62 6] :build/stand [5 63 5] :build/step :room}
         i {:intent/kind :build
            :intent/build :cast-one
-           :intent/origin [100 64 200]
+           :intent/origin [4 64 4]
            :intent/facing :south
            :intent/status :active
            :intent/op op}
@@ -725,7 +725,9 @@
         "the landing's chunk is not loaded: a walk toward it, at the feet's height")
     (is (nil? (build/far-way (standing-at (open-ground {}) [5.5 63.0 5.5])
                              (assoc i :intent/origin [6 30 12])))
-        "the landing's chunk is loaded: the stairs and the dug way are the build's own")))
+        "the landing's chunk is loaded: the stairs and the dug way are the build's own")
+    (is (nil? (build/far-way far (assoc i :intent/origin [30 30 5])))
+        "an unloaded chunk within far-site: the chunks of a start are still arriving")))
 
 (deftest refill-scoops-a-source-under-flowing-lava
   ;; sim race 38715231137 (issue #142, regressed, 166 runs in 44 rounds): at the station the

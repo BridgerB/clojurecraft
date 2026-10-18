@@ -1137,19 +1137,25 @@
               (> (physics/distance (physics/centre feet) (physics/centre to)) site-reach))
       (toward-stand world to build origin facing))))
 
+(def far-site 48)                     ; blocks on the plane from the landing past which its unloaded chunk means far off, not still arriving
+
 (defn far-way
   "The way to the build's site from so far off that its landing's chunk is not loaded (a death
    sent the feet back to spawn): a walk toward the landing's column at the feet's height, as far
    as the loaded terrain leads (intent/routable?), so the stairs and the dug way (toward-stand)
-   start at the site and not at these feet. nil when the landing's chunk is loaded, or no walk
-   leads toward it. Sim race 39076908669 (issue #196, world R3/13 seed 2): the bot died at its
+   start at the site and not at these feet. nil when the landing's chunk is loaded, when it is
+   within far-site of the feet (the chunks of a start are still arriving), or no walk leads
+   toward it. Sim race 39076908669 (issue #196, world R3/13 seed 2): the bot died at its
    cast at y 48, woke at spawn 190 blocks off, made a pickaxe for the build's next op, a floor
    cell that is no dig, and found no stand at the feet: :no-stand three times in three ticks."
   [world {:intent/keys [origin facing access]}]
   (let [[lx _ lz] (cell origin facing (landing (or access 0)))
         walk
         {:intent/kind :walk :intent/target [lx (second (intent/feet world)) lz] :intent/for :site}]
-    (when (and (not (terrain/chunk-loaded? world [lx 0 lz])) (intent/routable? world walk)) walk)))
+    (when (and (not (terrain/chunk-loaded? world [lx 0 lz]))
+               (> (physics/horizontal-distance (:player/pos world) [lx 0 lz]) far-site)
+               (intent/routable? world walk))
+      walk)))
 
 (defn approach-stand
   "The child that gets the feet where op is worked from, or nil when they are there: the room's
