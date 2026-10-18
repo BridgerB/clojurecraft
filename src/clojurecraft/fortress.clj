@@ -256,7 +256,10 @@
                 (assoc :player/controls {})
                 (intent/fail :blocked)))
           :else
-          (let [next (build/next-op world (step-plan from move))]
+          (let [next (build/next-op world (step-plan from move))
+                next (cond-> next
+                       (= :place (:build/op next))
+                       (assoc :build/item (or (stairs/filler world 1) :cobblestone)))]
             (cond (nil? next)
                   (reduce
                    intent/dissoc-intent

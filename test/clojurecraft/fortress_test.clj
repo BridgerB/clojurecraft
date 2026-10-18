@@ -320,6 +320,55 @@
                                [0 64 0]
                                [1 0 0]))))))
 
+(deftest a-tunnel-floors-with-carried-stone-after-cobblestone-is-spent
+  ;; Issue #410: R1/34 and R2/39 spent their cobblestone with safe filler still carried.
+  (let [w (assoc (rock {[1 63 0] blocks/lava-base})
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/held-slot 0)
+        op (build/next-op w (fortress/step-plan [0 64 0] [1 0 0]))
+        i {:intent/kind :tunnel-to
+           :intent/target [10 64 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/from [0 64 0]
+           :intent/move [1 0 0]}
+        tick {:event/kind :tick :event/now 0}]
+    (doseq [item [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt]]
+      (let [w (assoc w :player/inventory {0 {:item (recipe/item-id item) :count 1}})
+            started (intent/run (assoc w :plan/intent i) i tick)
+            out (intent/run started (:plan/intent started) tick)]
+        (is (= item (get-in started [:plan/intent :intent/op :build/item])))
+        (is (= item (get-in out [:plan/intent :intent/child :intent/item])))
+        (is (= :active (get-in out [:plan/intent :intent/status])))))
+    (testing "an in-flight placement of the exhausted material is replaced, even after failure"
+      (doseq [status [:active :failed]]
+        (let [i (assoc i
+                       :intent/op op
+                       :intent/child
+                       {:intent/kind :place
+                        :intent/item :cobblestone
+                        :intent/cell [1 63 0]
+                        :intent/status status
+                        :intent/reason :not-held})
+              w (assoc w :player/inventory {0 {:item (recipe/item-id :cobbled_deepslate) :count 1}})
+              out (intent/run (assoc w :plan/intent i) i tick)]
+          (is (= :active (get-in out [:plan/intent :intent/status])))
+          (is (= :cobbled_deepslate (get-in out [:plan/intent :intent/op :build/item])))
+          (is (nil? (get-in out [:plan/intent :intent/child]))))))
+    (testing "falling blocks are not floor supplies"
+      (let [w (assoc w
+                     :player/inventory
+                     {0 {:item (recipe/item-id :gravel) :count 64}
+                      1 {:item (recipe/item-id :sand) :count 64}})
+            started (intent/run (assoc w :plan/intent i) i tick)
+            out (intent/run started (:plan/intent started) tick)]
+        (is (= :cobblestone (get-in started [:plan/intent :intent/op :build/item])))
+        (is (= :not-held (get-in out [:plan/intent :intent/child :intent/reason])))
+        (is (empty? (:bot/effects out)))))))
+
 (def gen-move
   (gen/elements (for [d [[1 0] [-1 0] [0 1] [0 -1]] dy [-1 0 1]] [(first d) dy (second d)])))
 (def gen-feet (gen/tuple (gen/choose -1000 1000) (gen/choose 1 250) (gen/choose -1000 1000)))

@@ -35,6 +35,8 @@ sourceRefs:
   - test/clojurecraft/fortress_test.clj#no-tunnel-step-drops-a-fluid-bearing-bed
   - test/clojurecraft/fortress_test.clj#a-tunnel-drops-an-unsafe-in-flight-step
   - test/clojurecraft/fortress_test.clj#a-tunnel-replaces-a-solid-floor-the-route-cannot-walk
+  - test/clojurecraft/fortress_test.clj#a-tunnel-floors-with-carried-stone-after-cobblestone-is-spent
+  - src/clojurecraft/stairs.clj#defn filler
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-spawner
   - src/clojurecraft/fortress.clj#defn arrived?
   - src/clojurecraft/fortress.clj#def aside
@@ -60,6 +62,8 @@ The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) i
 Issue #339's real snapshot (`real-7-s1-Clj_r10`) ran past a descending step's repaired floor and fell into lava with no footing. A feet-cell match alone ended steps before centring or landing, leaving forward controls pressed; the walk also kept accelerating over a descending waypoint while waiting to fall to its height. The [[walk-intent]] stops horizontal input over that waypoint, and the tunnel waits for both centring and ground contact. In-flight steps re-read the same goal, replacing the older `[:feet to]` op rather than preserving its premature completion.
 
 Issue #296 exhausted the last pickaxe and retried the same tunnel until three `:no-pickaxe` failures ended the plan. The fortress planner now makes a replacement when `build/pickaxe-at-hand?` finds a non-fetching producer, before starting another tunnel. An in-flight tunnel that loses its tool ends without spending a failed attempt, so that supply planning can run again. With no replacement at hand, the shared op executor lets a tunnel dig even slow rock by hand: the Nether may have no wood for a replacement, and quartz ore must not turn that state into an immediate dead end. Portal builds retain their hand-dig time limit; tunnel lava and protected-block rules are unchanged.
+
+Issue #410's R1/34 and R2/39 snapshots spent every cobblestone floor block while carrying other safe filler, then failed `:not-held` three times. Before working a floor placement, the tunnel selects `stairs/filler` from the current inventory: cobblestone first, then the carried stones and dirt, never falling gravel or sand. A changed material changes the op, so `build/work-op` drops even an already failed placement child and equips the available filler; portal build materials and tunnel safety rules stay unchanged.
 
 ## Never beside lava
 `safe?` refuses a step when a cell it opens or its floor is not loaded, a cell it opens is lava or a solid a tunnel never opens (obsidian, bedrock, a spawner: the blaze rods come from it, issue #262), a cell it opens has lava beside it (other than the floor, which is filled first), or the floor is neither solid nor lava a placed block can fill. A passable portal cell needs no dig and may be walked through; its frame remains protected. An air floor is never safe to enter: live run f1-5 stood at a cave's edge, slid off while placing one and fell forty blocks into the lava sea. A cell behind a wall cannot be capped before the wall is dug, and Nether lava flows a block every half second, so instead of capping (ruststeve's `nether_tunnel_step`) the tunnel goes round: `moves` tries the axis with farther to go, up or down first when the target is more than 3 off, then level, then the other axis, sideways, and finally backward.
