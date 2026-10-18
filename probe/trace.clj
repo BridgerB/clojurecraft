@@ -6,6 +6,7 @@
          '[clojurecraft.entity :as entity]
          '[clojurecraft.combat :as combat]
          '[clojurecraft.physics :as physics]
+         '[clojurecraft.stairs :as stairs]
          '[clojure.string :as str])
 (defn out [& xs] (println (str/join " " xs)))
 (defn brief
@@ -47,7 +48,8 @@
                  (:player/food world)
                  (pr-str (brief i))
                  "child" (pr-str (brief (:intent/child i)))
-                 "backed" (pr-str (:plan/backed-off world))
+                 "bore" (pr-str (stairs/bore-cells world (intent/feet world)))
+                 "handed" (stairs/handed? world)
                  "boxed" (count (:plan/boxed-at world #{}))
                  "mobs" (pr-str (near-hostiles world))))
           (recur world sim (inc k) cur))
