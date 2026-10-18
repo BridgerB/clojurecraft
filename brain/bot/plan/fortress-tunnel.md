@@ -70,6 +70,8 @@ Issue #339's R1/5 and R2/23 snapshots opened gravel beds below lava, then repeat
 
 Issue #286 exposed two false dead ends: R3/10 had a safe retreat behind the feet that `moves` omitted, and the real portal at [256 97 464] was passable but rejected. Merely adding those moves paced between the portal's two cells. `next-move` prefers cells not yet left by this tunnel (`:intent/tunnel-visited`). Before retreating it can floor a level turn onto adjoining ground: the air floor must have immediate placement support and another solid horizontal neighbour besides the floor under the feet, and `stairs/over-fluid?` must find no fluid below it. The step must satisfy the same lava and optional water rules with that floor filled. Controls stop when the step is chosen, and its ordinary floor op must be confirmed before the walk begins; this is a short corner onto ground, not permission to enter an air floor or extend a causeway over lava.
 
+The later R4/12 and R4/4 reproductions of #286 were a different dead end: the [[server-model]] placed the arrival on a single gravel block suspended over lava, where no portal frame could fit. The model now requires the frame's footprint before choosing a natural arrival. The tunnel still refuses those unsupported steps; its lava rules are not relaxed to escape an impossible arrival.
+
 ## The planner across dimensions
 A row with `:goal/dimension` is chosen only there (`plan/here?`). When no row can be chosen here but one is undone elsewhere (`elsewhere?`), the plan waits `:other-dimension` instead of ending, so `--until fortress` in the overworld does not report done, and a run toward `[:nether :fortress]` works the portal, then the fortress.
 
