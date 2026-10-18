@@ -122,6 +122,21 @@
   [id]
   (contains? solid-states id))
 
+(def flat-shape 0.125)                ; blocks a shape may rise to and still be walked over like the floor: a carpet 0.0625; a slab 0.5 is not
+
+(defn collision-top
+  "The top, in blocks over its cell's floor, of the box block state id collides as: 1.0 for a
+   full cube (solid?), the shape's top for a flat shape (partial-shapes no taller than
+   flat-shape: a carpet or a pale moss carpet 0.0625, a passable type otherwise), nil for
+   nothing. The server stands a player on a carpet a sixteenth over its block and refuses
+   every move of one whose feet are inside it: gym batch stronghold-265c (plan run
+   38934412014) run 3 landed in a pale garden and could not take one step for three minutes."
+  [id]
+  (if (solid? id)
+    1.0
+    (let [top (get partial-shapes (name-of id))]
+      (when (and top (pos? (double top)) (<= (double top) flat-shape)) (double top)))))
+
 (def air-names
   "The block names that are air: plain, in a cave, in the void."
   #{:air :cave_air :void_air})

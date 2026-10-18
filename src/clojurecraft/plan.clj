@@ -114,6 +114,15 @@
   {:arglists '([world goal table])}
   (fn [_world goal _table] (:goal/plan goal :needs)))
 
+(defmulti interrupts?
+  "Should the running intent i of goal (the goal chosen now) end before it is done, so the row's
+   act plans again? Nothing else ends a running intent but itself. Keyed by :goal/plan; never by
+   default."
+  {:arglists '([world goal i])}
+  (fn [_world goal _i] (:goal/plan goal :needs)))
+
+(defmethod interrupts? :default [_ _ _] false)
+
 (defmethod done-by :default [_ _] false)
 (defmethod act :default [_ goal] {:plan/wait [:no-act (:goal/act goal)]})
 (defmethod next-intent :default [_ _ _] nil)
@@ -309,7 +318,7 @@
                        " " (or (:intent/target i) (:intent/recipe i)))))))
 
 (defn abandon-intent
-  "Drop the running intent i before it ended, for reason (:goal-met, :preempted): remember it
+  "Drop the running intent i before it ended, for reason (:goal-met, :preempted, :interrupted): remember it
    as abandoned, stop moving, and close any open container so the server is not left with one.
    Only called with an empty cursor (see can-abandon?), so closing never drops an item."
   [world i reason]
@@ -356,7 +365,8 @@
    while an intent runs (docs/RICH-HICKEY.md: \"the planner runs every tick against the current
    value, so done is re-derived, regressions re-plan automatically\"): no target left means
    :done, whatever is running; a running intent that serves another target than the one chosen
-   now is preempted; either waits while the cursor holds an item. Otherwise the intent runs, or
+   now is preempted, as is one the chosen row's interrupts? cuts short; either waits while the
+   cursor holds an item. Otherwise the intent runs, or
    the chosen target's next intent starts."
   [world event table]
   (let [world (cond-> world
@@ -366,9 +376,10 @@
         active? (= :active (:plan/status world))
         goal (when active? (choose world table))
         preempt? (and i goal (:intent/goal i) (not= (:goal/id goal) (:intent/goal i)))
+        cut? (and i goal (not preempt?) (interrupts? world goal i))
         next (when (and goal (nil? i)) (next-intent world goal table))]
     (cond (not active?) world
-          (and i (or (nil? goal) preempt?) (not (can-abandon? world)))
+          (and i (or (nil? goal) preempt? cut?) (not (can-abandon? world)))
           (run-intent world i event table)
           (and (nil? goal) (elsewhere? world table))
           (-> world
@@ -381,6 +392,7 @@
               (assoc :plan/status :done :player/controls {})
               (dissoc :plan/intent))
           preempt? (plan-tick (abandon-intent world i :preempted) event table)
+          cut? (plan-tick (abandon-intent world i :interrupted) event table)
           i (run-intent world i event table)
           (nil? next) (wait world :nothing-to-do)
           (:plan/wait next) (wait world (:plan/wait next))

@@ -143,3 +143,33 @@
         b (ph/step (floor-at) fluid a {:control/forward? true :control/yaw 0.0})]
     (is (< 0.09 (- (nth (:player/pos b) 2) (nth (:player/pos a) 2)) 0.11)
         "0.02 / (1 - 0.8) = 0.1 blocks a tick")))
+
+(deftest a-carpet-is-stood-on-and-stepped-onto
+  ;; a flat box a sixteenth high (blocks/collision-top, terrain/solid-fn): the feet rest on its
+  ;; top, where the server holds them (a body whose feet are inside it has every move refused),
+  ;; and a walk steps onto it (rise-onto, vanilla's maxUpStep), never stopped at its edge
+  (let [carpet (fn [x y z]
+                 (cond (<= y 63) true
+                       (and (= y 64) (= x 0) (<= 2 z 4)) 0.0625))]
+    (testing "landing on it rests on its top"
+      (let [w
+            (run carpet (assoc standing :player/pos [0.5 64.5 3.5] :player/on-ground? false) {} 40)]
+        (is (= 64.0625 (nth (:player/pos w) 1)))
+        (is (:player/on-ground? w))))
+    (testing "a walk onto it rises a sixteenth and goes on"
+      (let [w (run carpet standing {:control/forward? true :control/yaw 0.0} 12)
+            [_ y z] (:player/pos w)]
+        (is (< 1.8 z 3.6) "on the carpet, not stopped at its edge (1.7)")
+        (is (= 64.0625 y))
+        (is (:player/on-ground? w))
+        (is (not (:player/horizontal-collision? w)))))
+    (testing "and down off its far end onto the floor"
+      (let [w (run carpet standing {:control/forward? true :control/yaw 0.0} 40)
+            [_ y z] (:player/pos w)]
+        (is (> z 5.5) "across it")
+        (is (= 64.0 y))))
+    (testing "a block is never stepped onto: a one-block ledge still needs a jump"
+      (let [w (run (floor-at [0 64 2]) standing {:control/forward? true :control/yaw 0.0} 40)
+            [_ y z] (:player/pos w)]
+        (is (= 64.0 y))
+        (is (< z 1.71))))))

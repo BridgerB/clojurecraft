@@ -3,7 +3,7 @@ title: Fortress tunnel
 description: How the bot reaches a nether fortress (issue #11) - bricks as passive sightings in the Nether, a tunnel one step at a time where each step is a small plan of ops, and the rule that no step opens a cell beside lava.
 type: reference
 tags: [bot, plan, nether, fortress]
-aliases: [fortress.clj, :tunnel-to, :fortress, step-plan, safe?, at-fortress?]
+aliases: [fortress.clj, :tunnel-to, :fortress, step-plan, safe?, at-fortress?, bridge?]
 status: verified
 lastUpdated: 2026-10-18
 verifiedAgainst: HEAD
@@ -17,6 +17,8 @@ sourceRefs:
   - src/clojurecraft/fortress.clj#defn opens
   - src/clojurecraft/fortress.clj#defn safe?
   - src/clojurecraft/fortress.clj#defn dry?
+  - src/clojurecraft/fortress.clj#defn bridge?
+  - test/clojurecraft/fortress_test.clj#the-dry-tunnel-floors-its-way-across-a-cave
   - src/clojurecraft/fortress.clj#defn moves
   - src/clojurecraft/fortress.clj#defn next-move
   - test/clojurecraft/fortress_test.clj#a-tunnel-turns-onto-ground-instead-of-pacing-in-the-portal
@@ -111,9 +113,11 @@ A `:tunnel-to` is done at its target from `reach` 6 (`arrived?`, from the feet c
 ## A step the feet left
 A step's move and the cell it started from are kept on the intent until the step is stood in. When the feet are in none of its cells (`off-step?`: knocked back by a fireball, or moved by a fight or a cover walk between its ticks), or its walk back to the cell it started from fails `:no-path` (`lost-way?`), the step is dropped and chosen again from where the feet are, never failed. Gym blaze-fortress-h run 1 failed its tunnel into the spawner's room `:no-path` twice, and the plan with it (issue #262).
 
+A block in the body's own cells (gravel fallen into the tunnel) is dug out first (`buried`: the head's cell, then the feet's, from the feet), before any step is chosen or worked. A walk has no route from inside a block: issue #338's snapshot R1-33-1 stood in gravel at y 34 mid-step, its stand-in's walk failed `:no-path` with no route, was dropped as unreachable-but-routable and asked again, every tick of its fifteen-minute window.
+
 ## Gotchas
 - The sightings are passive: a brick is remembered when its chunk loads (`memory/landmark-kinds`), in the dimension it was seen in, so no scan and no line of sight.
 - The gym row (`fortress`, `:gym/land :nether-fortress`) carves a pocket of netherrack 48 blocks west of `locate structure minecraft:fortress` at y 72 and judges with `execute as {name} at @s if dimension minecraft:the_nether` and a filtered clone that counts bricks within 6.
 
 ## In the overworld
-The stronghold's portal room (issue #265, [[stronghold]]) is reached by the same tunnel with `:intent/dry? true`: `choose-move` then also wants `dry?`, no opened cell water or beside water, since the way down runs through aquifers; the Nether's steps never ask.
+The stronghold's portal room (issue #265, [[stronghold]]) is reached by the same tunnel with `:intent/dry? true`: `choose-move` then also wants `dry?`, no opened cell water or beside water, since the way down runs through aquifers; the Nether's steps never ask. That tunnel alone also floors its way across a cave (`bridge?`): a level step onto air that the block under the feet holds, no water or lava within 16 under it (`stairs/over-fluid?`), a filler carried, taken as soon as a safe step in the order of `moves`; the step plan's floor op places the block. Gym batch stronghold-room-b run 3 staired down through a cave to the frame's height 126 blocks from it, nothing but its own stair floors solid for 12 blocks round (probe 39137426809), every step toward the frame over air, and walked its own stairs 32 steps a tunnel for 23 minutes to the timeout. The fortress's tunnel never bridges: the Nether's caves are over the lava sea.
