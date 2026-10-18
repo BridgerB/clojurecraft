@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T05:09:07.682Z",
+  "at" : "2026-10-18T05:11:17.636Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -24,13 +24,13 @@
     "pr" : 429,
     "session" : true
   }, {
-    "number" : 60,
-    "title" : "Bot stops at water-bucket: no-water",
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
+    "number" : 60,
+    "title" : "Bot stops at water-bucket: no-water",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -68,11 +68,11 @@
     "pr" : 429,
     "why" : "session running"
   }, {
-    "issue" : 60,
+    "issue" : 71,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 71,
+    "issue" : 60,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
