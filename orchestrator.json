@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:48:20.620Z",
+  "at" : "2026-10-18T01:49:28.116Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -31,7 +31,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 339,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at fortress: no-footing",
     "copilot" : true,
     "draft" : false,
@@ -52,11 +52,6 @@
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 349,
-    "title" : "Bot stops at flint-and-steel: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 196,
@@ -178,9 +173,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 339,
-    "move" : "wait",
-    "pr" : 414,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 414
   }, {
     "issue" : 105,
     "move" : "leave",
@@ -191,10 +185,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 71,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 349,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -1132,5 +1122,10 @@
     "move" : "ready",
     "pr" : 414,
     "at" : "2026-10-18T01:41:35.537Z"
+  }, {
+    "issue" : 339,
+    "move" : "merge",
+    "pr" : 414,
+    "at" : "2026-10-18T01:49:28.116Z"
   } ]
 }
