@@ -665,21 +665,32 @@
                 [cx (dec fy) cz])]
     (every? #(= :clear (path/classify world %)) cells)))
 
-(defn straddling-ahead?
-  "Would the next half-width of a step toward unit direction [ux uz] leave a body on the ground
-   with nothing under its box and no landing within path/max-fall below its feet cell: the bot
-   stands on the rim of a floor whose own cell has none (its box overlaps the cell beside it), and
-   the first step toward the drop takes it off the edge. The cell ahead is the feet's own, which
-   ledge-ahead? skips."
-  [world [ux uz]]
+(defn off-the-rim?
+  "Would moving the body [dx dz] blocks on the plane leave it on the ground with nothing under its
+   box (unsupported?) and no landing within path/max-fall below the cell its feet centre is then
+   in?"
+  [world [dx dz]]
   (let [[px py pz] (:player/pos world)
         [_ fy _] (feet world)
-        edge [(+ px (* physics/half-width ux)) py (+ pz (* physics/half-width uz))]
+        edge [(+ px dx) py (+ pz dz)]
         cell [(long (math/floor (first edge))) fy (long (math/floor (nth edge 2)))]]
     (boolean (and (:player/on-ground? world)
                   (= :clear (path/classify world cell))
                   (unsupported? world edge fy)
                   (nil? (path/landing world cell))))))
+
+(defn straddling-ahead?
+  "Would a half-width step toward unit direction [ux uz], or along either axis of it a block in the
+   way would slide the body (a wall the diagonal runs into), leave the body off the rim it
+   stands on (off-the-rim?): the bot stands on a floor whose own cell has none (its box overlaps
+   the cell beside it), and the first step toward the drop takes it off the edge. The cell
+   ahead is the feet's own, which ledge-ahead? skips."
+  [world [ux uz]]
+  (let [w physics/half-width]
+    (boolean (some #(off-the-rim? world %)
+                   (cond-> [[(* w ux) (* w uz)]]
+                     (> (abs ux) 0.1) (conj [(* w (math/signum ux)) 0.0])
+                     (> (abs uz) 0.1) (conj [0.0 (* w (math/signum uz))]))))))
 
 (defn ledge-ahead?
   "Would a step toward goal take the body over a drop: the cell ledge-look ahead on the plane (not

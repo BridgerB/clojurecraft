@@ -842,4 +842,6 @@
     (is (not (intent/ledge-ahead? (assoc-in rim [:world/blocks [5 63 5]] 1) drop))
         "a floor under its own cell")
     (is (not (intent/ledge-ahead? (assoc rim :player/on-ground? false) drop)) "not in the air")
-    (is (not (intent/ledge-ahead? rim [8.5 64.0 5.5])) "toward the floor, not off it")))
+    (is (not (intent/ledge-ahead? rim [8.5 64.0 5.5])) "toward the floor, not off it")
+    (is (intent/ledge-ahead? (assoc-in rim [:world/blocks [5 63 4]] 1) [4.5 64.0 3.5])
+        "a wall in the way of the diagonal slides it west along the rim, off its side")))
