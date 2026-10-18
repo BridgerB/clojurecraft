@@ -50,8 +50,8 @@
 (def seek-radius 64.0)                ; blocks from the feet an enderman is walked toward, none nearer
 (def lookout-ms 5000)                 ; ms a :lookout stands turning before the plan looks again
 (def lookout-turn 0.09)               ; degrees of yaw a :lookout turns a ms: a full turn in four seconds
-(def roam-reach 16)                   ; blocks a roam walks from the feet to look round somewhere else
-(def roam-rise 8)                     ; blocks over and under the feet a roam's end is looked for in its column
+(def roam-reach 16)                   ; blocks a roam walks from the feet, at the least, to look round somewhere else
+(def toward-gain 4)                   ; blocks nearer an enderman, by a route's measure, a walk toward one must bring the feet
 (def roam-turn-ms 10000)              ; ms after which a roam sets out a heading further round
 (def headings ; the eight ways a roam may go, a quarter turn of each other in pairs
   [[1 0] [1 1] [0 1] [-1 1] [-1 0] [-1 -1] [0 -1] [1 -1]])
@@ -118,23 +118,37 @@
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (some (fn [[_ e :as ee]] (when (provokable? world e) ee))))))
 
+(defn roam-goal
+  "The path goal of a roam along heading [dx dz] from the feet: any cell more than twice
+   roam-reach, less one, from the point roam-reach behind the feet (path's :away, by its
+   flat-distance), which the cells roam-reach or more ahead satisfy at any height, and the cells
+   beside and behind do not. The route finds the way to one: along a cave's passage, up a
+   cliff's side, round a lake of lava."
+  [[x y z] [dx dz]]
+  {:goal/kind :away
+   :goal/pos [(- x (* dx roam-reach)) y (- z (* dz roam-reach))]
+   :goal/range (dec (* 2 roam-reach))})
+
 (defn roam
-  "A walk roam-reach blocks off to look round from somewhere else: along the first of the eight
-   headings, from one the clock picks (roam-turn-ms a heading), to a cell a body can stand in
-   within roam-rise of the feet's height there, that a route reaches; nil when none does. Gym
-   batch pearls-263e (plan run 38905343997): with the stare reaching 64 blocks, a warped forest
-   landing still stood looking round for forty minutes, every enderman out of its sight."
+  "A walk to look round from somewhere else: along the first of the eight headings, from one the
+   clock picks (roam-turn-ms a heading), to the end of a route that reaches a roam-goal cell
+   (path/plan :found, its last node, which the walk then plans to again and reaches); nil when
+   no heading has one. Gym batch pearls-263e (plan run 38905343997): with the stare reaching 64
+   blocks, a warped forest landing still stood looking round for forty minutes, every enderman
+   out of its sight. Batch pearls-263f (plan run 38918584959, probe 39130057525): the roam then
+   asked for one cell a heading, roam-reach off within eight of the feet's height, and from a
+   cave under the forest found rock in all eight, forty minutes long; the Nether is caves and
+   cliffs, and a route knows where the cells are."
   [world]
-  (let [[x y z] (intent/feet world)
+  (let [feet (intent/feet world)
         start (mod (quot (:time/now world 0) roam-turn-ms) (count headings))]
     (some (fn [k]
-            (let [[dx dz] (nth headings (mod (+ start k) (count headings)))
-                  tx (+ x (* dx roam-reach))
-                  tz (+ z (* dz roam-reach))
-                  ty (first (filter #(path/standable? world [tx % tz])
-                                    (range (+ y roam-rise) (- y roam-rise 1) -1)))
-                  i (when ty {:intent/kind :walk :intent/target [tx ty tz] :intent/for :pearls})]
-              (when (and i (intent/routable? world i)) i)))
+            (let [heading (nth headings (mod (+ start k) (count headings)))
+                  r
+                  (path/plan world (path/feet-cell (:player/pos world)) (roam-goal feet heading) {})
+                  to (last (:path/waypoints r))]
+              (when (and (= :found (:path/status r)) to)
+                {:intent/kind :walk :intent/target to :intent/for :pearls})))
           (range (count headings)))))
 
 (defn routable
@@ -149,6 +163,30 @@
                  (when (intent/routable? world
                                          {:intent/kind :walk :intent/target (cell (:entity/pos e))})
                    ee))))))
+
+(defn toward
+  "A walk toward the nearest of the candidates nearest endermen in ms when no route reaches one
+   (routable found none): to the end of the route that comes nearest it (path/plan's :partial or
+   :none, the way as far as it goes), when that end is toward-gain or more nearer it than the
+   feet by the route's own measure (path/flat-distance); nil when no route gains on any. Gym
+   batch pearls-263f (plan run 38918584959, probe 39130057525): a landing on the forest floor
+   tracked fifteen endermen, every route to them :none, the nearest 33 blocks off, and stood
+   looking round for thirty minutes. The way as far as it goes changes what is in sight, and
+   from the new place the route is asked again."
+  [world ms]
+  (let [pos (:player/pos world)
+        feet (path/feet-cell pos)]
+    (->> ms
+         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
+         (take candidates)
+         (some (fn [[_ e]]
+                 (let [c (cell (:entity/pos e))
+                       i {:intent/kind :walk :intent/target c :intent/for :pearls}
+                       to (last (:path/waypoints (path/plan world feet (intent/goal-of i) {})))]
+                   (when (and to
+                              (>= (- (path/flat-distance feet c) (path/flat-distance to c))
+                                  toward-gain))
+                     (assoc i :intent/target to))))))))
 
 ;; ---------------------------------------------------------------- the kill and its drop
 
@@ -331,9 +369,10 @@
    yet coming and provokable? from here within stare-range (quarry), provoked (never one already coming: a provoke of it
    ends at once, and batch pearls-263b's bot, its pickaxe lost, provoked one 26 times in a row);
    one coming and no burrow to meet it in, fought; else a walk to the nearest within seek-radius a
-   route reaches; else a :lookout, standing where it is: no enderman yet is no failure (batch
-   pearls-263c's warped forest landings failed :no-enderman and :no-route in 40 s); after a
-   lookout that found nothing, a roam somewhere else to look from."
+   route reaches, or toward one as far as a route goes (toward); else a :lookout, standing where
+   it is: no enderman yet is no failure (batch pearls-263c's warped forest landings failed
+   :no-enderman and :no-route in 40 s); after a lookout that found nothing, a roam somewhere
+   else to look from."
   [world]
   (let [pos (:player/pos world)
         ms (endermen world)
@@ -360,10 +399,12 @@
       qid {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       :else
-      (or (when-let [[_ far] (routable world (endermen world seek-radius))]
-            {:intent/kind :walk :intent/target (cell (:entity/pos far)) :intent/for :pearls})
-          (when (= :lookout (:intent/kind (:plan/last world))) (roam world))
-          {:intent/kind :lookout :intent/for :pearls}))))
+      (let [far (endermen world seek-radius)]
+        (or (when-let [[_ e] (routable world far)]
+              {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})
+            (toward world far)
+            (when (= :lookout (:intent/kind (:plan/last world))) (roam world))
+            {:intent/kind :lookout :intent/for :pearls})))))
 
 (defmethod plan/next-intent :pearls
   [world _ _]

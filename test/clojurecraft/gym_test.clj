@@ -194,6 +194,7 @@
                      "The nearest minecraft:warped_forest is at [120, 70, 240] (90 blocks away)"
                      (str/includes? % "spreadplayers")
                      "Spread 1 player around 120, 240 with an average distance of 0 blocks apart"
+                     (str/includes? % "cave_air") "Test failed"
                      :else "Test passed"))]
     (is (:gym/landed? r))
     (is (= [100 200 72] (:gym/landing r)) "where the spread stood it (the server's Pos)")
@@ -203,8 +204,11 @@
       sent)
      "an eighth of the overworld landing [800 1600]")
     (is (some
-         #{"execute in minecraft:the_nether run spreadplayers 120 240 0 16 under 110 false Clj_g1"}
-         sent))
+         #{"execute in minecraft:the_nether run spreadplayers 120 240 0 16 under 120 false Clj_g1"}
+         sent)
+        "under the roof, over the forest's highest floors (batch pearls-263f landed in caves)")
+    (is (some #{"execute in minecraft:the_nether if block 100 72 200 minecraft:cave_air"} sent)
+        "a carved cave's floor is refused")
     (is (some #{"execute in minecraft:the_nether if biome 100 72 200 minecraft:warped_forest"}
               sent))
     (is (some #(str/includes? % "run tp Clj_g1 100.5 72 200.5") sent))

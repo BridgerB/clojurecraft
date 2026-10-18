@@ -106,17 +106,80 @@
     (is (nil? (pearls/quarry (assoc-in w [:world/entities 9 :entity/creepy?] true)))
         "one already coming is no quarry")))
 
+(defn looked-out
+  "w after a lookout that found nothing: the hunt's next choice is a roam."
+  [w]
+  (assoc w :time/now 0 :plan/last {:intent/kind :lookout :intent/status :done}))
+
 (deftest a-lookout-that-found-nothing-roams-somewhere-else
   ;; gym batch pearls-263e (plan run 38905343997): forty minutes of looking round from one place
   (let [w (-> (standing {})
               (assoc :time/now 0)
-              (assoc-in [:world/chunks [1 0]] (world/column {})))]
+              (assoc-in [:world/chunks [1 0]] (world/column {})))
+        {:intent/keys [kind target for]} (plan/next-intent (looked-out w) row plan/goals)]
     (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals)))
-    (is (= {:intent/kind :walk :intent/target [24 64 8] :intent/for :pearls}
-           (plan/next-intent (assoc w :plan/last {:intent/kind :lookout :intent/status :done})
+    (is (= [:walk :pearls] [kind for]))
+    (is (and (>= (first target) 23) (= 64 (second target)))
+        "east first at this hour, sixteen blocks or near it, onto the floor there")))
+
+(def rock-y (range 64 67))
+
+(defn cave
+  "Four chunk columns (x 0 to 31, z 0 to 31) of stone three high over the floor (y 64 to 66),
+   with the cells of open (world coordinates) left as air: a cave inside the rock."
+  [open]
+  (into {}
+        (for [cx [0 1]
+              cz [0 1]]
+          [[cx cz]
+           (world/column (into {}
+                               (for [lx (range 16)
+                                     lz (range 16)
+                                     y rock-y
+                                     :let [x (+ (* 16 cx) lx)
+                                           z (+ (* 16 cz) lz)]
+                                     :when (not (contains? open [x y z]))]
+                                 [[lx y lz] stone])))])))
+
+(defn passage
+  "The cells of a passage two high from the feet at [8 64 8]: north along x 8 to z, then east
+   along that z to x."
+  [z x]
+  (set (concat (for [pz (range 8 (inc z)) y [64 65]] [8 y pz])
+               (for [px (range 8 (inc x)) y [64 65]] [px y z]))))
+
+(deftest a-roam-follows-a-caves-passage-to-where-it-can-look-from
+  ;; gym batch pearls-263f (plan run 38918584959, probe 39130057525): a landing in a cave pocket
+  ;; under the forest, netherrack sixteen blocks off in every heading at every height; the roam
+  ;; asked for those cells and stood forty minutes. A route finds the passage
+  (let [w (assoc (standing {}) :world/chunks (cave (passage 20 26)))
+        {:intent/keys [kind target for]} (plan/next-intent (looked-out w) row plan/goals)]
+    (is (= [:walk :pearls] [kind for]))
+    (is (= [64 20] [(second target) (nth target 2)]) "along the passage's east arm")
+    (is (>= (first target) 18) "to where it is sixteen blocks off, as the way goes")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (looked-out (assoc w :world/chunks (cave (passage 12 8))))
                              row
                              plan/goals))
-        "east first at this hour, sixteen blocks, onto the floor there")))
+        "a pocket no route leaves: the lookout again")))
+
+(def cliff
+  "Stone six high (y 64 to 69) across z 20 to 31 of the chunk column [0 1]: a ledge no route
+   climbs, from the floor at y 64 south of it."
+  (into {} (for [lx (range 16) lz (range 4 16) y (range 64 70)] [[lx y lz] stone])))
+
+(deftest an-enderman-no-route-reaches-is-walked-toward-as-far-as-the-route-goes
+  ;; gym batch pearls-263f (plan run 38918584959, probe 39130057525): fifteen endermen tracked
+  ;; from the forest floor, every route to them :none, and thirty minutes of looking round
+  (let [w (-> (standing {7 (enderman [8.5 70.0 30.5])})
+              (assoc-in [:world/chunks [0 1]] (world/column cliff)))]
+    (is (nil? (pearls/quarry w)) "on the ledge, out of sight behind its edge")
+    (is (= {:intent/kind :walk :intent/target [8 64 19] :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "to the cliff's foot, the route's end, eleven blocks nearer it")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc w :player/pos [8.5 64.0 19.5]) row plan/goals))
+        "from the foot no route gains on it: the lookout")))
 
 (deftest the-provoke-stares-at-the-head-until-the-server-says-it-has-a-target
   (let [pos [8.5 64.0 15.5]
