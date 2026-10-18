@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:04:10.705Z",
+  "at" : "2026-10-18T02:05:22.696Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -50,9 +50,9 @@
     "title" : "Bot stops at fortress: not-held",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 0,
+    "nudges" : 1,
     "pr" : 416,
-    "session" : false
+    "session" : true
   }, {
     "number" : 60,
     "title" : "Bot stops at water-bucket: no-water",
@@ -69,17 +69,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "quiet" : true,
-    "number" : 161,
-    "checks" : "red",
-    "title" : "Bot stops at portal-kit: timeout",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 8,
-    "pr" : 391,
-    "session" : false
-  }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
@@ -94,6 +83,17 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 387,
+    "session" : false
+  }, {
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
+    "quiet" : true,
+    "number" : 161,
+    "checks" : "red",
+    "title" : "Bot stops at portal-kit: timeout",
+    "copilot" : true,
+    "draft" : false,
+    "nudges" : 8,
+    "pr" : 391,
     "session" : false
   }, {
     "number" : 62,
@@ -175,8 +175,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 410,
-    "move" : "nudge",
-    "pr" : 416
+    "move" : "wait",
+    "pr" : 416,
+    "why" : "session running"
   }, {
     "issue" : 60,
     "move" : "leave",
@@ -190,11 +191,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 161,
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
+    "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
