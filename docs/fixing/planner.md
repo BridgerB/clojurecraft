@@ -162,7 +162,7 @@ A build is a vector of ops with done-predicates as data (`build/holds?`); `next-
 
 ### 19.13 Fortress tunnel (`fortress.clj`)
 
-`:fortress` (Nether) done by `:at-fortress?`: a brick on record at y ≥ 32 within 6. `:tunnel-to` the nearest brick within 512, else explore 48 along the first safe axis; wait `:other-dimension` outside the Nether, `:no-way` nowhere safe. `step-plan`: floor under the new cell, `opens` dug, stand in it (worked by `build/next-op`). `safe?` refuses unloaded cells, opened lava/unbreakable cells, lava beside an opened cell, a floor neither solid nor lava. Vertical first when > 3 off. Done at target or after 32 steps. Failure `:blocked`.
+`:fortress` (Nether) done by `:at-fortress?`: a brick on record at y ≥ 32 within 6. `:tunnel-to` the nearest brick within 512, else the next leg of a spiral search (fortress/exploring: legs of 160, 160, 320, 320 ... blocks, a quarter turn right each, at y 52 to 90, a leg ended by its end, the world's edge, an idle three looks, or too many tunnels); wait `:other-dimension` outside the Nether, `:no-way` nowhere safe. `step-plan`: floor under the new cell, `opens` dug, stand in it (worked by `build/next-op`). `safe?` refuses unloaded cells, opened lava/unbreakable cells, lava beside an opened cell, a floor neither solid nor lava. Vertical first when > 3 off. Done at target or after 32 steps. Failure `:blocked`.
 
 ### 19.14 Intentions as facts (`memory.clj`)
 

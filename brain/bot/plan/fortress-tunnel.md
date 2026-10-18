@@ -25,6 +25,20 @@ sourceRefs:
   - test/clojurecraft/fortress_test.clj#fortress-bricks-use-the-indexed-current-sightings
   - src/clojurecraft/fortress.clj#defmethod intent/run :tunnel-to
   - src/clojurecraft/fortress.clj#defmethod plan/next-intent :fortress
+  - src/clojurecraft/fortress.clj#defn exploring
+  - src/clojurecraft/fortress.clj#defn leg-over?
+  - src/clojurecraft/fortress.clj#defn looked
+  - src/clojurecraft/fortress.clj#defn leg-target
+  - src/clojurecraft/fortress.clj#defn explore-y
+  - src/clojurecraft/fortress.clj#defn shallow?
+  - src/clojurecraft/fortress.clj#defn bridge-ok?
+  - test/clojurecraft/fortress_test.clj#the-spiral-turns-right-and-its-legs-grow
+  - test/clojurecraft/fortress_test.clj#a-leg-keeps-to-the-heights-over-the-lava-sea-and-under-the-roof
+  - test/clojurecraft/fortress_test.clj#the-first-leg-goes-east-and-the-edge-of-the-world-turns-it
+  - test/clojurecraft/fortress_test.clj#a-leg-goes-on-until-its-end-then-the-spiral-turns
+  - test/clojurecraft/fortress_test.clj#a-leg-that-gains-ground-is-not-idle
+  - test/clojurecraft/fortress_test.clj#an-exploring-tunnel-keeps-its-leg-for-the-planner
+  - test/clojurecraft/fortress_test.clj#a-cavern-floor-is-bridged-only-over-ground-a-fall-survives
   - src/clojurecraft/fortress.clj#defmethod plan/done-by :at-fortress?
   - src/clojurecraft/fortress.clj#defmethod plan/done-by :nether-access?
   - src/clojurecraft/fortress.clj#defmethod plan/next-intent :return-nether
@@ -53,7 +67,7 @@ related:
 
 # Fortress tunnel
 
-The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) is done when a fortress block on record (`nether_bricks`, its fence or stairs, at y 32 or more, so never one under the lava sea) is within 6 blocks of the feet. Its planner (`plan/next-intent :fortress`) starts a `:tunnel-to` (not stone's `:tunnel`, which digs along a direction for ore) to the nearest one on record, or, with none, 48 blocks along the first axis with a safe first step.
+The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) is done when a fortress block on record (`nether_bricks`, its fence or stairs, at y 32 or more, so never one under the lava sea) is within 6 blocks of the feet. Its planner (`plan/next-intent :fortress`) starts a `:tunnel-to` (not stone's `:tunnel`, which digs along a direction for ore) to the nearest one on record, or, with none, the next leg of a spiral search (below).
 
 `bricks` asks `memory/positions-now` for `brick-states`, the indexed current sightings remembered by the facts' identity, before filtering the height; it never scans all sightings with `memory/latest`. Issue #328's snapshot, once streamed chunks restored its dug room ([[server-model]]), could tunnel but exhausted the judge's four-minute budget in that full scan on every tick. The indexed query preserves the dimension and recency rules without repeating the whole-memory query.
 
@@ -65,6 +79,16 @@ Issue #339's real snapshot (`real-7-s1-Clj_r10`) ran past a descending step's re
 Issue #296 exhausted the last pickaxe and retried the same tunnel until three `:no-pickaxe` failures ended the plan. The fortress planner now makes a replacement when `build/pickaxe-at-hand?` finds a non-fetching producer, before starting another tunnel. An in-flight tunnel that loses its tool ends without spending a failed attempt, so that supply planning can run again. With no replacement at hand, the shared op executor lets a tunnel dig even slow rock by hand: the Nether may have no wood for a replacement, and quartz ore must not turn that state into an immediate dead end. Portal builds retain their hand-dig time limit; tunnel lava and protected-block rules are unchanged.
 
 Issue #410's R1/34 and R2/39 snapshots spent every cobblestone floor block while carrying other safe filler, then failed `:not-held` three times. Before working a floor placement, the tunnel selects `stairs/filler` from the current inventory: cobblestone first, then the carried stones and dirt, never falling gravel or sand. A changed material changes the op, so `build/work-op` drops even an already failed placement child and equips the available filler; portal build materials and tunnel safety rules stay unchanged.
+
+## Exploring: a spiral, not a line
+With no brick on record the tunnel used to aim 48 blocks east, then 48 more, for ever, and drifted down a block whenever the level step was refused, into the bedrock. Sim race 39095704051 runner 4 (issue #338, world R4/33) went 630 blocks east along y 2-8 with a fortress 150 blocks north of its line; the snapshots of R2/4 and R3/21 stood in pockets of the bedrock layer or at the east edge of the captured region (the model's limit: nothing is loaded past it). `exploring` now returns a search, `:fortress/search` = {`:search/from` `:search/heading` `:search/leg` `:search/tunnels` `:search/best` `:search/idle`}, and the planner's tunnel carries it (`:intent/search`; the `:tunnel-to` executor keeps it on the world, so an eat or a fight between two looks forgets nothing).
+
+- **Legs of a square spiral.** The first leg goes east, each next one a quarter turn right (`turn-right`: east, south, west, north), `leg-length` blocks long: 160 for the first two (`explore-spacing`: a server shows 96 either side of the feet, `nether-view` 6 chunks), then each pair one spacing longer, so the strips swept lie a spacing apart and nothing is swept twice. The target is the leg's end (`leg-target`) at the height `explore-y` of where the leg began, the feet's own kept within y 52 to 90 (`explore-band`: over the lava sea at y 31 and its lakes, under the roof), so a tunnel in the bedrock climbs (a target more than 3 above sends the steps up first) and one that drifted into the roof comes down.
+- **A leg is over** (`leg-over?`) when its end is within reach by the ground, when the world ends two blocks ahead (`open-ahead?`, `look-ahead`: a real server shows 96 blocks, so only the model's captured Nether ends in front of a tunnel, and a leg that cannot go the way it turns tries the next heading), when more tunnels were spent on it than its length asks, when the feet are farther from where it began than its length and 64 (another trip's), or when it is idle: at each look of the planner (`looked`) the feet must have gained `idle-gain` (4) blocks along the heading beyond the best so far, and `idle-looks` (3) looks without that end the leg. Sim race 39104666000 (R2/4) spent 45 simulated minutes at a time pacing a cavern before a leg of the old kind ended.
+- **A search already running is kept** while its leg goes on; with none (the first look, a death, a failed tunnel that forgot it) the first leg starts east at the feet.
+
+## Bridging a cavern
+Never entering an air floor was the rule from the first live run (below), and in a Nether cavern it left every step ahead refused: sim race 39099976057 runner 2 (R2/4) paced a ledge for half an hour at a time. A step may now lay its floor in the air (`safe?` with `bridge?`, the placement the step plan always had: `build/place-op floor`, taken only once the block is confirmed) when the air hangs over solid ground within `bridge-fall` (2) blocks (`shallow?`: never lava or water, never the void or a cell not loaded, so a fall costs no health) and a solid neighbour holds the block (`build/foundation`). `bridge-ok?` limits it to a step toward the target (never sideways or back: the first version wandered out over the cavern and laid 500 blocks in 170 minutes) while more than `bridge-reserve` (24) filler is carried (`stairs/carried-filler`: the last floor of a plain step failed `:not-held` with the run's filler gone). The executor asks the same question each tick, so a bridging step is not dropped as unsafe once chosen.
 
 ## Never beside lava
 `safe?` refuses a step when a cell it opens or its floor is not loaded, a cell it opens is lava or a solid a tunnel never opens (obsidian, bedrock, a spawner: the blaze rods come from it, issue #262), a cell it opens has lava beside it (other than the floor, which is filled first), or the floor is neither solid nor lava a placed block can fill. A passable portal cell needs no dig and may be walked through; its frame remains protected. An air floor is never safe to enter: live run f1-5 stood at a cave's edge, slid off while placing one and fell forty blocks into the lava sea. A cell behind a wall cannot be capped before the wall is dug, and Nether lava flows a block every half second, so instead of capping (ruststeve's `nether_tunnel_step`) the tunnel goes round: `moves` tries the axis with farther to go, up or down first when the target is more than 3 off, then level, then the other axis, sideways, and finally backward.

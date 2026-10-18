@@ -694,6 +694,8 @@
     (is (step {floor air [1 62 0] air}) "air, then solid one below the floor cell: a fall of two")
     (is (step {floor air}) "solid right under the floor cell")
     (is (not (step {floor air [1 62 0] air [1 61 0] air})) "three of air: a drop")
+    (is (not (step {floor (blocks/default-state :crimson_fungus)}))
+        "a fungus is no air: the server keeps it and refuses the block")
     (is (not (step {floor air [1 62 0] blocks/lava-base})) "lava under the floor")
     (is (not (step {floor air [1 62 0] blocks/water-base})) "water under the floor")
     (is (not (step {floor air [1 62 0] nil [1 61 0] nil})) "ground not loaded")
