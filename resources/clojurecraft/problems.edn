@@ -148,6 +148,7 @@
    "Proof of a scoop: water_bucket appearing in the inventory"]
   :problem/risks
   ["Planks burned as fuel run dry after about 3 ingots and starve the wood chain"
+   "Race 39088700340 bot Clj_r10 (issue #60) stood in a frozen sea with the water a block under the sheet and found no surface to scoop; ice is no water, but the game leaves a source where it breaks, so a sheet is dug (scoop/ice-water), never cut toward far pools"
    "Race 39037024176 runner 1 (issue #342) mined toward fluid-exposing rock and carried stair refusals between feet cells until furnace failed :boxed; exposed targets must pass the dig's fluid guard, and a completed stair must reset its turns"
    "Race 39070889905 runner 1 (issue #342) spent its escape filler on descent seals and could not seal the climb out; descent seals must keep the same lay-reserve as floors, while climbs may spend it"
    "Items in the furnace or grid are invisible to the inventory count, so steps flicker"

@@ -167,6 +167,21 @@
     (is (= {:plan/wait :no-log} (wood/gather-next (boxed (bed :gravel))))
         "never under gravel, which would fall on the bot")))
 
+(deftest boxed-under-water-that-has-no-top-the-bot-does-not-dig-into-it
+  ;; sim world R3/13 (issue #71): a tunnel at y 16 dug up into an aquifer seven deep under stone,
+  ;; and the water followed the bot along its tunnel; a lake's ice is open water's roof
+  (let [pocket (into {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air}
+                     (for [y (range 54 61)] [[8 y 8] blocks/water-base]))
+        boxed #(assoc % :plan/boxed-at #{[8 50 8]})
+        under (fn [roof]
+                (boxed (remembered (assoc pocket [8 53 8] 1 [8 61 8] roof) [8.5 50.0 8.5])))]
+    (is (= {:plan/wait :no-log} (wood/gather-next (under 1)))
+        "water under stone is a pocket: no way up")
+    (is (= :into-water (:intent/for (wood/gather-next (under blocks/air))))
+        "open at the top: dig up into it")
+    (is (= :into-water (:intent/for (wood/gather-next (under (blocks/default-state :ice)))))
+        "under a lake's ice: still dug into (the rise has no dig of its cap yet)")))
+
 (deftest a-trunk-across-a-chasm-is-bridged-by-stairs-up
   ;; sim worlds R3/45 (issues #87 and #108): the only trunk in reach stood across two blocks of air
   ;; from the pillar the bot had climbed out on, no route reached it, and the plan waited :no-log
