@@ -644,9 +644,12 @@
 
 (defn bore-cells
   "The cells a bore from feet [x y z] opens, bottom first: one to bore-bed blocks of rock over the
-   head (from y + 2: none that falls, none never dug) under a lake, whose water runs up from the
-   rock for at most bore-depth blocks to open air. nil when the column over the head is not that:
-   rock too thick, no water over it, an aquifer's sheet with rock over it, or a gravel bed."
+   head (from y + 2: none never dug; the gravel and sand of a lake's bed count, which fall into the
+   cell below as it is dug, and are dug again) under a lake, whose water runs up from the rock for
+   at most bore-depth blocks to open air. nil when the column over the head is not that: rock too
+   thick, no water over it, or an aquifer's sheet with rock over it. The three bots of issues #69,
+   #62 and #161 stood under beds of stone, then gravel or sand, under fourteen to twenty-three
+   blocks of water."
   [world [x y z]]
   (let [cell (fn [dy] [x (+ y dy) z])
         kind #(path/classify world %)
@@ -660,9 +663,7 @@
                        first
                        kind
                        (= :clear))
-               (not-any? #(or (blocks/falls? (terrain/block-at world %))
-                              (contains? intent/never-dug
-                                         (blocks/name-of (terrain/block-at world %))))
+               (not-any? #(contains? intent/never-dug (blocks/name-of (terrain/block-at world %)))
                          rock))
       rock)))
 
