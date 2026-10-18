@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T04:18:43.605Z",
+  "at" : "2026-10-18T04:19:55.049Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -15,9 +15,9 @@
     "title" : "Bot stops at fortress: not-held",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 2,
+    "nudges" : 3,
     "pr" : 416,
-    "session" : false
+    "session" : true
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
@@ -71,8 +71,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 410,
-    "move" : "nudge",
-    "pr" : 416
+    "move" : "wait",
+    "pr" : 416,
+    "why" : "session running"
   }, {
     "issue" : 338,
     "move" : "leave",
