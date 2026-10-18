@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:58:20.591Z",
+  "at" : "2026-10-18T02:59:28.576Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -44,7 +44,7 @@
     "pr" : 421,
     "session" : true
   }, {
-    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
+    "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 410,
     "checks" : "red",
@@ -60,16 +60,10 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
-    "quiet" : false,
     "number" : 338,
-    "checks" : "red",
     "title" : "Bot stops at fortress: timeout",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 417,
-    "session" : false
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : true
   }, {
     "number" : 60,
     "title" : "Bot stops at water-bucket: no-water",
@@ -162,16 +156,17 @@
     "why" : "session running"
   }, {
     "issue" : 410,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "move" : "stuck",
+    "pr" : 416,
+    "why" : "answered with no push"
   }, {
     "issue" : 44,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 338,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 60,
     "move" : "leave",
@@ -1157,5 +1152,16 @@
     "issue" : 162,
     "move" : "assign",
     "at" : "2026-10-18T02:49:20.958Z"
+  }, {
+    "issue" : 410,
+    "move" : "stuck",
+    "pr" : 416,
+    "why" : "answered with no push",
+    "at" : "2026-10-18T02:59:28.576Z"
+  }, {
+    "issue" : 338,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-18T02:59:28.576Z"
   } ]
 }
