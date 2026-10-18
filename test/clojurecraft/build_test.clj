@@ -588,6 +588,19 @@
     (is (not (build/carry-sticks? sticks)) "sticks held already")
     (is (not (build/carry-sticks? bare)) "nothing to make them from: no trip out for them")))
 
+(deftest a-portal-build-carries-a-spare-pickaxe
+  (let [portal (first (filter #(= :portal (:goal/id %)) plan/goals))
+        table (blocks/default-state :crafting_table)
+        base (standing-at (open-ground (assoc trench [11 63 10] table)) feet-pos)
+        w (-> base
+              (memory/remember-column [0 0] (get-in base [:world/chunks [0 0]]))
+              (assoc :player/inventory
+                     {0 {:item (recipe/item-id :stone_pickaxe) :count 1}
+                      1 {:item (recipe/item-id :cobblestone) :count 3}
+                      2 {:item (recipe/item-id :stick) :count 2}}))]
+    (is (= :craft (:intent/kind (build/held-first w portal plan/goals nil)))
+        "the second pickaxe is made before the portal build starts")))
+
 (deftest a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
   ;; sim race 38843552659 (issue #186, world R1/18): on a ravine's floor sixty under the landing,
   ;; the sky open and no hunt target in its band, the bot waited :no-log

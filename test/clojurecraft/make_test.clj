@@ -453,6 +453,23 @@
                  (zipmap (range 36) (repeat {:item (recipe/item-id :iron_ingot) :count 64})))]
     (is (= {:plan/wait :inventory-full} (make/take-table-along w)))))
 
+(deftest a-dropped-table-is-recovered-before-gathering-wood
+  (let [w (assoc (world-holding {} false)
+                 :world/entities
+                 {1 {:entity/type blocks/item-entity-type
+                     :entity/pos [5.5 64.0 5.5]
+                     :entity/item (recipe/item-id :crafting_table)}})]
+    (is (= {:intent/kind :collect-drops
+            :intent/item :crafting_table
+            :intent/target [5 64 5]}
+           (make/take-table w {:goal/act :gather})))
+    (is (= {:plan/wait :inventory-full}
+           (make/take-table
+            (assoc w :player/inventory
+                   (zipmap (range 36)
+                           (repeat {:item (recipe/item-id :iron_ingot) :count 64})))
+            {:goal/act :gather})))))
+
 (deftest a-toss-closes-the-crafting-window-before-clicking-inventory
   (let [w (assoc (world-holding {} true)
                  :window/open

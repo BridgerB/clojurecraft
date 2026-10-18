@@ -16,6 +16,7 @@
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.craft]
+            [clojurecraft.drops :as drops]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
@@ -411,6 +412,19 @@
             (window/tossable world v) {:intent/kind :toss}
             :else {:plan/wait :inventory-full}))))
 
+(defn take-table-drop
+  "Collect a still-nearby dropped crafting table before gathering wood for a replacement."
+  [world]
+  (when (zero? (get (counts world) :crafting_table 0))
+    (when-let [[_ e] (drops/nearest world :crafting_table (:player/pos world))]
+      (let [v (window/view world :inventory)]
+        (cond (window/free-slot world v)
+              {:intent/kind :collect-drops
+               :intent/item :crafting_table
+               :intent/target (mapv (comp long math/floor) (:entity/pos e))}
+              (window/tossable world v) {:intent/kind :toss}
+              :else {:plan/wait :inventory-full})))))
+
 (defn take-table
   "A dig of the bot's placed crafting table, to carry it on (take-table-along), when row goes out
    for something (fetch?); nil otherwise. A table
@@ -420,7 +434,7 @@
    there; with sticks and cobblestone in hand and no table, none could make the pickaxe the
    climb or the gravel tunnels wore out (issues #39 and #67)."
   [world row]
-  (when (fetch? row) (take-table-along world)))
+  (when (fetch? row) (or (take-table-along world) (take-table-drop world))))
 
 (defn make-room
   "A :toss of junk (window/tossable) before row goes out for something (fetch?) with every slot

@@ -141,8 +141,8 @@
   :goal/target? true
   :goal/until "portal"
   :goal/doc
-  "a nether portal cast from lava and water into holes cut in the rock beside a lava pool, a block placed only where the rock is missing, never mined, and lit with flint and steel (issue #124); a pickaxe is held, as for cast-one"
-  :goal/holds {:tag/pickaxes 1}
+  "a nether portal cast from lava and water into holes cut in the rock beside a lava pool, a block placed only where the rock is missing, never mined, and lit with flint and steel (issue #124); two pickaxes are held so one survives a broken tool when the table is already lost (issue #178)"
+  :goal/holds {:tag/pickaxes 2}
   :goal/plan :build
   :goal/build :portal
   :goal/done? :built?}

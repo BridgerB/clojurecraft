@@ -1,6 +1,6 @@
 ---
 title: Build plan
-description: How a build is data (issue #8) - ops with done-predicates read against the world, the first op not satisfied is worked; portal-plan, the portal cut into the rock beside any lava pool as a player casts it (issue #124); the site, the station, the blocks the cast asks for, and the hunt for lava when no site is at hand (issue #41).
+description: How a build is data (issue #8) - ops with done-predicates read against the world, the first op not satisfied is worked; portal-plan, the portal cut into the rock beside any lava pool as a player casts it (issue #124); the site, the station, the blocks the cast asks for, and the hunt for lava when no site is at hand (issue #41). The portal goal keeps a spare pickaxe in case its table is lost (issue #178).
 type: reference
 tags: [bot, plan, build, portal]
 aliases: [build.clj, portal-plan, cast-one-plan, build/holds?, satisfied?, op, :build/done, choose-site, station, refill, blocks-needed, lava-hunt, uncap, no-site]
@@ -53,6 +53,7 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn place-cells
   - src/clojurecraft/build.clj#defn wood-near?
   - test/clojurecraft/build_test.clj#a-build-fetches-its-kit-wood-only-from-the-surface
+  - test/clojurecraft/build_test.clj#a-portal-build-carries-a-spare-pickaxe
   - test/clojurecraft/build_test.clj#a-stand-within-reach-is-not-walked-to
   - test/clojurecraft/build_test.clj#the-cells-a-build-places-in-are-those-of-every-access
   - src/clojurecraft/build.clj#defn work-op
