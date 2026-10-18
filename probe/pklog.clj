@@ -54,6 +54,7 @@
               :boxed-at (count (:plan/boxed-at w2))
               :boxed-route (count (:plan/boxed-route w2))
               :blacklist (count (:plan/blacklist w2))
-              :feet (:player/pos w2)})))
+              :feet (:player/pos w2)})
+    w2))
 
 (defn -main [& paths] (doseq [p paths] (play p)) (shutdown-agents))
