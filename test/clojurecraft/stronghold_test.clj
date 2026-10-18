@@ -538,8 +538,9 @@
             (assoc-in seen [:world/chunks [0 0]] (world/column (assoc hill-blocks [4 83 8] 1)))]
         (is (nil? (stronghold/downhill roofed f)))
         (is (= :stairs-down (:intent/kind (plan/next-intent roofed room-row plan/goals))))))
-    (testing "the cell a walk failed at is not chosen again"
-      (is (nil? (stronghold/downhill (assoc seen :plan/blacklist #{[12 72 8]}) f))))))
+    (testing "the cell a walk failed at is not chosen again: the way turned"
+      (is (= [11 74 12]
+             (:intent/target (stronghold/downhill (assoc seen :plan/blacklist #{[12 72 8]}) f)))))))
 
 (deftest the-portal-room-is-reached-down-a-mountain-against-the-model
   ;; the landing on the hill's plateau 16 over the valley floor, the frame 24 under the floor
