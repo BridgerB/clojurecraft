@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T12:14:39.806Z",
+  "at" : "2026-10-18T12:15:49.929Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -13,9 +13,9 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 342,
-    "title" : "Bot stops at furnace: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "number" : 37,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "labels" : [ "bot-failure", "sim" ],
@@ -25,9 +25,14 @@
     "title" : "Bot stops at portal: timeout",
     "copilot" : true,
     "draft" : false,
-    "nudges" : 1,
+    "nudges" : 2,
     "pr" : 444,
-    "session" : false
+    "session" : true
+  }, {
+    "number" : 342,
+    "title" : "Bot stops at furnace: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
@@ -44,13 +49,14 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 178,
+    "move" : "wait",
+    "pr" : 444,
+    "why" : "session running"
+  }, {
     "issue" : 342,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 178,
-    "move" : "nudge",
-    "pr" : 444
   } ],
   "log" : [ {
     "issue" : 60,
