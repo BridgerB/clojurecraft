@@ -540,11 +540,13 @@
   "Where the newest walk that arrived ended (memory/last-done), ground the bot stood on, when it
    is farther than start-reach from the feet on the plane; nil otherwise. The way back to land
    from water with nothing dry in sight: batch stronghold-room-b run 2 had walked the lake's far
-   shore before its swim."
+   shore before its swim. Not one more than hop-rise over or under the feet: a walk on the
+   mountain over a cave is no way out of the cave."
   [world]
-  (let [[fx _ fz] (intent/feet world)
-        [x _ z :as c] (:intention/target (memory/last-done world :walk))]
-    (when (and c (> (max (abs (- x fx)) (abs (- z fz))) start-reach)) c)))
+  (let [[fx fy fz] (intent/feet world)
+        [x y z :as c] (:intention/target (memory/last-done world :walk))]
+    (when (and c (> (max (abs (- x fx)) (abs (- z fz))) start-reach) (<= (abs (- y fy)) hop-rise))
+      c)))
 
 (defn stairs-toward
   "A staircase down toward frame f from feet, to height to-y: the stairs' heading is the axis
@@ -576,8 +578,9 @@
    (swim's :swim-out :retreat); from a shore, a walk to a dry start (dry-start) that ends
    standing in that cell (a :retreat walk, intent/standing-walks: one ending near it was chosen
    again from the wet cell it ended in, twelve thousand times a model run); with none within
-   start-reach, a swim (:cross) to one farther (far-start), else back to the ground last walked
-   (walked-ground), never stairs from a block in a lake; more than deep
+   start-reach and the open sky over the feet (a lake's, not a cave's), a swim (:cross) to one
+   farther (far-start), else back to the ground last walked (walked-ground), never stairs from a
+   block in a lake; more than deep
    over the frame, or after a tunnel that got nowhere (tunnel-spent?), a staircase down toward
    it a leg of stair-leg at a time (stairs-toward), never under room-over over the frame; then
    the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?), when its
@@ -590,8 +593,10 @@
   (let [[_ fy _ :as feet] (intent/feet world)
         high? (> fy (+ y deep))
         start (when (and high? (not (:player/in-water? world))) (dry-start world f))
-        far (when (and high? (not (:player/in-water? world)) (nil? start))
-              (or (far-start world) (walked-ground world)))
+        far
+        (when
+          (and high? (not (:player/in-water? world)) (nil? start) (terrain/under-sky? world feet))
+          (or (far-start world) (walked-ground world)))
         stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
           (and start (not= start feet))
