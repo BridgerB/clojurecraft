@@ -299,6 +299,12 @@
    [:intent/search
     "the fortress search leg an exploring :tunnel-to works for (fortress/exploring): the executor keeps it as :fortress/search"
     "a :tunnel-to with no brick on record to go to"]
+   [:intent/hop?
+    "a :tunnel-to that walks over open ground toward its target where a route exists (fortress/hop-target) before it digs a step; the fortress goal sets it"
+    "a :tunnel-to to a brick or along a search leg"]
+   [:intent/hop-fails
+    "hops (walks over open ground) of this :tunnel-to that failed; after hop-tries of them it only digs"
+    ":tunnel-to, after a failed hop"]
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/tunnel-visited
     "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"

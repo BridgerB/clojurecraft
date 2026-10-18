@@ -449,6 +449,8 @@
 (s/def :intent/reach (s/and number? pos?))
 (s/def :intent/climb nat-int?)
 (s/def :intent/dry? boolean?)
+(s/def :intent/hop? boolean?)
+(s/def :intent/hop-fails nat-int?)
 (s/def :intent/search :fortress/search)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
@@ -891,6 +893,12 @@
          :visited :intent/tunnel-visited)
   :ret (s/nilable :intent/move))
 
+(s/fdef fortress/hop-target
+  :args
+  (s/cat :world (requires :world/chunks :player/pos)
+         :target ::block-pos)
+  :ret (s/nilable ::block-pos))
+
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
@@ -899,5 +907,5 @@
    `place/ashore `stone/redig-place `window/view `path/plan `path/classify `entity/hostiles
    `entity/gone? `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe?
    `stairs/down-lay `stone/retreat `build/safe-source? `build/scoop-blocked? `build/lit-entry
-   `fortress/next-move])
+   `fortress/next-move `fortress/hop-target])
 (s/def :stats/deaths pos-int?)
