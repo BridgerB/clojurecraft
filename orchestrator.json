@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T11:17:09.518Z",
+  "at" : "2026-10-18T11:23:37.698Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -11,7 +11,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 392,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at portal: no-site",
     "copilot" : true,
     "draft" : false,
@@ -35,9 +35,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 392,
-    "move" : "wait",
-    "pr" : 443,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 443
   }, {
     "issue" : 342,
     "move" : "leave",
@@ -1195,5 +1194,10 @@
     "move" : "ready",
     "pr" : 443,
     "at" : "2026-10-18T11:16:02.871Z"
+  }, {
+    "issue" : 392,
+    "move" : "merge",
+    "pr" : 443,
+    "at" : "2026-10-18T11:23:37.698Z"
   } ]
 }
