@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T05:34:07.392Z",
+  "at" : "2026-10-18T05:35:13.896Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -24,7 +24,7 @@
     "checks" : "red",
     "title" : "Bot stops at portal: boxed",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 431,
     "session" : false
@@ -68,7 +68,7 @@
     "why" : "hands-off label"
   }, {
     "issue" : 363,
-    "move" : "ready",
+    "move" : "gave-up",
     "pr" : 431
   }, {
     "issue" : 60,
@@ -1138,5 +1138,10 @@
     "move" : "ready",
     "pr" : 431,
     "at" : "2026-10-18T05:34:07.392Z"
+  }, {
+    "issue" : 363,
+    "move" : "gave-up",
+    "pr" : 431,
+    "at" : "2026-10-18T05:35:13.896Z"
   } ]
 }
