@@ -25,8 +25,7 @@
 (def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
 (def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
 (def return-max-nodes 120000)         ; expansions for a complete way back to trees when local routes and hunts fail
-(def tunnel-reach 12)                 ; blocks on the plane to a trunk no route reaches that a level tunnel is cut toward
-(def tunnel-rise 3)                   ; blocks the trunk's bottom may lie over or under the feet for that tunnel
+(def opening-drop 2)                  ; blocks under the feet a mouth may lie and still be the way out, not the way down
 
 (defn ground?
   "Can a drop come to rest on this block where a player stands beside it: solid, and neither a log
@@ -165,40 +164,21 @@
            (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)])
            :intent/for :trees})))))
 
-(declare water-toward?)
+(defn mouth-below?
+  "Is a walk to target, [x y z], a way down from feet: its cell more than opening-drop under the
+   feet's?"
+  [[_ fy _] [_ ty _]]
+  (< (+ ty opening-drop) fy))
 
-(defn trees-tunnel
-  "A standing trunk close by with no route to it: a :tunnel of level steps toward it along the
-   plane's longer axis, one short of the trunk, a floor laid under each step that lacks one
-   (stairs/lay) and a cell of rock dug when the tools can, the planner looking again when it ends
-   (the next heading is the other axis, or a route now reaches). Only a trunk within tunnel-reach
-   on the plane and tunnel-rise of the feet's height, where a staircase up or down is not the
-   way, and no open water on the way (water-toward?: crossing is for that), never from a cell
-   where a tunnel died :boxed. Sim worlds R3/45 and R2/16 (issues #87 and #108): the bot stood
-   on its own pillar eight blocks from the only trunk in reach, the hill with the tree on it
-   across two blocks of air; and on a ledge three blocks from a trunk at its own height, the
-   cliff between. No route reached either, and the open sky and the trunk at the eye said the
-   climb was done: one walked back down to the mouth of its shaft and climbed again, every
-   twenty seconds, the other waited :no-log."
-  [world trunks]
-  (let [[fx fy fz :as feet] (intent/feet world)
-        eye-y (physics/y-of (game/eye world))]
-    (when-not (contains? (:plan/boxed-at world #{}) feet)
-      (when-let [[tx _ tz] (first (filter
-                                   (fn [[tx ty tz :as trunk]]
-                                     (and (<= (abs (- ty fy)) tunnel-rise)
-                                          (< 2.0 (physics/horizontal-distance [fx 0 fz] [tx 0 tz]))
-                                          (<= (physics/horizontal-distance [fx 0 fz] [tx 0 tz])
-                                              tunnel-reach)
-                                          (not (water-toward? world feet trunk eye-y))))
-                                   trunks))]
-        (let [[dx dz] [(- tx fx) (- tz fz)]
-              along-x? (>= (abs dx) (abs dz))
-              gap (if along-x? (abs dx) (abs dz))]
-          {:intent/kind :tunnel
-           :intent/dir (if along-x? [(if (pos? dx) 1 -1) 0] [0 (if (pos? dz) 1 -1)])
-           :intent/length (max 1 (dec gap))
-           :intent/for :trees})))))
+(defn opening-up
+  "intent/opening, the walk up the air already dug, unless its mouth lies below the feet
+   (mouth-below?): that is the way down, and the staircase cut up from here goes on instead. Sim
+   world R2/16 (issue #87): the bot cut stairs up from its mouth at y 83 toward the trees on a
+   cliff to y 99, a ledge that is not out of the ground, and the opening walked it back down to
+   the mouth, where the climb began again, every twenty seconds until the plan waited :no-log."
+  [world]
+  (let [o (intent/opening world)]
+    (when (and o (not (mouth-below? (intent/feet world) (:intent/target o)))) o)))
 
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
@@ -233,9 +213,8 @@
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
-          (trees-tunnel world trunks)
           (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
-            (or (intent/opening world)
+            (or (opening-up world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
                  :intent/for :surface}))
