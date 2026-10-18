@@ -58,6 +58,19 @@ jobs:
           added=$(git diff --name-only --diff-filter=AM "$BASE_SHA" HEAD -- 'test/issues/*/*.edn.gz' || true)
           files=""
           red=0
+          # a pull request carries only its own issues' evidence, whole: Copilot sessions swept other
+          # issues' fetched snapshots into their commits (#398, #401 changed #342's) and one left a
+          # snapshot empty (#403)
+          for f in $(git diff --name-only --diff-filter=AMD "$BASE_SHA" HEAD -- 'test/issues/*/*' || true); do
+            d=$(echo "$f" | cut -d/ -f3)
+            if ! printf '%s\n%s\n' "$n" "$named" | grep -qx "$d"; then
+              echo "::error::$f belongs to issue $d, which this pull request does not fix: restore it (git checkout origin/main -- $f)"
+              red=1
+            elif [ -f "$f" ] && case "$f" in *.edn.gz) true;; *) false;; esac && ! gzip -t "$f" 2>/dev/null; then
+              echo "::error::$f is empty or not gzip: copy it again from cache/issues/$d/"
+              red=1
+            fi
+          done
           for m in $(printf '%s\n%s\n' "$n" "$named" | grep -E '^[0-9]+$' | sort -un); do
             found=$(printf '%s\n' "$added" | grep -E "^test/issues/$m/" || true)
             if [ -n "$found" ]; then
