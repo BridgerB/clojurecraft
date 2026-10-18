@@ -35,7 +35,7 @@ If a snapshot does not recur on `main`, it proves nothing; use the other. If non
 
 ## 2. Find the cause
 
-Copy the snapshots: `mkdir -p test/issues/<n> && cp cache/issues/<n>/*.edn.gz test/issues/<n>/` (two at most, AGENTS.md section 7).
+Copy the snapshots with the brief's command: new names, so a snapshot an earlier fix committed under the same name still counts as your evidence (two at most, AGENTS.md section 7).
 
 Form the cause from SCENE, SLICE, STORY and the code: where the bot was, what it held, which intent failed and why, and which function decided it. AGENTS.md section 9: find the choice that led there, not only the moment (9.2), both halves.
 
@@ -59,7 +59,7 @@ AGENTS.md section 10. The rules most often broken:
 - every test but the forest property;
 - `bb check`.
 
-It takes about five minutes. Run it in the foreground and read only its last lines: `VERIFY READY`, or `VERIFY NOT READY:` with what is left. Each step's full output is in `/tmp/verify-<step>.log` when you need more. Fix what it names and run it again, at most three times. Never run the suite, the judge or `bb check` one at a time to see the same thing.
+It takes about five minutes. Run it in the foreground and read only its last lines: `VERIFY READY`, or `VERIFY NOT READY:` with what is left. Each step's full output is in `/tmp/verify-<step>.log` when you need more. Fix what it names and run it again, at most three times. Never run the suite, the judge or `bb check` one at a time to see the same thing, and never `bb ci` (it runs the forest property: an hour). No `bb verify` task means your branch is behind main: `git merge origin/main` first.
 
 You may run code here (your session is on a runner), but never the forest property, a full sim race, `--from-landing`, a Minecraft server, a gym, a race or a world build.
 
