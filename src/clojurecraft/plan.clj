@@ -244,7 +244,10 @@
    a row fail the plan too, so a search whose places keep changing cannot run for hours. A
    staircase or a tunnel that died :boxed (boxing-kinds) records the cell it stood on in
    :plan/boxed-at, so the next descent or tunnel does not start there and a later stair will not
-   step back onto it."
+   step back onto it. Its visited cells join :plan/boxed-route: a retreat back along the failed
+   search is not new rock (issue #161, R1/29). A walk for a log that failed :no-path adds its
+   target to :plan/unreached, the places a choice of logs passes over together with the trees round them
+   (issue #75)."
   [world i]
   (let [unwalkable? (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))
         attempts (cond-> (:plan/attempts world 0) (not unwalkable?) inc)
@@ -255,7 +258,10 @@
         (cond-> (and (:intent/target i) (not (contains? placing-kinds (:intent/kind i))))
                 (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (cond-> (and (contains? boxing-kinds (:intent/kind i)) (= :boxed (:intent/reason i)))
-                (update :plan/boxed-at (fnil conj #{}) (intent/feet world)))
+                (-> (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+                    (update :plan/boxed-route (fnil into #{}) (:intent/visited i))))
+        (cond-> (and unwalkable? (= :log (:intent/for i)))
+                (update :plan/unreached (fnil conj #{}) (:intent/target i)))
         (cond-> (:intent/trunk i)
                 (update-in [:plan/trunk-failures (let [[x _ z] (:intent/trunk i)] [x z])]
                            (fnil inc 0)))
