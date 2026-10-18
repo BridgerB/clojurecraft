@@ -71,6 +71,9 @@
    [:intent/retreated?
     "a :place that has walked off to fresh rock once (place/fresh-rock) and fails :no-spot next"
     "on a :place after its walk to fresh rock"]
+   [:intent/niche
+    "the cell a :place chose to cut out of the wall for its block (place/niche): once empty it is the spot, even where a route could run through it (powder snow over it)"
+    "on a :place from the tick it starts cutting its niche"]
    [:player/air "breath left, 0-300 ticks: an estimate, down 1 under water, up 4 out"
     "after the first physics tick"]
    [:player/dead? "health reached zero; cleared by the server's respawn" "while dead"]
@@ -193,6 +196,9 @@
     "from the :go event"]
    [:plan/unwalkable "walks in a row that failed :no-path; max-unwalkable of them fail the plan"
     "from the :go event"]
+   [:plan/unreached
+    "targets log walks failed :no-path toward; a log within unreached-radius of one is not chosen: the trees round a place no route reaches are as far from the feet"
+    "after a walk fails :no-path"]
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]
@@ -210,6 +216,9 @@
     "after a :boxed staircase or tunnel"]
    [:plan/boxed-last
     "ms the last cell was added to :plan/boxed-at (intent/box): the pockets are forgotten when it is old (plan/forget-boxed, issue #135)"
+    "after a :boxed staircase or tunnel"]
+   [:plan/boxed-route
+    "feet cells visited by descents or tunnels that ended :boxed: a retreat seeks ground outside those failed searches"
     "after a :boxed staircase or tunnel"]
    [:plan/surfaced
     "[feet ms] where and when the last climb out to the surface came out: a spare's climb is not cut again from below near it for a while"
