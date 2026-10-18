@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:10:47.673Z",
+  "at" : "2026-10-18T03:11:54.408Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -146,9 +146,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 162,
-    "move" : "wait",
-    "pr" : 421,
-    "why" : "nudged recently"
+    "move" : "nudge",
+    "pr" : 421
   }, {
     "issue" : 44,
     "move" : "leave",
@@ -1156,5 +1155,10 @@
     "move" : "nudge",
     "pr" : 421,
     "at" : "2026-10-18T03:06:16.453Z"
+  }, {
+    "issue" : 162,
+    "move" : "nudge",
+    "pr" : 421,
+    "at" : "2026-10-18T03:11:54.408Z"
   } ]
 }
