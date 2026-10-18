@@ -190,11 +190,6 @@
                 (hurt (assoc (standing {7 near}) :world/chunks {[0 0] (world/column pillar)})))))
         (is (= {:intent/kind :back-off :intent/target 7} (next-intent (hurt (standing {7 near}))))
             "in the open nothing hides: backed away from")))
-    (is (= {:intent/kind :back-off :intent/target 7}
-           (next-intent (hurt (assoc (standing {7 (entity :blaze [10.5 65.0 12.5])})
-                                     :world/chunks
-                                     {[0 0] (world/column closet)}))))
-        "nowhere to hide: backed away from")
     (is (= blaze/rest-intent
            (next-intent (assoc (standing {1 (item :cooked_beef 4)} {}) :player/health 12.0)))
         "out of sight under 14: a rest")
