@@ -212,7 +212,9 @@
   ;; face the target every tick, walking on toward it while it is out of reach (pressing?);
   ;; attack when the deadline has passed, the eyes face it (the look went out a tick before, with
   ;; the movement packet) and it is in reach; failed :unreachable when no attack has gone out for
-  ;; approach-timeout-ms (a fight that holds its ground waits as long as it is not broken off)
+  ;; approach-timeout-ms, hold-timeout-ms for a fight that holds its ground: gym batch
+  ;; pearls-warped-b (plan run 39135767198) run 3 held a fight twenty minutes on an enderman two
+  ;; blocks off on the plane and fourteen below, never in reach
   [world {:intent/keys [target next-swing swings hold? since] :or {next-swing 0 swings 0}} e]
   (let [now (:time/now world)
         eye (game/eye world)
@@ -225,10 +227,9 @@
     (cond (> (horizontal world e) (inc approach-range))
           (intent/assoc-intent world :intent/stage :approach :intent/since now)
           (>= swings max-swings) (intent/fail world :ghost)
-          (and (not hold?)
-               since
+          (and since
                (> (- now (if (pos? next-swing) (- next-swing swing-every) since))
-                  approach-timeout-ms))
+                  (if hold? hold-timeout-ms approach-timeout-ms)))
           (intent/fail world :unreachable)
           (and (>= now next-swing)
                (<= (physics/distance eye (aim e)) attack-reach)

@@ -261,8 +261,9 @@
     (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
            (plan/next-intent (burrowed [8.5 61.0 8.5] {7 coming}) row plan/goals))
         "in the burrow, the one coming is fought where the bot stands")
-    (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
-           (plan/next-intent (burrowed [8.5 61.0 8.5] {7 far}) row plan/goals))
+    (is (=
+         {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+         (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [-8.5 64.0 8.5])}) row plan/goals))
         "none coming: out to the mouth to look round")
     (is (=
          {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
@@ -310,6 +311,27 @@
                                            row
                                            plan/goals)))
         "hurt, its food under 18 (where health stops coming back): a meal")))
+
+(deftest an-angry-one-given-up-on-keeps-the-bot-in-its-burrow
+  ;; gym batch pearls-warped-b (plan run 39135767198): a held fight timed out :unreachable, its
+  ;; enderman was blacklisted while still angry, and two bots in three walked out to the mouth
+  ;; and were slain; the third's run 2 went from the end to the mouth and back for two minutes
+  ;; while a calm one stood beside the mouth
+  (let [angry (assoc (enderman [3.5 64.0 20.5]) :entity/creepy? true)]
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})
+                             row
+                             plan/goals))
+        "in the burrow: it stays while the one given up on is angry")
+    (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+           (plan/next-intent (assoc (burrowed [3.5 64.0 8.5] {7 angry}) :plan/blacklist #{7})
+                             row
+                             plan/goals))
+        "at the mouth: back in")
+    (is (=
+         {:intent/kind :lookout :intent/for :pearls}
+         (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])}) row plan/goals))
+        "a calm one three blocks from the mouth: it waits for it to wander off")))
 
 (deftest a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
   (let [kill {:intent/kind :fight

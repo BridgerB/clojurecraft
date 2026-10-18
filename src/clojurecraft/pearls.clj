@@ -85,6 +85,27 @@
                           (<= (physics/distance pos (:entity/pos e)) radius))))
            (:world/entities world)))))
 
+(defn coming
+  "{eid entity} of the endermen alive within hunt-radius of the feet that are coming
+   (entity/creepy?), blacklisted or not: one a held fight gave up on (:unreachable, then
+   blacklisted) is still angry and still hits the bot that steps out to it. Gym batch
+   pearls-warped-b (plan run 39135767198): two landings in three left the burrow after a held
+   fight timed out and were slain by that enderman within seconds."
+  [world]
+  (into {} (filter (comp entity/creepy? val)) (endermen (dissoc world :plan/blacklist))))
+
+(defn crowded?
+  "Does an enderman stand within strike-range on the plane of the burrow's mouth (:pearls/mouth)?
+   A walk out to it would end beside one too near to stare at (stare-from), and the hunt would
+   walk back in: batch pearls-warped-b's run 2 went from the end to the mouth and back for two
+   minutes while one stood there."
+  [world]
+  (let [m (some-> (:pearls/mouth world)
+                  physics/centre)]
+    (boolean (and m
+                  (some #(<= (physics/horizontal-distance m (:entity/pos %)) strike-range)
+                        (vals (endermen world)))))))
+
 (defn head
   "The point an enderman at pos is stared at: its eye, as the server's stare test measures it
    (mob/head, the model's)."
@@ -375,8 +396,10 @@
    health comes back only from there), and in the burrow a :lookout where it is, never out to
    the mouth (the same batch's run 3 went from the burrow's end to its mouth and back, hurt,
    for twelve minutes); no burrow near and one to provoke, coming or at hand, one dug there
-   (:burrow, a pickaxe held) away from it, so the stare goes from its mouth; in the burrow with
-   none coming, out to its mouth to look round; one not
+   (:burrow, a pickaxe held) away from it, so the stare goes from its mouth; in the burrow, one
+   provokable from where it stands provoked from there, and with one angry (coming, even
+   blacklisted) or one at the mouth (crowded?), a :lookout where it is; in the burrow with none
+   coming, out to its mouth to look round (out of the burrow with one angry, back in); one not
    yet coming and provokable? from here within stare-range (quarry), provoked (never one already coming: a provoke of it
    ends at once, and batch pearls-263b's bot, its pickaxe lost, provoked one 26 times in a row);
    one coming and no burrow to meet it in, fought; else a walk to the nearest within seek-radius a
@@ -396,9 +419,10 @@
         meal (when hurt? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
+        danger? (seq (coming world))
         [qid q] (quarry world)]
     (cond
-      (and home (not in?) (or ce near? hurt?))
+      (and home (not in?) (or ce near? hurt? danger?))
       {:intent/kind :walk :intent/target home :intent/for :shelter}
       (and in? (or ce near?))
       {:intent/kind :fight :intent/target (if ce ceid eid) :intent/hold? true :intent/for :pearls}
@@ -409,6 +433,8 @@
       (and hurt? in?) {:intent/kind :lookout :intent/for :pearls}
       (and (nil? home) (pickaxe? world) (or ce q near?))
       {:intent/kind :burrow :intent/dir (away world (or q ce e)) :intent/for :pearls}
+      (and in? qid) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
+      (and in? (or danger? (crowded? world))) {:intent/kind :lookout :intent/for :pearls}
       (and in? (:pearls/mouth world))
       {:intent/kind :walk :intent/target (:pearls/mouth world) :intent/for :shelter}
       qid {:intent/kind :provoke :intent/target qid :intent/for :pearls}
