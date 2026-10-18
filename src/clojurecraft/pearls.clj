@@ -425,7 +425,8 @@
    the plane alone: batch pearls-warped-b's run 3 held a fight twenty minutes on one two blocks
    off on the plane and fourteen below, and batch pearls-warped-c's run 1 stood over one
    fourteen below for forty); with no burrow, one at hand backed away
-   from under 10 health, fought when it is coming or no pickaxe is held (batch
+   from under 10 health, fought when it is coming or no pickaxe is held (a calm one given up on,
+   a ghost, is left) (batch
    pearls-warped-a, plan run 39131478416: two landings in three walked up to a calm one, struck
    it in the open and died); hurt, a meal when the food is under hunger/heal-level (blaze/meal:
    health comes back only from there), and in the burrow a :lookout where it is, never out to
@@ -465,7 +466,9 @@
       (and in? (or ce near?))
       {:intent/kind :fight :intent/target (if ce ceid eid) :intent/hold? true :intent/for :pearls}
       (and near? hurt?) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
-      (and near? (or (entity/creepy? e) (not (pickaxe? world))))
+      (and near?
+           (or (entity/creepy? e)
+               (and (not (pickaxe? world)) (not (contains? (:plan/blacklist world #{}) eid)))))
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
       (and hurt? in?) {:intent/kind :lookout :intent/for :pearls}
