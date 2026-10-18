@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T07:37:49.881Z",
+  "at" : "2026-10-18T07:38:55.716Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,10 +18,16 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 228,
-    "title" : "Bot stops at portal: no-footing",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 228,
+    "checks" : "pending",
+    "title" : "Bot stops at portal: no-footing",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 435,
+    "session" : true
   }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
@@ -42,7 +48,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 228,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 435,
+    "why" : "session running"
   }, {
     "issue" : 161,
     "move" : "leave",
