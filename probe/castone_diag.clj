@@ -49,49 +49,70 @@
           :class (path/classify world c)
           :standable? (path/standable? world c)})))
 
+(defn child-of
+  "c as a value to print: a map shortened, anything else as it is."
+  [c]
+  (if (map? c) (brief c) c))
+
 (defn build-questions
   "What the running :build intent i asks of world: its open ops, the op worked and each way to a
-   stand for it."
+   stand for it. Every answer is asked on its own, so one that throws names itself."
   [world i]
   (let [{:intent/keys [build origin facing access]} i
         plan (build/plan-for build origin facing (or access 0))
         open (remove #(build/satisfied? world %) plan)
         nxt (build/next-op world plan)
         {:build/keys [stand pos]} nxt
-        feet (intent/feet world)]
+        feet (intent/feet world)
+        placed (build/place-cells build origin facing)
+        kept (build/kept origin facing)
+        ask (fn [label f] (say label (safely f)))]
     (say
      "PLAN"
      {:ops (count plan) :open (count open) :feet feet :origin origin :facing facing :access access})
-    (doseq [op (take 10 open)]
-      (say "OPEN"
-           (assoc (select-keys op [:build/op :build/step :build/pos :build/stand :build/item])
-                  :block
-                  (named (terrain/block-at world (:build/pos op))))))
+    (doseq [op (take 14 open)]
+      (ask "OPEN"
+           #(assoc (select-keys op [:build/op :build/step :build/pos :build/stand :build/item])
+                   :block
+                   (named (some->> (:build/pos op)
+                                   (terrain/block-at world))))))
     (say "NEXT" (select-keys nxt [:build/op :build/step :build/pos :build/stand]))
-    (when stand
-      (say "STAND"
-           {:standable? (safely #(path/standable? world stand))
-            :routable? (safely #(intent/routable?
-                                 world
-                                 {:intent/kind :walk :intent/target stand :intent/for :build}))
-            :stance-block (safely #(build/stance-block world stand build origin facing))
-            :clear-stand (safely #(brief (build/clear-stand world stand build origin facing)))
-            :round-corner (safely #(build/round-corner world stand origin facing))
-            :floor-gap (safely #(build/floor-gap world stand))
-            :bridge (safely #(brief (build/bridge world stand)))
-            :toward-stand (safely #(let [c (build/toward-stand world stand build origin facing)]
-                                     (if (map? c) (brief c) c)))
-            :stand-walk (safely #(brief (build/stand-walk world stand)))}))
     (when pos
-      (say "POS"
-           {:reachable-stand (safely #(build/reachable-stand world stand pos))
-            :room-stand (safely #(build/room-stand world i pos))
-            :nearest-stand-cell (safely #(build/nearest-stand-cell world i pos))
-            :way-back (safely #(let [c (build/way-back world i)] (if (map? c) (brief c) c)))
-            :within-reach? (safely #(build/within-reach? world pos))}))
-    (say "APPROACH"
-         (safely #(let [c (build/approach-stand world i nxt)] (if (map? c) (brief c) c))))
-    (say "OPCHILD" (safely #(let [c (build/op-child world i nxt)] (if (map? c) (brief c) c))))))
+      (ask "NEXTCELL"
+           #(hash-map :placed? (contains? placed pos)
+                      :kept? (contains? kept pos)
+                      :block (named (terrain/block-at world pos)))))
+    (when stand
+      (ask "STAND"
+           #(hash-map
+             :standable? (path/standable? world stand)
+             :routable?
+             (intent/routable? world {:intent/kind :walk :intent/target stand :intent/for :build})
+             :stance-block (build/stance-block world stand build origin facing)
+             :clear-stand (child-of (build/clear-stand world stand build origin facing))
+             :round-corner (build/round-corner world stand origin facing)
+             :floor-gap (build/floor-gap world stand)
+             :bridge (child-of (build/bridge world stand))
+             :toward-stand (child-of (build/toward-stand world stand build origin facing))
+             :stand-walk (child-of (build/stand-walk world stand)))))
+    (when pos
+      (ask "POS"
+           #(hash-map :reachable-stand (build/reachable-stand world stand pos)
+                      :room-stand (build/room-stand world i pos)
+                      :nearest-stand-cell (build/nearest-stand-cell world i pos)
+                      :way-back (child-of (build/way-back world i))
+                      :within-reach? (build/within-reach? world pos))))
+    (ask "APPROACH" #(child-of (build/approach-stand world i nxt)))
+    (ask "OPCHILD" #(child-of (build/op-child world i nxt)))
+    (ask "STATION" #(select-keys (build/station world origin facing access) [:stand :h]))
+    (ask "REFILL" #(child-of (build/refill world i)))
+    (doseq [op (take 40 (filter #(#{:landing :room :floor} (:build/step %)) plan))]
+      (ask "OPS"
+           #(vector (:build/step op)
+                    (:build/op op)
+                    (:build/pos op)
+                    (named (terrain/block-at world (:build/pos op)))
+                    (build/satisfied? world op))))))
 
 (defn diagnose!
   "Play the snapshot at path to where its plan ends and ask the questions of the world before."
@@ -113,7 +134,7 @@
     (say "INTENT" (brief i))
     (say "LAST" (brief (:plan/last world)))
     (say "RETREAT" (safely #(brief (stone/retreat world))))
-    (when (= :build (:intent/kind i)) (safely #(build-questions world i)))
+    (when (= :build (:intent/kind i)) (build-questions world i))
     (cells-line world sim cells)
     (doseq [line (scene/slice world)] (println "SLICE" line))))
 

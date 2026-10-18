@@ -69,30 +69,40 @@
                     :stairs (stone/stairs w {:goal/depth build/lava-depth})})))
 
 (defn trace!
-  "Play the snapshot at path on from its moment with the tracer and print the road."
-  [path]
-  (let [snap (capture/read-world path)
-        w (simrace/world-for! snap)
-        {:keys [world] :as m} (simrace/moment-of snap w)
-        stage (simrace/stage-of snap)
-        t0 (:time/now world)
-        lines (atom [])]
-    (println "TRACE" path (pr-str (:snapshot/signature snap)) "window" (simrace/window-of snap))
-    (lava-line world)
-    (let [{world' :world crashed :crashed}
-          (sim/play-from (tracer t0 lines)
-                         m
-                         #(or (plan/done? %) (plan/failed? %) (contains? (:plan/reached %) stage))
-                         (simrace/window-of snap)
-                         (simrace/go-of w (:snapshot/until snap))
-                         nil)
-          all @lines]
-      (when crashed (println "CRASHED" crashed))
-      (doseq [l (take head-lines all)] (println l))
-      (when (> (count all) (+ head-lines tail-lines)) (println "... " (count all) "lines"))
-      (doseq [l (take-last tail-lines (drop head-lines all))] (println l))
-      (lava-line world')
-      (doseq [line (scene/slice world')] (println "SLICE end" line))
-      (doseq [line (take-last 40 (simrace/story world' t0))] (println "STORY" (pr-str line))))))
+  "Play the snapshot at path on from its moment with the tracer and print the road; with
+   :unboxed? the moment's pockets (:plan/boxed-at) forgotten first, to ask whether they are what
+   keeps the bot where it is."
+  ([path] (trace! path {}))
+  ([path {:keys [unboxed?]}]
+   (let [snap (capture/read-world path)
+         w (simrace/world-for! snap)
+         {:keys [world] :as m} (cond-> (simrace/moment-of snap w)
+                                 unboxed? (update :world dissoc :plan/boxed-at))
+         stage (simrace/stage-of snap)
+         t0 (:time/now world)
+         lines (atom [])]
+     (println "TRACE" path (pr-str (:snapshot/signature snap)) "window" (simrace/window-of snap))
+     (lava-line world)
+     (let [{world' :world crashed :crashed}
+           (sim/play-from (tracer t0 lines)
+                          m
+                          #(or (plan/done? %) (plan/failed? %) (contains? (:plan/reached %) stage))
+                          (simrace/window-of snap)
+                          (simrace/go-of w (:snapshot/until snap))
+                          nil)
+           all @lines]
+       (when crashed (println "CRASHED" crashed))
+       (doseq [l (take head-lines all)] (println l))
+       (when (> (count all) (+ head-lines tail-lines)) (println "... " (count all) "lines"))
+       (doseq [l (take-last tail-lines (drop head-lines all))] (println l))
+       (lava-line world')
+       (doseq [line (scene/slice world')] (println "SLICE end" line))
+       (doseq [line (take-last 40 (simrace/story world' t0))] (println "STORY" (pr-str line)))))))
 
 (defn -main "Trace each path given." [& paths] (doseq [p paths] (trace! p)) (shutdown-agents))
+
+(defn -main-unboxed
+  "Trace each path given with the moment's pockets forgotten."
+  [& paths]
+  (doseq [p paths] (trace! p {:unboxed? true}))
+  (shutdown-agents))
