@@ -149,9 +149,18 @@
                            (zero? (mod k 1)))
                   (let [row (first (filter #(= :mine-stone (:goal/id %)) plan/goals))
                         cands (take 12 (stone/exposed-of-states world (stone/states-of-row row)))]
-                    (println "  SPENT" (stone/spent? world)
-                             "boxed-count" (count (:plan/boxed-at world))
-                             "retreat" (pr-str (stone/retreat world (:plan/boxed-at world)))
+                    (println "  SPENT"
+                             (stone/spent? world)
+                             "boxed-count"
+                             (count (:plan/boxed-at world))
+                             "retreat"
+                             (pr-str (stone/retreat world (:plan/boxed-at world)))
+                             "home"
+                             (pr-str (:plan/go-at world))
+                             (pr-str (stone/toward-home world))
+                             "deeper" (pr-str (stone/deeper world))
+                             "tunnel" (pr-str (stone/tunnel-heading world))
+                             "mine-next" (pr-str (stone/mine-next world row))
                              "over" (pr-str (stone/over-stone world row))
                              "stairs" (pr-str (stone/stairs world row)))
                     (println "  CANDS"
