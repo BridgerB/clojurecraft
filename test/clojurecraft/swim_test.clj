@@ -431,7 +431,7 @@
   ;; water) and was :no-escape three times in six minutes. A notch under the sky is never a bank;
   ;; a block laid into the water against the wall is one
   (let [sea (into {}
-                  (for [x (range 3 13) z (range 16) y (range 56 64)] [[x y z] blocks/water-base]))
+                  (for [x (range 3 16) z (range 16) y (range 56 64)] [[x y z] blocks/water-base]))
         cliff
         (into
          {}
