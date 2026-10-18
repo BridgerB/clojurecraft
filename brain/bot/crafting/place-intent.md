@@ -5,7 +5,7 @@ type: reference
 tags: [bot, crafting, intents, placement]
 aliases: [:place, place.clj, spot, place a crafting table, rejected placement, no-spot]
 status: verified
-lastUpdated: 2026-10-17
+lastUpdated: 2026-10-15
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/place.clj#defmethod intent/run :place
@@ -14,7 +14,10 @@ sourceRefs:
   - src/clojurecraft/place.clj#defn spot
   - src/clojurecraft/place.clj#defn passage?
   - src/clojurecraft/place.clj#defn niche
-  - src/clojurecraft/place.clj#defn walled-at?
+  - src/clojurecraft/place.clj#defn dug-spot
+  - src/clojurecraft/place.clj#defn powder-snow-at?
+  - test/clojurecraft/place_test.clj#a-niche-is-cut-where-powder-snow-lies-over-it-and-is-the-spot-once-dug
+  - test/clojurecraft/place_test.clj#powder-snow-beside-the-feet-is-dug-for-the-niche
   - src/clojurecraft/place.clj#defn dig-niche
   - src/clojurecraft/place.clj#defn fresh-rock
   - src/clojurecraft/place.clj#defn walk-off
@@ -29,7 +32,6 @@ sourceRefs:
   - src/clojurecraft/place.clj#With a container open, the swap waits a tick for it to close
   - test/clojurecraft/place_test.clj#a-swap-into-the-hand-closes-an-open-furnace-first
   - test/clojurecraft/place_test.clj#no-niche-where-the-tools-cannot-drop
-  - test/clojurecraft/place_test.clj#a-niche-is-cut-in-powder-snow
   - test/clojurecraft/place_test.clj#no-niche-under-gravel
   - test/clojurecraft/place_test.clj#a-niche-beside-the-head-when-the-side-walls-border-water
   - test/clojurecraft/place_test.clj#a-block-is-never-placed-on-a-table
@@ -81,7 +83,7 @@ related:
 - **Never into a flower.** The server places only into a block its replaceable tag lists (air, grass, ferns, a dead bush, vines); a flower bed such as wildflowers stays and the placement is refused with a `block-update` of the flower. Race 38477665442 bot Clj_r23's nearest cell held wildflowers and its table was refused three times, `:rejected` (`a-spot-is-never-a-flower`, `a-table-is-never-placed-into-a-flower`).
 - **Never on a table.** A right-click on a crafting table or a furnace opens it instead of placing against it, so `spot` never takes one as support: gym batch iron-a5 run 4's only spot was on its table, and the gravel it meant to dig again for flint was never placed (`:rejected` three times, `a-block-is-never-placed-on-a-table`).
 - **A stowed pickaxe cuts a niche.** `niche` asks `place/droppable?`: a tool in the hotbar (`intent/choose-tool`) or one stowed in the main inventory (`intent/stowed-tool`), which the `:niche` stage puts in hand first by a child `:equip` before the child `:dig` (`dig-niche` finds the niche again once the tool is in the hotbar). With the hotbar full of what mining picked up, equipping the furnace swaps the pickaxe out of the hand into the main inventory, and a niche asked of the hotbar alone was refused everywhere: sim race 38477665389 world R1/43 (issue #94, 11 runs) held two stone pickaxes and the furnace at the end of its iron tunnel at y 16, the table behind it, `:no-spot` three times (`a-furnace-is-placed-in-a-niche-cut-with-the-stowed-pickaxe`).
-- **Powder snow walls a niche.** Powder snow has no collision for a player (`blocks/passable-types`) and is not a block a placement replaces, so a bot standing in a powder-snow cave has no `spot` and, with powder snow over or beside every rock wall, no niche that is solid on every side. `niche` takes a cell walled by `walled-at?` (solid or powder snow) with solid under it and walled over it, digs the powder snow (instant, any tool) and the furnace goes where it was. Issue #68's real snapshots (bots Clj_r03 and Clj_r10) failed `:no-spot` three times that way (`a-niche-is-cut-in-powder-snow`).
+- **Powder snow is a niche, not a spot.** No block is placed into powder snow, and it is not solid, so a pocket whose walls are powder snow, or stone under powder snow, had no spot and no niche. `niche` takes a powder-snow cell (the hand breaks it) or stone with powder snow over it (`powder-snow-at?`), and the `:niche` stage keeps the cell it cut in `:intent/niche`; once that cell is air `dug-spot` returns it ahead of `spot`, which would refuse it as a passage (the feet could stand in it, there being no stone over it). Race 38998997695 bot Clj_r12 (issue #94, snapshot real-2-s1) smelted atop a powder-snow field, fell through to a pocket at y 98 and failed the table :no-spot three times; race 39031393203 (real-2-s2) the same at y 89.
 - **Ashore first.** A spot is sought round the feet, and afloat at a pond's edge every cell round them is water and the bank above the impulse's reach, so the place fails `:no-spot` the tick it starts, three times in half a second, before the trap can preempt it. Sim race 38515210080 world R4/41 (issue #95, 15 runs; four real bots of race 38515209959): the bucket filled, the bot was afloat in the column its source had left, two under the bank, and the gravel to dig again for flint found no spot. `place/ashore` wraps the `:place` and `:redig` acts: with `:player/in-water?` the act is a `:swim-out` for `:retreat` first (done on dry land, [[water-escape]]), and the place is asked for again from the bank (`a-redig-afloat-at-a-ponds-edge-gets-ashore-before-it-places`).- **Never twice into a body.** The game refuses a block into any player's box, its own included, and answers with the cell still air. Race 38515209959 runner 9 bot Clj_r17 (issue #106): bot Clj_r24 had landed at the same cell and walked through the furnace's spot collecting the same drops, and the same spot was sent three times in two seconds. A cell answered empty is now given up for another (`give-up`, `:intent/refused`, `a-cell-refused-with-nothing-in-it-is-given-up-for-another`). The same race's other three were the flower (bots Clj_r25 and Clj_r12 on a red tulip, fixed above) and the niche placed into before the slow server's break (bot Clj_r02, fixed above). The issue's snapshots hold the tick after the child place had already failed, so `stone/afloat-no-spot?` lets the `:redig` itself take the retreat in the failed child's place and start the place again ashore (`a-redig-whose-place-found-no-spot-afloat-gets-ashore-and-places`).
 - The local world is never written by the intent; only the server's `block-update` makes the table appear, and then memory records it (`memory/watched?` includes tables and furnaces, `memory/placed-kinds`), and `make/near` finds either within 24 blocks.
 - A swap click's answer changes slot state ids exactly like a craft click; the intent waits for it.

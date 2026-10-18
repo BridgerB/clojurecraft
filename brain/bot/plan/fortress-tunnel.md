@@ -32,6 +32,8 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn work-op
   - src/clojurecraft/plan.clj#defn elsewhere?
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-cell-beside-lava
+  - test/clojurecraft/fortress_test.clj#no-tunnel-step-drops-a-fluid-bearing-bed
+  - test/clojurecraft/fortress_test.clj#a-tunnel-drops-an-unsafe-in-flight-step
   - test/clojurecraft/fortress_test.clj#a-tunnel-replaces-a-solid-floor-the-route-cannot-walk
   - test/clojurecraft/fortress_test.clj#no-step-opens-a-spawner
   - src/clojurecraft/fortress.clj#defn arrived?
@@ -64,7 +66,11 @@ Issue #296 exhausted the last pickaxe and retried the same tunnel until three `:
 
 Solid does not mean walkable: issue #284's two real snapshots chose soul-sand floors, which the route classifies as awkward, and failed the entry walk `:no-path`. Each step first digs a floor unless `[:walk-floor floor]` (`path/floor?`) already holds, then places cobblestone before entering. The dig's guard also holds after placement, so the repair cannot undo itself. A repair is safe only with replacement support, no protected block, and no fluid exposed by the dig. An in-flight step re-reads these ops too: its failed entry walk is dropped when the floor repair becomes the next op; an unsafe repair drops the step instead, choosing again from the current world.
 
+Issue #339's R1/5 and R2/23 snapshots opened gravel beds below lava, then repeatedly cleared the gravel falling into the headroom until lava reached the bot and no escape footing remained. `safe?` also checks `intent/fluid-over-falling?` and `intent/bed-over-fluid?` for every opened cell: a fluid-bearing roof or neighbouring bed must stay sealed. Before each body-cell dig and entry walk, as before a floor repair, the tunnel rechecks safety and drops an unsafe step and its child with controls stopped, so an in-flight step replans instead of finishing a stale dig.
+
 Issue #286 exposed two false dead ends: R3/10 had a safe retreat behind the feet that `moves` omitted, and the real portal at [256 97 464] was passable but rejected. Merely adding those moves paced between the portal's two cells. `next-move` prefers cells not yet left by this tunnel (`:intent/tunnel-visited`). Before retreating it can floor a level turn onto adjoining ground: the air floor must have immediate placement support and another solid horizontal neighbour besides the floor under the feet, and `stairs/over-fluid?` must find no fluid below it. The step must satisfy the same lava and optional water rules with that floor filled. Controls stop when the step is chosen, and its ordinary floor op must be confirmed before the walk begins; this is a short corner onto ground, not permission to enter an air floor or extend a causeway over lava.
+
+The later R4/12 and R4/4 reproductions of #286 were a different dead end: the [[server-model]] placed the arrival on a single gravel block suspended over lava, where no portal frame could fit. The model now requires the frame's footprint before choosing a natural arrival. The tunnel still refuses those unsupported steps; its lava rules are not relaxed to escape an impossible arrival.
 
 ## The planner across dimensions
 A row with `:goal/dimension` is chosen only there (`plan/here?`). When no row can be chosen here but one is undone elsewhere (`elsewhere?`), the plan waits `:other-dimension` instead of ending, so `--until fortress` in the overworld does not report done, and a run toward `[:nether :fortress]` works the portal, then the fortress.
