@@ -101,8 +101,9 @@
              (at (assoc up [8 70 6] cobble [8 71 6] cobble) [8.5 70.0 5.5] crystal))
           "the wall up, the strike")
       (is (= {:intent/kind :dig-down} (at up [8.5 70.0 5.5] {})) "the crystal gone, the way down")
-      (is (nil? (at (merge s (pillar [8 5] 64 64)) [8.5 65.0 5.5] {}))
-          "one block left under the feet: down"))
+      (is (= {:intent/kind :dig-down} (at (merge s (pillar [8 5] 64 64)) [8.5 65.0 5.5] {}))
+          "one block left under the feet: that one too")
+      (is (nil? (at s [8.5 64.0 5.5] {})) "on the ground: down"))
     (testing "on a wide spike's top with the crystal gone, back to the pillar's top"
       (let [wide (merge (spike [8 8] 4 64 6) (pillar [8 3] 64 69))]
         (is (= {:intent/kind :walk :intent/target [8 70 3] :intent/for :build}
