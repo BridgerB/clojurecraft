@@ -208,6 +208,9 @@
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
     "after a :boxed staircase or tunnel"]
+   [:plan/boxed-route
+    "feet cells visited by descents or tunnels that ended :boxed: a retreat seeks ground outside those failed searches"
+    "after a :boxed staircase or tunnel"]
    [:plan/surfaced
     "[feet ms] where and when the last climb out to the surface came out: a spare's climb is not cut again from below near it for a while"
     "after a climb out comes out"]

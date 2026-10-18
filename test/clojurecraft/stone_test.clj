@@ -248,6 +248,32 @@
     (is (nil? (stone/retreat (assoc boxed :plan/boxed-at (set (for [x (range 5 10)] [x 48 5])))))
         "a corridor whose every cell is boxed is not retried")))
 
+(deftest a-long-retreat-does-not-end-on-boxed-ground
+  (let [w (assoc (standing 64)
+                 :world/chunks {[0 0] (world/column {}) [1 0] (world/column {})}
+                 :plan/boxed-at (set (for [x (range 32) z (range 16)] [x 64 z])))
+        fresh [20 64 5]]
+    (is (nil? (stone/retreat w)) "distance alone does not make exhausted ground new")
+    (is (= fresh (:intent/target (stone/retreat (update w :plan/boxed-at disj fresh))))
+        "the search crosses boxed ground to reach an unboxed destination")))
+
+(deftest a-boxed-search-does-not-retreat-to-its-start
+  (let [w (assoc (standing 64)
+                 :plan/boxed-route #{[19 64 5]}
+                 :plan/boxed-at (disj (set (for [x (range 32) z (range 16)] [x 64 z])) [20 64 5])
+                 :world/chunks {[0 0] (world/column {}) [1 0] (world/column {})})]
+    (doseq [kind [:stairs-down :tunnel]]
+      (let [i {:intent/kind kind
+               :intent/id 7
+               :intent/reason :boxed
+               :intent/visited #{[20 64 5] [6 63 5]}}
+            died (plan/fail-intent w i)]
+        (is (= #{[19 64 5] [20 64 5] [6 63 5]} (:plan/boxed-route died)))
+        (is (nil? (stone/retreat died)) "the failed route is no new destination")
+        (is (= (:plan/boxed-route w)
+               (:plan/boxed-route (plan/fail-intent w (assoc i :intent/reason :rejected))))
+            "an unrelated failure does not exhaust the search route")))))
+
 (deftest boxed-in-by-water-with-no-way-away-the-mine-climbs-out
   ;; race 38515209959 (issue #105): runner 3 bot Clj_r19 and runner 9 bot Clj_r18 tunnelled for
   ;; gravel at y 38-40 into underground water, swam out onto a cell every stair and tunnel from
