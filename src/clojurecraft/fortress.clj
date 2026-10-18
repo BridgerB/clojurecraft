@@ -32,7 +32,7 @@
 (def explore-spacing 160)             ; blocks between the strips an exploring tunnel sweeps: a server shows 96 either side of the feet
 (def explore-band [52 90])            ; the heights an exploring tunnel keeps to: over the lava sea (y 31) and its lakes, under the roof
 (def bridge-fall 2)                   ; blocks of air a laid floor may hang over solid ground: a fall that costs no health
-(def bridge-reserve 24)               ; filler a tunnel keeps unspent when it bridges: the floors of steps that are no bridge, and the way out
+(def bridge-reserve 99999)               ; filler a tunnel keeps unspent when it bridges: the floors of steps that are no bridge, and the way out
 (def idle-gain 4)                     ; blocks along its heading a leg must gain between looks of the planner to be going on
 (def idle-looks 3)                    ; looks with no such gain that end a leg: a cavern or a wall it goes round in place
 (def look-ahead 2)                    ; blocks ahead that must be loaded for a leg to go on: the world's edge turns it
