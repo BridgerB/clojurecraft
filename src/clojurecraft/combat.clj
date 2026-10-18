@@ -348,19 +348,7 @@
                          (hittable? world e))))
           (entity/hostiles world))))
 
-(defn backing-off?
-  "Is a :back-off for the :defend goal running? It runs to its end (back-off-to blocks between
-   the bot and its target, the target gone, or back-off-timeout-ms): a threat that is out of
-   sight for a tick (threats asks hittable?, and a step back turns a corner) does not end it.
-   Gym snapshot R3-18-1 of issue #161 (a bot starved to one health, a hostile at the edge of its
-   sight) switched between the back-off and the mine's walk every few ticks for fifteen minutes
-   and stood where it began."
-  [world]
-  (let [i (:plan/intent world)] (and (= :back-off (:intent/kind i)) (= :defend (:intent/goal i)))))
-
-(defmethod plan/done-by :safe?
-  [world _]
-  (and (not (backing-off? world)) (or (nil? (:player/pos world)) (empty? (threats world)))))
+(defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
 (defmethod plan/next-intent :defend
   ;; the nearest threat: a creeper, or anything while the health is under retreat-health, is
