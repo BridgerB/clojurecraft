@@ -228,6 +228,7 @@
 
 (def placing-kinds #{:place :redig})  ; intents whose target is a cell they chose to put a block in, not a place they failed to reach
 (def boxing-kinds #{:stairs-down :tunnel}) ; intents that die :boxed standing in a pocket, which :plan/boxed-at remembers
+(def crossing-kinds #{:cross})         ; intents whose target is a trunk the way to it failed, not a place to give up
 
 (defn fail-intent
   "An intent failed: stop moving, blacklist its target (and count a failure against its trunk's
@@ -247,7 +248,13 @@
    step back onto it. Its visited cells join :plan/boxed-route: a retreat back along the failed
    search is not new rock (issue #161, R1/29). A walk for a log that failed :no-path adds its
    target to :plan/unreached, the places a choice of logs passes over together with the trees round them
-   (issue #75)."
+   (issue #75). A :cross (crossing-kinds) blacklists nothing and counts against its trunk's column
+   as a log's walk does, so the trunk is skipped after max-trunk-failures of them and no sooner:
+   its target is the trunk across the water, which the bridge up the cliff at the far shore
+   reaches (wood/trees-bridge) when the swim does not. Sim worlds R3/45 (issues #87 and #108)
+   crossed a lake toward the only trunk in reach, met the foot of a cliff with the trunk on its
+   top, and the failed cross blacklisted it: the staircase up the cliff then found no trunk to
+   climb toward and the plan waited :no-log."
   [world i]
   (let [unwalkable? (and (= :walk (:intent/kind i)) (= :no-path (:intent/reason i)))
         attempts (cond-> (:plan/attempts world 0) (not unwalkable?) inc)
@@ -255,15 +262,19 @@
     (-> world
         (memory/remember-intention i :failed)
         (assoc :player/controls {})
-        (cond-> (and (:intent/target i) (not (contains? placing-kinds (:intent/kind i))))
+        (cond-> (and (:intent/target i)
+                     (not (contains? placing-kinds (:intent/kind i)))
+                     (not (contains? crossing-kinds (:intent/kind i))))
                 (update :plan/blacklist (fnil conj #{}) (:intent/target i)))
         (cond-> (and (contains? boxing-kinds (:intent/kind i)) (= :boxed (:intent/reason i)))
                 (-> (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
                     (update :plan/boxed-route (fnil into #{}) (:intent/visited i))))
         (cond-> (and unwalkable? (= :log (:intent/for i)))
                 (update :plan/unreached (fnil conj #{}) (:intent/target i)))
-        (cond-> (:intent/trunk i)
-                (update-in [:plan/trunk-failures (let [[x _ z] (:intent/trunk i)] [x z])]
+        (cond-> (or (:intent/trunk i)
+                    (when (contains? crossing-kinds (:intent/kind i)) (:intent/target i)))
+                (update-in [:plan/trunk-failures
+                            (let [[x _ z] (or (:intent/trunk i) (:intent/target i))] [x z])]
                            (fnil inc 0)))
         (assoc :plan/attempts attempts :plan/unwalkable unwalkable)
         (dissoc :plan/intent :plan/last)
@@ -400,6 +411,8 @@
 (defn failed? "Has the plan given up (see :plan/reason)?" [world] (= :failed (:plan/status world)))
 
 (defn summary
-  "Every :plan/* attribute but the blacklist, for the RESULT line."
+  "Every :plan/* attribute but the blacklist and the creepers backed away from, for the RESULT line."
   [world]
-  (into {} (filter (fn [[k _]] (= "plan" (namespace k))) (dissoc world :plan/blacklist))))
+  (into {}
+        (filter (fn [[k _]] (= "plan" (namespace k))))
+        (dissoc world :plan/blacklist :plan/backed-off)))

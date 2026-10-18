@@ -12,6 +12,8 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-lit-portal-is-entered-without-rebuilding-or-fetching-tools
   - src/clojurecraft/build.clj#defmulti holds?
   - src/clojurecraft/build.clj#defn satisfied?
+  - src/clojurecraft/build.clj#defmethod holds? :no-water-source
+  - test/clojurecraft/build_test.clj#a-cast-scoops-sources-not-flow-from-later-cells
   - src/clojurecraft/build.clj#defn portal-plan
   - src/clojurecraft/build.clj#defn cell-ops
   - src/clojurecraft/build.clj#defn firm-ops
@@ -32,6 +34,17 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-nearby-room-at-another-height-is-gone-back-to
   - test/clojurecraft/build_test.clj#a-portal-behind-its-back-wall-is-entered-from-the-room
   - src/clojurecraft/build.clj#defn way-back
+  - src/clojurecraft/build.clj#defn wading-out?
+  - src/clojurecraft/build.clj#defn way-columns
+  - test/clojurecraft/build_test.clj#the-lava-hunt-heads-for-lava-beyond-the-hunt-radius
+  - test/clojurecraft/build_test.clj#a-tunnel-for-lava-is-not-cut-again-from-the-cell-one-boxed
+  - test/clojurecraft/build_test.clj#a-boxed-tunnel-for-lava-gives-its-source-up
+  - test/clojurecraft/build_test.clj#a-walk-whose-way-is-gravel-out-of-reach-is-no-refill
+  - test/clojurecraft/build_test.clj#a-build-in-water-with-no-route-swims-out-first
+  - test/clojurecraft/build_test.clj#a-way-a-wall-bars-is-not-the-way-to-dig
+  - test/clojurecraft/build_test.clj#a-cast-one-walk-with-no-path-gives-its-site-up
+  - test/clojurecraft/build_test.clj#a-cast-one-with-no-stand-gives-its-site-up
+  - test/clojurecraft/build_test.clj#rock-between-the-feet-and-the-landing-is-a-way-to-cut
   - test/clojurecraft/build_test.clj#a-site-left-for-a-pickaxe-is-gone-back-to
   - src/clojurecraft/build.clj#defn far-way
   - test/clojurecraft/build_test.clj#a-site-out-of-sight-is-walked-toward-before-anything-is-dug
@@ -62,6 +75,7 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-way-is-cut-round-water-and-awkward-footing
   - test/clojurecraft/build_test.clj#a-refill-stand-never-rests-on-magma
   - test/clojurecraft/build_test.clj#an-unsafe-build-stance-gives-up-the-site
+  - test/clojurecraft/build_test.clj#an-exhausted-walk-to-a-nearby-build-stand-gives-up-the-site
   - test/clojurecraft/build_test.clj#a-pool-without-a-safe-station-is-left
   - src/clojurecraft/build.clj#defn sources-near
   - test/clojurecraft/build_test.clj#the-lava-hunt-passes-over-a-given-up-pool
@@ -174,6 +188,8 @@ Issue #124 replaced ruststeve's template mold (a pad, a rim, platforms, walled c
 
 In solid rock the cast places four blocks: the walls its own digging opened (the bottom cells' over cells are the columns' side walls; the columns' top over cells are the top cells' side walls). `cast-one-plan` is the room and the first cell, with a `:verify` that it is obsidian and the water taken back.
 
+Water cleanup and the first-cast verification use `:no-water-source`, not `:no-water`: only a source can be scooped. A later cast's water can flow through an earlier, already-scooped cell (issue #419, R1/20), which must not select that earlier scoop again and fail `:target-gone`. Re-reading these predicates also drops a failed scoop child when the plan moves on to the remaining source. `:no-water` still means no water of any level.
+
 ## The site and the station
 `choose-site` looks beside the `max-sources` lava sources nearest the feet, loaded, at any depth. For each cell beside the cell over a source (`stands-beside`: firm under it, it and the head openable, no fluid touching them, the cell over the source openable with no fluid round it but the source), each facing and each of `station-spots` (the lava's stand seven in front of the frame, 1 to `max-access` over the room's floor), the origin follows; `site-ok?` wants the footprint (the frame's rock `frame-box`, the room and its floors) loaded and no fluid in it or touching it, and a pool that can finish the frame (`spent?` false: `pool`, the sources any lava stand of the site could scoop, every height up to `max-access`, at least as many as the frame's cells still to cast). Sim race 38664661309 (issue #142, 89 runs in 18 rounds) chose sites beside a lone source in five worlds, cast one cell and failed `:no-station` with nine to go (`a-lone-lava-source-is-no-site`). Each candidate's checks look only at the sources near its own source (`build-near`, within `pool-radius` of any origin it may take): over the lava sea, with thirty thousand sources loaded, a choice took forty seconds. Of those, the fewest blocks to place (`blocks-needed`, at most `site-blocks`), then the nearest. The lava's stand is always over the room's floor: water spilled on the floor never runs up to the pool.
 
@@ -204,12 +220,24 @@ The shared `work-op` makes one exception to the hand-dig time limit for `:tunnel
 
 A site so far off that its landing's chunk is not loaded (a death sent the feet back to spawn: sim race 39076908669, issue #196, world R3/13 seed 2, 190 blocks) is walked toward first (`far-way`: a `:walk` `:for :site` toward the landing's column at the feet's height, as far as the loaded terrain leads), before any op looks for a stand: a floor cell is no dig, so it never took `way-back`, and stairs cut at spawn would have started the climb to the site at the wrong place. A place op or a pour with no stance reachable falls back to `way-back` as a dig does, `:no-stand` only when the feet are at the landing already. The roof `uncap` digs over a lava source is broken for nothing when its ore is above the pickaxe's tier (`way-dig`: issue #163, a stone pickaxe on deepslate diamond ore at y -59). The cells a way dug for a stand must keep (`place-cells`, read by `stance-block`) are those the plan places at every access, not access 0's: sim race 39076908669, issue #178, world R1/11, a build at access 4 dug its landing's cobblestone floor each time it was placed. `lava-walk` never walks to a stand the walk would call arrived at once (`intent/arrived?`, the eye within reach), where it used a two-block radius smaller than the walk's reach: real race 39076909951, issue #163, walked the same stand every fifty milliseconds after the roof was dug. The kit's table and sticks are fetched, not only made from what is held, while the feet are out of the ground with a trunk a route reaches (`wood-near?`): sim race 39076908669, issue #178, world R2/21, broke its last pickaxe at the cast with no table, one stick and no planks and climbed a hundred blocks of deepslate by hand, seventeen seconds a dig, for the log.
 
+An exhausted fixed-stance walk (`:no-path`, not a pickup approach) gives up a nearby site even when the target is dry and has sound footing. The route may be blocked between the feet and the stance; classifying only the target as water or awkward misses this case and retries the same site until the plan fails (issue #162, R1/17 and R3/23). `lost-way?` records the site through the existing `work-op` recovery, so resumed failed children recover too and site selection excludes the same pool. Falling blocks in the way are still cleared first, and nearby pickup walks, dry-stance `:stuck` failures and non-build executors retain their previous handling (`an-exhausted-walk-to-a-nearby-build-stand-gives-up-the-site`).
+
+If the build's way to its landing uses a retreat walk that fails `:no-path`, remember that failed waypoint in `:plan/retreat-unreachable` and recompute the escape before giving up the site. Otherwise replanning can choose another site that asks for the same unreachable waypoint and exhausts the portal attempt budget (issue #162, R2/43; `an-unreachable-retreat-waypoint-is-not-retried`).
+
 ## The targets
 
 A lit portal's next operation is entry, not another pass through the casting room (`lit-entry`, `next-op`). The build planner skips the casting kit and table collection when a route reaches that entry; a blocked way still needs its tools. Issue #389 (R2/38) had reached `:portal`, but filled room cells and a broken pickaxe sent `:nether` climbing through deepslate by hand for wood instead of stepping into the existing portal.
 Entry walks directly into the portal when a route reaches it; otherwise `approach-stand` goes by the room's landing first, using the same way around the protected rock as the cast. Sim race 39007433993 runner 4 (issue #346, R4/1 seed 1) approached the lit portal from behind its back wall. The portal itself is inside `kept`, so no `round-corner` could end there; the direct way dug up to the wall and three walks failed `:no-path`. Going by the landing preserves the back wall and reaches the open side, including when resuming an already lit portal. The snapshot enters the Nether 107950 ms after its moment, then starts the fortress tunnel (`a-portal-behind-its-back-wall-is-entered-from-the-room`).
 
 `goals.edn` rows `:cast-one`, `:portal` and `:nether` plan with `:goal/plan :build` and are done by `:built?`; each holds a pickaxe (`:goal/holds`), and before the build starts `held-first` asks the needs planner for it and for the blocks the plan places at the site (`blocks-needed`, counted from the plan, never a constant). `:portal-kit` holds the buckets alone: the water bucket and an empty one for lava (`the-portal-kit-asks-for-no-constant-of-blocks`). With no site, `lava-hunt` walks to an exposed source (`lava-walk`), uncaps one in reach (`uncap`), or cuts stairs and a tunnel toward lava or the lava sea's depth (`toward-lava`). The stairs and the tunnel go only toward the nearest source below or level with the feet round which a frame could be cast (`hunt-target`, `castable?`: as many sources within `pool-radius` as the frame has cells), else down toward the sea: sim race 38811561269 (issue #41) tunnelled under a lone source six over the feet and under a small pool eleven over, stopped a block short with nothing to cut, and waited `:no-site` over the sea (`the-lava-hunt-goes-down-past-lava-it-cannot-cast-from`). From a feet cell in `:plan/boxed-at` no stair is cut, so the hunt takes the mine's way out (`stone/retreat`, `stone/climb`) instead of waiting `:no-site`: sim race 38515210080 (issue #41, world R4/36, y 16, sea forty under; `the-lava-hunt-leaves-a-boxed-pocket-by-the-way-out`).
+
+## Where a cast-one stopped (issues #135, #130, #74, #45, #44, #41)
+- **The hunt reaches lava beyond `hunt-radius`.** With no safe source within 48 blocks, `hunt-target` takes the nearest of the first `hunt-checked` within `far-radius` (160, what a view shows): at y -54 over thousands of sources loaded, the real snapshots of #41 waited `:no-site` out. The tunnel to it is cut `stone/tunnel-length` steps at a time.
+- **A tunnel for lava carries its source and gives it up when boxed in.** `toward-lava`'s tunnel has `:intent/for :lava` and `:intent/target` the source; `stairs/box` ends it (done, not failed) with the feet in `:plan/boxed-at` and the source given up (`memory/give-up-site`, which `sources-near` leaves out with the pool round it), so the hunt takes the next. From a boxed feet cell no second tunnel is cut: the way out (`stone/retreat`, `stone/climb`). #130's tunnel east from the foot of the stairs was boxed three times in a tick.
+- **`way-refilled?` drops a walk only for gravel in reach.** A falling block anywhere on a fifty-block straight way is no clear the bot can dig; the walk fails `:no-path` and `lost-way?` gives the site up (#135, R4/34). A build whose feet are in water with no route from them (`wading-out?`) swims out first (`:swim-out` for `:retreat`): a route never crosses water.
+- **A staircase can end inside the frame's box** (#45, real-3-s2-Clj_r05): the feet's own cell is the frame's rock and every way to the landing crosses a wall; no single corner (`round-corner`) is clear, the plain walk fails `:no-path`, and a cast-one gives the site up on the second such failure. A route of several corners round the box would keep the site (not built). `stance-block` takes the z-first line when the x-first one holds a solid cell a way may not dig (the frame's rock, cobblestone the plan places, a cell beside lava) and the z-first none (#45, real-6-s2-Clj_r05).
+- **No way, no stand: the site is given up.** A cast-one whose plain walk fails `:no-path` a second time (`lost-way?`, `:plan/attempts`) or whose op has no stand (`work-op`'s `:no-stand`) gives its site up and the planner chooses another; `way-back` goes to the landing whenever no route reaches it, however near (#74's two snapshots stood six blocks off with rock between). A portal's site holds a cast and is not given up for these.
+- **A bubble column takes a block.** The model's `blocks/placeable-into?` accepts it as the game does (replaceable): #44's bridge over a magma stream was refused three times.
 
 ## Gotchas
 - **Hunt only sources with a safe stand to open.** `hunt-target` requires `stands-beside`, not just enough nearby sources. Issue #392's real snapshot tunnelled to a low source in a lava body extending above the feet; no stand could be opened safely, the last tunnel had zero steps left, and `:no-site` was waited out. Such sources are skipped both on approach and when already beside them, leaving the hunt free to seek another pool or descend toward the sea (`the-lava-hunt-passes-sources-with-no-safe-stand`). The snapshot no longer recurs over its window; followed on, it casts all ten obsidian cells and reaches `:portal` 589200 ms after its moment.

@@ -245,7 +245,8 @@
 (defn retreat
   "Away from where nothing can be cut: out of water first when the feet are in it (a :swim-out for
    :retreat, done on dry land), else a walk to the end of a route at least retreat-distance
-   away (path's :unboxed-away goal), never onto a cell already in :plan/boxed-at.
+   away (path's :unboxed-away goal), never onto cells already in :plan/boxed-at or
+   :plan/boxed-route, or a retreat waypoint already marked :plan/retreat-unreachable.
    Sim race 39044508577 (issue #161, R1/29) retreated between two boxed cells for hours.
    From a boxed cell, when the search exhausts
    the reachable ground short of that distance, use its last unboxed waypoint instead, or with
@@ -258,7 +259,8 @@
   (if (:player/in-water? world)
     {:intent/kind :swim-out :intent/for :retreat}
     (let [feet (intent/feet world)
-          boxed (into (:plan/boxed-at world #{}) (:plan/boxed-route world))
+          boxed (into (:plan/boxed-at world #{})
+                      (concat (:plan/boxed-route world) (:plan/retreat-unreachable world)))
           r
           (path/plan
            world

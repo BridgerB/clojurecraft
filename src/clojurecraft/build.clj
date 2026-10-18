@@ -4,7 +4,7 @@
    A plan is a vector of ops, flat maps. Every op says what it does (:build/op :place :dig :pour
    :scoop :use-on :stand-in), where (:build/pos, and :build/stand where the bot stands to do it),
    with what (:build/item), and when it is done (:build/done, a predicate over the world as data:
-   [:solid p] [:not-solid p] [:filled p] [:block p name] [:lava-source p] [:no-water p]
+   [:solid p] [:not-solid p] [:filled p] [:block p name] [:lava-source p] [:no-water p] [:no-water-source p]
    [:dimension name] [:or & preds] [:and & preds]). `satisfied?` reads a predicate against the
    world. Nothing about progress is stored: the op to work on is the first one not satisfied, so
    a build resumes after a death, a chunk reload or a relaunch by reading the world again.
@@ -80,6 +80,7 @@
 (defmethod holds? :no-water
   [world [_ p]]
   (not (contains? blocks/water-states (terrain/block-at world p))))
+(defmethod holds? :no-water-source [world [_ p]] (not (scoop/source? world p :water)))
 (defmethod holds? :dimension [world [_ d]] (= d (:player/dimension world)))
 (defmethod holds? :feet [world [_ p]] (= p (intent/feet world)))
 (defmethod holds? :no-lava
@@ -207,8 +208,10 @@
    face the water is placed against), dig the hole and the cell over it, pour lava low against the
    hole's back wall, pour water into the cell directly over the lava against the same wall (it
    lands on the source: obsidian), and scoop the water straight back from there. Every op but the
-   scoop is done once the cell is obsidian. Water is never poured beside the lava: a source with a
-   side open flows within about 1.5 s on a server, and flow meeting water is cobblestone."
+   scoop is done once the cell is obsidian; the scoop is done when no water source remains,
+   even if another cast's water flows through that cell. Water is never poured beside the lava:
+   a source with a side open flows within about 1.5 s on a server, and flow meeting water is
+   cobblestone."
   [at origin facing [dx dy :as c]]
   (let [[sx _ _ :as s] (stands c)
         stand (at s)
@@ -242,7 +245,7 @@
               :build/aim (aim origin facing [dx (inc dy) 0] [(side-aim side) 0.4 0.5])
               :build/cell c
               :build/step :scoop
-              :build/done [:no-water over]}])))
+              :build/done [:no-water-source over]}])))
 
 (def max-access 6)                    ; the lava's stand at most this far over the room's floor
 
@@ -345,7 +348,7 @@
                   [{:build/op :verify
                     :build/stand (at (stands first-cell))
                     :build/step :verify
-                    :build/done [:and done [:no-water (at [dx (inc dy) 0])]]}])))))
+                    :build/done [:and done [:no-water-source (at [dx (inc dy) 0])]]}])))))
 
 (defn frame-plan
   "The whole frame from origin facing cut into the rock: the room, the ten cells bottom up in
@@ -676,31 +679,40 @@
          (not (contains? intent/never-dug (blocks/name-of id)))
          (contains? #{:solid :awkward} (path/classify-id id)))))
 
+(defn way-columns
+  "The columns [x z] of the straight way from the feet's column to stand's, both ends included,
+   as stance-block walks it: along x first, then along z; with z-first? along z first, then x."
+  ([from stand] (way-columns from stand false))
+  ([[fx _ fz] [sx _ sz] z-first?]
+   (let [span (fn [a b] (let [d (if (> a b) -1 1)] (range a (+ b d) d)))]
+     (if z-first?
+       (concat (for [z (span fz sz)] [fx z]) (for [x (rest (span fx sx))] [x sz]))
+       (concat (for [x (span fx sx)] [x fz]) (for [z (rest (span fz sz))] [sx z]))))))
+
 (defn stance-block
   "The first solid cell in the way of standing at stand: from the feet toward it, one cell
    at a time, the body at the stand's height or the head over that. nil when that line is
-   already clear. Full run 4e59246 stood at a pond and the pad's stand, four blocks east, was
-   stone inside the hill; the walk at it was :none."
+   already clear. The line goes along x first, then z, unless a cell of it is solid and may not
+   be dug (the frame's rock, cobblestone the plan places, a cell beside lava) while the line along
+   z first has none: then that one, since a way a wall bars is not the way to dig. Full run
+   4e59246 stood at a pond and the pad's stand, four blocks east, was stone inside the hill; the
+   walk at it was :none. Real snapshot real-6-s2-Clj_r05 (issue #45): the lava's stand one block
+   aside and one on from the feet, the cell between them on the x-first line a stair's floor
+   the plan places, so the line was called clear, nothing was dug and the walk failed :no-path,
+   with stone on the z-first line to dig."
   [world stand build origin facing]
   (let [placed? (place-cells build origin facing)
         kept? (kept origin facing)
-        [fx _ fz] (intent/feet world)
-        [sx sy sz] stand]
-    (loop [x fx
-           z fz]
-      (let [body [x sy z]]
-        (cond (diggable? world body placed? kept?) body
-              (diggable? world (update body 1 inc) placed? kept?) (update body 1 inc)
-              (and (= x sx) (= z sz)) nil
-              :else
-              (recur (cond (< x sx) (inc x)
-                           (> x sx) (dec x)
-                           :else x)
-                     (if (= x sx)
-                       (cond (< z sz) (inc z)
-                             (> z sz) (dec z)
-                             :else z)
-                       z)))))))
+        feet (intent/feet world)
+        sy (second stand)
+        digs? #(diggable? world % placed? kept?)
+        walled? #(and (some-> (terrain/block-at world %)
+                              blocks/solid?)
+                      (not (digs? %)))
+        cells (fn [cols] (mapcat (fn [[x z]] [[x sy z] [x (inc sy) z]]) cols))
+        lines (map #(cells (way-columns feet stand %)) [false true])
+        line (or (first (remove #(some walled? %) lines)) (first lines))]
+    (first (filter digs? line))))
 
 (defn within-reach?
   "Can a dig of pos be started from here: the eye within reach of its centre, the same gate
@@ -885,14 +897,6 @@
            (sort-by (fn [[cx _ cz]]
                       (+ (abs (- cx fx)) (abs (- cz fz)) (abs (- sx cx)) (abs (- sz cz)))))
            first))))
-(defn way-columns
-  "The columns [x z] of the straight way from the feet's column to stand's, as stance-block
-   walks it: along x first, then along z, both ends included."
-  [[fx _ fz] [sx _ sz]]
-  (let [step (fn [a b] (if (> a b) -1 1))]
-    (concat (for [x (range fx (+ sx (step fx sx)) (step fx sx))] [x fz])
-            (for [z (range (+ fz (step fz sz)) (+ sz (step fz sz)) (step fz sz))] [sx z]))))
-
 (defn floor-gap
   "The cell under the first cell of the straight way to stand, at the stand's height and past
    the feet's own column, that nothing holds the feet up over: no solid under it, it and the
@@ -1099,14 +1103,19 @@
   "Did child, the way to the site from far off (a walk, a swim out, stairs), fail for want of a
    way (:no-path, :stuck, or a climb :boxed) beyond site-reach of the room's landing? Then it is
    the site that no way reaches, not an op. A nearby walk whose target is flooded or has awkward
-   footing also gives up the site: its fixed stance is no walking destination (issue #162).
+   footing also gives up the site: dry footing alone does not mean a route reaches it (issue #162).
    Sim race 38839665459 (issue #222, world R1/11, six runs in two rounds) chose a site 70 blocks
    off across an aquifer, the walk there failed :no-path,
    the stairs down toward its landing at y 24 were refused for the water beside them, the swim
    out of the water let in dug down a staircase it flooded until :stuck, and the escape from
    that water failed :stuck too: three failures, all toward the one site the planner kept. Only
-   a :build has a site: a :tunnel-to (fortress) works its steps through work-op too."
-  [world {:intent/keys [kind origin facing access]} {:intent/keys [reason target] :as child}]
+   a :build has a site: a :tunnel-to (fortress) works its steps through work-op too. A cast-one's
+   walk to a stand that failed :no-path anywhere gives its site up too, from the second failure
+   on (:plan/attempts): what the build offers before it, a way dug, a corner, a bridge, is
+   exhausted when it is the plain walk left, and a site no way reaches is better left than
+   failed (issue #45: real snapshot real-3-s2-Clj_r05 stood in the rock behind its frame, the
+   frame's rock all round a way to the landing four blocks off, and failed :no-path three times)."
+  [world {:intent/keys [kind build origin facing access]} {:intent/keys [reason target] :as child}]
   (boolean
    (and (= :build kind)
         (intent/failed? child)
@@ -1114,6 +1123,11 @@
         (or (> (physics/distance (physics/centre (intent/feet world))
                                  (physics/centre (cell origin facing (landing (or access 0)))))
                site-reach)
+            (and (= :cast-one build)
+                 (= :walk (:intent/kind child))
+                 (= :no-path reason)
+                 (not (:intent/pickup? child))
+                 (pos? (:plan/attempts world 0)))
             (and (= :walk (:intent/kind child))
                  (not (:intent/pickup? child))
                  target
@@ -1124,8 +1138,11 @@
 (defn way-back
   "The way back to the build's site from far off: toward the room's landing (landing for the
    build's access h) as a landing op goes (toward-stand: a walk, else stairs to its height and a
-   level way dug), or nil when the feet are within site-reach at its height. Nearby feet above
-   or below the landing still need a way to its height when no working stance is reachable.
+   level way dug), or nil when the feet are within site-reach at its height with a route to it.
+   Nearby feet above or below the landing still need a way to its height when no working stance
+   is reachable, and so do nearby feet with rock between: sim races 39076911005 and 39070979444
+   (issue #74, worlds R3/22 and R1/38) stood six blocks from the landing at its height, the
+   room dug and the way to it not, and failed :no-stand three times.
    Sim race 38806318231 (issue #196, 75 runs in 37 rounds, world R2/3):
    the cast's room at y 23, the bot climbed out to y 64 for the wood of a pickaxe, made it, and
    the build's next op, a room cell 41 below and 34 away, found no stand and no cut at the feet's
@@ -1134,7 +1151,9 @@
   (let [to (cell origin facing (landing (or access 0)))
         feet (intent/feet world)]
     (when (or (not= (second feet) (second to))
-              (> (physics/distance (physics/centre feet) (physics/centre to)) site-reach))
+              (> (physics/distance (physics/centre feet) (physics/centre to)) site-reach)
+              (not (intent/routable? world
+                                     {:intent/kind :walk :intent/target to :intent/for :build})))
       (toward-stand world to build origin facing))))
 
 (def far-site 48)                     ; blocks on the plane from the landing past which its unloaded chunk means far off, not still arriving
@@ -1212,37 +1231,54 @@
   (boolean (some #(contains? blocks/lava-states (terrain/block-at world %))
                  (remove #{(update cell 1 dec)} (touching cell)))))
 
+(defn wading-out?
+  "Is child, what approach-stand gave, a walk no route follows (intent/routable?) with the body in
+   water? A route never crosses water, so a bot standing in a flooded tunnel has none from it, and
+   the walk would be failed :no-path (or dropped, way-refilled?) with the feet in the water: it
+   swims out to a bank first (:swim-out for :retreat, done on dry land). Sim race 39081492834
+   (issue #135, world R4/34): the stairs ended in a flooded tunnel at y 28, the landing fifty
+   blocks off, and the build did nothing for fifteen minutes."
+  [world child]
+  (boolean (and (map? child)
+                (= :walk (:intent/kind child))
+                (:player/in-water? world)
+                (not (intent/routable? world child)))))
+
 (defn op-child
   "The child intent that works op next: lava to refill first when a lava pour has none, else
    whatever gets the feet centred for the op (a dig of the ground in the way, a walk to the
-   stand, or a place already in reach from the shore), else the op's own action; or a
-   keyword, why it cannot be worked."
+   stand, or a place already in reach from the shore; a swim out of the water the walk has no
+   route from, wading-out?), else the op's own action; or a keyword, why it cannot be worked."
   [world i {:build/keys [op pos item aim into done] :as this}]
   (cond (and (= op :pour) (= item :lava_bucket) (not (held? world :lava_bucket))) (refill world i)
         (and (= op :pour) (= item :water_bucket) (stray-lava? world into)) :stray-lava
         :else
-        (or (approach-stand world i this)
-            (case op
-              :place
-              (if-let [c (foundation world pos)]
-                {:intent/kind :place :intent/item item :intent/cell c}
-                :no-support)
-              :dig (way-dig pos)
-              :pour
-              {:intent/kind :pour
-               :intent/item item
-               :intent/aim aim
-               :intent/target into
-               :intent/expect done}
-              :scoop (cond-> {:intent/kind :scoop :intent/target pos} aim (assoc :intent/aim aim))
-              :use-on
-              {:intent/kind :use-on
-               :intent/item item
-               :intent/target pos
-               :intent/aim (update (physics/centre pos) 1 + 0.5)
-               :intent/expect done}
-              :stand-in {:intent/kind :await :intent/expect done}
-              :verify :unverified))))
+        (let [c (approach-stand world i this)]
+          (cond (wading-out? world c) {:intent/kind :swim-out :intent/for :retreat}
+                c c
+                :else
+                (case op
+                  :place
+                  (if-let [c (foundation world pos)]
+                    {:intent/kind :place :intent/item item :intent/cell c}
+                    :no-support)
+                  :dig (way-dig pos)
+                  :pour
+                  {:intent/kind :pour
+                   :intent/item item
+                   :intent/aim aim
+                   :intent/target into
+                   :intent/expect done}
+                  :scoop
+                  (cond-> {:intent/kind :scoop :intent/target pos} aim (assoc :intent/aim aim))
+                  :use-on
+                  {:intent/kind :use-on
+                   :intent/item item
+                   :intent/target pos
+                   :intent/aim (update (physics/centre pos) 1 + 0.5)
+                   :intent/expect done}
+                  :stand-in {:intent/kind :await :intent/expect done}
+                  :verify :unverified)))))
 
 (defn lit-entry
   "The entry op of plan when its preceding light op is satisfied, or nil. Portal plans end
@@ -1321,13 +1357,17 @@
    out, so the walk is dropped, not failed, and never sent again over the same cells while the
    block stands there. Sim race 38837004562 (issue #45, world R1/6): the level way to the landing
    at y 21 ran under a bed of gravel, each dug cell filled again, and three walks along it failed
-   :no-path."
+   :no-path. Only a block the next clear can dig, within reach of the eye (within-reach?):
+   sim race 39081492834 (issue #135, world R4/34) stood in a pocket of water with the landing
+   fifty blocks off and a gravel block somewhere on the straight way, out of reach, so each
+   walk's failure was dropped for a clear that never came, every tick for fifteen minutes."
   [world {:intent/keys [kind reason target]}]
   (boolean (and (= :walk kind)
                 (= :no-path reason)
                 target
-                (some #(some-> (terrain/block-at world %)
-                               blocks/falls?)
+                (some #(and (within-reach? world %)
+                            (some-> (terrain/block-at world %)
+                                    blocks/falls?))
                       (mapcat (fn [c] [c (update c 1 inc)])
                        (stance-line (intent/feet world) target))))))
 
@@ -1375,6 +1415,18 @@
             (assoc :player/controls {})
             (intent/dissoc-intent :intent/child)
             (game/say "build: the scoop's sight line filled, opening it again"))
+        (and (= :build (:intent/kind i))
+             (= :walk (:intent/kind child))
+             (= :retreat (:intent/for child))
+             (intent/failed? child)
+             (= :no-path (:intent/reason child))
+             (:intent/target child))
+        ;; avoid retrying the same failed waypoint when the build recalculates its way out
+        (-> world
+            (assoc :player/controls {})
+            (update :plan/retreat-unreachable (fnil conj #{}) (:intent/target child))
+            (intent/dissoc-intent :intent/child)
+            (game/say "build: retreat waypoint failed, finding another"))
         (and child (lost-way? world i child))
         ;; no way reaches the site from here: it is given up and the planner chooses another
         (-> world
@@ -1413,6 +1465,13 @@
                     (memory/give-up-site (:intent/origin i))
                     intent/done
                     (game/say "build: no safe lava station at the site, a new site"))
+                (and (= :no-stand c) (= :cast-one (:intent/build i)))
+                ;; no cell reaches the op and none can be cut: the site is no use, a new one
+                (-> world
+                    (assoc :player/controls {})
+                    (memory/give-up-site (:intent/origin i))
+                    intent/done
+                    (game/say "build: no stand at the site, a new site"))
                 (keyword? c) (intent/fail world c)
                 :else
                 (intent/run-child
@@ -1536,18 +1595,22 @@
 
 (def lava-depth -54)                  ; the feet a block over the lava sea: below y -54 the game fills its aquifers with lava (ruststeve cast at y -50, the sea's surface at -55)
 (def hunt-radius 48)                  ; blocks from the feet a lava source is walked, dug or tunnelled toward
+(def far-radius 160)                  ; blocks from the feet a source is tunnelled toward when none lies within hunt-radius: what a view shows
+(def hunt-checked 300)                ; the nearest far sources asked for a stand and a pool: each ask reads every loaded source
 (def max-candidates 3)                ; the nearest sources a route is planned to
 
 (defn sources-near
-  "The lava sources loaded within hunt-radius of the feet, nearest first, outside given-up
-   sites. Hunting back to a pool the planner refuses only walks between its stands forever."
-  [world]
-  (let [feet (physics/centre (intent/feet world))
-        given (memory/given-up-sites world)]
-    (->> (lava-sources world)
-         (filter #(<= (physics/distance (physics/centre %) feet) hunt-radius))
-         (remove #(given-up? given %))
-         (sort-by #(physics/distance (physics/centre %) feet)))))
+  "The lava sources loaded within radius of the feet (hunt-radius by default), nearest first,
+   outside given-up sites. Hunting back to a pool the planner refuses only walks between its
+   stands forever."
+  ([world] (sources-near world hunt-radius))
+  ([world radius]
+   (let [feet (physics/centre (intent/feet world))
+         given (memory/given-up-sites world)]
+     (->> (lava-sources world)
+          (filter #(<= (physics/distance (physics/centre %) feet) radius))
+          (remove #(given-up? given %))
+          (sort-by #(physics/distance (physics/centre %) feet))))))
 
 (defn lava-walk
   "A walk to a cell beside an exposed source's air (stands-beside), from which a site has its
@@ -1619,14 +1682,17 @@
    R2/26 on runner 8): the hunt took the nearest source whatever its height, tunnelled under a
    lone source six blocks over the feet (R1/38) and under a small pool eleven over (R2/26),
    stopped a block short of the column with nothing to cut, the roof out of reach, and waited
-   :no-site with fifteen thousand sources of the lava sea loaded below."
+   :no-site with fifteen thousand sources of the lava sea loaded below. With none within
+   hunt-radius the nearest within far-radius is taken, as far as the terrain loaded shows: real
+   race 38929353563 (issue #41, Clj_r13 and Clj_r14) stood at y -54 over six thousand sources
+   loaded, the nearest farther than hunt-radius, and waited :no-site out."
   [world]
   (let [fy (physics/y-of (intent/feet world))
-        sources (lava-sources world)]
-    (first (filter #(and (<= (inc (physics/y-of %)) fy)
-                         (seq (stands-beside world %))
-                         (castable? sources %))
-                   (sources-near world)))))
+        sources (lava-sources world)
+        target?
+        #(and (<= (inc (physics/y-of %)) fy) (seq (stands-beside world %)) (castable? sources %))]
+    (or (first (filter target? (sources-near world)))
+        (first (filter target? (take hunt-checked (sources-near world far-radius)))))))
 
 (defn toward-lava
   "The way toward lava a frame can be cast from (hunt-target): stairs down (stone/stairs,
@@ -1637,7 +1703,12 @@
    (stone/stairs): the way out the mine takes (stone/retreat, stone/climb), as the build's own
    descent does (to-height). Sim race 38515210080 (issue #41, world R4/36, at the iron mine's
    y 16 with the lava sea forty blocks under, the feet boxed by an earlier descent): nothing was
-   cut and :no-site was waited out. nil when nothing can be cut from here."
+   cut and :no-site was waited out. The tunnel carries its source (:intent/target): one boxed
+   in gives that source up (stairs/box) and the hunt takes the next, and from a feet cell a
+   tunnel boxed in no other is cut (the way out first), as no tunnel for ore is (stone/tunnel-heading).
+   Sim races 39085720764 and 39085577169 (issue #130, worlds R1/19 and R1/25): the tunnel east from the foot of
+   the stairs met an aquifer on each of its three headings and was :boxed three times in a tick,
+   toward the one source. nil when nothing can be cut from here."
   [world]
   (let [feet (intent/feet world)
         [sx sy sz :as src] (hunt-target world)
@@ -1645,13 +1716,15 @@
     (cond (> (physics/y-of feet) to)
           (or (stone/stairs world {:goal/depth to}) (stone/retreat world) (stone/climb world))
           (nil? src) nil
+          (contains? (:plan/boxed-at world #{}) feet) (or (stone/retreat world) (stone/climb world))
           :else
           (let [steps (dec (long (max (abs (- sx (first feet))) (abs (- sz (nth feet 2))))))]
             (when (pos? steps)
               {:intent/kind :tunnel
                :intent/dir (heading-to feet src)
                :intent/length (min stone/tunnel-length steps)
-               :intent/for :lava})))))
+               :intent/for :lava
+               :intent/target src})))))
 
 (defn lava-hunt
   "The next step toward lava a site can refill from, when no site is at hand: a walk to a stand
