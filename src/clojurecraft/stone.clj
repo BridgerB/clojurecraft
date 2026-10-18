@@ -354,6 +354,23 @@
                             (when-not (or (= feet start) (contains? boxed start)) start)))]
        (when target {:intent/kind :walk :intent/target target :intent/for :retreat})))))
 
+(defn toward-home
+  "A walk back to the landing (:plan/go-at), a retreat's new ground, when it is more than
+   spent-radius from the feet on the plane and a route reaches it (routable?); else nil. A spent
+   place's retreat that finds no ground clear of its boxed cells (retreat with them: the search runs
+   out of its budget among the bank's cells) still has the landing, which is land far from
+   them. Issue #342 (the R1/30 sim moment): retreat was nil, and the mine fell through to
+   deeper, which cut the same stairs again."
+  [world]
+  (when-let [[hx hy hz] (:plan/go-at world)]
+    (let [[fx _ fz] (intent/feet world)
+          cell [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]
+          walk {:intent/kind :walk :intent/target cell :intent/for :retreat}]
+      (when (and (< spent-radius
+                    (physics/horizontal-distance [fx 0 fz] [(first cell) 0 (nth cell 2)]))
+                 (intent/routable? world walk))
+        walk))))
+
 (defn climb
   "Stairs up out of the ground, climb-stairs at a time (stairs/climb-to), when nothing can be
    tunnelled, cut or walked to from here and the feet are not out (stairs/out?); nil when they
@@ -397,36 +414,38 @@
    retreat comes before any stair or tunnel: sim race 38844683780 (issue #230) cut its stairs down
    where the lava had just caught it, and the flow followed it down."
   [world row]
-  (or (continue-mine world row)
-      (let [missing (tool-missing world row)
-            [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
-            walk-to (fn [t]
-                      (cond-> {:intent/kind :walk
-                               :intent/target t
-                               :intent/for (:goal/id row)
-                               :intent/pickup? true}
-                        (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
-                        (assoc :intent/step-down? true)))
-            walk (when-not missing
-                   (->> (exposed-of-states world (states-of-row row))
-                        (take max-candidates)
-                        (map walk-to)
-                        (filter #(intent/routable? world %))
-                        first))]
-        (cond missing {:plan/wait missing}
-              stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
-              walk walk
-              :else
-              (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
-                  (off-ice world)
-                  (over-stone world row)
-                  (if (spent? world) (retreat world (:plan/boxed-at world)) (stairs world row))
-                  (when-let [d (tunnel-heading world)]
-                    {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
-                  (deeper world)
-                  (retreat world)
-                  (climb world)
-                  {:plan/wait :boxed})))))
+  (or
+   (continue-mine world row)
+   (let [missing (tool-missing world row)
+         [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
+         walk-to
+         (fn [t]
+           (cond->
+             {:intent/kind :walk :intent/target t :intent/for (:goal/id row) :intent/pickup? true}
+             (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
+             (assoc :intent/step-down? true)))
+         walk (when-not missing
+                (->> (exposed-of-states world (states-of-row row))
+                     (take max-candidates)
+                     (map walk-to)
+                     (filter #(intent/routable? world %))
+                     first))]
+     (cond missing {:plan/wait missing}
+           stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
+           walk walk
+           :else
+           (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
+               (off-ice world)
+               (over-stone world row)
+               (if (spent? world)
+                 (or (retreat world (:plan/boxed-at world)) (toward-home world))
+                 (stairs world row))
+               (when-let [d (tunnel-heading world)]
+                 {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
+               (deeper world)
+               (retreat world)
+               (climb world)
+               {:plan/wait :boxed})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
 
