@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T10:32:37.572Z",
+  "at" : "2026-10-18T10:35:53.628Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -17,7 +17,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 339,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at fortress: no-footing",
     "copilot" : true,
     "draft" : true,
