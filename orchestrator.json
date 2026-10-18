@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:26:43.593Z",
+  "at" : "2026-10-18T02:27:51.332Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -48,11 +48,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 87,
-    "title" : "Bot stops at ingots: no-log",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 410,
@@ -63,6 +58,11 @@
     "nudges" : 1,
     "pr" : 416,
     "session" : false
+  }, {
+    "number" : 87,
+    "title" : "Bot stops at ingots: no-log",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "number" : 74,
     "title" : "Bot stops at cast-one: no-stand",
@@ -178,11 +178,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 87,
+    "issue" : 410,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 410,
+    "issue" : 87,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
