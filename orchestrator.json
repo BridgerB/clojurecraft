@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-18T01:00:52.074Z",
+  "at" : "2026-10-18T01:07:34.373Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 296,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at fortress: no-pickaxe",
     "copilot" : true,
     "draft" : true,
@@ -19,13 +19,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 45,
-    "title" : "Bot stops at cast-one: no-path",
+    "number" : 37,
+    "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 37,
-    "title" : "Bot stops at ingots: boxed",
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
