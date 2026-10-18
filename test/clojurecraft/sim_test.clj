@@ -2311,8 +2311,7 @@
 
 (deftest a-full-inventory-makes-room-before-taking-the-table
   (let [sand {:item (item :sand) :count 64}
-        inv (merge (zipmap (concat (map #(vector :hotbar %) (range 9))
-                                   (map #(vector :main %) (range 27)))
+        inv (merge (zipmap (concat (for [n (range 9)] [:hotbar n]) (for [n (range 27)] [:main n]))
                            (repeat sand))
                    {[:hotbar 0] {:item (item :wooden_pickaxe) :count 1}
                     [:hotbar 1] {:item (item :oak_planks) :count 1}
