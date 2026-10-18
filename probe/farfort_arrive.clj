@@ -88,6 +88,7 @@
         [lx lz ly] (:capture/landing w)
         {[ax ay az] :at} (sim/arrival (:decoded n) [lx ly lz])
         last-min (volatile! -1)
+        looked (volatile! #{})
         acts (atom {})
         steps (volatile! 0)
         last-taken (volatile! [nil 0])
@@ -103,7 +104,9 @@
                              (> (second tk) (second @last-taken)))
                     (vswap! steps inc))
                   (vreset! last-taken tk)
-                  (when (and (not= m @last-min) (contains? looks m)) (look world m))
+                  (when (and (contains? looks m) (not (contains? @looked m)))
+                    (vswap! looked conj m)
+                    (look world m))
                   (when (and (not= m @last-min) (zero? (mod m every)))
                     (vreset! last-min m)
                     (println "AT"
