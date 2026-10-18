@@ -215,7 +215,7 @@
    [:throw/dir "the unit [dx dz] on the plane the eye flew, toward the stronghold"
     "inside :stronghold/throws"] [:throw/at "ms the eye was first seen" "inside :stronghold/throws"]
    [:fortress/search
-    "the leg of the spiral search a fortress tunnel with no brick on record is on: {:search/from :search/heading :search/leg :search/tunnels}; the planner turns it a quarter right when the leg is over (fortress/exploring, issue #338)"
+    "the leg of the spiral search a fortress tunnel with no brick on record is on: {:search/from :search/heading :search/leg :search/tunnels :search/best :search/idle}; the planner turns it a quarter right when the leg is over (fortress/exploring, issue #338)"
     "after an exploring :tunnel-to's first tick"]
    [:search/from "the feet cell the leg began at" "inside :fortress/search"]
    [:search/heading "the unit [dx dz] the leg goes along: east, south, west or north"
@@ -225,6 +225,12 @@
     "inside :fortress/search"]
    [:search/tunnels
     "the tunnels the leg has taken, one more at each look of the planner; too many end the leg"
+    "inside :fortress/search"]
+   [:search/best
+    "the most blocks along its heading the leg's feet have been from where it began, counted from the last gain of fortress/idle-gain"
+    "inside :fortress/search"]
+   [:search/idle
+    "looks of the planner since the leg's feet last gained fortress/idle-gain blocks along its heading; fortress/idle-looks of them end the leg"
     "inside :fortress/search"]
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
