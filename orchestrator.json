@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T08:06:05.270Z",
+  "at" : "2026-10-18T08:07:14.291Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -12,17 +12,6 @@
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 228,
-    "checks" : "green",
-    "title" : "Bot stops at portal: no-footing",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 1,
-    "pr" : 435,
-    "session" : false
   }, {
     "number" : 430,
     "title" : "Bot stops at fortress: boxed",
@@ -42,10 +31,6 @@
     "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 228,
-    "move" : "merge",
-    "pr" : 435
   }, {
     "issue" : 430,
     "move" : "leave",
