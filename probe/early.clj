@@ -7,6 +7,7 @@
          '[clojurecraft.place :as place]
          '[clojurecraft.plan :as plan]
          '[clojurecraft.recipe :as recipe]
+         '[clojurecraft.scoop :as scoop]
          '[clojurecraft.sim :as sim]
          '[clojurecraft.simrace :as simrace]
          '[clojurecraft.stairs :as stairs]
@@ -117,6 +118,11 @@
            (out "-- end")
            (facts end "end")
            (when (wood? (second sig)) (wood-asks end "end"))
+           (when (= :no-water (second sig))
+             (ask "end sources" #(take 5 (scoop/sources end)))
+             (ask "end scoop-next" #(scoop/scoop-next end))
+             (ask "end deep?" #(scoop/deep? end))
+             (ask "end go-at" #(:plan/go-at end)))
            (ask "end place/spot" #(place/spot end))
            (ask "end place/niche" #(place/niche end))
            (ask "end place/fresh-rock" #(place/fresh-rock end))))
