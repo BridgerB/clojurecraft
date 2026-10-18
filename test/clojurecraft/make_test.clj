@@ -10,7 +10,7 @@
             [clojure.test.check.properties :as prop]
             [clojurecraft.blaze]
             [clojurecraft.blocks :as blocks]
-            [clojurecraft.build]
+            [clojurecraft.build :as build]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress]
             [clojurecraft.game :as game]
@@ -511,3 +511,23 @@
         done #(plan/finish-intent w {:intent/kind :collect :intent/for % :intent/status :done})]
     (is (nil? (:plan/surfaced (done :log))) "a log picked up: the climb came out to trees")
     (is (= [[6 66 6] 990000] (:plan/surfaced (done :mine-iron))) "ore picked up: the mark kept")))
+
+(deftest a-cast-keeps-a-spare-pickaxe-made-from-what-is-carried
+  ;; issues #135 and #161: bots with the one pickaxe broken far under the landing and no table
+  ;; (R1/11, R1/38, a plank and a stick or three held) climbed by hand for hours toward the wood
+  ;; for another; the casts hold a pickaxe and, like the mines, keep a spare while the table and
+  ;; the sticks are at hand
+  (let [row (fn [id] (first (filter #(= id (:goal/id %)) plan/goals)))
+        decide (fn [id held table?]
+                 (build/held-first (world-holding held table?) (row id) plan/goals nil))
+        kit {:stone_pickaxe 1 :stick 2 :cobblestone 3}]
+    (doseq [id [:cast-one :portal :nether]]
+      (is (= {:goal/spares {:tag/pickaxes 1}} (select-keys (row id) [:goal/spares]))
+          "the row names the spare")
+      (is (= :craft (:intent/kind (decide id kit true)))
+          "the table near and the sticks held: the spare is made before the build")
+      (is (= :place (:intent/kind (decide id (assoc kit :crafting_table 1) false)))
+          "the table carried is placed for it")
+      (is (nil? (decide id (assoc kit :stone_pickaxe 2) true)) "a spare held: the build goes on")
+      (is (nil? (decide id {:stone_pickaxe 1} false))
+          "one pickaxe and nothing to make another from: no trip for wood"))))
