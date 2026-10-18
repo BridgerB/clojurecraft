@@ -1,0 +1,9 @@
+;; issue #267, batch a: on the End's main island, the ten crystals put back on the spikes' tops
+;; (cages taken off), broken by pillaring; then a summoned dragon killed while it perches; three
+;; runs a row.
+{:plans/label "dragon-a"
+ :plans/jobs 2
+ :plans/issue 267
+ :plans/experiments
+ [{:exp/name "crystals" :exp/kind :gym :exp/goal "crystals" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}]}

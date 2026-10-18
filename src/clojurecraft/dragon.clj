@@ -463,18 +463,26 @@
 ;; ---------------------------------------------------------------- the goals
 
 (defmethod plan/done-by :crystals-gone?
-  ;; in the End, no end crystal shown and the feet down off every pillar and spike, once look-ms
-  ;; have passed since the plan began (the entities come a moment after the chunks)
+  ;; in the End, no end crystal shown and the feet down off every pillar and spike, standing on
+  ;; a block (the tick a dig-down's block breaks, the feet are over air and not yet down), once
+  ;; look-ms have passed since the plan began (the entities come a moment after the chunks)
   [world _]
   (boolean (and (:player/pos world)
                 (= dimension/end (dimension/of world))
                 (empty? (crystals world))
+                (:player/on-ground? world)
+                (place/solid-at? world (update (intent/feet world) 1 dec))
                 (not (on-pillar? world))
                 (not (on-spike? world))
                 (>= (- (:time/now world) (:plan/since world 0)) look-ms))))
 
 (defmethod plan/done-by :dragon-dead? [world _] (boolean (:world/dragon-dead? world)))
 
-(defmethod plan/next-intent :crystals [world _ _] (toward-crystals world))
+(defmethod plan/next-intent :crystals
+  ;; outside the End, a wait :other-dimension
+  [world _ _]
+  (if (= dimension/end (dimension/of world)) (toward-crystals world) {:plan/wait :other-dimension}))
 
-(defmethod plan/next-intent :dragon [world _ _] (toward-dragon world))
+(defmethod plan/next-intent :dragon
+  [world _ _]
+  (if (= dimension/end (dimension/of world)) (toward-dragon world) {:plan/wait :other-dimension}))
