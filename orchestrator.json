@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T00:50:38.919Z",
+  "at" : "2026-10-18T00:52:53.254Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -71,7 +71,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 342,
-    "checks" : "pending",
+    "checks" : "green",
     "title" : "Bot stops at furnace: boxed",
     "copilot" : true,
     "draft" : false,
@@ -203,9 +203,8 @@
   } ],
   "moves" : [ {
     "issue" : 342,
-    "move" : "wait",
-    "pr" : 403,
-    "why" : "checks running"
+    "move" : "merge",
+    "pr" : 403
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -1072,5 +1071,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-18T00:49:30.287Z"
+  }, {
+    "issue" : 342,
+    "move" : "merge",
+    "pr" : 403,
+    "at" : "2026-10-18T00:52:53.254Z"
   } ]
 }
