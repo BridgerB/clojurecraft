@@ -123,6 +123,7 @@
 (s/def :intent/drop-ok? boolean?)
 (s/def :intent/passage-ok? boolean?)
 (s/def :intent/retreated? boolean?)
+(s/def :intent/niche ::block-pos)
 (s/def :player/dead? boolean?)
 (s/def :player/in-lava? boolean?)
 (s/def :player/eye-in-water? boolean?)

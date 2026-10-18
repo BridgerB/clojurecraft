@@ -71,6 +71,9 @@
    [:intent/retreated?
     "a :place that has walked off to fresh rock once (place/fresh-rock) and fails :no-spot next"
     "on a :place after its walk to fresh rock"]
+   [:intent/niche
+    "the cell a :place chose to cut out of the wall for its block (place/niche): once empty it is the spot, even where a route could run through it (powder snow over it)"
+    "on a :place from the tick it starts cutting its niche"]
    [:player/air "breath left, 0-300 ticks: an estimate, down 1 under water, up 4 out"
     "after the first physics tick"]
    [:player/dead? "health reached zero; cleared by the server's respawn" "while dead"]
