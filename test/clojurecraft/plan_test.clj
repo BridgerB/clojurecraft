@@ -1130,4 +1130,3 @@
                                              (sent fx))]
       (is (>= (- t-finish t-start) (intent/finish-delay 3000 2.6)))
       (is (> (intent/finish-delay 3000 2.6) (* 2 (intent/finish-delay 3000)))))))
-
