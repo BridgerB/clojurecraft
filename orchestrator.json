@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T15:51:29.740Z",
+  "at" : "2026-10-18T15:52:39.608Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -8,15 +8,15 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 37,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
+  }, {
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
   }, {
     "number" : 284,
     "title" : "Bot stops at fortress: no-path",
@@ -65,7 +65,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 44,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 178,
     "move" : "leave",
