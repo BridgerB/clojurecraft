@@ -183,6 +183,19 @@
            (plan/next-intent (assoc w :player/pos [8.5 64.0 19.5]) row plan/goals))
         "from the foot no route gains on it: the lookout")))
 
+(deftest a-walk-toward-one-is-never-to-a-place-already-in-reach
+  ;; gym batch pearls-warped-a (plan run 39131478416) run 3: the route's end three blocks off and
+  ;; a step up, four nearer by the route's measure and within a walk's reach of the eye, so the
+  ;; walk arrived where it began and was planned again every tick for minutes
+  (let [w (-> (standing {7 (enderman [8.5 70.0 30.5])})
+              (assoc :player/pos [8.5 64.0 16.5])
+              (assoc-in [:world/chunks [0 1]] (world/column (assoc cliff [8 64 3] stone))))]
+    (is (nil? (pearls/toward w (pearls/endermen w pearls/seek-radius))))
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals)))
+    (is (= {:intent/kind :walk :intent/target [8 65 19] :intent/for :pearls}
+           (plan/next-intent (assoc w :player/pos [8.5 64.0 13.5]) row plan/goals))
+        "from farther back, the step at the cliff's foot is a walk")))
+
 (deftest the-provoke-stares-at-the-head-until-the-server-says-it-has-a-target
   (let [pos [8.5 64.0 15.5]
         w (assoc (standing {7 (enderman pos)})
@@ -268,6 +281,35 @@
          row
          plan/goals))
      "hurt with one at hand: into the burrow, not backing away in the open (gym batch pearls-263b)")))
+
+(deftest one-at-hand-not-yet-coming-is-met-from-a-burrow-and-a-hurt-bot-rests-in-it
+  ;; gym batch pearls-warped-a (plan run 39131478416): two warped forest landings in three walked
+  ;; up to a calm enderman, struck it in the open and died; the third, hurt, went from its
+  ;; burrow's end to its mouth and back for twelve minutes, its food too low to heal
+  (let [near (assoc-in (standing {7 (enderman [11.5 64.0 8.5])})
+              [:player/inventory 1]
+              (item :iron_pickaxe 1))
+        far (enderman [0.5 64.0 8.5])]
+    (is (= {:intent/kind :burrow :intent/dir [-1 0] :intent/for :pearls}
+           (plan/next-intent near row plan/goals))
+        "a pickaxe held and one at hand not coming: a burrow away from it, not a blow in the open")
+    (is (=
+         {:intent/kind :fight :intent/target 7 :intent/for :pearls}
+         (plan/next-intent (assoc-in near [:world/entities 7 :entity/creepy?] true) row plan/goals))
+        "one at hand already coming is fought: there is no time to dig")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc (burrowed [8.5 61.0 8.5] {7 far}) :player/health 6.0)
+                             row
+                             plan/goals))
+        "hurt in the burrow with none coming: it stays, not out to the mouth")
+    (is (= :eat
+           (:intent/kind (plan/next-intent (-> (burrowed [8.5 61.0 8.5] {7 far})
+                                               (assoc :player/health 6.0 :player/food 15)
+                                               (assoc-in [:player/inventory 2]
+                                                         (item :cooked_beef 8)))
+                                           row
+                                           plan/goals)))
+        "hurt, its food under 18 (where health stops coming back): a meal")))
 
 (deftest a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
   (let [kill {:intent/kind :fight

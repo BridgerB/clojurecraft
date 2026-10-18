@@ -28,6 +28,7 @@
    rain and water: the trap rows already keep the bot from fighting while it stands in water."
   (:require [clojure.math :as math]
             [clojure.string :as str]
+            [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.drops :as drops]
@@ -168,7 +169,10 @@
   "A walk toward the nearest of the candidates nearest endermen in ms when no route reaches one
    (routable found none): to the end of the route that comes nearest it (path/plan's :partial or
    :none, the way as far as it goes), when that end is toward-gain or more nearer it than the
-   feet by the route's own measure (path/flat-distance); nil when no route gains on any. Gym
+   feet by the route's own measure (path/flat-distance) and past a walk's reach of the eye
+   (intent/reach: nearer, the walk arrives where it starts, and batch pearls-warped-a's run 3,
+   plan run 39131478416, planned it again every tick for minutes); nil when no route gains on
+   any. Gym
    batch pearls-263f (plan run 38918584959, probe 39130057525): a landing on the forest floor
    tracked fifteen endermen, every route to them :none, the nearest 33 blocks off, and stood
    looking round for thirty minutes. The way as far as it goes changes what is in sight, and
@@ -179,14 +183,15 @@
     (->> ms
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (take candidates)
-         (some (fn [[_ e]]
-                 (let [c (cell (:entity/pos e))
-                       i {:intent/kind :walk :intent/target c :intent/for :pearls}
-                       to (last (:path/waypoints (path/plan world feet (intent/goal-of i) {})))]
-                   (when (and to
-                              (>= (- (path/flat-distance feet c) (path/flat-distance to c))
-                                  toward-gain))
-                     (assoc i :intent/target to))))))))
+         (some
+          (fn [[_ e]]
+            (let [c (cell (:entity/pos e))
+                  i {:intent/kind :walk :intent/target c :intent/for :pearls}
+                  to (last (:path/waypoints (path/plan world feet (intent/goal-of i) {})))]
+              (when (and to
+                         (>= (- (path/flat-distance feet c) (path/flat-distance to c)) toward-gain)
+                         (> (physics/distance (game/eye world) (physics/centre to)) intent/reach))
+                (assoc i :intent/target to))))))))
 
 ;; ---------------------------------------------------------------- the kill and its drop
 
@@ -363,9 +368,15 @@
   "The hunt's next step with no kill to pick up, in order: out of the burrow (shelter) with one
    coming (creepy), one at hand, or under 10 health, back to it (gym batch pearls-263b: a bot
    that met one in the open, or backed away hurt, died); in it, the one coming or one at hand
-   fought where the bot stands (:fight :intent/hold?); with no burrow, one at hand fought, or
-   backed away from under 10 health; no burrow near and one to provoke or coming, one dug there
-   (:burrow, a pickaxe held) away from it, so the stare goes from its mouth; in the burrow with none coming, out to its mouth to look round; one not
+   fought where the bot stands (:fight :intent/hold?); with no burrow, one at hand backed away
+   from under 10 health, fought when it is coming or no pickaxe is held (batch
+   pearls-warped-a, plan run 39131478416: two landings in three walked up to a calm one, struck
+   it in the open and died); hurt, a meal when the food is under hunger/heal-level (blaze/meal:
+   health comes back only from there), and in the burrow a :lookout where it is, never out to
+   the mouth (the same batch's run 3 went from the burrow's end to its mouth and back, hurt,
+   for twelve minutes); no burrow near and one to provoke, coming or at hand, one dug there
+   (:burrow, a pickaxe held) away from it, so the stare goes from its mouth; in the burrow with
+   none coming, out to its mouth to look round; one not
    yet coming and provokable? from here within stare-range (quarry), provoked (never one already coming: a provoke of it
    ends at once, and batch pearls-263b's bot, its pickaxe lost, provoked one 26 times in a row);
    one coming and no burrow to meet it in, fought; else a walk to the nearest within seek-radius a
@@ -382,6 +393,7 @@
                    pos)
         near? (and e (<= (combat/horizontal world e) strike-range))
         hurt? (< (:player/health world 20.0) combat/retreat-health)
+        meal (when hurt? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
         [qid q] (quarry world)]
@@ -391,9 +403,12 @@
       (and in? (or ce near?))
       {:intent/kind :fight :intent/target (if ce ceid eid) :intent/hold? true :intent/for :pearls}
       (and near? hurt?) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
-      near? {:intent/kind :fight :intent/target eid :intent/for :pearls}
-      (and (nil? home) (pickaxe? world) (or ce q))
-      {:intent/kind :burrow :intent/dir (away world (or q ce)) :intent/for :pearls}
+      (and near? (or (entity/creepy? e) (not (pickaxe? world))))
+      {:intent/kind :fight :intent/target eid :intent/for :pearls}
+      meal meal
+      (and hurt? in?) {:intent/kind :lookout :intent/for :pearls}
+      (and (nil? home) (pickaxe? world) (or ce q near?))
+      {:intent/kind :burrow :intent/dir (away world (or q ce e)) :intent/for :pearls}
       (and in? (:pearls/mouth world))
       {:intent/kind :walk :intent/target (:pearls/mouth world) :intent/for :shelter}
       qid {:intent/kind :provoke :intent/target qid :intent/for :pearls}
