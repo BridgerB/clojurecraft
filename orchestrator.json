@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T08:53:09.120Z",
+  "at" : "2026-10-18T08:54:14.585Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -21,7 +21,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 65,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at cobblestone: boxed",
     "copilot" : true,
     "draft" : false,
@@ -44,9 +44,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 65,
-    "move" : "wait",
-    "pr" : 437,
-    "why" : "checks running"
+    "move" : "nudge",
+    "pr" : 437
   }, {
     "issue" : 430,
     "move" : "leave",
@@ -1132,5 +1131,10 @@
     "move" : "ready",
     "pr" : 437,
     "at" : "2026-10-18T08:52:03.099Z"
+  }, {
+    "issue" : 65,
+    "move" : "nudge",
+    "pr" : 437,
+    "at" : "2026-10-18T08:54:14.585Z"
   } ]
 }
