@@ -25,6 +25,7 @@
             [clojurecraft.conn :as conn]
             [clojurecraft.drops]
             [clojurecraft.eat]
+            [clojurecraft.end-portal :as end-portal]
             [clojurecraft.entity :as entity]
             [clojurecraft.eyes]
             [clojurecraft.fortress]
@@ -84,8 +85,9 @@
    (:mobs, only when there is one, so older recordings' RESULTs are unchanged; the gym's entities
    trial reads it), the eyes of ender thrown (:throws, only once one is kept: the gym's throw
    trial reads the first), the nearest end portal frame remembered (:frame, only once one is: the
-   stronghold trials ask the server whether one stands there) and the plan summary (once a plan
-   began)."
+   stronghold trials ask the server whether one stands there), the nearest end portal block
+   remembered (:portal, only once one is: the end-portal trial asks the server about it, issue
+   #266) and the plan summary (once a plan began)."
   [world until ok]
   (merge {:ok ok
           :until until
@@ -108,6 +110,7 @@
            {:mobs h})
          (when (seq (:stronghold/throws world)) {:throws (:stronghold/throws world)}) ; the eyes' lines (issue #265: the gym's throw trial reads the first)
          (when-let [f (and (:player/pos world) (stronghold/nearest-frame world))] {:frame f}) ; the portal room's (the stronghold trials ask the server about it)
+         (when-let [p (and (:player/pos world) (end-portal/nearest-portal world))] {:portal p}) ; the lit portal's (the end-portal trial asks the server about it)
          (when (seq (:world/traps world)) {:escaped true}) ; only once a trap was escaped, so older recordings' RESULTs are unchanged
          (when (:plan/status world) {:plan (plan/summary world)})))
 

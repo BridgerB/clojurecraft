@@ -96,6 +96,20 @@
   (is (= ["give Clj_g1 minecraft:iron_sword 1" "give Clj_g1 minecraft:cooked_beef 8"]
          (gym/kit (gym/gym :arena-nether) "Clj_g1"))))
 
+(deftest the-portal-room-is-the-vanilla-piece-round-the-landing
+  ;; issue #266: StrongholdPieces.PortalRoom block for block, the bot landing at its (5, 1, 2)
+  (let [cmds (mapv #(gym/fill-in % "Clj_g1" [100 200 64]) gym/portal-room)]
+    (is (= "fill 95 63 198 105 70 213 minecraft:stone_bricks hollow" (first cmds)) "the shell")
+    (is (some #{"fill 99 66 206 101 66 206 minecraft:end_portal_frame[facing=south]"} cmds)
+        "the northern frames face south, two over the floor the bot lands on")
+    (is (some #{"fill 98 66 207 98 66 209 minecraft:end_portal_frame[facing=east]"} cmds))
+    (is (some #{"fill 99 64 207 101 64 209 minecraft:lava"} cmds) "the pit two under the frames")
+    (is (some #{"setblock 100 66 204 minecraft:spawner"} cmds) "in the middle of the top step")
+    (is (= 4 (count (filter #(str/includes? % "end_portal_frame") cmds)))
+        "four rows of three frames")
+    (is (= (:gym/setup (gym/gym "end-portal")) (:gym/setup (gym/gym "enter-end")) gym/portal-room))
+    (is (= [:portal] (:truth/at (first (:gym/truth (gym/gym "end-portal"))))))))
+
 (deftest each-landing-names-its-dimension
   (is (= "minecraft:the_nether" (gym/dimension-of (gym/gym :fortress))))
   (is (= "minecraft:the_nether" (gym/dimension-of (gym/gym :arena-nether))))
@@ -150,6 +164,19 @@
                   #(if (str/includes? % "if dimension") "Test failed" "Test passed"))]
     (is (not (:gym/landed? r)) "a bot that never reaches the dimension is a failed landing")
     (is (not-any? #(str/starts-with? % "give ") sent) "and never gets its kit in the wrong world")))
+
+(deftest ^:eftest/synchronized the-portal-room-landing-puts-the-bot-on-its-floor
+  ;; issue #266: the room built round the landing with its chunks loaded, then the bot teleported
+  ;; to the landing itself (the surface over it is now the roof), then the eyes
+  (let [[r sent] (landing-commands :end-portal (constantly "Test passed"))
+        at (fn [pred] (first (keep-indexed (fn [i c] (when (pred c) i)) sent)))
+        built (at #(str/starts-with? % "fill 795 69 1598 805 76 1613 minecraft:stone_bricks"))
+        tp (at #{"tp Clj_g1 800.5 70 1600.5"})
+        give (at #{"give Clj_g1 minecraft:ender_eye 14"})]
+    (is (:gym/landed? r))
+    (is (and built tp give (< built tp give)) "the room, the teleport into it, then the eyes")
+    (is (some #(str/starts-with? % "forceload add 784 1584 816 1616") sent))
+    (is (some #{"spawnpoint Clj_g1 800 70 1600"} sent))))
 
 (deftest the-pearl-rows-are-found-by-their-own-names
   ;; issue #263: pearls-1 and pearls-1-live share the goal :ender-pearl and the --until pearls-1
