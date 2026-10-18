@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T04:06:35.481Z",
+  "at" : "2026-10-18T04:07:41.762Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -22,13 +22,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 338,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at fortress: timeout",
     "copilot" : true,
     "draft" : true,
     "nudges" : 0,
     "pr" : 426,
-    "session" : true
+    "session" : false
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -76,9 +76,8 @@
     "why" : "session running"
   }, {
     "issue" : 338,
-    "move" : "wait",
-    "pr" : 426,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 426
   }, {
     "issue" : 71,
     "move" : "leave",
@@ -1085,5 +1084,10 @@
     "issue" : 338,
     "move" : "assign",
     "at" : "2026-10-18T03:57:42.570Z"
+  }, {
+    "issue" : 338,
+    "move" : "ready",
+    "pr" : 426,
+    "at" : "2026-10-18T04:07:41.762Z"
   } ]
 }
