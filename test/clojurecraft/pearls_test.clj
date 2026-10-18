@@ -360,14 +360,9 @@
     (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [-1 0] :intent/for :pearls}
            (plan/next-intent (looked-out w) row plan/goals))
         "then a flight of stairs toward it, descend-step down")
-    (is (= {:intent/kind :lookout :intent/for :pearls}
-           (plan/next-intent (looked-out (standing {7 below})) row plan/goals))
-        "no pickaxe: no stairs")
-    (is (= {:intent/kind :lookout :intent/for :pearls}
-           (plan/next-intent (looked-out (assoc w :world/entities {7 (enderman [8.5 59.0 8.5])}))
-                             row
-                             plan/goals))
-        "five below is a slope's worth, not another level")
+    (is (nil? (pearls/descend (standing {7 below}) {7 below})) "no pickaxe: no stairs")
+    (is (nil? (pearls/descend w {7 (enderman [8.5 59.0 8.5])}))
+        "five below is a slope's worth, not another level: the roam's")
     (let [w (-> (burrowed [3.5 64.0 8.5] {7 (enderman [12.5 40.0 8.5])})
                 (assoc :world/chunks {[0 0] (world/column (merge burrow ledge-wall))}))]
       (is (nil? (pearls/toward w (pearls/endermen w pearls/seek-radius)))
