@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:43:34.913Z",
+  "at" : "2026-10-18T02:45:51.496Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -85,14 +85,14 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 161,
-    "title" : "Bot stops at portal-kit: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : false
-  }, {
     "number" : 110,
     "title" : "Bot stops at pickaxe: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 161,
+    "title" : "Bot stops at portal-kit: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
     "number" : 69,
@@ -189,11 +189,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 161,
+    "issue" : 110,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 110,
+    "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
