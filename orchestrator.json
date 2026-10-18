@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:06:30.271Z",
+  "at" : "2026-10-18T02:07:39.805Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,7 +43,7 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 410,
     "checks" : "red",
@@ -175,9 +175,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 410,
-    "move" : "stuck",
-    "pr" : 416,
-    "why" : "answered with no push"
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 60,
     "move" : "leave",
@@ -190,6 +189,9 @@
     "issue" : 74,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 338,
+    "move" : "assign"
   }, {
     "issue" : 161,
     "move" : "leave",
@@ -1134,5 +1136,9 @@
     "pr" : 416,
     "why" : "answered with no push",
     "at" : "2026-10-18T02:06:30.271Z"
+  }, {
+    "issue" : 338,
+    "move" : "assign",
+    "at" : "2026-10-18T02:07:39.805Z"
   } ]
 }
