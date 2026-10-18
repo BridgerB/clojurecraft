@@ -220,6 +220,9 @@
    [:plan/boxed-route
     "feet cells visited by descents or tunnels that ended :boxed: a retreat seeks ground outside those failed searches"
     "after a :boxed staircase or tunnel"]
+   [:plan/retreat-unreachable
+    "targets of build retreat walks that failed :no-path: later retreat searches exclude them"
+    "after a build retreat walk fails :no-path"]
    [:plan/surfaced
     "[feet ms] where and when the last climb out to the surface came out: a spare's climb is not cut again from below near it for a while"
     "after a climb out comes out"]
@@ -242,7 +245,7 @@
     "intents the planner starts"]
    [:intent/reason "why it failed, or why the planner abandoned it" "a failed or abandoned intent"]
    [:intent/target
-    "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265) (issue #259: a widening, a position is still one)"
+    "block position it acts on or walks to; for a :fight, a :back-off or a :provoke (issue #263), the entity id it is after; for a :throw-eye, the eye it follows (issue #265); for a :tunnel for :bank or :lava, the water or the lava source it heads for (issue #130) (issue #259: a widening, a position is still one)"
     "most intents"]
    [:intent/for
     "what the intent serves (:log, :log-hunt, a mining row's id), so chains continue only their own"
