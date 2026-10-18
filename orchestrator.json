@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T06:04:24.206Z",
+  "at" : "2026-10-18T06:05:28.841Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,11 +18,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 363,
-    "title" : "Bot stops at portal: boxed",
-    "labels" : [ "bot-failure", "sim", "agent-stuck" ],
-    "copilot" : false
-  }, {
     "number" : 430,
     "title" : "Bot stops at fortress: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -33,14 +28,14 @@
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
-    "number" : 62,
-    "title" : "Bot stops at ingots: timeout",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : false
-  }, {
     "number" : 69,
     "title" : "Bot stops at water-bucket: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 62,
+    "title" : "Bot stops at ingots: timeout",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   } ],
   "moves" : [ {
@@ -56,10 +51,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 363,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 430,
     "move" : "leave",
     "why" : "hands-off label"
@@ -68,11 +59,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 62,
+    "issue" : 69,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 69,
+    "issue" : 62,
     "move" : "leave",
     "why" : "hands-off label"
   } ],
