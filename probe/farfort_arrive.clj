@@ -77,6 +77,8 @@
                     (* 60000 (Long/parseLong minutes))
                     {:event/kind :go :go/goals [:fortress]})
         world (:world r)]
+    (println "STEPS" @steps "TICKS" (reduce + (vals @acts)))
+    (doseq [[k v] (take 25 (sort-by (comp - val) @acts))] (println "ACT" v (pr-str k)))
     (println "END"
              file
              seed
