@@ -217,7 +217,11 @@
    [:fortress/search
     "the leg of the spiral search a fortress tunnel with no brick on record is on: {:search/from :search/heading :search/leg :search/tunnels}; the planner turns it a quarter right when the leg is over (fortress/exploring, issue #338)"
     "after an exploring :tunnel-to's first tick"]
-   [:search/from "the feet cell the leg began at" "inside :fortress/search"]
+   [:way/from "the cell a route edge leaves" "inside :intent/ways"]
+   [:way/to "the cell a route edge arrives at" "inside :intent/ways"]
+   [:way/via
+    "how an edge of a route is taken: :walk (ground a walk crosses) or :dig (a tunnel step)"
+    "inside :intent/ways"] [:search/from "the feet cell the leg began at" "inside :fortress/search"]
    [:search/heading "the unit [dx dz] the leg goes along: east, south, west or north"
     "inside :fortress/search"]
    [:search/leg
@@ -302,6 +306,9 @@
    [:intent/hop?
     "a :tunnel-to that walks over open ground toward its target where a route exists (fortress/hop-target) before it digs a step; the fortress goal sets it"
     "a :tunnel-to to a brick or along a search leg"]
+   [:intent/ways
+    "the rest of the route a :tunnel-to follows (fortress/plan-route): edges {:way/from :way/to :way/via}, :walk or :dig, the first leaving from the feet"
+    ":tunnel-to with :intent/hop?, after its route was planned"]
    [:intent/hop-fails
     "hops (walks over open ground) of this :tunnel-to that failed; after hop-tries of them it only digs"
     ":tunnel-to, after a failed hop"]

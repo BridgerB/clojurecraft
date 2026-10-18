@@ -451,6 +451,10 @@
 (s/def :intent/dry? boolean?)
 (s/def :intent/hop? boolean?)
 (s/def :intent/hop-fails nat-int?)
+(s/def :way/from ::block-pos)
+(s/def :way/to ::block-pos)
+(s/def :way/via #{:walk :dig})
+(s/def :intent/ways (s/coll-of (s/keys :req [:way/from :way/to :way/via]) :kind vector?))
 (s/def :intent/search :fortress/search)
 (s/def :intent/trunk ::block-pos)
 (s/def :intent/stage keyword?)
@@ -893,11 +897,12 @@
          :visited :intent/tunnel-visited)
   :ret (s/nilable :intent/move))
 
-(s/fdef fortress/hop-target
+(s/fdef fortress/plan-route
   :args
-  (s/cat :world (requires :world/chunks :player/pos)
+  (s/cat :world (requires :world/chunks)
+         :feet ::block-pos
          :target ::block-pos)
-  :ret (s/nilable ::block-pos))
+  :ret (s/nilable (s/coll-of (s/keys :req [:way/from :way/to :way/via]) :kind vector?)))
 
 (def selected
   "Every function whose selection is stated above, for instrument."
@@ -907,5 +912,5 @@
    `place/ashore `stone/redig-place `window/view `path/plan `path/classify `entity/hostiles
    `entity/gone? `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe?
    `stairs/down-lay `stone/retreat `build/safe-source? `build/scoop-blocked? `build/lit-entry
-   `fortress/next-move `fortress/hop-target])
+   `fortress/next-move `fortress/plan-route])
 (s/def :stats/deaths pos-int?)

@@ -13,6 +13,7 @@
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
+            [clojurecraft.dig :as dig]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.intent :as intent]
             [clojurecraft.make :as make]
@@ -33,7 +34,12 @@
 (def explore-band [52 90])            ; the heights an exploring tunnel keeps to: over the lava sea (y 31) and its lakes, under the roof
 (def look-ahead 2)                    ; blocks ahead that must be loaded for a leg to go on: the world's edge turns it
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
-(def hop-nodes 6000)                  ; expansions a look for open ground toward the target may spend
+(def walk-ticks 5.0)                  ; ticks a cell of walking costs: a block in 4.6
+(def dig-ticks 15.0)                  ; ticks every cell a step opens costs besides the break: settle, aim, start, confirm
+(def step-ticks 12.0)                 ; ticks the walk into a cell a step opened costs
+(def floor-ticks 12.0)                ; ticks laying a floor block costs
+(def route-nodes 6000)                ; expansions a route search may spend
+(def route-weight 2.4)                ; what the route search's heuristic multiplies walking's cost by: a search that reaches
 (def hop-gain 8)                      ; blocks nearer the target a route over open ground must end to be walked
 (def hop-longest 96)                  ; waypoints of a route one hop walks before the planner looks again
 (def hop-tries 2)                     ; failed hops a tunnel forgives before it only digs
@@ -234,21 +240,111 @@
        (intent/failed? child)
        (= :no-path (:intent/reason child))))
 
-(defn hop-target
-  "The cell a walk over open ground toward target should end at, or nil: the end of the route
-   path/plan finds from the feet over what is loaded (cut at hop-longest waypoints), when it ends
-   at least hop-gain nearer target on the plane than the feet. The route keeps clear of lava and
-   long drops as every walk does, so it crosses a cavern floor where there is one; a tunnel digs
-   where there is none. Sim runs R2/4 and R2/5 (issue #338) tunnelled 4 blocks a minute over
-   ground a 158-waypoint route crossed."
-  [world target]
-  (let [from (path/feet-cell (:player/pos world))
-        {:path/keys [waypoints]} (path/plan world
-                                            from
-                                            {:goal/kind :near :goal/pos target :goal/range reach}
-                                            {:path/max-nodes hop-nodes})
-        end (nth waypoints (dec (min hop-longest (count waypoints))) nil)]
-    (when (and end (>= (- (path/octile from target) (path/octile end target)) hop-gain)) end)))
+;; ---------------------------------------------------------------- a route over ground and rock
+
+(defn break-ticks
+  "A function from a block state id to the ticks breaking it costs with the best tool world holds
+   (the hand when none is of its kind): dig-ticks and the break's time, nil for an unbreakable
+   block. Remembered, a route search asks it for the same few blocks again and again."
+  [world]
+  (let [inventory (:player/inventory world)
+        penalties (intent/penalties world)]
+    (memoize (fn [id]
+               (let [[_ item] (dig/best-tool id inventory penalties)
+                     ms (dig/ms id item penalties)]
+                 (when ms (+ dig-ticks (/ (double ms) physics/tick-ms))))))))
+
+(defn dig-step-ticks
+  "The ticks the step from feet by move takes as a route search counts it: the walk in, each cell
+   it opens by its break time (nothing for an open one) and a floor the feet cannot walk by laying
+   one over it, digging the old one first when it is solid. ticks is break-ticks'."
+  [world ticks feet move]
+  (let [cell-ticks (fn [c]
+                     (let [id (terrain/block-at world c)]
+                       (if (blocks/solid? id) (or (ticks id) 1e9) 0.0)))
+        floor (plus (plus feet move) [0 -1 0])]
+    (+ step-ticks
+       (reduce + (map cell-ticks (opens feet move)))
+       (if (path/floor? world floor) 0.0 (+ floor-ticks (cell-ticks floor))))))
+
+(defn ways
+  "The edges leaving feet: [{:way/to :way/cost :way/via}], the walks path/neighbors allows over
+   cells at (path/cells) and every step safe? allows, each with its ticks."
+  [world at ticks feet]
+  (concat
+   (for [{:keys [node cost]} (path/neighbors at feet)]
+     {:way/to node :way/cost (* walk-ticks cost) :way/via :walk})
+   (for [[dx dz] aside
+         dy [0 -1 1]
+         :let [move [dx dy dz]]
+         :when (safe? world feet move)]
+     {:way/to (plus feet move) :way/cost (dig-step-ticks world ticks feet move) :way/via :dig})))
+
+(defn way-edges
+  "The edges [{:way/from :way/to :way/via}] from the first node of parents (a map node to [previous
+   via]) to end, in order."
+  [parents end]
+  (loop [node end
+         edges ()]
+    (let [[prev via] (get parents node)]
+      (if prev (recur prev (conj edges {:way/from prev :way/to node :way/via via})) (vec edges)))))
+
+(defn plan-route
+  "A route from feet toward target over the loaded world, as edges [{:way/from :way/to :way/via}]
+   in order, :way/via :walk (a cell of ground path/neighbors walks) or :dig (a step, safe? and
+   opening what it must): the cheapest in ticks a weighted search finds in route-nodes
+   expansions, to within reach of target or, when the budget runs out, to the node it came
+   nearest. nil when that is less than hop-gain nearer target than feet. Walking is cheap and
+   digging dear (break-ticks), so the route crosses a cavern floor and goes round the rock where
+   it can, never past what safe? refuses. Issue #338: sim runs R2/4 and R2/5 dug 90 percent of
+   their time, by hand once the one stone pickaxe wore out, with open ground beside them."
+  [world feet target]
+  (let [at (path/cells world)
+        ticks (break-ticks world)
+        dist #(path/octile % target)
+        h #(* route-weight walk-ticks (dist %))
+        finish (fn [parents end]
+                 (when (>= (- (dist feet) (dist end)) hop-gain) (way-edges parents end)))]
+    (loop [open (sorted-set [(h feet) 0.0 feet])
+           g {feet 0.0}
+           parents {feet nil}
+           closed #{}
+           best feet
+           expanded 0]
+      (let [[_ gn node :as entry] (first open)]
+        (cond (or (nil? entry) (>= expanded route-nodes)) (finish parents best)
+              (closed node) (recur (disj open entry) g parents closed best expanded)
+              (<= (dist node) reach) (finish parents node)
+              :else
+              (let [[open g parents] (reduce (fn [[open g parents] {:way/keys [to cost via]}]
+                                               (let [g' (+ gn cost)]
+                                                 (if (and (not (closed to))
+                                                          (< g' (get g to Double/MAX_VALUE)))
+                                                   [(conj open [(+ g' (h to)) g' to])
+                                                    (assoc g to g') (assoc parents to [node via])]
+                                                   [open g parents])))
+                                             [(disj open entry) g parents]
+                                             (ways world at ticks node))]
+                (recur open
+                       g
+                       parents
+                       (conj closed node)
+                       (if (< (dist node) (dist best)) node best)
+                       (inc expanded))))))))
+
+(defn live-route
+  "The route to follow from feet toward target: route, the rest of the one an intent holds, while
+   its first edge leaves from feet and, when a step, is still safe?; else a fresh plan-route. nil
+   when there is none."
+  [world feet target route]
+  (let [{:way/keys [from to via]} (first route)]
+    (cond (and from (= from feet) (or (= :walk via) (safe? world feet (mapv - to feet)))) route
+          :else (plan-route world feet target))))
+
+(defn walk-end
+  "The cell a hop along route ends at: the end of its leading walks, hop-longest of them at most."
+  [route]
+  (:way/to (last (take-while #(= :walk (:way/via %)) (take hop-longest route)))))
 
 (defn hop-child
   "The walk a hop is: a :walk intent to cell, marked :hop so the tunnel tells it from a step's."
@@ -288,57 +384,67 @@
     :as i} event]
   (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
         feet (intent/feet world)]
-    (cond
-      (or (arrived? world target r) (>= taken steps))
-      (-> world
-          (assoc :player/controls {})
-          intent/done)
-      (and move (or (off-step? feet from move) (lost-way? i)))
-      (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
-      (and (nil? move) (= :hop (:intent/for child))) (hop-step world event i)
-      (nil? move)
-      (let [hop (when (and hop? (< hop-fails hop-tries)) (hop-target world target))
-            m (when-not hop (next-move world feet target climb (boolean dry?) tunnel-visited))]
-        (cond hop
-              (intent/assoc-intent (assoc world :player/controls {}) :intent/child (hop-child hop))
-              m
-              (intent/assoc-intent (assoc world :player/controls {})
-                                   :intent/move m
-                                   :intent/from feet
-                                   :intent/tunnel-visited (conj tunnel-visited feet))
-              :else
-              (-> world
-                  (assoc :player/controls {})
-                  (intent/fail :blocked))))
-      :else
-      (let [next (build/next-op world (step-plan from move))
-            next (cond-> next
-                   (= :place (:build/op next))
-                   (assoc :build/item (or (stairs/filler world 1) :cobblestone)))]
-        (cond (nil? next)
-              (reduce
-               intent/dissoc-intent
-               (intent/assoc-intent (assoc world :player/controls {}) :intent/taken (inc taken))
-               step-keys)
-              (and (#{:floor-clear :open :enter} (:build/step next)) (not (safe? world from move)))
-              (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
-              (and (= :enter (:build/step next))
-                   (= :walk (:intent/kind child))
-                   (intent/failed? child)
-                   (= :no-path (:intent/reason child))
-                   (= :none (:intent/route child))
-                   (empty? (:intent/waypoints child))
-                   (intent/routable? world child))
-              (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
-              :else
-              (let [world (build/work-op world i next event)
-                    i (:plan/intent world)]
-                (cond (and (intent/failed? i) (= :no-pickaxe (:intent/reason i)))
-                      (-> world
-                          (assoc :player/controls {})
-                          (intent/dissoc-intent :intent/reason)
-                          intent/done)
-                      :else world)))))))
+    (cond (or (arrived? world target r) (>= taken steps))
+          (-> world
+              (assoc :player/controls {})
+              intent/done)
+          (and move (or (off-step? feet from move) (lost-way? i)))
+          (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
+          (and (nil? move) (= :hop (:intent/for child))) (hop-step world event i)
+          (nil? move)
+          (let [route (when (and hop? (< hop-fails hop-tries))
+                        (live-route world feet target (:intent/ways i)))
+                head (first route)
+                m (when-not head (next-move world feet target climb (boolean dry?) tunnel-visited))]
+            (cond (= :walk (:way/via head))
+                  (-> (assoc world :player/controls {})
+                      (intent/assoc-intent :intent/child (hop-child (walk-end route)))
+                      (intent/dissoc-intent :intent/ways))
+                  head
+                  (intent/assoc-intent (assoc world :player/controls {})
+                                       :intent/move (mapv - (:way/to head) feet)
+                                       :intent/from feet
+                                       :intent/tunnel-visited (conj tunnel-visited feet)
+                                       :intent/ways (vec (rest route)))
+                  m
+                  (intent/assoc-intent (assoc world :player/controls {})
+                                       :intent/move m
+                                       :intent/from feet
+                                       :intent/tunnel-visited (conj tunnel-visited feet))
+                  :else
+                  (-> world
+                      (assoc :player/controls {})
+                      (intent/fail :blocked))))
+          :else
+          (let [next (build/next-op world (step-plan from move))
+                next (cond-> next
+                       (= :place (:build/op next))
+                       (assoc :build/item (or (stairs/filler world 1) :cobblestone)))]
+            (cond (nil? next)
+                  (reduce
+                   intent/dissoc-intent
+                   (intent/assoc-intent (assoc world :player/controls {}) :intent/taken (inc taken))
+                   step-keys)
+                  (and (#{:floor-clear :open :enter} (:build/step next))
+                       (not (safe? world from move)))
+                  (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
+                  (and (= :enter (:build/step next))
+                       (= :walk (:intent/kind child))
+                       (intent/failed? child)
+                       (= :no-path (:intent/reason child))
+                       (= :none (:intent/route child))
+                       (empty? (:intent/waypoints child))
+                       (intent/routable? world child))
+                  (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
+                  :else
+                  (let [world (build/work-op world i next event)
+                        i (:plan/intent world)]
+                    (cond (and (intent/failed? i) (= :no-pickaxe (:intent/reason i)))
+                          (-> world
+                              (assoc :player/controls {})
+                              (intent/dissoc-intent :intent/reason)
+                              intent/done)
+                          :else world)))))))
 
 ;; ---------------------------------------------------------------- the goal
 
