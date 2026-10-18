@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T04:36:21.204Z",
+  "at" : "2026-10-18T04:37:26.942Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -17,7 +17,7 @@
     "draft" : false,
     "nudges" : 3,
     "pr" : 416,
-    "session" : true
+    "session" : false
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -67,7 +67,7 @@
     "issue" : 410,
     "move" : "wait",
     "pr" : 416,
-    "why" : "session running"
+    "why" : "checks running"
   }, {
     "issue" : 338,
     "move" : "leave",
