@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:04:01.096Z",
+  "at" : "2026-10-18T03:05:09.289Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -28,22 +28,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 162,
-    "checks" : "pending",
-    "title" : "Bot stops at portal: no-path",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 421,
-    "session" : false
-  }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
     "number" : 410,
@@ -53,6 +37,22 @@
     "draft" : false,
     "nudges" : 1,
     "pr" : 416,
+    "session" : false
+  }, {
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "quiet" : false,
+    "number" : 162,
+    "checks" : "pending",
+    "title" : "Bot stops at portal: no-path",
+    "copilot" : true,
+    "draft" : false,
+    "nudges" : 0,
+    "pr" : 421,
     "session" : false
   }, {
     "number" : 44,
@@ -78,7 +78,7 @@
     "number" : 284,
     "title" : "Bot stops at fortress: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
@@ -90,14 +90,14 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 161,
-    "title" : "Bot stops at portal-kit: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : false
-  }, {
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 161,
+    "title" : "Bot stops at portal-kit: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
     "number" : 74,
@@ -151,18 +151,18 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 162,
-    "move" : "wait",
-    "pr" : 421,
-    "why" : "checks running"
+    "issue" : 410,
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 41,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 410,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "issue" : 162,
+    "move" : "wait",
+    "pr" : 421,
+    "why" : "checks running"
   }, {
     "issue" : 44,
     "move" : "leave",
@@ -175,10 +175,6 @@
     "issue" : 87,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 284,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 75,
     "move" : "leave",
