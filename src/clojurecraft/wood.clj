@@ -375,15 +375,20 @@
 
 (defn way-out
   "With no log to set out for (gather-next waits :no-log), the way out the water hunt takes from
-   where the feet are, never in water (the escape owns it): out of a pit under the open sky deep
-   under the landing (scoop/pit-climb), else from a cell under rock where a climb out died :boxed
-   (scoop/boxed-here?) a retreat to new rock (stone/retreat), the next climb from there; nil when
-   neither. Sim race 38843552659 (issue #186): world R1/18 stood at y 6 on a ravine's floor
-   sixty under its landing, the sky open and no hunt target in its band, and world R4/39 under
-   rock at y 47 where its climb out had died :boxed, and both waited :no-log with trees
-   remembered sixty blocks off."
+   where the feet are. In water (:player/in-water?: wading is no trap, the eye is in air, so the
+   escape does not own it, and a trapped bot never gets here), a :swim-out for :retreat, done on
+   dry land, from where a route to the trunks starts again. Out of water: out of a pit under the
+   open sky deep under the landing (scoop/pit-climb), else from a cell under rock where a climb
+   out died :boxed (scoop/boxed-here?) a retreat to new rock (stone/retreat), the next climb from
+   there; nil when neither. Sim race 38843552659 (issue #186): world R1/18 stood at y 6 on a
+   ravine's floor sixty under its landing, the sky open and no hunt target in its band, and world
+   R4/39 under rock at y 47 where its climb out had died :boxed, and both waited :no-log with
+   trees remembered sixty blocks off. Sim world R1/30 (issue #110): the bot dropped from a
+   canopy into a lake a block deep, the two trunks left standing a step from the bank, and with
+   its feet in the water no route started: it waited :no-log until the plan failed."
   [world]
-  (when-not (:player/in-water? world)
+  (if (:player/in-water? world)
+    {:intent/kind :swim-out :intent/for :retreat}
     (or (scoop/pit-climb world)
         (when (and (scoop/boxed-here? world) (not (terrain/under-sky? world (intent/feet world))))
           (stone/retreat world)))))

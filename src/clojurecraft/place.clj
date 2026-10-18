@@ -58,6 +58,20 @@
   (boolean (some-> (terrain/block-at world pos)
                    blocks/solid?)))
 
+(defn walled-at?
+  "Is the block at pos loaded and one a niche is walled by: solid, or powder snow. Powder snow
+   has no collision for a player (blocks/passable-types), so it is not solid, but it is not air
+   either: it never fills a dug cell the way gravel does, and a cell of it dug out is a cell a
+   block goes into. Issue #68's real snapshots (bots Clj_r03 and Clj_r10 of two races) stood in
+   a powder-snow cave with the furnace made: the cells round the feet were powder snow, which a
+   block is not placed into, and every rock wall had powder snow over or under it, so no niche
+   was solid on all sides and the furnace failed :no-spot three times."
+  [world pos]
+  (boolean (or (solid-at? world pos)
+               (= :powder_snow
+                  (some-> (terrain/block-at world pos)
+                          blocks/name-of)))))
+
 (defn passage?
   "Is cell part of a way through: the feet could stand in it (path/standable?) and two or more
    of its horizontal neighbours are solid, a corridor (a staircase, a tunnel) rather than open
@@ -198,13 +212,13 @@
   "A cell beside the feet at their level, or beside the head when none is there (the block
    goes into the wall at head height, still in reach to open: race 38477665442 bot Clj_r12 at
    the end of its tunnel had water beside both side walls and its table in the third, and
-   found no spot for the furnace, :no-spot), that, dug out, is a spot no way runs through: solid,
-   with solid under and over it, nothing over it that falls (gravel or sand fill the niche
-   again as soon as it is dug: race 38477665442 bot Clj_r14 dug two such niches seven times in
-   turn and was refused), no fluid beside it (the dig would refuse it), not a block the held
-   tools cannot drop (batch iron-a3 run 5 failed placing its furnace :needs-tool three times
-   on one), neither a block
-   that is never dug nor one the bot placed (a table in the last niche); nil when none. Where a
+   found no spot for the furnace, :no-spot), that, dug out, is a spot no way runs through: solid
+   (or powder snow, walled-at?), with solid under it and walled over it, nothing over it that
+   falls (gravel or sand fill the niche again as soon as it is dug: race 38477665442 bot Clj_r14
+   dug two such niches seven times in turn and was refused), no fluid beside it (the dig would
+   refuse it), not a block the held tools cannot drop (batch iron-a3 run 5 failed placing its
+   furnace :needs-tool three times on one), neither a block that is never dug nor one the bot
+   placed (a table in the last niche); nil when none. Where a
    staircase has no spot, the wall gives one: the side nearest the landing (:plan/go-at), never
    the wall ahead, where the way goes on (batch iron-a2 run 1 put its table there, and its
    tunnel dug through it)."
@@ -218,9 +232,9 @@
                                       (physics/horizontal-distance [(+ fx dx 0.5) 0 (+ fz dz 0.5)]
                                                                    home))))
                  :let [c [(+ fx dx) (+ fy dy) (+ fz dz)]]
-                 :when (and (solid-at? world c)
+                 :when (and (walled-at? world c)
                             (solid-at? world (update c 1 dec))
-                            (solid-at? world (update c 1 inc))
+                            (walled-at? world (update c 1 inc))
                             (not (blocks/falls? (terrain/block-at world (update c 1 inc))))
                             (not (intent/exposes-fluid? world c))
                             (droppable? world (terrain/block-at world c))

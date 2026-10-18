@@ -19,6 +19,7 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
   - src/clojurecraft/stone.clj#defn retreat
   - test/clojurecraft/plan_test.clj#a-climb-for-wood-boxed-under-gravel-takes-the-short-way-away
+  - test/clojurecraft/plan_test.clj#a-bot-wading-with-no-log-in-reach-swims-out
   - src/clojurecraft/wood.clj#defn trees-climb
   - src/clojurecraft/wood.clj#defn trees-descend
   - test/clojurecraft/plan_test.clj#a-trunk-far-below-is-descended-toward-when-out
@@ -79,6 +80,7 @@ Getting a log is a chain of three intents, each started by the planner after the
 
 ## Gotchas
 - A boxed climb under gravel must not wait just because its way back is shorter than `stone/retreat-distance`. The gather act's `way-out` uses `stone/retreat`, which accepts the last unboxed waypoint of an exhausted search from boxed feet when the full distance is unreachable. Issue #370 (R1/29) had eight reachable tunnel cells, none twelve blocks away; gathering now walks away and re-plans a climb while the gravel and boxed-cell guards remain intact.
+- Wading is no trap, so nothing swims a wader out. `way-out` answers a bot with its feet in water (`:player/in-water?`, never a trapped one: the escape preempts that) with a `:swim-out` for `:retreat`, done on dry land, where the routes to the trunks start again. Sim world R1/30 (issue #110): the bot dropped from a canopy into a lake a block deep with the trunks a step from the bank, no route started from the water, and the plan waited `:no-log` out (`a-bot-wading-with-no-log-in-reach-swims-out`).
 - The tag exists so a walk for another purpose (to a crafting table) is never continued as a dig; before it, any finished walk or dig was assumed to be part of a log chain.
 - The chain lives entirely in `:plan/last` and the intent maps; nothing else remembers it. A failed intent clears `:plan/last`, so a failure restarts the chain from a fresh search with the target blacklisted.
 - The sim test drops a 2x2 oak canopy one block above the ground between bot and trunk; the bot breaks the leaf at `[3 65 0]` and finishes with no failed attempts.

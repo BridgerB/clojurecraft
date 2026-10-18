@@ -167,6 +167,18 @@
     (is (= {:plan/wait :no-log} (wood/gather-next (boxed (bed :gravel))))
         "never under gravel, which would fall on the bot")))
 
+(deftest a-bot-wading-with-no-log-in-reach-swims-out
+  ;; sim world R1/30 (issue #110): dropped from a canopy into a lake one block deep, the trunks
+  ;; left a step from the bank, no route started from the water, and the plan waited :no-log
+  ;; out with the wading no trap
+  (let [w (assoc (remembered {[8 50 8] blocks/water-base} [8.5 50.0 8.5]) :player/in-water? true)]
+    (is (= {:plan/wait :no-log} (wood/gather-next w)) "no log to set out for")
+    (is (= {:intent/kind :swim-out :intent/for :retreat} (wood/gather-or-out w))
+        "swim out to the bank instead of waiting in the water")
+    (is (not= {:intent/kind :swim-out :intent/for :retreat}
+              (wood/gather-or-out (assoc w :player/in-water? false)))
+        "on land it waits as before")))
+
 (deftest a-climb-for-wood-boxed-under-gravel-takes-the-short-way-away
   (let [corridor (into {[12 64 8] 136} (for [x (range 5 10) y [48 49]] [[x y 5] blocks/air]))
         bed (into corridor (for [x (range 5 10)] [[x 51 5] (blocks/default-state :gravel)]))

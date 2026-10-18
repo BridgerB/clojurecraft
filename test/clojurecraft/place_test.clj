@@ -24,6 +24,11 @@
       (assoc :bot/phase :play :player/pos pos :player/loaded? true :player/on-ground? true)
       (assoc :world/chunks {[0 0] (world/column {})})))
 
+(defn solid-under?
+  "Is the block under cell solid?"
+  [w cell]
+  (place/solid-at? w (update cell 1 dec)))
+
 (defn overlaps?
   [[px py pz] [x y z]]
   (and (< (- px 0.3) (inc x))
@@ -208,6 +213,22 @@
                  :world/chunks {[0 0] (world/column rock)}
                  :plan/go-at [2.5 64.0 8.0])]
     (is (#{[8 65 9] [8 65 7]} (place/niche w)) "a side wall at head height")))
+
+(deftest a-niche-is-cut-in-powder-snow
+  ;; issue #68, real snapshots Clj_r03 and Clj_r10: the furnace made, the bot stood in a
+  ;; powder-snow cave. Powder snow is no collision for a player and no cell a block goes into,
+  ;; so there was no spot, and no rock wall was solid on every side (powder snow over it): three
+  ;; :no-spot failures. The powder snow is dug and the furnace set where it was.
+  (let [snow (blocks/default-state :powder_snow)
+        rock (merge (into {} (for [x (range 16) y (range 63 70) z (range 16)] [[x y z] 1]))
+                    (into {} (for [x (range 5 12) y (range 64 67) z (range 5 12)] [[x y z] snow]))
+                    {[8 64 8] 0 [8 65 8] 0})
+        w (assoc (standing [8.5 64.0 8.5]) :world/chunks {[0 0] (world/column rock)})
+        n (place/niche w)]
+    (is (nil? (place/spot w)) "no air to place into, no spot")
+    (is (some? n) "a niche, where there was none")
+    (is (= :powder_snow (blocks/name-of (terrain/block-at w n))) "the powder snow is the niche")
+    (is (solid-under? w n) "with rock under it for the block to stand on")))
 
 (deftest a-block-is-never-placed-on-a-table
   ;; gym batch iron-a5 run 4: the only spot was on its crafting table, and a right-click on a
