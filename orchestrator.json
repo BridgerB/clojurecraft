@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T00:03:11.993Z",
+  "at" : "2026-10-18T00:04:19.776Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -84,6 +84,11 @@
     "pr" : 403,
     "session" : true
   }, {
+    "number" : 349,
+    "title" : "Bot stops at flint-and-steel: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : true,
     "number" : 178,
@@ -94,11 +99,6 @@
     "nudges" : 0,
     "pr" : 387,
     "session" : false
-  }, {
-    "number" : 349,
-    "title" : "Bot stops at flint-and-steel: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : false,
