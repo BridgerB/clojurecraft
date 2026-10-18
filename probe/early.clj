@@ -75,6 +75,10 @@
   (ask (str tag " child")
        #(select-keys (:intent/child (:plan/intent world))
                      [:intent/kind :intent/for :intent/target :intent/status :intent/reason]))
+  (ask (str tag " chosen")
+       #(let [g (plan/choose world plan/goals)]
+          (select-keys g [:goal/id :goal/act :goal/plan :goal/needs :goal/item :goal/doc])))
+  (ask (str tag " next-intent") #(plan/next-intent world (plan/choose world plan/goals) plan/goals))
   (ask (str tag " last") #(:plan/last world))
   (ask (str tag " reason") #(:plan/reason world))
   (ask (str tag " wait") #(:plan/wait world))
