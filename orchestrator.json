@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:18:49.339Z",
+  "at" : "2026-10-18T02:19:59.214Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -95,10 +95,16 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 286,
-    "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "quiet" : false,
+    "number" : 286,
+    "checks" : "pending",
+    "title" : "Bot stops at fortress: blocked",
+    "copilot" : true,
+    "draft" : true,
+    "nudges" : 0,
+    "pr" : 418,
+    "session" : true
   }, {
     "number" : 110,
     "title" : "Bot stops at pickaxe: no-log",
@@ -201,7 +207,9 @@
     "why" : "hands-off label"
   }, {
     "issue" : 286,
-    "move" : "assign"
+    "move" : "wait",
+    "pr" : 418,
+    "why" : "session running"
   }, {
     "issue" : 110,
     "move" : "leave",
