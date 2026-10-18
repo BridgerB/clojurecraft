@@ -82,5 +82,13 @@
                     stop?
                     (* 60000 330)
                     (sr/go-of w until))]
-    (println "END" (quot (:time/now (:world r)) 60000) "min" (:plan/reached (:world r)))
+    (println "END"
+             (quot (:time/now (:world r)) 60000)
+             "min"
+             (:plan/status (:world r))
+             (:plan/reason (:world r))
+             (:plan/attempts (:world r))
+             (pr-str (select-keys (:plan/last (:world r))
+                                  [:intent/kind :intent/reason :intent/target]))
+             (pr-str (:crashed r)))
     (shutdown-agents)))
