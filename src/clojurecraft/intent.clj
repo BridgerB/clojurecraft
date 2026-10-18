@@ -654,24 +654,57 @@
                             blocks/leaves?)
                    spots))))
 
+(defn unsupported?
+  "Would a body standing at feet level fy with its feet centre at [x _ z] have nothing under its
+   box: every cell under the cells the box overlaps at that level clear (path/classify :clear: air,
+   a plant)? A floor, a slab, a fluid or an unloaded cell is something to stand on or in."
+  [world [x _ z] fy]
+  (let [half physics/half-width
+        cells (for [cx (distinct [(long (math/floor (- x half))) (long (math/floor (+ x half)))])
+                    cz (distinct [(long (math/floor (- z half))) (long (math/floor (+ z half)))])]
+                [cx (dec fy) cz])]
+    (every? #(= :clear (path/classify world %)) cells)))
+
+(defn straddling-ahead?
+  "Would the next half-width of a step toward unit direction [ux uz] leave a body on the ground
+   with nothing under its box and no landing within path/max-fall below its feet cell: the bot
+   stands on the rim of a floor whose own cell has none (its box overlaps the cell beside it), and
+   the first step toward the drop takes it off the edge. The cell ahead is the feet's own, which
+   ledge-ahead? skips."
+  [world [ux uz]]
+  (let [[px py pz] (:player/pos world)
+        [_ fy _] (feet world)
+        edge [(+ px (* physics/half-width ux)) py (+ pz (* physics/half-width uz))]
+        cell [(long (math/floor (first edge))) fy (long (math/floor (nth edge 2)))]]
+    (boolean (and (:player/on-ground? world)
+                  (= :clear (path/classify world cell))
+                  (unsupported? world edge fy)
+                  (nil? (path/landing world cell))))))
+
 (defn ledge-ahead?
   "Would a step toward goal take the body over a drop: the cell ledge-look ahead on the plane (not
-   the feet's own) open, with no floor under it nor within path/max-fall below that (path/landing)? Gym batch
-   iron-a9 run 3's collect walked after a drop at a ravine's edge at y -7 and the bot fell from
-   a high place."
+   the feet's own) open, with no floor under it nor within path/max-fall below that (path/landing),
+   or the body on the rim of a floor whose own cell has none, about to step off it
+   (straddling-ahead?)? Gym batch iron-a9 run 3's collect walked after a drop at a ravine's edge at
+   y -7 and the bot fell from a high place. Race 39110733219 runner 1 bot Clj_r15 (issue #65)
+   dug stone at the wall of a cave lake, stood on the rim of its stair's last floor with its feet
+   cell open, and the collect walked after the drop off it into the lake three blocks down, where
+   the nearest bank was a pocket it could not climb out of."
   [world goal]
   (let [[px _ pz] (:player/pos world)
         [gx _ gz] goal
         d (physics/horizontal-distance [px 0 pz] [gx 0 gz])
         [_ fy _ :as at] (feet world)
-        cell (when (pos? d)
-               [(long (math/floor (+ px (* ledge-look (/ (- gx px) d))))) fy
-                (long (math/floor (+ pz (* ledge-look (/ (- gz pz) d)))))])]
+        unit (when (pos? d) [(/ (- gx px) d) (/ (- gz pz) d)])
+        cell (when unit
+               [(long (math/floor (+ px (* ledge-look (first unit))))) fy
+                (long (math/floor (+ pz (* ledge-look (second unit)))))])]
     (boolean (and cell
-                  (not= cell at)
-                  (= :clear (path/classify world cell))
-                  (not (path/floor? world (update cell 1 dec)))
-                  (nil? (path/landing world cell))))))
+                  (or (and (not= cell at)
+                           (= :clear (path/classify world cell))
+                           (not (path/floor? world (update cell 1 dec)))
+                           (nil? (path/landing world cell)))
+                      (straddling-ahead? world unit))))))
 
 (defmethod run :collect
   [world
