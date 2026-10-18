@@ -851,3 +851,18 @@
         child (:intent/child (:plan/intent next))]
     (is (= [5 66 5] (:intent/target child)))
     (is (true? (:intent/exposes-ok? child)))))
+
+(deftest a-collect-stops-on-the-rim-of-a-floor-its-own-cell-lacks
+  ;; Race 39110733219 runner 1 bot Clj_r15 (issue #65): the stair's last floor was one block wide
+  ;; and the bot stood on its rim with its feet cell over a cave's drop; the collect walked after
+  ;; the drop, off the rim into the lake three blocks down.
+  (let [pit (into {} (for [x (range 2 6) y (range 50 64) z (range 4 7)] [[x y z] blocks/air]))
+        rim (assoc (standing 64) :player/pos [5.8 64.0 5.5] :world/blocks pit)
+        drop [2.5 64.0 5.5]]
+    (is (intent/ledge-ahead? rim drop) "the first step west leaves the floor with no landing")
+    (is (not (intent/ledge-ahead? (assoc-in rim [:world/blocks [5 63 5]] 1) drop))
+        "a floor under its own cell")
+    (is (not (intent/ledge-ahead? (assoc rim :player/on-ground? false) drop)) "not in the air")
+    (is (not (intent/ledge-ahead? rim [8.5 64.0 5.5])) "toward the floor, not off it")
+    (is (intent/ledge-ahead? (assoc-in rim [:world/blocks [5 63 4]] 1) [4.5 64.0 3.5])
+        "a wall in the way of the diagonal slides it west along the rim, off its side")))

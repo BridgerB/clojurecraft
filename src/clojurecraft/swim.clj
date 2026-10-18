@@ -27,6 +27,7 @@
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
+            [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]
@@ -210,6 +211,39 @@
                                                            (physics/centre cell)) cell]))
          first)))
 
+(defn bank-block
+  "With no bank in reach and the water open to the sky over the feet, the water cell at the
+   float-top level to lay a filler into that makes one: within notch-radius on the plane and the
+   place reach of the eye, with a solid neighbour to place against (place/support: the wall the
+   water meets), and over it two cells of open air with nothing wet or roofed over them
+   (in-the-open?), so the block is a bank the lift reaches (bank-rise 1) and the body stands on.
+   Nearest first. nil when none. A notch cut into a wall under the sky is never a bank (banks keeps
+   only the open ones), so a sea that meets a cliff is left by a block, not a hole: race
+   39109674329 runner 4 bot Clj_r16 (issue #92) swam 73 blocks to a cliff three blocks over the
+   water with 489 cobblestone and no pickaxe, dug a notch in it by hand (75 s a block under water)
+   and was :no-escape three times in six minutes."
+  [world [fx _ fz :as feet] surface]
+  (when (terrain/under-sky? world feet)
+    (let [top (float-top world feet surface)
+          eye (game/eye world)]
+      (->> (for [dx (range (- notch-radius) (inc notch-radius))
+                 dz (range (- notch-radius) (inc notch-radius))
+                 :let [x (+ fx dx)
+                       z (+ fz dz)
+                       cell [x top z]
+                       bank [x (inc top) z]]
+                 :when (and (= :water (terrain/fluid-kind world cell))
+                            (path/clear? world bank)
+                            (path/clear? world [x (+ top 2) z])
+                            (in-the-open? world bank)
+                            (not (place/inside-player? world cell))
+                            (place/support world cell)
+                            (<= (physics/distance eye (physics/centre cell)) place/place-reach))]
+             cell)
+           (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
+                                                             (physics/centre cell)) cell]))
+           first))))
+
 (defn child-dig
   "A :dig child for cell that may expose water: the escape digs beside the water it is in."
   [cell]
@@ -238,6 +272,17 @@
       (intent/assoc-intent :intent/child (child-dig cell) :intent/best-tick (:time/tick world))
       (intent/dissoc-intent :intent/dig-when-down)
       (game/say (str "swim-out: " why ", digging " cell))))
+
+(defn start-lay
+  "Lay item into cell as a child :place now."
+  [world [cell item] why]
+  (-> world
+      (intent/assoc-intent
+       :intent/child
+       {:intent/kind :place :intent/item item :intent/cell cell :intent/status :active}
+       :intent/best-tick (:time/tick world))
+      (intent/dissoc-intent :intent/dig-when-down)
+      (game/say (str "swim-out: " why ", laying " (name item) " into " cell))))
 
 (defn dig-or-sink
   "Dig cell as a child intent now, or, afloat with the floor in reach of it, remember it as
@@ -342,8 +387,8 @@
   ;; flooded tunnel) ends itself on dry land, and one for a :rise (up a shaft dug into the sea,
   ;; wood/into-water) on dry land in the open
   [world
-   {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for shore to-y]}
-   event]
+   {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for shore to-y
+                  no-lay]} event]
   (let [tick (:time/tick world)
         started (or started tick)
         feet (intent/feet world)
@@ -367,6 +412,10 @@
       (-> world
           (assoc :player/controls {:control/jump? true})
           (intent/dissoc-intent :intent/child :intent/best-tick :intent/next-search))
+      (and child (intent/failed? child) (= :place (:intent/kind child)))
+      (-> world
+          (intent/dissoc-intent :intent/child :intent/best-tick :intent/next-search)
+          (intent/assoc-intent :intent/no-lay true))
       (and child (intent/failed? child))
       (-> world
           (assoc :player/controls {})
@@ -398,12 +447,16 @@
                     :else (banks world feet surface (:plan/blacklist world #{})))
             cap (when-not b
                   (let [c (obstacle world feet nil)] (when (or (not rise?) (iced? world c)) c)))
-            wall (when-not (or b cap rise?) (notch world feet surface))]
+            laid (when-not (or b cap rise? no-lay)
+                   (when-let [item (stairs/filler world 1)]
+                     (when-let [cell (bank-block world feet surface)] [cell item])))
+            wall (when-not (or b cap laid rise?) (notch world feet surface))]
         (cond b
               (-> world
                   (intent/assoc-intent :intent/bank b :intent/target b)
                   (game/say (str "swim-out: bank " b)))
               cap (dig-or-sink world feet cap "no bank")
+              laid (start-lay world laid "no bank")
               wall (start-dig world wall "no bank, notching the wall")
               ;; nothing in reach: rise, toward a shore when the water is open over the feet
               ;; (the roof or a bank comes into reach, or the timeout ends it)
