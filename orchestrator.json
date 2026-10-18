@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:09:49.289Z",
+  "at" : "2026-10-18T01:10:57.992Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -29,13 +29,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
+    "number" : 130,
+    "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 130,
-    "title" : "Bot stops at cast-one: boxed",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
