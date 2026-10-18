@@ -1098,8 +1098,9 @@
 (defn lost-way?
   "Did child, the way to the site from far off (a walk, a swim out, stairs), fail for want of a
    way (:no-path, :stuck, or a climb :boxed) beyond site-reach of the room's landing? Then it is
-   the site that no way reaches, not an op. A nearby walk whose target is flooded or has awkward
-   footing also gives up the site: its fixed stance is no walking destination (issue #162).
+   the site that no way reaches, not an op. A nearby fixed-stance walk that exhausted its routes
+   (:no-path), or whose target is flooded or has awkward footing, also gives up the site:
+   dry footing alone does not mean a route reaches it (issue #162).
    Sim race 38839665459 (issue #222, world R1/11, six runs in two rounds) chose a site 70 blocks
    off across an aquifer, the walk there failed :no-path,
    the stairs down toward its landing at y 24 were refused for the water beside them, the swim
@@ -1117,7 +1118,8 @@
             (and (= :walk (:intent/kind child))
                  (not (:intent/pickup? child))
                  target
-                 (or (= :water (path/classify world target))
+                 (or (= :no-path reason)
+                     (= :water (path/classify world target))
                      (= :water (path/classify world (update target 1 inc)))
                      (= :awkward (path/classify world (update target 1 dec)))))))))
 

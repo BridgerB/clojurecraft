@@ -194,6 +194,7 @@
    "Gravel can fall into a lava refill's cleared ray while the bucket is equipped: drop the blocked scoop and reconsider the refill, rather than retry the stale aim until :no-scoop (issue #227, R3/26 and R3/29)."
    "Placing into a lava source destroys it; casting over a lava sea has no stance"
    "A refill approach through aquifer water or over solid magma is no walking route: require a firm walking floor, cut dry detours, and give up sites whose fixed stance or remaining refill stations are unusable, including on resume (issue #162, R1/16 and R1/42)."
+   "A nearby dry build stance may still have no route from the feet: an exhausted fixed-stance walk must give up its site, including on resume, rather than retry the same pool until all attempts fail (issue #162, R1/17 and R3/23)."
    "Sim race 39032523584 (issue #231, R1/32): opening a low source's sight line admitted lava above the stand and three escapes failed :no-footing; stations and refills now reject ray excavations beside lava at or above the feet."
    "Sim race 39044511861 runner 6 (issue #380, R3/32): a stand's projected ray was safe but the slightly off-centre feet saw a wall holding back higher lava, so three refills failed :no-station; a station already occupied now checks the actual eyes and chooses another stand when unsafe."
    "A rejected placement left as a ghost block; the pathfinder digs finished obsidian"

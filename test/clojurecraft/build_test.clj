@@ -875,6 +875,34 @@
     (is (intent/done? (:plan/intent out)))
     (is (= #{site} (memory/given-up-sites out)))))
 
+(deftest an-exhausted-walk-to-a-nearby-build-stand-gives-up-the-site
+  (let [site [8 62 4]
+        target [10 63 7]
+        walls (into {} (for [[x z] [[9 7] [11 7] [10 6] [10 8]] y [63 64 65]] [[x y z] 1]))
+        op (assoc hill-op :build/stand target)
+        child {:intent/kind :walk
+               :intent/for :build
+               :intent/target target
+               :intent/replans intent/max-replans
+               :intent/status :failed
+               :intent/reason :no-path}
+        i (assoc hill-intent :intent/origin site :intent/op op :intent/child child)
+        w (assoc (standing-at (open-ground walls) [8.5 63.0 7.5])
+                 :plan/intent i
+                 :plan/attempts 2
+                 :player/controls {:control/forward? true})
+        out (build/work-op w i op {:event/kind :tick})]
+    (is (path/standable? w target) "the fixed stance is dry and has sound footing")
+    (is (not (intent/routable? w child)) "but no route reaches it through the surrounding rock")
+    (is (intent/done? (:plan/intent out)) "an exhausted route does not spend the last attempt")
+    (is (= 2 (:plan/attempts out)))
+    (is (= {} (:player/controls out)))
+    (is (= #{site} (memory/given-up-sites out)) "the next build must choose another site")
+    (testing "nearby walks that are not exhausted fixed-stance approaches retain their handling"
+      (is (not (build/lost-way? w i (assoc child :intent/pickup? true))))
+      (is (not (build/lost-way? w i (assoc child :intent/reason :stuck))))
+      (is (not (build/lost-way? w (assoc i :intent/kind :tunnel-to) child))))))
+
 (deftest the-lava-hunt-passes-over-a-given-up-pool
   (let [deeper [8 40 12]
         w (standing-at (open-ground (assoc trench deeper blocks/lava-base)) feet-pos)
