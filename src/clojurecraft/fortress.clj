@@ -15,6 +15,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.intent :as intent]
+            [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
@@ -261,7 +262,15 @@
                    step-keys)
                   (and (= :floor-clear (:build/step next)) (not (safe? world from move)))
                   (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
-                  :else (build/work-op world i next event))))))
+                  :else
+                  (let [world (build/work-op world i next event)
+                        i (:plan/intent world)]
+                    (cond (and (intent/failed? i) (= :no-pickaxe (:intent/reason i)))
+                          (-> world
+                              (assoc :player/controls {})
+                              (intent/dissoc-intent :intent/reason)
+                              intent/done)
+                          :else world)))))))
 
 ;; ---------------------------------------------------------------- the goal
 
@@ -302,11 +311,14 @@
     (plan/next-intent world (assoc goal :goal/plan :build) table)))
 
 (defmethod plan/next-intent :fortress
-  ;; tunnel to the nearest brick on record; with none, explore; with nowhere safe, or outside the
-  ;; Nether (the planner waits there for a row of another dimension anyway), wait
-  [world _ _]
+  ;; replace a missing pickaxe from held supplies, then tunnel to the nearest brick on record;
+  ;; with none, explore; with nowhere safe, or outside the Nether, wait
+  [world goal table]
   (let [t (when (= dimension/nether (dimension/of world))
             (or (nearest-brick world) (exploring world)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
-          t {:intent/kind :tunnel-to :intent/target t :intent/steps steps-per-tunnel}
-          :else {:plan/wait :no-way})))
+          :else
+          (or (when (build/pickaxe-at-hand? world)
+                (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
+              (when t {:intent/kind :tunnel-to :intent/target t :intent/steps steps-per-tunnel})
+              {:plan/wait :no-way}))))
