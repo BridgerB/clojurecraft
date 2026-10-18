@@ -166,6 +166,43 @@
       (cond-> {:intent/kind :stairs-down :intent/to-y to}
         (and depth (= :mine act)) (assoc :intent/floor-to depth)))))
 
+(def over-radius 3)                   ; blocks on the plane round the surface over stone within which the feet count as over it
+
+(defn surface-over
+  "The standable cell on top of the column of cell [x _ z]: above the highest solid block, the
+   body and head clear (path/standable?); nil when the column has none."
+  [world [x _ z]]
+  (some (fn [y]
+          (when (some-> (terrain/block-at world [x y z])
+                        blocks/solid?)
+            (let [c [x (inc y) z]] (when (path/standable? world c) c))))
+        (range terrain/top-y (dec chunk/min-y) -1)))
+
+(defn over-stone
+  "A walk to the surface over the nearest stone of the row in sight that no route reaches, for the
+   staircase to be cut from there, or nil: when the feet are already within over-radius on the
+   plane of the surface over one of the max-candidates nearest, when none has a surface a route
+   reaches (routable?), and never to a surface within over-radius of a cell of :plan/boxed-at,
+   where a staircase has died :boxed already. Issue #342 (a real bot, Clj_r15, landed at R1/30):
+   stone lay in the wall of a cave lake, five blocks under the far bank; the mine cut its stairs
+   down at the near bank, where every stair was refused for the water, up and down the same stairs
+   until the plan failed :boxed, and the surface over the stone, eight blocks off along a strip of
+   grass, was routable all the while (a-stone-no-route-reaches-is-cut-down-to-from-the-surface-over-it)."
+  [world row]
+  (let [feet (intent/feet world)
+        near? (fn [[ax _ az] [bx _ bz]]
+                (<= (physics/horizontal-distance [ax 0 az] [bx 0 bz]) over-radius))
+        surfaces (->> (exposed-of-states world (states-of-row row))
+                      (take max-candidates)
+                      (keep #(surface-over world %))
+                      distinct)]
+    (when-not (some #(near? feet %) surfaces)
+      (->> surfaces
+           (remove (fn [c] (some #(near? c %) (:plan/boxed-at world #{}))))
+           (map (fn [c] {:intent/kind :walk :intent/target c :intent/for :over-stone}))
+           (filter #(intent/routable? world %))
+           first))))
+
 (def floor-margin 8)                  ; blocks above the bottom of the world a staircase deeper stops
 
 (defn tunnel-heading
@@ -338,6 +375,7 @@
               :else
               (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
                   (off-ice world)
+                  (over-stone world row)
                   (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})

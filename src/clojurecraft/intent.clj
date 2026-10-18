@@ -214,8 +214,10 @@
    out of a blaze's sight (:cover, issue #262: a cell within reach of the eye but round a corner
    hides only once stood in) and a fight's stand round a wall (:fight, issue #262: a walk near
    the target ended in reach of it through the wall, where it started), and a retreat's new
-   ground (:retreat: a short way out of a boxed pocket must leave that pocket)."
-  #{:build :shelter :cover :fight :retreat})
+   ground (:retreat: a short way out of a boxed pocket must leave that pocket), and the surface over
+   stone no route reaches (:over-stone, issue #342: a walk that ended near it ended again at once, and
+   the mine planned it again every tick)."
+  #{:build :shelter :cover :fight :retreat :over-stone})
 
 (defn walk-goal
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell

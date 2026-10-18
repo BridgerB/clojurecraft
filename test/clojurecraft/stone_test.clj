@@ -866,3 +866,24 @@
     (is (not (intent/ledge-ahead? rim [8.5 64.0 5.5])) "toward the floor, not off it")
     (is (intent/ledge-ahead? (assoc-in rim [:world/blocks [5 63 4]] 1) [4.5 64.0 3.5])
         "a wall in the way of the diagonal slides it west along the rim, off its side")))
+
+(deftest a-stone-no-route-reaches-is-cut-down-to-from-the-surface-over-it
+  ;; issue #342 (a real bot, Clj_r15, landed at R1/30): stone in the wall of a cave under the far
+  ;; bank of a lake, no route to it, and the mine cut its stairs at the near bank among the water
+  (let [dirt (blocks/default-state :dirt)
+        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+        cave (into {} (for [x (range 11 15) z (range 3 7) y (range 55 58)] [[x y z] blocks/air]))
+        w (assoc (standing 64 :wooden_pickaxe)
+                 :world/chunks
+                 {[0 0] (world/column (merge ground cave))})
+        walk (stone/over-stone w (row :mine-stone))]
+    (is (= [:walk :over-stone] [(:intent/kind walk) (:intent/for walk)]) (pr-str walk))
+    (let [[x y z] (:intent/target walk)]
+      (is (= 64 y) "the surface")
+      (is (<= 10 x 15) "over the cave")
+      (is (<= 2 z 7)))
+    (is (= walk (stone/mine-next w (row :mine-stone))) "the act goes there before cutting stairs")
+    (is (nil? (stone/over-stone (assoc w :player/pos [13.5 64.0 5.5]) (row :mine-stone)))
+        "over it already: the stairs are cut from here")
+    (is (nil? (stone/over-stone (assoc w :plan/boxed-at #{[12 57 5]}) (row :mine-stone)))
+        "not back to where a staircase died boxed")))
