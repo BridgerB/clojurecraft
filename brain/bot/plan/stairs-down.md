@@ -21,6 +21,7 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn down-safe?
   - src/clojurecraft/stairs.clj#defn down-lay
   - test/clojurecraft/stone_test.clj#a-stair-down-seals-water-before-opening-the-rock
+  - test/clojurecraft/stone_test.clj#a-descent-seal-keeps-filler-for-the-climb-out
   - test/clojurecraft/sim_test.clj#water-beside-every-descent-is-sealed-before-digging
   - src/clojurecraft/stairs.clj#defn clear-way?
   - src/clojurecraft/stairs.clj#def fillers
@@ -145,7 +146,7 @@ related:
 - `stairs.clj`, `max-turns` 4, `step-timeout-ticks` 200.
 
 ## How it works
-For a descent, `down-safe?` also checks the solid cells against the child dig's fluid refusals; already open cells need no dig. `down-lay` first tries the same side-water seal as a climb (`seal`), then the missing floor (`lay`). A dry heading still comes before a seal (`rock-heading`). A seal over an existing floor costs only its own blocks, not the cave-floor budget (`floors-affordable?`); the floor reserve and the refusals for lava, water overhead, and unsupported placements are unchanged. Race 39007359500 runner 5 bot Clj_r06 (issue #342) turned from side water until it stood on a dry shelf with no route away, five cobblestone and twenty dirt held, and waited `[:furnace :boxed]`. Sealing lets it descend into rock and mine again; the kept snapshot reaches the furnace 222.25 seconds after its moment.
+For a descent, `down-safe?` also checks the solid cells against the child dig's fluid refusals; already open cells need no dig. `down-lay` first tries the same side-water seal as a climb (`seal`), then the missing floor (`lay`). A dry heading still comes before a seal (`rock-heading`). A seal over an existing floor costs only its own blocks, not the cave-floor budget (`floors-affordable?`), but must still leave `lay-reserve` for the climb out. Climbs can spend that reserve. The refusals for lava, water overhead, and unsupported placements are unchanged. Race 39007359500 runner 5 bot Clj_r06 (issue #342) turned from side water until it stood on a dry shelf with no route away, five cobblestone and twenty dirt held, and waited `[:furnace :boxed]`. Sealing lets it descend into rock and mine again. Race 39070889905 runner 1 bot Clj_r15 then spent its remaining filler on descent seals and could not seal its escape climb. Keeping the reserve lets that snapshot climb out, mine cobblestone and craft the furnace 127.4 seconds after its moment.
 
 Each stage is a method of `stairs-stage`; `run :stairs-down` only checks whether the feet are down far enough.
 Refusals belong to the current feet cell: returning from `:step` to `:plan` resets `:intent/turns`, so a completed stair does not spend the next cell's headings. Race 39037024176 runner 1 (issue #342) carried three refusals through successful stairs and boxed before considering the other directions from its new footing. This also recovers a saved staircase already carrying those refusals.

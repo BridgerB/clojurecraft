@@ -355,11 +355,13 @@
 
 (defn down-lay
   "The cells to lay before a stair down: seal side water first, else lay its missing floor.
-   nil when neither can be laid. A seal uses the same support and fluid checks as a climb's.
+   nil when neither can be laid without spending lay-reserve. A seal uses the same support and
+   fluid checks as a climb's, but keeps the filler the climb needs to escape.
    Race 39007359500 runner 5 bot Clj_r06 (issue #342) turned from water beside every descent,
    then waited :boxed on a dry shelf with no route away, five cobblestone and twenty dirt held."
   [world feet cells]
-  (or (seal world feet cells) (lay world feet cells)))
+  (when-let [laid (or (seal world feet cells) (lay world feet cells))]
+    (when (>= (- (carried-filler world) (count laid)) lay-reserve) laid)))
 
 (def shapes
   "How each kind of staircase is cut: the cells a stair opens (top first, the new feet last), the
