@@ -452,3 +452,19 @@
     (let [r (path/plan w from {:goal/kind :near :goal/pos [12 64 12] :goal/range 1})]
       (is (= :found (:path/status r)) "and drops into the snowfield")
       (is (sound-route? w [5 65 1] r)))))
+
+(deftest a-bot-on-a-sheet-of-ice-walks-off-it-but-never-onto-it
+  ;; race 39088700340 bot Clj_r02 (issue #71) climbed out of a frozen sea onto the ice, and no
+  ;; route led off the sheet: ice is no floor to a route
+  (let [ice (blocks/default-state :ice)
+        sheet (fill ice (range 0 10) [63] (range 16))
+        goal-land {:goal/kind :near :goal/pos [14 64 8] :goal/range 1}
+        goal-ice {:goal/kind :near :goal/pos [3 64 8] :goal/range 1}
+        on-ice (world-of sheet [2.5 64.0 8.5])
+        on-land (world-of sheet [12.5 64.0 8.5])]
+    (is (path/on-ice? on-ice))
+    (is (not (path/on-ice? on-land)))
+    (is (= :found (:path/status (path/plan on-ice (path/feet-cell [2.5 64.0 8.5]) goal-land)))
+        "from the sheet, over it to the land")
+    (is (not= :found (:path/status (path/plan on-land (path/feet-cell [12.5 64.0 8.5]) goal-ice)))
+        "from the land, never onto the sheet")))
