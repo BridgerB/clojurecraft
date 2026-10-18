@@ -129,7 +129,7 @@
   (cond (fn? w) w
         :else
         (let [held (java.util.HashMap.)
-              ice? (on-ice? w)]
+              ice? (or (:path/ice? w) (on-ice? w))]
           (fn [[x y z :as pos]]
             (let [k (cell-key x y z)
                   known (.get held k)]
@@ -468,15 +468,16 @@
     (filterv (fn [{:trap/keys [at]}] (<= (- now at) trap-ttl)) (:world/traps world))))
 
 (def plan-on
-  "[chunks blocks traps from goal max-nodes] → the route plan gives over that terrain with those
-   traps in force, remembered by the terrain's identity (memo/by): an act asked whether each of
+  "[chunks blocks traps ice? from goal max-nodes] → the route plan gives over that terrain with those
+   traps in force, the sheet of ice floor when ice? (the bot stands on it, on-ice?), remembered by the terrain's identity (memo/by): an act asked whether each of
    its candidates could be walked to every tick, a full search each (a race's profile: a sixth of
    all its CPU), over terrain that changes when a chunk arrives or a block changes."
-  (memo/by [:identical :identical :equal :equal :equal :equal]
+  (memo/by [:identical :identical :equal :equal :equal :equal :equal]
            256
-           (fn [chunks blocks traps from goal max-nodes]
+           (fn [chunks blocks traps ice? from goal max-nodes]
              ;; every trap here is in force, so the clock is not needed: trap-factor counts them all at 0
-             (let [world {:world/chunks chunks :world/blocks blocks :world/traps traps}
+             (let [world
+                   {:world/chunks chunks :world/blocks blocks :world/traps traps :path/ice? ice?}
                    start (start-cell world from)
                    [x y z] from
                    departure (when (and (not= start from)
@@ -503,6 +504,7 @@
    (plan-on (:world/chunks world)
             (:world/blocks world)
             (traps-in-force world)
+            (on-ice? world)
             from
             goal
             max-nodes)))
