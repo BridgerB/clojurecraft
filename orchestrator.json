@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T09:45:47.601Z",
+  "at" : "2026-10-18T09:47:58.151Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -37,6 +37,11 @@
     "number" : 65,
     "title" : "Bot stops at cobblestone: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 342,
+    "title" : "Bot stops at furnace: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   } ],
   "moves" : [ {
