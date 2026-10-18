@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T18:00:42.434Z",
+  "at" : "2026-10-18T18:05:10.862Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -72,6 +72,11 @@
     "number" : 41,
     "title" : "Bot stops at cast-one: no-site",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 450,
+    "title" : "Bot stops at cast-one: no-spot",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 419,
