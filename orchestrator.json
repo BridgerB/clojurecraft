@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:08:41.875Z",
+  "at" : "2026-10-18T01:09:49.289Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -19,13 +19,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 37,
-    "title" : "Bot stops at ingots: boxed",
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 45,
-    "title" : "Bot stops at cast-one: no-path",
+    "number" : 37,
+    "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -59,14 +59,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 60,
-    "title" : "Bot stops at water-bucket: no-water",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 349,
     "title" : "Bot stops at flint-and-steel: timeout",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 60,
+    "title" : "Bot stops at water-bucket: no-water",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 196,
@@ -79,13 +79,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 89,
-    "title" : "Bot stops at portal-kit: no-log",
+    "number" : 87,
+    "title" : "Bot stops at ingots: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 87,
-    "title" : "Bot stops at ingots: no-log",
+    "number" : 89,
+    "title" : "Bot stops at portal-kit: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -116,14 +116,14 @@
     "pr" : 391,
     "session" : false
   }, {
-    "number" : 75,
-    "title" : "Bot stops at portal-kit: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
+  }, {
+    "number" : 75,
+    "title" : "Bot stops at portal-kit: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 69,
@@ -151,6 +151,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 131,
+    "title" : "Bot stops at portal-kit: stale-window",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 68,
     "title" : "Bot stops at ingots: no-spot",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -168,11 +173,6 @@
   }, {
     "number" : 142,
     "title" : "Bot stops at portal: no-station",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 131,
-    "title" : "Bot stops at portal-kit: stale-window",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
