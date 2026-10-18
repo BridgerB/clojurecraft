@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T00:52:53.254Z",
+  "at" : "2026-10-18T00:54:05.826Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -67,17 +67,6 @@
     "title" : "Bot stops at flint-and-steel: timeout",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "quiet" : false,
-    "number" : 342,
-    "checks" : "green",
-    "title" : "Bot stops at furnace: boxed",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 6,
-    "pr" : 403,
-    "session" : false
   }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
@@ -202,9 +191,8 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 342,
-    "move" : "merge",
-    "pr" : 403
+    "issue" : 296,
+    "move" : "assign"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -1076,5 +1064,9 @@
     "move" : "merge",
     "pr" : 403,
     "at" : "2026-10-18T00:52:53.254Z"
+  }, {
+    "issue" : 296,
+    "move" : "assign",
+    "at" : "2026-10-18T00:54:05.826Z"
   } ]
 }
