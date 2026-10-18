@@ -3,7 +3,9 @@
          '[clojurecraft.capture :as capture]
          '[clojurecraft.game :as game]
          '[clojurecraft.intent :as intent]
+         '[clojurecraft.make :as make]
          '[clojurecraft.memory :as memory]
+         '[clojurecraft.path :as path]
          '[clojurecraft.place :as place]
          '[clojurecraft.plan :as plan]
          '[clojurecraft.recipe :as recipe]
@@ -64,6 +66,26 @@
   (ask (str tag " gather-next") #(wood/gather-next world))
   (ask (str tag " way-out") #(wood/way-out world)))
 
+(defn map-round
+  "The terrain round the feet, r cells each way, heights from 3 over the feet to 3 under: # solid,
+   W water, . clear, ? unknown, L lava, ~ other."
+  [world r]
+  (let [[fx fy fz] (intent/feet world)]
+    (doseq [y (range (+ fy 3) (- fy 4) -1)]
+      (out "  map y" y)
+      (doseq [z (range (- fz r) (inc (+ fz r)))]
+        (out "   "
+             (str/join (for [x (range (- fx r) (inc (+ fx r)))]
+                         (if (= [x y z] [fx fy fz])
+                           "@"
+                           (case (path/classify world [x y z])
+                             :solid "#"
+                             :water "W"
+                             :clear "."
+                             :unknown "?"
+                             :lava "L"
+                             "~")))))))))
+
 (defn facts
   [world tag]
   (ask (str tag " pos") #(:player/pos world))
@@ -78,11 +100,15 @@
   (ask (str tag " chosen")
        #(let [g (plan/choose world plan/goals)]
           (select-keys g [:goal/id :goal/act :goal/plan :goal/needs :goal/item :goal/doc])))
+  (ask (str tag " row")
+       #(select-keys (make/next-row world (plan/choose world plan/goals) plan/goals)
+                     [:goal/id :goal/act :goal/item :goal/doc]))
   (ask (str tag " next-intent") #(plan/next-intent world (plan/choose world plan/goals) plan/goals))
   (ask (str tag " last") #(:plan/last world))
   (ask (str tag " reason") #(:plan/reason world))
   (ask (str tag " wait") #(:plan/wait world))
-  (ask (str tag " names") #(names-round world)))
+  (ask (str tag " names") #(names-round world))
+  (ask (str tag " map") #(map-round world 10)))
 
 (defn play
   "The snapshot played as judged, printing the intent's changes (the first 70) as they come;
