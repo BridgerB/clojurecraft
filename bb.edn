@@ -111,7 +111,7 @@
    :task (apply copilot/-main *command-line-args*)}
   brief
   {:doc
-   "A Copilot session's brief before it starts (copilot-setup-steps.yml): write puts cache/issues/<n>/brief.md for the issue Copilot holds"
+   "A fix session's brief (copilot-setup-steps.yml, probes): write puts cache/issues/<n>/brief.md for the issue Copilot holds; issue <n>... fetches and briefs any issues"
    :requires ([clojurecraft.brief :as brief])
    :task (apply brief/-main *command-line-args*)}
   verify
