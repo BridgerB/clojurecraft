@@ -29,6 +29,7 @@
 (def answer-ms 3000)                  ; ms to wait for the server to answer a placement or an open
 (def fresh-rock-distance 12)          ; blocks a place with nowhere to put its block walks off before it looks again
 (def fresh-rock-climb 4)              ; stairs up a place with nowhere and no route away cuts before it looks again
+(def max-nudges 40)                   ; ticks a placement into a given cell steps off its edge for before it asks the server anyway
 (def max-refusals 3)                  ; spots the server refused with nothing in them before a placement fails :rejected
 
 (defn- now [world] (:time/now world))
@@ -288,6 +289,18 @@
                           (not (contains? memory/placed-kinds (blocks/name-of id))))]
            [s face])))
 
+(defn nudge-off
+  "The world with one tick's controls toward the middle of the feet's cell and :intent/nudges one
+   more: a given cell (a stair's seal against the water beside the feet) that the body clips at the
+   edge, the feet a few hundredths over the line, is a placement the server refuses with the cell
+   empty (the game refuses a block into any player), as often as it is tried. Race 39095700271
+   runner 3 bot Clj_r04 (issue #430) stood at x 2838.74 and sealed the water at 2839 three times
+   in turn, each stair :boxed."
+  [world nudges]
+  (-> world
+      (assoc :player/controls (intent/toward world (physics/centre (intent/feet world)) 0.0))
+      (intent/assoc-intent :intent/nudges (inc nudges))))
+
 (defn settle-at
   "On to :settle to place into target by a click on face of against."
   [world target against face]
@@ -330,17 +343,18 @@
   ;; (:intent/niche, dug-spot), else a plain spot, else a niche cut in the wall, else (passage-ok?)
   ;; a spot in the passage: a table or a gravel to dig again leaves the way open when the bot goes on
   [world
-   {:intent/keys [passage-ok? refused retreated?]
+   {:intent/keys [passage-ok? refused retreated? nudges]
     at :intent/cell
     cut :intent/niche
-    :or {refused #{}}}]
+    :or {refused #{} nudges 0}}]
   (let [[against face :as given] (when at (support world at))
         found (when-not at (or (dug-spot world cut refused) (spot world false refused)))
         n (when-not (or at found) (niche world))
         [_ stowed-item :as stowed] (when n (intent/stowed-tool world (terrain/block-at world n)))
         [target from] (or found
                           (when (and (nil? at) (nil? n) passage-ok?) (spot world true refused)))]
-    (cond given (settle-at world at against face)
+    (cond (and given (inside-player? world at) (< nudges max-nudges)) (nudge-off world nudges)
+          given (settle-at world at against face)
           at (intent/fail world :no-support)
           target (settle-at world target from :up)
           ;; the tool the niche needs is in the main inventory: in the hand first, then the dig
@@ -407,7 +421,9 @@
   ;; put back) is given up for another spot before anything is sent; a given cell (a build's)
   ;; is sent and judged by the server
   [world
-   {:intent/keys [target against click-face since still] at :intent/cell :or {click-face :up}}]
+   {:intent/keys [target against click-face since still nudges]
+    at :intent/cell
+    :or {click-face :up nudges 0}}]
   (let [look (physics/look-at (game/eye world) (physics/centre target))
         still (if (intent/still? world) (inc still) 0)
         world (assoc world :player/controls {:control/look look})]
@@ -415,6 +431,8 @@
           (-> world
               (intent/assoc-intent :intent/stage :spot)
               (intent/dissoc-intent :intent/target :intent/against :intent/click-face))
+          (and at (inside-player? world at) (< nudges max-nudges))
+          (intent/assoc-intent world :intent/stage :spot)
           (and (>= still 3) (> (- (now world) since) settle-ms))
           (-> world
               (use-item-on against (packet/value :face click-face) (face-cursors click-face))
