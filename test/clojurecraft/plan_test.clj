@@ -543,6 +543,25 @@
           "counted by column, whichever log of it the chain was at")
       (is (nil? (:plan/intent w2)) "twice: given up, and there is no other trunk"))))
 
+(deftest a-walk-that-fails-no-path-puts-the-trees-round-it-aside
+  ;; real race 39042120284 bot Clj_r14 (issue #75): the trees were a grove two hundred blocks off
+  ;; across the sea, and each of twelve walks to a trunk of it failed :no-path alone
+  (let [w (assoc (world-state [0.5 64.0 0.5])
+                 :plan/status :active
+                 :plan/blacklist #{}
+                 :plan/attempts 0
+                 :plan/unwalkable 0)
+        walk {:intent/kind :walk :intent/target [13 65 0] :intent/for :log :intent/trunk [13 65 0]}
+        failed (plan/fail-intent w (assoc walk :intent/reason :no-path))
+        skip (wood/skipped failed)]
+    (is (= #{[13 65 0]} (:plan/unreached failed)))
+    (is (skip [13 65 0]) "the trunk itself")
+    (is (skip [17 70 6]) "a trunk of the same grove")
+    (is (not (skip [40 65 0])) "one far from it")
+    (is (not (contains? (plan/fail-intent w (assoc walk :intent/reason :stuck)) :plan/unreached))
+        "only a walk with no route puts a place aside")
+    (is (not ((wood/skipped w) [17 70 6])) "before any walk failed")))
+
 (deftest digs-the-log-at-feet-height
   (testing "standing level with the trunk base: the bottom log"
     (is (= [3 64 0] (clojurecraft.wood/trunk-target (world-state [0.5 64.0 0.5]) [3 64 0]))))
