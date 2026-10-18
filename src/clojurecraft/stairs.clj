@@ -406,11 +406,16 @@
 (defn level-clear?
   "May a level step's cells be opened, the floor aside: clear-way?, and no cell it opens borders
    water or lava (intent/exposes-fluid?) or is too hard for the held tools (too-hard?), which
-   the child dig would refuse to open. Gym batch iron-a9 run 4's tunnel at y 2 met ore its stone
-   pickaxe could not drop and failed :needs-tool three times in a moment."
+   the child dig would refuse to open. Only solid cells need that dig: race 39110733219 bot
+   Clj_r15 (issue #65) refused an open, floored step beside water and failed :boxed.
+   Gym batch iron-a9 run 4's tunnel at y 2 met ore its stone pickaxe could not drop and failed
+   :needs-tool three times in a moment."
   [world cells]
   (and (clear-way? world cells)
-       (not-any? #(or (intent/exposes-fluid? world %) (too-hard? world %)) cells)))
+       (not-any? #(and (some-> (terrain/block-at world %)
+                               blocks/solid?)
+                       (or (intent/exposes-fluid? world %) (too-hard? world %)))
+                 cells)))
 
 (defn level-safe?
   "May a level step (or a stair whose cells are given) be cut: its cells may be opened

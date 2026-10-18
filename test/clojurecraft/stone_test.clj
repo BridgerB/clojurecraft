@@ -778,7 +778,7 @@
     (testing "an open step"
       (let [open {[6 63 5] blocks/air [7 64 5] blocks/water-base}
             w (at open :cobblestone)]
-        (is (not (stairs/level-clear? w cells)) "water beside the open feet cell")
+        (is (stairs/level-clear? w cells) "water beside an open cell needs no seal")
         (is (= [[6 63 5]] (stairs/level-lay w feet cells))
             "its floor is laid, the water beside it left")
         (is (nil? (stairs/level-lay (at (assoc open [6 63 5] blocks/water-base) :cobblestone)
@@ -787,6 +787,40 @@
             "no floor can be laid over water")))
     (testing "a step with nothing wrong has nothing to lay"
       (is (nil? (stairs/level-lay (at {} :cobblestone) feet cells))))))
+
+(deftest a-boxed-stair-takes-an-open-floored-step-beside-water
+  ;; Race 39110733219 bot Clj_r15 (issue #65): the pocket's open step north was refused for
+  ;; water beside its air, but there was nothing to dig or seal and no floor to lay.
+  (let [feet [5 56 5]
+        cells (stairs/level-cells feet [0 -1])
+        w (assoc (standing 56 :wooden_pickaxe)
+                 :world/blocks
+                 {[5 56 5] blocks/air
+                  [5 57 5] blocks/air
+                  [5 56 4] blocks/air
+                  [5 57 4] blocks/air
+                  [6 57 4] blocks/water-base
+                  [5 57 7] blocks/water-base
+                  [3 57 5] blocks/water-base})]
+    (is (stairs/level-safe? w cells) "an open step with a solid floor needs no filler")
+    (is (nil? (stairs/level-lay w feet cells)) "nothing to dig, seal or lay")
+    (doseq [kind [:stairs-down :stairs-up]]
+      (let [i {:intent/kind kind :intent/status :active :intent/dir [1 0]}
+            next (:plan/intent (stairs/step-aside (assoc w :plan/intent i) i))]
+        (is (= :active (:intent/status next)))
+        (is (= :level (:intent/stage next)))
+        (is (= cells (:intent/level-cells next)))
+        (is (nil? (:intent/lay next)))))
+    (is (not (stairs/level-clear? (assoc-in w [:world/blocks [5 57 4]] 1) cells))
+        "a solid head cell would let water in and still needs sealing")
+    (is (not (stairs/level-safe? (assoc-in w [:world/blocks [5 56 4]] blocks/water-base) cells))
+        "water in the path is still refused")
+    (is (not (stairs/level-safe? (assoc-in w [:world/blocks [6 57 4]] blocks/lava-base) cells))
+        "lava beside the path is still refused")
+    (is (not (stairs/level-safe? (assoc-in w [:world/blocks [5 55 4]] blocks/air) cells))
+        "a missing floor is still refused")
+    (is (not (stairs/level-safe? (assoc w :plan/boxed-at #{[5 56 4]}) cells))
+        "a known boxed destination is still refused")))
 
 (defn under-a-lake
   "Standing at [5 64 5] (feet) with rock rock blocks over the head from y 66, then water for wet
