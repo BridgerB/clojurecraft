@@ -78,7 +78,7 @@ Ready, never a work in progress: `bb verify` says READY, everything is pushed, a
 Test: <ns/var>. Brain: <note>. problems.edn: <stage>.
 ```
 
-Then stop. Do not touch labels, assignees, other issues or `fix/<n>` branches. The orchestrator owns the claim, the merge and the next issue.
+Commit only the files you changed for this issue: never `git add -A` or `git add .`, never another issue's `test/issues/<m>/` (the check fails a pull request that changes one). Then stop. Do not touch labels, assignees, other issues or `fix/<n>` branches. The orchestrator owns the claim, the merge and the next issue.
 
 ## When you cannot finish
 
