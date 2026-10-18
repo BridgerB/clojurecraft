@@ -1,0 +1,20 @@
+;; Issue #263, branch feat/263-warped: an angry enderman given up on keeps nothing in (one at hand,
+;; blacklisted or not, is met from the burrow and fought when it follows); a crowd at the mouth is
+;; measured in three; the stairs down come before the walk toward, reach as far as the server shows
+;; endermen and never start from a boxed cell.
+;; pearls-12 is the stage (pearls-warped-d: 0/3, three pearls then a standoff); pearls-1-live guards the arena.
+{:plans/label "pearls-warped-e"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}

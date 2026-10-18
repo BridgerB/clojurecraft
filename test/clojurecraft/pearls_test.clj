@@ -312,26 +312,50 @@
                                            plan/goals)))
         "hurt, its food under 18 (where health stops coming back): a meal")))
 
-(deftest an-angry-one-given-up-on-keeps-the-bot-in-its-burrow
+(deftest an-angry-one-given-up-on-is-met-from-the-burrow-when-it-comes
   ;; gym batch pearls-warped-b (plan run 39135767198): a held fight timed out :unreachable, its
   ;; enderman was blacklisted while still angry, and two bots in three walked out to the mouth
   ;; and were slain; the third's run 2 went from the end to the mouth and back for two minutes
-  ;; while a calm one stood beside the mouth
+  ;; while a calm one stood beside the mouth. Batch pearls-warped-d (plan run 39160760074) run 1:
+  ;; three pearls in six minutes, then thirty-four in the burrow over such ones standing off
   (let [angry (assoc (enderman [3.5 64.0 20.5]) :entity/creepy? true)]
-    (is (= {:intent/kind :lookout :intent/for :pearls}
+    (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
            (plan/next-intent (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})
                              row
                              plan/goals))
-        "in the burrow: it stays while the one given up on is angry")
+        "in the burrow, the one given up on angry twelve blocks off: out to the mouth")
     (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
-           (plan/next-intent (assoc (burrowed [3.5 64.0 8.5] {7 angry}) :plan/blacklist #{7})
+           (plan/next-intent (assoc (burrowed [3.5 64.0 8.5]
+                                              {7 (assoc angry :entity/pos [5.5 64.0 10.5])})
+                                    :plan/blacklist
+                                    #{7})
                              row
                              plan/goals))
-        "at the mouth: back in")
+        "at the mouth with it at hand: back in")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
+           (plan/next-intent (assoc (burrowed [8.5 61.0 8.5]
+                                              {7 (assoc angry :entity/pos [5.5 61.0 8.5])})
+                                    :plan/blacklist
+                                    #{7})
+                             row
+                             plan/goals))
+        "at the end with it on the stairs: fought")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc (burrowed [8.5 61.0 8.5]
+                                              {7 (assoc angry :entity/pos [1.5 64.0 8.5])})
+                                    :plan/blacklist
+                                    #{7})
+                             row
+                             plan/goals))
+        "at the end with it two off the mouth: a crowd, blacklisted or not")
     (is (=
          {:intent/kind :lookout :intent/for :pearls}
          (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])}) row plan/goals))
         "a calm one three blocks from the mouth: it waits for it to wander off")
+    (is (=
+         {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+         (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [3.5 44.0 8.5])}) row plan/goals))
+        "a calm one under the mouth, twenty below: no crowd")
     ;; batch pearls-warped-c (plan run 39152813557, probe 39157605071) run 1: forty minutes in the
     ;; burrow over one angry, blacklisted and seventeen blocks below the mouth, in another cave
     (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
@@ -355,11 +379,12 @@
   ;; the route's measure of height, and out again for forty minutes
   (let [below (enderman [8.5 40.0 8.5])
         w (assoc-in (standing {7 below}) [:player/inventory 1] (item :iron_pickaxe 1))]
-    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals))
-        "a lookout first: a stare it turns onto provokes one; one straight below is not at hand")
     (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [-1 0] :intent/for :pearls}
-           (plan/next-intent (looked-out w) row plan/goals))
-        "then a flight of stairs toward it, descend-step down")
+           (plan/next-intent w row plan/goals))
+        "a flight of stairs toward it, descend-step down; one straight below is not at hand")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (assoc w :plan/boxed-at #{[8 64 8]}) row plan/goals))
+        "a staircase from here was boxed: not again from here")
     (is (nil? (pearls/descend (standing {7 below}) {7 below})) "no pickaxe: no stairs")
     (is (nil? (pearls/descend w {7 (enderman [8.5 59.0 8.5])}))
         "five below is a slope's worth, not another level: the roam's")
