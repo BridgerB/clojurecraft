@@ -169,7 +169,7 @@
 
 (deftest boxed-under-water-that-has-no-top-the-bot-does-not-dig-into-it
   ;; sim world R3/13 (issue #71): a tunnel at y 16 dug up into an aquifer seven deep under stone,
-  ;; and the water followed the bot along its tunnel; a lake's ice is a roof the rise digs
+  ;; and the water followed the bot along its tunnel; a lake's ice is open water's roof
   (let [pocket (into {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air}
                      (for [y (range 54 61)] [[8 y 8] blocks/water-base]))
         boxed #(assoc % :plan/boxed-at #{[8 50 8]})
@@ -180,7 +180,43 @@
     (is (= :into-water (:intent/for (wood/gather-next (under blocks/air))))
         "open at the top: dig up into it")
     (is (= :into-water (:intent/for (wood/gather-next (under (blocks/default-state :ice)))))
-        "under a lake's ice: dig up into it, the rise digs the ice")))
+        "under a lake's ice: still dug into (the rise has no dig of its cap yet)")))
+
+(deftest a-trunk-across-a-chasm-is-bridged-by-stairs-up
+  ;; sim worlds R3/45 (issues #87 and #108): the only trunk in reach stood across two blocks of air
+  ;; from the pillar the bot had climbed out on, no route reached it, and the plan waited :no-log
+  (let [chasm (into {} (for [x (range 16) y (range 40 64) z (range 16)] [[x y z] blocks/air]))
+        platforms (fn [y & boxes]
+                    (into {}
+                          (for [[x0 x1] boxes x (range x0 (inc x1)) z (range 6 11)] [[x y z] 1])))
+        trunk {[1 64 8] 136 [1 65 8] 136}
+        near (remembered (merge chasm (platforms 63 [7 10] [0 1]) trunk) [8.5 64.0 8.5])
+        high (remembered (merge chasm (platforms 63 [0 1]) (platforms 66 [7 10]) trunk)
+                         [8.5 67.0 8.5])
+        far (remembered (merge chasm (platforms 63 [0 2] [13 15]) {[15 64 8] 136 [15 65 8] 136})
+                        [1.5 64.0 8.5])
+        bridge {:intent/kind :stairs-up
+                :intent/to-y 66
+                :intent/to-height? true
+                :intent/dir [-1 0]
+                :intent/for :surface}]
+    (is (nil? (wood/near-walk near)) "no route reaches the trunk across the chasm")
+    (is (= bridge (wood/gather-next near)) "two stairs up toward it")
+    (is (= bridge (wood/trees-bridge near [[1 64 8]])))
+    (is (nil? (wood/trees-bridge (assoc near :plan/boxed-at #{[8 64 8]}) [[1 64 8]]))
+        "never from a cell where a climb died boxed")
+    (is (nil? (wood/trees-bridge high [[1 64 8]]))
+        "bounded: three over the trunk's bottom, no more")
+    (is (nil? (wood/trees-bridge far [[15 64 8]]))
+        "a trunk past bridge-reach is not climbed toward")))
+
+(deftest a-mouth-below-the-feet-is-the-way-down-not-out
+  ;; sim world R2/16 (issue #87): stairs cut up from the mouth at y 83 toward trees on a cliff
+  ;; ended on a ledge at y 99 that was not out of the ground; the opening walked the bot back
+  ;; down to the mouth, where the climb began again, every twenty seconds
+  (is (wood/mouth-below? [2312 99 2655] [2327 83 2656]) "sixteen under the feet")
+  (is (not (wood/mouth-below? [2312 99 2655] [2327 98 2656])) "a step down is the way out")
+  (is (not (wood/mouth-below? [2312 20 2655] [2327 70 2656])) "a mouth above is the way out"))
 
 (deftest a-climb-for-wood-boxed-under-gravel-takes-the-short-way-away
   (let [corridor (into {[12 64 8] 136} (for [x (range 5 10) y [48 49]] [[x y 5] blocks/air]))
@@ -468,6 +504,13 @@
     (let [out (assoc w :player/pos [8.5 56.0 8.5])]
       (is (intent/arrived? out i 2.0))
       (is (nil? (intent/opening out))))))
+
+(deftest the-opening-up-the-shaft-is-kept
+  ;; the mouth is above the pocket: the walk up the shaft already dug, as intent/opening says
+  (let [surface (into {} (for [x (range 8 16) y (range 56 64) z (range 16)] [[x y z] blocks/air]))
+        w (remembered (merge sky-shaft surface) [2.5 50.0 8.5])]
+    (is (= :walk (:intent/kind (wood/opening-up w))))
+    (is (= (intent/opening w) (wood/opening-up w)))))
 
 (deftest a-shaft-open-to-the-sky-is-not-a-way-out
   (let [w (remembered sky-shaft [2.5 50.0 8.5])
@@ -1013,6 +1056,24 @@
       (is (= :tool-broke
              (:intention/reason (last (filter #(= :failed (:intention/event %))
                                               (memory/intentions w2)))))))))
+
+(deftest a-failed-crossing-keeps-its-trunk-for-the-bridge
+  ;; sim worlds R3/45 (issues #87 and #108): the cross toward the only trunk in reach met a cliff
+  ;; and failed :stuck; blacklisting the trunk left the climb up the cliff nothing to climb toward
+  (let [w (assoc (world-state [0.5 64.0 0.5])
+                 :plan/status :active
+                 :plan/blacklist #{}
+                 :plan/attempts 0)
+        cross
+        {:intent/kind :cross :intent/target [3 64 0] :intent/status :failed :intent/reason :stuck}
+        once (plan/fail-intent w cross)
+        twice (plan/fail-intent once cross)]
+    (is (= #{} (:plan/blacklist once)) "the trunk is not blacklisted")
+    (is (= {[3 0] 1} (:plan/trunk-failures once)) "the failure counts against its column")
+    (is (not ((wood/skipped once) [3 64 0])) "one failed cross is chance")
+    (is ((wood/skipped twice) [3 64 0]) "a second gives the trunk up")
+    (is (= #{[3 64 0]} (:plan/blacklist (plan/fail-intent w (assoc cross :intent/kind :walk))))
+        "a walk that failed there still blacklists it")))
 
 (deftest a-cell-a-place-or-a-redig-chose-is-never-blacklisted
   ;; race 38477665442 bot Clj_r04 (issue #43): a redig failed :not-picked-up at the cell before
