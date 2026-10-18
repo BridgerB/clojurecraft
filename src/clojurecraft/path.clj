@@ -88,6 +88,24 @@
   [world pos]
   (classify-id (terrain/block-at world pos)))
 
+(def ice-states
+  "Every state of the blocks of a lake's sheet: ice, frosted ice, packed ice, blue ice."
+  (into #{} (mapcat blocks/states-of) [:ice :frosted_ice :packed_ice :blue_ice]))
+
+(defn on-ice?
+  "Do the feet stand on a sheet of ice: is one of the two blocks under the feet's cell (a touch
+   under the position, as intent/feet reads it) ice, the second for a floor laid over the sheet?
+   false with no position."
+  [world]
+  (boolean (when-let [[x y z] (:player/pos world)]
+             (some (fn [d]
+                     (contains? ice-states
+                                (terrain/block-at world
+                                                  [(long (math/floor x))
+                                                   (- (long (math/floor (+ y 0.5))) d)
+                                                   (long (math/floor z))])))
+                   [1 2]))))
+
 (defn cell-key
   "One long naming the cell [x y z]: x and z in 26 bits each, y in 12, which holds every cell
    inside the world border (±30,000,000) at any height a dimension has, each to its own key."
@@ -98,8 +116,10 @@
 
 (defn cells
   "The cells of w as a route sees them: a function of [x y z] to classify's answer. w is a world,
-   or such a function already, returned as it is, so every predicate below takes either. Made
-   from a world, each cell is read through the terrain once and its answer held for the life of
+   or such a function already, returned as it is, so every predicate below takes either. Of a
+   world whose bot stands on ice (on-ice?) the sheet is floor: a route never steps onto ice from
+   land, but a bot a swim out put on one (issue #71) must be able to walk off it. Made from a
+   world, each cell is read through the terrain once and its answer held for the life of
    the function: one search or one scan asks about the same few thousand cells hundreds of
    thousands of times (a race's profile: the route search a fifth of all the bots' CPU, nearly
    all of it reading cells it had read). It answers about one world value, so what it holds is
@@ -108,13 +128,19 @@
   [w]
   (cond (fn? w) w
         :else
-        (let [held (java.util.HashMap.)]
+        (let [held (java.util.HashMap.)
+              ice? (or (:path/ice? w) (on-ice? w))]
           (fn [[x y z :as pos]]
             (let [k (cell-key x y z)
                   known (.get held k)]
               (cond known known
                     :else
-                    (let [c (classify w pos)]
+                    (let [c (classify w pos)
+                          c (if (and ice?
+                                     (= :awkward c)
+                                     (contains? ice-states (terrain/block-at w pos)))
+                              :solid
+                              c)]
                       (.put held k c)
                       c)))))))
 
@@ -442,15 +468,16 @@
     (filterv (fn [{:trap/keys [at]}] (<= (- now at) trap-ttl)) (:world/traps world))))
 
 (def plan-on
-  "[chunks blocks traps from goal max-nodes] → the route plan gives over that terrain with those
-   traps in force, remembered by the terrain's identity (memo/by): an act asked whether each of
+  "[chunks blocks traps ice? from goal max-nodes] → the route plan gives over that terrain with those
+   traps in force, the sheet of ice floor when ice? (the bot stands on it, on-ice?), remembered by the terrain's identity (memo/by): an act asked whether each of
    its candidates could be walked to every tick, a full search each (a race's profile: a sixth of
    all its CPU), over terrain that changes when a chunk arrives or a block changes."
-  (memo/by [:identical :identical :equal :equal :equal :equal]
+  (memo/by [:identical :identical :equal :equal :equal :equal :equal]
            256
-           (fn [chunks blocks traps from goal max-nodes]
+           (fn [chunks blocks traps ice? from goal max-nodes]
              ;; every trap here is in force, so the clock is not needed: trap-factor counts them all at 0
-             (let [world {:world/chunks chunks :world/blocks blocks :world/traps traps}
+             (let [world
+                   {:world/chunks chunks :world/blocks blocks :world/traps traps :path/ice? ice?}
                    start (start-cell world from)
                    [x y z] from
                    departure (when (and (not= start from)
@@ -477,6 +504,7 @@
    (plan-on (:world/chunks world)
             (:world/blocks world)
             (traps-in-force world)
+            (on-ice? world)
             from
             goal
             max-nodes)))

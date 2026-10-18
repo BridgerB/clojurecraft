@@ -633,6 +633,59 @@
           (intent/dissoc-intent :intent/child :intent/lay :intent/level-cells)
           (game/say (str "stairs: boxed under water, a stair down toward " d))))))
 
+(def bore-bed 3)                       ; rock blocks over the head a bore digs through at most (the eyes' reach to the water over them)
+(def bore-depth 24)                    ; blocks of water over that rock a bore swims up through at most: 2.7 a second, nine of the fifteen seconds of breath
+
+(defn handed?
+  "Does the inventory hold no pickaxe at all: a bot that digs by hand, a block of stone 7500 ms?"
+  [world]
+  (not-any? (fn [[_ {:keys [item]}]] (= :pickaxe (:kind (blocks/tool item))))
+            (:player/inventory world)))
+
+(defn bore-cells
+  "The cells a bore from feet [x y z] opens, bottom first: one to bore-bed blocks of rock over the
+   head (from y + 2: none never dug; the gravel and sand of a lake's bed count, which fall into the
+   cell below as it is dug, and are dug again) under a lake, whose water runs up from the rock for
+   at most bore-depth blocks to open air. nil when the column over the head is not that: rock too
+   thick, no water over it, or an aquifer's sheet with rock over it. The three bots of issues #69,
+   #62 and #161 stood under beds of stone, then gravel or sand, under fourteen to twenty-three
+   blocks of water."
+  [world [x y z]]
+  (let [cell (fn [dy] [x (+ y dy) z])
+        kind #(path/classify world %)
+        rock (vec (take-while #(= :solid (kind %)) (map cell (range 2 (+ 3 bore-bed)))))
+        n (count rock)
+        above (map cell (range (+ 2 n) (+ 3 n bore-depth)))
+        [wet top] (split-with #(= :water (kind %)) above)]
+    (when (and (<= 1 n bore-bed)
+               (seq wet)
+               (some-> top
+                       first
+                       kind
+                       (= :clear))
+               (not-any? #(contains? intent/never-dug (blocks/name-of (terrain/block-at world %)))
+                         rock))
+      rock)))
+
+(defn bore-up
+  "A climb out from under a lake with no pickaxe to cut a way along it: the stairs' stage :bore,
+   digging bore-cells over the head by hand and then holding up the shaft under the water that
+   comes down it, the swim-out (swim.clj) rising it to the surface. nil with a pickaxe held
+   (its level steps are quick), or without a bed bore-cells accepts. Sim races (issues #69, #62,
+   #161, #135; worlds R1/17, R3/45, R4/19, R3/30): bots with the pickaxe broken stood in a pocket
+   under a lake bed two blocks thick and cut level steps toward a shore by hand all window,
+   182 of them in a quarter of an hour, a block of stone 7500 ms."
+  [world]
+  (when (handed? world)
+    (when-let [cells (bore-cells world (intent/feet world))]
+      (-> world
+          (assoc :player/controls {})
+          (intent/assoc-intent :intent/bore cells
+                               :intent/stage :bore
+                               :intent/started-tick (:time/tick world))
+          (intent/dissoc-intent :intent/child :intent/cells :intent/lay :intent/level-cells)
+          (game/say (str "stairs: under a lake with no pickaxe, a bore up through " cells))))))
+
 (defn step-aside
   "Every stair refused: a level step, the turns counted afresh, or :boxed when none is allowed
    or max-level-steps are spent. The step keeps the last one's way (:intent/level-dir) while it
@@ -681,10 +734,12 @@
                    (first (filter laid ws))))
         budget? (< level-steps (level-step-limit world kind feet))
         fresh (when budget? (pick (remove #(contains? visited (last (level-cells feet %))) ways)))
-        ducked (when (and budget? (nil? fresh) (= :stairs-up kind)) (duck world i))
+        bored (when (= :stairs-up kind) (bore-up world))
+        ducked (when (and (nil? bored) budget? (nil? fresh) (= :stairs-up kind)) (duck world i))
         d (or fresh (when (and budget? (nil? ducked)) (pick ways)))
         to-lay (when (and d (not (level-safe? world (level-cells feet d)))) (laid d))]
-    (cond ducked ducked
+    (cond bored bored
+          ducked ducked
           d
           (-> world
               (intent/assoc-intent :intent/dir d
@@ -953,6 +1008,41 @@
               (assoc :player/controls {})
               (intent/fail :stair-not-taken))
           :else (assoc world :player/controls (onto world rise cell dir)))))
+
+(def bore-timeout-ticks 1200)           ; ticks (a minute) a bore may take, digging and rising
+
+(defmethod stairs-stage :bore
+  ;; dig each of :intent/bore, bottom first, one child at a time (the water over the last may
+  ;; come in: :intent/exposes-ok?; the rock's drop is not wanted: :intent/drop-ok?), then hold
+  ;; under the shaft's centre with the jump held, rising as the water allows; the swim-out takes
+  ;; over when the bot is trapped, and the climb ends at the surface (intent/run :stairs-up)
+  [world {:intent/keys [child bore started-tick]} event]
+  (let [[x y z] (intent/feet world)
+        next (next-to-open world bore)]
+    (cond (and child (or (intent/done? child) (fell? child)))
+          (intent/dissoc-intent world :intent/child)
+          (and child (intent/failed? child))
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail (:intent/reason child)))
+          child (intent/run-child world event)
+          next
+          (intent/run-child (intent/assoc-intent world
+                                                 :intent/child
+                                                 (assoc (intent/child-dig next)
+                                                        :intent/exposes-ok? true
+                                                        :intent/drop-ok? true))
+                            event)
+          (> (- (:time/tick world) started-tick) bore-timeout-ticks)
+          (-> world
+              (assoc :player/controls {})
+              (intent/fail :stair-not-taken))
+          :else
+          (assoc world
+                 :player/controls
+                 (assoc (intent/toward world [(+ x 0.5) (double y) (+ z 0.5)] 0.0)
+                        :control/jump?
+                        true)))))
 
 (defn level-refused
   "A level step whose cell a child dig would not cut (refusals) after the step was chosen: a

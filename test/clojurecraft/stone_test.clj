@@ -252,17 +252,22 @@
   ;; sim race 39074156402 (issue #71, world R2/35): a cove between a cliff and a frozen lake, the
   ;; feet on the ice's edge in a cell no route stands in, the one standable cell beside them a
   ;; dead end; the stairs died :boxed there and every plan after found no way, so the plan waited
-  ;; :boxed to its end
+  ;; :boxed to its end (the floor here is awkward sand of souls: a bot on ice plans over it now)
   (let [pocket (merge (into {} (for [y [48 49]] [[5 y 5] blocks/air]))
                       (into {} (for [y [48 49]] [[6 y 6] blocks/air]))
-                      {[5 47 5] (blocks/default-state :ice)})
+                      {[5 47 5] (blocks/default-state :soul_sand)})
         w (assoc (standing 48) :world/chunks {[0 0] (world/column pocket)})
-        boxed (assoc w :plan/boxed-at #{[5 48 5]})]
+        boxed (assoc w :plan/boxed-at #{[5 48 5]})
+        iced (assoc-in boxed
+              [:world/chunks [0 0]]
+              (world/column (assoc pocket [5 47 5] (blocks/default-state :ice))))]
     (is (nil? (stone/retreat w)) "not boxed: an ordinary retreat seeks twelve blocks of distance")
     (is (= {:intent/kind :walk :intent/target [6 48 6] :intent/for :retreat} (stone/retreat boxed))
         "boxed, with no route from the cell the search begins on: that cell itself")
-    (is (nil? (stone/retreat (update boxed :plan/boxed-at conj [6 48 6])))
-        "unless it is boxed too")))
+    (is (nil? (stone/retreat (update boxed :plan/boxed-at conj [6 48 6]))) "unless it is boxed too")
+    (is
+     (nil? (stone/retreat iced))
+     "on ice the sheet is floor (issue #71): the feet cell is the search's own start, no other")))
 
 (deftest a-long-retreat-does-not-end-on-boxed-ground
   (let [w (assoc (standing 64)
@@ -782,3 +787,46 @@
             "no floor can be laid over water")))
     (testing "a step with nothing wrong has nothing to lay"
       (is (nil? (stairs/level-lay (at {} :cobblestone) feet cells))))))
+
+(defn under-a-lake
+  "Standing at [5 64 5] (feet) with rock rock blocks over the head from y 66, then water for wet
+   blocks, then air, holding items by name."
+  [rock wet & items]
+  (let [stone (blocks/default-state :stone)
+        cells (concat (for [dy (range rock)] [[5 (+ 66 dy) 5] stone])
+                      (for [dy (range wet)] [[5 (+ 66 rock dy) 5] blocks/water-base]))]
+    (assoc (apply standing 64 items)
+           :world/blocks (into {} cells)
+           :plan/intent {:intent/kind :stairs-up :intent/to-y 90 :intent/status :active})))
+
+(deftest a-bore-is-the-bed-over-the-head-under-a-lake-of-open-air
+  (let [feet [5 64 5]]
+    (is (= [[5 66 5] [5 67 5]] (stairs/bore-cells (under-a-lake 2 4) feet)))
+    (is (= 3 (count (stairs/bore-cells (under-a-lake 3 4) feet))) "the thickest bed the eyes reach")
+    (is (nil? (stairs/bore-cells (under-a-lake 4 4) feet)) "rock too thick")
+    (is (nil? (stairs/bore-cells (under-a-lake 2 0) feet)) "no water over the rock")
+    (is (nil? (stairs/bore-cells (under-a-lake 2 (inc stairs/bore-depth)) feet))
+        "water that runs on past the swim: an aquifer, not a lake")))
+
+(deftest a-climb-with-no-pickaxe-under-a-lake-bores-up-rather-than-step-aside
+  (let [i {:intent/kind :stairs-up :intent/dir [1 0]}
+        by-hand (under-a-lake 2 4 :cobblestone)
+        armed (under-a-lake 2 4 :stone_pickaxe)]
+    (is (= :bore (:intent/stage (:plan/intent (stairs/step-aside by-hand i)))))
+    (is (= [[5 66 5] [5 67 5]] (:intent/bore (:plan/intent (stairs/step-aside by-hand i)))))
+    (is (not= :bore (:intent/stage (:plan/intent (stairs/step-aside armed i))))
+        "with a pickaxe the level steps are quick")))
+
+(deftest a-bore-digs-its-cells-bottom-first-letting-the-water-in
+  (let [w (-> (under-a-lake 2 4 :cobblestone)
+              (assoc :plan/intent
+                     {:intent/kind :stairs-up
+                      :intent/stage :bore
+                      :intent/bore [[5 66 5] [5 67 5]]
+                      :intent/started-tick 0
+                      :intent/status :active})
+              (assoc :time/tick 1))
+        next (stairs/stairs-stage w (:plan/intent w) {:event/kind :tick})
+        child (:intent/child (:plan/intent next))]
+    (is (= [5 66 5] (:intent/target child)))
+    (is (true? (:intent/exposes-ok? child)))))
