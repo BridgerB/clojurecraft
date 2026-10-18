@@ -161,7 +161,8 @@
    "Race 39007354638 runner 3 batch 2 (issue #348) retreated from gravel to a seagrass cell and bobbed until flint-and-steel failed :stuck; an escape bank must have no fluid at the feet or head, even when its plants are passable"
    "Sim race 39007353160 R4/2 (issue #349) climbed eight stairs for wood, then walked back down to a sky-lit pit every eleven seconds until flint-and-steel timed out; an exit walk must reach the same usable open ground as the climb, not merely open sky"
    "Sim races 39081494214 R1/31 and 39074159590 R3/44 (issue #105) climbed up under a lake for the water bucket and stood in a flooded shaft with hundreds of cobblestone, where water beside every cell a level step digs refused each step and the climb failed :boxed three times; a level step seals that water (stairs/level-lay) and floors an open step instead"
-   "Sim race 39004332220 R2/2 (issue #323) died while smelting and the model retained the old furnace menu, refusing every equip click until :stale-window; respawn now drops that menu reference while keeping the inventory and furnace contents"]
+   "Sim race 39004332220 R2/2 (issue #323) died while smelting and the model retained the old furnace menu, refusing every equip click until :stale-window; respawn now drops that menu reference while keeping the inventory and furnace contents"
+   "Sim races (issues #69, #62, #161, #135, worlds R1/17, R3/45, R4/19) left bots with the pickaxe broken in a pocket under a lake bed of stone, then gravel or sand, under fourteen to twenty-three blocks of water, cutting level steps toward a shore by hand for the whole window (a block of stone 7500 ms, 200 stale cells in :plan/boxed-at): a climb with no pickaxe now bores up through a bed of at most three and swims the water (stairs/bore)"]
   :problem/done
   "RCON Inventory shows a filled water_bucket and flint_and_steel after a live run on the local server, with RESULT :ok true."
   :problem/last-failure
@@ -182,6 +183,7 @@
    "The current dimension, from the respawn packet"]
   :problem/risks
   ["Water from a later cast can flow through an earlier cell whose source was already scooped: cleanup must test for a remaining source, not any water, or it retries an uncollectable flow and fails :target-gone (issue #419, R1/20)."
+   "Race 39088700340 bot Clj_r02 (issue #71) rose out of an air pocket under a frozen sea onto the ice and could not leave it: a route never stands on ice, so the mine cut stairs and laid floors on the sheet until it was :boxed; a bot on ice plans over it (path/on-ice?, stone/off-ice), and the rise up its shaft digs the ice cap and holds jump for the dig"
    "A boxed pocket whose search finds no waypoint (a cove between a cliff and a frozen lake, the feet on the ice) must still step to the standable cell the search began on, so the next descent starts from there and the plan does not wait :boxed to its end (issue #71, R2/35)."
    "Trees across water no route crosses: a grove is one failure, not a failed walk for each trunk, so the hunt and the crossing have their turn before twelve unwalkable walks end the plan (issue #75, real-1)."
    "A pocket under a powder-snow field has no air to put a table or furnace into, and powder snow is no place for a niche or a solid roof: cut the niche through it too, and place into the cell once dug, however a route could run through it (issue #94, real-2)."

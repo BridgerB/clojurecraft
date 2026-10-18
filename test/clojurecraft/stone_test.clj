@@ -782,3 +782,46 @@
             "no floor can be laid over water")))
     (testing "a step with nothing wrong has nothing to lay"
       (is (nil? (stairs/level-lay (at {} :cobblestone) feet cells))))))
+
+(defn under-a-lake
+  "Standing at [5 64 5] (feet) with rock rock blocks over the head from y 66, then water for wet
+   blocks, then air, holding items by name."
+  [rock wet & items]
+  (let [stone (blocks/default-state :stone)
+        cells (concat (for [dy (range rock)] [[5 (+ 66 dy) 5] stone])
+                      (for [dy (range wet)] [[5 (+ 66 rock dy) 5] blocks/water-base]))]
+    (assoc (apply standing 64 items)
+           :world/blocks (into {} cells)
+           :plan/intent {:intent/kind :stairs-up :intent/to-y 90 :intent/status :active})))
+
+(deftest a-bore-is-the-bed-over-the-head-under-a-lake-of-open-air
+  (let [feet [5 64 5]]
+    (is (= [[5 66 5] [5 67 5]] (stairs/bore-cells (under-a-lake 2 4) feet)))
+    (is (= 3 (count (stairs/bore-cells (under-a-lake 3 4) feet))) "the thickest bed the eyes reach")
+    (is (nil? (stairs/bore-cells (under-a-lake 4 4) feet)) "rock too thick")
+    (is (nil? (stairs/bore-cells (under-a-lake 2 0) feet)) "no water over the rock")
+    (is (nil? (stairs/bore-cells (under-a-lake 2 (inc stairs/bore-depth)) feet))
+        "water that runs on past the swim: an aquifer, not a lake")))
+
+(deftest a-climb-with-no-pickaxe-under-a-lake-bores-up-rather-than-step-aside
+  (let [i {:intent/kind :stairs-up :intent/dir [1 0]}
+        by-hand (under-a-lake 2 4 :cobblestone)
+        armed (under-a-lake 2 4 :stone_pickaxe)]
+    (is (= :bore (:intent/stage (:plan/intent (stairs/step-aside by-hand i)))))
+    (is (= [[5 66 5] [5 67 5]] (:intent/bore (:plan/intent (stairs/step-aside by-hand i)))))
+    (is (not= :bore (:intent/stage (:plan/intent (stairs/step-aside armed i))))
+        "with a pickaxe the level steps are quick")))
+
+(deftest a-bore-digs-its-cells-bottom-first-letting-the-water-in
+  (let [w (-> (under-a-lake 2 4 :cobblestone)
+              (assoc :plan/intent
+                     {:intent/kind :stairs-up
+                      :intent/stage :bore
+                      :intent/bore [[5 66 5] [5 67 5]]
+                      :intent/started-tick 0
+                      :intent/status :active})
+              (assoc :time/tick 1))
+        next (stairs/stairs-stage w (:plan/intent w) {:event/kind :tick})
+        child (:intent/child (:plan/intent next))]
+    (is (= [5 66 5] (:intent/target child)))
+    (is (true? (:intent/exposes-ok? child)))))

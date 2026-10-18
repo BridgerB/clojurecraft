@@ -9,6 +9,8 @@ lastUpdated: 2026-10-18
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/path.clj#defn plan
+  - src/clojurecraft/path.clj#defn on-ice?
+  - test/clojurecraft/path_test.clj#a-bot-on-a-sheet-of-ice-walks-off-it-but-never-onto-it
   - src/clojurecraft/path.clj#defn search
   - src/clojurecraft/path.clj#defn classify-id
   - src/clojurecraft/path.clj#defn cells
@@ -42,6 +44,7 @@ related:
 `(path/plan world from goal opts)` returns `{:path/waypoints [[x y z] ...] :path/cost n :path/status :found|:partial|:none}`: a route for the feet over the block grid, as a pure function of the world value (issue #4). Nothing in it reads a clock or the atom; the budget is in node expansions, so a recording replays to the same route on any machine ([[sib-astar-budget]] is why not milliseconds).
 
 ## Key files
+- `path.clj`, `on-ice?` / `cells` - ice is `:awkward` (the physics does not slide), so a route never steps onto a sheet from land; but of a world whose bot stands on one (`on-ice?`: ice in one of the two blocks under the feet, the second for a floor laid on it, passed to `plan-on` as `ice?` since it builds its own world from the chunks) the sheet is floor, so a bot a swim out put on a frozen lake can walk off it. Issue #71, race 39088700340 bot Clj_r02 (`a-bot-on-a-sheet-of-ice-walks-off-it-but-never-onto-it`, `stone/off-ice`).
 - `path.clj`, `classify-id` / `classify` - what a block state is to a route: `:water`, `:lava`, `:awkward` (a block whose collision shape the game says is neither nothing nor a full cube and stands taller than `flat-shape`, 0.125, read from the game into `shapes.edn`, `blocks/partial-shapes`: a cocoa pod, a slab, a lantern, but not a carpet; or a definition type in `awkward-types`, the hand list kept for full cubes the physics cannot simulate, slime, ice, magma, cobwebs. Gym batch iron-a9 run 5 walked into a cocoa pod on a jungle log the hand list lacked and never moved again), `:solid` (a full cube), `:clear` (passable, not a liquid; one layer of snow is, `one-layer-snow`: the game gives the block's default state no collision shape at all and the physics passes through it, so the feet stand in its cell on the block under it; deeper layers collide and stay `:awkward`), `:unknown` (the chunk is not loaded).
 - `path.clj`, `cells` / `cell-key` - one search's view of the cells: a function from a cell to its class that reads each cell through the terrain once and holds the answer under one long key. Every cell predicate below takes a world or its cells; the search and the stone scan make one and pass it down, so a cell asked a hundred times is read once ([[remembered-by-identity]]).
 - `path.clj`, `templates` / `moves` - four move templates along +x, rotated to the eight directions: `:walk` (cost 1), `:jump-up` (2), `:diagonal` (√2, both corner columns clear), `:drop` (1 + 0.5 per block fallen, at most `max-fall` 3). Each template lists what cells must be what; `neighbors` interprets them.
