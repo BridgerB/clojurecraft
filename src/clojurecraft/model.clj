@@ -438,6 +438,9 @@
    [:intent/refused
     "cells the server refused a placement into with nothing in them (a body stood there); the next spot is another, place/max-refusals of them fail :rejected"
     "place, after such a refusal"]
+   [:intent/nudges
+    "ticks a placement into a given cell has walked toward the middle of the feet's cell, the body clipping the cell's edge (place/nudge-off); place/max-nudges of them, then the server is asked anyway"
+    "place into a given cell the body clips"]
    [:intent/sequence "sequence number of the placement, or of the bucket's use"
     "place and scoop, after sending"]
    [:intent/tries "scoops sent at this source; the last of scoop/max-tries fails :no-scoop"

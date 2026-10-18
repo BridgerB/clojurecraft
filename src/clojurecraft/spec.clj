@@ -533,6 +533,7 @@
 (s/def :intent/sent-at int?)
 (s/def :intent/against ::block-pos)
 (s/def :intent/refused (s/coll-of ::block-pos :kind set?))
+(s/def :intent/nudges nat-int?)
 (s/def :intent/sequence int?)
 (s/def :chunk/column map?)
 (s/def :chunk/min-y #{-64 0})
