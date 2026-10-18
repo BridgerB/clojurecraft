@@ -1,10 +1,12 @@
 (ns probe.moment-trace
   "A snapshot's moment played on, the running intent printed every few simulated seconds."
-  (:require [clojurecraft.capture :as capture]
+  (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.capture :as capture]
             [clojurecraft.plan :as plan]
             [clojurecraft.scene :as scene]
             [clojurecraft.sim :as sim]
-            [clojurecraft.simrace :as sr]))
+            [clojurecraft.simrace :as sr]
+            [clojurecraft.terrain :as terrain]))
 
 (defn brief
   "The small values of an intent, children too."
