@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T09:30:35.838Z",
+  "at" : "2026-10-18T09:32:47.486Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,6 +18,11 @@
     "nudges" : 1,
     "pr" : 438,
     "session" : true
+  }, {
+    "number" : 339,
+    "title" : "Bot stops at fortress: no-footing",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
   }, {
     "number" : 392,
     "title" : "Bot stops at portal: no-site",
