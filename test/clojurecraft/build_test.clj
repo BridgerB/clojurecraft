@@ -17,6 +17,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.scoop :as scoop]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.wood :as wood]
             [clojurecraft.world :as world]))
 
@@ -912,6 +913,18 @@
   (let [walk-at (fn [pos] (build/lava-walk (standing-at (open-ground trench) pos)))]
     (is (= :lava (:intent/for (walk-at [10.5 63.0 8.5]))) "far from every stand: walked to")
     (is (nil? (walk-at [10.5 63.0 11.5])) "the eye within reach of the stands: already there")))
+
+(deftest a-build-fetches-its-kit-wood-only-from-the-surface
+  ;; sim race 39076908669 (issue #178, world R2/21 seed 2): the pickaxe broke at the cast with no
+  ;; table, one stick and no planks, and the hand-dug climb for a log took the run's last hour
+  (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])
+        trunk {:intent/kind :walk :intent/target [9 63 9] :intent/for :log}]
+    (with-redefs [wood/near-walk (constantly trunk)]
+      (is (true? (build/carry-table? w)) "out of the ground with a trunk near: a table is fetched")
+      (with-redefs [stairs/out? (constantly false)]
+        (is (not (build/carry-table? w)) "underground the build goes on without it")))
+    (with-redefs [wood/near-walk (constantly nil)]
+      (is (not (build/carry-table? w)) "no trunk a route reaches: nothing to fetch"))))
 
 (deftest a-refill-never-opens-lava-over-its-stand
   ;; Issue #231, R1/32: the ray to a low source opened the wall under higher lava,

@@ -34,7 +34,8 @@
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]
-            [clojurecraft.window :as window]))
+            [clojurecraft.window :as window]
+            [clojurecraft.wood :as wood]))
 
 (set! *warn-on-reflection* true)
 
@@ -1663,9 +1664,20 @@
                            plan/goals)]
     (boolean (and (map? row) (not (make/fetch? row))))))
 
+(defn wood-near?
+  "Is the kit's wood a short trip: the feet out of the ground (stairs/out?) and a standing trunk a
+   route reaches (wood/near-walk)? Underground it is the climb out from the lava, and the build
+   goes on with what it holds. Sim race 39076908669 (issue #178, world R2/21 seed 2): the last
+   pickaxe broke at the cast at y -52 with one stick, no planks and no table, and the stairs up
+   through deepslate by hand, three digs of seventeen seconds a block, ran the run's last hour
+   for the log: the wood was a short walk from the surface the build began at."
+  [world]
+  (and (stairs/out? world (intent/feet world)) (some? (wood/near-walk world))))
+
 (defn carry-table?
   "Should a build take a crafting table into its kit: none held, none placed within reach to take
-   along (make/take-table-along), and one can be made from what is held (table-at-hand?). A cast
+   along (make/take-table-along), and one can be made from what is held (table-at-hand?) or its
+   wood is a short trip (wood-near?). A cast
    wears out every pickaxe it holds; with a table, sticks and cobblestone the next is made where
    the bot stands. Sim races 38806318231 and 38843552659 (issue #186, worlds R1/25, R2/11, R1/18,
    R4/39): the pickaxes broke in the cast with sticks and four hundred cobblestone in hand and no
@@ -1673,7 +1685,7 @@
   [world]
   (and (zero? (get (make/counts world) :crafting_table 0))
        (nil? (make/take-table-along world))
-       (table-at-hand? world)))
+       (or (table-at-hand? world) (wood-near? world))))
 
 (def kit-sticks 2)                    ; sticks a build carries: one pickaxe's worth, made again where the cast wore the last out
 
@@ -1689,7 +1701,8 @@
 (defn carry-sticks?
   "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or placed
    within reach already (the table first: carry-table?, so the planks a table needs are never
-   spent on sticks), and they can be made from what is held (sticks-at-hand?). A table and
+   spent on sticks), and they can be made from what is held (sticks-at-hand?) or their wood is a
+   short trip (wood-near?). A table and
    cobblestone make no pickaxe without sticks: a probe of world R3/12 seed 1 from spawn on main
    (Refs #178) wore out its pickaxes in the cast holding a table, 684 cobblestone and one plank,
    no sticks, and cut stairs up through deepslate by hand for a log, fifteen seconds a block,
@@ -1697,7 +1710,7 @@
   [world]
   (and (< (get (make/counts world) :stick 0) kit-sticks)
        (or (pos? (get (make/counts world) :crafting_table 0)) (some? (make/take-table-along world)))
-       (sticks-at-hand? world)))
+       (or (sticks-at-hand? world) (wood-near? world))))
 
 (defn held-first
   "What the needs planner does for what a build row holds before it starts: the tools of
