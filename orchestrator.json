@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T05:33:02.053Z",
+  "at" : "2026-10-18T05:34:07.392Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,11 +18,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 60,
-    "title" : "Bot stops at water-bucket: no-water",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 363,
@@ -32,11 +27,16 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 431,
-    "session" : true
+    "session" : false
+  }, {
+    "number" : 60,
+    "title" : "Bot stops at water-bucket: no-water",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "number" : 430,
     "title" : "Bot stops at fortress: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 62,
@@ -67,14 +67,17 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 363,
+    "move" : "ready",
+    "pr" : 431
+  }, {
     "issue" : 60,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 363,
-    "move" : "wait",
-    "pr" : 431,
-    "why" : "session running"
+    "issue" : 430,
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 62,
     "move" : "leave",
@@ -1130,5 +1133,10 @@
     "issue" : 363,
     "move" : "assign",
     "at" : "2026-10-18T05:30:50.240Z"
+  }, {
+    "issue" : 363,
+    "move" : "ready",
+    "pr" : 431,
+    "at" : "2026-10-18T05:34:07.392Z"
   } ]
 }
