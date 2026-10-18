@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:38:10.062Z",
+  "at" : "2026-10-18T01:41:35.537Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,13 +18,13 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
+    "number" : 130,
+    "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 130,
-    "title" : "Bot stops at cast-one: boxed",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -37,7 +37,7 @@
     "draft" : true,
     "nudges" : 0,
     "pr" : 414,
-    "session" : true
+    "session" : false
   }, {
     "number" : 41,
     "title" : "Bot stops at cast-one: no-site",
@@ -95,6 +95,11 @@
     "pr" : 391,
     "session" : false
   }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "quiet" : true,
     "number" : 178,
@@ -111,19 +116,14 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent", "agent-stuck" ],
     "copilot" : false
   }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 69,
-    "title" : "Bot stops at water-bucket: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "number" : 286,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 110,
@@ -131,9 +131,9 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 286,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "number" : 69,
+    "title" : "Bot stops at water-bucket: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 163,
@@ -169,18 +169,17 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 44,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 130,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 44,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 339,
-    "move" : "wait",
-    "pr" : 414,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 414
   }, {
     "issue" : 41,
     "move" : "leave",
@@ -230,11 +229,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 69,
+    "issue" : 110,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 110,
+    "issue" : 69,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -1127,5 +1126,10 @@
     "issue" : 339,
     "move" : "assign",
     "at" : "2026-10-18T01:22:23.471Z"
+  }, {
+    "issue" : 339,
+    "move" : "ready",
+    "pr" : 414,
+    "at" : "2026-10-18T01:41:35.537Z"
   } ]
 }
