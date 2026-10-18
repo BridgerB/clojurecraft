@@ -31,6 +31,7 @@
 (def steps-per-tunnel 32)             ; steps a :tunnel-to takes before the planner looks again
 (def explore-spacing 160)             ; blocks between the strips an exploring tunnel sweeps: a server shows 96 either side of the feet
 (def explore-band [52 90])            ; the heights an exploring tunnel keeps to: over the lava sea (y 31) and its lakes, under the roof
+(def bridge-fall 2)                   ; blocks of air a laid floor may hang over solid ground: a fall that costs no health
 (def look-ahead 2)                    ; blocks ahead that must be loaded for a leg to go on: the world's edge turns it
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
 
@@ -90,13 +91,24 @@
   [c]
   (map #(plus c %) (vals physics/face-offsets)))
 
+(defn shallow?
+  "Is the first block under floor that is not air, within bridge-fall below it, solid (never a
+   fluid, never the void or a cell not loaded)? A floor laid there hangs over ground a fall
+   reaches without harm."
+  [world [x y z]]
+  (let [kinds (map #(path/classify world [x % z]) (range (dec y) (- y (inc bridge-fall)) -1))]
+    (= :solid (first (remove #{:clear} kinds)))))
+
 (defn safe?
   "Can the step from feet by move be taken: every cell it opens and the floor loaded, none of them
    lava or something it never opens, no lava beside a cell it opens (other than the cells it opens,
    the floor, which is filled first, and the body's own), and a floor that is solid, or lava a
    block placed against a solid neighbour fills. Never air: a step over a drop is not enclosed
    (live run f1-5 stood at a cave's edge with air under the next floor, slid off while placing it
-   and fell forty blocks into the lava sea). A solid floor the route cannot walk on is replaced
+   and fell forty blocks into the lava sea), unless the air floor hangs over solid ground within
+   bridge-fall (shallow?) and a solid neighbour holds the block laid in it: a cavern's floor is
+   bridged a block at a time, from the floor the feet stand on (sim race 39099976057 runner 2, world
+   R2/4: thirty minutes at a time paced on a ledge, every step ahead an air floor). A solid floor the route cannot walk on is replaced
    only when digging it opens no fluid and leaves support for its replacement. No opened cell
    may drop a gravel or sand bed carrying fluid into the tunnel."
   [world feet move]
@@ -116,7 +128,10 @@
               (not (contains? unbreakable (blocks/name-of (at floor))))
               (not (intent/exposes-fluid? world floor))
               (= floor (build/foundation world floor)))
-         (and (lava? floor) (= floor (build/foundation world floor)))))))
+         (and (lava? floor) (= floor (build/foundation world floor)))
+         (and (= :clear (path/classify world floor))
+              (shallow? world floor)
+              (= floor (build/foundation world floor)))))))
 
 (defn dry?
   "Does the step from feet by move open no cell that is water or has water beside it (other than

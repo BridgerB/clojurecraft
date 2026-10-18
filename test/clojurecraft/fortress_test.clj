@@ -653,3 +653,19 @@
     (is (= (assoc east-leg :search/tunnels 1)
            (:intent/search (plan/next-intent out goal plan/goals)))
         "and the next look goes on along it")))
+
+(deftest a-cavern-floor-is-bridged-only-over-ground-a-fall-survives
+  ;; issue #338: a tunnel in a Nether cavern paced for half an hour on a ledge, every step ahead an
+  ;; air floor; one over solid ground within bridge-fall is bridged, over lava or a drop never
+  (let [floor [1 63 0]
+        step #(fortress/safe? (rock %) [0 64 0] [1 0 0])]
+    (is (step {floor air [1 62 0] air}) "air, then solid one below the floor cell: a fall of two")
+    (is (step {floor air}) "solid right under the floor cell")
+    (is (not (step {floor air [1 62 0] air [1 61 0] air})) "three of air: a drop")
+    (is (not (step {floor air [1 62 0] blocks/lava-base})) "lava under the floor")
+    (is (not (step {floor air [1 62 0] blocks/water-base})) "water under the floor")
+    (is (not (step {floor air [1 62 0] nil [1 61 0] nil})) "ground not loaded")
+    (is (not (step {floor air [1 62 0] air [1 61 0] air [1 60 0] air [1 59 0] air}))
+        "no ground within reach of a fall")
+    (is (some #{[1 0 0]} (fortress/moves [0 64 0] [10 64 0]))
+        "and the step is among those tried toward the target")))
