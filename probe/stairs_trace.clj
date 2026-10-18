@@ -90,6 +90,8 @@
                          (mapv #(/ (long (* 10.0 %)) 10.0) (:player/pos world))
                          "feet"
                          feet
+                         "filler"
+                         (stairs/carried-filler world)
                          (pr-str (select-keys world
                                               [:player/in-water? :player/on-ground?
                                                :player/controls]))
