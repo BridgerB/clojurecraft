@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T02:56:05.090Z",
+  "at" : "2026-10-18T02:57:12.662Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -41,7 +41,7 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 162,
-    "checks" : "pending",
+    "checks" : "red",
     "title" : "Bot stops at portal: no-path",
     "copilot" : true,
     "draft" : true,
@@ -81,11 +81,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 74,
-    "title" : "Bot stops at cast-one: no-stand",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -104,6 +99,11 @@
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 74,
+    "title" : "Bot stops at cast-one: no-stand",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 69,
@@ -181,10 +181,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 74,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 75,
     "move" : "leave",
     "why" : "hands-off label"
@@ -194,6 +190,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 161,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 74,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
