@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T03:26:29.243Z",
+  "at" : "2026-10-18T03:27:37.098Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -44,11 +44,6 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 41,
-    "title" : "Bot stops at cast-one: no-site",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "labels" : [ "bot-failure", "real", "sim" ],
     "quiet" : false,
     "number" : 162,
@@ -59,6 +54,11 @@
     "nudges" : 3,
     "pr" : 421,
     "session" : true
+  }, {
+    "number" : 41,
+    "title" : "Bot stops at cast-one: no-site",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
@@ -145,14 +145,14 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 41,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 162,
     "move" : "wait",
     "pr" : 421,
     "why" : "session running"
+  }, {
+    "issue" : 41,
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 60,
     "move" : "leave",
