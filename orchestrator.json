@@ -1,18 +1,18 @@
 {
-  "at" : "2026-10-18T10:26:00.684Z",
+  "at" : "2026-10-18T10:28:10.338Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim" ],
     "quiet" : false,
     "number" : 338,
-    "checks" : "red",
+    "checks" : "pending",
     "title" : "Bot stops at fortress: timeout",
     "copilot" : true,
     "draft" : true,
     "nudges" : 0,
     "pr" : 440,
-    "session" : true
+    "session" : false
   }, {
     "number" : 339,
     "title" : "Bot stops at fortress: no-footing",
@@ -41,9 +41,8 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "wait",
-    "pr" : 440,
-    "why" : "session running"
+    "move" : "ready",
+    "pr" : 440
   }, {
     "issue" : 65,
     "move" : "leave",
@@ -1176,5 +1175,10 @@
     "issue" : 338,
     "move" : "assign",
     "at" : "2026-10-18T10:03:14.165Z"
+  }, {
+    "issue" : 338,
+    "move" : "ready",
+    "pr" : 440,
+    "at" : "2026-10-18T10:28:10.338Z"
   } ]
 }
