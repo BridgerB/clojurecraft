@@ -3426,3 +3426,30 @@
     (is (< (first (:player/pos w)) 7.0) "behind the wall")
     (is (= :cover (:intent/for (:plan/last w))) "the walk there was for cover")
     (is (= [] (:sim/violations sim)))))
+
+(deftest three-of-the-models-blazes-at-hand-the-bot-hides-not-fights
+  ;; gym blaze-fire-a run 1 (run 39131023637): a spawner's burst at hand, and the :defend row
+  ;; fought it from 20 health to none; the three here are within its 4, and it leaves them to the
+  ;; blaze-rods row, which walks round the wall out of their sight
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes nether-wall dimension/nether)
+                                    :spawn [8.5 64.0 6.5]
+                                    :dimension dimension/nether
+                                    :difficulty :easy
+                                    :food 20
+                                    :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}}
+                                    :mobs [{:type :blaze :pos [11.5 65.0 5.5]}
+                                           {:type :blaze :pos [11.5 65.0 6.5]}
+                                           {:type :blaze :pos [11.5 65.0 7.5]}]})
+                         #(or (and (= :cover (get-in % [:plan/last :intent/for]))
+                                   (intent/done? (:plan/last %)))
+                              (plan/failed? %)
+                              (pos? (:stats/deaths % 0)))
+                         30000
+                         {:event/kind :go :go/goals [:blaze-rods]})]
+    (is (intent/done? (:plan/last w)) (pr-str (plan/summary w)))
+    (is (zero? (:stats/deaths w 0)) "alive")
+    (is (empty? (blaze/watchers w)) "no blaze sees it")
+    (is (= :cover (:intent/for (:plan/last w))) "the walk there was for cover")
+    (is (= [] (:sim/violations sim)))))

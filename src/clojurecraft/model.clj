@@ -333,6 +333,9 @@
    [:intent/hold?
     "a :fight that never walks: it waits for the target to come, never presses after it and never breaks off (the pearl hunt's burrow, issue #263)"
     "a :fight from the hunt's burrow"]
+   [:intent/yield?
+    "a :fight that ends (done) under retreat-health instead of walking away: its row plans the retreat itself (blaze-rods' cover, issue #262)"
+    "a :fight the blaze-rods row starts"]
    [:intent/mouth "where a :burrow began: the stairs go down from it"
     ":burrow, from its first tick"]
    [:intent/eye-from "where the eye a :throw-eye follows was first seen [x y z]"

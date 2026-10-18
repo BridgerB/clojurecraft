@@ -464,6 +464,7 @@
 (s/def :intent/blazes (s/coll-of int? :kind set?))
 (s/def :intent/health number?)
 (s/def :intent/hold? boolean?)
+(s/def :intent/yield? boolean?)
 (s/def :intent/mouth ::block-pos)
 (s/def :intent/eye-from ::vec3)
 (s/def :intent/eye-pos ::vec3)

@@ -14,7 +14,10 @@
    out (a lit floor stops its blazes); else the remembered spawner (a spawner seen in the Nether
    is a fortress's, memory/nether-landmark-kinds) is walked to, or tunnelled to by the fortress's
    steps when no route reaches it, and camped by until its blazes come; with no spawner known, a
-   wait :no-blaze. The :defend row still answers anything hostile within 4 first.
+   wait :no-blaze. The :defend row answers anything else hostile within 4 first; blazes it
+   leaves to this row while it is worked (combat/answers), or its fights would override the
+   cover. A fight this row starts ends under combat/retreat-health (:intent/yield?), and the
+   cover, the meal or the rest follows, not combat's straight retreat.
 
    Fireballs are not dodged: ruststeve never needed it with its break-off at 10 health; the
    damage-event log is where to look if they kill. The bot does not put itself out: no water
@@ -75,13 +78,14 @@
 
 (defn reachable?
   "Can blaze e be fought from where the bot can walk: hittable from here (combat/hittable?: in
-   sight, its feet no more than three over the bot's nor two under), and a route reaching within
-   a walk's range of its cell on the plane (intent/routable?, which judges the plane only). Gym
+   sight, its feet no more than three over the bot's nor two under), and the fight's approach
+   comes to it (combat/approachable?: near on the plane, or the approach's own route). Gym
    blaze-fortress-a (run 38892386220) tunnelled to its spawner and failed three fights in a row
-   :unreachable on blazes seen through the fortress's walls, every run."
+   :unreachable on blazes seen through the fortress's walls, every run; blaze-fire-a runs 2 and
+   4 (run 39131023637) did again on blazes a walk's route came within three of, the approach's
+   route, within two, finding none."
   [world e]
-  (and (combat/hittable? world e)
-       (intent/routable? world {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e))})))
+  (and (combat/hittable? world e) (combat/approachable? world e)))
 
 (defn quarry
   "[eid entity] of the blaze to fight: the first of the candidates nearest (blazes) that is
@@ -335,6 +339,8 @@
 
 (defmethod plan/done-by :rods-held? [world _] (>= (rods world) rods-wanted))
 
+(defmethod combat/answers :blaze-rods [_] #{:blaze})
+
 (defmethod plan/next-intent :blaze-rods
   [world _ _]
   (let [[beid] (quarry world)
@@ -351,7 +357,7 @@
           {:intent/kind :collect-drops
            :intent/item :blaze_rod
            :intent/target (hunt/cell (:entity/pos lying))}
-          beid {:intent/kind :fight :intent/target beid}
+          beid {:intent/kind :fight :intent/target beid :intent/yield? true}
           @fire @fire
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
           sp {:intent/kind :camp :intent/spawner sp}

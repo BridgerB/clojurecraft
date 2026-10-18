@@ -4,6 +4,7 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blaze :as blaze]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
@@ -71,9 +72,10 @@
     (is (= {:intent/kind :collect-drops :intent/item :blaze_rod :intent/target [10 64 9]}
            (next-intent (standing {40 rod 7 near})))
         "the rod first: it lies there now, the blaze stays")
-    (is (= {:intent/kind :fight :intent/target 7} (next-intent (standing {7 near 8 far})))
+    (is (= {:intent/kind :fight :intent/target 7 :intent/yield? true}
+           (next-intent (standing {7 near 8 far})))
         "the nearest blaze within 12")
-    (is (= {:intent/kind :fight :intent/target 7}
+    (is (= {:intent/kind :fight :intent/target 7 :intent/yield? true}
            (next-intent (standing {40 (entity :item [10.5 64.0 9.5] :entity/item 1) 7 near})))
         "a drop that says it holds something else is left")
     (is (= {:intent/kind :walk :intent/target spawner-at}
@@ -215,7 +217,7 @@
              (next-intent (assoc (standing {1 (item :cooked_beef 4)} {7 near})
                                  :player/health 12.0
                                  :player/food 17))))
-      (is (= {:intent/kind :fight :intent/target 7}
+      (is (= {:intent/kind :fight :intent/target 7 :intent/yield? true}
              (next-intent
               (assoc (standing {1 (item :cooked_beef 4)} {7 near}) :player/health 12.0)))
           "fed, it fights on"))
@@ -234,12 +236,29 @@
     (is (= {:intent/kind :walk :intent/target [5 64 8] :intent/for :cover}
            (next-intent (assoc w :world/chunks {[0 0] (world/column pillar)})))
         "three watching, at full health: behind the pillar")
-    (is (= {:intent/kind :fight :intent/target 7} (next-intent w))
+    (is (= {:intent/kind :fight :intent/target 7 :intent/yield? true} (next-intent w))
         "in the open, nothing hides: the nearest is fought")
-    (is (= {:intent/kind :fight :intent/target 7}
+    (is (= {:intent/kind :fight :intent/target 7 :intent/yield? true}
            (next-intent
             (assoc (standing (dissoc three 9)) :world/chunks {[0 0] (world/column pillar)})))
         "two watching: fought")))
+
+(deftest the-defend-row-leaves-blazes-to-this-row
+  ;; gym blaze-fire-a run 1 (run 39131023637): the :defend row fought a spawner's burst of six at
+  ;; hand from 20 health to 7 in four seconds and died backing away, never asking this row, which
+  ;; takes cover from three
+  (let [near (entity :blaze [10.5 65.0 8.5] :entity/health 20.0)
+        skeleton (entity :wither_skeleton [10.5 64.0 9.5] :entity/health 20.0)
+        defend (first (filter #(= :defend (:goal/id %)) plan/goals))
+        playing (fn [& args] (assoc (apply standing args) :plan/goals #{:blaze-rods}))]
+    (is (empty? (combat/threats (playing {7 near}))) "a blaze at hand is this row's")
+    (is (plan/done-by (playing {7 near}) defend))
+    (is (= #{8} (set (keys (combat/threats (playing {7 near 8 skeleton})))))
+        "anything else hostile is still the :defend row's")
+    (is (= #{7} (set (keys (combat/threats (assoc (standing {7 near}) :plan/goals #{:wood})))))
+        "with the row not in play, a blaze is a threat")
+    (is (= #{7} (set (keys (combat/threats (playing {1 (item :blaze_rod 7)} {7 near})))))
+        "nor once its rods are held")))
 
 (deftest cover-is-out-of-every-watchers-sight
   (let [w (assoc (standing {}) :world/chunks {[0 0] (world/column pillar)})
