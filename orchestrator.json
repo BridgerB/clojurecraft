@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T04:42:50.617Z",
+  "at" : "2026-10-18T04:44:00.436Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -7,17 +7,6 @@
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "sim" ],
-    "quiet" : false,
-    "number" : 410,
-    "checks" : "green",
-    "title" : "Bot stops at fortress: not-held",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 3,
-    "pr" : 416,
-    "session" : false
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -64,13 +53,12 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 410,
-    "move" : "merge",
-    "pr" : 416
-  }, {
     "issue" : 338,
     "move" : "leave",
     "why" : "hands-off label"
+  }, {
+    "issue" : 419,
+    "move" : "assign"
   }, {
     "issue" : 71,
     "move" : "leave",
@@ -1097,5 +1085,9 @@
     "move" : "merge",
     "pr" : 416,
     "at" : "2026-10-18T04:42:50.617Z"
+  }, {
+    "issue" : 419,
+    "move" : "assign",
+    "at" : "2026-10-18T04:44:00.436Z"
   } ]
 }
