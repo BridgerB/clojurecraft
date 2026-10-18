@@ -1,17 +1,17 @@
 {
-  "at" : "2026-10-18T18:20:52.385Z",
+  "at" : "2026-10-18T18:22:02.533Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 37,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 44,
     "title" : "Bot stops at cast-one: rejected",
@@ -95,12 +95,9 @@
     "copilot" : false
   } ],
   "moves" : [ {
-    "issue" : 338,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 37,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 178,
     "move" : "leave",
