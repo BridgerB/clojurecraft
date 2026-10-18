@@ -1037,6 +1037,41 @@
         (is (= [4 63 5] (:stand (build/station-among safe [src] [2 62 1] :south 1)))
             "a lid over lava below the feet may still be opened")))))
 
+(deftest a-refill-never-digs-away-its-own-footing
+  (let [floor [5 62 5]
+        src [5 61 5]
+        other [8 62 5]
+        w (standing-at (open-ground {src blocks/lava-base other blocks/lava-base}) [5.5 63.0 5.5])]
+    (is (= floor (build/sight-block w src)))
+    (is (not (build/safe-source? w src)))
+    (is (= :no-station (build/scoop-at-station w [src])))
+    (is (= other (:intent/target (build/scoop-at-station w [src other])))
+        "a source visible without removing support can still be scooped")
+    (let [station (build/station-among w [src] [2 62 1] :south 1)]
+      (is (some? station))
+      (is (not= [5 63 5] (:stand station))
+          "projected eyes must preserve the proposed stand's support too"))))
+
+(deftest an-in-flight-refill-dig-preserves-the-feets-support
+  (doseq [stage [:settle :digging]]
+    (let [floor [5 62 5]
+          child (assoc (build/way-dig floor)
+                       :intent/for :lava
+                       :intent/status :active
+                       :intent/stage stage
+                       :intent/since 0)
+          op {:build/op :pour :build/item :lava_bucket}
+          i (assoc hill-intent :intent/status :active :intent/op op :intent/child child)
+          w (assoc (standing-at (open-ground {[5 61 5] blocks/lava-base}) [5.5 63.0 5.5])
+                   :plan/intent i
+                   :player/controls {:control/forward? true})
+          out (build/work-op w i op {:event/kind :tick :event/now 1000})]
+      (is (= :active (get-in out [:plan/intent :intent/status])))
+      (is (nil? (get-in out [:plan/intent :intent/child])))
+      (is (= {} (:player/controls out)))
+      (is (not-any? #(= :send (:effect/kind %)) (:bot/effects out))
+          "no dig finish is sent while the refill is reconsidered"))))
+
 (deftest a-refill-checks-the-eyes-at-the-stand
   ;; Issue #380, R3/32: a stand's projected ray was safe, but the feet slightly off its
   ;; centre saw a wall holding back higher lava and failed :no-station three times.

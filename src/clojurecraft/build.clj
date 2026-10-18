@@ -539,15 +539,18 @@
   (first (filter #(empty? (scoop/ray-walls world %)) (scoop/surface-points src))))
 
 (defn safe-source?
-  "Can src be scooped or its sight line opened without admitting lava at or above the feet?
-   A lid over lava may be opened; higher lava beside or above any block on the ray must stay
-   sealed. Issue #231 (R1/32) opened a low source's lid under higher lava, flooding its stand."
+  "Can src be scooped or its sight line opened without removing the feet's support or admitting
+   lava at or above the feet? A lid over lava may be opened; higher lava beside or above any
+   block on the ray must stay sealed. Issue #231 (R1/32) opened a low source's lid under higher
+   lava, flooding its stand."
   [world src]
-  (let [[_ y _] (intent/feet world)]
+  (let [[_ y _ :as feet] (intent/feet world)
+        floor (update feet 1 dec)]
     (or (not-any? (fn [block]
-                    (some #(and (>= (second %) (max y (second block)))
-                                (= :lava (terrain/fluid-kind world %)))
-                          (touching block)))
+                    (or (= floor block)
+                        (some #(and (>= (second %) (max y (second block)))
+                                    (= :lava (terrain/fluid-kind world %)))
+                              (touching block))))
                   (scoop/ray-walls world (scoop/aim-point src)))
         (some? (lava-aim world src)))))
 
@@ -1383,7 +1386,8 @@
    headroom is repaired. A child that failed fails i (a dig that found
    its cell open, found-open?, makes way for the next as one done would), one that is done
    makes way for the next. A lava scoop whose sight line filled (scoop-blocked?) is dropped so
-   the refill opens it again. Shared by every intent that works a plan of ops. A dig of rock with no
+   the refill opens it again; a refill dig of the feet's support is dropped to choose another
+   station. Shared by every intent that works a plan of ops. A dig of rock with no
    pickaxe held fails :no-pickaxe (stairs/tool-missing) rather than dig it by hand when one can be
    made without going out for anything (pickaxe-at-hand?), so the build's row makes one first (held-first): sim race 38669750355 (issue #135) broke its last pickaxe
    in the cast's room at y -20 and dug deepslate by hand, fifteen seconds a block, for the last
@@ -1415,6 +1419,14 @@
             (assoc :player/controls {})
             (intent/dissoc-intent :intent/child)
             (game/say "build: the scoop's sight line filled, opening it again"))
+        (and (= :dig (:intent/kind child))
+             (= :lava (:intent/for child))
+             (= (update (intent/feet world) 1 dec) (:intent/target child)))
+        (-> world
+            (assoc :player/controls {})
+            (intent/dissoc-intent :intent/child)
+            (game/say
+             "build: the refill would remove the feet's support, choosing another station"))
         (and (= :build (:intent/kind i))
              (= :walk (:intent/kind child))
              (= :retreat (:intent/for child))
