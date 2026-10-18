@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T17:41:29.878Z",
+  "at" : "2026-10-18T17:42:37.547Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -44,18 +44,23 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 162,
-    "title" : "Bot stops at portal: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 148,
     "title" : "Bot stops at water-bucket: no-spot",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
+    "number" : 162,
+    "title" : "Bot stops at portal: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 62,
+    "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -66,11 +71,6 @@
   }, {
     "number" : 41,
     "title" : "Bot stops at cast-one: no-site",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 62,
-    "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
