@@ -22,6 +22,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
+            [clojurecraft.swim :as swim]
             [clojurecraft.terrain :as terrain]))
 
 (set! *warn-on-reflection* true)
@@ -273,14 +274,30 @@
        :intent/to-y (stairs/climb-to world terrain/top-y)
        :intent/for :boxed})))
 
+(defn island-out
+  "Off a shore or an island nothing can be cut from: a :cross toward the nearest dry ground across
+   the water (swim/far-shore: along eight bearings, from bank-radius out, to shore-reach), where
+   the next descent starts afresh; nil when none lies within shore-reach on the plane. Asked last,
+   when no stair, tunnel or retreat can be cut or walked and the feet are out of the ground
+   (climb), so it only ever leaves a place there is nothing to do at. Sim world R1/26 and real
+   race 39060314790 bot Clj_r20 (issue #37, snapshots R1-26-1 and real-5-s1-Clj_r20): the stairs
+   up out of the mine came out on a spit and on a one-block island in a lake, every cell
+   beside the feet was water so every stair was refused, no route led 12 blocks off, and the
+   plan waited :boxed on dry land it could not leave."
+  [world]
+  (let [feet (intent/feet world)
+        far (swim/far-shore world feet (second feet))]
+    (when (and far (<= (physics/horizontal-distance (:player/pos world) far) swim/shore-reach))
+      {:intent/kind :cross :intent/target far})))
+
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
    (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
    ends where the drop lands in reach, :intent/pickup?), or cut stairs down toward them, or at
    the row's depth a tunnel (tunnel-heading), or deeper stairs when none can be cut, or a retreat
-   when neither can, or a climb out when there is no way away either (climb); wait for the
-   tool. The live runs that waited at the depth with nothing in sight failed there; a tunnel's
-   walls are where the ore shows. Beside a lava trap still in force (path/near-lava-trap?) the
+   when neither can, or a climb out when there is no way away either (climb), or off an island or
+   shore across the water (island-out); wait for the tool. The live runs that waited at the depth
+   with nothing in sight failed there; a tunnel's walls are where the ore shows. Beside a lava trap still in force (path/near-lava-trap?) the
    retreat comes before any stair or tunnel: sim race 38844683780 (issue #230) cut its stairs down
    where the lava had just caught it, and the flow followed it down."
   [world row]
@@ -311,6 +328,7 @@
                   (deeper world)
                   (retreat world)
                   (climb world)
+                  (island-out world)
                   {:plan/wait :boxed})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
