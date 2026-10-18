@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T01:15:27.615Z",
+  "at" : "2026-10-18T01:16:36.005Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -9,7 +9,7 @@
     "checks" : "pending",
     "title" : "Bot stops at fortress: no-pickaxe",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 411,
     "session" : false
@@ -198,8 +198,9 @@
   } ],
   "moves" : [ {
     "issue" : 296,
-    "move" : "ready",
-    "pr" : 411
+    "move" : "wait",
+    "pr" : 411,
+    "why" : "checks running"
   }, {
     "issue" : 178,
     "move" : "leave",
