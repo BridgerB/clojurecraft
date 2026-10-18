@@ -291,6 +291,20 @@
        :intent/to-y (stairs/climb-to world terrain/top-y)
        :intent/for :boxed})))
 
+(defn off-ice
+  "On a sheet of ice (path/on-ice?), a walk toward the landing (:plan/go-at) over it, the route
+   search taking the sheet for floor of a bot that stands on one; nil off ice, with no landing or
+   no route toward it. Issue #71, race 39088700340 bot Clj_r02 rose out of the sea floor under a
+   frozen sea onto the ice, and every act that followed (stairs down for the mine, level steps
+   over the water) cut and laid on the sheet until it was :boxed."
+  [world]
+  (when-let [[hx hy hz] (and (path/on-ice? world) (:plan/go-at world))]
+    (let [walk {:intent/kind :walk
+                :intent/target [(long (math/floor hx)) (long (math/floor hy))
+                                (long (math/floor hz))]
+                :intent/for :off-ice}]
+      (when (intent/routable? world walk) walk))))
+
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
    (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
@@ -323,6 +337,7 @@
               walk walk
               :else
               (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
+                  (off-ice world)
                   (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})

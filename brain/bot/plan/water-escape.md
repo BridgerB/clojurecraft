@@ -13,6 +13,8 @@ sourceRefs:
   - src/clojurecraft/trap.clj#def trap-after-ticks 20
   - src/clojurecraft/trap.clj#def dry-ticks-to-clear 6
   - test/clojurecraft/swim_test.clj#a-flee-clears-its-trap-on-a-placed-floor
+  - test/clojurecraft/swim_test.clj#a-rise-under-a-frozen-lake-digs-the-ice-and-leaves-other-roofs
+  - src/clojurecraft/swim.clj#defn dig-afloat
   - src/clojurecraft/plan.clj#defn choose
   - "resources/clojurecraft/goals.edn#{:goal/id :escape-water :goal/priority 0 :goal/target? true :goal/always? true"
   - src/clojurecraft/swim.clj#defn banks
@@ -102,6 +104,8 @@ Notch reach is measured from the current eye to the solid cell that will actuall
 Issue #156 recurred in race 38999008545 bot Clj_r06: an escape kept a dry bank at y 49 while rising to y 62 directly above it, then failed at horizontal distance zero. Once progress stalls, a bank below the current float-top's `bank-drop` band is dropped too; while still making progress, the rise keeps its heading rather than turning sideways deep underwater. At the surface, packed ice above a step and along the other axis of a diagonal approach blocked the lift. `obstacle` checks both axes, their corner and columns touched by the body's bounding box, including the cell two above the feet ahead, without digging away a higher bank's step.
 
 A `:swim-out` started by the mine act's retreat (`:intent/for :retreat`, out of a flooded tunnel the bot is wading in) ends itself on dry land (`trap/dry-land?`); one started by the gather's `into-water` (`:intent/for :rise`, up a shaft dug into the sea, [[gather-chain]]) on dry land in the open, cap and notch skipped; an escape's is ended by its goal when the trap clears ([[mine-act]]).
+
+A rise keeps to its shaft: deeper than `rise-clear` (2) under its top (`:intent/to-y`) it looks for no bank, only `shore-controls` centring it in its column, and past that its banks are those in the open (`in-the-open?`), never the dry floor of the pocket it dug out of. Under a frozen lake the rise ends at the ice: the cap over the head is dug when it is lake ice (`iced?`; any other cap is left alone, as before), and `dig-afloat` holds jump under a roof whose dig the floor cannot reach (`dig-from-floor?`), so the body stays against the ice for the dig's 4.7 s instead of sinking three blocks and digging a new hole each time until it drowned. Race 39088700340 bot Clj_r02 (issue #71) dug up from an air pocket under a frozen sea, found the pocket's own floor for a bank, then dug the ice at three columns and drowned; now it rises, digs one hole and climbs out onto the ice, where `stone/off-ice` and the route search over the sheet ([[pathfinder]]) take it ashore (`a-rise-under-a-frozen-lake-digs-the-ice-and-leaves-other-roofs`).
 
 `bank?` also requires no fluid in the feet or head cell, using `terrain/fluid-kind` rather than a route's collision classification. Passable water plants (seagrass, tall seagrass, kelp) and bubble columns still contain water. Race 39007354638 runner 3 batch 2 bot Clj_r22 (issue #348) retreated to seagrass at [3204 62 3520], reached its centre and bobbed until `:stuck` at flint-and-steel. Rejecting that cell both keeps new escapes off submerged plants and lets `flooded?` discard a bank already kept in an older world value.
 

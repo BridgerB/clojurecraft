@@ -180,7 +180,7 @@
     (is (= :into-water (:intent/for (wood/gather-next (under blocks/air))))
         "open at the top: dig up into it")
     (is (= :into-water (:intent/for (wood/gather-next (under (blocks/default-state :ice)))))
-        "under a lake's ice: still dug into (the rise has no dig of its cap yet)")))
+        "under a lake's ice: dug into, the rise digs the ice")))
 
 (deftest a-trunk-across-a-chasm-is-bridged-by-stairs-up
   ;; sim worlds R3/45 (issues #87 and #108): the only trunk in reach stood across two blocks of air
