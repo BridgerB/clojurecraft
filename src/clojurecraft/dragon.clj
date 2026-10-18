@@ -116,11 +116,18 @@
   [world]
   (under-feet? world pillar-block? 2))
 
+(defn obsidian?
+  "Is the state (or nil) obsidian, a spike's?"
+  [id]
+  (= :obsidian
+     (some-> id
+             blocks/name-of)))
+
 (defn on-spike?
   "Do the feet stand on a spike's top, three obsidian under them (the End's platform is one
    thick)?"
   [world]
-  (under-feet? world #(= :obsidian (blocks/name-of %)) 3))
+  (under-feet? world obsidian? 3))
 
 (defn ground
   "The feet height of the first ground in column x z down from y top (a solid block, the feet over
@@ -137,7 +144,10 @@
    at the nearest) :top the feet height level with the spike's top :stand the feet cell stand-off
    out at :top :wall the cells wall-off out at :top and over it}; nil when the spike's edge is not
    found within spike-search, or that column has something over its ground at the top or over the
-   head there, or no ground. The spike's top is read off the block under the crystal (its bedrock),
+   head there, or no ground. The spike's edge is the first cell of its top layer that is not
+   obsidian: gym dragon-b's bot pillared beside a wide spike, and its own pillar's top block,
+   solid, moved the edge a column out, so the feet on top were in no approach's column and the
+   way down began at once. The spike's top is read off the block under the crystal (its bedrock),
    not the crystal's height: a crystal stands in the fire it lights, and gym dragon-a's, put on the
    highest block of the column, stood on that fire a block over the bedrock, its approach a block
    too high, and every walk to its pillar's foot (on the spike's top) failed :no-path."
@@ -148,7 +158,7 @@
                   dec)
         at (fn [k y] [(+ x (* k dx)) y (+ z (* k dz))])
         edge (when h
-               (first (remove #(place/solid-at? world (at % (dec h)))
+               (first (remove #(obsidian? (terrain/block-at world (at % (dec h))))
                               (range 1 (inc spike-search)))))
         out (when edge (max edge stand-off))
         [px _ pz] (when out (at out h))
@@ -399,6 +409,12 @@
   [world]
   (entity/nearest (breaths world) (:player/pos world) breath-radius))
 
+(defn breath-over?
+  "Is a breath cloud or fireball within breath-radius of point p on the plane?"
+  [world p]
+  (boolean (some #(<= (physics/horizontal-distance p (:entity/pos %)) breath-radius)
+                 (vals (breaths world)))))
+
 (defn from-fountain
   "Blocks on the plane from the feet to the fountain."
   [world]
@@ -430,7 +446,9 @@
             (cond (:intent/resync i) (window/resync world (window/view world :inventory))
                   (= :arm (:intent/stage i)) (arm world)
                   (and sat? (<= (reach world e) strike-reach)) (hit world target e)
-                  (and sat? (> (from-fountain world) walk-in-to))
+                  (and sat?
+                       (> (from-fountain world) walk-in-to)
+                       (not (breath-over? world (let [[fx fz] fountain] [fx 0.0 fz]))))
                   (let [[fx fz] fountain]
                     (assoc world
                            :player/controls
@@ -465,14 +483,18 @@
 (defn toward-dragon
   "The next intent toward the dragon dead: while a crystal stands or the feet are up a pillar or
    a spike, the crystals' (toward-crystals); a breath near, combat's :back-off from it; away from
-   the fountain's stand (fountain-stand), the walk there; there, the :perch. A wait :no-fountain
-   with no ground round the fountain loaded, :no-dragon with no dragon shown."
+   the fountain's stand (fountain-stand), the walk there; there, the :perch, and with every stand
+   under a breath the :perch where the feet are (gym dragon-b: a fireball's cloud on the basin
+   after the dragon took off, and the plan waited :no-fountain until it failed). A wait
+   :no-fountain with no ground round the fountain loaded, :no-dragon with no dragon shown."
   [world]
   (let [[eid] (dragon world)
         breath (breath-near world)
         stand (fountain-stand world)]
     (cond (or (seq (crystals world)) (on-pillar? world) (on-spike? world)) (toward-crystals world)
           breath {:intent/kind :back-off :intent/target (first breath)}
+          (and (nil? stand) eid (some? (ground world 0 0 sky)))
+          {:intent/kind :perch :intent/target eid}
           (nil? stand) {:plan/wait :no-fountain}
           (> (physics/horizontal-distance (:player/pos world) (physics/centre stand)) stand-near)
           (standing-walk stand)

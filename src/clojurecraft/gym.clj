@@ -717,7 +717,11 @@
                  :truth/re "Test passed"}]}
    ;; issue #267: the main island, the ten spikes' cages taken off and a crystal on each one's
    ;; bedrock, the dragon gone; two stacks of cobblestone to pillar and wall with, a pickaxe to
-   ;; dig the pillars back down; judged by no crystal left
+   ;; dig the pillars back down; judged by no crystal left. The bot takes no harm (invulnerable):
+   ;; the End's fight makes a dragon of its own on the bot's arrival, after the summons, which no
+   ;; command here can keep away, and gym dragon-b's three runs died to its fireballs and its
+   ;; knocks off a pillar, the row measuring the dragon and not the crystals (the wall's worth is
+   ;; read off the recording: dragon-b run 1 struck its first crystal from behind it for 1 damage)
    {:gym/goal :crystals
     :gym/until "crystals"
     :gym/land :end
@@ -725,7 +729,7 @@
     :gym/setup spike-cages
     :gym/prereqs ["minecraft:cobblestone 64" "minecraft:cobblestone 64" "minecraft:iron_pickaxe 1"
                   "minecraft:iron_sword 1" "minecraft:cooked_beef 16"]
-    :gym/summon spike-crystals
+    :gym/summon (into spike-crystals invulnerable)
     :gym/timeout-ms 1500000
     :gym/truth [{:truth/cmd
                  "execute in minecraft:the_end unless entity @e[type=minecraft:end_crystal]"

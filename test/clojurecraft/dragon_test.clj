@@ -105,7 +105,10 @@
     (testing "on a wide spike's top with the crystal gone, back to the pillar's top"
       (let [wide (merge (spike [8 8] 4 64 6) (pillar [8 3] 64 69))]
         (is (= {:intent/kind :walk :intent/target [8 70 3] :intent/for :build}
-               (at wide [8.5 70.0 5.5] {})))))
+               (at wide [8.5 70.0 5.5] {})))
+        (is (= {:intent/kind :walk :intent/target [8 70 5] :intent/for :build}
+               (at wide [8.5 70.0 3.5] crystal))
+            "on the pillar's top the walk onto the spike: the pillar's own block is no spike")))
     (is (= {:plan/wait :no-blocks} (dragon/toward-crystals (standing s [8.5 64.0 5.5] {} crystal)))
         "nothing to pillar with")))
 
@@ -187,6 +190,19 @@
   (is (dragon/perched? {:entity/pos [2.5 66.0 -1.5]}))
   (is (not (dragon/perched? {:entity/pos [2.5 75.0 -1.5]})) "over y 70: flying")
   (is (not (dragon/perched? {:entity/pos [40.5 66.0 0.5]})) "away from the fountain"))
+
+(deftest with-every-stand-under-a-breath-the-perch-is-waited-where-the-feet-are
+  (let [d {dragon-eid {:entity/type (mob/type-id :ender_dragon) :entity/pos [0.5 90.0 0.5]}}
+        cloud {50 {:entity/type (mob/type-id :area_effect_cloud) :entity/pos [0.5 64.0 0.5]}}]
+    (is (= (dragon/standing-walk [2 64 0])
+           (dragon/toward-dragon (standing {} [12.5 64.0 0.5] {} d)))
+        "the stand in the basin beside the pillar")
+    (is (= {:intent/kind :perch :intent/target dragon-eid}
+           (dragon/toward-dragon (standing {} [12.5 64.0 0.5] {} (merge d cloud))))
+        "the basin under a cloud: wait out here")
+    (is (= {:intent/kind :back-off :intent/target 50}
+           (dragon/toward-dragon (standing {} [3.5 64.0 0.5] {} (merge d cloud))))
+        "in it: away")))
 
 ;; ---------------------------------------------------------------- against the model's End
 
