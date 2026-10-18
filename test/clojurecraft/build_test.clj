@@ -693,7 +693,38 @@
     (is (= {:intent/kind :stairs-down :intent/to-y 57} (build/approach-stand far i op))
         "far above the room: stairs down toward the landing's height")
     (is (nil? (build/way-back (standing-at (open-ground {}) [6.5 31.0 15.5]) i))
-        "at the landing already: nothing to go back by")))
+        "at the landing already: nothing to go back by")
+    (is (= {:intent/kind :stairs-down :intent/to-y 57}
+           (build/approach-stand far
+                                 i
+                                 {:build/op :place
+                                  :build/pos pos
+                                  :build/stand (build/cell [6 30 12] :south [1 1 1])
+                                  :build/step :floor}))
+        "a place op with no stance reachable goes back to the landing too, not :no-stand")))
+
+(deftest a-site-out-of-sight-is-walked-toward-before-anything-is-dug
+  ;; sim race 39076908669 (issue #196, world R3/13 seed 2): the bot died at its cast, woke at
+  ;; spawn 190 blocks off, and the build's next op, a floor cell, found no stand at the feet:
+  ;; :no-stand three times in three ticks
+  (let [site [100 30 100]
+        i {:intent/kind :build
+           :intent/build :portal
+           :intent/origin site
+           :intent/facing :south
+           :intent/access 1}
+        [lx _ lz] (build/cell site :south (build/landing 1))
+        op {:build/op :place
+            :build/pos (build/cell site :south [1 0 1])
+            :build/stand (build/cell site :south [1 1 1])
+            :build/step :floor}
+        far (standing-at (open-ground {}) [5.5 63.0 5.5])]
+    (is (= {:intent/kind :walk :intent/target [lx 63 lz] :intent/for :site}
+           (build/approach-stand far i op))
+        "the landing's chunk is not loaded: a walk toward it, at the feet's height")
+    (is (nil? (build/far-way (standing-at (open-ground {}) [5.5 63.0 5.5])
+                             (assoc i :intent/origin [6 30 12])))
+        "the landing's chunk is loaded: the stairs and the dug way are the build's own")))
 
 (deftest refill-scoops-a-source-under-flowing-lava
   ;; sim race 38715231137 (issue #142, regressed, 166 runs in 44 rounds): at the station the
@@ -852,6 +883,19 @@
     (is (= :stairs-down (:intent/kind (build/lava-hunt left))))
     (is (< (:intent/to-y (build/lava-hunt left)) (second (intent/feet left)))
         "seek deeper lava, not another walk round the rejected pool")))
+
+(deftest the-roof-over-lava-is-broken-though-its-ore-drops-nothing
+  ;; real race 39076909951 (issue #163, bot Clj_r02): the roof over the lava sea at y -59 was
+  ;; deepslate diamond ore, a stone pickaxe in hand, and the dig failed :needs-tool three times
+  (let [roof [8 63 8]
+        w (standing-at (open-ground {[8 62 8] blocks/lava-base
+                                     roof (blocks/default-state :deepslate_diamond_ore)})
+                       [7.5 63.0 6.5])
+        c (build/uncap w)]
+    (is (= roof (:intent/target c)) "the roof over the source is the dig")
+    (is (true? (:intent/drop-ok? c))
+        "its drop is not wanted: ore the pickaxe cannot take is broken")
+    (is (= :lava (:intent/for c)))))
 
 (deftest a-refill-never-opens-lava-over-its-stand
   ;; Issue #231, R1/32: the ray to a low source opened the wall under higher lava,

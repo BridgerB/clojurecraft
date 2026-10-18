@@ -1128,6 +1128,20 @@
               (> (physics/distance (physics/centre feet) (physics/centre to)) site-reach))
       (toward-stand world to build origin facing))))
 
+(defn far-way
+  "The way to the build's site from so far off that its landing's chunk is not loaded (a death
+   sent the feet back to spawn): a walk toward the landing's column at the feet's height, as far
+   as the loaded terrain leads (intent/routable?), so the stairs and the dug way (toward-stand)
+   start at the site and not at these feet. nil when the landing's chunk is loaded, or no walk
+   leads toward it. Sim race 39076908669 (issue #196, world R3/13 seed 2): the bot died at its
+   cast at y 48, woke at spawn 190 blocks off, made a pickaxe for the build's next op, a floor
+   cell that is no dig, and found no stand at the feet: :no-stand three times in three ticks."
+  [world {:intent/keys [origin facing access]}]
+  (let [[lx _ lz] (cell origin facing (landing (or access 0)))
+        walk
+        {:intent/kind :walk :intent/target [lx (second (intent/feet world)) lz] :intent/for :site}]
+    (when (and (not (terrain/chunk-loaded? world [lx 0 lz])) (intent/routable? world walk)) walk)))
+
 (defn approach-stand
   "The child that gets the feet where op is worked from, or nil when they are there: the room's
    landing is gone to at its height (toward-stand: stairs to it first, then a level way dug); a
@@ -1140,8 +1154,10 @@
    no such cell exists. Ground in the way is dug only for a :build, whose plan says which rock to
    keep; a :tunnel-to step (fortress) works the same ops with no build of its own."
   [world i {:build/keys [op stand pos step]}]
-  (let [{:intent/keys [build origin facing]} i]
+  (let [{:intent/keys [build origin facing]} i
+        far (when build (far-way world i))]
     (cond
+      far far
       (and (= :landing step) build) (toward-stand world stand build origin facing)
       (and (= :dig op) (within-reach? world pos)) nil
       (and (= :dig op) (= stand pos))
@@ -1170,7 +1186,7 @@
               (let [work (cond (= :place op) (or (foundation world pos) pos)
                                :else pos)
                     alt (reachable-stand world stand work)]
-                (cond (nil? alt) :no-stand
+                (cond (nil? alt) (or (when build (way-back world i)) :no-stand)
                       (intent/centred? world alt) nil
                       :else {:intent/kind :walk :intent/target alt :intent/for :build})))))))
 
@@ -1534,8 +1550,11 @@
    cell to stand in beside the roof (stands-beside: the station the dig makes), so it can be
    scooped: a solid the tools can take (never obsidian or bedrock), never the cell under the
    feet. The deep sea lies under a ceiling of deepslate (ruststeve: 'roofed sources ... scooped
-   by digging the roof'); the dig is allowed to expose the lava under it, which flows no higher.
-   nil when none."
+   by digging the roof'); the dig is allowed to expose the lava under it, which flows no higher,
+   and its drop is not wanted (way-dig): a roof of ore the pickaxe cannot harvest is broken for
+   nothing, not refused. Real race 39076909951 (issue #163, bot Clj_r02): the roof over the sea at
+   y -59 was deepslate diamond ore, a stone pickaxe in hand, and the dig failed :needs-tool three
+   times in a moment. nil when none."
   [world]
   (let [under (update (intent/feet world) 1 dec)
         roof-of (fn [[x y z :as src]]
@@ -1549,7 +1568,7 @@
                                (seq (stands-beside world src)))
                       roof)))]
     (when-let [roof (first (keep roof-of (sources-near world)))]
-      (assoc (intent/child-dig roof) :intent/exposes-ok? true :intent/for :lava))))
+      (assoc (way-dig roof) :intent/for :lava))))
 
 (defn heading-to
   "The cardinal [dx dz] from feet toward pos, along the longer of the two plane distances."

@@ -203,7 +203,9 @@
    "A pickaxe broken in the cast or its child staircase exhausts the failure budget before replacement: the build must yield for held-first to replace it, retaining its site (issue #347, R1/35 and R1/4)"
    "A climb on a narrow ledge ducks through its own steps and fails :boxed with filler held: regain sound higher steps, reconsider an old duck before digging them away, and lay a holder beside the current floor before an unsupported step (issue #363, R1/35)."
    "Reconsidering a duck while only the previous floor's edge supports the body plans an ascent too high: require floor under the feet before reconsidering, and replan a rising step after falling below its launch height (issue #368, R4/20)."
-   "Sim race 39007350790 runner 2 (issue #344, R3/4 seed 1): the sea bed dug beneath tall seagrass left water suspended over a dry shaft in the model, and three rises failed :no-escape; aquatic sources now flow, preserving their blocks, and older saved models wake sources beside changed cells once."]
+   "Sim race 39007350790 runner 2 (issue #344, R3/4 seed 1): the sea bed dug beneath tall seagrass left water suspended over a dry shaft in the model, and three rises failed :no-escape; aquatic sources now flow, preserving their blocks, and older saved models wake sources beside changed cells once."
+   "A death at the site wakes the bot at spawn, far enough that the landing's chunk is not loaded: the build walks toward the landing first (build/far-way) before any stairs or dig, and a place or pour with no stance reachable goes back to the landing as a dig does (sim race 39076908669 runner 3, issue #196, R3/13 seed 2, 190 blocks off, :no-stand)"
+   "The roof over a lava source is ore the held pickaxe cannot harvest: it is broken for nothing (build/way-dig), never refused :needs-tool three times (real race 39076909951, issue #163, deepslate diamond ore at y -59 under a stone pickaxe)"]
   :problem/done
   "Ten obsidian frame blocks and nether_portal blocks inside exist (RCON execute if block), and after standing in the portal RCON data get entity Dimension reads the Nether."
   :problem/last-failure
