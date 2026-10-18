@@ -39,7 +39,7 @@
 
 (def search-radius 24)                ; blocks from the eye searched for water in the loaded terrain
 (def pool-radius 96)                  ; blocks from the eye a remembered pool is walked to from
-(def far-pool-radius 256)             ; blocks from the eye a remembered pool still steers a hunt toward it
+(def far-pool-radius 400)             ; blocks from the eye a remembered pool still steers a hunt toward it
 (def settle-ms 300)                   ; standing still this long, looking at the source, before using the bucket
 (def answer-ms 3000)                  ; ms a scoop waits for the water bucket before it is tried again
 (def max-tries 3)                     ; scoops sent at one source before it fails :no-scoop
@@ -174,20 +174,24 @@
 
 (defn sources
   "The surface water sources in the loaded terrain within search-radius of the eye
-   (surface-water?), not blacklisted, nearest first. Asked of the terrain through the block
-   overlay, so a source just scooped is air."
+   (surface-water?), not blacklisted, nearest first: the sources the chunks held, and those the
+   block overlay made since (:world/blocks: the water a broken sheet of ice leaves, ice-water).
+   Asked of the terrain through the overlay, so a source just scooped is air."
   [world]
   (let [eye (game/eye world)
         blacklist (:plan/blacklist world #{})]
-    (memory/nearest-first eye
-                          search-radius
-                          (->> (chunk/find-blocks (stone/near-chunks (:world/chunks world)
-                                                                     (stone/feet-chunk world))
-                                                  #{blocks/water-base})
-                               (map (fn [[x y z _]] [x y z]))
-                               (remove blacklist)
-                               (filter #(surface-source? world %))
-                               (filter #(surface-water? world % (physics/y-of eye)))))))
+    (memory/nearest-first
+     eye
+     search-radius
+     (->> (concat (map (fn [[x y z _]] [x y z])
+                       (chunk/find-blocks (stone/near-chunks (:world/chunks world)
+                                                             (stone/feet-chunk world))
+                                          #{blocks/water-base}))
+                  (for [[pos id] (:world/blocks world) :when (= blocks/water-base id)] pos))
+          distinct
+          (remove blacklist)
+          (filter #(surface-source? world %))
+          (filter #(surface-water? world % (physics/y-of eye)))))))
 
 (def ice-states
   "Every state of the blocks the game's IceBlock turns to a water source when a player breaks them

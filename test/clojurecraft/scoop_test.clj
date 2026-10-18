@@ -217,9 +217,9 @@
                                     :plan/blacklist
                                     #{[10 63 8] [11 63 8] [12 63 8]})))
         "ice whose dig failed is not chosen again")
-    (is (= {:intent/kind :scoop :intent/target [10 62 8]}
-           (scoop/scoop-next (standing (assoc frozen-pond [10 63 8] blocks/air) [8.5 8.5])))
-        "once the ice is gone the source is the scoop's")
+    (is (= {:intent/kind :scoop :intent/target [10 63 8]}
+           (scoop/scoop-next (terrain/set-block (standing frozen-pond [8.5 8.5]) [10 63 8] water)))
+        "the server's word that the ice broke to a source (the overlay, not the chunk): scoop it")
     (is (= {:plan/wait :no-water}
            (scoop/scoop-next (standing (into frozen-pond (for [x [10 11 12]] [[x 70 8] 1]))
                                        [8.5 8.5])))

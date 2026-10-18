@@ -24,7 +24,7 @@ sourceRefs:
   - test/clojurecraft/scoop_test.clj#a-pond-below-a-hill-is-surface-water
   - src/clojurecraft/scoop.clj#defn hunt-targets
   - src/clojurecraft/scoop.clj#a hunt that knows where the water is
-  - src/clojurecraft/scoop.clj#def far-pool-radius 256
+  - src/clojurecraft/scoop.clj#def far-pool-radius 400
   - test/clojurecraft/scoop_test.clj#a-hunt-that-knows-a-far-pool-walks-toward-it
   - src/clojurecraft/scoop.clj#defn first-walk
   - src/clojurecraft/scoop.clj#defn climb
