@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T22:26:54.687Z",
+  "at" : "2026-10-18T22:32:24.762Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -34,14 +34,14 @@
     "pr" : 444,
     "session" : false
   }, {
-    "number" : 284,
-    "title" : "Bot stops at fortress: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 446,
     "title" : "Bot stops at fortress: inventory-full",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 284,
+    "title" : "Bot stops at fortress: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 71,
@@ -49,14 +49,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 344,
-    "title" : "Bot stops at cast-one: no-escape",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 410,
     "title" : "Bot stops at fortress: not-held",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 344,
+    "title" : "Bot stops at cast-one: no-escape",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 62,
@@ -94,6 +94,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 92,
+    "title" : "Bot stops at portal-kit: no-escape",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 85,
     "title" : "Bot stops at cobblestone: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -125,6 +130,10 @@
     "why" : "session starting"
   }, {
     "issue" : 178,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 92,
     "move" : "leave",
     "why" : "hands-off label"
   } ],
