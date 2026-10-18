@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-18T19:26:14.232Z",
+  "at" : "2026-10-18T19:30:42.522Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,11 +18,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 446,
-    "title" : "Bot stops at fortress: inventory-full",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 284,
     "title" : "Bot stops at fortress: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -39,14 +34,19 @@
     "pr" : 444,
     "session" : false
   }, {
-    "number" : 344,
-    "title" : "Bot stops at cast-one: no-escape",
+    "number" : 446,
+    "title" : "Bot stops at fortress: inventory-full",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 344,
+    "title" : "Bot stops at cast-one: no-escape",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 148,
