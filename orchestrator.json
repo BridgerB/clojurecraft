@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-19T21:09:19.331Z",
+  "at" : "2026-10-19T21:11:31.833Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -30,13 +30,13 @@
     "pr" : 444,
     "session" : false
   }, {
-    "number" : 37,
-    "title" : "Bot stops at ingots: boxed",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
+    "number" : 37,
+    "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -45,13 +45,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 161,
-    "title" : "Bot stops at portal-kit: timeout",
+    "number" : 446,
+    "title" : "Bot stops at fortress: inventory-full",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 446,
-    "title" : "Bot stops at fortress: inventory-full",
+    "number" : 161,
+    "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
