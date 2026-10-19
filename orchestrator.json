@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-19T09:48:31.097Z",
+  "at" : "2026-10-19T09:49:39.357Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -94,6 +94,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
     "labels" : [ "bot-failure", "sim" ],
@@ -106,11 +111,6 @@
   }, {
     "number" : 75,
     "title" : "Bot stops at portal-kit: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 45,
-    "title" : "Bot stops at cast-one: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -186,8 +186,7 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -202,10 +201,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 44,
-    "move" : "assign",
-    "at" : "2026-10-18T14:25:12.825Z"
-  }, {
     "issue" : 44,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1551,5 +1546,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-19T09:48:31.097Z"
+  }, {
+    "issue" : 338,
+    "move" : "assign",
+    "at" : "2026-10-19T09:49:39.357Z"
   } ]
 }
