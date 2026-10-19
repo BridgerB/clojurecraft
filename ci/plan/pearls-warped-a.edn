@@ -1,0 +1,18 @@
+;; Issue #263, branch feat/263-warped: the warped forest landing spread under 120 and off a carved
+;; cave's floor, the hunt's roam by a route and its walk toward an enderman as far as a route goes.
+;; pearls-12 is the stage (0/3 in every batch before); pearls-1-live guards the arena hunt.
+{:plans/label "pearls-warped-a"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}

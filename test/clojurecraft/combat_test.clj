@@ -331,3 +331,17 @@
     (is (= :approach (:intent/stage (:plan/intent waited))))
     (is (= :active (:intent/status (:plan/intent waited))))
     (is (not= :retreat (:intent/stage (:plan/intent hurt))) "and never breaks off under 10")))
+
+(deftest a-fight-that-holds-its-ground-gives-up-on-one-in-reach-on-the-plane-only
+  ;; gym batch pearls-warped-b (plan run 39135767198) run 3: an enderman two blocks off on the
+  ;; plane and fourteen below, never in reach, held twenty minutes
+  (let [w (-> (standing {7 (mob :zombie [10.5 50.0 8.5] 20.0)})
+              (assoc
+               :plan/intent
+               {:intent/kind :fight :intent/target 7 :intent/status :active :intent/hold? true}))
+        [early _] (fx/fold intent-step w (map tick (range 500 30000 500)))
+        [late _] (fx/fold intent-step w (map tick (range 500 70000 500)))]
+    (is (= :engage (:intent/stage (:plan/intent early))))
+    (is (= :active (:intent/status (:plan/intent early))))
+    (is (= [:failed :unreachable] ((juxt :intent/status :intent/reason) (:plan/intent late)))
+        "past hold-timeout-ms with no blow")))
