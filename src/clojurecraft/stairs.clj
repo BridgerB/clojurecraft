@@ -589,15 +589,36 @@
             (when (and (terrain/chunk-loaded? world c) (not (wet-head? world c))) n)))
         (range 1 (inc shore-reach))))
 
+(defn floor-distance
+  "How many columns along heading [dx dz] from feet [x y z] the first lies where a stair down
+   would have its floor: the cell two under the feet's height solid, or clear with no fluid
+   within bridge-depth under it (over-fluid?), so a floor could be laid there; within
+   shore-reach; nil when none. In a cave over a lake sixteen blocks down every stair is refused
+   for the water under its floor while a level step, one block higher, may lay its own, so the
+   staircase creeps along at that one height: gym batch stronghold-room2-a (plan run
+   39161847521) run 3 of the portal room stood at y 33 over such a lake, stepped 32 east laying
+   a floor a step, and was :boxed three times; batch stronghold-room-a (plan run 39131390440)
+   run 3 at the same cells found a stair on its 33rd step and passed."
+  [world [x y z] [dx dz]]
+  (some (fn [n]
+          (let [c [(+ x (* n dx)) (- y 2) (+ z (* n dz))]
+                k (path/classify world c)]
+            (when (or (= :solid k) (and (= :clear k) (not (over-fluid? world c)))) n)))
+        (range 1 (inc shore-reach))))
+
 (defn level-step-limit
   "How many level steps a staircase of kind may take before it is :boxed: max-level-steps, and a
    climb as many more as the landing (:plan/go-at) is far from feet on the plane, since under a
    lake or the sea the way out may be all the way back: gym batch iron-a9 run 1 climbed under
-   the sea 155 blocks from its landing and was :boxed after 32 steps three times."
+   the sea 155 blocks from its landing and was :boxed after 32 steps three times. A descent with
+   a floor for a stair in sight along some heading (floor-distance) has shore-reach more: the
+   way across a cave over a lake to where the stairs go on may be longer than max-level-steps."
   [world kind feet]
   (let [home (:plan/go-at world)]
     (cond-> max-level-steps
-      (and home (= :stairs-up kind)) (+ (long (physics/horizontal-distance feet home))))))
+      (and home (= :stairs-up kind)) (+ (long (physics/horizontal-distance feet home)))
+      (and (= :stairs-down kind) (some #(floor-distance world feet %) directions))
+      (+ shore-reach))))
 
 (defn under-falling?
   "Would a climb from feet cell [x y z] be refused for gravel or sand over the cell above the
@@ -698,7 +719,10 @@
    (shore-distance), since what refuses a climb is most often a lake or the sea overhead, and
    with no shore in sight toward the landing (:plan/go-at), which is land: gym batch iron-a7
    run 1, under a lake at y 44, stepped 32 east under it and failed :boxed; batch iron-a8 run 2,
-   under the sea with no shore in sight, :boxed three times. Going up, a way whose next cell is
+   under the sea with no shore in sight, :boxed three times. Going down, the heading along
+   which a stair's floor lies nearest first (floor-distance): over a lake in a cave that is the
+   lake's shore, where the stairs go on; gym batch stronghold-room2-a run 3 stepped 32 the way
+   its last turn faced and was :boxed with the shore 33 off. Going up, a way whose next cell is
    not under gravel or sand (under-falling?) comes before any that is, whatever the last step's
    way: under a bed of gravel every stair is refused again from the next cell, and race
    38477665442 bot Clj_r04 stepped thirty cells along one at y 42, two blocks dug a step, until
@@ -717,12 +741,14 @@
         home (:plan/go-at world)
         kept
         (if level-dir (cons level-dir (remove #{back} (take 4 (iterate turn level-dir)))) round)
-        ways (if (= :stairs-up kind)
+        ways (case kind
+               :stairs-up
                (sort-by (fn [[dx dz :as d]]
                           [(or (shore-distance world feet d) Long/MAX_VALUE)
                            (or (dry-head-distance world feet d) Long/MAX_VALUE)
                            (if home (physics/horizontal-distance [(+ fx dx) 0 (+ fz dz)] home) 0)])
                         kept)
+               :stairs-down (sort-by #(or (floor-distance world feet %) Long/MAX_VALUE) kept)
                kept)
         ways (cond->> ways
                (= :stairs-up kind)

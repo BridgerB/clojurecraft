@@ -1,0 +1,18 @@
+;; Issue #265, the way down to the portal room, round 2 (branch feat/265-room2): batch b, with
+;; a descent's level steps heading for the nearest column where a stair's floor would stand
+;; (a cave over a lake), on top of batch a's walk down the slope.
+{:plans/label "stronghold-room2-b"
+ :plans/jobs 2
+ :plans/issue 265
+ :plans/experiments [{:exp/name "portal-room"
+                      :exp/kind :gym
+                      :exp/goal "portal-room"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 900}
+                     {:exp/name "stronghold"
+                      :exp/kind :gym
+                      :exp/goal "stronghold"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 600}]}
