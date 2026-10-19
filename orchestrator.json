@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-19T05:18:07.546Z",
+  "at" : "2026-10-19T05:19:15.692Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -59,11 +59,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 344,
-    "title" : "Bot stops at cast-one: no-escape",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 105,
     "title" : "Bot stops at flint-and-steel: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -77,6 +72,11 @@
     "number" : 342,
     "title" : "Bot stops at furnace: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 344,
+    "title" : "Bot stops at cast-one: no-escape",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 66,
@@ -171,7 +171,8 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 178,
     "move" : "leave",
