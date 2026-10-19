@@ -40,6 +40,7 @@
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
             [clojurecraft.terrain :as terrain]))
 
@@ -67,6 +68,7 @@
 (def descend-drop 8)                  ; blocks below the feet the nearest enderman stands, at the least, before the hunt cuts stairs down toward it
 (def descend-step 8)                  ; blocks one flight of those stairs goes down before the hunt looks round again
 (def descend-radius 128.0)            ; blocks from the feet an enderman far below is descended toward: the server shows them that far
+(def site-reach 6)                    ; cells on the plane round the feet a burrow site is looked for within, when none can be cut from the feet
 (def candidates 3)                    ; nearest endermen asked for a route, as the other acts ask
 
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
@@ -357,6 +359,57 @@
                         :intent/dir (mapv - (away world e))
                         :intent/for :pearls}))))))))
 
+(defn burrow-steps
+  "The cells a burrow cut from feet along dir opens, a step at a time: burrow-depth stairs
+   (stairs/stair-cells, the feet a block down and on at each), then burrow-length level steps
+   (stairs/level-cells); the last cell of the last step is where the bot ends."
+  [feet dir]
+  (let [stairs (reductions (fn [cells _] (stairs/stair-cells (last cells) dir))
+                           (stairs/stair-cells feet dir)
+                           (range (dec burrow-depth)))
+        tunnel (reductions (fn [cells _] (stairs/level-cells (last cells) dir))
+                           (stairs/level-cells (last (last stairs)) dir)
+                           (range (dec burrow-length)))]
+    (vec (concat stairs tunnel))))
+
+(defn burrowable?
+  "Would a burrow cut from feet along dir end in a shelter?: each of its steps (burrow-steps)
+   may be cut (stairs/safe?: no water, lava or drop, not a cell a staircase was boxed on) once
+   the steps before it are open, and its end, every step open, is a shelter?. The steps are
+   opened on the world's block overlay (:world/blocks), as the digs would open them."
+  [world feet dir]
+  (let [steps (burrow-steps feet dir)
+        open (fn [w cells] (reduce #(assoc-in %1 [:world/blocks %2] blocks/air) w cells))
+        dug (reduce (fn [w cells] (if (stairs/safe? w cells) (open w cells) (reduced nil)))
+                    world
+                    steps)]
+    (boolean (and dug (shelter? dug (last (last steps)))))))
+
+(defn standable?
+  "Could the bot stand with its feet in cell [x y z]: the feet and head cells clear and a solid
+   floor under them (path/classify)."
+  [world [x y z]]
+  (and (= :clear (path/classify world [x y z]))
+       (= :clear (path/classify world [x (inc y) z]))
+       (= :solid (path/classify world [x (dec y) z]))))
+
+(defn burrow-site
+  "The cell nearest the feet, within site-reach on the plane and a block up or down at most,
+   not the feet, that the bot could stand in (standable?) and cut a burrow along dir from
+   (burrowable?); nil when there is none. Gym batch pearls-warped-e (plan run 39164914828) run
+   1: on broken ground :burrow failed :no-shelter six times in a row where the bot stood, and
+   it then provoked an enderman with no shelter and was slain in the open."
+  [world dir]
+  (let [[x y z :as feet] (intent/feet world)]
+    (->> (for [dx (range (- site-reach) (inc site-reach))
+               dz (range (- site-reach) (inc site-reach))
+               dy [0 1 -1]]
+           [(+ x dx) (+ y dy) (+ z dz)])
+         (remove #{feet})
+         (sort-by #(physics/distance feet %))
+         (filter (fn [c] (and (standable? world c) (burrowable? world c dir))))
+         first)))
+
 (defmethod intent/run :burrow
   ;; {:intent/kind :burrow :intent/dir [dx dz]}: stairs down burrow-depth (stairs.clj, refusing
   ;; water, lava and drops, turning where refused), then a tunnel burrow-length on along the
@@ -432,14 +485,21 @@
    health comes back only from there), and in the burrow a :lookout where it is, never out to
    the mouth (the same batch's run 3 went from the burrow's end to its mouth and back, hurt,
    for twelve minutes); no burrow near and one to provoke, coming or at hand, one dug there
-   (:burrow, a pickaxe held) away from it, so the stare goes from its mouth; in the burrow, one
+   (:burrow, a pickaxe held) away from it, so the stare goes from its mouth, when one cut from
+   the feet would end in a shelter (burrowable?), else a walk to the nearest cell one would
+   (burrow-site; batch pearls-warped-e, plan run 39164914828, run 1: on broken ground the
+   burrow failed :no-shelter six times where the bot stood, and it then provoked with no
+   shelter and was slain); in the burrow, one
    provokable from where it stands provoked from there, and with one at the mouth (crowded?,
    blacklisted or not), a :lookout where it is; in the burrow with none coming, out to its mouth
    to look round (an angry one given up on that stands off the mouth never comes: batch
    pearls-warped-d, plan run 39160760074, run 1 took three pearls in six minutes, then stood in
-   its burrow thirty-four over such ones); one not
-   yet coming and provokable? from here within stare-range (quarry), provoked (never one already coming: a provoke of it
-   ends at once, and batch pearls-263b's bot, its pickaxe lost, provoked one 26 times in a row);
+   its burrow thirty-four over such ones); one not yet coming and provokable? from here within
+   stare-range (quarry), provoked from the burrow's mouth, or from anywhere with no pickaxe to
+   dig one (never one already coming: a provoke of it ends at once, and batch pearls-263b's bot,
+   its pickaxe lost, provoked one 26 times in a row; with a burrow but away from its mouth, a
+   walk to the mouth first: the same run 1 provoked fifteen blocks from its burrow, and the
+   walk home found no path);
    one coming and no burrow to meet it in, fought; else a walk to the nearest within seek-radius a
    route reaches, or toward one as far as a route goes (toward); else a :lookout, standing where
    it is: no enderman yet is no failure (batch pearls-263c's warped forest landings failed
@@ -459,7 +519,11 @@
         meal (when hurt? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
-        [qid q] (quarry world)]
+        [qid q] (quarry world)
+        dir (when (and (nil? home) (pickaxe? world) (or ce q near?)) (away world (or q ce e)))
+        digs? (and dir (burrowable? world (intent/feet world) dir))
+        site (when (and dir (not digs?)) (burrow-site world dir))
+        mouth (:pearls/mouth world)]
     (cond
       (and home (not in?) (or ce near? hurt?))
       {:intent/kind :walk :intent/target home :intent/for :shelter}
@@ -472,13 +536,14 @@
       {:intent/kind :fight :intent/target eid :intent/for :pearls}
       meal meal
       (and hurt? in?) {:intent/kind :lookout :intent/for :pearls}
-      (and (nil? home) (pickaxe? world) (or ce q near?))
-      {:intent/kind :burrow :intent/dir (away world (or q ce e)) :intent/for :pearls}
+      digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
+      site {:intent/kind :walk :intent/target site :intent/for :pearls}
       (and in? qid) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       (and in? (crowded? world)) {:intent/kind :lookout :intent/for :pearls}
-      (and in? (:pearls/mouth world))
-      {:intent/kind :walk :intent/target (:pearls/mouth world) :intent/for :shelter}
-      qid {:intent/kind :provoke :intent/target qid :intent/for :pearls}
+      (and in? mouth) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and qid (or (not (pickaxe? world)) (= mouth (intent/feet world))))
+      {:intent/kind :provoke :intent/target qid :intent/for :pearls}
+      (and qid home) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
       ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
       :else
       (let [far (endermen world seek-radius)]

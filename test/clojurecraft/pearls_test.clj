@@ -16,6 +16,7 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.world :as world]))
 
 (use-fixtures :once fx/instrumented)
@@ -395,6 +396,27 @@
       (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [1 0] :intent/for :pearls}
              (plan/next-intent (looked-out w) row plan/goals))
           "stairs down toward it from the mouth"))))
+
+(deftest a-burrow-is-cut-where-it-would-shelter-and-the-provoke-goes-from-its-mouth
+  ;; batch pearls-warped-e (plan run 39164914828) run 1: on broken ground :burrow failed
+  ;; :no-shelter six times in a row where the bot stood, it then provoked an enderman fifteen
+  ;; blocks from its old burrow, the walk home found no path, and it was slain in the open
+  (let [seen {7 (enderman [8.5 64.0 15.5])}
+        flat (assoc-in (standing seen) [:player/inventory 1] (item :iron_pickaxe 1))
+        cave (assoc flat :world/chunks (:world/chunks (standing seen {[8 62 7] air})))]
+    (is (pearls/burrowable? flat [8 64 8] [0 -1]) "rock all the way: the end is a shelter")
+    (is (not (pearls/burrowable? cave [8 64 8] [0 -1]))
+        "a hollow under the first stair's floor: the stair is a drop")
+    (is (= {:intent/kind :walk :intent/target [7 64 8] :intent/for :pearls}
+           (plan/next-intent cave row plan/goals))
+        "so the hunt walks to the nearest cell a burrow would shelter from")
+    (is (= [7 64 8] (pearls/burrow-site cave [0 -1])))
+    (is
+     (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+        (plan/next-intent (burrowed [3.5 64.0 12.5] {7 (enderman [3.5 64.0 25.5])}) row plan/goals))
+     "a burrow four blocks off and one to provoke: to the mouth first, the stare from there")
+    (is (= :netherrack (stairs/filler {:player/inventory {0 (item :netherrack 3)}} 2))
+        "a Nether descent lays its floors from what it digs")))
 
 (deftest a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
   (let [kill {:intent/kind :fight
