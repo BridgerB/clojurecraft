@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-19T03:51:05.431Z",
+  "at" : "2026-10-19T03:53:18.168Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -84,6 +84,11 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
+    "number" : 62,
+    "title" : "Bot stops at ingots: timeout",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 419,
     "title" : "Bot stops at portal: target-gone",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -101,11 +106,6 @@
   }, {
     "number" : 85,
     "title" : "Bot stops at cobblestone: timeout",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 62,
-    "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
