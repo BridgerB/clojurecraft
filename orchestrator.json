@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-19T23:51:37.128Z",
+  "at" : "2026-10-19T23:53:49.518Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -110,11 +110,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 450,
-    "title" : "Bot stops at cast-one: no-spot",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 370,
     "title" : "Bot stops at portal: no-log",
     "labels" : [ "bot-failure", "sim" ],
@@ -143,6 +138,11 @@
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 450,
+    "title" : "Bot stops at cast-one: no-spot",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 349,
