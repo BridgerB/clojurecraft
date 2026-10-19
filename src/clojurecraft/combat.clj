@@ -440,12 +440,17 @@
 
 (defmethod plan/next-intent :defend
   ;; the nearest threat: a creeper, or anything while the health is under retreat-health, is
-  ;; backed away from; anything else fought
+  ;; backed away from; anything else fought. A neutral mob turned on the bot (an angry enderman,
+  ;; entity/neutral) is fought to the end whatever the health: it is faster than the bot and
+  ;; teleports after it, so a back-off from it is only hits taken. Gym dragon-e run 1 struck one
+  ;; five times (40 to 10) then backed away under 10 health and died in its hands
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
-    (if (or (= :creeper (entity/kind e)) (< (:player/health world 20.0) retreat-health))
-      {:intent/kind :back-off :intent/target eid}
-      {:intent/kind :fight :intent/target eid})))
+    (cond (= :creeper (entity/kind e)) {:intent/kind :back-off :intent/target eid}
+          (contains? entity/neutral (entity/kind e))
+          {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
+          (< (:player/health world 20.0) retreat-health) {:intent/kind :back-off :intent/target eid}
+          :else {:intent/kind :fight :intent/target eid})))
 
 (defn quarry
   "{eid entity} of the hostiles the gym's :attack row kills: within attack-radius, not
