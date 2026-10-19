@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-19T21:29:16.116Z",
+  "at" : "2026-10-19T21:30:23.373Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -110,6 +110,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 75,
+    "title" : "Bot stops at portal-kit: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 457,
     "title" : "Bot stops at cast-one: inventory-full",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -143,11 +148,6 @@
     "number" : 66,
     "title" : "Bot stops at ingots: stair-not-taken",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 75,
-    "title" : "Bot stops at portal-kit: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 461,
