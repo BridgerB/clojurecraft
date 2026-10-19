@@ -164,7 +164,17 @@
            (plan/next-intent (looked-out (assoc w :world/chunks (cave (passage 12 8))))
                              row
                              plan/goals))
-        "a pocket no route leaves: the lookout again")))
+        "a pocket no route leaves: the lookout again")
+    ;; gym batch pearls-warped2-a (plan run 39179234118) run 3: three flights down to the
+    ;; endermen's level ended inside the rock, none in sight and no route, and the bot walked its
+    ;; staircase up and down for thirty minutes
+    (is (= {:intent/kind :tunnel :intent/dir [0 1] :intent/length 8 :intent/for :pearls}
+           (plan/next-intent (-> (standing {7 (enderman [8.5 64.0 20.5])})
+                                 (assoc :world/chunks (cave (passage 8 8)))
+                                 (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
+                             row
+                             plan/goals))
+        "a pocket with an enderman twelve blocks off through the rock: a tunnel toward it")))
 
 (def cliff
   "Stone six high (y 64 to 69) across z 20 to 31 of the chunk column [0 1]: a ledge no route
@@ -407,9 +417,9 @@
     (is (pearls/burrowable? flat [8 64 8] [0 -1]) "rock all the way: the end is a shelter")
     (is (not (pearls/burrowable? cave [8 64 8] [0 -1]))
         "a hollow under the first stair's floor: the stair is a drop")
-    (is (= {:intent/kind :walk :intent/target [7 64 8] :intent/for :pearls}
+    (is (= {:intent/kind :walk :intent/target [7 64 8] :intent/for :shelter}
            (plan/next-intent cave row plan/goals))
-        "so the hunt walks to the nearest cell a burrow would shelter from")
+        "so the hunt walks to the nearest cell a burrow would shelter from, and stands in it")
     (is (= [7 64 8] (pearls/burrow-site cave [0 -1])))
     (is (=
          {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}

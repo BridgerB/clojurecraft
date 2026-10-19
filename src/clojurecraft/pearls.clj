@@ -68,6 +68,7 @@
 (def descend-drop 8)                  ; blocks below the feet the nearest enderman stands, at the least, before the hunt cuts stairs down toward it
 (def descend-step 8)                  ; blocks one flight of those stairs goes down before the hunt looks round again
 (def descend-radius 128.0)            ; blocks from the feet an enderman far below is descended toward: the server shows them that far
+(def bore-length 8)                   ; level steps a tunnel toward an enderman no route reaches cuts before the hunt looks again
 (def site-reach 6)                    ; cells on the plane round the feet a burrow site is looked for within, when none can be cut from the feet
 (def candidates 3)                    ; nearest endermen asked for a route, as the other acts ask
 
@@ -144,12 +145,14 @@
 
 (defn roam-goal
   "The path goal of a roam along heading [dx dz] from the feet: any cell more than twice
-   roam-reach, less one, from the point roam-reach behind the feet (path's :away, by its
-   flat-distance), which the cells roam-reach or more ahead satisfy at any height, and the cells
-   beside and behind do not. The route finds the way to one: along a cave's passage, up a
-   cliff's side, round a lake of lava."
+   roam-reach, less one, on the plane (path's :afar, by its octile) from the point roam-reach
+   behind the feet, which the cells roam-reach or more ahead satisfy at any height, and the
+   cells beside and behind do not. The route finds the way to one: along a cave's passage, up a
+   cliff's side, round a lake of lava. Never by the height alone: gym batch pearls-warped2-a
+   (plan run 39179234118) run 3 roamed its own staircase up and down for thirty minutes, each
+   flight far enough by path's :away, which counts the height."
   [[x y z] [dx dz]]
-  {:goal/kind :away
+  {:goal/kind :afar
    :goal/pos [(- x (* dx roam-reach)) y (- z (* dz roam-reach))]
    :goal/range (dec (* 2 roam-reach))})
 
@@ -410,6 +413,27 @@
          (filter (fn [c] (and (standable? world c) (burrowable? world c dir))))
          first)))
 
+(defn bore
+  "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) bore-length long
+   the straight way toward the nearest enderman in ms standing less than descend-drop above or
+   below the feet, a pickaxe held and no staircase boxed from these feet (:plan/boxed-at); nil
+   otherwise. For when no route reaches one and none gains on one (toward): the bot stands
+   enclosed, at the foot of its own descent inside the rock. Gym batch pearls-warped2-a (plan
+   run 39179234118) run 3: three flights down to the endermen's level ended in the rock, with
+   none in sight and no route, and the bot walked its staircase for thirty minutes."
+  [world ms]
+  (let [pos (:player/pos world)
+        feet (intent/feet world)
+        [_ e] (entity/nearest ms pos)]
+    (when (and e
+               (pickaxe? world)
+               (not (contains? (:plan/boxed-at world) feet))
+               (< (abs (- (physics/y-of (:entity/pos e)) (physics/y-of feet))) descend-drop))
+      {:intent/kind :tunnel
+       :intent/dir (mapv - (away world e))
+       :intent/length bore-length
+       :intent/for :pearls})))
+
 (defmethod intent/run :burrow
   ;; {:intent/kind :burrow :intent/dir [dx dz]}: stairs down burrow-depth (stairs.clj, refusing
   ;; water, lava and drops, turning where refused), then a tunnel burrow-length on along the
@@ -506,8 +530,10 @@
    :no-enderman and :no-route in 40 s); before the walk toward one, stairs down toward one far
    below within descend-radius (descend: batch pearls-warped-c's landings stood on ledges over
    the forest floor, and batch pearls-warped-d's run 2 walked toward one and another, the stairs
-   down and up, between lookouts for forty minutes with none within seek-radius for six); after a
-   lookout that found nothing, a roam somewhere else to look from."
+   down and up, between lookouts for forty minutes with none within seek-radius for six); after
+   the walk toward, a tunnel toward the nearest on this level no route reaches (bore: the foot
+   of a descent is inside the rock); after a lookout that found nothing, a roam somewhere else to
+   look from."
   [world]
   (let [pos (:player/pos world)
         [eid e] (entity/nearest (endermen (dissoc world :plan/blacklist)) pos)
@@ -537,7 +563,7 @@
       meal meal
       (and hurt? in?) {:intent/kind :lookout :intent/for :pearls}
       digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
-      site {:intent/kind :walk :intent/target site :intent/for :pearls}
+      site {:intent/kind :walk :intent/target site :intent/for :shelter}
       (and in? qid) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
       (and in? (crowded? world)) {:intent/kind :lookout :intent/for :pearls}
       (and in? mouth) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
@@ -551,6 +577,7 @@
               {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})
             (descend world (endermen world descend-radius))
             (toward world far)
+            (bore world (endermen world descend-radius))
             (when (= :lookout (:intent/kind (:plan/last world))) (roam world))
             {:intent/kind :lookout :intent/for :pearls})))))
 
