@@ -398,7 +398,8 @@
    [:intent/rejections
     "digs of the current stair (or level step) the server did not do, each dug again; stairs/max-rejections fail :rejected"
     "stairs-down, after a child dig rejected"]
-   [:intent/cells "the three cells the current stair opens, top first"
+   [:intent/cells
+    "the cells the current stair opens, top first: three, or four for a stair cut for a taller body (:intent/tall)"
     "stairs-down, while a stair is cut"]
    [:intent/level-cells
     "the two cells a level step opens, head then feet, when every stair down was refused"
