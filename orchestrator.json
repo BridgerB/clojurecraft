@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-19T17:27:16.143Z",
+  "at" : "2026-10-19T17:28:24.722Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -49,11 +49,6 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 344,
-    "title" : "Bot stops at cast-one: no-escape",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 162,
     "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -67,6 +62,11 @@
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 344,
+    "title" : "Bot stops at cast-one: no-escape",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 455,
@@ -91,11 +91,6 @@
   }, {
     "number" : 89,
     "title" : "Bot stops at portal-kit: no-log",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 457,
-    "title" : "Bot stops at cast-one: inventory-full",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -126,6 +121,11 @@
   }, {
     "number" : 45,
     "title" : "Bot stops at cast-one: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 457,
+    "title" : "Bot stops at cast-one: inventory-full",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -196,8 +196,7 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -212,10 +211,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 338,
-    "move" : "assign",
-    "at" : "2026-10-19T11:35:26.737Z"
-  }, {
     "issue" : 338,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1562,5 +1557,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-19T17:27:16.143Z"
+  }, {
+    "issue" : 338,
+    "move" : "assign",
+    "at" : "2026-10-19T17:28:24.722Z"
   } ]
 }
