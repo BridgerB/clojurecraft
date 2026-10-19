@@ -1,0 +1,1 @@
+#:churn{:offsets {"runs.edn" 57}, :batch 13, :counts {[:fortress :timeout] 8, [:portal :no-log] 1, [:portal :timeout] 3, [:fortress :inventory-full] 1, [:furnace :boxed] 3, [:flint-and-steel :boxed] 2, [:portal :no-site] 1, [:cast-one :no-log] 1, [:portal :no-stand] 1, [:cast-one :no-path] 1, [:cast-one :timeout] 8}}

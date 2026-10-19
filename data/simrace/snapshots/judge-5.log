@@ -1,0 +1,302 @@
+JUDGE {:path "data/simrace/snapshots/R4-19-1.edn.gz", :recurs? true, :signature [:fortress :timeout], :sim-ms 822250, :plan/status :active, :slow? true, :wall-ms 240862, :halted? true, :window-ms 900000, :moment {:why :stall, :t 19470000, :decision-t 19500050, :stop-t 19800050, :window-ms 900000}, :run/signature [:fortress :timeout]}
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19478750 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19478750 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19493450 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19493450 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19508100 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19508100 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19522800 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19522800 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19537450 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19537450 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19552150 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19552150 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19566800 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19566800 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19581500 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19581500 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19596150 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19596150 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19610850 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19610850 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19625500 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19625500 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19640200 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19640200 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19654850 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19654850 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19669550 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19669550 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19684200 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19684200 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19698900 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19698900 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19713550 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19713550 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19728250 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19728250 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19742900 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19742900 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19757600 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19757600 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19772250 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19772250 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19786950 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19786950 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19801600 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19801600 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19816300 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19816300 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19830950 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19830950 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19845650 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19845650 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19860300 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19860300 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19875000 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19875000 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19889650 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19889650 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19904350 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19904350 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19919000 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19919000 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19933700 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19933700 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19948350 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19948350 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19963050 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19963050 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19977700 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19977700 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19992400 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [19992400 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20007050 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20007050 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20021750 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20021750 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20036400 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20036400 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20051100 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20051100 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20065750 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20065750 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20080450 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20080450 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20095100 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20095100 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20109800 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20109800 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20124450 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20124450 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20139150 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20139150 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20153800 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20153800 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20168500 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20168500 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20183150 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20183150 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20197850 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20197850 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20212500 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20212500 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20227200 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20227200 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20241850 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20241850 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20256550 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20256550 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20271200 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20271200 :started :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20285900 :done :tunnel-to [480 54 308] nil]
+STORY data/simrace/snapshots/R4-19-1.edn.gz [20285900 :started :tunnel-to [480 54 308] nil]
+SCENE data/simrace/snapshots/R4-19-1.edn.gz start {:pos [480.5 73.0 313.6], :dimension "minecraft:the_nether", :health 20.0, :food 16, :held {:andesite 105, :basalt 192, :blackstone 14, :bucket 1, :coal 5, :cobblestone 494, :crafting_table 1, :diorite 38, :dirt 106, :flint_and_steel 1, :gold_nugget 2, :granite 62, :gravel 7, :netherrack 210, :raw_copper 5, :sand 23, :soul_sand 12, :stick 1, :stone_pickaxe 1, :stone_sword 1, :water_bucket 1}, :intent #:intent{:from [480 73 313], :goal :fortress, :id 1368, :kind :tunnel-to, :move [0 0 1], :status :active, :steps 32, :taken 12, :target [480 54 308]}, :last #:intent{:goal :fortress, :id 1367, :kind :tunnel-to, :status :done, :steps 32, :taken 32, :target [480 54 308]}, :status :active}
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z-5 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z-4 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z-3 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z-2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z-1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z+0 .....abbbbb
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z+1 .....aaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z+2 ....aaaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z+3 ..aaaaaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z+4 .aaaaaaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y-1 z+5 .aaaaaaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z-5 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z-4 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z-3 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z-2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z-1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z+0 .....@.....
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z+1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z+2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z+3 ........aaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z+4 ......caaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+0 z+5 ..a...aaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z-5 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z-4 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z-3 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z-2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z-1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z+0 .....@.....
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z+1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z+2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z+3 ........aaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z+4 .......aLLL
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+1 z+5 ......aLLLL
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z-5 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z-4 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z-3 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z-2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z-1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z+0 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z+1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z+2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z+3 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z+4 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start y+2 z+5 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz start legend .=air L=lava a=basalt b=cobblestone c=magma_block
+SCENE data/simrace/snapshots/R4-19-1.edn.gz end {:pos [480.6 73.0 314.6], :dimension "minecraft:the_nether", :health 20.0, :food 16, :held {:andesite 105, :basalt 192, :blackstone 14, :bucket 1, :coal 5, :cobblestone 494, :crafting_table 1, :diorite 38, :dirt 106, :flint_and_steel 1, :gold_nugget 2, :granite 62, :gravel 7, :netherrack 210, :raw_copper 5, :sand 23, :soul_sand 12, :stick 1, :stone_pickaxe 1, :stone_sword 1, :water_bucket 1}, :intent #:intent{:from [480 73 314], :goal :fortress, :id 1424, :kind :tunnel-to, :move [1 0 0], :status :active, :steps 32, :taken 13, :target [480 54 308]}, :last #:intent{:goal :fortress, :id 1423, :kind :tunnel-to, :status :done, :steps 32, :taken 32, :target [480 54 308]}, :status :active}
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z-5 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z-4 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z-3 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z-2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z-1 .....abbbbb
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z+0 .....aaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z+1 ....aaaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z+2 ..aaaaaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z+3 .aaaaaaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z+4 .aaaaaaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y-1 z+5 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z-5 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z-4 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z-3 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z-2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z-1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z+0 .....@.....
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z+1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z+2 ........aaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z+3 ......caaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z+4 ..a...aaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+0 z+5 ..aaaaaaaaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z-5 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z-4 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z-3 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z-2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z-1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z+0 .....@.....
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z+1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z+2 ........aaa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z+3 .......aLLL
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z+4 ......aLLLL
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+1 z+5 ..aaaaLLLLa
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z-5 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z-4 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z-3 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z-2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z-1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z+0 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z+1 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z+2 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z+3 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z+4 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end y+2 z+5 ...........
+SLICE data/simrace/snapshots/R4-19-1.edn.gz end legend .=air L=lava a=basalt b=cobblestone c=magma_block
+JUDGE {:path "data/simrace/snapshots/R2-8-2.edn.gz", :recurs? true, :signature [:fortress :timeout], :sim-ms 900100, :plan/status :active, :slow? false, :wall-ms 23205, :halted? false, :window-ms 900000, :moment {:why :stall, :t 19470000, :decision-t 19500050, :stop-t 19800050, :window-ms 900000}, :run/signature [:fortress :timeout]}
+STORY data/simrace/snapshots/R2-8-2.edn.gz [19512200 :done :tunnel-to [983 52 324] nil]
+STORY data/simrace/snapshots/R2-8-2.edn.gz [19512200 :started :tunnel-to [983 52 324] nil]
+STORY data/simrace/snapshots/R2-8-2.edn.gz [19992550 :done :tunnel-to [983 52 324] nil]
+STORY data/simrace/snapshots/R2-8-2.edn.gz [19992550 :started :tunnel-to [983 52 324] nil]
+SCENE data/simrace/snapshots/R2-8-2.edn.gz start {:pos [274.4 53.0 326.5], :dimension "minecraft:the_nether", :health 20.0, :food 15, :held {:andesite 64, :basalt 1, :bucket 1, :cobblestone 1187, :diorite 82, :dirt 146, :flint_and_steel 1, :granite 125, :gravel 22, :iron_ingot 1, :iron_sword 1, :raw_copper 8, :stick 5, :water_bucket 1}, :intent #:intent{:from [274 53 326], :goal :fortress, :id 588, :kind :tunnel-to, :move [1 0 0], :status :active, :steps 32, :taken 29, :target [983 52 324]}, :last #:intent{:goal :fortress, :id 587, :kind :tunnel-to, :status :done, :steps 32, :taken 32, :target [983 52 324]}, :status :active}
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z-5 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z-4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z-3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z-2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z-1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z+0 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z+1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z+2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z+3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z+4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y-1 z+5 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z-5 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z-4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z-3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z-2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z-1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z+0 .....@aaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z+1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z+2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z+3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z+4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+0 z+5 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z-5 ...........
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z-4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z-3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z-2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z-1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z+0 .....@aaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z+1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z+2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z+3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z+4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+1 z+5 aabaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z-5 ...........
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z-4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z-3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z-2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z-1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z+0 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z+1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z+2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z+3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z+4 aabaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start y+2 z+5 abbbaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz start legend .=air a=basalt b=blackstone
+SCENE data/simrace/snapshots/R2-8-2.edn.gz end {:pos [332.4 54.0 327.5], :dimension "minecraft:the_nether", :health 20.0, :food 15, :held {:andesite 64, :basalt 1, :bucket 1, :cobblestone 1184, :diorite 82, :dirt 146, :flint_and_steel 1, :granite 125, :gravel 22, :iron_ingot 1, :iron_sword 1, :raw_copper 8, :stick 5, :water_bucket 1}, :intent #:intent{:from [332 54 327], :goal :fortress, :id 590, :kind :tunnel-to, :move [1 0 0], :status :active, :steps 32, :taken 24, :target [983 52 324]}, :last #:intent{:goal :fortress, :id 589, :kind :tunnel-to, :status :done, :steps 32, :taken 32, :target [983 52 324]}, :status :active}
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z-5 aaaaabbbbba
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z-4 aaaaaabbbaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z-3 aaaaaaabaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z-2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z-1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z+0 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z+1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z+2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z+3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z+4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y-1 z+5 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z-5 aaaaaabbbaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z-4 aaaaaaabaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z-3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z-2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z-1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z+0 .....@aaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z+1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z+2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z+3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z+4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+0 z+5 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z-5 aaaaaaabaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z-4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z-3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z-2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z-1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z+0 .....@aaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z+1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z+2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z+3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z+4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+1 z+5 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z-5 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z-4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z-3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z-2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z-1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z+0 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z+1 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z+2 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z+3 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z+4 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end y+2 z+5 aaaaaaaaaaa
+SLICE data/simrace/snapshots/R2-8-2.edn.gz end legend .=air a=basalt b=blackstone
