@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-19T17:11:06.825Z",
+  "at" : "2026-10-19T17:12:15.927Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -84,6 +84,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 148,
+    "title" : "Bot stops at water-bucket: no-spot",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 89,
     "title" : "Bot stops at portal-kit: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -99,24 +104,19 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 45,
-    "title" : "Bot stops at cast-one: no-path",
+    "number" : 461,
+    "title" : "Bot stops at portal: out-of-reach",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 461,
-    "title" : "Bot stops at portal: out-of-reach",
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 410,
     "title" : "Bot stops at fortress: not-held",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 148,
-    "title" : "Bot stops at water-bucket: no-spot",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 85,
@@ -196,8 +196,7 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -212,10 +211,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 338,
-    "move" : "assign",
-    "at" : "2026-10-19T11:19:21.381Z"
-  }, {
     "issue" : 338,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1562,5 +1557,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-19T17:11:06.825Z"
+  }, {
+    "issue" : 338,
+    "move" : "assign",
+    "at" : "2026-10-19T17:12:15.927Z"
   } ]
 }
