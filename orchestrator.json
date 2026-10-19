@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-19T04:18:35.143Z",
+  "at" : "2026-10-19T04:19:41.848Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -102,6 +102,11 @@
     "number" : 40,
     "title" : "Bot stops at ingots: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 456,
+    "title" : "Bot stops at flint-and-steel: rejected",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 45,
