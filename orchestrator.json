@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-19T04:42:48.370Z",
+  "at" : "2026-10-19T04:45:00.873Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -101,6 +101,11 @@
   }, {
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 457,
+    "title" : "Bot stops at cast-one: inventory-full",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
