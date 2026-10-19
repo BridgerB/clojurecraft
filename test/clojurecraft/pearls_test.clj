@@ -411,10 +411,10 @@
            (plan/next-intent cave row plan/goals))
         "so the hunt walks to the nearest cell a burrow would shelter from")
     (is (= [7 64 8] (pearls/burrow-site cave [0 -1])))
-    (is
-     (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
-        (plan/next-intent (burrowed [3.5 64.0 12.5] {7 (enderman [3.5 64.0 25.5])}) row plan/goals))
-     "a burrow four blocks off and one to provoke: to the mouth first, the stare from there")
+    (is (=
+         {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+         (plan/next-intent (burrowed [3.5 64.0 2.5] {7 (enderman [3.5 64.0 14.5])}) row plan/goals))
+        "a burrow six blocks off and one to provoke: to the mouth first, the stare from there")
     (is (= :netherrack (stairs/filler {:player/inventory {0 (item :netherrack 3)}} 2))
         "a Nether descent lays its floors from what it digs")))
 
