@@ -418,4 +418,24 @@
   :goal/doc
   "the End entered (issue #266): the frames eyed as the end portal row does, the portal's nine blocks awaited, then the feet brought over the portal's middle, where the body drops into it and the server sends the End's respawn at once; done when the dimension is the End. On arrival the bot stands on the obsidian platform: a route never steps off it, since a column open to the void has no landing within three blocks (path/landing). An aside until the stronghold (#265) is proven and the chain is raised to it"
   :goal/done? :in-end?
-  :goal/plan :enter-end}]
+  :goal/plan :enter-end}
+ {:goal/id :crystals
+  :goal/priority 26
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "crystals"
+  :goal/doc
+  "every end crystal broken (issue #267): for the crystal nearest the feet, a pillar beside its spike along an axis (a block under the feet at the top of each jump) up to the spike's top, a walk onto a wide spike's top to the cell three out from the crystal, two blocks put in the cell between (the blast's line to the body shut), the crystal struck from behind them, then back down the pillar dug from its top; done when no crystal is shown and the feet are off every pillar and spike. In the End only. An aside until the End (#266) is entered from a stronghold and the chain is raised to it"
+  :goal/dimension "minecraft:the_end"
+  :goal/done? :crystals-gone?
+  :goal/plan :crystals}
+ {:goal/id :dragon
+  :goal/priority 27
+  :goal/target? true
+  :goal/aside? true
+  :goal/until "dragon"
+  :goal/doc
+  "the ender dragon dead (issue #267): the crystals first as the crystals row breaks them, then a wait on the ground five blocks from the fountain, where the dragon lands to perch; once it has held within six of the fountain and under y 70 for ten ticks, struck with the best sword every 650 ms while its box is in reach, a breath cloud or fireball within four backed away from; done when the server says it died (its death event, its removal near the bot with no boss bar, or the credits). In the End only. An aside until the End (#266) is entered from a stronghold and the chain is raised to it"
+  :goal/dimension "minecraft:the_end"
+  :goal/done? :dragon-dead?
+  :goal/plan :dragon}]

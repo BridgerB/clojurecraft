@@ -1,0 +1,9 @@
+;; issue #267, batch d: the wait for the dragon never stares at an enderman and an angry one is
+;; fought, a pillar with a gap under it is still the way down, the gym's kill shuts the exit
+;; portal it opens; three runs a row.
+{:plans/label "dragon-d"
+ :plans/jobs 2
+ :plans/issue 267
+ :plans/experiments
+ [{:exp/name "crystals" :exp/kind :gym :exp/goal "crystals" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}]}

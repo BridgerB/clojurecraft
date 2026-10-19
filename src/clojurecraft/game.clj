@@ -378,9 +378,14 @@
                     [(relative flags 32 ovx dx) (relative flags 64 ovy dy)
                      (relative flags 128 ovz dz)])))))
 (defmethod on-packet [:play :entity-event]
-  ;; status 3 is a living entity's death: a fact before the body is removed
+  ;; status 3 is a living entity's death: a fact before the body is removed; the dragon's is the
+  ;; run's win (issue #267)
   [w {:keys [entity-id status]}]
-  (cond-> w (= entity/death-status status) (track entity-id assoc :entity/died-at (:time/now w))))
+  (let [death? (= entity/death-status status)]
+    (cond-> w
+      death? (track entity-id assoc :entity/died-at (:time/now w))
+      (and death? (entity/dragon? (get-in w [:world/entities entity-id])))
+      (assoc :world/dragon-dead? true))))
 (defmethod on-packet [:play :set-entity-data]
   ;; the skimmed metadata: shared flags, and a living entity's health (entity/metadata-facts)
   [w {:keys [entity-id metadata]}]
@@ -397,8 +402,26 @@
     (assoc-in w [:world/entities entity-id :entity/pos] [x y z])
     w))
 (defmethod on-packet [:play :remove-entities]
+  ;; the dragon removed near the bot with no boss bar shown is dead (entity/dragon-gone?)
   [w {:keys [ids]}]
-  (update w :world/entities #(apply dissoc % ids)))
+  (cond-> (update w :world/entities #(apply dissoc % ids))
+    (some #(entity/dragon-gone? w %) ids) (assoc :world/dragon-dead? true)))
+(defmethod on-packet [:play :boss-event]
+  ;; the bars shown, by id (issue #267): the dragon fight's goes when its dragon dies
+  [w {:keys [uuid action]}]
+  (cond (nil? uuid) w
+        (= action (p/value :boss-event :add)) (update w :world/boss-bars (fnil conj #{}) uuid)
+        (= action (p/value :boss-event :remove)) (update w :world/boss-bars (fnil disj #{}) uuid)
+        :else w))
+(defmethod on-packet [:play :game-event]
+  ;; win_game: the bot went through the exit portal, so the dragon is dead; the vanilla client
+  ;; shows the credits and then asks to respawn (client-command 0, typecraft bot/game.ts), and so
+  ;; does the bot (issue #267). Every other event is unread
+  [w {:keys [event]}]
+  (cond-> w
+    (= event (p/value :game-event :win-game))
+    (-> (assoc :world/dragon-dead? true)
+        (emit {:packet/name :client-command :action (p/value :client-command :perform-respawn)}))))
 (defmethod on-packet [:play :take-item-entity]
   [w {:keys [collected collector count] :as p}]
   (cond-> (update w :stats/pickups (fnil conj []) p)

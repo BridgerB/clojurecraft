@@ -581,6 +581,12 @@
             (when (= :lookout (:intent/kind (:plan/last world))) (roam world))
             {:intent/kind :lookout :intent/for :pearls})))))
 
+(defmethod combat/answers :pearls
+  ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)
+  ;; is a hostile the :defend row would otherwise walk out of the burrow after
+  [_]
+  #{:enderman})
+
 (defmethod plan/next-intent :pearls
   [world _ _]
   (let [k (fresh-kill world)

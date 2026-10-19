@@ -9,6 +9,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.claims :as claims]
             [clojurecraft.combat]
+            [clojurecraft.dragon :as dragon]
             [clojurecraft.drops :as drops]
             [clojurecraft.eat :as eat]
             [clojurecraft.end-portal :as end-portal]
@@ -173,6 +174,10 @@
 (s/def :entity/died-at int?)
 (s/def :entity/item int?)
 (s/def :entity/creepy? boolean?)
+(s/def :entity/phase int?)
+(s/def :entity/radius double?)
+(s/def :world/dragon-dead? boolean?)
+(s/def :world/boss-bars (s/coll-of uuid? :kind set?))
 (s/def :pearls/shelter ::block-pos)
 (s/def :pearls/mouth ::block-pos)
 (s/def :throw/from ::vec3)
@@ -431,6 +436,10 @@
 (s/def :intent/reason some?)
 (s/def :intent/for keyword?)
 (s/def :intent/enter? boolean?)
+(s/def :intent/top int?)
+(s/def :intent/under ::block-pos)
+(s/def :intent/refusals nat-int?)
+(s/def :intent/perched nat-int?)
 (s/def :intent/pickup? boolean?)
 (s/def :intent/step-down? boolean?)
 (s/def :intent/cell ::block-pos)
@@ -906,6 +915,17 @@
   (s/nilable (s/or :op ::op
                    :why keyword?)))
 
+(s/fdef dragon/best-approach
+  :args
+  (s/cat :world (requires :player/pos :world/chunks)
+         :pos ::vec3)
+  :ret (s/nilable map?))
+
+(s/fdef dragon/toward-crystals
+  :args
+  (s/cat :world (requires :player/pos :world/entities :world/chunks))
+  :ret (s/nilable map?))
+
 (def selected
   "Every function whose selection is stated above, for instrument."
   [`game/eye `physics/step `inventory/item-count `inventory/logs-held `terrain/block-at
@@ -914,5 +934,5 @@
    `place/ashore `stone/redig-place `window/view `path/plan `path/classify `entity/hostiles
    `entity/gone? `eat/food-held `drops/lying `blaze/blazes `pearls/endermen `stairs/down-safe?
    `stairs/down-lay `stone/retreat `build/safe-source? `build/scoop-blocked? `build/lit-entry
-   `fortress/next-move `end-portal/next-op])
+   `fortress/next-move `end-portal/next-op `dragon/best-approach `dragon/toward-crystals])
 (s/def :stats/deaths pos-int?)

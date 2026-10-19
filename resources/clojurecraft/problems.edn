@@ -543,6 +543,42 @@
   :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
                     "brain/siblings/sib-end-and-dragon.md" "brain/bot/plan/end-portal.md"
                     "brain/bot/plan/stronghold.md"]}
+ {:problem/stage :dragon
+  :problem/issue 267
+  :problem/goals [:crystals :dragon]
+  :problem/statement
+  "Split from :end-and-dragon. In the End, break the ten end crystals that heal the dragon, each on top of an obsidian spike 76 to 103 high, without dying to the blast a hit sets off, then kill the dragon with the sword while it perches on the fountain, and know from the server that it died."
+  :problem/needs
+  ["Every end crystal and the dragon in the entity map, with where they stand (add-entity, entity/kind)"
+   "A way up a spike with no bow: a pillar of blocks beside it, a block put under the feet at the top of each jump once the body is clear of the cell"
+   "A stand within reach of the crystal whose line to the blast is shut: the crystal blasts with power 6 at any hit, about 56 damage three blocks off with a clear line, so two blocks go between the body and it"
+   "A way back down: the pillar dug from its top, a block at a time, never a fall"
+   "When the dragon perches: its position held within six of the fountain (0, 0) and under y 70, and its box (16 by 8, its feet on the pillar) in reach of the eye"
+   "The dragon's breath (area_effect_cloud) and fireballs (dragon_fireball) near the feet"
+   "The win as the server says it: entity-event 3 on the dragon, its removal with no boss bar shown (boss-event), or game-event win_game (answered with client-command 0)"]
+  :problem/risks
+  ["A crystal struck in the open kills the bot: no wall but the one the bot put there stops the blast"
+   "A wide spike (radius 3 to 5) puts the crystal out of reach from beside it: the stand is on the spike's top, walked onto from the pillar"
+   "Two spikes have iron cages round their crystals: the walk onto them is shut, and a strike through the bars is unproven"
+   "A block placed while the body is still in the cell is refused, and the jump lands back where it was"
+   "Endermen in the End turn on a bot that looks them in the face; a hit on a pillar is a fall"
+   "The dragon's charges and fireballs between perches; its body takes a quarter of a hit plus one, and after 50 damage in one perch it takes off"
+   "The dragon flown out of the bot's tracking taken for dead: a removal counts only near the bot with no boss bar"
+   "The End's platform floats over the void at x 100: the main island is a bridge away, and nothing of this stage builds one"]
+  :problem/decisions
+  ["The strike stands three out from the crystal's column along an axis, feet level with the spike's top, with two blocks in the cell between at the feet's height and the eye's: the crystal's box is two away, and every line from the blast to the body crosses the blocks. Along an axis only, so the two cells cover the body"
+   "The pillar goes up the first column out from the spike's top layer along that axis, never nearer than the stand: on a spike of radius 2 its top is the stand"
+   "Everything is read from the world each tick (the nearest crystal, its approach, whether the feet stand on two pillar blocks or three obsidian), so a death or a reload resumes where the world says and nothing records progress"
+   "The bot waits for the perch in the exit portal's basin two out from the pillar: the sitting dragon turns its face to the bot, its head 6.5 out and its neck 5.5, and both hurt what they touch"
+   "The perched dragon is struck by its box, not by :fight's aim point: the server tests an attack's reach to the box, and an aim point over feet on the fountain's pillar is out of reach from every floor"
+   "The gym takes the cages away and puts a crystal on each spike's bedrock with the dragon gone, so the crystals row measures the pillar and the strike; the dragon row has no crystals and a summoned dragon (DragonPhase 0, which the End's fight takes for its own on the bot's arrival)"]
+  :problem/done
+  "RCON: execute in minecraft:the_end unless entity @e[type=minecraft:end_crystal] passes (gym crystals: ten put on the spikes, all gone); execute in minecraft:the_end unless entity @e[type=minecraft:ender_dragon] passes (gym dragon: summoned, dead, RESULT :ok true). sim_test: against the model's End, a crystal on a spike broken from behind a wall with no blast taken and the bot back down; the perched dragon killed and :world/dragon-dead? set."
+  :problem/last-failure
+  "clojurecraft has never fought in the End. ruststeve's End gyms went beds-not-bow (dragon_beds) and crystals_bow over 1800 s budgets; steve's dragon attempts f7 1/3/5 were slain by endermen before a single bed, with no kit server-side. Batch dragon-a (plan run 39152590801, 03421f2): crystals 0/3, the approach a block high for crystals the gym stood on their fire and on their column's corner (:no-path to the pillar's foot); dragon 0/3, one run struck the perched dragon five times for 2.5 each from five out and died under its head (10 a touch, the head 6.5 out toward the bot), two waited :no-blocks on crystals the gym's kill missed. Batch dragon-b (plan run 39154171045, 2183057): crystals 0/3, every run killed by the fight's own dragon (fireballs, a knock off a pillar); run 1 broke its first crystal from behind its wall for 1 damage and dug back down, then dug down from the second's pillar at once, its own block taken for the spike's edge. Dragon 0/3: from the basin two out, run 2 struck the perched dragon 21 times (200 to 147.5) unhurt until it took off, then waited :no-fountain under a fireball's cloud on the basin until the plan failed, run 3 the same; run 1 slain by an enderman. Batch dragon-c (plan run 39156110792, 71a04c9): crystals 2/3, runs 2 and 3 breaking all ten (869 and 700 s); run 1 broke three, then the fight's dragon smashed its pillar under it, it fell to a stump with a gap under it and, two pillar blocks under the feet no more, walked for the next foot from up there (:no-path) until the plan failed. Dragon 1/3: run 1 a false pass, the gym's kill of the fight's own dragon opening the exit portal in the basin, which the bot walked into (the credits, 25 s in); runs 2 and 3 slain by an enderman the wait for the dragon had stared at over the island's rim, four hits of 3.78 through iron, never fought back, the enderman neutral. Batch dragon-d (plan run 39164095788, cd2dbdd): crystals 3/3 (989, 989 and 580 s). Dragon 1/3: run 2 killed the dragon in 339 s, four endermen fought on the way; runs 1 and 3 backed off from a breath to 8 out and walked back to the stand straight through a fireball's cloud lying between (grown to 5.7), four hits of 6 (magic, through iron) a second apart, a walk ending only by itself. Batch dragon-e (plan run 39178268421, 25d6279): crystals 3/3 (990, 992 and 990 s). Dragon 1/3: run 3 killed the dragon in 368 s; run 1 struck an angry enderman five times (40 to 10), backed away from it under 10 health and was slain by it 53 s in; run 2 stood at the stand two out with the dragon sitting and was touched four times for 6 in two seconds (slain by Ender Dragon, phases 6 and 7): the head looking down at a bot that near brings the neck's box, 5.5 out at level, to about 3 out and over the stand. Batch dragon-f (plan run 39183632770, 3b49427): crystals 3/3 (699, 862 and 928 s). Dragon 1/3: run 1 killed the dragon in 466 s; run 2 was touched by the sitting dragon at the stand again and slain by it 175 s in; run 3 fought three angry endermen in turn and was slain by the third at 270 s."
+  :problem/sources ["docs/issues/10-blazes-pearls-stronghold-end.md"
+                    "brain/siblings/sib-end-and-dragon.md" "brain/bot/plan/dragon.md"
+                    "brain/bot/plan/end-portal.md"]}
  {:problem/stage :real-snapshots
   :problem/issue 299
   :problem/goals []
