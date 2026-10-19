@@ -76,6 +76,8 @@
 (def hop-reach 32)                    ; blocks a walk toward somewhere far goes at a time
 (def hop-rise 12)                     ; blocks over and under the feet a hop's end is looked for in its column
 (def hop-turns [0.0 30.0 -30.0 60.0 -60.0 90.0 -90.0]) ; degrees off the way a hop may turn when straight on has no route
+(def downhill-reaches [32 16 8])      ; blocks toward the frame a walk down the surface goes at a time, the farther first: a slope steeper than a stair's one in one is walked, never staired into the air
+(def downhill-drop 4)                 ; blocks lower than the feet such a walk must end: the ground's bumps are no slope
 (def there 16.0)                      ; blocks on the plane from a point that count as there
 (def rethrow-beyond 48.0)             ; at the crossing with no frame seen, a throw from there when the last was made farther off
 (def explore-reach 64)                ; blocks from the crossing the walks round it go, each loading chunks further out
@@ -549,6 +551,39 @@
     (when (and c (> (max (abs (- x fx)) (abs (- z fz))) start-reach) (<= (abs (- y fy)) hop-rise))
       c)))
 
+(defn downhill
+  "A walk down the surface toward frame [x _ z] from feet under the open sky
+   (terrain/under-sky?): the cell a body stands in (stand-in) downhill-drop or more under the
+   feet, each of downhill-reaches along the way, the farther first, straight on first then
+   turned by each of hop-turns, not one a walk failed at (:plan/blacklist), one a route reaches
+   (intent/routable?); nil when none is, or the feet are not under the sky. A mountain's slope falls faster than a
+   staircase's one in one: stairs cut from it leave it into the air and lay a floor every stair
+   over the valley, a bridge into the sky that ends where the stairs' floor would be a bridge
+   over the valley's water (stairs/over-fluid?). Gym batch stronghold-room-e (plan run
+   39152932850) run 3 of the portal room cut six legs from the mountain at y 120 and left its
+   western slope at y 83 into the open air over a flooded valley, laid a floor a stair down to
+   y 72, fifteen over the water, where every stair was refused and every level step laid one
+   more block of causeway, 32 east, :boxed three times (probes 39158899900, 39159213076)."
+  [world [x _ z]]
+  (let [[fx fy fz :as feet] (intent/feet world)
+        v [(- x fx) (- z fz)]
+        d (norm v)]
+    (when (and (pos? d) (terrain/under-sky? world feet))
+      (some (fn [[r turn]]
+              (let [[ux uz] (rotate [(/ (first v) d) (/ (second v) d)] turn)
+                    r (min r d)
+                    [_ cy _ :as c] (stand-in world
+                                             (long (math/floor (+ fx 0.5 (* r ux))))
+                                             (long (math/floor (+ fz 0.5 (* r uz))))
+                                             fy)
+                    i (when c {:intent/kind :walk :intent/target c :intent/for :stronghold})]
+                (when (and i
+                           (<= cy (- fy downhill-drop))
+                           (not (contains? (:plan/blacklist world #{}) c))
+                           (intent/routable? world i))
+                  i)))
+            (for [r downhill-reaches turn hop-turns] [r turn])))))
+
 (defn stairs-toward
   "A staircase down toward frame f from feet, to height to-y: the stairs' heading is the axis
    with the farther way to go (stairs.clj: it turns where water or lava is, steps aside, and lays
@@ -589,7 +624,10 @@
    start-reach and the open sky over the feet (a lake's, not a cave's), a swim (:cross) to one
    farther (far-start), else back to the ground last walked (walked-ground), never stairs from a
    block in a lake, nor once the way down has begun (the last intent the stairs or the tunnel:
-   batch stronghold-room-d run 2 swam back up from its first leg of stairs); more than deep
+   batch stronghold-room-d run 2 swam back up from its first leg of stairs); standing dry under
+   the open sky with lower ground toward the frame a route reaches, a walk down to it
+   (downhill: a slope is walked, never staired into the air; batch stronghold-room-e run 3 built
+   a bridge off the mountain's slope into the sky over a flooded valley); more than deep
    over the frame, or after a tunnel that got nowhere (tunnel-spent?), a staircase down toward
    it a leg of stair-leg at a time (stairs-toward), never under room-over over the frame; then
    the fortress's tunnel to it, its steps opening no cell by water (fortress/dry?), when its
@@ -608,11 +646,13 @@
                        (terrain/under-sky? world feet)
                        (not (#{:stairs-down :tunnel-to} (:intent/kind (:plan/last world)))))
               (or (far-start world) (walked-ground world)))
+        down (when (and high? (= start feet)) (downhill world f))
         stairs (stairs-toward feet f (max (+ y room-over) (- fy stair-leg)))]
     (cond (:player/in-water? world) {:intent/kind :swim-out :intent/for :retreat}
           (and start (not= start feet))
           {:intent/kind :walk :intent/target start :intent/for :retreat}
           far {:intent/kind :cross :intent/target far :intent/for :stronghold}
+          down down
           (and (> fy (+ y room-over)) (or high? (tunnel-spent? world f))) stairs
           (fortress/choose-move world feet f fortress/climb-past true)
           {:intent/kind :tunnel-to

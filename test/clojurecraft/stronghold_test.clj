@@ -503,3 +503,73 @@
     (is (< (second (:player/pos w)) 48.0) "down by the frame")
     (is (= frame (sim/block-at sim [8 40 8])) "the frame never dug")
     (is (empty? (:sim/violations sim)))))
+
+(defn hill-top
+  "The top stone cell's y of the hill at lx: a plateau at 79 to lx 8, then a slope east falling
+   two a block, steeper than a stair's one in one, to 65 at lx 15."
+  [lx]
+  (if (<= lx 8) 79 (- 79 (* 2 (- lx 8)))))
+
+(def hill-blocks
+  "Stone over the floor making the hill (hill-top), one chunk column of it."
+  (into {} (for [lx (range 16) lz (range 16) y (range 64 (inc (hill-top lx)))] [[lx y lz] 1])))
+
+(deftest a-mountain-is-walked-down-toward-the-frame-before-the-stairs
+  ;; gym batch stronghold-room-e run 3: stairs cut from a mountain's slope left it into the air
+  ;; and laid a bridge into the sky over a flooded valley, :boxed
+  (let [frame (blocks/default-state :end_portal_frame)
+        f [40 20 8]
+        seen (-> (searching [4.5 8.5] [])
+                 (assoc-in [:world/chunks [0 0]] (world/column hill-blocks))
+                 (assoc :player/pos [4.5 80.0 8.5])
+                 (memory/observe f frame))]
+    (testing "on the plateau under the sky, the slope toward the frame lower: a walk down it"
+      (is
+       (= {:intent/kind :walk :intent/target [12 72 8] :intent/for :stronghold}
+          (stronghold/downhill seen f))
+       "32 and 16 along the way the ground is more than hop-rise under the feet; 8 along, the slope")
+      (is (= :walk (:intent/kind (plan/next-intent seen room-row plan/goals)))))
+    (testing "at the slope's foot, nothing lower toward the frame: the stairs"
+      (let [foot (assoc seen :player/pos [16.5 64.0 8.5])]
+        (is (nil? (stronghold/downhill foot f)))
+        (is (= :stairs-down (:intent/kind (plan/next-intent foot room-row plan/goals))))))
+    (testing "under rock, not the sky: the stairs"
+      (let [roofed
+            (assoc-in seen [:world/chunks [0 0]] (world/column (assoc hill-blocks [4 83 8] 1)))]
+        (is (nil? (stronghold/downhill roofed f)))
+        (is (= :stairs-down (:intent/kind (plan/next-intent roofed room-row plan/goals))))))
+    (testing "the cell a walk failed at is not chosen again: the way turned"
+      (is (= [11 74 12]
+             (:intent/target (stronghold/downhill (assoc seen :plan/blacklist #{[12 72 8]}) f)))))))
+
+(deftest the-portal-room-is-reached-down-a-mountain-against-the-model
+  ;; the landing on the hill's plateau 16 over the valley floor, the frame 24 under the floor
+  ;; 36 blocks east: the walk down the slope, the staircase from the foot, the tunnel the last
+  ;; blocks; no floor laid into the air over the slope
+  (let [frame (blocks/default-state :end_portal_frame)
+        cobblestone (blocks/default-state :cobblestone)
+        plain (world/column-bytes {})
+        columns (into {}
+                      (for [cx (range -1 4)
+                            cz (range -1 2)]
+                        [[cx cz]
+                         (case [cx cz]
+                           [0 0] (world/column-bytes hill-blocks)
+                           [2 0] (world/column-bytes {[8 40 8] frame})
+                           plain)]))
+        [w sim] (sim/run main/step
+                         (game/init fx/opts)
+                         (sim/init {:columns columns
+                                    :spawn [4.5 80.0 8.5]
+                                    :inventory
+                                    {[:hotbar 0] {:item (recipe/item-id :iron_pickaxe) :count 1}
+                                     [:hotbar 1] {:item (recipe/item-id :cobblestone) :count 64}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         600000
+                         {:event/kind :go :go/goals [:portal-room]})
+        over-slope (for [lx (range 9 16) y (range (inc (hill-top lx)) 81)] [lx y 8])]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (< (second (:player/pos w)) 48.0) "down by the frame")
+    (is (= frame (sim/block-at sim [40 40 8])) "the frame never dug")
+    (is (not-any? #(= cobblestone (sim/block-at sim %)) over-slope) "no bridge into the air")
+    (is (empty? (:sim/violations sim)))))

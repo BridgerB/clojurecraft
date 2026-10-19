@@ -184,6 +184,36 @@
   (world/column
    (into {} (for [x (range 16) y (range 64 67) z (range 16)] [[x y z] blocks/water-base]))))
 
+(deftest a-descent-over-a-cave-lake-steps-toward-the-nearest-floor
+  ;; gym batch stronghold-room2-a run 3 (issue #265): at y 33 in a cave with a lake sixteen under
+  ;; every stair's floor, the staircase stepped level 32 the way its last turn faced, laying a
+  ;; floor a step, and was :boxed; the shore where a stair went on lay 33 east
+  (let [cave (for [x (range 16) z (range 16) y (range 44 64)] [[x y z] blocks/air])
+        lake (for [x (range 16) z (range 16) y (range 40 44)] [[x y z] blocks/water-base])
+        ledge (for [x (range 12 16) z (range 16)] [[x 58 z] 1])
+        over (fn [blocks]
+               (assoc (standing 60 :iron_pickaxe)
+                      :player/pos [8.5 60.0 8.5]
+                      :plan/intent
+                      {:intent/kind :stairs-down :intent/dir [0 1] :intent/status :active}
+                      :player/inventory
+                      {0 {:item (blocks/items :iron_pickaxe) :count 1}
+                       1 {:item (blocks/items :cobblestone) :count 64}}
+                      :world/chunks
+                      {[0 0] (world/column (into {} (concat cave lake blocks [[[8 59 8] 1]])))}))
+        w (over ledge)
+        i {:intent/kind :stairs-down :intent/dir [0 1]}]
+    (is (= 4 (stairs/floor-distance w [8 60 8] [1 0])) "the ledge's stone, four columns east")
+    (is (nil? (stairs/floor-distance w [8 60 8] [-1 0])) "nothing loaded west")
+    (is (nil? (stairs/floor-distance w [8 60 8] [0 1])) "over the lake south, no floor to lay")
+    (is (= [1 0] (:intent/level-dir (:plan/intent (stairs/step-aside w i))))
+        "the level step toward the ledge, not the way the staircase faced")
+    (is (= (+ stairs/max-level-steps stairs/shore-reach)
+           (stairs/level-step-limit w :stairs-down [8 60 8]))
+        "a floor in sight: steps enough to reach it")
+    (is (= stairs/max-level-steps (stairs/level-step-limit (over []) :stairs-down [8 60 8]))
+        "none in sight: the usual")))
+
 (deftest tunnels-and-climbs-keep-under-dry-ground
   ;; gym batch iron-a8 run 2 tunnelled 260 blocks east at depth, out under the sea, and its stairs
   ;; up met the seabed every way: :boxed three times

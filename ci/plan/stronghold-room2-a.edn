@@ -1,0 +1,18 @@
+;; Issue #265, the way down to the portal room, round 2 (branch feat/265-room2): a mountain's
+;; slope is walked down toward the frame before the stairs, never staired into the air.
+;; The two rows the issue's acceptance still lacks, three landings each.
+{:plans/label "stronghold-room2-a"
+ :plans/jobs 2
+ :plans/issue 265
+ :plans/experiments [{:exp/name "portal-room"
+                      :exp/kind :gym
+                      :exp/goal "portal-room"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 900}
+                     {:exp/name "stronghold"
+                      :exp/kind :gym
+                      :exp/goal "stronghold"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 600}]}
