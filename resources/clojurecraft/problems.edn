@@ -545,7 +545,7 @@
                     "brain/bot/plan/stronghold.md"]}
  {:problem/stage :dragon
   :problem/issue 267
-  :problem/goals [:crystals :dragon]
+  :problem/goals [:crystals :dragon :heal]
   :problem/statement
   "Split from :end-and-dragon. In the End, break the ten end crystals that heal the dragon, each on top of an obsidian spike 76 to 103 high, without dying to the blast a hit sets off, then kill the dragon with the sword while it perches on the fountain, and know from the server that it died."
   :problem/needs

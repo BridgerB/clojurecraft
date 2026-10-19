@@ -716,6 +716,7 @@
              (not (on-spike? world))
              (some? (breath-near world)))
         (and (= :walk (:intent/kind i))
+             (:intent/target i)
              (not (before-head? d pos))
              (bite-on-way? d pos (physics/centre (:intent/target i)))))))
 

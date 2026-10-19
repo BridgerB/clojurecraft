@@ -376,7 +376,7 @@
         "there, the perch")
     (let [perch #(:plan/intent (intent/run (round-fountain %1 %2)
                                            {:intent/kind :perch :intent/target dragon-eid}
-                                           {}))]
+                                           {:event/kind :tick :event/now 1000 :event/rand 0.5}))]
       (is (intent/done? (perch [-1.5 64.0 0.5] (sitting 270.0)))
           "its head turned onto the feet: the perch hands back")
       (is (not (intent/done? (perch [2.5 64.0 0.5] (sitting 270.0)))) "behind it: on"))
