@@ -1,0 +1,18 @@
+;; Issue #263, branch feat/263-warped: an angry enderman given up on keeps the bot in its burrow;
+;; a held engage gives up after hold-timeout-ms; provoke from inside the burrow when it can.
+;; pearls-12 is the stage (pearls-warped-b: 0/3, two slain stepping out); pearls-1-live guards the arena.
+{:plans/label "pearls-warped-c"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
