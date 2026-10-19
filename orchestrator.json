@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-19T09:05:54.530Z",
+  "at" : "2026-10-19T09:08:14.730Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -69,6 +69,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 342,
+    "title" : "Bot stops at furnace: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim" ],
@@ -87,11 +92,6 @@
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 342,
-    "title" : "Bot stops at furnace: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 66,
@@ -196,11 +196,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 228,
-    "move" : "ready",
-    "pr" : 435,
-    "at" : "2026-10-18T07:54:02.791Z"
-  }, {
     "issue" : 228,
     "move" : "nudge",
     "pr" : 435,
@@ -1553,5 +1548,9 @@
     "issue" : 338,
     "move" : "assign",
     "at" : "2026-10-19T09:05:54.530Z"
+  }, {
+    "issue" : 338,
+    "move" : "assign",
+    "at" : "2026-10-19T09:08:14.730Z"
   } ]
 }
