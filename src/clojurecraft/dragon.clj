@@ -23,13 +23,17 @@
    16 by 8 box whose feet are on the fountain's pillar: :fight's reach to an aim point over its
    feet is never met from a floor, the server's own test is to the box). The dragon's breath and
    fireballs (area_effect_cloud, dragon_fireball) within their breath-reach are backed away from
-   (combat's :back-off). Not done: the cages round two spikes (the strike through their bars is
-   unproven; the gym takes them away), the bridge from the End's platform to the main island,
-   and the exit portal."
+   (combat's :back-off). The sitting dragon's head and neck hurt what they touch, so the wait is
+   behind its body (its yaw, :entity/yaw), re-chosen as it turns, and a walk goes round the head
+   (around); every look of the row's intents is turned from an enderman's eyes (look-away,
+   plan/steer); in a lull, the bot eats for health back (the :heal row). Not done: the cages
+   round two spikes (the strike through their bars is unproven; the gym takes them away), the
+   bridge from the End's platform to the main island, and the exit portal."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -75,6 +79,16 @@
 (def breath-radius 5.0)               ; a breath cloud's radius when its metadata has not said: the sitting dragon's flame cloud (DragonSittingFlamingPhase)
 (def breath-margin 1.5)               ; blocks beyond a breath cloud's radius (:entity/radius: a fireball's grows from 3 to 7) the bot keeps
 (def breath-kinds #{:area_effect_cloud :dragon_fireball})
+(def behind-by 1.0)                   ; blocks behind the sitting dragon's body (along its facing, mob/ahead) a stand must be: out of its head's and neck's way
+(def leave-by 0.5)                    ; blocks behind it the feet may come to, the dragon turning, before the :perch hands back for another stand
+(def clear-across 3.3)                ; blocks across its facing a way must keep: the neck's box (mob/bite-across), the body's half width, a half block
+(def way-step 0.5)                    ; blocks between the samples of a way tested for the head
+(def side-out 5.0)                    ; blocks across its facing a way round the head goes out to
+(def side-clear 3.8)                  ; blocks across its facing the feet must be at before the way round goes along
+(def side-margin 1.0)                 ; blocks past the head's reach and behind the stands' line the way round turns at
+(def heal-below 18)                   ; food under this stops natural regeneration (FoodData.tick): eat in the End's lulls
+(def calm-radius 8.0)                 ; blocks from the feet no hostile may be for a lull
+(def full-health 20.0)                ; the player's health when nothing is left to heal
 
 ;; ---------------------------------------------------------------- what is shown
 
@@ -409,6 +423,70 @@
     (cond phase (contains? sitting-phases phase)
           :else (and (<= (math/hypot (- x fx) (- z fz)) perch-radius) (< y perch-below)))))
 
+(defn turned?
+  "Does the dragon e sit on its perch (perched?) with a yaw the server said (:entity/yaw): then
+   its head and neck are on one side of it (mob/facing)."
+  [e]
+  (boolean (and e (:entity/yaw e) (perched? e))))
+
+(defn behind?
+  "Is point p at least by blocks behind the sitting dragon e's body along its facing (mob/ahead):
+   out of its head's and neck's way, whatever their pitch? True whenever e is not turned?: a
+   flying dragon's head is not at its perch. Gym dragon-e run 2 and dragon-f run 2: slain two
+   blocks from the fountain in front of the sitting dragon's head, four touches of 6 in two
+   seconds."
+  [e p by]
+  (or (not (turned? e)) (<= (first (mob/ahead (:entity/pos e) (:entity/yaw e) p)) (- by))))
+
+(defn in-bite?
+  "Has the sitting dragon e turned its head onto point p: p not leave-by behind its body
+   (behind?) and within mob/bite-out of it on the plane?"
+  [e p]
+  (and (not (behind? e p leave-by)) (< (mob/flat-distance (:entity/pos e) p) mob/bite-out)))
+
+(defn before-head?
+  "Is point p where the sitting dragon e's head and neck may come (turned?): along its facing
+   from leave-by behind its body out to mob/bite-out, within clear-across of it?"
+  [e p]
+  (and (turned? e)
+       (let [[along across] (mob/ahead (:entity/pos e) (:entity/yaw e) p)]
+         (and (<= (- leave-by) along mob/bite-out) (<= (abs across) clear-across)))))
+
+(defn bite-on-way?
+  "Does the straight way on the plane from point a to point b pass before the sitting dragon e's
+   head (before-head?, sampled every way-step)?"
+  [e a b]
+  (let [n (max 1 (long (math/ceil (/ (physics/horizontal-distance a b) way-step))))]
+    (boolean (and (turned? e)
+                  (some (fn [k]
+                          (let [t (/ (double k) n)]
+                            (before-head? e (mapv #(+ %1 (* t (- %2 %1))) a b))))
+                        (range (inc n)))))))
+
+(defn around
+  "The point [x z] a walk from pos to point b goes by first while the straight way passes before
+   the sitting dragon e's head (bite-on-way?), or nil when it does not: with the feet less than
+   side-clear beside its facing, side-out out on their side, no nearer along it than side-margin
+   past its head's reach (straight out when nearer); else side-out beside it, side-margin behind
+   the stands' line (behind-by), from where the way to a stand behind the body is clear. A bot
+   coming back from a back-off or its arrival in front of the perched dragon walked straight
+   under its head to a stand behind it."
+  [e pos b]
+  (when (bite-on-way? e pos b)
+    (let [[along across] (mob/ahead (:entity/pos e) (:entity/yaw e) pos)
+          side (if (neg? across) (- side-out) side-out)]
+      (mob/beside (:entity/pos e)
+                  (:entity/yaw e)
+                  (cond (< (abs across) side-clear) [(min along (+ mob/bite-out side-margin)) side]
+                        :else [(- (+ behind-by side-margin)) side])))))
+
+(defn ground-cell
+  "The feet cell on the ground of the column under point [x z], or nil when none is loaded."
+  [world [x z]]
+  (let [cx (long (math/floor x))
+        cz (long (math/floor z))]
+    (when-let [y (ground world cx cz sky)] [cx y cz])))
+
 (defn breath-reach
   "Blocks on the plane from breath e's centre the bot keeps out of: its radius (:entity/radius,
    breath-radius when its metadata has not said) and breath-margin. Gym dragon-d runs 1 and 3
@@ -473,8 +551,10 @@
   ;; {:intent/kind :perch :intent/target eid}: the best sword in hand, then by the fountain facing
   ;; the dragon (look-away: never into an enderman's eyes); once it has held perched (perched?)
   ;; for perch-ticks, hit it while its box is in reach, walking in toward the fountain while it
-  ;; is not (no nearer than walk-in-to). Done when it is gone (dead), a breath is near (the
-  ;; planner backs off) or after perch-hold-ms (the planner looks again)
+  ;; is not (no nearer than walk-in-to, and never under its head: bite-on-way?). Done when it is
+  ;; gone (dead), a breath is near (the planner backs off), its head has turned onto the feet
+  ;; (in-bite?: the planner finds a stand behind it) or after perch-hold-ms (the planner looks
+  ;; again)
   [world {:intent/keys [target stage perched] :or {perched 0} :as i} _]
   (let [now (:time/now world)
         e (get-in world [:world/entities target])
@@ -484,6 +564,7 @@
         sat? (>= perched perch-ticks)]
     (cond (or (entity/gone? world target)
               (breath-near world)
+              (in-bite? e (:player/pos world))
               (> (- now (:intent/since i)) perch-hold-ms))
           (-> world
               (assoc :player/controls {})
@@ -492,36 +573,41 @@
           (case (window/waiting world i)
             :overdue (window/lost world i :arm)
             :waiting world
-            (cond (:intent/resync i) (window/resync world (window/view world :inventory))
-                  (= :arm (:intent/stage i)) (arm world)
-                  (and sat? (<= (reach world e) strike-reach)) (hit world target e)
-                  (and sat?
-                       (> (from-fountain world) walk-in-to)
-                       (not (breath-on-way? world
-                                            (:player/pos world)
-                                            (let [[fx fz] fountain] [fx 0.0 fz]))))
-                  (let [[fx fz] fountain]
-                    (assoc world
-                           :player/controls
-                           (update (intent/toward world [fx (physics/y-of (game/eye world)) fz] 0.0)
-                                   :control/look
-                                   #(look-away world %))))
-                  :else
-                  (assoc world
-                         :player/controls
-                         {:control/look (look-away world
-                                                   (physics/look-at (game/eye world)
-                                                                    (:entity/pos e)))}))))))
+            (cond
+              (:intent/resync i) (window/resync world (window/view world :inventory))
+              (= :arm (:intent/stage i)) (arm world)
+              (and sat? (<= (reach world e) strike-reach)) (hit world target e)
+              (and sat?
+                   (> (from-fountain world) walk-in-to)
+                   (not
+                    (breath-on-way? world (:player/pos world) (let [[fx fz] fountain] [fx 0.0 fz])))
+                   (not (bite-on-way? e (:player/pos world) (let [[fx fz] fountain] [fx 0.0 fz]))))
+              (let [[fx fz] fountain]
+                (assoc world
+                       :player/controls
+                       (update (intent/toward world [fx (physics/y-of (game/eye world)) fz] 0.0)
+                               :control/look
+                               #(look-away world %))))
+              :else
+              (assoc world
+                     :player/controls
+                     {:control/look
+                      (look-away world (physics/look-at (game/eye world) (:entity/pos e)))}))))))
 
 (defn fountain-stand
   "The feet cell on the ground stand-from out from the fountain along the axis nearest the feet,
-   none within breath-reach of a breath cloud or fireball, where the bot waits for the dragon to
-   perch, or nil when no such column has ground loaded. In the exit portal's basin beside the
-   pillar: the perched dragon turns its face to the bot, its head 6.5 out from the pillar and its
-   neck 5.5, each hurting what it touches; gym dragon-a stood five out, under the head, and died
-   in two seconds of its perch, its five hits 2.5 each on the body."
+   none within breath-reach of a breath cloud or fireball and, while the dragon sits there turned
+   (turned?), none short of behind-by behind its body (behind?), where the bot waits for the
+   dragon to perch, or nil when no such column has ground loaded. In the exit portal's basin
+   beside the pillar: the perched dragon turns its face to the bot, its head 6.5 out from the
+   pillar and its neck 5.5, each hurting what it touches; gym dragon-a stood five out, under the
+   head, and died in two seconds of its perch, its five hits 2.5 each on the body; dragon-e and
+   dragon-f stood two out in front of the head lowered to them, and died the same way. Behind
+   the body only the tail is, which hurts nothing; the nearest stand behind is re-chosen as the
+   dragon turns (the :perch hands back when its head comes onto the feet, in-bite?)."
   [world]
   (let [[fx fz] fountain
+        [_ d] (dragon world)
         clouds (vals (breaths world))]
     (->> [[1 0] [-1 0] [0 1] [0 -1]]
          (keep (fn [[dx dz]]
@@ -532,6 +618,7 @@
                    (some #(<= (physics/horizontal-distance (physics/centre c) (:entity/pos %))
                               (breath-reach %))
                          clouds)))
+         (filter #(behind? d (physics/centre %) behind-by))
          (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
          first)))
 
@@ -542,10 +629,12 @@
    under a breath, or one on the straight way to the stand (breath-on-way?), the :perch where
    the feet are (gym dragon-b: a fireball's cloud on the basin after the dragon took off, and
    the plan waited :no-fountain until it failed; gym dragon-d: the walk back to the stand went
-   through a fireball's cloud lying between and died in it). A wait :no-fountain with no ground
-   round the fountain loaded, :no-dragon with no dragon shown."
+   through a fireball's cloud lying between and died in it). With no stand and the sitting
+   dragon's head on the feet (in-bite?), combat's :back-off from it. A wait :no-fountain with no
+   ground round the fountain loaded, :no-dragon with no dragon shown. A walk to the stand while
+   the sitting dragon's head is on the straight way goes round it first (around)."
   [world]
-  (let [[eid] (dragon world)
+  (let [[eid d] (dragon world)
         pos (:player/pos world)
         breath (breath-near world)
         stand (fountain-stand world)
@@ -553,13 +642,42 @@
         blocked? (and far? (breath-on-way? world pos (physics/centre stand)))]
     (cond (or (seq (crystals world)) (on-pillar? world) (on-spike? world)) (toward-crystals world)
           breath {:intent/kind :back-off :intent/target (first breath)}
+          (and (nil? stand) eid (in-bite? d pos)) {:intent/kind :back-off :intent/target eid}
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
           {:intent/kind :perch :intent/target eid}
           (nil? stand) {:plan/wait :no-fountain}
           (and blocked? eid) {:intent/kind :perch :intent/target eid}
-          far? (standing-walk stand)
+          far?
+          (standing-walk (or (some->> (around d pos (physics/centre stand))
+                                      (ground-cell world))
+                             stand))
           (nil? eid) {:plan/wait :no-dragon}
           :else {:intent/kind :perch :intent/target eid})))
+
+;; ---------------------------------------------------------------- a lull
+
+(defn lull?
+  "Is the End quiet round the feet: no breath near (breath-near), the dragon not sitting on its
+   perch (perched?), and no hostile (entity/hostiles) within calm-radius?"
+  [world]
+  (let [[_ d] (dragon world)]
+    (and (nil? (breath-near world))
+         (not (and d (perched? d)))
+         (nil? (entity/nearest (entity/hostiles world) (:player/pos world) calm-radius)))))
+
+(defn heal-food
+  "The name of the food to eat now for health back in the End (eat/food-held), or nil: the bot
+   hurt (under full-health), its food under heal-below, where the body stops healing by itself
+   and the :eat row (under eat/hungry-below) does not yet eat, in a lull (lull?). The hand-off
+   of gym dragon-f: a bot with sixteen steak fought on hurt and unhealed."
+  [world]
+  (when (and (:player/pos world)
+             (= dimension/end (dimension/of world))
+             (< (:player/health world full-health) full-health)
+             (some-> (:player/food world)
+                     (< heal-below))
+             (lull? world))
+    (eat/food-held world)))
 
 ;; ---------------------------------------------------------------- the goals
 
@@ -587,12 +705,35 @@
 (defmethod plan/interrupts? :dragon
   ;; any running intent but a :back-off ends when a breath is near (breath-near) and the feet are
   ;; down off the pillars and spikes: gym dragon-d runs 1 and 3 walked into a fireball's cloud
-  ;; and died in it, six a second, nothing else ending a walk
+  ;; and died in it, six a second, nothing else ending a walk; and a walk whose straight way
+  ;; passes before the sitting dragon's head (bite-on-way?), unless the feet are there already
+  ;; (the walk out from it)
   [world _ i]
-  (and (not= :back-off (:intent/kind i))
-       (not (on-pillar? world))
-       (not (on-spike? world))
-       (some? (breath-near world))))
+  (let [[_ d] (dragon world)
+        pos (:player/pos world)]
+    (or (and (not= :back-off (:intent/kind i))
+             (not (on-pillar? world))
+             (not (on-spike? world))
+             (some? (breath-near world)))
+        (and (= :walk (:intent/kind i))
+             (not (before-head? d pos))
+             (bite-on-way? d pos (physics/centre (:intent/target i)))))))
+
+(defmethod plan/steer :dragon
+  ;; every look the row's intents make, a walk's and a back-off's as well as the perch's, turned
+  ;; from an enderman's eyes (look-away): gym dragon-f run 3 stared at three endermen in turn on
+  ;; its walks to and from the stand and was slain by the third, dragon-e run 1 at one on its
+  ;; first walk there; a walk steers by :control/yaw, so the look's pitch is free
+  [world _]
+  (if-let [look (:control/look (:player/controls world))]
+    (assoc-in world [:player/controls :control/look] (look-away world look))
+    world))
+
+(defmethod plan/done-by :healed? [world _] (nil? (heal-food world)))
+
+(defmethod plan/next-intent :heal
+  [world _ _]
+  (when-let [n (heal-food world)] {:intent/kind :eat :intent/item n}))
 
 (defmethod plan/next-intent :dragon
   [world _ _]

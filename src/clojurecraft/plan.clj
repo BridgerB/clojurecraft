@@ -121,7 +121,15 @@
   {:arglists '([world goal i])}
   (fn [_world goal _i] (:goal/plan goal :needs)))
 
+(defmulti steer
+  "The world with the controls its running intent set this tick as goal, the row the intent
+   serves, would have them: a row's own rule over every look its intents make, whatever their
+   kind. Keyed by :goal/plan; the controls as they are by default."
+  {:arglists '([world goal])}
+  (fn [_world goal] (:goal/plan goal :needs)))
+
 (defmethod interrupts? :default [_ _ _] false)
+(defmethod steer :default [world _] world)
 
 (defmethod done-by :default [_ _] false)
 (defmethod act :default [_ goal] {:plan/wait [:no-act (:goal/act goal)]})
@@ -398,10 +406,19 @@
           (:plan/wait next) (wait world (:plan/wait next))
           :else (start-intent world (assoc next :intent/goal (:goal/id goal))))))
 
+(defn steered
+  "The world after steer by the row of table the running intent serves (:intent/goal), or as it
+   is with no intent running."
+  [world table]
+  (let [id (:intent/goal (:plan/intent world))
+        goal (when id (some #(when (= id (:goal/id %)) %) table))]
+    (if goal (steer world goal) world)))
+
 (defn step-over
   "The planner over a goal table (docs/RICH-HICKEY.md: \"(plan world goals) → intent\"), as a reducer
    composed after game/step: :go begins a plan, :tick advances it. Nothing here reads a table
-   from anywhere but its argument."
+   from anywhere but its argument. Each tick's controls are steered by the running intent's row
+   (steered)."
   [table world {:event/keys [kind] :as event}]
   (case kind
     :go
@@ -410,7 +427,7 @@
         (game/say "go"))
     :tick
     (case (:plan/status world)
-      :active (plan-tick world event table)
+      :active (steered (plan-tick world event table) table)
       :landing (landing-tick world)
       world)
     world))

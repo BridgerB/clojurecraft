@@ -353,30 +353,38 @@
 
 (defmethod on-packet [:play :add-entity]
   ;; every entity, not only items (issue #258): mobs, players, projectiles, an eye of ender; its
-  ;; velocity when the packet carries one (a recording from before the spec grew does not)
-  [w {:keys [entity-id type x y z vel]}]
+  ;; velocity and yaw when the packet carries them (a recording from before the spec grew does not)
+  [w {:keys [entity-id type x y z vel yaw]}]
   (assoc-in w
    [:world/entities entity-id]
    (cond-> {:entity/type type :entity/pos [x y z] :entity/seen-at (:time/now w)}
-     vel (assoc :entity/vel vel))))
+     vel (assoc :entity/vel vel)
+     yaw (assoc :entity/yaw (entity/angle yaw)))))
+(defn turn
+  "w with tracked entity eid's yaw set to deg, when the packet said one (a recording from before
+   the spec grew does not)."
+  [w eid deg]
+  (cond-> w deg (track eid assoc :entity/yaw (double deg))))
 (defmethod on-packet [:play :set-entity-motion]
   [w {:keys [entity-id vel]}]
   (track w entity-id assoc :entity/vel vel))
 (defmethod on-packet [:play :teleport-entity]
   ;; position and velocity, each axis relative when its Relative bit says so (X 1 Y 2 Z 4, the
   ;; deltas 32 64 128), as the player's own teleport reads them
-  [w {:keys [entity-id x y z dx dy dz flags]}]
+  [w {:keys [entity-id x y z dx dy dz yaw flags]}]
   (track w
          entity-id
          (fn [e]
            (let [[ox oy oz] (:entity/pos e)
                  [ovx ovy ovz] (:entity/vel e [0.0 0.0 0.0])]
-             (assoc e
-                    :entity/pos
-                    [(relative flags 1 ox x) (relative flags 2 oy y) (relative flags 4 oz z)]
-                    :entity/vel
-                    [(relative flags 32 ovx dx) (relative flags 64 ovy dy)
-                     (relative flags 128 ovz dz)])))))
+             (cond-> (assoc e
+                            :entity/pos
+                            [(relative flags 1 ox x) (relative flags 2 oy y)
+                             (relative flags 4 oz z)]
+                            :entity/vel
+                            [(relative flags 32 ovx dx) (relative flags 64 ovy dy)
+                             (relative flags 128 ovz dz)])
+               yaw (assoc :entity/yaw (double (relative flags 8 (:entity/yaw e 0.0) yaw))))))))
 (defmethod on-packet [:play :entity-event]
   ;; status 3 is a living entity's death: a fact before the body is removed; the dragon's is the
   ;; run's win (issue #267)
@@ -394,12 +402,22 @@
   [w {:keys [entity-id dx dy dz]}]
   (move-entity w entity-id dx dy dz))
 (defmethod on-packet [:play :move-entity-pos-rot]
-  [w {:keys [entity-id dx dy dz]}]
-  (move-entity w entity-id dx dy dz))
+  [w {:keys [entity-id dx dy dz yaw]}]
+  (-> (move-entity w entity-id dx dy dz)
+      (turn entity-id
+            (some-> yaw
+                    entity/angle))))
+(defmethod on-packet [:play :move-entity-rot]
+  [w {:keys [entity-id yaw]}]
+  (turn w
+        entity-id
+        (some-> yaw
+                entity/angle)))
 (defmethod on-packet [:play :entity-position-sync]
-  [w {:keys [entity-id x y z]}]
+  [w {:keys [entity-id x y z yaw]}]
   (if (get-in w [:world/entities entity-id])
-    (assoc-in w [:world/entities entity-id :entity/pos] [x y z])
+    (-> (assoc-in w [:world/entities entity-id :entity/pos] [x y z])
+        (turn entity-id yaw))
     w))
 (defmethod on-packet [:play :remove-entities]
   ;; the dragon removed near the bot with no boss bar shown is dead (entity/dragon-gone?)

@@ -86,6 +86,7 @@
          with-mobs
          frame-takes-eye
          perch
+         bite
          told)
 
 (def player-eid 1)                    ; the player's entity id, as the model's login gives it
@@ -234,9 +235,10 @@
    spawn at night and in the dark, and animals stand on newly loaded chunks), and :mobs
    [{:type kind :pos [x y z]}] (a fixture's mobs, mob/kinds, sent at login and never despawned),
    :stronghold [x y z] (where a thrown eye flies toward; absent, an eye is not thrown) and :end
-   {:columns {[cx cz] bytes} :dragon [x y z] :crystals [[x y z] ...]} (the End an end portal
-   leads to: its columns, a void when absent, where the dragon perches, the fountain's top when
-   absent, and its crystals, one on every spike when absent)."
+   {:columns {[cx cz] bytes} :dragon [x y z] :dragon-yaw deg :crystals [[x y z] ...]} (the End
+   an end portal leads to: its columns, a void when absent, where the dragon perches, the
+   fountain's top when absent, the way it faces, its head harmless when absent, and its
+   crystals, one on every spike when absent)."
   [{:keys [column columns decoded view-distance spawn keep-alive-every drop-clicks drop-breaks
            inventory lag-ticks slow-breaks respawn seed tick-seed kill-at dimension nether food
            difficulty day-time mobs stronghold end]
@@ -2034,20 +2036,32 @@
   [sim]
   (fn [c] (let [id (block-at sim c)] (or (nil? id) (blocks/solid? id)))))
 
+(defn yaw-byte
+  "The byte add-entity carries yaw degrees in: 1/256 turns, -128 to 127."
+  [yaw]
+  (let [b (mod (math/round (* yaw (/ 256.0 360.0))) 256)] (if (> b 127) (- b 256) b)))
+
 (defn add-mob
   "The model with a mob of kind standing at pos: its own entity id and the kind's full health,
    the client told (add-entity, then its health). With :persistent? in opts it never despawns
-   (a fixture's, a chunk's animals)."
-  [sim kind [x y z :as pos] {:keys [persistent?]}]
+   (a fixture's, a chunk's animals); with :yaw it faces that way, told in the add-entity's
+   rotation (the dragon's head, mob/bitten?)."
+  [sim kind [x y z :as pos] {:keys [persistent? yaw]}]
   (let [eid (:sim/next-eid sim)
-        health (:health (mob/kinds kind))]
+        health (:health (mob/kinds kind))
+        add
+        {:packet/name :add-entity :entity-id eid :uuid nil :type (mob/type-id kind) :x x :y y :z z}]
     (->
       sim
       (assoc :sim/next-eid (inc eid))
       (assoc-in [:sim/mobs eid]
-                (cond-> {:type kind :pos pos :health health} persistent? (assoc :persistent? true)))
+                (cond-> {:type kind :pos pos :health health}
+                  persistent? (assoc :persistent? true)
+                  yaw (assoc :yaw (double yaw))))
       (send
-       {:packet/name :add-entity :entity-id eid :uuid nil :type (mob/type-id kind) :x x :y y :z z})
+       (cond-> add
+         yaw
+         (assoc :vel [0.0 0.0 0.0] :pitch 0 :yaw (yaw-byte yaw) :head-yaw (yaw-byte yaw) :data 0)))
       (send (health-data eid health)))))
 
 (defn with-mobs
@@ -2347,7 +2361,7 @@
         over (* physics/tick-ms (if (= :ender_dragon type) mob/dragon-death-ticks mob/death-ticks))]
     (cond (nil? m) sim
           dead-at (cond-> sim (>= (- (:sim/now sim) dead-at) over) (remove-mob eid))
-          (:perched k) (perch sim eid)
+          (:perched k) (perch (bite sim eid) eid)
           (or (:passive k) (:crystal k)) sim
           :else
           (let [sim (burn sim eid)
@@ -2589,7 +2603,7 @@
    perched at :sim/end's :dragon (the fountain's top when absent) and a crystal on every spike
    (:sim/end's :crystals, end/spikes' when absent)."
   [sim]
-  (let [{:keys [columns dragon crystals]} (:sim/end sim)
+  (let [{:keys [columns dragon dragon-yaw crystals]} (:sim/end sim)
         [x y z] end/spawn
         platform (end/platform)
         sim (-> sim
@@ -2624,7 +2638,9 @@
                           (send sim {:packet/name :block-update :pos c :state state}))
                         sim
                         (sort-by key platform))
-                (add-mob :ender_dragon (or dragon [0.5 65.0 0.5]) {:persistent? true}))
+                (add-mob :ender_dragon
+                         (or dragon [0.5 65.0 0.5])
+                         (cond-> {:persistent? true} dragon-yaw (assoc :yaw dragon-yaw))))
             (or crystals (map end/crystal-at end/spikes)))))
 
 (defn through-end-portal
@@ -2636,9 +2652,23 @@
           (= end/portal (block-at sim (mob/cell-of (update pos 1 + 0.1)))) (arrive-end sim)
           :else sim)))
 
+(defn bite
+  "The perched dragon eid's head and neck: with a yaw, a player within them (mob/bitten?) is hurt
+   mob/bite-damage, scaled by the difficulty and its armour, every mob/bite-every ticks (the
+   tick's sync-health tells it)."
+  [sim eid]
+  (let [{:keys [pos yaw attack-at]} (get-in sim [:sim/mobs eid])
+        player (:sim/player-pos sim)
+        now (:sim/now sim)]
+    (cond (not (and yaw player (mob/bitten? pos yaw player) (>= now (or attack-at 0)))) sim
+          :else
+          (-> sim
+              (assoc-in [:sim/mobs eid :attack-at] (+ now (* mob/bite-every physics/tick-ms)))
+              (hurt (armoured sim (mob/scaled mob/bite-damage (:sim/difficulty sim))) true)))))
+
 (defn perch
-  "The perched dragon's tick: while any crystal stands, one health back every dragon-heal-every
-   ticks up to its kind's full health, told (set-entity-data)."
+  "The perched dragon's tick: its bite, and while any crystal stands, one health back every
+   dragon-heal-every ticks up to its kind's full health, told (set-entity-data)."
   [sim eid]
   (let [{:keys [health]} (get-in sim [:sim/mobs eid])
         full-health (:health (mob/kinds :ender_dragon))

@@ -570,6 +570,8 @@
    "The pillar goes up the first column out from the spike's top layer along that axis, never nearer than the stand: on a spike of radius 2 its top is the stand"
    "Everything is read from the world each tick (the nearest crystal, its approach, whether the feet stand on two pillar blocks or three obsidian), so a death or a reload resumes where the world says and nothing records progress"
    "The bot waits for the perch in the exit portal's basin two out from the pillar: the sitting dragon turns its face to the bot, its head 6.5 out and its neck 5.5, and both hurt what they touch"
+   "While the dragon sits, the stand is one behind its body (its yaw, :entity/yaw, the head along (sin yaw, -cos yaw)), re-chosen when the head comes onto the feet, and a walk goes round the head, never under it: two out in front, the head lowered to the bot brings the neck over the stand"
+   "Every look of the dragon row's intents, walks and back-offs too, is turned from an enderman's eyes (plan/steer); in a lull the bot eats for health back under food 18 (the :heal row)"
    "The perched dragon is struck by its box, not by :fight's aim point: the server tests an attack's reach to the box, and an aim point over feet on the fountain's pillar is out of reach from every floor"
    "The gym takes the cages away and puts a crystal on each spike's bedrock with the dragon gone, so the crystals row measures the pillar and the strike; the dragon row has no crystals and a summoned dragon (DragonPhase 0, which the End's fight takes for its own on the bot's arrival)"]
   :problem/done

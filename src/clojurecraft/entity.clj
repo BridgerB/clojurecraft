@@ -91,6 +91,11 @@
       (and (= :ender_dragon (blocks/entity-names type-id)) (int? phase))
       (assoc :entity/phase phase))))
 
+(defn angle
+  "Degrees of an angle the server sends as a byte, in 1/256 turns (add-entity, the moves)."
+  [b]
+  (* (double b) (/ 360.0 256.0)))
+
 (defn creepy?
   "Has the server said enderman e has a target (:entity/creepy?): it is coming for someone,
    most likely the bot that stared at it or hit it."

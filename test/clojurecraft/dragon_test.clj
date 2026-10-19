@@ -1,7 +1,9 @@
 (ns clojurecraft.dragon-test
   "The dragon (issue #267): a crystal's approach beside its spike, the planner's pillar, wall,
-   strike and way down, the climb's jump and block, the win as the server says it, and the whole
-   bot against the model's End breaking a crystal and killing the perched dragon."
+   strike and way down, the climb's jump and block, the win as the server says it, the wait
+   behind the sitting dragon's head and the way round it, every look away from an enderman's
+   eyes, the meal in a lull, and the whole bot against the model's End breaking a crystal and
+   killing the perched dragon, from behind its head when it faces the way in."
   (:require [clojure.math :as math]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
@@ -11,6 +13,7 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
+            [clojurecraft.intent :as intent]
             [clojurecraft.main :as main]
             [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
@@ -256,6 +259,181 @@
          (plan/interrupts? (w (cloud [7.5 64.0 9.5])) {:goal/plan :dragon} {:intent/kind :walk}))
         "none near: the walk goes on")))
 
+;; ---------------------------------------------------------------- the sitting dragon's head
+
+(deftest the-dragon-turns-by-the-servers-word
+  (let [added (told (standing {} [0.5 64.0 0.5] {} {})
+                    {:packet/name :add-entity
+                     :entity-id 41
+                     :uuid (random-uuid)
+                     :type (mob/type-id :ender_dragon)
+                     :x 0.5
+                     :y 66.0
+                     :z 0.5
+                     :vel [0.0 0.0 0.0]
+                     :pitch 0
+                     :yaw 64
+                     :head-yaw 64
+                     :data 0})
+        yaw #(get-in % [:world/entities 41 :entity/yaw])]
+    (is (= 90.0 (yaw added)) "a quarter turn, in 1/256 turns")
+    (is (= -90.0
+           (yaw
+            (told
+             added
+             {:packet/name :move-entity-rot :entity-id 41 :yaw -64 :pitch 0 :on-ground false}))))
+    (is (= 0.0
+           (yaw (told added
+                      {:packet/name :move-entity-pos-rot
+                       :entity-id 41
+                       :dx 0
+                       :dy 0
+                       :dz 0
+                       :yaw 0
+                       :pitch 0
+                       :on-ground false}))))
+    (is (= 90.0
+           (yaw (told added
+                      {:packet/name :move-entity-pos-rot :entity-id 41 :dx 4096 :dy 0 :dz 0})))
+        "a move recorded before the spec grew: the yaw kept")
+    (is (= 45.0
+           (yaw (told added
+                      {:packet/name :entity-position-sync
+                       :entity-id 41
+                       :x 0.5
+                       :y 66.0
+                       :z 0.5
+                       :dx 0.0
+                       :dy 0.0
+                       :dz 0.0
+                       :yaw 45.0
+                       :pitch 0.0
+                       :on-ground false}))))
+    (is (= 100.0
+           (yaw (told added
+                      {:packet/name :teleport-entity
+                       :entity-id 41
+                       :x 0.0
+                       :y 0.0
+                       :z 0.0
+                       :dx 0.0
+                       :dy 0.0
+                       :dz 0.0
+                       :yaw 10.0
+                       :pitch 0.0
+                       :flags 15
+                       :on-ground false})))
+        "a teleport's yaw relative by its flag")))
+
+(defn near?
+  "Are two [x z] pairs equal to within a billionth?"
+  [a b]
+  (every? #(< (abs %) 1.0e-9) (map - a b)))
+
+(deftest the-sitting-dragons-head-is-along-its-yaw
+  (is (near? [0.0 1.0] (mob/facing 180.0)) "EnderDragon.aiStep's head part at (sin yaw, −cos yaw)")
+  (is (near? [1.0 0.0] (mob/facing 90.0)))
+  (is (near? [2.0 -1.0] (mob/ahead [0.5 66.0 0.5] 90.0 [2.5 64.0 -0.5]))
+      "along it, and across it to the right: negative")
+  (is (near? [2.5 -0.5] (mob/beside [0.5 66.0 0.5] 90.0 [2.0 -1.0])) "and back")
+  (is (mob/bitten? [0.5 66.0 0.5] 90.0 [2.5 64.0 0.5]) "two out in front: under the neck")
+  (is (not (mob/bitten? [0.5 66.0 0.5] 90.0 [-1.5 64.0 0.5])) "two out behind: the tail")
+  (is (not (mob/bitten? [0.5 66.0 0.5] 90.0 [2.5 64.0 4.0])) "beside, past the neck's box")
+  (is (not (mob/bitten? [0.5 66.0 0.5] 90.0 [2.5 58.0 0.5])) "far under it"))
+
+(defn round-fountain
+  "A bot at pos seeing the entities, over the floor of the four chunks round the fountain."
+  [pos entities]
+  (assoc (standing {} pos {} entities)
+         :world/chunks
+         (into {} (for [cx [-1 0] cz [-1 0]] [[cx cz] (world/column {})]))))
+
+(defn sitting
+  "The dragon sitting on the fountain (phase 6) facing yaw."
+  [yaw]
+  {dragon-eid {:entity/type (mob/type-id :ender_dragon)
+               :entity/pos [0.5 66.0 0.5]
+               :entity/phase 6
+               :entity/yaw yaw}})
+
+(deftest the-wait-is-behind-the-sitting-dragons-head
+  ;; gym dragon-e run 2 and dragon-f run 2: slain at the stand two out in front of the sitting
+  ;; dragon's head, four touches of 6 in two seconds
+  (let [at #(dragon/toward-dragon (round-fountain %1 %2))]
+    (is (= (dragon/standing-walk [-2 64 0]) (at [-12.5 64.0 0.5] (sitting 90.0)))
+        "behind it, the stand behind")
+    (is (= (dragon/standing-walk [-2 64 0])
+           (at [-12.5 64.0 0.5] (assoc-in (sitting 270.0) [dragon-eid :entity/phase] 0)))
+        "flying: the nearest stand")
+    (testing "facing the bot: round its head to the stand behind it"
+      (is (= (dragon/standing-walk [-9 64 -5]) (at [-12.5 64.0 0.5] (sitting 270.0)))
+          "out beside it first, short of its reach")
+      (is (= (dragon/standing-walk [2 64 -5]) (at [-8.5 64.0 -4.5] (sitting 270.0)))
+          "then along beside it, past its body")
+      (is (= (dragon/standing-walk [2 64 0]) (at [2.5 64.0 -4.5] (sitting 270.0)))
+          "then in, behind it"))
+    (is (= {:intent/kind :perch :intent/target dragon-eid} (at [2.5 64.0 0.5] (sitting 270.0)))
+        "there, the perch")
+    (let [perch #(:plan/intent (intent/run (round-fountain %1 %2)
+                                           {:intent/kind :perch :intent/target dragon-eid}
+                                           {}))]
+      (is (intent/done? (perch [-1.5 64.0 0.5] (sitting 270.0)))
+          "its head turned onto the feet: the perch hands back")
+      (is (not (intent/done? (perch [2.5 64.0 0.5] (sitting 270.0)))) "behind it: on"))
+    (is (= {:intent/kind :back-off :intent/target dragon-eid}
+           (at [7.5 64.0 0.5]
+               (assoc (sitting 90.0)
+                      50
+                      {:entity/type (mob/type-id :area_effect_cloud)
+                       :entity/pos [0.5 64.0 0.5]
+                       :entity/radius 3.0})))
+        "every stand under a breath and the head on the feet: away from it")
+    (is (plan/interrupts? (round-fountain [12.5 64.0 0.5] (sitting 90.0))
+                          {:goal/plan :dragon}
+                          {:intent/kind :walk :intent/target [-2 64 0]})
+        "a walk whose way goes under the head ends")
+    (is (not (plan/interrupts? (round-fountain [4.5 64.0 0.5] (sitting 90.0))
+                               {:goal/plan :dragon}
+                               {:intent/kind :walk :intent/target [4 64 5]}))
+        "never the walk out from under it")))
+
+(deftest every-look-of-the-dragon-row-is-away-from-an-endermans-eyes
+  ;; gym dragon-f run 3: three endermen stared at in turn on the walks to and from the stand
+  (let [w (standing {}
+                    [0.5 64.0 0.5]
+                    {}
+                    {9 {:entity/type (mob/type-id :enderman) :entity/pos [6.5 64.0 0.5]}})
+        [yaw :as at-head] (physics/look-at (game/eye w) (mob/head :enderman [6.5 64.0 0.5]))
+        walking
+        (assoc w
+               :player/controls {:control/forward? true :control/yaw yaw :control/look at-head}
+               :plan/intent {:intent/kind :walk :intent/target [9 64 0] :intent/goal :dragon})
+        table [{:goal/id :dragon :goal/plan :dragon} {:goal/id :wood}]]
+    (is (= {:control/forward? true :control/yaw yaw :control/look [yaw 90.0]}
+           (:player/controls (plan/steered walking table)))
+        "a walk of the dragon row: straight down, the way kept")
+    (is (= (:player/controls walking)
+           (:player/controls (plan/steered (assoc-in walking [:plan/intent :intent/goal] :wood)
+                                           table)))
+        "another row's: as it was")))
+
+(deftest in-a-lull-the-bot-eats-for-health-back
+  ;; the hand-off of gym dragon-f: sixteen steak held, the food between 14 and 18, no healing
+  (let [steak {0 {:item (recipe/item-id :cooked_beef) :count 16}}
+        w (assoc (standing {} [20.5 64.0 0.5] steak {})
+                 :player/dimension dimension/end
+                 :player/health 12.0
+                 :player/food 16)]
+    (is (= :cooked_beef (dragon/heal-food w)))
+    (is (= {:intent/kind :eat :intent/item :cooked_beef}
+           (plan/next-intent w {:goal/plan :heal} plan/goals)))
+    (is (not (plan/done-by w {:goal/done? :healed?})))
+    (is (nil? (dragon/heal-food (assoc w :player/food 18))) "healing by itself")
+    (is (nil? (dragon/heal-food (assoc w :player/health 20.0))) "nothing to heal")
+    (is (nil? (dragon/heal-food (assoc w :player/dimension dimension/overworld))) "the End only")
+    (is (nil? (dragon/heal-food (assoc w :world/entities (sitting 90.0))))
+        "the dragon on its perch")))
+
 ;; ---------------------------------------------------------------- against the model's End
 
 (def floor
@@ -326,4 +504,19 @@
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (true? (:world/dragon-dead? w)) "the server said it died")
     (is (or (nil? d) (:dead-at d)) "dead in the model")
+    (is (empty? (:sim/violations sim)))))
+
+(deftest the-sitting-dragon-is-killed-from-behind-its-head-against-the-model
+  ;; gym dragon-e run 2 and dragon-f run 2: slain in front of the sitting dragon's head; the
+  ;; model's dragon faces the way the bot comes in (+x) and hurts what is before its head
+  ;; (mob/bitten?), so the bot goes round it to the stand behind
+  (let [[w sim] (run {:columns (end-columns (range -1 7) [-1 0] {})
+                      :dragon [0.5 52.0 0.5]
+                      :dragon-yaw 90.0
+                      :crystals []}
+                     {[:hotbar 0] {:item (recipe/item-id :iron_sword) :count 1}}
+                     [:dragon])]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (true? (:world/dragon-dead? w)) "the server said it died")
+    (is (= 20.0 (:sim/health sim)) "never under its head")
     (is (empty? (:sim/violations sim)))))

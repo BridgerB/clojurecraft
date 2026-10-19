@@ -176,6 +176,7 @@
 (s/def :entity/creepy? boolean?)
 (s/def :entity/phase int?)
 (s/def :entity/radius double?)
+(s/def :entity/yaw double?)
 (s/def :world/dragon-dead? boolean?)
 (s/def :world/boss-bars (s/coll-of uuid? :kind set?))
 (s/def :pearls/shelter ::block-pos)
@@ -711,11 +712,12 @@
 (s/def :sim.mob/dead-at int?)                  ; when it died; removed once its death is over
 (s/def :sim.mob/angry? boolean?)               ; a neutral one has turned on the player
 (s/def :sim.mob/persistent? boolean?)          ; never despawned: a fixture's, an animal
+(s/def :sim.mob/yaw double?)                   ; its body's yaw in degrees, told at add-entity: the dragon's says where its head is
 (s/def ::sim-mob
   (s/keys :req-un [:sim.mob/type :sim.mob/pos :sim.mob/health]
           :opt-un
           [:sim.mob/hit-at :sim.mob/last-hit :sim.mob/attack-at :sim.mob/fuse-at :sim.mob/dead-at
-           :sim.mob/angry? :sim.mob/persistent?]))
+           :sim.mob/angry? :sim.mob/persistent? :sim.mob/yaw]))
 (s/def :sim/mobs (s/map-of int? ::sim-mob))
 (s/def :sim/fixture-mobs (s/coll-of (s/keys :req-un [:sim.mob/type :sim.mob/pos]) :kind vector?))
 (s/def :sim/mob-rng int?)                      ; the mobs' own roll stream (sim/mob-roll)
@@ -738,7 +740,9 @@
 (s/def :sim.end/columns (s/map-of ::column-key bytes?))
 (s/def :sim.end/dragon ::point)
 (s/def :sim.end/crystals (s/coll-of ::point))
-(s/def :sim/end (s/keys :opt-un [:sim.end/columns :sim.end/dragon :sim.end/crystals]))
+(s/def :sim.end/dragon-yaw number?)
+(s/def :sim/end
+  (s/keys :opt-un [:sim.end/columns :sim.end/dragon :sim.end/crystals :sim.end/dragon-yaw]))
 (s/def ::sim (s/keys :req [:sim/phase :sim/now :sim/out]))
 (s/fdef sim/step
   :args

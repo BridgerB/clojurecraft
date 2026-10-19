@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, end, dragon, combat, goals]
 aliases: [dragon.clj, dragon, :crystals, :dragon, :crystals-gone?, :dragon-dead?, :pillar, :dig-down, :strike, :perch, :world/dragon-dead?, :world/boss-bars, boss-event, game-event, win_game, spike-cages, spike-crystals]
 status: verified
-lastUpdated: 2026-10-18
+lastUpdated: 2026-10-19
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/dragon.clj#defn approach-along
@@ -29,6 +29,23 @@ sourceRefs:
   - src/clojurecraft/entity.clj#defn hostile?
   - src/clojurecraft/dragon.clj#defn fountain-stand
   - src/clojurecraft/dragon.clj#defn toward-dragon
+  - src/clojurecraft/dragon.clj#defn turned?
+  - src/clojurecraft/dragon.clj#defn behind?
+  - src/clojurecraft/dragon.clj#defn in-bite?
+  - src/clojurecraft/dragon.clj#defn before-head?
+  - src/clojurecraft/dragon.clj#defn bite-on-way?
+  - src/clojurecraft/dragon.clj#defn around
+  - src/clojurecraft/dragon.clj#defmethod plan/steer :dragon
+  - src/clojurecraft/dragon.clj#defn lull?
+  - src/clojurecraft/dragon.clj#defn heal-food
+  - src/clojurecraft/plan.clj#defmulti steer
+  - src/clojurecraft/plan.clj#defn steered
+  - src/clojurecraft/mob.clj#defn facing
+  - src/clojurecraft/mob.clj#defn ahead
+  - src/clojurecraft/mob.clj#defn bitten?
+  - src/clojurecraft/sim.clj#defn bite
+  - src/clojurecraft/game.clj#defmethod on-packet [:play :move-entity-rot]
+  - "resources/clojurecraft/goals.edn#{:goal/id :heal"
   - src/clojurecraft/dragon.clj#defmethod plan/done-by :crystals-gone?
   - src/clojurecraft/dragon.clj#defmethod plan/done-by :dragon-dead?
   - src/clojurecraft/entity.clj#defn dragon-gone?
@@ -57,6 +74,12 @@ sourceRefs:
   - test/clojurecraft/dragon_test.clj#the-dragon-perches-on-the-fountain
   - test/clojurecraft/dragon_test.clj#a-crystal-is-broken-from-behind-a-wall-against-the-model
   - test/clojurecraft/dragon_test.clj#the-perched-dragon-is-killed-against-the-model
+  - test/clojurecraft/dragon_test.clj#the-dragon-turns-by-the-servers-word
+  - test/clojurecraft/dragon_test.clj#the-sitting-dragons-head-is-along-its-yaw
+  - test/clojurecraft/dragon_test.clj#the-wait-is-behind-the-sitting-dragons-head
+  - test/clojurecraft/dragon_test.clj#every-look-of-the-dragon-row-is-away-from-an-endermans-eyes
+  - test/clojurecraft/dragon_test.clj#in-a-lull-the-bot-eats-for-health-back
+  - test/clojurecraft/dragon_test.clj#the-sitting-dragon-is-killed-from-behind-its-head-against-the-model
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[end-portal]]"
@@ -85,7 +108,15 @@ Not done: the cages round two spikes (radius 2: the stand beside one is outside 
 
 `toward-dragon`: while a crystal stands or the feet are up a pillar or spike, the crystals'; a breath cloud or fireball (`area_effect_cloud`, `dragon_fireball`) within its `breath-reach` (its radius, `:entity/radius` from metadata index 8, a fireball's cloud growing from 3 to 7, `breath-radius` 5 when unsaid, plus `breath-margin` 1.5), combat's `:back-off`; away from the fountain's stand (`fountain-stand`, the ground `stand-from` (2) out from the exit portal's pillar at 0 0 along the axis nearest the feet, in the portal's empty basin, none within a breath's reach), the standing walk there, unless a breath reaches the straight way to it (`breath-on-way?`, `segment-distance`: dragon-d runs 1 and 3 walked back through a fireball's cloud and died in it); there, or with every stand under a breath or one on the way, the `:perch` where the feet are (dragon-b waited `:no-fountain` under a fireball's cloud on the basin until the plan failed). `plan/interrupts?` for `:dragon`: any running intent but a `:back-off` ends when a breath is near and the feet are down (a walk ends only by itself otherwise). The `:perch` faces the dragon (`look-away`: never a look that stares at an enderman shown by the server's own cone and line test, `mob/stared?`; straight down instead. The wait followed the dragon over the island's rim, and dragon-c runs 2 and 3 stared at an enderman there, which came and killed the bot; an angry enderman, `entity/creepy?`, is now a hostile the `:defend` row fights) and counts the ticks it holds `perched?` (its phase, `:entity/phase` from metadata index 16, one of the sitting phases 5 to 7; with no phase said, as in the model, within 6 of the fountain on the plane and under y 70); after `perch-ticks` (10) it hits the dragon while its box is in reach, walking in toward the fountain (no nearer than `walk-in-to`) while it is not; done when the dragon is gone, a breath is near, or after `perch-hold-ms`.
 
-The stand is beside the pillar because the perched dragon turns its face to the bot: its head is 6.5 out from the pillar and its neck 5.5, and each hurts what it touches whenever the dragon is not in its hurt time (10 damage, about 6 through iron). Batch dragon-a stood five out, under the head: run 1 landed five hits of 2.5 on the body and died in four seconds of the perch. Two out, the head and neck are past the bot.
+The stand is beside the pillar because the perched dragon turns its face to the bot: its head is 6.5 out from the pillar and its neck 5.5, and each hurts what it touches whenever the dragon is not in its hurt time (10 damage, about 6 through iron). Batch dragon-a stood five out, under the head: run 1 landed five hits of 2.5 on the body and died in four seconds of the perch. Two out in front is not enough either (dragon-e run 2, dragon-f run 2: the head lowered to the bot brings the neck over the stand).
+
+## The head
+
+The dragon's yaw is tracked (`:entity/yaw`, degrees, from `add-entity`'s byte, `move-entity-pos-rot` and `move-entity-rot` (their specs grown by the rotation and on-ground), `entity-position-sync` (grown by the rest of its PositionMoveRotation) and `teleport-entity`, relative by its flag 8). Its head is along `mob/facing`, (sin yaw, −cos yaw), the opposite of any other mob's look: `EnderDragon.aiStep` puts the head part there, and `DragonSittingScanningPhase` turns the dragon by the same vector toward its target, then holds it through the attacking and flaming phases. `mob/ahead` gives a point's [along across] in that frame, `mob/beside` the reverse. While the dragon is `turned?` (sitting, yaw known), `fountain-stand` keeps only the stands `behind?` its body by `behind-by` (1) and takes the nearest; the `:perch` hands back when the head comes onto the feet (`in-bite?`: not `leave-by` 0.5 behind, within `mob/bite-out`), and the planner walks to the stand now behind; with none (every one under a breath) and the head on the feet, a `:back-off` from the dragon. A walk whose straight way passes before the head (`before-head?`: along from 0.5 behind out to 8, within `clear-across` 3.3; `bite-on-way?`) goes round it (`around`): out `side-out` (5) beside the facing on the feet's side, short of its reach, then along to behind the stands' line, then in. `plan/interrupts?` ends a walk whose way the head has come onto, unless the feet are before it already (the walk out). The `:perch`'s walk in toward the fountain never goes under the head. Behind the body only the tail is, which hurts nothing; the wings only push.
+
+## Endermen and the meal
+
+`plan/steer`, a registry keyed by `:goal/plan` that `plan/steered` applies each tick to the running intent's row, turns every look of the `:dragon` row's intents with `look-away`: dragon-f run 3 stared at three endermen in turn on its walks to and from the stand and was slain by the third; dragon-e run 1 at one on its first walk. A walk steers by `:control/yaw`, so a look straight down changes nothing of the way. The `:heal` row (always, priority 0 after `:eat`, the End only) eats (`eat/food-held`, the `:eat` intent) when the bot is hurt, its food under `heal-below` (18, where natural regeneration stops; the `:eat` row eats only under 14) and in a lull (`lull?`: no breath near, the dragon not perched, no hostile within `calm-radius` 8).
 
 The dragon is struck by its box, not through `:fight`: its box is 16 by 8 with its feet on the fountain's pillar, four over the portal, and `:fight`'s reach to an aim point 0.9 over the feet is never met from a floor; the server's own test is the box. The body takes a quarter of a hit plus one (the head takes it all; its part's position is the client's to compute, not done), and a perched dragon takes off after 50 damage in one perch, so a kill takes several perches.
 
@@ -104,7 +135,7 @@ Rows `crystals` and `dragon`, both `land! :end` (the main island, ruststeve's En
 
 ## Proof
 
-- `dragon_test`: the approach on a spike of radius 2 (the pillar's top is the stand) and 4 (the stand on the top); the planner's walk, pillar, wall, strike and way down, and the walk back off a wide spike; the climb's jump, nothing sent while the body is in the cell, the block against the one under once clear; the win from the death event, the removal with no bar, not with a bar, not far off, and the credits answered; the perch by phase and by place; and against the model's End, a crystal on a spike of radius 2 broken from behind the wall with no blast taken and the bot back down, and the perched dragon killed.
+- `dragon_test`: the approach on a spike of radius 2 (the pillar's top is the stand) and 4 (the stand on the top); the planner's walk, pillar, wall, strike and way down, and the walk back off a wide spike; the climb's jump, nothing sent while the body is in the cell, the block against the one under once clear; the win from the death event, the removal with no bar, not with a bar, not far off, and the credits answered; the perch by phase and by place; the yaw from every packet that carries it; the head's frame and the model's bite; the stand behind the sitting dragon, the way round its head, the perch handing back, the back-off with no stand, the walk cut under the head; the dragon row's looks away from an enderman's eyes; the meal in a lull; and against the model's End, a crystal on a spike of radius 2 broken from behind the wall with no blast taken and the bot back down, the perched dragon killed, and the dragon facing the bot's way in (the model's head and neck hurting what is before them, `sim/bite`) killed from behind with no hurt taken.
 - Batch dragon-a (plan run 39152590801, at 03421f2): `crystals` 0/3, every run walking at once for the foot of a pillar on the spike's top (:no-path): the crystals stood on the fire a block over their bedrock and on the corner of their column, so the approach was a block high; `dragon` 0/3: run 1 struck the perched dragon five times (2.5 each, 200 to 187.5) from five out, under its head, and died; runs 2 and 3 waited :no-blocks for crystals the gym's kill missed.
 - Batch dragon-b (plan run 39154171045, at 2183057): `crystals` 0/3, every run dead to the fight's own dragon (its fireballs' magic, a knock off a pillar), though no crystal was left at the end; run 1 broke the first crystal by pillar, wall and strike for 1 damage and dug its pillar back down, the first crystal a clojurecraft bot broke, then dug down from the second's pillar at once (its own block moved the spike's edge). `dragon` 0/3: from the basin two out, run 2 struck the perched dragon 21 times (200 to 147.5) with no damage taken until it took off after 50, then waited `:no-fountain` under a fireball's cloud until the plan failed (run 3 the same); run 1 was slain by an enderman.
 - Batch dragon-c (plan run 39156110792, at 71a04c9): `crystals` 2/3, runs 2 and 3 breaking all ten by pillar, wall and strike (869 and 700 s); run 1 broke three, then the fight's dragon smashed its third pillar under it (cobblestone is not dragon-immune), it fell to a stump with a gap under it, `on-pillar?` wanting two blocks said no, and it walked for the next foot from up there (`:no-path`) until the plan failed. `dragon` 1/3: run 1 a false pass, the gym's kill of the fight's own dragon having opened the exit portal in the basin, which the bot walked into (the credits, 25 s); runs 2 and 3 slain by an enderman the wait had stared at over the rim (its stared-at flag, then its target, four hits of 3.78 through iron), never fought back, the enderman neutral.
