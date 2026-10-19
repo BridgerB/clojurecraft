@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-19T09:28:59.445Z",
+  "at" : "2026-10-19T09:30:08Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -49,13 +49,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 344,
-    "title" : "Bot stops at cast-one: no-escape",
+    "number" : 456,
+    "title" : "Bot stops at flint-and-steel: rejected",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 456,
-    "title" : "Bot stops at flint-and-steel: rejected",
+    "number" : 344,
+    "title" : "Bot stops at cast-one: no-escape",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
@@ -99,11 +99,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 66,
-    "title" : "Bot stops at ingots: stair-not-taken",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
     "labels" : [ "bot-failure", "sim" ],
@@ -127,6 +122,11 @@
     "number" : 85,
     "title" : "Bot stops at cobblestone: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 66,
+    "title" : "Bot stops at ingots: stair-not-taken",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 130,
@@ -186,7 +186,8 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "assign"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -201,11 +202,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 392,
-    "move" : "ready",
-    "pr" : 443,
-    "at" : "2026-10-18T11:16:02.871Z"
-  }, {
     "issue" : 392,
     "move" : "merge",
     "pr" : 443,
@@ -1552,5 +1548,10 @@
     "issue" : 338,
     "move" : "assign",
     "at" : "2026-10-19T09:28:59.445Z"
+  }, {
+    "issue" : 338,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-19T09:30:08Z"
   } ]
 }
