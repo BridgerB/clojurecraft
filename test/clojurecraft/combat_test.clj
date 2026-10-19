@@ -9,7 +9,6 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.bytes :as b]
             [clojurecraft.combat :as combat]
-            [clojurecraft.dimension :as dimension]
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
@@ -192,8 +191,8 @@
     (is (plan/done-by (assoc zombie :plan/blacklist #{7}) (row :defend)) "a ghost is left alone")
     (let [angry (assoc (standing
                         {7 (assoc (mob :enderman [11.0 64.0 8.5] 40.0) :entity/creepy? true)})
-                       :player/dimension
-                       dimension/end)] ; the pearls rows answer endermen themselves, in the Nether
+                       :plan/goals
+                       #{:dragon})] ; the pearls rows, in play, answer endermen themselves
       (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
              (plan/next-intent (assoc angry :player/health 6.0) (row :defend) plan/goals))
           "an angry enderman is fought to the end, hurt or not: it cannot be outrun")
