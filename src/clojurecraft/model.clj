@@ -383,6 +383,9 @@
    [:intent/confirm-left "ticks left to wait for the server's word after FINISH"
     "dig, :confirm stage"]
    [:intent/to-y "feet height at or below which the staircase is done" "stairs-down"]
+   [:intent/tall
+    "cells high the body a stair down is cut for (stairs/tall-stair-cells): each stair opens the new feet and that many over them, four for an enderman's three (issue #263)"
+    "stairs-down from a :burrow"]
    [:intent/floor-to
     "the height a mine's staircases are cut toward a few stairs at a time (its row's :goal/depth): how far down a floor laid through a cave must go on"
     "stairs-down from the mine act (stone/stairs), when the row has a depth"]
