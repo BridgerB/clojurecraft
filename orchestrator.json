@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-19T06:58:33.267Z",
+  "at" : "2026-10-19T07:00:49.878Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -18,11 +18,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 37,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : true,
     "number" : 178,
@@ -33,6 +28,11 @@
     "nudges" : 2,
     "pr" : 444,
     "session" : false
+  }, {
+    "number" : 37,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
   }, {
     "number" : 446,
     "title" : "Bot stops at fortress: inventory-full",
@@ -104,11 +104,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 148,
-    "title" : "Bot stops at water-bucket: no-spot",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 45,
     "title" : "Bot stops at cast-one: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -116,6 +111,11 @@
   }, {
     "number" : 349,
     "title" : "Bot stops at flint-and-steel: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 148,
+    "title" : "Bot stops at water-bucket: no-spot",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
@@ -192,10 +192,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 380,
-    "move" : "assign",
-    "at" : "2026-10-17T16:04:17.473Z"
-  }, {
     "issue" : 339,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1578,5 +1574,10 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-19T06:58:33.267Z"
+  }, {
+    "issue" : 338,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-19T07:00:49.878Z"
   } ]
 }
