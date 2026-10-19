@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-19T04:10:48.651Z",
+  "at" : "2026-10-19T04:11:55.807Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -156,8 +156,7 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -172,11 +171,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 338,
-    "move" : "nudge",
-    "pr" : 341,
-    "at" : "2026-10-17T06:05:44.907Z"
-  }, {
     "issue" : 338,
     "move" : "nudge",
     "pr" : 341,
@@ -1576,5 +1570,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-19T04:10:48.651Z"
+  }, {
+    "issue" : 338,
+    "move" : "assign",
+    "at" : "2026-10-19T04:11:55.807Z"
   } ]
 }
