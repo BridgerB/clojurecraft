@@ -1,0 +1,19 @@
+;; Issue #263, branch feat/263-warped2: a burrow is cut only where one would end in a shelter, else
+;; the hunt walks to the nearest cell one would; a provoke goes from the burrow's mouth (or from
+;; anywhere only with no pickaxe); netherrack is a floor filler for a Nether descent.
+;; pearls-12 is the stage (pearls-warped-e: 0/3, two slain in the open); pearls-1-live guards the arena.
+{:plans/label "pearls-warped2-a"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}

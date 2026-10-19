@@ -6,7 +6,7 @@
    A node is the feet cell [x y z]: standing there means a floor at y-1 and the body and head
    clear. Moves are data (`moves`): what cell each leads to, what it costs, and which cells must
    be what for it to be allowed; `neighbors` interprets them. Goals are data too (`:goal/kind`
-   :near :block :xz :away), with `goal-done?` and `heuristic` open on the kind. The search is
+   :near :block :xz :away :afar), with `goal-done?` and `heuristic` open on the kind. The search is
    plain A* with a budget in node expansions, never in time, so a recording replays to the same
    route on any machine. Running out of budget or of frontier returns the route to the node that
    came nearest (:partial, :none), which is what a walker should follow before planning again as
@@ -329,6 +329,14 @@
 (defmethod heuristic :away
   [{:goal/keys [pos range]} node]
   (max 0.0 (- range (flat-distance node pos))))
+
+(defmethod goal-done? :afar
+  ;; :away on the plane alone: a staircase climbed or descended gets no farther (the pearl
+  ;; hunt's roam, gym batch pearls-warped2-a run 3, walked its own staircase up and down for
+  ;; thirty minutes, each flight far by the height)
+  [_ {:goal/keys [pos range]} node]
+  (> (octile node pos) range))
+(defmethod heuristic :afar [{:goal/keys [pos range]} node] (max 0.0 (- range (octile node pos))))
 
 (defmethod goal-done? :sky
   ;; a standable cell the open sky is over

@@ -1,0 +1,19 @@
+;; Issue #263, branch feat/263-warped2: the walk to a burrow site ends in its cell; a roam measures
+;; on the plane (path :afar), never up and down a staircase; the foot of a descent tunnels toward
+;; the nearest enderman on its level (bore).
+;; pearls-12 is the stage (pearls-warped2-a: 0/3, 2 pearls then a staircase loop); pearls-1-live guards the arena.
+{:plans/label "pearls-warped2-b"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
