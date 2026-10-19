@@ -79,6 +79,7 @@
 
 (def warped-ranges [16 32 64 96])     ; blocks round a located warped forest a floor is spread for, nearer first
 (def warped-tries 3)                  ; spreads at each range before a wider one
+(def spread-under 120)                ; the height a Nether spread scans down from: under the roof's rock (y 123 up), over the forest's highest floors
 
 (def dimensions
   "The dimension each kind of landing (:gym/land) leaves the bot in; any other is the overworld.
@@ -1046,14 +1047,26 @@
 
 (defn spread
   "The command that stands the bot named name on a floor in the Nether within r blocks of x z,
-   under the roof (spreadplayers ... under 110: the highest place a body fits below y 110, where
-   vanilla judges a player safe: no lava, no fire)."
+   under the roof (spreadplayers ... under spread-under: the highest floor with two cells of air
+   over it below that height, scanning down (SpreadPlayersCommand.getSpawnY), where vanilla
+   judges a player safe: no lava, no fire). Gym batch pearls-263f (plan run 38918584959, probe
+   39130057525) spread under 110 where the forest's floor stood at 113 to 118: the scan went
+   down through the rock to the first cave under it, and the bot stood forty minutes in a
+   pocket of netherrack no route left."
   [x z r name]
   (str "execute in " dimension/nether
        " run spreadplayers " x
        " " z
        " 0 " r
-       " under 110 false " name))
+       " under " spread-under
+       " false " name))
+
+(defn pocket?
+  "The test the server passes when cell [x y z] of the Nether is cave_air: the air a carved cave
+   is made of (NetherWorldCarver carves cave_air over its lava), never the open cavern's, so a
+   floor the spread found inside the rock is told from the forest's floor."
+  [[x y z]]
+  (str "execute in " dimension/nether " if block " x " " y " " z " minecraft:cave_air"))
 
 (defn warped?
   "The test the server passes when cell [x y z] of the Nether is in a warped forest."
@@ -1102,11 +1115,13 @@
   ;; the warped forest nearest the landing's Nether coordinates (an eighth of the overworld's, so
   ;; each landing has its own; issue #263's hunting ground, where endermen are the only hostile
   ;; that spawns), and a floor in it: the bot spread onto one round the located point (spread),
-  ;; nearer ranges first, until the server says where it stands is warped forest (warped?), then
-  ;; stood on that cell with the row's setup round it. Gym batches pearls-263a and b (plan runs
-  ;; 38892130785, 38895776486) looked for nylium cell by cell round the located point and found
-  ;; none: probe 38896760962 read that column netherrack from y 4 to 125, the biome's located
-  ;; height inside the rock
+  ;; nearer ranges first, until the server says where it stands is warped forest (warped?) and
+  ;; not the air of a carved cave (pocket?), then stood on that cell with the row's setup round
+  ;; it. Gym batches pearls-263a and b (plan runs 38892130785, 38895776486) looked for nylium
+  ;; cell by cell round the located point and found none: probe 38896760962 read that column
+  ;; netherrack from y 4 to 125, the biome's located height inside the rock. Batches d, e and f
+  ;; stood two landings in three forty minutes in a cave pocket the spread had put them in
+  ;; (probe 39130057525: cave_air at the feet, netherrack sixteen blocks round at every height)
   [rc row name [x z _]]
   (let [dim dimension/nether
         reply (rcon/command! rc
@@ -1125,7 +1140,10 @@
                                 (fixture/position rc name))
                             c (when p (mapv #(long (math/floor %)) p))]
                         (cli/log "spread:" r spread-reply c)
-                        (when (and c (fixture/passed? (rcon/command! rc (warped? c)))) c)))
+                        (when (and c
+                                   (fixture/passed? (rcon/command! rc (warped? c)))
+                                   (not (fixture/passed? (rcon/command! rc (pocket? c)))))
+                          c)))
                     (mapcat #(repeat warped-tries %) warped-ranges))
         [fx fy fz] (or floor (throw (ex-info "no floor in the warped forest" {:at at})))]
     (place! rc dim name [fx fz fy] 2 (vec (:gym/setup row)))))
