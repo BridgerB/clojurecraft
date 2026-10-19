@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-19T20:19:10.739Z",
+  "at" : "2026-10-19T20:20:19.775Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -9,7 +9,7 @@
     "checks" : "red",
     "title" : "Bot stops at fortress: timeout",
     "copilot" : true,
-    "draft" : true,
+    "draft" : false,
     "nudges" : 0,
     "pr" : 462,
     "session" : false
@@ -50,14 +50,14 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 284,
-    "title" : "Bot stops at fortress: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 284,
+    "title" : "Bot stops at fortress: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 105,
@@ -207,7 +207,7 @@
   } ],
   "moves" : [ {
     "issue" : 338,
-    "move" : "ready",
+    "move" : "gave-up",
     "pr" : 462
   }, {
     "issue" : 178,
@@ -223,10 +223,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 338,
-    "move" : "assign",
-    "at" : "2026-10-19T14:27:19.392Z"
-  }, {
     "issue" : 338,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1573,5 +1569,10 @@
     "move" : "ready",
     "pr" : 462,
     "at" : "2026-10-19T20:19:10.739Z"
+  }, {
+    "issue" : 338,
+    "move" : "gave-up",
+    "pr" : 462,
+    "at" : "2026-10-19T20:20:19.775Z"
   } ]
 }
