@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-19T04:26:15.595Z",
+  "at" : "2026-10-19T04:30:37.961Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -39,13 +39,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 410,
-    "title" : "Bot stops at fortress: not-held",
+    "number" : 455,
+    "title" : "Bot stops at portal: not-held",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 455,
-    "title" : "Bot stops at portal: not-held",
+    "number" : 410,
+    "title" : "Bot stops at fortress: not-held",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
