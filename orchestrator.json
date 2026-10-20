@@ -1,7 +1,7 @@
 {
-  "at" : "2026-10-20T02:41:26.378Z",
+  "at" : "2026-10-20T02:42:34.654Z",
   "cap" : 1,
-  "agent-tasks" : true,
+  "agent-tasks" : false,
   "issues" : [ {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : true,
