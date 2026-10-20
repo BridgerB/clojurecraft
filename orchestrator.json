@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T00:10:28.481Z",
+  "at" : "2026-10-20T00:11:35.546Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -90,11 +90,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 148,
-    "title" : "Bot stops at water-bucket: no-spot",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 410,
     "title" : "Bot stops at fortress: not-held",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -117,6 +112,11 @@
   }, {
     "number" : 370,
     "title" : "Bot stops at portal: no-log",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 148,
+    "title" : "Bot stops at water-bucket: no-spot",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
