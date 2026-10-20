@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T06:19:49.200Z",
+  "at" : "2026-10-20T06:20:57.357Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -65,13 +65,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 284,
-    "title" : "Bot stops at fortress: no-path",
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
+    "number" : 284,
+    "title" : "Bot stops at fortress: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -110,11 +110,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 196,
-    "title" : "Bot stops at portal: no-stand",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -122,6 +117,11 @@
   }, {
     "number" : 410,
     "title" : "Bot stops at fortress: not-held",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 196,
+    "title" : "Bot stops at portal: no-stand",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
