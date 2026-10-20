@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T13:36:26.207Z",
+  "at" : "2026-10-20T13:37:37.956Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -17,7 +17,7 @@
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : true,
@@ -226,7 +226,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 135,
-    "move" : "assign"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -245,11 +246,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-20T00:23:41.948Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-20T00:24:50.920Z"
@@ -1594,5 +1590,10 @@
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-20T13:36:26.207Z"
+  }, {
+    "issue" : 135,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-20T13:37:37.956Z"
   } ]
 }
