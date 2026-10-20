@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T07:56:35.214Z",
+  "at" : "2026-10-20T07:59:54.610Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -85,11 +85,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 410,
-    "title" : "Bot stops at fortress: not-held",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 370,
     "title" : "Bot stops at portal: no-log",
     "labels" : [ "bot-failure", "sim" ],
@@ -110,19 +105,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 177,
-    "title" : "Bot stops at ingots: no-escape",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 148,
     "title" : "Bot stops at water-bucket: no-spot",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 92,
-    "title" : "Bot stops at portal-kit: no-escape",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 105,
@@ -132,6 +122,11 @@
   }, {
     "number" : 461,
     "title" : "Bot stops at portal: out-of-reach",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 410,
+    "title" : "Bot stops at fortress: not-held",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -155,13 +150,18 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 85,
-    "title" : "Bot stops at cobblestone: timeout",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "number" : 177,
+    "title" : "Bot stops at ingots: no-escape",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 45,
-    "title" : "Bot stops at cast-one: no-path",
+    "number" : 92,
+    "title" : "Bot stops at portal-kit: no-escape",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 85,
+    "title" : "Bot stops at cobblestone: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -232,11 +232,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 92,
+    "issue" : 65,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 65,
+    "issue" : 92,
     "move" : "leave",
     "why" : "hands-off label"
   } ],
