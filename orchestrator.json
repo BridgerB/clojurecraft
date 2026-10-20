@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T08:40:13.818Z",
+  "at" : "2026-10-20T08:41:21.296Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -60,13 +60,18 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 455,
-    "title" : "Bot stops at portal: not-held",
+    "number" : 162,
+    "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 457,
     "title" : "Bot stops at cast-one: inventory-full",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 455,
+    "title" : "Bot stops at portal: not-held",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -82,11 +87,6 @@
   }, {
     "number" : 105,
     "title" : "Bot stops at flint-and-steel: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 162,
-    "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
