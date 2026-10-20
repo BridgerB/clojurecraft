@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T08:32:24.301Z",
+  "at" : "2026-10-20T08:33:31.982Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -35,11 +35,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 344,
-    "title" : "Bot stops at cast-one: no-escape",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 446,
     "title" : "Bot stops at fortress: inventory-full",
     "labels" : [ "bot-failure", "sim" ],
@@ -52,6 +47,11 @@
   }, {
     "number" : 37,
     "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 344,
+    "title" : "Bot stops at cast-one: no-escape",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -73,11 +73,6 @@
     "number" : 89,
     "title" : "Bot stops at portal-kit: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 66,
-    "title" : "Bot stops at ingots: stair-not-taken",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 71,
@@ -107,6 +102,11 @@
   }, {
     "number" : 370,
     "title" : "Bot stops at portal: no-log",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 66,
+    "title" : "Bot stops at ingots: stair-not-taken",
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
