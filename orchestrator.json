@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T06:36:44.488Z",
+  "at" : "2026-10-20T06:38:58.339Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -30,6 +30,11 @@
     "pr" : 444,
     "session" : false
   }, {
+    "number" : 161,
+    "title" : "Bot stops at portal-kit: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 44,
     "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -40,11 +45,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 161,
-    "title" : "Bot stops at portal-kit: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 446,
     "title" : "Bot stops at fortress: inventory-full",
     "labels" : [ "bot-failure", "sim" ],
@@ -52,6 +52,11 @@
   }, {
     "number" : 344,
     "title" : "Bot stops at cast-one: no-escape",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 89,
+    "title" : "Bot stops at portal-kit: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -67,11 +72,6 @@
   }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 89,
-    "title" : "Bot stops at portal-kit: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
