@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T08:35:46.874Z",
+  "at" : "2026-10-20T08:39:06.188Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -60,13 +60,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 457,
-    "title" : "Bot stops at cast-one: inventory-full",
+    "number" : 455,
+    "title" : "Bot stops at portal: not-held",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 455,
-    "title" : "Bot stops at portal: not-held",
+    "number" : 457,
+    "title" : "Bot stops at cast-one: inventory-full",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
