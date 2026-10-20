@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T04:14:11.931Z",
+  "at" : "2026-10-20T04:19:45.463Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -100,14 +100,14 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 66,
-    "title" : "Bot stops at ingots: stair-not-taken",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 455,
     "title" : "Bot stops at portal: not-held",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 66,
+    "title" : "Bot stops at ingots: stair-not-taken",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 370,
