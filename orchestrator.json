@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T00:25:58.520Z",
+  "at" : "2026-10-20T00:27:05.240Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -85,6 +85,11 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
+    "number" : 370,
+    "title" : "Bot stops at portal: no-log",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
     "number" : 342,
     "title" : "Bot stops at furnace: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -103,11 +108,6 @@
     "number" : 162,
     "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
-  }, {
-    "number" : 370,
-    "title" : "Bot stops at portal: no-log",
-    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 148,
