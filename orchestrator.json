@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T04:06:24.668Z",
+  "at" : "2026-10-20T04:13:04.199Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -35,14 +35,14 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 446,
-    "title" : "Bot stops at fortress: inventory-full",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
-  }, {
     "number" : 37,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 446,
+    "title" : "Bot stops at fortress: inventory-full",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 284,
