@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-20T00:02:39.593Z",
+  "at" : "2026-10-20T00:03:48.642Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -17,7 +17,7 @@
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : true,
@@ -211,7 +211,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 135,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 178,
     "move" : "leave",
