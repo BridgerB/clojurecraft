@@ -165,6 +165,8 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn lava-walk
   - src/clojurecraft/build.clj#defn uncap
   - src/clojurecraft/build.clj#defn toward-lava
+  - src/clojurecraft/build.clj#defn explore-lava
+  - test/clojurecraft/build_test.clj#the-lava-hunt-tunnels-away-from-the-landing-when-no-lava-is-loaded
   - src/clojurecraft/build.clj#defn castable?
   - src/clojurecraft/build.clj#defn hunt-target
   - test/clojurecraft/build_test.clj#the-lava-hunt-goes-down-past-lava-it-cannot-cast-from
@@ -281,3 +283,4 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **A refill keeps its own support.** `safe-source?` rejects a blocked sight line through the cell under the feet, even when all lava lies below them. It applies to projected stations and actual eyes; an unobstructed alternative ray is still usable. Issue #228's R1/16 and R3/43 snapshots dug their own floor while refilling and fell into lava, where escapes timed out `:no-footing`. `work-op` drops an in-flight refill dig of that support and stops controls so the next refill chooses another station.
 - **The row against the frame is five wide**: a diagonal ray from the stair's last step (x 4) crossed x 4 of that row when the eye was 0.07 off the step's middle; it met rock, the lava landed in the room, and the bot was trapped in it. A stand aside aims further across the cell (`side-aim`).
 - **Blocks counted are the walls the cast opens, not its holes**: a cell dug as a hole is obsidian after (`blocks-needed`); counting it as a missing wall made every sealed-pool site ten blocks and none was chosen.
+- **No lava loaded at the sea's depth: tunnel away.** With no source in the 160 blocks the server sent and the feet already at `lava-depth`, `toward-lava` has neither a stair nor a tunnel target; `explore-lava` cuts level steps (`stone/tunnel-length` a call) along the plane axis away from the landing, so the chunks ahead load and the hunt asks again, instead of waiting `:no-site` out. Real race 39318301246 (issue #41, Clj_r21) stood at y -54 in deepslate with no lava loaded (`the-lava-hunt-tunnels-away-from-the-landing-when-no-lava-is-loaded`). A boxed feet cell takes the way out first, as a tunnel toward a source does.

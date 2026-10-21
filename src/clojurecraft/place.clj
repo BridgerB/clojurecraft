@@ -422,7 +422,13 @@
    stood on a pillar in the sea, the stairs up refused toward every heading, and the table
    failed :no-spot three times with the water beside it to be placed into."
   [world {:intent/keys [child]} event]
-  (cond (or (intent/done? child) (intent/failed? child))
+  (cond (and (intent/failed? child) (:player/in-water? world) (not= :swim-out (:intent/kind child)))
+        (-> world
+            (assoc :player/controls {})
+            (intent/assoc-intent
+             :intent/child
+             {:intent/kind :swim-out :intent/for :retreat :intent/status :active}))
+        (or (intent/done? child) (intent/failed? child))
         (-> world
             (assoc :player/controls {})
             (intent/assoc-intent :intent/stage :equip)
