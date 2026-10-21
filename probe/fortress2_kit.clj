@@ -7,13 +7,14 @@
             [clojurecraft.simrace :as simrace]))
 
 (defn swap-slot
-  "Inventory inv with one stack of gravel, granite, andesite or dirt turned into an iron pickaxe."
-  [inv]
+  "Inventory inv with one hotbar stack (slots lo to lo+8) turned into an iron pickaxe."
+  [lo inv]
   (let [ids (set (map recipe/item-id [:gravel :granite :andesite :dirt :diorite :cobblestone]))
-        k (or (some (fn [[k v]] (when (and (< -1 k 9) (contains? ids (:item v))) k)) inv)
-              (some (fn [k] (when (< -1 k 9) k)) (sort (keys inv)))
-              0)]
-    (println "KITSLOT" k (get inv k))
+        in? (fn [k] (and (integer? k) (<= lo k (+ lo 8))))
+        k (or (some (fn [[k v]] (when (and (in? k) (contains? ids (:item v))) k)) inv)
+              (some #(when (in? %) %) (sort (filter integer? (keys inv))))
+              lo)]
+    (println "KITSLOT" lo k (get inv k))
     (assoc inv k {:item (recipe/item-id :iron_pickaxe) :count 1})))
 
 (defn -main
@@ -23,8 +24,8 @@
         w (simrace/world-for! snap)
         m (simrace/moment-of snap w)
         m (-> m
-              (update-in [:world :player/inventory] swap-slot)
-              (update-in [:sim :sim/inv] swap-slot))
+              (update-in [:world :player/inventory] (partial swap-slot 0))
+              (update-in [:sim :sim/inv] (partial swap-slot 36)))
         t0 (:t m)
         last-s (volatile! -1)
         stop? (fn [world]

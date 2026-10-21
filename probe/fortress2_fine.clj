@@ -13,8 +13,8 @@
         w (simrace/world-for! snap)
         m (simrace/moment-of snap w)
         m (-> m
-              (update-in [:world :player/inventory] kit/swap-slot)
-              (update-in [:sim :sim/inv] kit/swap-slot))
+              (update-in [:world :player/inventory] (partial kit/swap-slot 0))
+              (update-in [:sim :sim/inv] (partial kit/swap-slot 36)))
         t0 (:t m)
         skip (* 1000 (Long/parseLong skip))
         last-s (volatile! -1)
