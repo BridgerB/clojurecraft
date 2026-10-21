@@ -185,22 +185,6 @@
                (not (and (= :surface (:intent/for n)) (stairs/surfaced-near? world)))))
         :else true))
 
-(def spare-uses 40)                   ; digs a tool must have left to count as a spare: a tunnel's twelve level steps dig about thirty
-
-(defn uses-left
-  "How many digs a slot's tool has left: its tier's durability (blocks/materials) less the
-   :damage component the server sends on a worn tool (packet/read-slot); nil for an item that
-   is no tool."
-  [{:keys [item components]}]
-  (when-let [{:keys [tier]} (blocks/tool item)]
-    (- (:durability (blocks/materials tier)) (get components :damage 0))))
-
-(defn worn?
-  "Is a slot's tool too worn to be a spare: fewer than spare-uses digs left?"
-  [slot]
-  (boolean (some-> (uses-left slot)
-                   (< spare-uses))))
-
 (defn without-worn
   "counts less the tools in the inventory that are worn (worn?): what a spare is counted from.
    Race 38477665442 bot Clj_r22 tunnelled for coal at y 16 with a stone pickaxe and, for its
@@ -209,7 +193,7 @@
   [world counts]
   (reduce (fn [c [n k]] (update c n (fnil #(max 0 (- % k)) 0)))
           counts
-          (recipe/counts (into {} (filter (comp worn? val)) (:player/inventory world)))))
+          (recipe/counts (into {} (filter (comp window/worn? val)) (:player/inventory world)))))
 
 (defn resolve-spares
   "[counts action] for the tools a row keeps one more of than it holds (:goal/spares, beside
