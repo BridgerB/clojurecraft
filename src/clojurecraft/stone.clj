@@ -236,10 +236,21 @@
             (let [c [x (inc y) z]] (when (path/standable? world c) c))))
         (range terrain/top-y (dec chunk/min-y) -1)))
 
+(defn under-surface?
+  "Are the feet [fx fy fz] within reach of the surface cell [sx sy sz] a staircase was cut from: on
+   the plane within over-radius, plus a block for each block the feet are below it, since a
+   staircase down gains a block along its heading for each block it drops. Sim race 39593216223
+   (issue #62, world R4/2): the stairs cut from the surface over the stone went six down and six
+   along, the feet then 6 from the surface, outside over-radius, and the walk back up to the
+   surface began the same staircase again every twelve seconds until the run stalled."
+  [[fx fy fz] [sx sy sz]]
+  (<= (physics/horizontal-distance [fx 0 fz] [sx 0 sz])
+      (+ over-radius (max 0 (- (long sy) (long fy))))))
+
 (defn over-stone
   "A walk to the surface over the nearest stone of the row in sight that no route reaches, for the
-   staircase to be cut from there, or nil: when the feet are already within over-radius on the
-   plane of the surface over one of the max-candidates nearest, when none has a surface a route
+   staircase to be cut from there, or nil: when the feet are not already under-surface? of the
+   surface over one of the max-candidates nearest, when none has a surface a route
    reaches (routable?), and never to a surface within over-radius of a cell of :plan/boxed-at,
    where a staircase has died :boxed already. Issue #342 (a real bot, Clj_r15, landed at R1/30):
    stone lay in the wall of a cave lake, five blocks under the far bank; the mine cut its stairs
@@ -254,7 +265,7 @@
                       (take max-candidates)
                       (keep #(surface-over world %))
                       distinct)]
-    (when-not (some #(near? feet %) surfaces)
+    (when-not (some #(under-surface? feet %) surfaces)
       (->> surfaces
            (remove (fn [c] (some #(near? c %) (:plan/boxed-at world #{}))))
            (map (fn [c] {:intent/kind :walk :intent/target c :intent/for :over-stone}))
@@ -368,6 +379,18 @@
                            (when-not (or (= feet start) (contains? boxed start)) start)))]
       (when target {:intent/kind :walk :intent/target target :intent/for :retreat}))))
 
+(defn dead-end-retreat
+  "retreat from where nothing could be cut, the feet cell it leaves named a dead end
+   (:intent/dead-end) when it is a walk: the planner puts it in :plan/boxed-at as the walk starts,
+   so the staircase cut from above is refused its last stair there (stairs/clear-way?) and
+   turns. Sim race 39593216223 (issue #62, world R4/42): at the mine's depth, y 16, with an
+   aquifer round, no tunnel, stair or deeper stair could be cut; the retreat walked up the
+   staircase, the next descent was the same staircase down to the same cell, and the two
+   alternated until the run stalled. nil when there is no retreat."
+  [world]
+  (when-let [r (retreat world)]
+    (cond-> r (= :walk (:intent/kind r)) (assoc :intent/dead-end (intent/feet world)))))
+
 (defn climb
   "Stairs up out of the ground, climb-stairs at a time (stairs/climb-to), when nothing can be
    tunnelled, cut or walked to from here and the feet are not out (stairs/out?); nil when they
@@ -389,16 +412,19 @@
 (defn off-ice
   "On a sheet of ice (path/on-ice?), a walk toward the landing (:plan/go-at) over it, the route
    search taking the sheet for floor of a bot that stands on one; nil off ice, with no landing or
-   no route toward it. Issue #71, race 39088700340 bot Clj_r02 rose out of the sea floor under a
-   frozen sea onto the ice, and every act that followed (stairs down for the mine, level steps
-   over the water) cut and laid on the sheet until it was :boxed."
+   no route toward it, or when a walk to it failed (the landing is in :plan/blacklist: the walk's
+   route was accepted and then could not be walked). Issue #71, race 39088700340 bot Clj_r02 rose
+   out of the sea floor under a frozen sea onto the ice, and every act that followed (stairs down
+   for the mine, level steps over the water) cut and laid on the sheet until it was :boxed.
+   Race 39181272601 bot Clj_r23 (issue #40): hunting on a glacier, it was sent 300 blocks over
+   the sheet to a landing in chunks not loaded, the route partial; the walk ended :no-path at
+   the edge of what was loaded, and was chosen again at the same place twelve times, :no-path."
   [world]
   (when-let [[hx hy hz] (and (path/on-ice? world) (:plan/go-at world))]
-    (let [walk {:intent/kind :walk
-                :intent/target [(long (math/floor hx)) (long (math/floor hy))
-                                (long (math/floor hz))]
-                :intent/for :off-ice}]
-      (when (intent/routable? world walk) walk))))
+    (let [target [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]
+          walk {:intent/kind :walk :intent/target target :intent/for :off-ice}]
+      (when (and (not (contains? (:plan/blacklist world #{}) target)) (intent/routable? world walk))
+        walk))))
 
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
@@ -439,7 +465,7 @@
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
                   (deeper world)
-                  (retreat world)
+                  (dead-end-retreat world)
                   (climb world)
                   {:plan/wait :boxed})))))
 
