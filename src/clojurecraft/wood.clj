@@ -148,25 +148,21 @@
            :intent/for :surface})))))
 
 (defn trees-descend
-  "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk's bottom
-   under the feet by more than bridge-rise (trees-bridge takes those within it): stairs down
-   toward it, one length (stone/stair-depth, never below the trunk's feet) at a time, the
-   planner looking again between. The way down from a height is a cut one: trees-climb's
-   mirror. Only a trunk within descend-reach on the plane, and never from a cell where a climb
-   died :boxed. Real race (issue #57, snapshot real-4-s2-Clj_r07): bot Clj_r07 cut stairs up out
-   of a stone pocket to the top of a mountain at y 238 with 844 trunks remembered, the nearest
-   fifty-six below and sixty across; the near band stops forty-eight out and twelve down, the
-   hunt's two targets were ledges no route reached, and the plan waited :no-log until it failed.
-   Race 39552763365 bot Clj_r22 (issue #87): a staircase cut up in the air toward the trees ended
-   at y 110, level with the trunk's top, the nearest trunk five across and four under the feet
-   with no route to it through the leaves: under the bridge's rise and short of the twelve under
-   the eye this took, nothing was cut and the plan waited :no-log."
+  "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk below
+   the eye by more than the near band's twelve: stairs down toward it, one length
+   (stone/stair-depth, never below the trunk's feet) at a time, the planner looking again
+   between. The way down from a height is a cut one: trees-climb's mirror. Only a trunk within
+   descend-reach on the plane, and never from a cell where a climb died :boxed. Real race
+   (issue #57, snapshot real-4-s2-Clj_r07): bot Clj_r07 cut stairs up out of a stone pocket
+   to the top of a mountain at y 238 with 844 trunks remembered, the nearest fifty-six below
+   and sixty across; the near band stops forty-eight out and twelve down, the hunt's two
+   targets were ledges no route reached, and the plan waited :no-log until it failed."
   [world trunks]
   (let [feet (intent/feet world)
         fy (physics/y-of feet)]
     (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
       (when-let [[tx ty tz] (first (filter (fn [[tx ty tz]]
-                                             (and (> (- fy ty) bridge-rise)
+                                             (and (> (- (physics/y-of (game/eye world)) ty) 12)
                                                   (<= (physics/horizontal-distance (:player/pos
                                                                                     world)
                                                                                    [tx 0 tz])
@@ -228,15 +224,6 @@
   (let [o (intent/opening world)]
     (when (and o (not (mouth-below? (intent/feet world) (:intent/target o)))) o)))
 
-(defn descended-for-trees?
-  "Did the intent that just ended cut stairs down toward the trees (:stairs-down for :trees,
-   trees-descend)? Then the feet are where the descent left them, in the ground and not yet out:
-   not a pit to climb out of. Race 39552763365 bot Clj_r22 (issue #87): the staircase down
-   toward a trunk four under the feet ended under a roof of leaves, the opening walked it back up
-   to the mouth, and the descent began again, every five seconds."
-  [world]
-  (let [{:intent/keys [kind for]} (:plan/last world)] (and (= :stairs-down kind) (= :trees for))))
-
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
    a route reaches (intent/routable?), under the open sky or not. Not out of the ground
@@ -270,9 +257,7 @@
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
-          (when-not (or (stairs/out? world feet)
-                        (contains? (:plan/boxed-at world #{}) feet)
-                        (descended-for-trees? world))
+          (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
             (or (opening-up world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
