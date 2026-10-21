@@ -975,12 +975,13 @@
           :else (turned world dir turns (str "stairs: refused toward " dir ", turning")))))
 
 (defn unshaft
-  "world with the climb's shaft given up for this intent (:intent/no-shaft), back to :plan to cut
-   stairs: a dig or a pillar the shaft could not do, or a cell over the head it may not open."
-  [world]
+  "world with the climb's shaft given up for this intent (:intent/no-shaft, the reason: a child's
+   failure or :unsafe), back to :plan to cut stairs: a dig or a pillar the shaft could not do, or a
+   cell over the head it may not open."
+  [world why]
   (-> world
       (assoc :player/controls {})
-      (intent/assoc-intent :intent/stage :plan :intent/no-shaft true)
+      (intent/assoc-intent :intent/stage :plan :intent/no-shaft why)
       (intent/dissoc-intent :intent/child)))
 
 (defn refuse
@@ -1039,10 +1040,11 @@
         item (filler world 1)]
     (cond (and child (or (intent/done? child) (fell? child)))
           (intent/dissoc-intent world :intent/child)
-          (and child (intent/failed? child)) (unshaft world)
+          (and child (intent/failed? child))
+          (unshaft world [(:intent/kind child) (:intent/reason child)])
           child (intent/run-child world event)
           (airborne? world) (assoc world :player/controls {})
-          (not (and item (shaft-safe? world feet))) (unshaft world)
+          (not (and item (shaft-safe? world feet))) (unshaft world :unsafe)
           (= :solid (path/classify world cell))
           (intent/run-child (intent/assoc-intent world :intent/child (intent/child-dig cell)) event)
           :else
