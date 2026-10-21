@@ -52,12 +52,22 @@
                w (sr/world-for! snap)
                lines (atom [])
                dumps (atom 0)
+               walks (atom 0)
                orig sr/step
                logged (fn [world event]
                         (let [w' (orig world event)]
                           (doseq [e (:bot/effects w')
                                   :when (= :log (:effect/kind e))]
                             (swap! lines conj [(:time/now w') (:effect/message e)])
+                            (when (and (re-find #"^intent :walk" (str (:effect/message e)))
+                                       (< @walks 4))
+                              (swap! walks inc)
+                              (swap! lines conj
+                                [(:time/now w')
+                                 (str "WALK " (pr-str (:plan/intent w'))
+                                      " blacklist=" (count (:plan/blacklist w'))
+                                      " unwalkable=" (:plan/unwalkable w')
+                                      " attempts=" (:plan/attempts w'))]))
                             (when (and (re-find #"refused toward|every stair refused"
                                                 (str (:effect/message e)))
                                        (< @dumps 4))
