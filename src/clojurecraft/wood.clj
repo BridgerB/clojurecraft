@@ -228,6 +228,15 @@
   (let [o (intent/opening world)]
     (when (and o (not (mouth-below? (intent/feet world) (:intent/target o)))) o)))
 
+(defn descended-for-trees?
+  "Did the intent that just ended cut stairs down toward the trees (:stairs-down for :trees,
+   trees-descend)? Then the feet are where the descent left them, in the ground and not yet out:
+   not a pit to climb out of. Race 39552763365 bot Clj_r22 (issue #87): the staircase down
+   toward a trunk four under the feet ended under a roof of leaves, the opening walked it back up
+   to the mouth, and the descent began again, every five seconds."
+  [world]
+  (let [{:intent/keys [kind for]} (:plan/last world)] (and (= :stairs-down kind) (= :trees for))))
+
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
    a route reaches (intent/routable?), under the open sky or not. Not out of the ground
@@ -261,7 +270,9 @@
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
-          (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
+          (when-not (or (stairs/out? world feet)
+                        (contains? (:plan/boxed-at world #{}) feet)
+                        (descended-for-trees? world))
             (or (opening-up world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)

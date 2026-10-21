@@ -341,6 +341,17 @@
     (is (nil? (wood/trees-descend (assoc w :plan/boxed-at #{(intent/feet w)}) [trunk]))
         "never from a cell where a climb died boxed")))
 
+(deftest a-descent-toward-the-trees-is-not-climbed-back-out-of
+  ;; race 39552763365 bot Clj_r22 (issue #87): the staircase down toward a trunk ended under a roof
+  ;; of leaves, not out; the opening walked it back up to the mouth and the descent began again
+  (let [w (remembered {[12 9 8] 136 [12 10 8] 136} [8.5 64.0 8.5])
+        descended
+        (assoc w :plan/last {:intent/kind :stairs-down :intent/for :trees :intent/status :done})]
+    (is (false? (wood/descended-for-trees? w)))
+    (is (true? (wood/descended-for-trees? descended)))
+    (is (false? (wood/descended-for-trees?
+                 (assoc w :plan/last {:intent/kind :stairs-down :intent/for :surface}))))))
+
 (deftest a-trunk-across-powder-snow-is-walked-to
   ;; sim race 38811417241 runner 2 (issue #87, world R2/20): out of the mine on one cobblestone
   ;; block in a powder-snow field, a spruce eight blocks off; powder snow was neither floor nor
