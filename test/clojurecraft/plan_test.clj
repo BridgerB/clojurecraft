@@ -1257,6 +1257,18 @@
         i (wood/hunt w)]
     (is (= [48 64 8] (:intent/target i)) "toward the trunk, back toward the landing")))
 
+(deftest a-hunt-never-heads-for-a-log-it-gave-up
+  ;; sim world R1/4 (issue #370): the nearest remembered log was the tree whose logs were
+  ;; blacklisted, so each hop ended beside it and the next set out for another given-up one,
+  ;; back and forth for the rest of the window
+  (let [w (-> (assoc (remembered {} [8.5 64.0 8.5]) :world/chunks shore :plan/go-at [48.5 64.0 8.5])
+              (memory/remember-column [2 0] (shore [2 0])))
+        given-up (set (memory/positions-now w blocks/log-states))]
+    (is (seq given-up) "a trunk is remembered")
+    (is (= [48 64 8] (:intent/target (wood/hunt w))) "toward it while it is a tree to take")
+    (is (not= [48 64 8] (:intent/target (wood/hunt (assoc w :plan/blacklist given-up))))
+        "not once every log of it is blacklisted")))
+
 (deftest a-slow-server-stretches-the-dig
   ;; race 38665691517 (issues #88, #144): the server ran at 130 ms a tick, counted the digs'
   ;; progress in its ticks, and left blocks standing that the bot had finished by its own clock

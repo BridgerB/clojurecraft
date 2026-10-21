@@ -391,11 +391,14 @@
    across the water: every trunk was in the near band and no route reached one, and each waited
    :no-log until the plan failed (issue #57). Bot Clj_r15 came up out of its mine for the wood
    of a spare pickaxe with the trees a hundred blocks off, past the pathfinder's budget, and
-   waited the same way (issue #87)."
+   waited the same way (issue #87). Never toward a log given up (skipped): the nearest of them
+   changed with every hop, and the bot walked between two places forty-three blocks apart, each
+   beside a tree it had given up, for the rest of the window (sim world R1/4, issue #370).
+   With every remembered log given up the hunt sets out as with none."
   [world]
-  (let [logs (memory/nearest-first (game/eye world)
-                                   far-radius
-                                   (memory/positions-now world blocks/log-states))]
+  (let [logs (->> (memory/positions-now world blocks/log-states)
+                  (memory/nearest-first (game/eye world) far-radius)
+                  (remove (skipped world)))]
     (when (terrain/under-sky? world (intent/feet world))
       (if (seq logs)
         (scoop/first-walk world
