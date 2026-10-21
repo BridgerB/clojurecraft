@@ -1001,6 +1001,11 @@
       (is (nil? (build/site-lost dry i :no-stand)) "a dry room fails for no stand as it did")
       (is (nil? (build/site-lost flooded (assoc i :intent/kind :tunnel-to) :no-stand))
           "only a build has a site"))
+    (testing "a stair refused :boxed with the body in water gives the site up"
+      (doseq [kind [:stairs-up :stairs-down]]
+        (let [stair {:intent/kind kind :intent/status :failed :intent/reason :boxed}]
+          (is (build/lost-way? (assoc dry :player/in-water? true) i stair))
+          (is (not (build/lost-way? dry i stair)) "on dry ground a boxed stair is the pocket"))))
     (testing "a walk or a dig that fails in a flooded room gives the site up"
       (doseq [child [walk dig (assoc walk :intent/reason :stuck)]]
         (is (build/lost-way? flooded i child))
