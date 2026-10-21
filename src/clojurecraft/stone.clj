@@ -439,6 +439,33 @@
   (when-let [r (retreat world)]
     (cond-> r (= :walk (:intent/kind r)) (assoc :intent/dead-end (intent/feet world)))))
 
+(defn islet?
+  "Do the feet stand on a solid block with water on all four sides of it, a block in the sea
+   that no route leaves?"
+  [world]
+  (let [[x y z] (intent/feet world)]
+    (boolean (and (some-> (terrain/block-at world [x (dec y) z])
+                          blocks/solid?)
+                  (every? (fn [[dx dz]]
+                            (= :water (terrain/fluid-kind world [(+ x dx) (dec y) (+ z dz)])))
+                          [[1 0] [-1 0] [0 1] [0 -1]])))))
+
+(defn cross-home
+  "A :cross toward the landing (:plan/go-at), swum, from a block in the sea (islet?) under the open
+   sky where a climb out already died :boxed (:plan/boxed-at); nil elsewhere. Real race
+   (issue #71, snapshot real-3-s2-Clj_r19): a bot that dug up into the sea from a mine under it
+   rose and swam forty-five blocks to the one block that stood in the water, every stair up
+   from it was refused for the water on all sides, and the mine's last resort, the climb, died
+   :boxed there three times."
+  [world]
+  (let [feet (intent/feet world)]
+    (when-let [[hx hy hz] (:plan/go-at world)]
+      (when (and (contains? (:plan/boxed-at world #{}) feet)
+                 (islet? world)
+                 (terrain/under-sky? world feet))
+        {:intent/kind :cross
+         :intent/target [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]}))))
+
 (defn climb
   "Stairs up out of the ground, climb-stairs at a time (stairs/climb-to), when nothing can be
    tunnelled, cut or walked to from here and the feet are not out (stairs/out?); nil when they
@@ -558,6 +585,7 @@
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
                   (deeper world)
                   (dead-end-retreat world)
+                  (cross-home world)
                   (climb world)
                   {:plan/wait :boxed})))))
 
