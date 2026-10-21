@@ -118,7 +118,21 @@
                  :n (count (:path/waypoints r))
                  :from (:path/from r)
                  :last (last (:path/waypoints r))}))
-        (ask " routable" #(intent/routable? wd i))))))
+        (ask " routable" #(intent/routable? wd i))
+        (ask " route-stale"
+             #(let [w2 (intent/route! wd i)
+                    i2 (:plan/intent w2)
+                    wps (:intent/waypoints i2)
+                    bad (keep-indexed (fn [n c] (when-not (path/standable? w2 c) [n c])) wps)]
+                {:n (count wps)
+                 :route (:intent/route i2)
+                 :stale (intent/route-stale? w2 i2)
+                 :first-bad (take 4 bad)
+                 :classes (mapv (fn [[_ c]] [c (path/classify w2 c)
+                                             (path/classify w2 (update c 1 dec))
+                                             (some-> (terrain/block-at w2 (update c 1 dec))
+                                                     blocks/name-of)])
+                                (take 3 bad))}))))))
 
 (defn run-one
   [p]
