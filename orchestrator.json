@@ -1,18 +1,12 @@
 {
-  "at" : "2026-10-21T22:22:19.674Z",
+  "at" : "2026-10-21T22:23:30.952Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "quiet" : true,
     "number" : 338,
-    "checks" : "red",
     "title" : "Bot stops at fortress: timeout",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 0,
-    "pr" : 462,
-    "session" : false
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
   }, {
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
@@ -34,16 +28,10 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "quiet" : true,
     "number" : 178,
-    "checks" : "red",
     "title" : "Bot stops at portal: timeout",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 2,
-    "pr" : 444,
-    "session" : false
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
   }, {
     "number" : 108,
     "title" : "Bot stops at water-bucket: no-log",
