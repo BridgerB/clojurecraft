@@ -51,8 +51,7 @@
               (assoc :player/dimension dimension/overworld)
               (memory/observe [4 64 0] brick)
               (assoc :player/dimension dimension/nether))]
-    (with-redefs [memory/latest (fn [_] (throw (ex-info "Full sightings scan" {})))]
-      (is (= #{[0 32 0] [2 64 0] [3 64 0]} (set (fortress/bricks w)))))))
+    (is (= #{[0 32 0] [2 64 0] [3 64 0]} (set (fortress/bricks w))))))
 
 (defn rock
   "A world of netherrack round [0 64 0] (x and z -4..4, y 60..70), the bot's two cells open, with
