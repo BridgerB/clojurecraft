@@ -492,10 +492,14 @@
 
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
-  "The first of the stair's cells (top first) still solid, or nil when the stair is open."
+  "The first of the stair's cells (top first) still in the body's way, or nil when the stair is
+   open: a full cube, or a flat box too (blocks/collision-top: a carpet), which the head meets
+   going up the jump. Sim race 39593216223 (issue #66, world R2/39): a moss carpet over the head
+   was no cube, the stair was called open, and the jump rose into the carpet's box three times
+   for ten seconds each, :stair-not-taken."
   [world cells]
   (first (filter #(some-> (terrain/block-at world %)
-                          blocks/solid?)
+                          blocks/collision-top)
                  cells)))
 
 (defn boxed?

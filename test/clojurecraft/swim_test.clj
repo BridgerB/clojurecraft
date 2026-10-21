@@ -114,6 +114,35 @@
            [(:control/forward? (:player/controls w2)) (:control/jump? (:player/controls w2))])
         "swimming toward it, rising")))
 
+(deftest the-shore-swum-for-is-kept-while-it-is-dry-ground
+  ;; sim race 39550831606 runner 4 (issue #177, world R4/1): sixteen blocks from a shore on each
+  ;; side, the first bearing at that distance changed with the cell the feet were in, and the
+  ;; escape dithered about one cell for 120 s, three times, :no-escape
+  (let [sea (fn [xs]
+              (into {} (for [x xs y (range 55 64) z (range 16)] [[x y z] blocks/water-base])))
+        w (assoc (game/init fx/opts)
+                 :world/chunks
+                 {[0 0] (world/column (sea (range 8 16)))
+                  [1 0] (world/column (sea (range 16)))
+                  [2 0] (world/column (sea (range 9)))})
+        feet [24 62 8]]
+    (is (= [41 64 8] (swim/far-shore w feet 64)) "east and west tie at seventeen, east first")
+    (is (= [7 64 8] (swim/far-shore w feet 64 [7 64 8])) "the west shore chosen before is kept")
+    (is (= [41 64 8] (swim/far-shore w feet 64 [20 64 8]))
+        "unless its column is water: a shore no more")
+    (let [roofed (assoc w
+                        :world/chunks
+                        {[0 0] (world/column (sea (range 8 16)))
+                         [1 0] (world/column (sea (range 16)))
+                         [2 0] (world/column (merge (sea (range 16))
+                                                    (into {}
+                                                          (for [x (range 16)]
+                                                            [[x 100 8]
+                                                             (blocks/default-state
+                                                              :cobblestone)]))))})]
+      (is (= [7 64 8] (swim/far-shore roofed feet 64))
+          "a block high over the sea does not make the sea round it a shore"))))
+
 (deftest a-deep-swim-rises-into-reach-before-notching
   (let [swim {:intent/kind :swim-out :intent/status :active}
         cells (merge (into {} (for [y (range 39 55)] [[5 y 5] blocks/water-base]))
