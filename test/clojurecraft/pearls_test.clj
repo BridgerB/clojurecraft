@@ -427,7 +427,7 @@
                              plan/goals))
         "at the end with it two off the mouth: a crowd, blacklisted or not")
     (is
-     (= [:walk :pearls]
+     (= [:walk :shelter]
         ((juxt :intent/kind :intent/for)
          (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])}) row plan/goals)))
      "a calm one three blocks from the mouth: out past it to a vantage to stare from")
@@ -564,8 +564,10 @@
     (is (nil? (memory/done-since dug :lookout :burrow)) "no burrow ever cut")
     (let [v (plan/next-intent (looked dug 11) row plan/goals)
           c (:intent/target v)]
-      (is (= [:walk :pearls] [(:intent/kind v) (:intent/for v)])
-          "eleven lookouts, open ground round the mouth: out to a vantage to stare from")
+      (is
+       (= [:walk :shelter] [(:intent/kind v) (:intent/for v)])
+       "eleven lookouts, open ground round the mouth: out to a vantage to stare from, ended
+           in that very cell")
       (is (= 7 (first (pearls/quarry (assoc (looked dug 11) :player/pos (pearls/feet-at c)))))
           "from which it can be stared at: no nearer than stare-from, with a clear line"))
     (is (pearls/stale? stale) "a minute of them: the burrow is given up")
@@ -574,8 +576,30 @@
         "the hunt walks out toward it, to cut a burrow beside it")
     (is (not (pearls/stale? (looked (assoc-in dug [:world/entities 7 :entity/creepy?] true) 12)))
         "one coming is no calm crowd")
-    (is (not (pearls/stale? (assoc (looked dug 12) :plan/blacklist #{7})))
-        "an angry one given up on keeps the burrow")
+    (is
+     (pearls/stale? (assoc (looked dug 12) :plan/blacklist #{7}))
+     "a calm one given up on (:unprovoked) holds nothing: batch pearls-warped5-a's run 3
+         stood 37 minutes beside its burrow over one")
+    ;; batch pearls-warped5-a (plan run 39625347094, probe 39668407179) run 4: a held fight on
+    ;; one timed out, the burrow went stale with it angry seven blocks off the mouth, and the
+    ;; walk out was slain by it
+    (let [angry (-> (burrowed [8.5 61.0 8.5] {7 (assoc calm :entity/creepy? true)})
+                    (assoc :plan/blacklist #{7}))
+          at (fn [p] (assoc-in angry [:world/entities 7 :entity/pos] p))]
+      (is (= 7 (first (pearls/angry-near (at [10.5 64.0 8.5])))) "angry, seven off the mouth")
+      (is (not (pearls/stale? (looked (at [10.5 64.0 8.5]) 12)))
+          "an angry one given up on near the mouth keeps the burrow")
+      (is (= {:intent/kind :lookout :intent/for :pearls}
+             (plan/next-intent (looked (at [10.5 64.0 8.5]) 12) row plan/goals))
+          "and the bot in it")
+      (is
+       (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+          (plan/next-intent (assoc (at [10.5 64.0 8.5]) :player/pos [3.5 64.0 8.5]) row plan/goals))
+       "at the mouth: back in")
+      (is (nil? (pearls/angry-near (at [3.5 44.0 8.5])))
+          "one twenty below the mouth, in another cave, never comes: no danger")
+      (is (nil? (pearls/angry-near (at [14.5 64.0 8.5])))
+          "eleven off: past danger-radius, the mouth is walked to as before"))
     ;; batch pearls-warped4-b (plan run 39596287510, probe 39616249061): the arena's endermen
     ;; wander out of the mouth's line within the first minute, and the forest's stand hidden
     ;; behind its ledges; a burrow with nothing to do from it is given up the same way
@@ -625,7 +649,7 @@
         there (assoc w :player/pos (pearls/feet-at target))]
     (is (nil? (pearls/quarry w)) "hidden from the mouth")
     (is (= i (pearls/vantage w (pearls/endermen w pearls/seek-radius))))
-    (is (= [:walk :pearls] [kind (:intent/for i)]))
+    (is (= [:walk :shelter] [kind (:intent/for i)]))
     (is (not= [3 64 20] target) "never to the enderman itself")
     (is (<= (physics/distance target [8 61 8]) pearls/shelter-reach) "within the burrow's reach")
     (is (= 7 (first (pearls/quarry there))) "from there it can be stared at")
