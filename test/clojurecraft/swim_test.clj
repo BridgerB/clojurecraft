@@ -246,6 +246,26 @@
     (is (= bank (get-in (intent/run (assoc w :time/tick 10) swim tick) [:plan/intent :intent/bank]))
         "do not redirect a rise before its progress has stalled")))
 
+(deftest a-bank-under-the-surface-is-not-picked-over-one-level-with-it
+  ;; issue #156 (sim race 39186407147, world R3/32): afloat in a cave pool at 3 health, the nearest
+  ;; bank on the plane was an air pocket three under the surface, in the rock; the swim went for
+  ;; it and failed :stuck three times, with a dry floor three blocks off at the surface
+  (let [pool (into {}
+                   (for [x (range 3 9) z (range 3 9) y (range 58 64)] [[x y z] blocks/water-base]))
+        pocket {[4 59 5] (blocks/default-state :stone) [4 60 5] blocks/air [4 61 5] blocks/air}
+        roof (into {} (for [x (range 16) z (range 16)] [[x 70 z] (blocks/default-state :stone)]))
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 62.97 5.5]
+                 :player/loaded? true
+                 :player/in-water? true
+                 :world/chunks {[0 0] (world/column (merge pool pocket roof))})
+        feet (intent/feet w)
+        surface (swim/surface-y w :water feet)]
+    (is (swim/bank? w [4 60 5]) "the pocket is a bank, a block from the feet on the plane")
+    (is (= [2 64 5] (swim/banks w feet surface #{}))
+        "the dry floor at the surface is nearer by cost")))
+
 (deftest a-diagonal-bank-approach-clears-the-side-wall
   (let [w (assoc (game/init fx/opts)
                  :world/chunks
@@ -473,3 +493,35 @@
         (is (nil? (:intent/child next)))))
     (let [far (assoc w :player/pos [10.5 62.97 8.5])]
       (is (nil? (swim/bank-block far (intent/feet far) 64)) "no wall within reach"))))
+
+(deftest a-wall-bank-just-out-of-reach-is-swum-to-not-notched
+  ;; issue #92 (sim race 39550831606, world R4/9): the sea met a cliff, the cells it could lay a
+  ;; bank into lay a block or two past the place reach, and with no pickaxe the escape dug a notch
+  ;; in the wall by hand (37 s a block) until it timed out, three times
+  (let [sea (into {}
+                  (for [x (range 3 16) z (range 16) y (range 56 64)] [[x y z] blocks/water-base]))
+        cliff
+        (into
+         {}
+         (for [x (range 3) z (range 16) y (range 64 72)] [[x y z] (blocks/default-state :stone)]))
+        swim {:intent/kind :swim-out :intent/status :active}
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [10.5 62.97 8.5]
+                 :player/loaded? true
+                 :player/in-water? true
+                 :player/eye-in-water? false
+                 :player/inventory {0 {:item (blocks/items :cobblestone) :count 20}}
+                 :time/tick 10
+                 :world/chunks {[0 0] (world/column (merge sea cliff))}
+                 :plan/intent swim)
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        feet (intent/feet w)
+        i (:plan/intent (intent/run w swim tick))]
+    (is (nil? (swim/bank-block w feet 64)) "no wall within reach")
+    (is (= [3 63 8] (swim/wall-toward w feet 64)) "the wall's cell nearest the feet")
+    (is (= [3 63 8] (:intent/shore i)) "the swim heads for it")
+    (is (nil? (:intent/child i)) "no notch dug")
+    (is (true? (:control/jump? (:player/controls (intent/run w swim tick)))) "swimming on")
+    (let [far (assoc w :player/pos [14.5 62.97 8.5])]
+      (is (nil? (swim/wall-toward far (intent/feet far) 64)) "none past approach-radius"))))

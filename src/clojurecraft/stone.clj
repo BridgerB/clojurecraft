@@ -241,7 +241,12 @@
    staircase to be cut from there, or nil: when the feet are already within over-radius on the
    plane of the surface over one of the max-candidates nearest, when none has a surface a route
    reaches (routable?), and never to a surface within over-radius of a cell of :plan/boxed-at,
-   where a staircase has died :boxed already. Issue #342 (a real bot, Clj_r15, landed at R1/30):
+   where a staircase has died :boxed already, and never to a surface stair-depth or more over the
+   feet: a staircase was cut down from there (or the feet are as deep as one), and the walk back
+   up only began it again. Sim race 39598424082 (issue #161, world R2/13): the staircase cut from
+   the surface over the stone ended some twenty blocks down and off to one side, the feet were no
+   longer within over-radius of that surface, and the walk climbed back to start the same
+   staircase, every two minutes for the quarter hour. Issue #342 (a real bot, Clj_r15, landed at R1/30):
    stone lay in the wall of a cave lake, five blocks under the far bank; the mine cut its stairs
    down at the near bank, where every stair was refused for the water, up and down the same stairs
    until the plan failed :boxed, and the surface over the stone, eight blocks off along a strip of
@@ -253,6 +258,7 @@
         surfaces (->> (exposed-of-states world (states-of-row row))
                       (take max-candidates)
                       (keep #(surface-over world %))
+                      (remove (fn [[_ sy _]] (>= (- sy (second feet)) stair-depth)))
                       distinct)]
     (when-not (some #(near? feet %) surfaces)
       (->> surfaces

@@ -918,6 +918,23 @@
     (is (nil? (stone/over-stone (assoc w :plan/boxed-at #{[12 57 5]}) (row :mine-stone)))
         "not back to where a staircase died boxed")))
 
+(deftest a-staircase-cut-down-from-the-surface-over-the-stone-is-not-walked-back-up-to
+  ;; issue #161 (sim race 39598424082, world R2/13): the staircase from the surface over the stone
+  ;; ended twenty blocks down and off to one side, out of over-radius of that surface, and the walk
+  ;; climbed back to cut the same staircase again, every two minutes for the quarter hour
+  (let [dirt (blocks/default-state :dirt)
+        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+        cave (into {} (for [x (range 11 15) z (range 3 7) y (range 55 58)] [[x y z] blocks/air]))
+        w (assoc (standing 64 :wooden_pickaxe)
+                 :world/chunks
+                 {[0 0] (world/column (merge ground cave))})
+        at (fn [y] (assoc w :player/pos [5.5 (double y) 5.5]))]
+    (is (some? (stone/over-stone (at 59) (row :mine-stone)))
+        "less than a staircase down: the surface is the place to cut from")
+    (is (nil? (stone/over-stone (at 58) (row :mine-stone)))
+        "a staircase down: the stairs go on from here")
+    (is (= :stairs-down (:intent/kind (stone/mine-next (at 58) (row :mine-stone)))))))
+
 (deftest stone-beside-water-is-sealed-with-what-is-held-before-it-is-dug
   ;; issue #342 (the R1/30 sim moment): stones on the west bank of a cave lake had water on their
   ;; north side, the dig refused them, and the bot held planks and no filler

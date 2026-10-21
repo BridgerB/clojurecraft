@@ -324,9 +324,16 @@
                    {:pos (:entity/pos e) :times 1})))
     world))
 
+(defn cornered
+  "The world with entity eid kept in :plan/cornered: a back-off from it ended on its clock, the
+   target still nearer than back-off-to, so there was nowhere to back off to."
+  [world eid]
+  (update world :plan/cornered (fnil conj #{}) eid))
+
 (defmethod intent/run :back-off
   ;; {:intent/kind :back-off :intent/target eid}: straight away from it, done once back-off-to
-  ;; is between them, it is gone, or back-off-timeout-ms has passed (a cornered bot plans again).
+  ;; is between them, it is gone, or back-off-timeout-ms has passed (a cornered bot plans again,
+  ;; and has the target kept in :plan/cornered: :defend fights what it could not get away from).
   ;; The first tick notes a creeper (noted), so :defend can tell one that stands still
   [world i _]
   (let [now (:time/now world)
@@ -334,11 +341,14 @@
         world (cond-> world (and e (nil? (:intent/since i))) (noted (:intent/target i) e))
         i (cond-> i (nil? (:intent/since i)) (assoc :intent/since now))
         world (assoc world :plan/intent i)]
-    (cond (or (entity/gone? world (:intent/target i))
-              (>= (horizontal world e) back-off-to)
-              (> (- now (:intent/since i)) back-off-timeout-ms))
+    (cond (or (entity/gone? world (:intent/target i)) (>= (horizontal world e) back-off-to))
           (-> world
               (assoc :player/controls {})
+              intent/done)
+          (> (- now (:intent/since i)) back-off-timeout-ms)
+          (-> world
+              (assoc :player/controls {})
+              (cornered (:intent/target i))
               intent/done)
           :else (assoc world :player/controls (intent/toward world (away-point world e) 0.0)))))
 
@@ -444,11 +454,14 @@
   ;; backed away from; anything else fought. A neutral mob turned on the bot (an angry enderman,
   ;; entity/neutral) is fought to the end whatever the health: it is faster than the bot and
   ;; teleports after it, so a back-off from it is only hits taken. Gym dragon-e run 1 struck one
-  ;; five times (40 to 10) then backed away under 10 health and died in its hands
+  ;; five times (40 to 10) then backed away under 10 health and died in its hands. What a
+  ;; back-off could not get away from (:plan/cornered: the bot was in a dead end) is fought to the
+  ;; end too: sim race 39593219246 (issue #161, world R3/41) backed away from a zombie two blocks
+  ;; off at under one health from the end of a one-wide tunnel, a quarter hour, never moving
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
     (cond (= :creeper (entity/kind e)) {:intent/kind :back-off :intent/target eid}
-          (contains? entity/neutral (entity/kind e))
+          (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
           {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
           (< (:player/health world 20.0) retreat-health) {:intent/kind :back-off :intent/target eid}
           :else {:intent/kind :fight :intent/target eid})))
