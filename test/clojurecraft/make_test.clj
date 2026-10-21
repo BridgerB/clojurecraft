@@ -519,3 +519,15 @@
         done #(plan/finish-intent w {:intent/kind :collect :intent/for % :intent/status :done})]
     (is (nil? (:plan/surfaced (done :log))) "a log picked up: the climb came out to trees")
     (is (= [[6 66 6] 990000] (:plan/surfaced (done :mine-iron))) "ore picked up: the mark kept")))
+
+(deftest a-scoop-with-water-at-hand-needs-no-pickaxe
+  ;; issue #54, sim snapshot real-5-s2-Clj_r17: a bot with a bucket and no pickaxe came up out of
+  ;; its mine into the middle of a lake, sources beside its feet, and went for logs across the water
+  ;; to make the pickaxe the scoop holds for the climb out of a mine
+  (let [kit (first (filter #(= :water-bucket (:goal/id %)) plan/goals))
+        dry (world-holding {:bucket 1} false)
+        wet (assoc dry :world/chunks {[0 0] (world/column {[7 63 5] blocks/water-base})})]
+    (is (not= :fill-bucket (:goal/id (make/next-row dry kit plan/goals)))
+        "no water in reach: the pickaxe for the climb first")
+    (is (= :fill-bucket (:goal/id (make/next-row wet kit plan/goals)))
+        "a source in reach and in sight: scoop it")))

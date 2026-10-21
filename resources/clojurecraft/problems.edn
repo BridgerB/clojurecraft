@@ -82,7 +82,9 @@
    "Stone dug by hand or iron ore with a wooden pickaxe takes 7.5 s and drops nothing"
    "Tool breaks mid-run and later digs fall back to bare hand"
    "Digging under the feet drops the bot into lava, water or a deep shaft"
-   "Reporting a dig-down as success when the bot never actually fell, so the caller spins"]
+   "Reporting a dig-down as success when the bot never actually fell, so the caller spins"
+   "Sim race 39550831606 R4/25 (issue #85) walked to the surface over its stone, which was the top of a birch's canopy, and every stair from there was refused for the leaves it opened onto, the walk back to the canopy repeating after each level step; the surface over stone is the highest solid block that is not leaves (stone/surface-over)"
+   "Real bot Clj_r15 R1/30 (issue #65) was one stair down from a lake shore with two dirt, and the one water cell beside the next stair was never sealed, for the eight the climb back would need; a seal keeps the filler the climb back needs, a block for each block it is under the highest rock of its column, none at the surface (stairs/climb-reserve), and a mine boxed with under eight filler digs dirt for it first (stone/filler-dig)"]
   :problem/done
   "RCON Inventory shows at least 3 cobblestone with the wooden pickaxe still held, RESULT :ok true, and the recorded run replays to the same RESULT; crafting the stone pickaxe itself is left to the crafting issue."
   :problem/last-failure
@@ -150,6 +152,11 @@
   ["Planks burned as fuel run dry after about 3 ingots and starve the wood chain"
    "Race 39088700340 bot Clj_r10 (issue #60) stood in a frozen sea with the water a block under the sheet and found no surface to scoop; ice is no water, but the game leaves a source where it breaks, so a sheet is dug (scoop/ice-water), never cut toward far pools"
    "Race 39037024176 runner 1 (issue #342) mined toward fluid-exposing rock and carried stair refusals between feet cells until furnace failed :boxed; exposed targets must pass the dig's fluid guard, and a completed stair must reset its turns"
+   "Sim race 39550831606 R4/1 (issue #177) dithered a cell wide for 120 s sixteen blocks from a shore on each side, the nearer shore changing with the cell the feet were in; the shore swum for is kept while it is dry ground"
+   "Sim race 39593216223 R4/2 (issue #62) walked back up to the surface over stone from the foot of the staircase cut from it, every twelve seconds until the run stalled; the feet count as over the surface a block more for each block they are below it"
+   "Sim race 39593216223 R4/42 (issue #62) alternated a retreat up its staircase and the same staircase down to the dead end at the mine's depth; a retreat names the cell it leaves boxed as it starts, so the descent that follows turns"
+   "Sim race 39593216223 R2/39 (issue #66) failed :stair-not-taken under a moss carpet two over the feet, which the jump rose into; a stair opens every cell with a collision box, not only a cube"
+   "Race 39181272601 bot Clj_r23 (issue #40) walked over a glacier to a landing in chunks not loaded and failed :no-path where it stood twelve times; a walk off the ice that failed is not chosen again"
    "Race 39070889905 runner 1 (issue #342) spent its escape filler on descent seals and could not seal the climb out; descent seals must keep the same lay-reserve as floors, while climbs may spend it"
    "Items in the furnace or grid are invisible to the inventory count, so steps flicker"
    "Closing the window with a loaded cursor drops the item on the ground"
@@ -165,7 +172,9 @@
    "Sim races 39081494214 R1/31 and 39074159590 R3/44 (issue #105) climbed up under a lake for the water bucket and stood in a flooded shaft with hundreds of cobblestone, where water beside every cell a level step digs refused each step and the climb failed :boxed three times; a level step seals that water (stairs/level-lay) and floors an open step instead"
    "Sim race 39004332220 R2/2 (issue #323) died while smelting and the model retained the old furnace menu, refusing every equip click until :stale-window; respawn now drops that menu reference while keeping the inventory and furnace contents"
    "Sim races (issues #69, #62, #161, #135, worlds R1/17, R3/45, R4/19) left bots with the pickaxe broken in a pocket under a lake bed of stone, then gravel or sand, under fourteen to twenty-three blocks of water, cutting level steps toward a shore by hand for the whole window (a block of stone 7500 ms, 200 stale cells in :plan/boxed-at): a climb with no pickaxe now bores up through a bed of at most three and swims the water (stairs/bore)"
-   "Race 39337645053 (issues #463, #457, #172, #446) filled all 36 slots with worn stone pickaxes (16 to 18, each made again as a spare, one slot apiece) and, in the Nether, netherrack, soul sand and wart blocks, so the craft that needed a slot failed :inventory-full at flint-and-steel, the cast, the portal kit and the fortress; a full inventory now throws a worn tool with a better one beside it and the Nether pick-ups (window/worn-spare-slot, window/junk)"]
+   "Race 39337645053 (issues #463, #457, #172, #446) filled all 36 slots with worn stone pickaxes (16 to 18, each made again as a spare, one slot apiece) and, in the Nether, netherrack, soul sand and wart blocks, so the craft that needed a slot failed :inventory-full at flint-and-steel, the cast, the portal kit and the fortress; a full inventory now throws a worn tool with a better one beside it and the Nether pick-ups (window/worn-spare-slot, window/junk)"
+   "Sim race 39601680523 R1/10 (issue #148) stood on the one cobblestone it had pillared up in open sea, water on every side and no pickaxe, and its table failed :no-spot three times with the scoop waiting on the pickaxe; with no dry spot and no fresh rock a block goes into the water cell beside the feet (place/water-spot), and a retreat that failed looks for a spot once more (place/walk-off)"
+   "Real bot Clj_r17 (issue #54) came up out of its mine into the middle of a lake, four sources beside its feet and no pickaxe, and went for logs across the water to make the pickaxe a scoop holds for the climb out of a mine; a scoop with a source in reach and sight holds and spares nothing (make/holds-waived?). Real bot Clj_r08 (issue #54) walked at the landing, then at the mouth of its shaft, every twelve seconds after each failed :no-path; a walk is never started at a blacklisted target (scoop/first-walk, intent/opening)"]
   :problem/done
   "RCON Inventory shows a filled water_bucket and flint_and_steel after a live run on the local server, with RESULT :ok true."
   :problem/last-failure

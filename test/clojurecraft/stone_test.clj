@@ -104,7 +104,7 @@
         down {:intent/kind :stairs-down :intent/to-y 58 :intent/status :active}
         w (-> (standing 64 :stone_pickaxe :dirt)
               (assoc-in [:player/inventory 1 :count] stairs/lay-reserve)
-              (assoc :world/blocks {[7 63 5] blocks/water-base} :plan/intent down))
+              (assoc :world/blocks {[7 63 5] blocks/water-base [5 80 5] 1} :plan/intent down))
         planned (:plan/intent (intent/run w down {:event/kind :tick :event/now 0}))]
     (is (= [[7 63 5]] (stairs/seal w feet cells)) "the water could be sealed")
     (is (nil? (stairs/down-lay w feet cells)) "but a descent must keep the escape reserve")
@@ -114,6 +114,23 @@
           climb (assoc w :world/blocks {[6 64 5] 1 [7 64 5] 1 [7 65 5] blocks/water-base})]
       (is (= [[7 65 5]] (stairs/up-lay climb feet up-cells))
           "a climb can still spend the reserve to leave the pocket"))))
+
+(deftest a-seal-at-the-surface-keeps-nothing-for-a-climb-it-does-not-need
+  ;; issue #65 (a real bot, Clj_r15, landed at R1/30): one stair down from a lake shore with two
+  ;; dirt, the one water cell beside the next stair was refused for the eight the climb back
+  ;; would need, and the staircase was :boxed
+  (let [feet [5 64 5]
+        cells (stairs/stair-cells feet [1 0])
+        at (fn [rock]
+             (-> (standing 64 :stone_pickaxe :dirt)
+                 (assoc-in [:player/inventory 1 :count] 2)
+                 (assoc :world/blocks (merge {[7 63 5] blocks/water-base} rock))))]
+    (is (= 0 (stairs/climb-reserve (at {}) feet)) "the open sky over the feet")
+    (is (= [[7 63 5]] (stairs/down-lay (at {}) feet cells)) "sealed with the two it has")
+    (is (= 3 (stairs/climb-reserve (at {[5 67 5] 1}) feet)) "three under the rock")
+    (is (nil? (stairs/down-lay (at {[5 67 5] 1}) feet cells)) "two cannot seal and keep three")
+    (is (= stairs/lay-reserve (stairs/climb-reserve (at {[5 90 5] 1}) feet))
+        "never over the reserve")))
 
 (deftest each-row-collects-what-its-blocks-drop
   (is (= #{(blocks/items :cobblestone)} (stone/drops-of-row (row :mine-stone))))
@@ -982,3 +999,94 @@
     (is (nil? (stone/seal-stone (at) (row :mine-stone))) "nothing to lay")
     (is (nil? (stone/seal-stone (assoc w :plan/blacklist #{[7 64 6]}) (row :mine-stone)))
         "not a cell a lay was given up on")))
+
+(deftest the-surface-over-stone-is-the-ground-not-the-canopy-over-it
+  ;; sim race 39550831606 world R4/25 (issue #85): the walk to the surface over stone no route
+  ;; reaches ended on the leaves of a birch, and every stair cut from there was refused
+  (let [dirt (blocks/default-state :dirt)
+        leaves (blocks/default-state :birch_leaves)
+        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+        cave (into {} (for [x (range 11 15) z (range 3 7) y (range 55 58)] [[x y z] blocks/air]))
+        canopy (into {} (for [x (range 9 17) z (range 1 9) y [67 68]] [[x y z] leaves]))
+        w (assoc (standing 64 :wooden_pickaxe)
+                 :world/chunks
+                 {[0 0] (world/column (merge ground cave canopy))})]
+    (is (= [13 64 5] (stone/surface-over w [13 57 5])) "under the leaves, on the ground")
+    (is (= 64 (second (:intent/target (stone/over-stone w (row :mine-stone)))))
+        "never the leaves")))
+
+(deftest a-mine-boxed-with-little-filler-digs-dirt-for-it-before-another-stair
+  ;; issues #342 and #65 (real bot Clj_r15, landed at R1/30): the shores a staircase was refused on
+  ;; for the water beside it, two dirt carried to seal with and dirt underfoot
+  (let [dirt (blocks/default-state :dirt)
+        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+        w (assoc (standing 64 :wooden_pickaxe) :world/chunks {[0 0] (world/column ground)})
+        boxed (assoc w :plan/boxed-at #{[2 50 2]})
+        filler (stone/filler-dig boxed)]
+    (is (nil? (stone/filler-dig w)) "no staircase died boxed: stairs as before")
+    (is (= [:walk :filler] [(:intent/kind filler) (:intent/for filler)]) (pr-str filler))
+    (is (= filler (stone/mine-next boxed (row :mine-stone))) "before another stair is cut")
+    (is (nil? (stone/filler-dig
+               (assoc-in boxed [:player/inventory 5] {:item (blocks/items :cobblestone) :count 8})))
+        "filler enough held")
+    (is (= {:intent/kind :dig :intent/target (:intent/target filler) :intent/for :filler}
+           (stone/mine-next (assoc boxed :plan/last (assoc filler :intent/status :done))
+                            (row :mine-stone)))
+        "the walk is followed by the dig")))
+(deftest a-staircase-cut-from-the-surface-over-stone-is-not-walked-back-from
+  ;; sim race 39593216223 (issue #62, world R4/2): the stairs cut from the surface over the stone
+  ;; went six down and six along; outside over-radius of that surface, the walk back to it began
+  ;; the same staircase again every twelve seconds until the run stalled
+  (let [dirt (blocks/default-state :dirt)
+        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+        cave (into {} (for [x (range 11 15) z (range 3 7) y (range 55 58)] [[x y z] blocks/air]))
+        w (assoc (standing 64 :wooden_pickaxe)
+                 :world/chunks
+                 {[0 0] (world/column (merge ground cave))})
+        below (assoc w :player/pos [5.5 58.0 5.5])]
+    (is (some? (stone/over-stone w (row :mine-stone))) "on the surface, out of reach of the stone")
+    (is (nil? (stone/over-stone below (row :mine-stone)))
+        "six down the staircase it is cut from the surface already")
+    (is (true? (stone/under-surface? [5 58 5] [11 64 5])) "a block along for a block down")
+    (is (false? (stone/under-surface? [5 64 5] [11 64 5])) "level, six along is out of reach")))
+
+(deftest a-failed-walk-off-the-ice-is-not-chosen-again
+  ;; race 39181272601 bot Clj_r23 (issue #40): the walk over a glacier to the landing, in chunks
+  ;; not loaded, ended :no-path where it stood, and was chosen again twelve times
+  (let [pocket {[5 63 5] (blocks/default-state :packed_ice)}
+        w (assoc (standing 64)
+                 :world/chunks {[0 0] (world/column pocket)}
+                 :plan/go-at [9.5 64.0 5.5])]
+    (is (= {:intent/kind :walk :intent/target [9 64 5] :intent/for :off-ice} (stone/off-ice w)))
+    (is (nil? (stone/off-ice (assoc w :plan/blacklist #{[9 64 5]})))
+        "not after a walk to it failed")))
+
+(deftest a-carpet-over-the-head-is-a-cell-to-open-in-a-stair-up
+  ;; sim race 39593216223 (issue #66, world R2/39): a moss carpet two over the feet was no cube,
+  ;; the stair was called open, and the jump rose into its box three times, :stair-not-taken
+  (let [cells (stairs/up-cells [5 64 5] [1 0])
+        carpeted (fn [pos]
+                   (assoc (standing 64)
+                          :world/chunks
+                          {[0 0] (world/column {pos (blocks/default-state :moss_carpet)})}))]
+    (is (nil? (stairs/next-to-open (standing 64) cells)) "open air: nothing to open")
+    (is (= [5 66 5] (stairs/next-to-open (carpeted [5 66 5]) cells)) "over the head")
+    (is (= [6 65 5] (stairs/next-to-open (carpeted [6 65 5]) cells)) "on the step's floor too")))
+
+(deftest a-retreat-from-a-dead-end-names-it-boxed-as-it-starts
+  ;; sim race 39593216223 (issue #62, world R4/42): at the mine's depth, among aquifer water, no
+  ;; stair or tunnel could be cut; the retreat walked up the staircase and the next descent was the
+  ;; same staircase to the same cell, until the run stalled
+  (let [corridor (into {} (for [x (range 5 10) y [48 49]] [[x y 5] blocks/air]))
+        w (assoc (standing 48) :world/chunks {[0 0] (world/column corridor)})
+        boxed (assoc w :plan/boxed-at #{[5 48 5]})
+        walk (stone/dead-end-retreat boxed)
+        started (plan/start-intent w (assoc walk :intent/dead-end [5 48 5]))]
+    (is (= [5 48 5] (:intent/dead-end walk)) "the cell the walk leaves")
+    (is (= [:walk :retreat] [(:intent/kind walk) (:intent/for walk)]))
+    (is (nil? (:plan/boxed-at w)))
+    (is (= #{[5 48 5]} (:plan/boxed-at started)) "put in :plan/boxed-at as the walk starts")
+    (is (not (stairs/clear-way? started [[5 49 5] [5 48 5]]))
+        "a staircase that ends there is refused its last stair")
+    (is (nil? (:intent/dead-end (stone/dead-end-retreat (assoc boxed :player/in-water? true))))
+        "out of water first: a swim, not a walk from a cell")))

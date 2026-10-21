@@ -334,14 +334,19 @@
    the iron at y 17, then cut a new one up through stone; the only pickaxe broke at y 49 and
    three :no-pickaxe failures ended the plan. Sim race 39007353160 (issue #349, world R4/2)
    climbed eight stairs out of a pit, then walked back down to its open sky, every eleven seconds:
-   the mouth must be out of the ground (stairs/out?), not merely under the sky."
+   the mouth must be out of the ground (stairs/out?), not merely under the sky. Never a mouth in
+   :plan/blacklist, where a walk to it that failed :no-path left it: sim snapshot
+   real-5-s2-Clj_r08 (issue #54) walked at the same mouth every twelve seconds for the window."
   [world]
   (let [feet (feet world)
         goal {:goal/kind :surface}]
     (when-not (path/goal-done? world goal feet)
-      (let [r (path/plan world feet goal)]
-        (when (and (= :found (:path/status r)) (seq (:path/waypoints r)))
-          {:intent/kind :walk :intent/target (last (:path/waypoints r)) :intent/for :opening})))))
+      (let [r (path/plan world feet goal)
+            mouth (last (:path/waypoints r))]
+        (when (and (= :found (:path/status r))
+                   (seq (:path/waypoints r))
+                   (not (contains? (:plan/blacklist world #{}) mouth)))
+          {:intent/kind :walk :intent/target mouth :intent/for :opening})))))
 
 (defn route!
   "The intent with a fresh route from the feet toward its walk-goal, counting the plan and

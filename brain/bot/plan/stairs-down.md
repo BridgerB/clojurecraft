@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, dig, mining, safety]
 aliases: [:stairs-down, :stairs-up, up-cells, under-sky?, descend, climb out, child intent, :boxed, stair-cells, safe?, intents composing intents, lay, step-lay, step-to-lay, floor-laying, fillers, cast staircase, cave lip, creep-speed, onto, aquifer, dry-head-distance, wet-head?, floor-distance]
 status: verified
-lastUpdated: 2026-10-18
+lastUpdated: 2026-10-21
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/stairs.clj#defn stair-cells
@@ -24,6 +24,8 @@ sourceRefs:
   - test/clojurecraft/stone_test.clj#a-descent-seal-keeps-filler-for-the-climb-out
   - test/clojurecraft/sim_test.clj#water-beside-every-descent-is-sealed-before-digging
   - src/clojurecraft/stairs.clj#defn clear-way?
+  - src/clojurecraft/stairs.clj#defn next-to-open
+  - test/clojurecraft/stone_test.clj#a-carpet-over-the-head-is-a-cell-to-open-in-a-stair-up
   - src/clojurecraft/stairs.clj#def fillers
   - src/clojurecraft/stairs.clj#defn filler
   - src/clojurecraft/stairs.clj#defn floor-laying
@@ -133,6 +135,8 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn water-over?
   - src/clojurecraft/stairs.clj#defn up-sealed?
   - test/clojurecraft/sim_test.clj#stairs-up-through-an-aquifer-are-sealed-with-cobblestone
+  - src/clojurecraft/stairs.clj#defn climb-reserve
+  - test/clojurecraft/stone_test.clj#a-seal-at-the-surface-keeps-nothing-for-a-climb-it-does-not-need
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[dig-timeline]]"
@@ -186,7 +190,9 @@ An ascent may regain a previously visited higher cell: height gained is progress
 - **No pickaxe under a lake: bore up through the bed and swim.** Sim races (issues #69, #62, #161, #135; worlds R1/17, R3/45, R4/19, R3/30): four bots with the pickaxe broken stood in a pocket under a lake whose bed was stone, then gravel or sand, over fourteen to twenty-three blocks of water, and cut level steps toward a shore by hand all window (182 steps in a quarter of an hour, a block of stone 7500 ms) with 200 and more cells in `:plan/boxed-at`, which were a symptom: a cap on that set (the nearest sixty-four) was tried, broke `a-boxed-search-does-not-retreat-to-its-start` and could reopen the retreat ping-pong of issue #161 R1/29, and the bore alone ended every one of those stalls. `step-aside` of a climb now tries `bore` first when no pickaxe is held at all (`handed?`): `bore-cells` is one to `bore-bed` 3 blocks of rock over the head (from y + 2; gravel and sand count, and fall into the cell below as it is dug, to be dug again) under at most `bore-depth` 24 blocks of water that ends in open air, so the stage `:bore` digs them bottom first by hand (child digs with `:intent/exposes-ok?` and `:intent/drop-ok?`), then holds the jump under the shaft's centre, the water rising the bot at 2.7 blocks a second (nine seconds of the fifteen of breath at the deepest) and the swim-out taking over when it is trapped. With a pickaxe the level steps are quick and nothing changes. `scoop/bed-depth` is 3 too, so a bot that needs water scoops it from below through the same thickness.
 - **A broken pickaxe stops ordinary descents.** Rock that drops only to a pickaxe with none held at all is not dug by hand going down, except toward trees: the stairs or tunnel fail `:no-pickaxe` (`tool-missing`) and the planner makes another. A stair up is cut by hand (`by-hand?`): the tool is made up top, so the way out is worth 7500 ms a block. Race 38477665442 Clj_r21 (issue #40): the pickaxe broke at y 60 in the iron mine, the stairs up stopped `:no-pickaxe`, the sticks for another were in the trees, and twelve walks to them failed `:no-path` (`stairs-up-with-no-pickaxe-are-cut-by-hand`). Batch iron-a2 runs went on by hand when the pickaxe broke, 7500 ms a stone for nothing, until a step timed out. A level step's 10 s is the walk's alone: it starts again after each dig. Only the pickaxe counts: a block that drops only to another tool is dug by hand in its own time, since the staircase wants the cell open, not the drop. Race 38477665442 (issues #42, #72): every bot landed in snow, on runners 2, 6 and 10, failed `:no-shovel` on its first stair, a snow block among its cells and a wooden pickaxe in hand (`snow-in-the-stair-is-cleared-by-hand`). `too-hard?` likewise asks `blocks/needs-tier`, the tier rule, not whether the block needs its tool.
 - **The wood for a replacement can be below the feet.** A descent explicitly toward trees (`:intent/for :trees`) is also cut by hand (`by-hand?`), unlike a mining or lava descent. Issue #229's R4/5 moment held sticks and cobblestone but no table or pickaxe; it walked out to y 78 and repeatedly failed the descent toward wood `:no-pickaxe`. The saved moment now completes that descent and walks onward; `stairs-down-to-trees-with-no-pickaxe-are-cut-by-hand` also keeps ordinary descents tool-required.
+- **A carpet is a cell to open.** `next-to-open` names a cell with any collision box (`blocks/collision-top`), not only a full cube: a moss carpet two over the feet, in the stair up's head cell, was called open, and the jump rose into its box three times for ten seconds each, `:stair-not-taken` (sim race 39593216223, issue #66, world R2/39; `a-carpet-over-the-head-is-a-cell-to-open-in-a-stair-up`).
 - **Gravel falls into the stair.** The seventh live iron-kit run (local landing 2360,3000) cut its staircase through gravel at y 37-40: the gravel over the cells it opened fell into them, the walk onto the stair failed `:stair-not-taken`, then two digs found their cell already emptied and failed `:target-gone`, ending the plan. A cell refilled is dug again, a cell emptied counts as open, and the step goes back to digging; the server model drops gravel the way the game does ([[server-model]]), and `gravel-that-refills-a-stair-is-dug-again` cuts two stairs into a gravel cliff (it fails with the old stages). A falling block that lands on the bot's head is not handled.
+- **A seal keeps what the climb back needs, not always eight.** `down-lay` seals the water beside a stair with `climb-reserve` kept: a block for each block the feet are under the highest rock (not leaves) of their column, up to `lay-reserve`, so a bot at the surface seals with all it has and one eight stairs down keeps all eight; a floor laid through a cave still keeps `lay-reserve` whatever the depth. Real bot Clj_r15 at R1/30 (issue #65) was one stair down from a lake shore with two dirt and every stair was refused for the eight (`a-seal-at-the-surface-keeps-nothing-for-a-climb-it-does-not-need`); the deeper reserve is race 39070889905's (issue #342).
 
 ## See also
 - [[dig-timeline]] - the child.

@@ -348,31 +348,57 @@
   [world bank]
   (not (bank? world bank)))
 
+(def shore-clearance 3)               ; cells over the water's surface a shore column is first looked at: a roof higher is not the ground
+(def shore-depth 4)                   ; and cells under it the look goes on to find the ground
+
+(defn shore-ground?
+  "Is column [x z] ground at the water's surface: scanning down from shore-clearance over surface
+   to shore-depth under it, the first cell that is water or solid is solid and not a lake's ice;
+   false when it is water, or when the column is not loaded. Not the top of the column
+   (stairs/dry-top?): a block high over the sea made every column under it ground. Sim race
+   39550831606 runner 4 (issue #177, world R4/1): a row of cobblestone at y 105 over the sea made
+   the sea out to y 62 the 'shore' of the swim, and the escape swam to the middle of the sea
+   and floated there."
+  [world [x z] surface]
+  (true? (first (keep (fn [y]
+                        (let [cell [x y z]]
+                          (cond (terrain/fluid-kind world cell) false
+                                (solid-cell? world cell) (not (iced? world cell))
+                                :else nil)))
+                      (range (+ surface shore-clearance) (- surface shore-depth 1) -1)))))
+
 (defn far-shore
   "With no bank in reach and the water open to the sky over the feet: the nearest column, along
-   eight bearings from bank-radius out to shore-reach, whose top is dry ground (stairs/dry-top?),
-   as the point at the water's surface to swim toward. Each pass
+   eight bearings from bank-radius out to shore-reach, whose top at the water's surface is dry
+   ground (shore-ground?), as the point at the water's surface to swim toward. Each pass
    that looks for a bank looks again, so the bank found near the shore takes over. Before it, an
    escape at sea rose to the surface and floated there until it timed out: sim race
    38811426215 runner 8 (issue #89, worlds R4/21 and R1/32 at 76010d2) had bots under the sea floor
    with land 33 and 40 blocks off, the only way out up through the water. With none, the point
    over the landing (:plan/go-at), which is land: world R4/30's bot stood under the sea 180
-   blocks from it, no shore within reach. nil with neither."
-  [world [fx _ fz] surface]
-  (or (->> (range 8)
-           (keep (fn [k]
-                   (let [a (* k (/ math/PI 4))
-                         [dx dz] [(math/cos a) (math/sin a)]]
-                     (some (fn [d]
-                             (let [x (long (math/floor (+ fx 0.5 (* d dx))))
-                                   z (long (math/floor (+ fz 0.5 (* d dz))))]
-                               (when (stairs/dry-top? world [x z]) [d [x surface z]])))
-                           (range bank-radius (inc shore-reach))))))
-           (sort-by first)
-           (map second)
-           first)
-      (when-let [[hx _ hz] (:plan/go-at world)]
-        [(long (math/floor hx)) surface (long (math/floor hz))])))
+   blocks from it, no shore within reach. nil with neither. The shore chosen before (kept, the
+   swim-out's :intent/shore) is kept while its column is dry ground still: sim race 39550831606
+   runner 4 (issue #177, world R4/1) floated sixteen blocks from a shore on each side, and the
+   first bearing at that distance changed with the cell the feet were in, so each stroke west
+   made the east shore the nearer and each stroke east the west: it dithered about one cell
+   for the escape's 120 s, three times, :no-escape."
+  ([world feet surface] (far-shore world feet surface nil))
+  ([world [fx _ fz] surface kept]
+   (or (when (and kept (shore-ground? world [(first kept) (nth kept 2)] surface)) kept)
+       (->> (range 8)
+            (keep (fn [k]
+                    (let [a (* k (/ math/PI 4))
+                          [dx dz] [(math/cos a) (math/sin a)]]
+                      (some (fn [d]
+                              (let [x (long (math/floor (+ fx 0.5 (* d dx))))
+                                    z (long (math/floor (+ fz 0.5 (* d dz))))]
+                                (when (shore-ground? world [x z] surface) [d [x surface z]])))
+                            (range bank-radius (inc shore-reach))))))
+            (sort-by first)
+            (map second)
+            first)
+       (when-let [[hx _ hz] (:plan/go-at world)]
+         [(long (math/floor hx)) surface (long (math/floor hz))]))))
 
 (defn shore-controls
   "Rising with jump held: while the feet are more than two under top (the water's top), drawn to
@@ -486,7 +512,7 @@
                   :else
                   (let [[fx _ fz] feet
                         shore (when-not (solid-cell? world [fx surface fz])
-                                (far-shore world feet surface))]
+                                (far-shore world feet surface shore))]
                     (-> world
                         (assoc :player/controls
                                (shore-controls world
