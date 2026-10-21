@@ -76,3 +76,33 @@
   [path from to every]
   (ticks path (parse-long from) (parse-long to) (parse-long every))
   (shutdown-agents))
+
+(defn ask
+  "Play the snapshot at path to ms, then print what each qualified function of fns says of the
+   world there, and the cells round the feet."
+  [path ms fns]
+  (let [snap (capture/read-world path)
+        w (simrace/world-for! snap)
+        m (simrace/moment-of snap w)
+        stop? (fn [world] (>= (:time/now world) ms))
+        r (sim/play-from simrace/step
+                         m
+                         stop?
+                         (simrace/window-of snap)
+                         (simrace/go-of w (:snapshot/until snap))
+                         nil)
+        world (:world r)]
+    (println "ASK" path ms (pr-str (mapv long (intent/feet world))))
+    (println "INTENT" (pr-str (dissoc (:plan/intent world) :intent/waypoints)))
+    (println "PLAN"
+             (pr-str (select-keys world
+                                  [:plan/attempts :plan/unwalkable :plan/wait :plan/boxed-at
+                                   :plan/blacklist])))
+    (doseq [f fns]
+      (println f
+               "=>"
+               (try (let [s (pr-str ((requiring-resolve (symbol f)) world))]
+                      (subs s 0 (min 800 (count s))))
+                    (catch Exception e (str "ERR " e)))))))
+
+(defn -main3 [path ms & fns] (ask path (parse-long ms) fns) (shutdown-agents))
