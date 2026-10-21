@@ -931,7 +931,8 @@
         out (build/site-lost w i :no-station)]
     (is (intent/done? (:plan/intent out)))
     (is (= #{site} (memory/given-up-sites out)))
-    (is (nil? (build/site-lost w i :no-stand)) "a build without a stand fails as it did")
+    (is (nil? (build/site-lost w (assoc i :intent/build :portal) :no-stand))
+        "a build other than a cast-one fails for no stand as it did")
     (is (nil? (build/site-lost w (assoc i :intent/kind :stairs-up) :no-station))
         "only a build gives its site up for no station")))
 
