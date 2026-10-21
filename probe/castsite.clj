@@ -4,6 +4,7 @@
             [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
             [clojurecraft.plan :as plan]
+            [clojurecraft.probe :as probe]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as simrace]))
 
@@ -98,6 +99,7 @@
              (pr-str (select-keys world
                                   [:plan/attempts :plan/unwalkable :plan/wait :plan/boxed-at
                                    :plan/blacklist])))
+    (doseq [line (probe/around world 6)] (println "AROUND" line))
     (doseq [f fns]
       (println f
                "=>"
