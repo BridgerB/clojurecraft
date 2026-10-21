@@ -931,10 +931,14 @@
     (is (not (stone/unsupported? (standing 64 :stone_pickaxe))) "stone under them")
     (is (not (stone/unsupported? (assoc w :player/in-water? true))) "afloat: the swim's business")
     (is (= {:plan/wait :unsupported} (stone/mine-next w (row :dig-gravel))) "wait for the fall")
-    (is (= :stairs-down
-           (:intent/kind (stone/mine-next (assoc w :plan/waiting-ticks stone/fall-wait-ticks)
-                                          (row :dig-gravel))))
-        "a hold that does not end in a fall (a ladder, a vine) is not waited on for ever")))
+    (let [held (stone/mine-next (assoc w :plan/waiting-ticks stone/fall-wait-ticks)
+                                (row :dig-gravel))
+          [x y z] (:intent/target held)]
+      (is (= [:walk :footing] [(:intent/kind held) (:intent/for held)])
+          "a body that has not fallen rests on the rim: it steps onto ground that stands")
+      (is (= 64 y))
+      (is (<= 1 (max (abs (- x 5)) (abs (- z 5))) 1) "a neighbouring cell"))
+    (is (nil? (stone/footing (standing 64 :stone_pickaxe))) "nothing to do with a floor")))
 
 (deftest stone-beside-kelp-is-not-sealed
   ;; issue #456 (sim race 39186569902, R1/24 seed 2): the seal went into the kelp plant beside

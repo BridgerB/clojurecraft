@@ -424,6 +424,29 @@
                   (not (:player/in-lava? world))
                   (contains? #{:clear :water :lava} (path/classify world [x (dec y) z]))))))
 
+(defn footing
+  "A walk onto the nearest cell beside the feet that stands (path/standable?), a block up or down
+   too, when the feet are over a gap (unsupported?), or nil: ending in that cell, since a body
+   that rests on the sliver of its box over a neighbour's edge falls no further and goes no
+   further. The same moment as unsupported?, a block of ice dug out under the feet two ticks
+   before, but the bot lay on the rim of the hole and no stair could be planned from it, nor a
+   retreat found from a cell with no floor: it waited :boxed to the end of its twenty seconds."
+  [world]
+  (when (unsupported? world)
+    (let [[x y z] (intent/feet world)
+          [px _ pz] (:player/pos world)]
+      (->> (for [dx [-1 0 1]
+                 dz [-1 0 1]
+                 dy [0 1 -1]
+                 :when (not (and (zero? dx) (zero? dz)))]
+             [(+ x dx) (+ y dy) (+ z dz)])
+           (filter #(path/standable? world %))
+           (sort-by (fn [[cx _ cz]]
+                      (physics/horizontal-distance [px 0 pz] [(+ cx 0.5) 0 (+ cz 0.5)])))
+           (map (fn [c] {:intent/kind :walk :intent/target c :intent/for :footing}))
+           (filter #(intent/routable? world %))
+           first))))
+
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
    (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
@@ -458,6 +481,7 @@
            (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
                (when (and (unsupported? world) (< (:plan/waiting-ticks world 0) fall-wait-ticks))
                  {:plan/wait :unsupported})
+               (footing world)
                (off-ice world)
                (seal-stone world row)
                (over-stone world row)
