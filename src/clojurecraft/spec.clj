@@ -458,6 +458,7 @@
 (s/def :intent/from-feet ::block-pos)
 (s/def :intent/taken nat-int?)
 (s/def :intent/tunnel-visited (s/coll-of ::block-pos :kind set?))
+(s/def :intent/retreats nat-int?)
 (s/def :intent/steps pos-int?)
 (s/def :intent/reach (s/and number? pos?))
 (s/def :intent/climb nat-int?)

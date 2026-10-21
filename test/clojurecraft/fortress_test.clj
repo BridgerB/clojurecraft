@@ -606,6 +606,75 @@
             visited))
         "retreat rather than laying a turn over lava")))
 
+(defn ledge
+  "Issue #338's R3-6-1 as a world: a cavern (x and z -4..4, y 60..70 air) over lava at y 59, two
+   blocks of a ledge at y 63 under the feet at [0 64 0] and the cell east of them, every way
+   round them air, with overrides on top."
+  [overrides]
+  (rock (merge (into {} (for [x (range -4 5) y (range 60 71) z (range -4 5)] [[x y z] air]))
+               (into {} (for [x (range -4 5) z (range -4 5)] [[x 59 z] blocks/lava-base]))
+               {[0 63 0] netherrack [1 63 0] netherrack}
+               overrides)))
+
+(deftest a-tunnel-climbs-out-of-a-dead-end-on-a-block-laid-beside-the-feet
+  ;; Issue #338's R3-6-1: two blocks of a ledge seven over the lava sea, every way round them
+  ;; air; the tunnel paced the two cells, 32 steps a tunnel, for four hours.
+  (let [w (assoc (ledge {}) :player/inventory {0 {:item (recipe/item-id :cobblestone) :count 64}})
+        feet [0 64 0]
+        target [10 64 0]
+        visited #{[0 64 0] [1 64 0]}
+        move (fortress/next-move w feet target 3 false visited)
+        floor [1 64 0]]
+    (is (= [1 1 0] move) "up onto a block laid on the ledge beside the feet")
+    (is (fortress/climb-out? w feet move false))
+    (is (not (fortress/safe? w feet move)) "not before the block is laid")
+    (is (fortress/safe? (assoc-in w [:world/blocks floor] netherrack) feet move))
+    (is (= :place (:build/op (build/next-op w (fortress/step-plan feet move))))
+        "the step lays it first")
+    (is (= [1 0 0] (fortress/next-move (dissoc w :player/inventory) feet target 3 false visited))
+        "nothing to lay: the retreat as before")
+    (is (nil?
+         (fortress/next-move (assoc-in w [:world/blocks [1 63 0]] air) feet target 3 false visited))
+        "a block needs a face to lay against")
+    (is
+     (not
+      (fortress/climb-out? (assoc-in w [:world/blocks [1 66 0]] blocks/lava-base) feet move false))
+     "never beside lava, laid or not")))
+
+(deftest a-tunnel-pacing-two-cells-is-blocked
+  ;; Issue #338's R3-6-1 with no filler carried: the only safe step from either ledge cell is
+  ;; back into the other, and each was counted as a step taken.
+  (let [w (assoc (ledge {})
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/on-ground? true
+                 :player/vel [0.0 0.0 0.0])
+        tick {:event/kind :tick :event/now 0}
+        i {:intent/kind :tunnel-to
+           :intent/target [10 64 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/tunnel-visited #{[0 64 0] [1 64 0]}}
+        run (fn [i] (:plan/intent (intent/run (assoc w :plan/intent i) i tick)))]
+    (is (fortress/retreat? [0 64 0] [1 0 0] #{[1 64 0]}))
+    (is (not (fortress/retreat? [0 64 0] [1 0 0] #{[0 64 0]})))
+    (testing "one retreat is allowed"
+      (let [out (run i)]
+        (is (= [1 0 0] (:intent/move out)))
+        (is (= 1 (:intent/retreats out)))
+        (is (= :active (:intent/status out)))))
+    (testing "a second in a row is a pace: blocked, not a step taken"
+      (let [out (run (assoc i :intent/retreats 1))]
+        (is (= :failed (:intent/status out)))
+        (is (= :blocked (:intent/reason out)))
+        (is (nil? (:intent/move out)))))
+    (testing "a fresh step resets the count"
+      (let [out (run (assoc i :intent/retreats 1 :intent/tunnel-visited #{}))]
+        (is (= [1 0 0] (:intent/move out)))
+        (is (= 0 (:intent/retreats out)))))))
+
 (deftest no-step-opens-a-spawner
   ;; issue #262: the blaze rods come from a fortress's spawner; a tunnel to it stops beside it
   (let [w (rock {[1 64 0] (blocks/default-state :spawner)})]
