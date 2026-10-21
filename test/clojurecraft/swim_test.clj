@@ -124,7 +124,7 @@
                  :world/chunks
                  {[0 0] (world/column (sea (range 8 16)))
                   [1 0] (world/column (sea (range 16)))
-                  [2 0] (world/column (sea (range 32 41)))})
+                  [2 0] (world/column (sea (range 9)))})
         feet [24 62 8]]
     (is (= [41 64 8] (swim/far-shore w feet 64)) "east and west tie at seventeen, east first")
     (is (= [7 64 8] (swim/far-shore w feet 64 [7 64 8])) "the west shore chosen before is kept")
@@ -134,9 +134,9 @@
                         :world/chunks
                         {[0 0] (world/column (sea (range 8 16)))
                          [1 0] (world/column (sea (range 16)))
-                         [2 0] (world/column (merge (sea (range 32 48))
+                         [2 0] (world/column (merge (sea (range 16))
                                                     (into {}
-                                                          (for [x (range 32 48)]
+                                                          (for [x (range 16)]
                                                             [[x 100 8]
                                                              (blocks/default-state
                                                               :cobblestone)]))))})]
