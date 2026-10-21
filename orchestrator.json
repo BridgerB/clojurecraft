@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T20:27:17.456Z",
+  "at" : "2026-10-21T20:28:28.794Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -78,7 +78,7 @@
     "number" : 108,
     "title" : "Bot stops at water-bucket: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
@@ -175,6 +175,9 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 186,
+    "move" : "assign"
+  }, {
     "issue" : 105,
     "move" : "leave",
     "why" : "hands-off label"
@@ -194,10 +197,6 @@
     "issue" : 40,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 108,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 87,
     "move" : "leave",
@@ -256,11 +255,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-21T07:22:36.684Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T07:23:45.220Z"
@@ -1605,5 +1599,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-21T20:27:17.456Z"
+  }, {
+    "issue" : 186,
+    "move" : "assign",
+    "at" : "2026-10-21T20:28:28.794Z"
   } ]
 }
