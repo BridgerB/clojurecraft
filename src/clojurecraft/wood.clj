@@ -21,6 +21,7 @@
 (def far-candidates 3)                ; routes planned on the way back to the surface
 (def max-trunk 8)                     ; logs followed up one trunk column
 (def descend-reach 96)                ; blocks on the plane to a trunk far below the eye a staircase down is cut toward
+(def continue-drop 3)                  ; blocks under the eye a trunk must be for the next length of a descent: the near band no route reaches
 (def cross-reach 48)                  ; blocks along the way to a trunk a crossing looks for open water
 (def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
 (def bed-reach 4)                     ; cells over the head a dig up into water overhead looks through
@@ -160,7 +161,8 @@
    (stone/stair-depth, never below the trunk's feet) at a time, the planner looking again
    between. The way down from a height is a cut one: trees-climb's mirror. Only a trunk within
    descend-reach on the plane, and never from a cell where a climb died :boxed. Once a length is
-   cut (descended?) the next goes on from its end, in the ground: out? is true only at the
+   cut (descended?) the next goes on from its end, in the ground, toward a trunk more than
+   continue-drop under the eye: out? is true only at the
    mouth, and from the length's foot the walk up the air already dug (intent/opening) took the
    bot back to it, every seven seconds, to cut the same length again. Sim race 39593219246
    (issue #135, world R4/4) went up and down five blocks of its own stairs for fifteen minutes
@@ -171,16 +173,18 @@
    targets were ledges no route reached, and the plan waited :no-log until it failed."
   [world trunks]
   (let [feet (intent/feet world)
-        fy (physics/y-of feet)]
-    (when (and (or (descended? world) (stairs/out? world feet))
+        fy (physics/y-of feet)
+        continuing? (descended? world)
+        drop-over (if continuing? continue-drop 12)]
+    (when (and (or continuing? (stairs/out? world feet))
                (not (contains? (:plan/boxed-at world #{}) feet)))
-      (when-let [[tx ty tz] (first (filter (fn [[tx ty tz]]
-                                             (and (> (- (physics/y-of (game/eye world)) ty) 12)
-                                                  (<= (physics/horizontal-distance (:player/pos
-                                                                                    world)
-                                                                                   [tx 0 tz])
-                                                      descend-reach)))
-                                           trunks))]
+      (when-let [[tx ty tz] (first (filter
+                                    (fn [[tx ty tz]]
+                                      (and (> (- (physics/y-of (game/eye world)) ty) drop-over)
+                                           (<= (physics/horizontal-distance (:player/pos world)
+                                                                            [tx 0 tz])
+                                               descend-reach)))
+                                    trunks))]
         (let [[fx _ fz] feet]
           {:intent/kind :stairs-down
            :intent/to-y (max ty (- fy stone/stair-depth))

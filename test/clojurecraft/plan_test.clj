@@ -380,6 +380,11 @@
     (is (= {:intent/kind :stairs-down :intent/to-y 44 :intent/dir [1 0] :intent/for :trees}
            (wood/trees-descend (assoc w :plan/last cut) [trunk]))
         "the next length goes on down toward the trunk")
+    (is (= {:intent/kind :stairs-down :intent/to-y 44 :intent/dir [1 0] :intent/for :trees}
+           (wood/trees-descend (assoc w :plan/last cut) [[12 43 8]]))
+        "a trunk under twelve below the eye, no route reaching it, is cut toward from the foot")
+    (is (nil? (wood/trees-descend (assoc w :plan/last cut) [[12 50 8]]))
+        "but not one level with the eye: that is the near band's")
     (is (nil? (wood/trees-descend (assoc w :plan/last cut :plan/boxed-at #{(intent/feet w)})
                                   [trunk]))
         "never from a cell where a climb died boxed")))
