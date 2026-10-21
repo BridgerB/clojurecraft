@@ -6,7 +6,8 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.probe :as probe]
             [clojurecraft.sim :as sim]
-            [clojurecraft.simrace :as simrace]))
+            [clojurecraft.simrace :as simrace]
+            [clojurecraft.terrain :as terrain]))
 
 (defn view
   "What changes between lines: the intent and its child's kind, aim and reason, no cells."
@@ -63,7 +64,8 @@
                                                   [:intent/kind :intent/stage :intent/target
                                                    :intent/at :intent/replans :intent/route]))
                              (pr-str (get (:intent/waypoints i) (:intent/at i)))
-                             (pr-str (count (:intent/waypoints i)))))
+                             (pr-str (count (:intent/waypoints i)))
+                             (pr-str (terrain/fluid-at world (intent/feet world)))))
                   (> t to)))]
     (println "TICKS" path from to)
     (sim/play-from simrace/step
