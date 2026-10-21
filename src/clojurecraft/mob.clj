@@ -122,6 +122,11 @@
 
 (def death-ticks 20)                  ; a dead mob is removed this long after it died (LivingEntity.tickDeath)
 (def dragon-death-ticks 200)          ; the dragon's death takes ten seconds (EnderDragon.tickDeath)
+(def bite-out 8.0)                    ; blocks along its facing the sitting dragon's head reaches: the head part 6.5 out, its box inflated 1.5 more (EnderDragon.aiStep, .hurt)
+(def bite-across 2.5)                 ; blocks across its facing: the neck part's box, 3 wide, inflated by 1
+(def bite-rise 5.0)                   ; blocks a player's feet may be under or over the dragon's and be reached
+(def bite-damage 10.0)                ; the head's and neck's hurt before the difficulty (EnderDragon.hurt)
+(def bite-every 10)                   ; game ticks between its hurts (its hurtTime between them)
 (def hurt-window-ms 500)              ; after a hurt only a harder one lands, for its excess (invulnerableTime past 10 of 20 ticks)
 (def attack-reach 3.2)                ; how far from the eye a player's attack reaches the mob's box
 (def day-ticks 24000)                 ; game ticks in a day
@@ -245,6 +250,43 @@
         hi [(+ x (/ w 2)) (+ y h) (+ z (/ w 2))]
         d (mapv (fn [v a b] (max 0.0 (- a v) (- v b))) p lo hi)]
     (math/sqrt (reduce + (map * d d)))))
+
+(defn facing
+  "[x z], the unit vector on the plane from the dragon's body toward its head for its yaw in
+   degrees: EnderDragon.aiStep puts the head part at (sin yaw · 6.5, −cos yaw · 6.5) from the
+   body, the opposite of any other mob's look (physics/direction), as the dragon flies along it."
+  [yaw]
+  (let [r (math/to-radians yaw)] [(math/sin r) (- (math/cos r))]))
+
+(defn ahead
+  "[along across] of point p from the dragon standing at pos with yaw, on the plane: blocks along
+   its facing (toward the head, negative behind the body) and across it (positive to the
+   facing's left, [−fz fx])."
+  [pos yaw p]
+  (let [[fx fz] (facing yaw)
+        dx (- (first p) (first pos))
+        dz (- (nth p 2) (nth pos 2))]
+    [(+ (* dx fx) (* dz fz)) (- (* dz fx) (* dx fz))]))
+
+(defn beside
+  "[x z], the point on the plane along and across (ahead's frame) from the dragon standing at pos
+   with yaw."
+  [pos yaw [along across]]
+  (let [[fx fz] (facing yaw)]
+    [(+ (first pos) (* along fx) (* across (- fz))) (+ (nth pos 2) (* along fz) (* across fx))]))
+
+(defn bitten?
+  "Is a player whose feet are at p within the sitting dragon's head and neck, the dragon standing
+   at pos with yaw: along its facing from its body's middle out to bite-out, across within
+   bite-across and the player's half width, the feet within bite-rise of the dragon's. The head
+   lowered toward a player near it brings the neck back toward the body (6.5 · cos pitch: gym
+   dragon-e run 2 and dragon-f run 2 were slain two blocks from the fountain, in front of the
+   head); the model takes every pitch down to the neck's box reaching the body's middle."
+  [pos yaw p]
+  (let [[along across] (ahead pos yaw p)]
+    (and (<= 0.0 along bite-out)
+         (<= (abs across) (+ bite-across physics/half-width))
+         (<= (abs (- (second p) (second pos))) bite-rise))))
 
 (defn head
   "The point a mob of kind at pos is looked at and shot from: its eye, 85% of its height."
