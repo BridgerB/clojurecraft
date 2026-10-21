@@ -96,6 +96,9 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn stand-cell?
   - test/clojurecraft/build_test.clj#a-room-cell-behind-a-wall-is-cut-toward
   - src/clojurecraft/build.clj#defn refused-for-the-body?
+  - src/clojurecraft/build.clj#defn dig-rejected?
+  - test/clojurecraft/build_test.clj#a-portal-block-in-the-wall-is-a-wall-already
+  - test/clojurecraft/build_test.clj#a-dig-the-server-did-not-do-is-dug-again-before-the-build-fails
   - test/clojurecraft/build_test.clj#a-block-is-never-placed-into-the-bot
   - src/clojurecraft/build.clj#defn toward-stand
   - src/clojurecraft/build.clj#defn stand-walk
@@ -125,6 +128,10 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#an-in-flight-refill-dig-preserves-the-feets-support
   - src/clojurecraft/build.clj#defn scoop-at-station
   - src/clojurecraft/build.clj#defn scoop-blocked?
+  - src/clojurecraft/build.clj#defn lava-gone?
+  - src/clojurecraft/build.clj#defn water-needed?
+  - test/clojurecraft/build_test.clj#a-lava-source-gone-before-the-aim-is-looked-for-again
+  - test/clojurecraft/build_test.clj#a-spent-water-bucket-is-asked-for-again
   - test/clojurecraft/build_test.clj#a-refill-reconsiders-a-scoop-whose-ray-filled
   - test/clojurecraft/build_test.clj#refill-scoops-a-source-under-flowing-lava
   - src/clojurecraft/build.clj#defn reach-sources
@@ -216,6 +223,10 @@ Refill approaches use the pathfinder's footing rules, not solidity alone. `stand
 
 The refill's clear ray can fill after its scoop child is chosen. `scoop-blocked?` checks a lava scoop's `:intent/aim` against the current terrain before `work-op` advances it, including a child already waiting for an answer or failed. A blocked child is dropped without spending a build attempt; the next refill chooses a clear source or digs its sight line again. Issue #227's R3/26 and R3/29 snapshots had gravel fall into the ray while the bucket was equipped, then retried that same blocked ray until `:no-scoop` (`a-refill-reconsiders-a-scoop-whose-ray-filled`). Water scoops retain their cast's side aim.
 
+A refill's source can turn to obsidian after it is chosen, when the cast's water or the water a dig let in reaches it. The scoop child then fails `:target-gone`; `lava-gone?` has `work-op` drop it, like a blocked ray, so the next refill chooses another source and a pool with none left ends in `:no-station` and a new site. Real races 39245788157 and 39590862487 (issue #419) failed the build on the first vanished source with lava still in reach (`a-lava-source-gone-before-the-aim-is-looked-for-again`).
+
+A water pour can land in the lava's own cell, where the lava becomes obsidian and the water goes with it: no source is left to scoop back and both buckets are empty. `held-first` adds a water bucket to the row's holds while a water pour is unsatisfied and none is held (`water-needed?`), so the build's next start asks the needs planner to fill one. Issue #455 failed `:not-held` three times in 300 ms at the next cell's water pour (`a-spent-water-bucket-is-asked-for-again`).
+
 Refill sight lines must be safe to excavate as well as reachable. `safe-source?` refuses a source whose ray walls touch lava at or above the stand's feet; lava below the feet may still be uncovered. Both `station-among` and `source-in-sight` apply this rule, so a new station avoids the dangerous opening and a resumed refill reconsiders it. Issue #231's R1/32 snapshot targeted a source at y -26 from a stand at y -25, but the rock on its ray held back lava at y -24. Opening it flooded the stand and three escapes failed `:no-footing`. With the unsafe sight line rejected, the snapshot casts its first obsidian after 30700 ms (`a-refill-never-opens-lava-over-its-stand`).
 
 When the feet already centre on a candidate stand (`intent/centred?`), `station-among` checks its sight lines from the actual eyes, not the cell's exact centre. Sim race 39044511861 runner 6 (issue #380, R3/32) reached a stand slightly off centre: its projected ray was safe, but the actual ray grazed a higher wall holding back lava. The refill refused that ray and failed `:no-station` three times despite 113 sources remaining in the pool. Reconsidering the stand from the actual eyes selects another and casts the first obsidian after 202750 ms (`a-refill-checks-the-eyes-at-the-stand`).
@@ -247,6 +258,8 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **`way-refilled?` drops a walk only for gravel in reach.** A falling block anywhere on a fifty-block straight way is no clear the bot can dig; the walk fails `:no-path` and `lost-way?` gives the site up (#135, R4/34). A build whose feet are in water with no route from them (`wading-out?`) swims out first (`:swim-out` for `:retreat`): a route never crosses water.
 - **A staircase can end inside the frame's box** (#45, real-3-s2-Clj_r05): the feet's own cell is the frame's rock and every way to the landing crosses a wall; no single corner (`round-corner`) is clear, the plain walk fails `:no-path`, and a cast-one gives the site up on the second such failure. A route of several corners round the box would keep the site (not built). `stance-block` takes the z-first line when the x-first one holds a solid cell a way may not dig (the frame's rock, cobblestone the plan places, a cell beside lava) and the z-first none (#45, real-6-s2-Clj_r05).
 - **No way, no stand: the site is given up.** A cast-one whose plain walk fails `:no-path` a second time (`lost-way?`, `:plan/attempts`) or whose op has no stand (`work-op`'s `:no-stand`) gives its site up and the planner chooses another; `way-back` goes to the landing whenever no route reaches it, however near (#74's two snapshots stood six blocks off with rock between). A portal's site holds a cast and is not given up for these.
+- **A dig the server did not do is dug again.** A child `:dig` that fails `:rejected` (the server acked the finish with the block standing: a lagging server drops a finish it found early and queued behind another) is counted in `:intent/rejections` and dug again by `stairs/rejected`, as a stair does, and only the third fails the build `:rejected` (`dig-rejected?`). Real race 39405014440 bot Clj_r13 and race 39407278017 bot Clj_r03 (issue #44) each failed the whole build on the first such dig, with the cast room unfinished (`a-dig-the-server-did-not-do-is-dug-again-before-the-build-fails`).
+- **A portal block in the wall is a wall.** `firm-ops` counts a `:nether_portal` cell as already walled: the game takes no block into one and no fluid flows into it, so the cobblestone for it was refused three times, `:rejected`, with the cast room unfinished (real race 39407278017 bot Clj_r03, issue #44; `a-portal-block-in-the-wall-is-a-wall-already`).
 - **A bubble column takes a block.** The model's `blocks/placeable-into?` accepts it as the game does (replaceable): #44's bridge over a magma stream was refused three times.
 
 ## Gotchas

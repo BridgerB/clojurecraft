@@ -164,13 +164,18 @@
 (defn firm-ops
   "Make pos a firm wall from stand where the rock is missing (issue #124): a falling block there
    (gravel, sand) dug out (:fall-clear), then a block placed; both done once pos is firm (solid and
-   not falling) or guard holds. In solid rock both hold from the start and nothing is placed."
+   not falling) or guard holds. In solid rock both hold from the start and nothing is placed.
+   A portal block there is a wall already: no block is placed into it (the game does not take
+   one) and no fluid flows into it. Real race 39407278017 bot Clj_r03 (issue #44): the cast
+   room's back wall met a nether portal's block, and the cobblestone for it was refused three
+   times, :rejected."
   [pos stand guard step]
-  [{:build/op :dig
-    :build/pos pos
-    :build/stand stand
-    :build/step :fall-clear
-    :build/done [:or guard [:firm pos] [:not-solid pos]]} (place-op pos stand guard step)])
+  (let [walled (into [:or] (remove nil? [guard [:block pos :nether_portal]]))]
+    [{:build/op :dig
+      :build/pos pos
+      :build/stand stand
+      :build/step :fall-clear
+      :build/done [:or guard [:firm pos] [:not-solid pos]]} (place-op pos stand walled step)]))
 
 (def stair
   "The steps the upper cells are cast from, [x feet] in the row three in front of the frame
@@ -1324,6 +1329,14 @@
   [world {:intent/keys [kind reason cell]}]
   (boolean (and (= :place kind) (= :rejected reason) cell (place/inside-player? world cell))))
 
+(defn dig-rejected?
+  "Did child, a dig, fail :rejected: the server acked the finish with the block still standing?
+   A lagging server drops a finish it found early and queued behind another, and the block is
+   still to open. Real race 39405014440 bot Clj_r13 and race 39407278017 bot Clj_r03 (issue #44)
+   each failed the whole build :rejected on the first such dig, a block into their cast room."
+  [{:intent/keys [kind reason]}]
+  (and (= :dig kind) (= :rejected reason)))
+
 (defn pickaxe-at-hand?
   "Could a pickaxe be made without going out for anything: the needs planner's next step toward
    one (make/next-row over plan/goals) a craft or a table placed, not a gather, a mine or a scoop
@@ -1351,6 +1364,15 @@
    dig took for open, and the build failed :target-gone."
   [{:intent/keys [kind reason]}]
   (and (= :dig kind) (= :target-gone reason)))
+
+(defn lava-gone?
+  "Did child, a lava scoop (scoop-at-station), find its source gone (:target-gone)? The cast's own
+   water, or the water the digs let in, turned it to obsidian between the choice and the aim; the
+   refill looks for another source. Real races 39245788157 and 39590862487 (issue #419): the
+   scoops of one pool failed :target-gone one after another with lava still in reach, and each
+   ended the build."
+  [{:intent/keys [kind reason fluid]}]
+  (and (= :scoop kind) (= :lava fluid) (= :target-gone reason)))
 
 (defn boxed-way?
   "Did child, a staircase or a tunnel (plan/boxing-kinds), fail :boxed: no way on from where the
@@ -1397,6 +1419,22 @@
   [world {:intent/keys [kind fluid aim]}]
   (boolean (and (= :scoop kind) (= :lava fluid) aim (seq (scoop/ray-walls world aim)))))
 
+(defn site-lost
+  "The world with the build's site given up and the intent done, or nil, when c, what op-child gave,
+   says the site is no use: :no-station at a :build (lava remains but no safe station reaches it),
+   or :no-stand at a :cast-one (no cell reaches the op and none can be cut). Either way the next
+   build chooses another site. Any other build fails with the keyword as it always did."
+  [world {:intent/keys [kind build origin]} c]
+  (when-let [say (cond (and (= :no-station c) (= :build kind))
+                       "build: no safe lava station at the site, a new site"
+                       (and (= :no-stand c) (= :cast-one build))
+                       "build: no stand at the site, a new site")]
+    (-> world
+        (assoc :player/controls {})
+        (memory/give-up-site origin)
+        intent/done
+        (game/say say))))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), except an active climb finishes before its
@@ -1411,101 +1449,96 @@
    half hour of its ninety minutes. A tunnel-to only refuses the hand when a replacement is at
    hand: without wood in the Nether, even slow rock must be cleared to reach the fortress."
   [world {:intent/keys [child op] :as i} next event]
-  (cond (not= next op)
-        (if (and (= :stairs-up (:intent/kind child))
-                 (not (or (intent/done? child) (intent/failed? child))))
-          (intent/run-child world event)
-          (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child))
-        (and child (intent/done? child)) (intent/dissoc-intent world :intent/child)
-        (and child (refused-for-the-body? world child))
-        ;; the server refused a block into the bot's own body: the stand was wrong, not the op
-        (-> world
-            (assoc :player/controls {})
-            (intent/dissoc-intent :intent/child)
-            (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
-        (and child (intent/failed? child) (found-open? child))
-        (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
-        (and child (intent/failed? child) (way-refilled? world child))
-        ;; gravel fell into the way after the walk was planned: clear it again
-        (-> world
-            (assoc :player/controls {})
-            (intent/dissoc-intent :intent/child)
-            (game/say "build: the way filled with what fell over it, clearing it again"))
-        (and child (scoop-blocked? world child))
-        (-> world
-            (assoc :player/controls {})
-            (intent/dissoc-intent :intent/child)
-            (game/say "build: the scoop's sight line filled, opening it again"))
-        (and (= :dig (:intent/kind child))
-             (= :lava (:intent/for child))
-             (= (update (intent/feet world) 1 dec) (:intent/target child)))
-        (-> world
-            (assoc :player/controls {})
-            (intent/dissoc-intent :intent/child)
-            (game/say
-             "build: the refill would remove the feet's support, choosing another station"))
-        (and (= :build (:intent/kind i))
-             (= :walk (:intent/kind child))
-             (= :retreat (:intent/for child))
-             (intent/failed? child)
-             (= :no-path (:intent/reason child))
-             (:intent/target child))
-        ;; avoid retrying the same failed waypoint when the build recalculates its way out
-        (-> world
-            (assoc :player/controls {})
-            (update :plan/retreat-unreachable (fnil conj #{}) (:intent/target child))
-            (intent/dissoc-intent :intent/child)
-            (game/say "build: retreat waypoint failed, finding another"))
-        (and child (lost-way? world i child))
-        ;; no way reaches the site from here: it is given up and the planner chooses another
-        (-> world
-            (assoc :player/controls {})
-            (memory/give-up-site (:intent/origin i))
-            intent/done
-            (game/say (str "build: no way to the site at " (:intent/origin i) ", a new site")))
-        (and child (intent/failed? child) (boxed-way? child))
-        ;; a way to the site boxed in: the pocket is remembered and the build looks again from it
-        ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's
-        (-> world
-            (assoc :player/controls {})
-            (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
-            (intent/dissoc-intent :intent/child)
-            (game/say (str "build: " (:intent/kind child) " boxed in, the way out")))
-        (and child (intent/failed? child))
-        (-> world
-            (assoc :player/controls {})
-            (intent/fail (:intent/reason child)))
-        child (intent/run-child world event)
-        :else
-        (let [c (op-child world i next)
-              missing (when (= :dig (:intent/kind c))
-                        (stairs/tool-missing world (:intent/target c)))
-              ;; the needs planner is asked only when no pickaxe is held
-              c (or (when (and missing
-                               (if (= :tunnel-to (:intent/kind i))
-                                 (pickaxe-at-hand? world)
-                                 (hand-dig-refused? world (:intent/target c))))
-                      missing)
-                    (tool-first world c))]
-          (cond (and (= :no-station c) (= :build (:intent/kind i)))
-                ;; lava remains but no safe station reaches it: do not choose this site again
-                (-> world
-                    (assoc :player/controls {})
-                    (memory/give-up-site (:intent/origin i))
-                    intent/done
-                    (game/say "build: no safe lava station at the site, a new site"))
-                (and (= :no-stand c) (= :cast-one (:intent/build i)))
-                ;; no cell reaches the op and none can be cut: the site is no use, a new one
-                (-> world
-                    (assoc :player/controls {})
-                    (memory/give-up-site (:intent/origin i))
-                    intent/done
-                    (game/say "build: no stand at the site, a new site"))
-                (keyword? c) (intent/fail world c)
+  (cond
+    (not= next op)
+    (if (and (= :stairs-up (:intent/kind child))
+             (not (or (intent/done? child) (intent/failed? child))))
+      (intent/run-child world event)
+      (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child))
+    (and child (intent/done? child)) (intent/dissoc-intent world :intent/child :intent/rejections)
+    (and child (refused-for-the-body? world child))
+    ;; the server refused a block into the bot's own body: the stand was wrong, not the op
+    (-> world
+        (assoc :player/controls {})
+        (intent/dissoc-intent :intent/child)
+        (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
+    (and child (intent/failed? child) (found-open? child))
+    (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
+    (and child (intent/failed? child) (lava-gone? child))
+    (-> world
+        (assoc :player/controls {})
+        (intent/dissoc-intent :intent/child)
+        (game/say "build: the lava source was gone, choosing another"))
+    (and child (intent/failed? child) (way-refilled? world child))
+    ;; gravel fell into the way after the walk was planned: clear it again
+    (-> world
+        (assoc :player/controls {})
+        (intent/dissoc-intent :intent/child)
+        (game/say "build: the way filled with what fell over it, clearing it again"))
+    (and child (scoop-blocked? world child))
+    (-> world
+        (assoc :player/controls {})
+        (intent/dissoc-intent :intent/child)
+        (game/say "build: the scoop's sight line filled, opening it again"))
+    (and (= :dig (:intent/kind child))
+         (= :lava (:intent/for child))
+         (= (update (intent/feet world) 1 dec) (:intent/target child)))
+    (-> world
+        (assoc :player/controls {})
+        (intent/dissoc-intent :intent/child)
+        (game/say "build: the refill would remove the feet's support, choosing another station"))
+    (and (= :build (:intent/kind i))
+         (= :walk (:intent/kind child))
+         (= :retreat (:intent/for child))
+         (intent/failed? child)
+         (= :no-path (:intent/reason child))
+         (:intent/target child))
+    ;; avoid retrying the same failed waypoint when the build recalculates its way out
+    (-> world
+        (assoc :player/controls {})
+        (update :plan/retreat-unreachable (fnil conj #{}) (:intent/target child))
+        (intent/dissoc-intent :intent/child)
+        (game/say "build: retreat waypoint failed, finding another"))
+    (and child (lost-way? world i child))
+    ;; no way reaches the site from here: it is given up and the planner chooses another
+    (-> world
+        (assoc :player/controls {})
+        (memory/give-up-site (:intent/origin i))
+        intent/done
+        (game/say (str "build: no way to the site at " (:intent/origin i) ", a new site")))
+    (and child (intent/failed? child) (boxed-way? child))
+    ;; a way to the site boxed in: the pocket is remembered and the build looks again from it
+    ;; (to-height takes the way out instead), as plan/fail-intent remembers an intent's
+    (-> world
+        (assoc :player/controls {})
+        (update :plan/boxed-at (fnil conj #{}) (intent/feet world))
+        (intent/dissoc-intent :intent/child)
+        (game/say (str "build: " (:intent/kind child) " boxed in, the way out")))
+    (and child (intent/failed? child) (dig-rejected? child))
+    ;; the server did not do the dig (its ack came with the block standing): a block is still
+    ;; to open, so it is dug again, as a stair does, before the build gives up
+    (stairs/rejected (assoc world :player/controls {}) i)
+    (and child (intent/failed? child))
+    (-> world
+        (assoc :player/controls {})
+        (intent/fail (:intent/reason child)))
+    child (intent/run-child world event)
+    :else
+    (let [c (op-child world i next)
+          missing (when (= :dig (:intent/kind c)) (stairs/tool-missing world (:intent/target c)))
+          ;; the needs planner is asked only when no pickaxe is held
+          c (or (when (and missing
+                           (if (= :tunnel-to (:intent/kind i))
+                             (pickaxe-at-hand? world)
+                             (hand-dig-refused? world (:intent/target c))))
+                  missing)
+                (tool-first world c))]
+      (or (site-lost world i c)
+          (cond (keyword? c) (intent/fail world c)
                 :else
                 (intent/run-child
                  (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
-                 event)))))
+                 event))))))
 
 (defmethod intent/run :build
   ;; work the first op of the plan not satisfied (next-op, work-op); done when the last op holds.
@@ -1858,6 +1891,21 @@
        (or (pos? (get (make/counts world) :crafting_table 0)) (some? (make/take-table-along world)))
        (or (sticks-at-hand? world) (wood-near? world))))
 
+(defn water-needed?
+  "Does plan still pour water (an op not satisfied that pours :water_bucket) while an empty
+   bucket is held to fill and no water bucket is? A cast's water poured into the cell over the lava can land in the lava's own cell: the
+   lava turns to obsidian, the water goes with it and there is no source to scoop back, so the
+   bucket stays empty. Real races 39181279602 runner 4 and 39499334753 runner 2 (issue #455): the
+   next cell's water pour failed :not-held three times in 300 ms and the plan ended with two empty
+   buckets and no water in sight."
+  [world plan]
+  (boolean (and (held? world :bucket)
+                (not (held? world :water_bucket))
+                (some #(and (= :pour (:build/op %))
+                            (= :water_bucket (:build/item %))
+                            (not (satisfied? world %)))
+                      plan))))
+
 (defn held-first
   "What the needs planner does for what a build row holds before it starts: the tools of
    :goal/holds (a pickaxe for the way down to lava and the digs: sim race 38477665389, issue #70,
@@ -1869,6 +1917,7 @@
   (let [n (if plan (blocks-needed world plan) 0)
         holds (cond-> (or (:goal/holds goal) {})
                 (pos? n) (assoc :item/cobblestone n)
+                (water-needed? world plan) (assoc :item/water_bucket 1)
                 (carry-table? world) (assoc :item/crafting_table 1)
                 (carry-sticks? world) (assoc :item/stick kit-sticks))]
     (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))))

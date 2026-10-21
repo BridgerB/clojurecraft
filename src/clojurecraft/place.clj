@@ -289,6 +289,34 @@
                           (not (contains? memory/placed-kinds (blocks/name-of id))))]
            [s face])))
 
+(defn water-spot
+  "The water cell beside the feet (the ring of cells touching them, around) to place a block into
+   when there is no dry spot: a water cell (a block placed into a source or a flow takes its place,
+   blocks/placeable-into?) with a solid neighbour to click (support), not refused, not inside
+   the player, within reach. nil when none. Sim race 39601680523 world R1/10 (issue #148): the
+   bot stood on the one cobblestone it had pillared up in the open sea, water on every side
+   and no pickaxe, and its table failed :no-spot three times, a pickaxe short of the bucket it
+   held for the water all round it."
+  [world refused]
+  (let [[px py pz] (:player/pos world)
+        fx (long (math/floor px))
+        fy (long (math/floor py))
+        fz (long (math/floor pz))
+        eye (game/eye world)]
+    (first (for [[dx dy dz] around
+                 :when (= 1 (max (abs dx) (abs dz)))
+                 :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
+                       t (terrain/block-at world target)]
+                 :when (and t
+                            (not (contains? refused target))
+                            (= :liquid (blocks/type-of t))
+                            (= :water (terrain/fluid-kind world target))
+                            (terrain/confirmed? world target)
+                            (not (inside-player? world target))
+                            (<= (physics/distance eye (physics/centre target)) place-reach)
+                            (support world target))]
+             target))))
+
 (defn nudge-off
   "The world with one tick's controls toward the middle of the feet's cell and :intent/nudges one
    more: a given cell (a stair's seal against the water beside the feet) that the body clips at the
@@ -352,7 +380,9 @@
         n (when-not (or at found) (niche world))
         [_ stowed-item :as stowed] (when n (intent/stowed-tool world (terrain/block-at world n)))
         [target from] (or found
-                          (when (and (nil? at) (nil? n) passage-ok?) (spot world true refused)))]
+                          (when (and (nil? at) (nil? n) passage-ok?) (spot world true refused)))
+        wet (when (and retreated? (nil? at) (nil? n) (nil? target)) (water-spot world refused))
+        [wet-against wet-face] (when wet (support world wet))]
     (cond (and given (inside-player? world at) (< nudges max-nudges)) (nudge-off world nudges)
           given (settle-at world at against face)
           at (intent/fail world :no-support)
@@ -371,6 +401,11 @@
                                :intent/stage :niche
                                :intent/niche n
                                :intent/child (intent/child-dig n))
+          ;; the water cell is a given cell from here: the server judges it, as it does a build's
+          wet
+          (-> world
+              (settle-at wet wet-against wet-face)
+              (intent/assoc-intent :intent/cell wet))
           :else
           (if-let [walk (when-not retreated? (fresh-rock world))]
             (intent/assoc-intent world
@@ -380,21 +415,24 @@
             (intent/fail world :no-spot)))))
 
 (defn walk-off
-  "One tick of the walk to fresh rock (the child :walk of fresh-rock): done, look for a spot
-   again from the equip; failed, fail :no-spot."
+  "One tick of the walk to fresh rock (the child :walk or :stairs-up of fresh-rock): done or
+   failed, look for a spot again from the equip, this once (:intent/retreated?), where a spot
+   in the water beside the feet counts (water-spot) and the next failure is :no-spot. A walk
+   that failed used to fail the place at once: sim race 39601680523 world R1/10 (issue #148)
+   stood on a pillar in the sea, the stairs up refused toward every heading, and the table
+   failed :no-spot three times with the water beside it to be placed into."
   [world {:intent/keys [child]} event]
-  (cond (intent/done? child)
-        (-> world
-            (assoc :player/controls {})
-            (intent/assoc-intent :intent/stage :equip)
-            (intent/dissoc-intent :intent/child))
-        (and (intent/failed? child) (:player/in-water? world) (not= :swim-out (:intent/kind child)))
+  (cond (and (intent/failed? child) (:player/in-water? world) (not= :swim-out (:intent/kind child)))
         (-> world
             (assoc :player/controls {})
             (intent/assoc-intent
              :intent/child
              {:intent/kind :swim-out :intent/for :retreat :intent/status :active}))
-        (intent/failed? child) (intent/fail (assoc world :player/controls {}) :no-spot)
+        (or (intent/done? child) (intent/failed? child))
+        (-> world
+            (assoc :player/controls {})
+            (intent/assoc-intent :intent/stage :equip)
+            (intent/dissoc-intent :intent/child))
         :else (intent/run-child world event)))
 
 (defn dig-niche

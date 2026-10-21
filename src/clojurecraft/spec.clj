@@ -123,6 +123,7 @@
 (s/def :intent/from-dist number?)
 (s/def :intent/exposes-ok? boolean?)
 (s/def :intent/no-lay boolean?)
+(s/def :intent/dug nat-int?)
 (s/def :intent/drop-ok? boolean?)
 (s/def :intent/passage-ok? boolean?)
 (s/def :intent/retreated? boolean?)
@@ -271,6 +272,7 @@
 (s/def :backed-off/pos (s/coll-of number? :count 3))
 (s/def :plan/backed-off ; creeper entity id → where it stood when first backed away from, and how often
   (s/map-of int? (s/keys :req-un [:backed-off/pos :backed-off/times])))
+(s/def :plan/cornered (s/coll-of int? :kind set?)) ; entity ids a back-off ended on its clock beside
 (s/def :plan/surfaced (s/tuple ::block-pos int?)) ; where and when the last climb out came out
 (s/def :plan/goals (s/coll-of keyword? :kind set?))
 (s/def :plan/chain? boolean?)
@@ -328,7 +330,7 @@
            :window/state-id :window/grid :window/cursor :window/open :player/held-slot :plan/intent
            :plan/status :plan/blacklist :plan/trunk-failures :plan/chain? :plan/reached
            :plan/boxed-at :plan/boxed-route :plan/retreat-unreachable :plan/unreached
-           :plan/unwalkable :plan/backed-off]))
+           :plan/unwalkable :plan/backed-off :plan/cornered]))
 
 (s/fdef game/step
   :args
@@ -456,6 +458,7 @@
 (s/def :intent/move (s/coll-of #{-1 0 1} :kind vector? :count 3)) ; a :tunnel step's [dx dy dz]
 (s/def :intent/from ::block-pos)
 (s/def :intent/from-feet ::block-pos)
+(s/def :intent/dead-end ::block-pos)
 (s/def :intent/taken nat-int?)
 (s/def :intent/tunnel-visited (s/coll-of ::block-pos :kind set?))
 (s/def :intent/retreats nat-int?)

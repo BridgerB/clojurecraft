@@ -58,6 +58,9 @@
    [:intent/no-lay
     "a :swim-out whose block laid for a bank was refused: it notches the wall instead"
     "after a refused lay"]
+   [:intent/dug
+    "ticks the child digs a :swim-out has finished took, added to its escape time (swim/dug-credit)"
+    "after a :swim-out's first finished dig"]
    [:intent/next-search "the tick a :swim-out with no bank yet looks for one again"
     "while a :swim-out rises with no bank"]
    [:intent/shore "the point at the water's surface a :swim-out with no bank swims toward"
@@ -220,6 +223,9 @@
    [:plan/backed-off
     "per creeper entity id {:pos where it stood the first time :times back-offs from it there}: a creeper that stands within a block of :pos through shun-after of them is shunned, a threat only within shunned-radius (combat/creeper-reach)"
     "after a back-off from a creeper began"]
+   [:plan/cornered
+    "entity ids a back-off could not get away from: it ended on its clock with the target still nearer than back-off-to, the bot in a dead end; :defend fights them to the end (combat/cornered, issue #161)"
+    "after a back-off ended on its clock"]
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]
@@ -341,6 +347,9 @@
    [:intent/from-feet
     "the feet a tunnel toward a bank (scoop/to-bank) began at, to judge whether it came nearer"
     ":tunnel for :bank; a :tunnel-to toward a portal room's frame (stronghold/to-room)"]
+   [:intent/dead-end
+    "the feet cell a mine's retreat walk left, where no stair, tunnel or deeper stair could be cut: :plan/boxed-at takes it when the walk starts, so the descent that follows is not cut to the same dead end again"
+    ":walk for :retreat, from the mine (stone/mine-next)"]
    [:intent/from "the feet a :tunnel-to's step started from, where its ops are worked"
     ":tunnel-to, during a step"]
    [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"
@@ -402,8 +411,8 @@
    [:intent/turns "quarter turns taken after refused stairs; four fail :boxed"
     "stairs-down, after a refusal"]
    [:intent/rejections
-    "digs of the current stair (or level step) the server did not do, each dug again; stairs/max-rejections fail :rejected"
-    "stairs-down, after a child dig rejected"]
+    "digs of the current stair (or level step, or a build's op) the server did not do, each dug again; stairs/max-rejections fail :rejected"
+    "stairs-down or a build, after a child dig rejected"]
    [:intent/cells
     "the cells the current stair opens, top first: three, or four for a stair cut for a taller body (:intent/tall)"
     "stairs-down, while a stair is cut"]

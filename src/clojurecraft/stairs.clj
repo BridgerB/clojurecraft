@@ -136,8 +136,10 @@
   "The items a floor is laid from, what a mine carries most of first: cobblestone, the stones
    that drop themselves, then dirt, then netherrack (what a descent in the Nether digs: gym batch
    pearls-warped-e, plan run 39164914828, run 3 had every stair refused in a pocket with no
-   filler to lay). Never gravel or sand, which fall out of a floor."
-  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack])
+   filler to lay), then the Nether's own rock a tunnel digs and carries (sim snapshot R3-38-1,
+   issue #410, held 55 soul soil and no filler). Never gravel or sand, which fall out of a floor."
+  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack :soul_soil
+   :blackstone :basalt])
 
 (defn filler
   "The first of fillers the inventory holds n or more of, or nil."
@@ -146,6 +148,22 @@
     (first (filter #(>= (get held % 0) n) fillers))))
 
 (def lay-reserve 8)                    ; filler a staircase down never lays into floors: what the climb back seals and steps with
+
+(defn climb-reserve
+  "The filler a seal keeps from feet for the climb back: a block for each block the feet are
+   under the highest rock (not leaves) of their column, up to lay-reserve, since the climb out
+   seals and steps once a stair. A bot at the surface keeps none and a bot eight stairs down all
+   of it. Issue #65 (a real bot, Clj_r15, landed at R1/30): one stair down from a lake shore,
+   holding two dirt, the one block of water beside the next stair was never sealed, for the
+   eight the climb back would need from nowhere, and every stair was refused until the staircase
+   was :boxed."
+  [world [x y z]]
+  (if-let [top (first (filter (fn [yy]
+                                (let [id (terrain/block-at world [x yy z])]
+                                  (and id (blocks/solid? id) (not (blocks/leaves? id)))))
+                              (range terrain/top-y (inc y) -1)))]
+    (min lay-reserve (- (long top) (long y)))
+    0))
 
 (defn carried-filler
   "How many of every filler the inventory holds, together."
@@ -374,8 +392,12 @@
    Race 39007359500 runner 5 bot Clj_r06 (issue #342) turned from water beside every descent,
    then waited :boxed on a dry shelf with no route away, five cobblestone and twenty dirt held."
   [world feet cells]
-  (when-let [laid (or (seal world feet cells) (lay world feet cells))]
-    (when (>= (- (carried-filler world) (count laid)) lay-reserve) laid)))
+  (let [sealed (seal world feet cells)
+        laid (or sealed (lay world feet cells))]
+    (when (and laid
+               (>= (- (carried-filler world) (count laid))
+                   (if sealed (climb-reserve world feet) lay-reserve)))
+      laid)))
 
 (def shapes
   "How each kind of staircase is cut: the cells a stair opens (top first, the new feet last), the
@@ -490,10 +512,14 @@
 
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
-  "The first of the stair's cells (top first) still solid, or nil when the stair is open."
+  "The first of the stair's cells (top first) still in the body's way, or nil when the stair is
+   open: a full cube, or a flat box too (blocks/collision-top: a carpet), which the head meets
+   going up the jump. Sim race 39593216223 (issue #66, world R2/39): a moss carpet over the head
+   was no cube, the stair was called open, and the jump rose into the carpet's box three times
+   for ten seconds each, :stair-not-taken."
   [world cells]
   (first (filter #(some-> (terrain/block-at world %)
-                          blocks/solid?)
+                          blocks/collision-top)
                  cells)))
 
 (defn boxed?
