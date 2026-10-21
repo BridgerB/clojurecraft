@@ -466,27 +466,6 @@
         {:intent/kind :cross
          :intent/target [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]}))))
 
-(def home-walk-distance 12)           ; feet this far or nearer the landing have nothing to walk home for
-
-(defn walk-home
-  "A walk to the landing (:plan/go-at) when the feet stand where a climb already died :boxed
-   (:plan/boxed-at) and the landing is routable on foot and farther than home-walk-distance;
-   nil elsewhere. A bridge or causeway over open water or air is no islet (islet? wants water on
-   all four sides) and no stair is cut from it, but it leads to the shore the bot came from.
-   Sim worlds R4/1 and R2/38 (issue #62's four snapshots, which fail `[:ingots :timeout]`): a bot
-   with no filler left on a one-wide dirt strip stepped level along it, was :boxed at the limit,
-   retreated twelve blocks back, and stepped level again, for the whole window."
-  [world]
-  (let [feet (intent/feet world)]
-    (when-let [[hx hy hz] (:plan/go-at world)]
-      (let [home [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]
-            walk {:intent/kind :walk :intent/target home :intent/for :retreat}]
-        (when (and (contains? (:plan/boxed-at world #{}) feet)
-                   (> (physics/distance (physics/centre feet) (physics/centre home))
-                      home-walk-distance)
-                   (intent/routable? world walk))
-          walk)))))
-
 (defn climb
   "Stairs up out of the ground, climb-stairs at a time (stairs/climb-to), when nothing can be
    tunnelled, cut or walked to from here and the feet are not out (stairs/out?); nil when they
@@ -605,7 +584,6 @@
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
                   (deeper world)
-                  (walk-home world)
                   (dead-end-retreat world)
                   (cross-home world)
                   (climb world)
