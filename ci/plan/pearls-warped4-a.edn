@@ -1,0 +1,20 @@
+;; Issue #263, branch feat/263-warped4: the stairs and tunnels toward an enderman keep spare-digs
+;; of the pickaxe for the burrow (pearls-warped3-a run 1 wore its pickaxe out at 14 min), and a
+;; walk toward one never ends where a walk already arrived (run 3 walked between two route ends
+;; for 25 min, probe 39543118281).
+;; pearls-12 is the stage (pearls-warped3-a: 0/2 and a harness failure); pearls-1-live guards the arena.
+{:plans/label "pearls-warped4-a"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 5
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
