@@ -118,8 +118,15 @@
    [:play :s2c :remove-entities] [[:ids [:vec :varint]]]
    [:play :s2c :move-entity-pos] [[:entity-id :varint] [:dx :i16] [:dy :i16] [:dz :i16]
                                   [:on-ground :bool]]
-   [:play :s2c :move-entity-pos-rot] [[:entity-id :varint] [:dx :i16] [:dy :i16] [:dz :i16]]
-   [:play :s2c :entity-position-sync] [[:entity-id :varint] [:x :f64] [:y :f64] [:z :f64]]
+   ;; the moves' rotations in 1/256 turns, then on-ground (ClientboundMoveEntityPacket.PosRot and
+   ;; .Rot); the sync's is PositionMoveRotation then on-ground, as teleport-entity's (issue #267:
+   ;; the dragon's yaw, where its head is)
+   [:play :s2c :move-entity-pos-rot] [[:entity-id :varint] [:dx :i16] [:dy :i16] [:dz :i16]
+                                      [:yaw :i8] [:pitch :i8] [:on-ground :bool]]
+   [:play :s2c :move-entity-rot] [[:entity-id :varint] [:yaw :i8] [:pitch :i8] [:on-ground :bool]]
+   [:play :s2c :entity-position-sync] [[:entity-id :varint] [:x :f64] [:y :f64] [:z :f64] [:dx :f64]
+                                       [:dy :f64] [:dz :f64] [:yaw :f32] [:pitch :f32]
+                                       [:on-ground :bool]]
    [:play :s2c :take-item-entity] [[:collected :varint] [:collector :varint] [:count :varint]]
    [:play :s2c :block-changed-ack] [[:sequence :varint]]
    [:play :s2c :disconnect] [[:reason :rest]]
