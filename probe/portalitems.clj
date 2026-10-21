@@ -1,11 +1,13 @@
 (ns probe.portalitems
   "Trace what a build did over a snapshot's window: each change of the intent's op and child, and
    each log line the bot said."
-  (:require [clojurecraft.capture :as capture]
+  (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
             [clojurecraft.plan :as plan]
             [clojurecraft.sim :as sim]
-            [clojurecraft.simrace :as sr]))
+            [clojurecraft.simrace :as sr]
+            [clojurecraft.terrain :as terrain]))
 
 (defn brief
   [world]
@@ -32,7 +34,20 @@
                   (doseq [e (:bot/effects wd)
                           :when (= :log (:effect/kind e))]
                     (println "SAY" (- (:time/now wd) t0) (:effect/message e)))
-                  (let [b (brief wd)]
+                  (let [b (brief wd)
+                        c (:intent/child (:plan/intent wd))]
+                    (when (and c (= :target-gone (:intent/reason c)) (:intent/target c))
+                      (let [[x y z] (:intent/target c)]
+                        (println "GONE"
+                                 (:intent/target c)
+                                 :lava-base
+                                 blocks/lava-base
+                                 (into {}
+                                       (for [dy [-1 0 1 2]
+                                             dx [-1 0 1]
+                                             dz [-1 0 1]]
+                                         [[dx dy dz]
+                                          (terrain/block-at wd [(+ x dx) (+ y dy) (+ z dz)])])))))
                     (when (not= b @last*)
                       (vreset! last* b)
                       (println "AT" (- (:time/now wd) t0) (pr-str b))))
