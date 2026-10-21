@@ -345,19 +345,27 @@
 (defn route!
   "The intent with a fresh route from the feet toward its walk-goal, counting the plan and
    noting how many chunks were loaded when it was made. Uses :intent/max-nodes when given;
-   otherwise the pathfinder's default budget."
-  [world {:intent/keys [replans max-nodes] :or {replans 0} :as i}]
-  (let [r (path/plan world
+   otherwise the pathfinder's default budget. A walk planned from a sheet of ice (path/on-ice?)
+   keeps :intent/ice? and plans with the sheet for floor from then on: its first steps cross
+   the sheet's edge, and the replan from the stair's top or the shore, off the ice, found no
+   route over the sheet it had just left, five times in a second, :no-path. Sim race 39467249581
+   (issue #75, world R2/29, 114 blocks of ice between the bot and its landing)."
+  [world {:intent/keys [replans max-nodes ice?] :or {replans 0} :as i}]
+  (let [ice? (or ice? (path/on-ice? world))
+        r (path/plan world
                      (path/feet-cell (:player/pos world))
                      (goal-of i)
-                     (cond-> {} max-nodes (assoc :path/max-nodes max-nodes)))]
-    (assoc-intent world
-                  :intent/waypoints (:path/waypoints r)
-                  :intent/route (:path/status r)
-                  :intent/at 0
-                  :intent/replans (inc replans)
-                  :intent/planned-chunks (:stats/chunks world 0)
-                  :intent/best-tick (:time/tick world))))
+                     (cond-> {}
+                       max-nodes (assoc :path/max-nodes max-nodes)
+                       ice? (assoc :path/ice? true)))]
+    (cond-> (assoc-intent world
+                          :intent/waypoints (:path/waypoints r)
+                          :intent/route (:path/status r)
+                          :intent/at 0
+                          :intent/replans (inc replans)
+                          :intent/planned-chunks (:stats/chunks world 0)
+                          :intent/best-tick (:time/tick world))
+      ice? (assoc-intent :intent/ice? true))))
 
 (defn route-stale?
   "Should the walk plan again: a waypoint still ahead can no longer be stood on (a chunk that
@@ -365,9 +373,10 @@
    or the route ended short of the target (:partial or :none) and every waypoint is behind. A
    chunk arriving is not by itself a reason: six arrived in the first seconds of a gym run and
    spent all six plans before the bot had walked a step, though every plan found the same route."
-  [world {:intent/keys [waypoints at best-tick route]}]
-  (let [ahead (drop at waypoints)]
-    (or (some #(not (path/standable? world %)) ahead)
+  [world {:intent/keys [waypoints at best-tick route ice?]}]
+  (let [ahead (drop at waypoints)
+        floor (cond-> world ice? (assoc :path/ice? true))]
+    (or (some #(not (path/standable? floor %)) ahead)
         (> (- (:time/tick world) best-tick) stuck-ticks)
         (and (empty? ahead) (not= :found route)))))
 

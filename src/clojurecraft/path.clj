@@ -513,7 +513,8 @@
 (defn plan
   "A route for the feet from the cell `from` toward goal: {:path/waypoints [[x y z] ...]
    :path/cost n :path/status :found|:partial|:none :path/from start}. opts: {:path/max-nodes n} (default
-   default-max-nodes). Pure and deterministic: equal inputs, equal output. The search normally
+   default-max-nodes), {:path/ice? true} (the sheet of ice is floor even when the feet are off it:
+   a walk planned from the sheet keeps it, see intent/route!). Pure and deterministic: equal inputs, equal output. The search normally
    begins at start-cell (from, or the standable cell beside it the player's box rests on).
    Before borrowing a neighbouring start, a route may leave the actual supported, clear feet
    cell if it reaches the goal; awkward floors remain forbidden as waypoints. With neither
@@ -521,11 +522,11 @@
    A goal in an unloaded chunk comes back :partial or :none
    toward it, which is the walker's cue to move and plan again."
   ([world from goal] (plan world from goal {}))
-  ([world from goal {:path/keys [max-nodes] :or {max-nodes default-max-nodes}}]
+  ([world from goal {:path/keys [max-nodes ice?] :or {max-nodes default-max-nodes}}]
    (plan-on (:world/chunks world)
             (:world/blocks world)
             (traps-in-force world)
-            (on-ice? world)
+            (boolean (or ice? (on-ice? world)))
             from
             goal
             max-nodes)))

@@ -923,7 +923,8 @@
   ;; ended twenty blocks down and off to one side, out of over-radius of that surface, and the walk
   ;; climbed back to cut the same staircase again, every two minutes for the quarter hour
   (let [dirt (blocks/default-state :dirt)
-        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+        ground
+        (into {} (for [x (range 16) z (range 16) y (range (if (< x 10) 50 60) 64)] [[x y z] dirt]))
         cave (into {} (for [x (range 11 15) z (range 3 7) y (range 55 58)] [[x y z] blocks/air]))
         ;; a staircase down from the surface at x 8 to y 58 at x 2, three cells high
         stairs (into {} (for [i (range 7) dy (range 3)] [[(- 8 i) (+ (- 64 i) dy) 5] blocks/air]))

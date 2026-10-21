@@ -445,6 +445,9 @@
     "walk, once planned"] [:intent/at "index of the next waypoint" "walk, once planned"]
    [:intent/replans "routes planned for this walk; more than intent/max-replans fails :no-path"
     "walk, once planned"]
+   [:intent/ice?
+    "true when the walk was planned from a sheet of ice: its routes take the sheet for floor even when the feet have stepped off it (intent/route!)"
+    "walk, once planned from ice"]
    [:intent/max-nodes "node expansion budget for this walk's route checks and replans"
     "walk, when a longer search is needed"]
    [:intent/planned-chunks
