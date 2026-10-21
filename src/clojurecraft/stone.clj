@@ -227,13 +227,18 @@
 (def over-radius 3)                   ; blocks on the plane round the surface over stone within which the feet count as over it
 
 (defn surface-over
-  "The standable cell on top of the column of cell [x _ z]: above the highest solid block, the
-   body and head clear (path/standable?); nil when the column has none."
+  "The standable cell on top of the column of cell [x _ z]: above the highest solid block that
+   is not leaves, the body and head clear (path/standable?); nil when the column has none.
+   Leaves are no ground to cut a staircase down from: sim race 39550831606 world R4/25 (issue
+   #85): a bot with a wooden pickaxe, no filler and a health of one walked to the surface over
+   its stone, which was the top of a birch's canopy, every stair from there was refused for the
+   leaves it opened onto, and it walked back to the canopy after each level step for the whole
+   window."
   [world [x _ z]]
   (some (fn [y]
-          (when (some-> (terrain/block-at world [x y z])
-                        blocks/solid?)
-            (let [c [x (inc y) z]] (when (path/standable? world c) c))))
+          (let [id (terrain/block-at world [x y z])]
+            (when (and id (blocks/solid? id) (not (blocks/leaves? id)))
+              (let [c [x (inc y) z]] (when (path/standable? world c) c)))))
         (range terrain/top-y (dec chunk/min-y) -1)))
 
 (defn over-stone

@@ -292,9 +292,13 @@
   "A walk tagged for to the first of targets (the max-candidates first that it has not already
    arrived at) a route reaches (intent/routable?), or nil. A walk already arrived would end
    before it began, and start again every tick (gym batch water-a3 run 5 did, for four minutes,
-   at a remembered pool under stone)."
+   at a remembered pool under stone). Never a target in :plan/blacklist, where a walk that failed
+   :no-path left it: the way up to the landing (way-up) was walked at again every twelve seconds
+   after each failure, forty times and more, the landing itself the target (sim snapshot
+   real-5-s2-Clj_r08, issue #54, 510 cells blacklisted and the bot at a tenth of its health)."
   [world for targets]
   (->> targets
+       (remove (:plan/blacklist world #{}))
        (map (fn [t] {:intent/kind :walk :intent/target t :intent/for for}))
        (remove #(intent/arrived? world
                                  %

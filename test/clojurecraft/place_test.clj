@@ -446,3 +446,30 @@
                                                       :intent/since 0
                                                       :intent/still 0})))))
         "a body drifted onto the edge while settling goes back to the spot stage")))
+
+(deftest on-a-pillar-in-the-sea-the-block-goes-into-the-water-beside-it
+  ;; sim race 39601680523 world R1/10 (issue #148): the bot stood on the one cobblestone it had
+  ;; pillared up in open water, water on every side of it, and its table failed :no-spot three
+  ;; times, a pickaxe short of the bucket it held for the water all round it
+  (let [water (blocks/default-state :water)
+        sea (merge (into {} (for [x (range 3 14) y [62] z (range 3 14)] [[x y z] water]))
+                   {[8 62 8] 1})
+        w (assoc (standing [8.5 63.0 8.5])
+                 :world/chunks {[0 0] (world/column sea)}
+                 :player/inventory {0 {:item (blocks/items :crafting_table) :count 1}})
+        run (fn [i]
+              (let [i (merge {:intent/kind :place
+                              :intent/item :crafting_table
+                              :intent/status :active
+                              :intent/stage :spot}
+                             i)]
+                (:plan/intent (intent/run (assoc w :plan/intent i)
+                                          i
+                                          {:event/kind :tick :event/now 0 :event/rand 0.5}))))
+        wet (run {:intent/retreated? true})]
+    (is (nil? (place/spot w)) "no dry spot: the pillar is the only support, under the feet")
+    (is (= :settle (:intent/stage wet)))
+    (is (= [8 62 8] (:intent/against wet)) "clicked against the pillar")
+    (is (= water (terrain/block-at w (:intent/cell wet))) "into a water cell")
+    (is (not (place/inside-player? w (:intent/cell wet))))
+    (is (= :retreat (:intent/stage (run {}))) "fresh rock is tried first")))
