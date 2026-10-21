@@ -171,7 +171,9 @@
    any other. Issue #342 (the R1/30 sim moment): the bot stood on the west bank of a cave lake
    beside two stones whose north sides were water, held three planks and no filler, and the dig
    refused both; it cut stairs down and climbed out again for the whole window, and its filler,
-   the cobblestone, was what the stone would have given it."
+   the cobblestone, was what the stone would have given it. Every wet cell is one a block takes
+   the place of (blocks/placeable-into?): a kelp plant holds water too, and sim race
+   39186569902 (issue #456, R1/24 seed 2) laid the seal into one three times, :rejected."
   [world row]
   (let [eye (game/eye world)
         blacklist (:plan/blacklist world #{})
@@ -182,19 +184,20 @@
              item (when (seq wet)
                     (or (stairs/filler world (count wet)) (planks-held world (count wet))))
              target (first wet)]
-         (when (and item
-                    (<= (count wet) 3)
-                    (every? #(= :water (terrain/fluid-kind world %)) wet)
-                    (not (intent/fluid-over-falling? world c))
-                    (not (intent/bed-over-fluid? world c))
-                    (every?
-                     #(and (reachable? %) (place/support world %) (not (contains? blacklist %)))
-                     wet)
-                    (intent/routable? world
-                                      {:intent/kind :walk
-                                       :intent/target c
-                                       :intent/for (:goal/id row)
-                                       :intent/pickup? true}))
+         (when
+           (and
+            item
+            (<= (count wet) 3)
+            (every? #(= :water (terrain/fluid-kind world %)) wet)
+            (every? #(some-> (terrain/block-at world %)
+                             blocks/placeable-into?)
+                    wet)
+            (not (intent/fluid-over-falling? world c))
+            (not (intent/bed-over-fluid? world c))
+            (every? #(and (reachable? %) (place/support world %) (not (contains? blacklist %))) wet)
+            (intent/routable?
+             world
+             {:intent/kind :walk :intent/target c :intent/for (:goal/id row) :intent/pickup? true}))
            {:intent/kind :place
             :intent/item item
             :intent/cell target
@@ -245,11 +248,16 @@
    stone lay in the wall of a cave lake, five blocks under the far bank; the mine cut its stairs
    down at the near bank, where every stair was refused for the water, up and down the same stairs
    until the plan failed :boxed, and the surface over the stone, eight blocks off along a strip of
-   grass, was routable all the while (a-stone-no-route-reaches-is-cut-down-to-from-the-surface-over-it)."
+   grass, was routable all the while (a-stone-no-route-reaches-is-cut-down-to-from-the-surface-over-it).
+   A staircase cut from the surface over the stone moves a block along for every block down, so
+   the feet count as over the surface within over-radius plus the blocks they are under it:
+   sim race 39598424082 (issue #349, R1/35 seed 1) cut six stairs east from the surface, stood
+   six along, and walked back up them to cut them again, a hundred times in the window."
   [world row]
   (let [feet (intent/feet world)
-        near? (fn [[ax _ az] [bx _ bz]]
-                (<= (physics/horizontal-distance [ax 0 az] [bx 0 bz]) over-radius))
+        near? (fn [[ax ay az] [bx by bz]]
+                (<= (physics/horizontal-distance [ax 0 az] [bx 0 bz])
+                    (+ over-radius (max 0 (- by ay)))))
         surfaces (->> (exposed-of-states world (states-of-row row))
                       (take max-candidates)
                       (keep #(surface-over world %))
@@ -400,6 +408,22 @@
                 :intent/for :off-ice}]
       (when (intent/routable? world walk) walk))))
 
+(def fall-wait-ticks 20)              ; planner ticks the mine waits for feet over a gap to fall before it plans anyway
+
+(defn unsupported?
+  "Are the feet over nothing a body rests on: not afloat, with air, water or lava in the cell
+   under them (path/classify), so the next tick drops them? Issue #105 (sim race 39550841573,
+   R2/32 seed 3): the bot dug the ice under its feet to scoop the lake and the water source
+   with it, and the planner, the instant the bucket was full, cut stairs from the lip of that
+   hole: every heading was refused for the water in the cells of its floor, four turns in four
+   ticks, :boxed before the body had fallen the one block into the hole it stood over."
+  [world]
+  (let [[x y z] (intent/feet world)]
+    (boolean (and (:player/pos world)
+                  (not (:player/in-water? world))
+                  (not (:player/in-lava? world))
+                  (contains? #{:clear :water :lava} (path/classify world [x (dec y) z]))))))
+
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
    (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
@@ -411,37 +435,39 @@
    retreat comes before any stair or tunnel: sim race 38844683780 (issue #230) cut its stairs down
    where the lava had just caught it, and the flow followed it down."
   [world row]
-  (or (continue-mine world row)
-      (let [missing (tool-missing world row)
-            [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
-            walk-to (fn [t]
-                      (cond-> {:intent/kind :walk
-                               :intent/target t
-                               :intent/for (:goal/id row)
-                               :intent/pickup? true}
-                        (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
-                        (assoc :intent/step-down? true)))
-            walk (when-not missing
-                   (->> (exposed-of-states world (states-of-row row))
-                        (take max-candidates)
-                        (map walk-to)
-                        (filter #(intent/routable? world %))
-                        first))]
-        (cond missing {:plan/wait missing}
-              stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
-              walk walk
-              :else
-              (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
-                  (off-ice world)
-                  (seal-stone world row)
-                  (over-stone world row)
-                  (stairs world row)
-                  (when-let [d (tunnel-heading world)]
-                    {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
-                  (deeper world)
-                  (retreat world)
-                  (climb world)
-                  {:plan/wait :boxed})))))
+  (or
+   (continue-mine world row)
+   (let [missing (tool-missing world row)
+         [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
+         walk-to
+         (fn [t]
+           (cond->
+             {:intent/kind :walk :intent/target t :intent/for (:goal/id row) :intent/pickup? true}
+             (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
+             (assoc :intent/step-down? true)))
+         walk (when-not missing
+                (->> (exposed-of-states world (states-of-row row))
+                     (take max-candidates)
+                     (map walk-to)
+                     (filter #(intent/routable? world %))
+                     first))]
+     (cond missing {:plan/wait missing}
+           stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
+           walk walk
+           :else
+           (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
+               (when (and (unsupported? world) (< (:plan/waiting-ticks world 0) fall-wait-ticks))
+                 {:plan/wait :unsupported})
+               (off-ice world)
+               (seal-stone world row)
+               (over-stone world row)
+               (stairs world row)
+               (when-let [d (tunnel-heading world)]
+                 {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
+               (deeper world)
+               (retreat world)
+               (climb world)
+               {:plan/wait :boxed})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
 

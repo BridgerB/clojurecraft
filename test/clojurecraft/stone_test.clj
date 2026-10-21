@@ -916,7 +916,41 @@
     (is (nil? (stone/over-stone (assoc w :player/pos [13.5 64.0 5.5]) (row :mine-stone)))
         "over it already: the stairs are cut from here")
     (is (nil? (stone/over-stone (assoc w :plan/boxed-at #{[12 57 5]}) (row :mine-stone)))
-        "not back to where a staircase died boxed")))
+        "not back to where a staircase died boxed")
+    ;; issue #349 (sim race 39598424082, R1/35 seed 1): the stairs cut from the surface over the
+    ;; stone ended six blocks along and six down, more than over-radius from the surface, and the
+    ;; mine walked back up to cut them again, for the whole window
+    (is (nil? (stone/over-stone (assoc w :player/pos [5.5 58.0 5.5]) (row :mine-stone)))
+        "at the foot of the stairs cut from the surface: under it, not off it")))
+
+(deftest feet-over-a-gap-wait-to-fall-before-the-mine-plans
+  ;; issue #105 (sim race 39550841573, R2/32 seed 3): the ice under the feet dug out and its
+  ;; water scooped, the stairs were planned from the lip of the hole and :boxed in four ticks
+  (let [w (assoc-in (standing 64 :stone_pickaxe :cobblestone) [:world/blocks [5 63 5]] blocks/air)]
+    (is (stone/unsupported? w) "air under the feet")
+    (is (not (stone/unsupported? (standing 64 :stone_pickaxe))) "stone under them")
+    (is (not (stone/unsupported? (assoc w :player/in-water? true))) "afloat: the swim's business")
+    (is (= {:plan/wait :unsupported} (stone/mine-next w (row :dig-gravel))) "wait for the fall")
+    (is (= :stairs-down
+           (:intent/kind (stone/mine-next (assoc w :plan/waiting-ticks stone/fall-wait-ticks)
+                                          (row :dig-gravel))))
+        "a hold that does not end in a fall (a ladder, a vine) is not waited on for ever")))
+
+(deftest stone-beside-kelp-is-not-sealed
+  ;; issue #456 (sim race 39186569902, R1/24 seed 2): the seal went into the kelp plant beside
+  ;; the stone, a cell the server does not let a block take the place of, :rejected three times
+  (let [dirt (blocks/default-state :dirt)
+        stone (blocks/default-state :stone)
+        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+        at (fn [wet]
+             (assoc (standing 64 :stone_pickaxe :cobblestone)
+                    :world/chunks
+                    {[0 0] (world/column (assoc ground [7 64 6] wet [7 64 5] stone))}))]
+    (is (some? (stone/seal-stone (at blocks/water-base) (row :mine-stone))) "water is sealed")
+    (is (some? (stone/seal-stone (at (blocks/default-state :seagrass)) (row :mine-stone)))
+        "seagrass is replaceable")
+    (is (nil? (stone/seal-stone (at (blocks/default-state :kelp_plant)) (row :mine-stone)))
+        "kelp is not")))
 
 (deftest stone-beside-water-is-sealed-with-what-is-held-before-it-is-dug
   ;; issue #342 (the R1/30 sim moment): stones on the west bank of a cave lake had water on their
