@@ -11,8 +11,10 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.place :as place]
+            [clojurecraft.scoop :as scoop]
             [clojurecraft.simrace :as sr]
             [clojurecraft.stairs :as stairs]
+            [clojurecraft.stone :as stone]
             [clojurecraft.swim :as swim]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.wood :as wood]
@@ -131,6 +133,14 @@
                (mapv (fn [c] [c (wood/standing-trunk? world c) (boolean ((wood/skipped world) c))
                               (int (physics/distance (game/eye world) (physics/centre c)))]))))
     (ask " trunk-failures" #(:plan/trunk-failures world))
+    (ask " boxed-at" #(:plan/boxed-at world))
+    (ask " boxed-here" #(scoop/boxed-here? world))
+    (ask " out?" #(stairs/out? world feet))
+    (ask " under-sky" #(terrain/under-sky? world feet))
+    (ask " stone/retreat" #(stone/retreat world))
+    (ask " stone/climb" #(stone/climb world))
+    (ask " wood/way-out" #(wood/way-out world))
+    (ask " pit-climb" #(scoop/pit-climb world))
     (ask " unreached" #(:plan/unreached world))
     (ask " terrain" #(layers world 6 3 4))
     (when (:player/in-water? world) (swim-questions world))
