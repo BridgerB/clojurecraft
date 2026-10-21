@@ -3,9 +3,9 @@ title: Fortress tunnel
 description: How the bot reaches a nether fortress (issue #11) - bricks as passive sightings in the Nether, a tunnel one step at a time where each step is a small plan of ops, and the rule that no step opens a cell beside lava.
 type: reference
 tags: [bot, plan, nether, fortress]
-aliases: [fortress.clj, :tunnel-to, :fortress, step-plan, safe?, at-fortress?, bridge?]
+aliases: [fortress.clj, :tunnel-to, :fortress, step-plan, safe?, at-fortress?, bridge?, climb-out?]
 status: verified
-lastUpdated: 2026-10-18
+lastUpdated: 2026-10-21
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/fortress.clj#defn step-plan
@@ -21,7 +21,11 @@ sourceRefs:
   - test/clojurecraft/fortress_test.clj#the-dry-tunnel-floors-its-way-across-a-cave
   - src/clojurecraft/fortress.clj#defn moves
   - src/clojurecraft/fortress.clj#defn next-move
+  - src/clojurecraft/fortress.clj#defn climb-out?
+  - src/clojurecraft/fortress.clj#defn retreat?
   - test/clojurecraft/fortress_test.clj#a-tunnel-turns-onto-ground-instead-of-pacing-in-the-portal
+  - test/clojurecraft/fortress_test.clj#a-tunnel-climbs-out-of-a-dead-end-on-a-block-laid-beside-the-feet
+  - test/clojurecraft/fortress_test.clj#a-tunnel-pacing-two-cells-is-blocked
   - src/clojurecraft/fortress.clj#def brick-states
   - src/clojurecraft/fortress.clj#defn bricks
   - test/clojurecraft/fortress_test.clj#fortress-bricks-use-the-indexed-current-sightings
@@ -100,7 +104,15 @@ Sim race 39113082582's R3/33 reproduction had lava beside the gravel higher up, 
 
 Issue #286 exposed two false dead ends: R3/10 had a safe retreat behind the feet that `moves` omitted, and the real portal at [256 97 464] was passable but rejected. Merely adding those moves paced between the portal's two cells. `next-move` prefers cells not yet left by this tunnel (`:intent/tunnel-visited`). Before retreating it can floor a level turn onto adjoining ground: the air floor must have immediate placement support and another solid horizontal neighbour besides the floor under the feet, and `stairs/over-fluid?` must find no fluid below it. The step must satisfy the same lava and optional water rules with that floor filled. Controls stop when the step is chosen, and its ordinary floor op must be confirmed before the walk begins; this is a short corner onto ground, not permission to enter an air floor or extend a causeway over lava.
 
+A dead end over a drop is neither: issue #338's R3-6-1 (sim race 39593212933, world R3/6) stood on two blocks of a ledge at y 39, seven over the lava sea, every way round them cave air, and no filler of a turn may be laid over fluid. The retreat stepped back into the other ledge cell, and from there the first allowed step was the first cell again: each step was counted (`:intent/taken`), 32 made a tunnel done in fifteen seconds, the next tunnel began with an empty `:intent/tunnel-visited`, and the leg's tunnel quota turned the spiral on the spot, so the bot paced the two cells from minute 90 to the timeout at 330 (1,134 intents). Two things changed. `next-move` now climbs before it retreats (`climb-out?`): an up step whose floor, the cell beside the feet at their own height, is air with a solid face to lay against (`build/foundation` is the cell itself: the ledge's rock, a wall, a block laid before), the block under the feet solid, a filler carried, and the step `safe?` once that floor is laid; the step plan's floor op lays it from the stand, so the body never leaves its footing over the drop, and it is one block against a ledge, not a causeway. And a retreat is counted (`retreat?`: the step goes into a cell the tunnel already stood in, which only the last resort does; `:intent/retreats`, reset by a fresh step): more than `retreats-allowed` (1) in a row is a pace, and the tunnel fails `:blocked` instead of counting the pace as steps. R2-12-1 (world R2/12) of the same reports was no pace: it tunnelled north through a basalt delta by hand, 7.5 s a block of blackstone, 15 s a step, its pickaxe worn out with one stick and one plank left (no wood in the Nether); that is a supply problem of the portal kit, left open.
+
 The later R4/12 and R4/4 reproductions of #286 were a different dead end: the [[server-model]] placed the arrival on a single gravel block suspended over lava, where no portal frame could fit. The model now requires the frame's footprint before choosing a natural arrival. The tunnel still refuses those unsupported steps; its lava rules are not relaxed to escape an impossible arrival.
+
+A real arrival can be possible and still ring the stand with lava: issue #286's `real-5-s1-Clj_r11` came through a portal cast into a one-deep lava lake, lava north and south of it and obsidian east and west, and `safe?` refused every step at every tick, `:blocked` fifty milliseconds apart. A block placed into a source or a flow replaces it and nothing is dug, so no lava runs into the tunnel; `next-move` now takes, after a fresh step, a floored turn and a climb-out and before a retreat, a step once the lava beside the cells it opens is capped (`sealed?`: some lava, `sealable?` every cell of it has a solid neighbour to place against and a filler is carried for all of them, at most `max-seals`, and `safe-but-lava?`, `safe?` with the lava clause left out, holds). The step plan then starts with the placements (`seal-ops`, step `:seal`, worked from the feet), recomputed from the world each tick, so a cell capped is not capped again and `safe?` holds by the time the first dig runs.
+
+Issue #284's R1-32-2 and R3-17-1 failed `:no-path` three times in a row from a different cause: a step down or up carried the centre half a block past the edge of the block under it, the body held by that edge alone and the cell under the feet air. A walk has no route from a cell with no floor, so the entry walk of every step chosen from there failed. The step was dropped as `off-step?` and chosen again from where the feet were. `recentre` (a perched feet cell, `perched?`) now comes before `next-move`: a level step onto a standable cell beside the feet whose floor is solid, never counted as a retreat.
+
+Issue #410's R3-38-1 dug a soul sand floor (walkable only as a route's last resort, so replaced) with no filler left and failed `:not-held` three times: `safe?` now asks for a filler wherever a step lays a block (a replaced floor, a lava floor), so a tunnel with none fails `:blocked` rather than reaching the place op, and `stairs/fillers` ends with the Nether's own rock a tunnel digs and carries: soul soil, blackstone, basalt.
 
 ## The planner across dimensions
 A row with `:goal/dimension` is chosen only there (`plan/here?`). When no row can be chosen here but one is undone elsewhere (`elsewhere?`), the plan waits `:other-dimension` instead of ending, so `--until fortress` in the overworld does not report done, and a run toward `[:nether :fortress]` works the portal, then the fortress.

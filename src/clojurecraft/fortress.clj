@@ -33,6 +33,7 @@
 (def explore-band [52 90])            ; the heights an exploring tunnel keeps to: over the lava sea (y 31) and its lakes, under the roof
 (def look-ahead 2)                    ; blocks ahead that must be loaded for a leg to go on: the world's edge turns it
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
+(def retreats-allowed 1)              ; retreats in a row a tunnel takes before it is blocked: a second one paces two cells
 
 (def fortress-kinds
   "The blocks that are a fortress's, not a bastion's."
@@ -90,6 +91,54 @@
   [c]
   (map #(plus c %) (vals physics/face-offsets)))
 
+(defn lava-beside
+  "The lava cells beside the cells the step from feet by move opens, other than the cells it
+   opens, the floor (filled first) and the body's own: what safe? refuses a step for, and what
+   sealable? may cap before it."
+  [world feet move]
+  (let [cells (opens feet move)
+        floor (plus (plus feet move) [0 -1 0])
+        own (set (concat cells [floor feet (plus feet up)]))]
+    (filter #(contains? blocks/lava-states (terrain/block-at world %))
+            (distinct (remove own (mapcat neighbours cells))))))
+
+(def max-seals 8)                      ; lava cells one step may cap before it is taken
+
+(defn sealable?
+  "May every cell of lava be capped from the stand: a solid neighbour to place against
+   (build/foundation is the cell itself) and, for all of them together, a filler carried, at
+   most max-seals. A block placed into a source or a flow replaces it; nothing is dug, so no lava
+   runs into the tunnel."
+  [world lava]
+  (and (<= (count lava) max-seals)
+       (some? (stairs/filler world (count lava)))
+       (every? #(= % (build/foundation world %)) lava)))
+
+(defn safe-but-lava?
+  "Can the step from feet by move be taken but for the lava beside the cells it opens (safe?
+   with that one clause left out): every cell it opens and the floor loaded, none of them lava or
+   something it never opens, and a floor that is solid, or lava a block placed against a solid
+   neighbour fills, or a solid floor the route cannot walk on, replaced only with a filler
+   carried to replace it with."
+  [world feet move]
+  (let [cells (opens feet move)
+        floor (plus (plus feet move) [0 -1 0])
+        at #(terrain/block-at world %)
+        lava? #(contains? blocks/lava-states (at %))
+        filler? (some? (stairs/filler world 1))]
+    (and
+     (every? some? (map at (conj cells floor)))
+     (not-any? lava? cells)
+     (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %)))) cells)
+     (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %)) cells)
+     (or (path/floor? world floor)
+         (and filler?
+              (build/holds? world [:solid floor])
+              (not (contains? unbreakable (blocks/name-of (at floor))))
+              (not (intent/exposes-fluid? world floor))
+              (= floor (build/foundation world floor)))
+         (and filler? (lava? floor) (= floor (build/foundation world floor)))))))
+
 (defn safe?
   "Can the step from feet by move be taken: every cell it opens and the floor loaded, none of them
    lava or something it never opens, no lava beside a cell it opens (other than the cells it opens,
@@ -97,26 +146,31 @@
    block placed against a solid neighbour fills. Never air: a step over a drop is not enclosed
    (live run f1-5 stood at a cave's edge with air under the next floor, slid off while placing it
    and fell forty blocks into the lava sea). A solid floor the route cannot walk on is replaced
-   only when digging it opens no fluid and leaves support for its replacement. No opened cell
-   may drop a gravel or sand bed carrying fluid into the tunnel."
+   only when digging it opens no fluid, leaves support for its replacement and a filler is
+   carried to replace it with (sim snapshot R3-38-1, issue #410, dug a soul sand floor with none
+   left and failed :not-held three times). No opened cell may drop a gravel or sand bed carrying
+   fluid into the tunnel."
   [world feet move]
-  (let [cells (opens feet move)
-        floor (plus (plus feet move) [0 -1 0])
-        own (set (concat cells [floor feet (plus feet up)]))
-        at #(terrain/block-at world %)
-        lava? #(contains? blocks/lava-states (at %))]
-    (and
-     (every? some? (map at (conj cells floor)))
-     (not-any? lava? cells)
-     (not-any? #(and (blocks/solid? (at %)) (contains? unbreakable (blocks/name-of (at %)))) cells)
-     (not-any? lava? (remove own (mapcat neighbours cells)))
-     (not-any? #(or (intent/fluid-over-falling? world %) (intent/bed-over-fluid? world %)) cells)
-     (or (path/floor? world floor)
-         (and (build/holds? world [:solid floor])
-              (not (contains? unbreakable (blocks/name-of (at floor))))
-              (not (intent/exposes-fluid? world floor))
-              (= floor (build/foundation world floor)))
-         (and (lava? floor) (= floor (build/foundation world floor)))))))
+  (and (empty? (lava-beside world feet move)) (safe-but-lava? world feet move)))
+
+(defn sealed?
+  "Can the step from feet by move be taken once the lava beside the cells it opens is capped
+   (seal-ops): there is some, sealable? caps all of it, and safe-but-lava? holds. The way out of
+   a stand ringed with lava, which safe? refuses every step from. Real snapshot real-5-s1-Clj_r11
+   (issue #286) arrived in a portal cast into a lava lake, lava north and south of it and
+   obsidian east and west, and failed :blocked at every tick."
+  [world feet move]
+  (let [lava (lava-beside world feet move)]
+    (and (seq lava) (sealable? world lava) (safe-but-lava? world feet move))))
+
+(defn seal-ops
+  "The ops that cap the lava beside the cells the step from feet by move opens, each placed from
+   the feet, before the step's own ops (step-plan); none when there is none or the step is not
+   sealed? (a step that safe? refuses stays refused, and is dropped as before)."
+  [world feet move]
+  (if (sealed? world feet move)
+    (mapv #(build/place-op % feet nil :seal) (lava-beside world feet move))
+    []))
 
 (defn dry?
   "Does the step from feet by move open no cell that is water or has water beside it (other than
@@ -185,14 +239,38 @@
                 feet
                 move))))
 
+(defn climb-out?
+  "May the up move from feet stand on a block laid beside the feet at their own height: the
+   step's floor (the cell beside the feet, under the cell stepped into) air that a solid
+   neighbour holds up (build/foundation: a ledge's rock, a wall, a block laid before), the
+   block under the feet solid, a filler carried, the step dry? when dry-only?, and with that
+   floor laid, safe?. The way out of a dead end over a drop, where no level step has a floor and
+   no turn may floor over the lava sea: the body stays on its stand while the block is laid
+   against the ledge, then climbs onto it, so it is never a causeway. Sim snapshot R3-6-1 (issue
+   #338) stood on two blocks of a ledge seven over the lava sea, every way round them air, and
+   paced them for four hours."
+  [world feet move dry-only?]
+  (let [floor (plus (plus feet move) [0 -1 0])]
+    (and (pos? (long (second move)))
+         (build/holds? world [:solid (plus feet [0 -1 0])])
+         (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
+         (= floor (build/foundation world floor))
+         (some? (stairs/filler world 1))
+         (or (not dry-only?) (dry? world feet move))
+         (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
+                feet
+                move))))
+
 (defn next-move
   "The next tunnel move: a safe unvisited cell first (in the dry tunnel, one floored across a cave
-   as soon, bridge?, in the order of moves), then a short floored turn onto adjoining ground, then a
-   safe retreat. A turn fills one air floor from the current stand before entering; it needs
-   support on another side too and never bridges over fluid. Gym batch stronghold-room-b (plan
-   run 39132210882) run 3 of the portal room staired down through a cave to the frame's height,
-   126 blocks from it, every step toward it over the cave's air, and walked its own stairs 32
-   steps a tunnel for 23 minutes to the timeout."
+   as soon, bridge?, in the order of moves), then a short floored turn onto adjoining ground, then
+   a climb onto a block laid beside the feet (climb-out?), then a step once the lava beside it is
+   capped (sealed?), then a safe retreat. A turn fills one
+   air floor from the current stand before entering; it needs support on another side too and
+   never bridges over fluid. Gym batch stronghold-room-b (plan run 39132210882) run 3 of the
+   portal room staired down through a cave to the frame's height, 126 blocks from it, every step
+   toward it over the cave's air, and walked its own stairs 32 steps a tunnel for 23 minutes to
+   the timeout."
   [world feet target climb dry-only? visited]
   (let [ways (moves feet target climb)
         fresh (remove #(contains? visited (plus feet %)) ways)
@@ -220,7 +298,35 @@
                                        (blocks/default-state :cobblestone))]
                            (and (turn? move) (safe? filled feet move))))
                        fresh))
+        (first (filter #(climb-out? world feet % dry-only?) fresh))
+        (first (filter #(and (sealed? world feet %) (or (not dry-only?) (dry? world feet %)))
+                       fresh))
         (first (filter allowed? ways)))))
+
+(defn retreat?
+  "Does move from feet step into a cell visited already stood in: next-move's last resort, a
+   retreat (every fresh step, turn and climb goes to an unvisited cell)?"
+  [feet move visited]
+  (contains? visited (plus feet move)))
+
+(defn perched?
+  "Do the feet stand over air: the cell under the feet's cell holds nothing solid, the body held
+   up by the edge of a block beside it? A walk has no route from such a cell. Sim snapshots R1-32-2
+   and R3-17-1 (issue #284) stood with the centre half a block past a ledge's edge, and every
+   walk to the next step's stand failed :no-path."
+  [world feet]
+  (build/holds? world [:not-solid (plus feet [0 -1 0])]))
+
+(defn recentre
+  "The level step from feet onto a floor beside them when the feet are perched? (a move to a
+   neighbouring cell whose floor is solid, safe?), else nil: the body stands over its footing
+   again before the next step is chosen."
+  [world feet]
+  (when (perched? world feet)
+    (first (for [[dx dz] aside
+                 :let [move [dx 0 dz]]
+                 :when (and (path/standable? world (plus feet move)) (safe? world feet move))]
+             move))))
 
 (defn arrived?
   "Is the bot within reach of target (from the feet cell's centre), or within r when given?"
@@ -268,12 +374,15 @@
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
   ;; :intent/reach, reach when absent) or after :intent/steps steps, failed :blocked when no step
-  ;; is safe. Steps go up or down first past :intent/climb blocks off (climb-past when absent);
-  ;; with :intent/dry? only steps that open no cell by water (dry?: the overworld's, issue #265)
+  ;; is safe, or when the only safe steps retreat into cells already stood in more than
+  ;; retreats-allowed times in a row (a pace between two cells, each counted as a step: sim
+  ;; snapshot R3-6-1, issue #338, paced a ledge 32 steps a tunnel for four hours). Steps go up or
+  ;; down first past :intent/climb blocks off (climb-past when absent); with :intent/dry? only
+  ;; steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
-   {:intent/keys [target steps taken move from climb dry? tunnel-visited child search]
+   {:intent/keys [target steps taken move from climb dry? tunnel-visited child search retreats]
     r :intent/reach
-    :or {taken 0 r reach climb climb-past tunnel-visited #{}}
+    :or {taken 0 r reach climb climb-past tunnel-visited #{} retreats 0}
     :as i} event]
   (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
         feet (intent/feet world)]
@@ -286,16 +395,22 @@
           (buried world feet)
           (build/work-op (assoc world :player/controls {}) i (buried world feet) event)
           (nil? move)
-          (if-let [m (next-move world feet target climb (boolean dry?) tunnel-visited)]
-            (intent/assoc-intent (assoc world :player/controls {})
-                                 :intent/move m
-                                 :intent/from feet
-                                 :intent/tunnel-visited (conj tunnel-visited feet))
-            (-> world
-                (assoc :player/controls {})
-                (intent/fail :blocked)))
+          (let [back (recentre world feet)
+                m (or back (next-move world feet target climb (boolean dry?) tunnel-visited))
+                retreated
+                (if (and m (not back) (retreat? feet m tunnel-visited)) (inc (long retreats)) 0)]
+            (cond (or (nil? m) (> retreated retreats-allowed))
+                  (-> world
+                      (assoc :player/controls {})
+                      (intent/fail :blocked))
+                  :else
+                  (intent/assoc-intent (assoc world :player/controls {})
+                                       :intent/move m
+                                       :intent/from feet
+                                       :intent/retreats retreated
+                                       :intent/tunnel-visited (conj tunnel-visited feet))))
           :else
-          (let [next (build/next-op world (step-plan from move))
+          (let [next (build/next-op world (into (seal-ops world from move) (step-plan from move)))
                 next (cond-> next
                        (= :place (:build/op next))
                        (assoc :build/item (or (stairs/filler world 1) :cobblestone)))]

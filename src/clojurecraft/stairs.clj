@@ -136,8 +136,10 @@
   "The items a floor is laid from, what a mine carries most of first: cobblestone, the stones
    that drop themselves, then dirt, then netherrack (what a descent in the Nether digs: gym batch
    pearls-warped-e, plan run 39164914828, run 3 had every stair refused in a pocket with no
-   filler to lay). Never gravel or sand, which fall out of a floor."
-  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack])
+   filler to lay), then the Nether's own rock a tunnel digs and carries (sim snapshot R3-38-1,
+   issue #410, held 55 soul soil and no filler). Never gravel or sand, which fall out of a floor."
+  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack :soul_soil
+   :blackstone :basalt])
 
 (defn filler
   "The first of fillers the inventory holds n or more of, or nil."
