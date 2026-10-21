@@ -1399,7 +1399,8 @@
         full {:player/inventory {0 {:item (recipe/item-id :water_bucket) :count 1}}}]
     (is (true? (build/water-needed? bare plan)) "two empty buckets, a water pour to come")
     (is (false? (build/water-needed? full plan)) "a water bucket held")
-    (is (false? (build/water-needed? bare [])) "no pour to come")))
+    (is (false? (build/water-needed? bare [])) "no pour to come")
+    (is (false? (build/water-needed? {} plan)) "no bucket to fill")))
 
 (deftest a-lava-source-gone-before-the-aim-is-looked-for-again
   ;; issue #419: water turned the chosen source to obsidian before the scoop aimed

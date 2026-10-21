@@ -1827,14 +1827,15 @@
        (or (sticks-at-hand? world) (wood-near? world))))
 
 (defn water-needed?
-  "Does plan still pour water (an op not satisfied that pours :water_bucket) while no water bucket
-   is held? A cast's water poured into the cell over the lava can land in the lava's own cell: the
+  "Does plan still pour water (an op not satisfied that pours :water_bucket) while an empty
+   bucket is held to fill and no water bucket is? A cast's water poured into the cell over the lava can land in the lava's own cell: the
    lava turns to obsidian, the water goes with it and there is no source to scoop back, so the
    bucket stays empty. Real races 39181279602 runner 4 and 39499334753 runner 2 (issue #455): the
    next cell's water pour failed :not-held three times in 300 ms and the plan ended with two empty
    buckets and no water in sight."
   [world plan]
-  (boolean (and (not (held? world :water_bucket))
+  (boolean (and (held? world :bucket)
+                (not (held? world :water_bucket))
                 (some #(and (= :pour (:build/op %))
                             (= :water_bucket (:build/item %))
                             (not (satisfied? world %)))
