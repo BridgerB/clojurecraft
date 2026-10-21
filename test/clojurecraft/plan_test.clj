@@ -368,7 +368,11 @@
                                            wood/far-radius
                                            (memory/positions-now w blocks/log-states)))]
     (is (stairs/out? w (intent/feet w)) "on open ground under the sky")
-    (is (= {:intent/kind :stairs-down :intent/to-y 58 :intent/dir [1 0] :intent/for :trees}
+    (is (= {:intent/kind :stairs-down
+            :intent/trunk trunk
+            :intent/to-y 58
+            :intent/dir [1 0]
+            :intent/for :trees}
            (wood/trees-descend w [trunk]))
         "down toward the trunk, one length")
     (is (= :stairs-down (:intent/kind (wood/trees-descend w [[130 9 8]])))
@@ -395,10 +399,18 @@
     (is (wood/descended? (assoc w :plan/last cut)))
     (is (not (wood/descended? (assoc w :plan/last (assoc cut :intent/for :surface)))))
     (is (not (wood/descended? (assoc w :plan/last (assoc cut :intent/status :failed)))))
-    (is (= {:intent/kind :stairs-down :intent/to-y 44 :intent/dir [1 0] :intent/for :trees}
+    (is (= {:intent/kind :stairs-down
+            :intent/trunk trunk
+            :intent/to-y 44
+            :intent/dir [1 0]
+            :intent/for :trees}
            (wood/trees-descend (assoc w :plan/last cut) [trunk]))
         "the next length goes on down toward the trunk")
-    (is (= {:intent/kind :stairs-down :intent/to-y 44 :intent/dir [1 0] :intent/for :trees}
+    (is (= {:intent/kind :stairs-down
+            :intent/trunk [12 43 8]
+            :intent/to-y 44
+            :intent/dir [1 0]
+            :intent/for :trees}
            (wood/trees-descend (assoc w :plan/last cut) [[12 43 8]]))
         "a trunk under twelve below the eye, no route reaching it, is cut toward from the foot")
     (is (nil? (wood/trees-descend (assoc w :plan/last cut) [[12 50 8]]))
@@ -1257,6 +1269,18 @@
         i (wood/hunt w)]
     (is (= [48 64 8] (:intent/target i)) "toward the trunk, back toward the landing")))
 
+(deftest a-hunt-never-heads-for-a-log-it-gave-up
+  ;; sim world R1/4 (issue #370): the nearest remembered log was the tree whose logs were
+  ;; blacklisted, so each hop ended beside it and the next set out for another given-up one,
+  ;; back and forth for the rest of the window
+  (let [w (-> (assoc (remembered {} [8.5 64.0 8.5]) :world/chunks shore :plan/go-at [48.5 64.0 8.5])
+              (memory/remember-column [2 0] (shore [2 0])))
+        given-up (set (memory/positions-now w blocks/log-states))]
+    (is (seq given-up) "a trunk is remembered")
+    (is (= [48 64 8] (:intent/target (wood/hunt w))) "toward it while it is a tree to take")
+    (is (not= [48 64 8] (:intent/target (wood/hunt (assoc w :plan/blacklist given-up))))
+        "not once every log of it is blacklisted")))
+
 (deftest a-slow-server-stretches-the-dig
   ;; race 38665691517 (issues #88, #144): the server ran at 130 ms a tick, counted the digs'
   ;; progress in its ticks, and left blocks standing that the bot had finished by its own clock
@@ -1346,3 +1370,19 @@
     (is (seq (:player/controls (run (item (at 0.72 64.0)))))
         "0.2 off, 0.75 over the drop: walks on")
     (is (empty? (:player/controls (run (item (at 0.72 63.4))))) "within the pickup box: waits")))
+
+(deftest a-descent-goes-on-toward-the-trunk-it-began-for
+  ;; sim world R1/4 (issue #370): trunks either side of the shaft, the nearest one changing at
+  ;; every length, so the heading turned north and south and the bot zigzagged down
+  (let [w (remembered {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air} [8.5 50.0 8.5])
+        w (assoc w :player/pos [8.5 70.0 8.5])
+        near [[8 20 12]]
+        far [[8 20 -20]]
+        cut {:intent/kind :stairs-down :intent/for :trees :intent/status :done}
+        dir #(:intent/dir (wood/trees-descend (assoc w :plan/last (assoc cut :intent/trunk %))
+                                              (concat near far)))
+        pick (wood/trees-descend (assoc w :plan/last (assoc cut :intent/trunk (first far)))
+                                 (concat near far))]
+    (is (= [0 1] (dir (first near))) "the trunk it began for is the near one")
+    (is (= [0 -1] (dir (first far))) "or the far one, whichever it began for")
+    (is (= (first far) (:intent/trunk pick)) "the intent names the trunk it is for")))
