@@ -6,7 +6,8 @@
          '[clojurecraft.stone :as stone])
 
 (let [dirt (blocks/default-state :dirt)
-      ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+      ground
+      (into {} (for [x (range 16) z (range 16) y (range (if (< x 10) 50 60) 64)] [[x y z] dirt]))
       cave (into {} (for [x (range 11 15) z (range 3 7) y (range 55 58)] [[x y z] blocks/air]))
       stairs (into {} (for [i (range 7) dy (range 3)] [[(- 8 i) (+ (- 64 i) dy) 5] blocks/air]))
       w (assoc (st/standing 64 :wooden_pickaxe)
