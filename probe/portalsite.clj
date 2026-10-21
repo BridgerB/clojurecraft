@@ -59,13 +59,16 @@
         w (simrace/world-for! snap)
         m (simrace/moment-of snap w)
         prev (volatile! nil)
-        n (volatile! 0)
+        ring (volatile! [])
         stop? (fn [world]
-                (let [v (view world)]
-                  (when (and (not= v @prev) (< @n 150))
-                    (vswap! n inc)
-                    (println (:time/now world) (pr-str v)))
-                  (vreset! prev v)
+                (let [v (view world)
+                      k (-> v
+                            (update 1 dissoc :intent/stage)
+                            (update 2 dissoc :intent/stage)
+                            (assoc 0 nil))]
+                  (when (not= k @prev)
+                    (vswap! ring #(vec (take-last 45 (conj % [(:time/now world) v])))))
+                  (vreset! prev k)
                   (or (plan/done? world) (plan/failed? world))))
         r (do (println "TRACE" path (pr-str (:snapshot/signature snap)))
               (sim/play-from simrace/step
@@ -74,6 +77,10 @@
                              (simrace/window-of snap)
                              (simrace/go-of w (:snapshot/until snap))
                              nil))]
+    (doseq [[t v] @ring] (println t (pr-str v)))
+    (doseq [line (filter #(#{:failed :abandoned} (second %))
+                         (simrace/story (:world r) (:time/now (:world m))))]
+      (println "STORY" (pr-str line)))
     (println "END" path (pr-str (view (:world r))))
     (when (= :no-site (:plan/wait (:world r))) (hunt (:world r)))
     (when (= [:portal :no-site] (:snapshot/signature snap)) (hunt (:world r)))))
