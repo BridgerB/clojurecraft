@@ -3484,11 +3484,14 @@
   ;; issue #262's acceptance, a spawner and no fixture blazes: six rods given, one more wanted;
   ;; the spawner on the floor four blocks from the landing wakes (mob/spawner), makes its first
   ;; batch within 800 ticks and again, the bot camps by it, fights what comes and picks up the rod
-  ;; one kill in two drops (rolled from the model's seed)
+  ;; one kill in two drops (rolled from the model's seed). It wears iron armour, as the stage's bot
+  ;; does (the first run without died to a batch of four), and the wall west of the landing is
+  ;; its cover
   (let [[w sim] (sim/run step
                          (game/init fx/opts)
-                         (sim/init {:column (world/column-bytes {blaze-spawner-cell
-                                                                 mob/spawner-block}
+                         (sim/init {:column (world/column-bytes (assoc nether-wall
+                                                                       blaze-spawner-cell
+                                                                       mob/spawner-block)
                                                                 dimension/nether)
                                     :spawn [8.5 64.0 8.5]
                                     :dimension dimension/nether
@@ -3496,12 +3499,17 @@
                                     :food 20
                                     :seed 3
                                     :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}
-                                                [:hotbar 1] {:item (item :blaze_rod) :count 6}}})
-                         #(or (plan/done? %) (plan/failed? %))
+                                                [:hotbar 1] {:item (item :blaze_rod) :count 6}
+                                                [:armour 0] {:item (item :iron_helmet) :count 1}
+                                                [:armour 1] {:item (item :iron_chestplate) :count 1}
+                                                [:armour 2] {:item (item :iron_leggings) :count 1}
+                                                [:armour 3] {:item (item :iron_boots) :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %) (pos? (:stats/deaths % 0)))
                          240000
                          {:event/kind :go :go/goals [:blaze-rods]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (>= (inventory/item-count w blaze/rod) blaze/rods-wanted))
     (is (seq (:sim/spawners sim)) "the model found the spawner")
-    (is (pos? (:sim/health sim)) "alive")
+    (is (zero? (:stats/deaths w 0)) "alive")
+    (is (pos? (:sim/health sim)))
     (is (= [] (:sim/violations sim)))))
