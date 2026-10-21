@@ -723,6 +723,16 @@
   [world pos]
   (<= (physics/distance (game/eye world) (physics/centre pos)) (+ intent/reach 0.5)))
 
+(def reach-slack 0.25)                ; blocks inside the dig's reach a dig is chosen at: the walk's momentum
+
+(defn near-enough?
+  "Is pos within reach with room to spare: the eye within intent/reach plus reach-slack of its
+   centre, short of the edge within-reach? is. A dig chosen at the edge fails :out-of-reach a tick
+   later, the momentum of the walk that ended there carrying the eye past it: real snapshot
+   real-5-s2-Clj_r09 (issue #461) began a dig from 4.478 blocks and was at 4.5007 when it settled."
+  [world pos]
+  (<= (physics/distance (game/eye world) (physics/centre pos)) (+ intent/reach reach-slack)))
+
 (defn approach
   "A walk to beside pos, where a dig of it can start, or nil when no route reaches a cell
    beside it."
@@ -744,12 +754,14 @@
 (defn clear-stand
   "The child that opens a way to stand at the feet's height, or nil when the way is clear or the
    stand is at another height (the line would start under the feet: to-height). The block in the
-   way is dug when it is in reach (a pond beside the hill makes the face expose water, which a
-   build's dig is allowed to), else walked to beside. The frame's rock is never taken (kept)."
+   way is dug when it is in reach with room to spare (near-enough?; a pond beside the hill makes
+   the face expose water, which a build's dig is allowed to), else walked to beside, and dug from
+   the edge of reach only when no route goes closer. The frame's rock is never taken (kept)."
   [world stand build origin facing]
   (when-let [b (and (= (second stand) (long (physics/y-of (intent/feet world))))
                     (stance-block world stand build origin facing))]
-    (if (within-reach? world b) (way-dig b) (approach world b))))
+    (cond (near-enough? world b) (way-dig b)
+          :else (or (approach world b) (when (within-reach? world b) (way-dig b))))))
 
 (defn dig-from-under
   "The dig of the first block in the way to stand (stance-block, at the stand's height) when the

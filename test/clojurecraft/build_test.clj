@@ -1486,3 +1486,23 @@
     (is (= :stairs-down (:intent/kind (hunt (pool-at 46))))
         "past hunt-rise: on down toward the sea as before")
     (is (= :tunnel (:intent/kind (hunt (pool-at 40)))) "level or below: the tunnel as before")))
+
+(deftest a-block-at-the-edge-of-reach-is-walked-to-not-dug
+  ;; real snapshot real-5-s2-Clj_r09 (issue #461): the block in the way of the lava's stand was dug
+  ;; from 4.478 blocks, the walk's momentum carried the eye to 4.5007 the next tick, and the dig
+  ;; failed :out-of-reach
+  (let [origin [8 62 4]
+        stand [9 63 12]
+        rock {[5 63 12] (blocks/default-state :stone)}
+        child-at (fn [x]
+                   (build/clear-stand (standing-at (open-ground rock) [x 63.0 12.5])
+                                      stand
+                                      :cast-one
+                                      origin
+                                      :south))]
+    (is (= [5 63 12] (:intent/target (child-at 1.7))) "well within reach: dug from here")
+    (is (= :dig (:intent/kind (child-at 1.7))))
+    (is (= :walk (:intent/kind (child-at 1.3))) "at the edge of reach: walked closer first")
+    (is (= [5 63 12] (:intent/target (child-at 1.3))))
+    (is (build/near-enough? (standing-at (open-ground rock) [1.7 63.0 12.5]) [5 63 12]))
+    (is (not (build/near-enough? (standing-at (open-ground rock) [1.3 63.0 12.5]) [5 63 12])))))
