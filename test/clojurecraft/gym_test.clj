@@ -242,6 +242,41 @@
     (is (some #{"difficulty normal"} sent))
     (is (some #{"give Clj_g1 minecraft:iron_sword 1"} sent))))
 
+(deftest ^:eftest/synchronized a-warped-forest-with-no-floor-is-left-for-the-next-one
+  ;; issue #263: set A's landing 19360,18752 located its nearest forest and found no floor in it
+  ;; three plans running (plan runs 39178856841, 39529384355 and 39596287510), a harness row
+  ;; each; the forest nearest the next origin is tried
+  (let [spread-at (atom nil)
+        [r sent]
+        (landing-commands
+         :ender-pearls
+         #(cond (str/includes? % "positioned 356 64 200 run locate")
+                "The nearest minecraft:warped_forest is at [400, 70, 240] (260 blocks away)"
+                (str/includes? % "locate biome")
+                "The nearest minecraft:warped_forest is at [120, 70, 240] (90 blocks away)"
+                (str/includes? % "spreadplayers")
+                (do (reset! spread-at (re-find #"spreadplayers \d+ \d+" %))
+                    "Spread 1 player around a point with an average distance of 0 blocks apart")
+                (str/includes? % "cave_air")
+                (if (= "spreadplayers 120 240" @spread-at) "Test passed" "Test failed")
+                :else "Test passed"))]
+    (is (= [[100 200] [356 200] [-156 200] [100 456] [100 -56] [612 200] [-412 200] [100 712]
+            [100 -312]]
+           (gym/warped-origins 800 1600))
+        "the landing's eighth, then 256 and 512 off it along each axis")
+    (is (:gym/landed? r))
+    (is (= 12 (count (filter #(str/includes? % "spreadplayers 120 240") sent)))
+        "every range and try round the nearest forest, each a cave pocket")
+    (is
+     (some
+      #{"execute in minecraft:the_nether positioned 356 64 200 run locate biome minecraft:warped_forest"}
+      sent)
+     "then the forest nearest the next origin")
+    (is (some #(str/includes? % "spreadplayers 400 240 0 16") sent))
+    (is (not-any? #(str/includes? % "positioned -156 64 200") sent)
+        "a floor found: no further origin asked")
+    (is (some #(str/includes? % "run tp Clj_g1 100.5 72 200.5") sent))))
+
 (deftest a-truth-reads-the-servers-reply
   (let [row {:truth/cmd "clear {name} minecraft:stick 0" :truth/re "Found ([4-9]|[1-9][0-9])"}]
     (is (= "clear Clj_g1 minecraft:stick 0" (gym/truth-cmd row "Clj_g1" [0 0 64])))

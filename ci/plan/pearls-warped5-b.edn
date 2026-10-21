@@ -1,0 +1,20 @@
+;; Issue #263, branch feat/263-warped5, second batch: after pearls-warped5-a (pearls-1-live 3/3,
+;; pearls-12 0/5 with 6 pearls held at best), a calm enderman blacklisted by the mouth no longer
+;; keeps a burrow from going stale (run 3's 37 minutes of lookouts), an angry one within
+;; danger-radius of the mouth keeps the bot in and never lets the burrow go stale (run 4 walked
+;; out past one and was slain), and a vantage walk ends in its cell instead of crawling.
+{:plans/label "pearls-warped5-b"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 5
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
