@@ -101,6 +101,25 @@
       (out "-- sample at" (:time/now wd) (:player/pos wd))
       (swim-questions wd))))
 
+(defn walk-hook
+  "On the first walk of a kind, what the pathfinder says from the feet toward its target."
+  [seen]
+  (fn [wd i]
+    (let [k [(:intent/kind i) (:intent/for i)]]
+      (when (and (= :walk (:intent/kind i)) (not (contains? @seen k)))
+        (swap! seen conj k)
+        (out "-- walk" k (:intent/target i) "at" (:time/now wd))
+        (ask " feet" #(vector (intent/feet wd) (:player/pos wd) (:player/on-ground? wd)))
+        (ask " on-ice" #(path/on-ice? wd))
+        (ask " loaded-target" #(terrain/chunk-loaded? wd (:intent/target i)))
+        (ask " plan"
+             #(let [r (path/plan wd (path/feet-cell (:player/pos wd)) (intent/goal-of i) {})]
+                {:status (:path/status r)
+                 :n (count (:path/waypoints r))
+                 :from (:path/from r)
+                 :last (last (:path/waypoints r))}))
+        (ask " routable" #(intent/routable? wd i))))))
+
 (defn run-one
   [p]
   (let [snap (capture/read-world p)
@@ -144,7 +163,10 @@
     (ask " unreached" #(:plan/unreached world))
     (ask " terrain" #(layers world 6 3 4))
     (when (:player/in-water? world) (swim-questions world))
-    (pkplay/play p 0 (hook (atom #{})) (sampler (atom 0)))))
+    (let [seen (atom #{})
+          h (hook seen)
+          wh (walk-hook (atom #{}))]
+      (pkplay/play p 0 (fn [wd i] (h wd i) (wh wd i)) (sampler (atom 0))))))
 
 (defn -main
   [& paths]
