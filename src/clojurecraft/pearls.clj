@@ -498,6 +498,35 @@
                         :intent/dir (mapv - (away world e))
                         :intent/for :pearls}))))))))
 
+(defn ascend
+  "Stairs up toward the first of the candidates nearest endermen in ms that stands descend-drop
+   or more above the feet, a pickaxe held with digs to spare past a burrow's (spare?): a
+   :stairs-up to descend-step higher, or to its height (:intent/to-height?: it ends at that
+   height, not where the ground opens), cut the straight way toward it; nil when none stands so
+   high, no pickaxe with spare digs is held, or a staircase from these feet was boxed
+   (:plan/boxed-at). The way back up that descend has no answer to: gym batch pearls-warped5-b
+   (plan run 39671293287, probe 39683564524) run 5 took five pearls in 150 s from a burrow on
+   the forest floor at y 59, cut seven flights down to three endermen in a cave at y 36 and
+   killed them, and then stood thirty-two minutes at y 33 to 50 with every enderman on the
+   floor above it, 20 to 30 blocks up, no route up and a roam that gained no height; runs 2, 3
+   and 4 of the same batch spent most of their forty minutes in the caves under the floor the
+   same way. The forest's endermen spawn on its floor; a bot under it hunts nothing."
+  [world ms]
+  (let [pos (:player/pos world)
+        fy (physics/y-of (path/feet-cell pos))]
+    (when (and (spare? world) (not (contains? (:plan/boxed-at world) (intent/feet world))))
+      (->> ms
+           (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
+           (take candidates)
+           (some (fn [[_ e]]
+                   (let [rise (- (physics/y-of (cell (:entity/pos e))) fy)]
+                     (when (>= rise descend-drop)
+                       {:intent/kind :stairs-up
+                        :intent/to-y (+ fy (min rise descend-step))
+                        :intent/dir (mapv - (away world e))
+                        :intent/to-height? true
+                        :intent/for :pearls}))))))))
+
 (defn burrow-steps
   "The cells a burrow cut from feet along dir opens, a step at a time: burrow-depth stairs an
    enderman walks down (stairs/tall-stair-cells for mob/tall, four high: the feet a block down
@@ -571,7 +600,11 @@
   "A walk to look from within the burrow's reach, with none of ms provokable from here: a cell
    on the plane between stare-from and vantage-reach from the nearest of the candidates nearest
    endermen in ms, within vantage-rise of its height and shelter-reach of the burrow
-   (:pearls/shelter), that the bot could stand in (standable?), from which the enderman is
+   (:pearls/shelter) and no farther from the burrow than from the enderman (provoked, it comes
+   at the bot's pace and more; the bot must be home first: gym batch pearls-warped5-b, plan run
+   39671293287, probe 39683564524, run 1 provoked one 7.6 blocks off from a vantage 12 from its
+   burrow's end and was slain on the walk home at 106 s, and run 5 lost eleven health on the
+   walk home from one 15 off), that the bot could stand in (standable?), from which the enderman is
    provokable?, past a walk's reach of the eye (nearer, the walk arrives where it starts) and
    not where a walk already arrived (memory/arrived); of those, nearest the feet first and
    vantage-tries at most, the first a route reaches (intent/routable?) with a route from it
@@ -607,6 +640,8 @@
                               on-plane (path/octile ec c)]
                         :when (and (<= stare-from on-plane vantage-reach)
                                    (<= (physics/distance c home) shelter-reach)
+                                   (<= (physics/distance c home)
+                                       (physics/distance c (:entity/pos e)))
                                    (not (contains? spent c))
                                    (> (physics/distance eye (physics/centre c)) intent/reach)
                                    (standable? world c)
@@ -765,7 +800,11 @@
    :no-enderman and :no-route in 40 s); before the walk toward one, stairs down toward one far
    below within descend-radius (descend: batch pearls-warped-c's landings stood on ledges over
    the forest floor, and batch pearls-warped-d's run 2 walked toward one and another, the stairs
-   down and up, between lookouts for forty minutes with none within seek-radius for six); after
+   down and up, between lookouts for forty minutes with none within seek-radius for six), and
+   stairs up toward one as far above (ascend: batch pearls-warped5-b's run 5 descended to three
+   endermen in a cave under the forest floor, killed them, and stood thirty-two minutes under
+   the floor with every enderman 20 to 30 blocks over it; runs 2, 3 and 4 hunted under the
+   floor the same way); after
    the walk toward, a tunnel toward the nearest on this level no route reaches (bore: the foot
    of a descent is inside the rock); after a lookout that found nothing, a roam somewhere else to
    look from. The stairs down and the tunnel toward one are cut only with digs to spare past a
@@ -831,6 +870,7 @@
           (or (when-let [[_ e] (routable world far)]
                 {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})
               (descend world (endermen world descend-radius))
+              (ascend world (endermen world descend-radius))
               (toward world far)
               (bore world (endermen world descend-radius))
               (when (= :lookout (:intent/kind (:plan/last world))) (roam world))
