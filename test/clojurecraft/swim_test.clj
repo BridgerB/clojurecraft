@@ -473,3 +473,35 @@
         (is (nil? (:intent/child next)))))
     (let [far (assoc w :player/pos [10.5 62.97 8.5])]
       (is (nil? (swim/bank-block far (intent/feet far) 64)) "no wall within reach"))))
+
+(deftest a-finished-dig-adds-its-time-to-the-escape
+  ;; sim race 39598424082 (issue #344, world R4/16): fifty blocks of swimming to a cliff, no
+  ;; pickaxe, a notch dug by hand at 37 s a block; the 120 s ran out between the second and the
+  ;; third cell, three times
+  (let [done {:intent/kind :dig :intent/status :done :intent/started 1000}
+        now {:time/now 38000}]
+    (is (= 740 (swim/dug-credit now nil done)) "the ticks from its start to now")
+    (is (= 1480 (swim/dug-credit now 740 done)) "added to what was credited before")
+    (is (= swim/dig-credit-ticks (swim/dug-credit now (- swim/dig-credit-ticks 10) done))
+        "never more than dig-credit-ticks in all"))
+  (let [bank [5 64 5]
+        swim {:intent/kind :swim-out
+              :intent/bank bank
+              :intent/target bank
+              :intent/best-dist 0.0
+              :intent/best-tick 0
+              :intent/started 0
+              :intent/status :active}
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 64.0 5.5]
+                 :player/loaded? true
+                 :player/on-ground? false
+                 :player/in-water? true
+                 :time/tick (inc swim/escape-timeout-ticks)
+                 :world/chunks {[0 0] (world/column {})})
+        tick {:event/kind :tick :event/now 120100 :event/rand 0.5}
+        run (fn [i] (:plan/intent (intent/run (assoc w :plan/intent i) i tick)))]
+    (is (= :no-escape (:intent/reason (run swim))) "past the timeout with no dig finished")
+    (is (not= :no-escape (:intent/reason (run (assoc swim :intent/dug 400))))
+        "400 ticks of finished digs put the timeout back")))

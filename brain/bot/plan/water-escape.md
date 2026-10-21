@@ -15,6 +15,10 @@ sourceRefs:
   - test/clojurecraft/swim_test.clj#a-flee-clears-its-trap-on-a-placed-floor
   - test/clojurecraft/swim_test.clj#a-rise-under-a-frozen-lake-digs-the-ice-and-leaves-other-roofs
   - src/clojurecraft/swim.clj#defn dig-afloat
+  - src/clojurecraft/swim.clj#defn dug-credit
+  - src/clojurecraft/intent.clj#defn finish-due
+  - test/clojurecraft/swim_test.clj#a-finished-dig-adds-its-time-to-the-escape
+  - test/clojurecraft/plan_test.clj#a-dig-finishes-at-the-pace-of-the-penalties-in-force-now
   - src/clojurecraft/plan.clj#defn choose
   - "resources/clojurecraft/goals.edn#{:goal/id :escape-water :goal/priority 0 :goal/target? true :goal/always? true"
   - src/clojurecraft/swim.clj#defn banks
@@ -124,6 +128,8 @@ The gym's water trial. `:shore` (priority 5, `--until shore`) is done by `:escap
 
 ## Dig refusals
 `:dig` fails `:unsafe` in `:settle` when any of the target's six neighbours is a fluid (`exposes-fluid?`, steve's `digExposesWater`) unless the intent says `:intent/exposes-ok?`, or when the target is in `never-dug` (obsidian: ruststeve dug its own portal frame). `intent/still?` accepts a body afloat as still, so an escape dig can start under water.
+
+A dig by hand is slow, and the escape's clock allows for it. A dig's time is set at its start from the penalties then (`intent/dig-time`), but the server weighs a FINISH by the block's destroy progress when it arrives, so `intent/finish-due` lets the FINISH go at the earlier of that time and what the penalties now allow: sim race 39598424082 (issue #344, world R1/3) began a granite dig by hand with the eyes still under water as it rose out of a flooded shaft, 187 s at 25 times the hand's pace, and its escape timed out `:no-escape` before the same dig, eyes in air, was due at 37 s (`a-dig-finishes-at-the-pace-of-the-penalties-in-force-now`). And every finished child dig puts its own ticks back on the escape's `escape-timeout-ticks` (`dug-credit`, `:intent/dug`, at most `dig-credit-ticks` 6000): a dig is progress toward the bank, not time lost afloat, and sim race 39598424082 (issue #344, world R4/16) swam fifty blocks to a cliff with no pickaxe and was timed out between the second and the third cell of its notch, three times (`a-finished-dig-adds-its-time-to-the-escape`).
 
 ## What the tests hold
 Four model fixtures from the issue, the siblings' deaths and the sim race: a two-deep pond with a bank three blocks away is left within 10 s with the air never under 200; ruststeve's roofed pool (water six deep under stone, the only air a pocket one block west and one down) is left through the pocket; a capped well is dug out through its cap with the pickaxe from the floor; a flooded cave with no bank (water three deep under three of air and a roof, walls straight from the water) is left by a notch dug in its wall, with no death. The shore goal wades in, is preempted, escapes, and ends done with `:escaped true`.
