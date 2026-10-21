@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T19:03:25.677Z",
+  "at" : "2026-10-21T19:12:45.389Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -19,13 +19,13 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 37,
-    "title" : "Bot stops at ingots: boxed",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
+    "number" : 37,
+    "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -85,6 +85,11 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 108,
+    "title" : "Bot stops at water-bucket: no-log",
+    "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : true
+  }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -94,11 +99,6 @@
     "title" : "Bot stops at portal: stuck",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "number" : 108,
-    "title" : "Bot stops at water-bucket: no-log",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : true
   }, {
     "number" : 85,
     "title" : "Bot stops at cobblestone: timeout",
@@ -174,11 +174,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 37,
+    "issue" : 44,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 44,
+    "issue" : 37,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -222,6 +222,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 108,
+    "move" : "wait",
+    "why" : "session starting"
+  }, {
     "issue" : 87,
     "move" : "leave",
     "why" : "hands-off label"
@@ -229,10 +233,6 @@
     "issue" : 464,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 108,
-    "move" : "wait",
-    "why" : "session starting"
   }, {
     "issue" : 85,
     "move" : "leave",
