@@ -1390,3 +1390,22 @@
     (is (nil? (build/way-back open i)) "a route to it: none to take")
     (is (= [5 63 7] (:intent/target (build/way-back walled i)))
         "rock between: the way cut toward it")))
+
+(deftest a-spent-water-bucket-is-asked-for-again
+  ;; issue #455: a cast's water landing in the lava's own cell leaves no source to scoop back, and
+  ;; the next cell's water pour failed :not-held three times
+  (let [plan (build/portal-plan origin :south)
+        bare {:player/inventory {0 {:item (recipe/item-id :bucket) :count 2}}}
+        full {:player/inventory {0 {:item (recipe/item-id :water_bucket) :count 1}}}]
+    (is (true? (build/water-needed? bare plan)) "two empty buckets, a water pour to come")
+    (is (false? (build/water-needed? full plan)) "a water bucket held")
+    (is (false? (build/water-needed? bare [])) "no pour to come")))
+
+(deftest a-lava-source-gone-before-the-aim-is-looked-for-again
+  ;; issue #419: water turned the chosen source to obsidian before the scoop aimed
+  (is (true? (build/lava-gone?
+              {:intent/kind :scoop :intent/fluid :lava :intent/reason :target-gone})))
+  (is (false? (build/lava-gone? {:intent/kind :scoop :intent/reason :target-gone}))
+      "a water scoop is the scoop intent's own business")
+  (is (false? (build/lava-gone?
+               {:intent/kind :scoop :intent/fluid :lava :intent/reason :no-scoop}))))
