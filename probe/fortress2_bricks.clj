@@ -9,7 +9,8 @@
 (defn -main
   "Prints each set's fortress bricks and each world's distance to the nearest."
   [& _]
-  (doseq [set ["R1" "R2" "R3" "R4"]]
+  (doseq [set ["R1" "R2" "R3" "R4"]
+          :when (.exists (io/file (str "cache/sim-nether/" set ".edn.gz")))]
     (let [n (capture/read-world (str "cache/sim-nether/" set ".edn.gz"))
           cols (into {} (map (fn [[k b]] [k (chunk/decode b)])) (:nether/columns n))
           xs (map first (keys cols))
