@@ -7,6 +7,7 @@
   (:require [clojure.math :as math]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.dragon :as dragon]
             [clojurecraft.end :as end]
@@ -349,12 +350,22 @@
          (into {} (for [cx [-1 0] cz [-1 0]] [[cx cz] (world/column {})]))))
 
 (defn sitting
-  "The dragon sitting on the fountain (phase 6) facing yaw."
+  "The dragon sitting on the fountain in its scanning turn (phase 6) facing yaw."
   [yaw]
   {dragon-eid {:entity/type (mob/type-id :ender_dragon)
                :entity/pos [0.5 66.0 0.5]
                :entity/phase 6
                :entity/yaw yaw}})
+
+(defn attacking
+  "The dragon sitting on the fountain about to breathe (phase 7), its yaw held, facing yaw."
+  [yaw]
+  (assoc-in (sitting yaw) [dragon-eid :entity/phase] 7))
+
+(defn cloud
+  "A breath cloud of radius r at pos, as entity 50."
+  [pos r]
+  {50 {:entity/type (mob/type-id :area_effect_cloud) :entity/pos pos :entity/radius r}})
 
 (deftest the-wait-is-behind-the-sitting-dragons-head
   ;; gym dragon-e run 2 and dragon-f run 2: slain at the stand two out in front of the sitting
@@ -377,7 +388,7 @@
     (let [perch #(:plan/intent (intent/run (round-fountain %1 %2)
                                            {:intent/kind :perch :intent/target dragon-eid}
                                            {:event/kind :tick :event/now 1000 :event/rand 0.5}))]
-      (is (intent/done? (perch [-1.5 64.0 0.5] (sitting 270.0)))
+      (is (intent/done? (perch [-1.5 64.0 0.5] (attacking 270.0)))
           "its head turned onto the feet: the perch hands back")
       (is (not (intent/done? (perch [2.5 64.0 0.5] (sitting 270.0)))) "behind it: on")
       (let [clouded (assoc (sitting 90.0)
@@ -390,7 +401,7 @@
         (is (not (intent/done? (perch [7.5 64.0 0.5] clouded)))
             "and with no stand to go to it holds")))
     (is
-     (= (dragon/standing-walk [2 64 0]) (at [-1.5 64.0 0.5] (sitting 270.0)))
+     (= (dragon/standing-walk [2 64 0]) (at [-1.5 64.0 0.5] (attacking 270.0)))
      "the head turned onto the feet in the basin: straight to the stand behind, low under it
          (gym dragon2-a runs 1 and 3 walked out up the rim into the neck)")
     (is (plan/interrupts? (round-fountain [12.5 64.0 0.5] (sitting 90.0))
@@ -405,6 +416,72 @@
                                {:goal/plan :dragon}
                                {:intent/kind :walk :intent/target [2 64 0]}))
         "nor a walk in the basin")))
+
+(deftest the-bot-keeps-the-basins-floor-while-the-dragon-sits-or-lands
+  ;; every head death of gym dragon2-a and dragon2-b was a bot up on the basin's rim (a way
+  ;; round, a back-off from a breath, the landing dragon's head) while the bot behind the body on
+  ;; the floor struck twenty times unhurt
+  (let [at #(dragon/toward-dragon (round-fountain %1 %2))
+        landing (assoc-in (sitting 270.0) [dragon-eid :entity/phase] 3)
+        flying (assoc-in (sitting 270.0) [dragon-eid :entity/phase] 0)
+        perch #(:plan/intent (intent/run (round-fountain %1 %2)
+                                         {:intent/kind :perch :intent/target dragon-eid}
+                                         {:event/kind :tick :event/now 1000 :event/rand 0.5}))
+        cut? #(plan/interrupts? (round-fountain %1 %2) {:goal/plan :dragon} %3)]
+    (testing "the landing dragon's head is where a sitting one's is"
+      (is (dragon/grounded? (get landing dragon-eid)))
+      (is (dragon/grounded? (get (sitting 270.0) dragon-eid)))
+      (is (not (dragon/grounded? (get flying dragon-eid))))
+      (is (dragon/grounded? {:entity/pos [0.5 66.0 0.5]}) "by place when no phase is said")
+      (is (= (dragon/standing-walk [-9 64 -5]) (at [-12.5 64.0 0.5] landing))
+          "from outside: round its head to the stand behind")
+      (is (not (dragon/lull? (round-fountain [20.5 64.0 0.5] landing))) "no lull to eat in")
+      (is (dragon/lull? (round-fountain [20.5 64.0 0.5] flying))))
+    (testing "a breath near the feet in the basin, the dragon grounded"
+      (let [reaching (merge (attacking 270.0) (cloud [0.5 64.0 4.5] 1.0))]
+        (is (= (dragon/standing-walk [2 64 0]) (at [0.5 64.0 2.5] reaching))
+            "the walk to the stand behind, out of its reach, never the back-off up the rim")
+        (is (not (cut? [0.5 64.0 2.5] reaching {:intent/kind :walk :intent/target [2 64 0]}))
+            "which the breath does not end")
+        (is (cut? [0.5 64.0 2.5] reaching {:intent/kind :walk :intent/target [0 64 3]})
+            "a walk to a cell in its reach ends"))
+      (let [held (merge (attacking 270.0) (cloud [2.5 64.0 3.4] 1.5))]
+        (is (= {:intent/kind :perch :intent/target dragon-eid} (at [2.5 64.0 0.5] held))
+            "no stand out of its reach, the feet out of the breath itself: hold")
+        (is (dragon/holds? (round-fountain [2.5 64.0 0.5] held)))
+        (is (not (intent/done? (perch [2.5 64.0 0.5] held))) "the perch holds")
+        (is (not (cut? [2.5 64.0 0.5] held {:intent/kind :perch :intent/target dragon-eid})))
+        (is (= {:intent/kind :back-off :intent/target 50}
+               (at [2.5 64.0 0.5] (merge (attacking 270.0) (cloud [2.5 64.0 1.5] 1.5))))
+            "in the breath itself: away, the lesser hurt")
+        (is (= {:intent/kind :back-off :intent/target 50}
+               (at [2.5 64.0 0.5] (merge flying (cloud [2.5 64.0 3.4] 1.5))))
+            "the dragon flying: away, as before")
+        (is (= {:intent/kind :back-off :intent/target 50}
+               (at [7.5 64.0 0.5] (merge (attacking 270.0) (cloud [7.5 64.0 2.5] 1.0))))
+            "outside the basin: away, as before")))
+    (testing "the scanning turn is held still through"
+      (is (= {:intent/kind :perch :intent/target dragon-eid} (at [-1.5 64.0 0.5] (sitting 270.0)))
+          "before its head as it scans: the perch where the feet are")
+      (is (not (intent/done? (perch [-1.5 64.0 0.5] (sitting 270.0)))) "which holds")
+      (is (= {:intent/kind :perch :intent/target dragon-eid} (at [0.5 64.0 2.5] (sitting 270.0)))
+          "beside it as it scans: no new stand")
+      (is (= (dragon/standing-walk [2 64 0]) (at [0.5 64.0 2.5] (attacking 270.0)))
+          "its yaw held: the stand behind"))
+    (testing ":defend leaves every hostile to the row while a breath reaches the feet"
+      (let [angry {9 {:entity/type (mob/type-id :enderman)
+                      :entity/pos [4.5 64.0 0.5]
+                      :entity/creepy? true}}
+            w (fn [es]
+                (assoc (round-fountain [2.5 64.0 0.5] es)
+                       :player/dimension dimension/end
+                       :plan/goals #{:dragon}))
+            breathed (w (merge (attacking 270.0) angry (cloud [2.5 64.0 3.4] 1.5)))
+            quiet (w (merge (attacking 270.0) angry))]
+        (is (contains? (combat/answering breathed :dragon) :enderman))
+        (is (empty? (combat/threats breathed)) "the back-off from the breath comes first")
+        (is (= #{:ender_dragon} (combat/answering quiet :dragon)) "no breath: the dragon alone")
+        (is (= #{9} (set (keys (combat/threats quiet)))) "and the enderman is fought")))))
 
 (deftest every-look-of-the-dragon-row-is-away-from-an-endermans-eyes
   ;; gym dragon-f run 3: three endermen stared at in turn on the walks to and from the stand

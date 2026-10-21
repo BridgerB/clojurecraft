@@ -404,18 +404,27 @@
 
 (defmethod answers :default [_] #{})
 
+(defmulti answering
+  "The hostile kinds a goal row's act answers itself at this moment, by the row's :goal/plan and
+   the world: answers, grown by what the world says (the dragon row, every kind while a breath
+   cloud reaches the feet). answers alone by default."
+  {:arglists '([world plan])}
+  (fn [_world plan] plan))
+
+(defmethod answering :default [_ plan] (answers plan))
+
 (defn answered-kinds
-  "The hostile kinds (answers) of the targets in play that are worked here, not reached and not
-   done. Gym blaze-fire-a run 1 (run 39131023637): the :defend row fought a spawner's burst at
-   hand, six blazes, from 20 health to 7 in four seconds and died backing away, while the
+  "The hostile kinds (answering) of the targets in play that are worked here, not reached and
+   not done. Gym blaze-fire-a run 1 (run 39131023637): the :defend row fought a spawner's burst
+   at hand, six blazes, from 20 health to 7 in four seconds and died backing away, while the
    blaze-rods row, which takes cover from three, was never asked."
   [world]
   (into #{}
-        (comp (filter #(seq (answers (:goal/plan %))))
+        (comp (filter #(seq (answering world (:goal/plan %))))
               (filter #(plan/here? world %))
               (remove #(contains? (:plan/reached world #{}) (:goal/id %)))
               (remove #(plan/done-by world %))
-              (mapcat #(answers (:goal/plan %))))
+              (mapcat #(answering world (:goal/plan %))))
         (plan/in-play world plan/goals)))
 
 (defn threats
