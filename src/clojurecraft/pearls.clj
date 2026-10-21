@@ -353,10 +353,10 @@
   "The most digs any held pickaxe has left (make/uses-left: its tier's durability less the
    :damage the server sends on a worn one), or nil with none held."
   [world]
-  (->> (vals (:player/inventory world))
-       (filter #(= :pickaxe (:kind (blocks/tool (:item %)))))
-       (keep make/uses-left)
-       (reduce max nil)))
+  (let [left (->> (vals (:player/inventory world))
+                  (filter #(= :pickaxe (:kind (blocks/tool (:item %)))))
+                  (keep make/uses-left))]
+    (when (seq left) (apply max left))))
 
 (defn spare?
   "Does a held pickaxe have spare-digs or more left, so that stairs or a tunnel for something

@@ -2,7 +2,8 @@
 ;; of the pickaxe for the burrow (pearls-warped3-a run 1 wore its pickaxe out at 14 min), and a
 ;; walk toward one never ends where a walk already arrived (run 3 walked between two route ends
 ;; for 25 min, probe 39543118281).
-;; pearls-12 is the stage (pearls-warped3-a: 0/2 and a harness failure); pearls-1-live guards the arena.
+;; pearls-12 is the stage (pearls-warped3-a: 0/2 and a harness failure); pearls-1-live guards the
+;; arena. Run again after the first push's digs-left crashed the planner (plan run 39543821826 cancelled).
 {:plans/label "pearls-warped4-a"
  :plans/jobs 4
  :plans/issue 263
