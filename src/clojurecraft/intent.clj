@@ -568,12 +568,26 @@
               (assoc :player/controls {:control/look (physics/look-at eye (physics/centre target))})
               (assoc-intent :intent/still (if (still? world) (inc still) 0))))))
 
+(defn finish-due
+  "The ms at which a dig may be finished now: the earlier of its :intent/finish-at, set at the
+   start from the penalties then, and what the penalties in force now allow (the block's state
+   and the tool it began with, dig-time and finish-delay from its start). The server weighs a
+   FINISH by the block's destroy progress at the moment it arrives (ServerPlayerGameMode: the
+   ticks since the start times that progress, 70% needed), so a dig begun with the eyes under
+   water and finished at the surface needs only the surface's time. Sim race 39598424082
+   (issue #344, world R1/3) began a granite dig by hand as the body rose out of a flooded
+   shaft, with the eyes still under water: 187 s, 25 times the hand's pace, and the escape's
+   120 s ran out while the body floated with its eyes in air, where the same dig was 37 s."
+  [world {:intent/keys [state tool started finish-at]}]
+  (min finish-at
+       (+ started (finish-delay (dig-time state tool (penalties world)) (slowdown world)))))
+
 (defmethod dig-stage :digging
-  [world {:intent/keys [target face slot tool next-swing finish-at]}]
+  [world {:intent/keys [target face slot tool next-swing] :as i}]
   (let [now (:time/now world)]
     (cond (and tool (not= tool (get-in world [:player/inventory slot :item])))
           (fail world :tool-broke) ; the slot no longer holds it: the next dig chooses again
-          (>= now finish-at)
+          (>= now (finish-due world i))
           (let [seq (inc (:bot/sequence world))]
             (-> world
                 (assoc :bot/sequence seq)
