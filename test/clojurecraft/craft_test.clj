@@ -232,3 +232,20 @@
                                                   11 {:item (recipe/item-id :stone_pickaxe)
                                                       :count 1}}}))
       "ores, fuel and tools are not surplus building blocks"))
+
+(deftest a-worn-tool-with-a-better-one-beside-it-is-thrown
+  ;; issues #463, #457, #172, #446: sixteen worn stone pickaxes took sixteen slots
+  (let [pick (fn [damage]
+               {:item (recipe/item-id :stone_pickaxe) :count 1 :components {:damage damage}})
+        w {:player/inventory {9 (pick 110) 10 (pick 20) 11 (pick 100)}}]
+    (is (= 9 (window/junk-slot w)) "the most worn of the three goes first")
+    (is (= 11 (window/junk-slot (update w :player/inventory dissoc 9))) "then the next")
+    (is (nil? (window/junk-slot (update w :player/inventory dissoc 9 11)))
+        "the last stone pickaxe stays, fresh")
+    (is (nil? (window/junk-slot {:player/inventory {9 (pick 110)}})) "and the last stays, worn")
+    (is (nil? (window/junk-slot {:player/inventory {9 (pick 20) 10 (pick 20)}}))
+        "two fresh ones are both spares")
+    (is (nil? (window/junk-slot {:player/inventory {9 (pick 110)
+                                                    10 {:item (recipe/item-id :wooden_pickaxe)
+                                                        :count 1}}}))
+        "a better tool of another item is no reason")))

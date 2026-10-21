@@ -28,6 +28,7 @@
             [clojurecraft.stronghold]
             [clojurecraft.swim :as swim]
             [clojurecraft.terrain :as terrain]
+            [clojurecraft.window :as window]
             [clojurecraft.wood :as wood]
             [clojurecraft.world :as world]))
 
@@ -457,11 +458,11 @@
   (let [held {:raw_iron 4 :stone_pickaxe 1 :wooden_pickaxe 1 :stick 2 :cobblestone 64}
         with-table #(memory/observe % [3 64 5] memory/crafting-table) ; the furnace is at [7 64 5]
         w (with-table (with-furnace (world-holding held false)))]
-    (is (= 59 (make/uses-left {:item (recipe/item-id :wooden_pickaxe) :count 1})) "fresh")
+    (is (= 59 (window/uses-left {:item (recipe/item-id :wooden_pickaxe) :count 1})) "fresh")
     (is (= 33
-           (make/uses-left
+           (window/uses-left
             {:item (recipe/item-id :wooden_pickaxe) :count 1 :components {:damage 26}})))
-    (is (nil? (make/uses-left {:item (recipe/item-id :cobblestone) :count 3})) "no tool")
+    (is (nil? (window/uses-left {:item (recipe/item-id :cobblestone) :count 3})) "no tool")
     (is (= :mine-coal (:goal/id (make/next-row w (ingots 4) plan/goals)))
         "a fresh wooden pickaxe beside the stone one is the spare: the coal is dug")
     (is (= :craft/stone_pickaxe
