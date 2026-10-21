@@ -1196,7 +1196,8 @@
             ;; swim-outs have not left it
             (and (= :boxed reason)
                  (#{:stairs-up :stairs-down} (:intent/kind child))
-                 (:player/in-water? world))
+                 (or (:player/in-water? world)
+                     (= :water (terrain/fluid-kind world (intent/feet world)))))
             ;; a flooded room (flooded-room?) is no site: its walks stall and its digs fall short
             (and (#{:no-path :stuck :out-of-reach} reason)
                  (#{:walk :dig} (:intent/kind child))

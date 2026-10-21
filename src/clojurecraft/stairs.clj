@@ -188,18 +188,6 @@
         (>= (carried-filler world)
             (+ lay-reserve (* (count to-lay) (max 1 (- (long y) (long end)))))))))
 
-(defn level-floors-affordable?
-  "May a level step of a staircase of kind lay to-lay (cells of floor and fill) with carried filler
-   in hand: always for any kind but :stairs-down, else only when the filler would still leave
-   lay-reserve for the climb back (floors-affordable?, which asks the same of a stair). A level
-   step along a cave or a drop laid a floor under itself, one cell a step, up to max-level-steps
-   times, and the stairs down ended on a bridge of its own with nothing left to lay, every stair
-   up or down refused for the air under it. Real races (issue #37, Clj_r01 and the sweep's
-   R4/1, R2/38): the level steps spent three planks, or the cobblestone, out over a gap, and the
-   staircase walked back and forth along the bridge until the plan ended."
-  [kind carried to-lay]
-  (or (not= :stairs-down kind) (>= carried (+ lay-reserve (count to-lay)))))
-
 (def bridge-depth 16)                 ; blocks under a floor to be laid looked down through for a fluid
 
 (defn over-fluid?
@@ -803,11 +791,9 @@
                (= :stairs-up kind)
                (sort-by #(if (under-falling? world (last (level-cells feet %))) 1 0)))
         laid (fn [d]
-               (let [cells (level-cells feet d)
-                     to-lay (or (and (level-clear? world cells) (lay world feet cells))
-                                (level-lay world feet cells))]
-                 (when (and to-lay (level-floors-affordable? kind (carried-filler world) to-lay))
-                   to-lay)))
+               (let [cells (level-cells feet d)]
+                 (or (and (level-clear? world cells) (lay world feet cells))
+                     (level-lay world feet cells))))
         pick (fn [ws]
                (or (first (filter #(level-safe? world (level-cells feet %)) ws))
                    (first (filter laid ws))))

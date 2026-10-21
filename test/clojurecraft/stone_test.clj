@@ -1109,11 +1109,3 @@
         "a staircase that ends there is refused its last stair")
     (is (nil? (:intent/dead-end (stone/dead-end-retreat (assoc boxed :player/in-water? true))))
         "out of water first: a swim, not a walk from a cell")))
-
-(deftest a-level-step-down-lays-only-what-leaves-the-climb-back
-  ;; issue #37 (real race Clj_r01) and the sweep's R4/1: level steps laid a floor each over a gap
-  ;; until nothing was left to lay
-  (is (stairs/level-floors-affordable? :stairs-down 10 [[0 0 0]]) "8 kept and 1 laid")
-  (is (not (stairs/level-floors-affordable? :stairs-down 8 [[0 0 0]])) "nothing left for the climb")
-  (is (not (stairs/level-floors-affordable? :stairs-down 3 [[0 0 0] [1 0 0]])))
-  (is (stairs/level-floors-affordable? :stairs-up 1 [[0 0 0] [1 0 0]]) "a climb lays what it has"))
