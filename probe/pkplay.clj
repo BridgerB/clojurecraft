@@ -8,8 +8,9 @@
             [clojurecraft.simrace :as sr]))
 
 (defn play
-  ([path cap] (play path cap (fn [_ _] nil) (fn [_] nil)))
-  ([path cap on-intent on-sample]
+  ([path cap] (play path cap (fn [_ _] nil) (fn [_] nil) (fn [_] nil)))
+  ([path cap on-intent on-sample] (play path cap on-intent on-sample (fn [_] nil)))
+  ([path cap on-intent on-sample on-tick]
    (let [snap (capture/read-world path)
          w (sr/world-for! snap)
          m (sr/moment-of snap w)
@@ -23,7 +24,8 @@
                 (let [n0 (count (:bot/effects wd))
                       wd' (sr/step wd ev)
                       i (:plan/intent wd')
-                      now (:time/now wd')]
+                      now (:time/now wd')
+                      _ (on-tick wd')]
                   (when (and i (not= (:intent/id i) @last-id))
                     (vreset! last-id (:intent/id i))
                     (on-intent wd' i)

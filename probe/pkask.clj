@@ -1,7 +1,8 @@
 (ns probe.pkask
   "Portal-kit batch: what the code sees at each snapshot's moment (feet, terrain layers, the swim
    and wood helpers' answers), one try per question."
-  (:require [clojure.string :as str]
+  (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
             [clojurecraft.entity :as entity]
@@ -134,6 +135,32 @@
                                                      blocks/name-of)])
                                 (take 3 bad))}))))))
 
+(defn tracer
+  "Each tick of the first second and a half of an off-ice walk: where the walk is and why it would replan."
+  [started]
+  (fn [wd]
+    (let [i (:plan/intent wd)
+          now (:time/now wd)]
+      (when (and (= :walk (:intent/kind i)) (= :off-ice (:intent/for i)))
+        (when-not @started (reset! started now))
+        (when (< (- now @started) 1500)
+          (let [wps (:intent/waypoints i)
+                at (:intent/at i)]
+            (out "TICK"
+                 now
+                 (mapv #(/ (math/round (* 10 %)) 10.0) (:player/pos wd))
+                 "ground" (:player/on-ground? wd)
+                 "ice" (path/on-ice? wd)
+                 "at" at
+                 "of" (count wps)
+                 "replans" (:intent/replans i)
+                 "route" (:intent/route i)
+                 "stale" (when wps (intent/route-stale? wd i))
+                 "bad"
+                 (first (keep-indexed (fn [n c] (when-not (path/standable? wd c) [n c]))
+                                      (drop (or at 0) wps)))
+                 "status" (:intent/status i))))))))
+
 (defn run-one
   [p]
   (let [snap (capture/read-world p)
@@ -180,7 +207,7 @@
     (let [seen (atom #{})
           h (hook seen)
           wh (walk-hook (atom #{}))]
-      (pkplay/play p 0 (fn [wd i] (h wd i) (wh wd i)) (sampler (atom 0))))))
+      (pkplay/play p 0 (fn [wd i] (h wd i) (wh wd i)) (sampler (atom 0)) (tracer (atom nil))))))
 
 (defn -main
   [& paths]
