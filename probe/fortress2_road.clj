@@ -31,7 +31,12 @@
                   "logs" (total c "_log")
                   "tables" (get c :crafting_table 0)
                   "picks" (total c "_pickaxe")
-                  "cobble" (get c :cobblestone 0)))
+                  "cobble" (get c :cobblestone 0)
+                  "op" (select-keys (:intent/op i) [:build/step :build/op :build/cell :build/item])
+                  "child"
+                  (select-keys (:intent/child i)
+                               [:intent/kind :intent/target :intent/status :intent/reason
+                                :intent/for :intent/tool])))
        (catch Exception e (println "ROADERR" s (ex-message e)))))
 
 (defn -main
