@@ -449,16 +449,19 @@
   "With no log to set out for (gather-next waits :no-log), the way out the water hunt takes from
    where the feet are, never in water (the escape owns it): out of a pit under the open sky deep
    under the landing (scoop/pit-climb), else from a cell under rock where a climb out died :boxed
-   (scoop/boxed-here?) a retreat to new rock (stone/retreat), the next climb from there; nil when
-   neither. Sim race 38843552659 (issue #186): world R1/18 stood at y 6 on a ravine's floor
-   sixty under its landing, the sky open and no hunt target in its band, and world R4/39 under
-   rock at y 47 where its climb out had died :boxed, and both waited :no-log with trees
-   remembered sixty blocks off."
+   (scoop/boxed-here?) a retreat to new rock (stone/retreat), else the climb the mine ends in
+   (stone/climb: stairs up, which seal the water beside them and lay their steps from carried
+   filler); nil when none. Sim race 38843552659 (issue #186): world R1/18 stood at y 6 on a
+   ravine's floor sixty under its landing, the sky open and no hunt target in its band, and world
+   R4/39 under rock at y 47 where its climb out had died :boxed, and both waited :no-log with
+   trees remembered sixty blocks off. A real race (issue #89, snapshot real-3-s2-Clj_r32) smelted
+   its iron at y 16 in a cell a stair down had died :boxed in; the furnace placed at its side
+   closed the way a retreat had walked, and the plan waited :no-log out beside a stone pickaxe."
   [world]
   (when-not (:player/in-water? world)
     (or (scoop/pit-climb world)
         (when (and (scoop/boxed-here? world) (not (terrain/under-sky? world (intent/feet world))))
-          (stone/retreat world)))))
+          (or (stone/retreat world) (stone/climb world))))))
 
 (defn gather-or-out
   "The :gather act: gather-next, or when it waits :no-log the way out (way-out) before the wait.
