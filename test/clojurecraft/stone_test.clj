@@ -992,6 +992,24 @@
     (is (= {:intent/kind :cross :intent/target [1 64 1]} (stone/mine-next boxed (row :mine-stone)))
         "the mine's last resort swims instead of climbing")))
 
+(deftest a-causeway-with-no-stair-is-walked-home
+  ;; issue #62's four snapshots (worlds R4/1 and R2/38): a one-wide dirt strip over the sea, no
+  ;; filler held, every stair refused; the strip leads back to the shore the bot came from
+  (let [sea (into {} (for [x (range 16) z (range 16) y (range 56 64)] [[x y z] blocks/water-base]))
+        strip (into sea (for [x (range 16)] [[x 63 8] (blocks/default-state :dirt)]))
+        w (assoc (standing 64 :stone_pickaxe)
+                 :player/pos [15.5 64.0 8.5]
+                 :plan/go-at [1.5 64.0 8.5]
+                 :world/chunks {[0 0] (world/column strip)})
+        boxed (assoc w :plan/boxed-at #{[15 64 8]})]
+    (is (not (stone/islet? w)) "a strip is no islet: dirt east and west")
+    (is (nil? (stone/walk-home w)) "before a climb died here, the climb comes first")
+    (is (= {:intent/kind :walk :intent/target [1 64 8] :intent/for :retreat}
+           (stone/walk-home boxed)))
+    (is (nil? (stone/walk-home (dissoc boxed :plan/go-at))) "no landing to walk to")
+    (is (nil? (stone/walk-home (assoc boxed :player/pos [4.5 64.0 8.5])))
+        "near the landing there is nothing to walk home for")))
+
 (deftest stone-beside-water-is-sealed-with-what-is-held-before-it-is-dug
   ;; issue #342 (the R1/30 sim moment): stones on the west bank of a cave lake had water on their
   ;; north side, the dig refused them, and the bot held planks and no filler
