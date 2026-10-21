@@ -36,6 +36,9 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-portal-behind-its-back-wall-is-entered-from-the-room
   - src/clojurecraft/build.clj#defn way-back
   - src/clojurecraft/build.clj#defn wading-out?
+  - src/clojurecraft/build.clj#defn swum
+  - src/clojurecraft/build.clj#defn swim-looped?
+  - test/clojurecraft/build_test.clj#a-swim-out-that-ends-where-it-began-again-and-again-gives-the-site-up
   - src/clojurecraft/build.clj#defn way-columns
   - test/clojurecraft/build_test.clj#the-lava-hunt-heads-for-lava-beyond-the-hunt-radius
   - test/clojurecraft/build_test.clj#a-tunnel-for-lava-is-not-cut-again-from-the-cell-one-boxed
@@ -261,6 +264,7 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **A bubble column takes a block.** The model's `blocks/placeable-into?` accepts it as the game does (replaceable): #44's bridge over a magma stream was refused three times.
 
 ## Gotchas
+- **A swim-out that ends where it began, asked for again, gives the site up.** `wading-out?` asks for a `:swim-out` whenever the body is in water with no route; a swim-out ends on dry land, and a shallow pool flickers between the two, so a build at health 1 (sim snapshot R3-4-1, issue #178) swam out every 650 ms for the whole window. `swum` counts swim-outs ended on one feet cell (`:intent/swims`); `max-swims` of them make `swim-looped?` and the build gives its site up like `lost-way?` does. The `:cast-one` and `:portal` rows keep a spare pickaxe (`:goal/spares`) so a pickaxe worn out in the cast leaves another, and wood for it is up at the surface (issue #135).
 - **Hunt only sources with a safe stand to open.** `hunt-target` requires `stands-beside`, not just enough nearby sources. Issue #392's real snapshot tunnelled to a low source in a lava body extending above the feet; no stand could be opened safely, the last tunnel had zero steps left, and `:no-site` was waited out. Such sources are skipped both on approach and when already beside them, leaving the hunt free to seek another pool or descend toward the sea (`the-lava-hunt-passes-sources-with-no-safe-stand`). The snapshot no longer recurs over its window; followed on, it casts all ten obsidian cells and reaches `:portal` 589200 ms after its moment.
 - **A dig never takes obsidian**: `dig-op`'s done holds when its cell is obsidian (`no-dig-can-take-obsidian`).
 - **Water above, never beside.** The model ([[server-model]]) turns a lava source with water above or beside it to obsidian, as vanilla does; the bot puts the water above because on a server the source's open side flows first.
