@@ -441,4 +441,7 @@
                  (->> (positions-now world blocks/log-states)
                       (remove blacklist)
                       (filter (fn [[_ y _]] (<= (abs (- y ey)) 12)))
+                      ;; the radius before bottom?: it reads the log's column, a scan of the
+                      ;; sightings, and a bot with thousands of logs remembered paid it for each
+                      (filter #(<= (physics/distance eye (physics/centre %)) radius))
                       (filter #(bottom? world %)))))))

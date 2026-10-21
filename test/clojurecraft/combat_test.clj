@@ -243,6 +243,27 @@
     (is (= #{8} (set (keys (combat/threats (world combat/given-up-after [20.0 64.0 8.5])))))
         "a creeper that came on from where it stood is counted afresh")))
 
+(deftest a-back-off-that-ran-out-its-clock-fights-the-next-time
+  ;; issue #161 (sim race 39593219246, world R3/41): at under one health in a dead end, the bot
+  ;; backed away from a zombie two blocks off every ten seconds for a quarter hour and never moved
+  (let [zombie (mob :zombie [10.5 64.0 8.5] 20.0)
+        hurt (assoc (standing {7 zombie}) :player/health 0.7)
+        backing (assoc
+                 hurt
+                 :plan/intent
+                 {:intent/kind :back-off :intent/target 7 :intent/status :active :intent/since 0})
+        [timed-out _] (fx/fold intent-step backing [(tick (+ combat/back-off-timeout-ms 100))])]
+    (is (= :done (:intent/status (:plan/intent timed-out))))
+    (is (= #{7} (:plan/cornered timed-out)) "the target is kept")
+    (is (= {:intent/kind :back-off :intent/target 7}
+           (plan/next-intent hurt (row :defend) plan/goals))
+        "before, hurt, the bot backs away")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/to-the-end? true}
+           (plan/next-intent timed-out (row :defend) plan/goals))
+        "after, it fights what it could not get away from, to the end")
+    (let [[going _] (fx/fold intent-step backing [(tick 1000) (tick 2000)])]
+      (is (not (contains? going :plan/cornered)) "a back-off still going has cornered nothing"))))
+
 (deftest back-offs-from-a-creeper-count-where-it-stood
   (let [w (assoc (standing {8 (mob :creeper [13.0 64.0 8.5] 20.0)})
                  :plan/intent

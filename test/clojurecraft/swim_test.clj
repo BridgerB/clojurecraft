@@ -503,6 +503,69 @@
     (let [far (assoc w :player/pos [10.5 62.97 8.5])]
       (is (nil? (swim/bank-block far (intent/feet far) 64)) "no wall within reach"))))
 
+(deftest a-finished-dig-adds-its-time-to-the-escape
+  ;; sim race 39598424082 (issue #344, world R4/16): fifty blocks of swimming to a cliff, no
+  ;; pickaxe, a notch dug by hand at 37 s a block; the 120 s ran out between the second and the
+  ;; third cell, three times
+  (let [done {:intent/kind :dig :intent/status :done :intent/started 1000}
+        now {:time/now 38000}]
+    (is (= 740 (swim/dug-credit now nil done)) "the ticks from its start to now")
+    (is (= 1480 (swim/dug-credit now 740 done)) "added to what was credited before")
+    (is (= swim/dig-credit-ticks (swim/dug-credit now (- swim/dig-credit-ticks 10) done))
+        "never more than dig-credit-ticks in all"))
+  (let [bank [5 64 5]
+        swim {:intent/kind :swim-out
+              :intent/bank bank
+              :intent/target bank
+              :intent/best-dist 0.0
+              :intent/best-tick 0
+              :intent/started 0
+              :intent/status :active}
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [5.5 64.0 5.5]
+                 :player/loaded? true
+                 :player/on-ground? false
+                 :player/in-water? true
+                 :time/tick (inc swim/escape-timeout-ticks)
+                 :world/chunks {[0 0] (world/column {})})
+        tick {:event/kind :tick :event/now 120100 :event/rand 0.5}
+        run (fn [i] (:plan/intent (intent/run (assoc w :plan/intent i) i tick)))]
+    (is (= :no-escape (:intent/reason (run swim))) "past the timeout with no dig finished")
+    (is (not= :no-escape (:intent/reason (run (assoc swim :intent/dug 400))))
+        "400 ticks of finished digs put the timeout back")))
+(deftest a-wall-bank-just-out-of-reach-is-swum-to-not-notched
+  ;; issue #92 (sim race 39550831606, world R4/9): the sea met a cliff, the cells it could lay a
+  ;; bank into lay a block or two past the place reach, and with no pickaxe the escape dug a notch
+  ;; in the wall by hand (37 s a block) until it timed out, three times
+  (let [sea (into {}
+                  (for [x (range 3 16) z (range 16) y (range 56 64)] [[x y z] blocks/water-base]))
+        cliff
+        (into
+         {}
+         (for [x (range 3) z (range 16) y (range 64 72)] [[x y z] (blocks/default-state :stone)]))
+        swim {:intent/kind :swim-out :intent/status :active}
+        w (assoc (game/init fx/opts)
+                 :bot/phase :play
+                 :player/pos [10.5 62.97 8.5]
+                 :player/loaded? true
+                 :player/in-water? true
+                 :player/eye-in-water? false
+                 :player/inventory {0 {:item (blocks/items :cobblestone) :count 20}}
+                 :time/tick 10
+                 :world/chunks {[0 0] (world/column (merge sea cliff))}
+                 :plan/intent swim)
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        feet (intent/feet w)
+        i (:plan/intent (intent/run w swim tick))]
+    (is (nil? (swim/bank-block w feet 64)) "no wall within reach")
+    (is (= [3 63 8] (swim/wall-toward w feet 64)) "the wall's cell nearest the feet")
+    (is (= [3 63 8] (:intent/shore i)) "the swim heads for it")
+    (is (nil? (:intent/child i)) "no notch dug")
+    (is (true? (:control/jump? (:player/controls (intent/run w swim tick)))) "swimming on")
+    (let [far (assoc w :player/pos [14.5 62.97 8.5])]
+      (is (nil? (swim/wall-toward far (intent/feet far) 64)) "none past approach-radius"))))
+
 (deftest the-escape-never-digs-ore-no-held-tool-can-take
   ;; a real race's bot Clj_r10 (issue #163): iron ore was the nearest wall of a flooded shaft and
   ;; the bot held no pickaxe, so each dig was refused :needs-tool
