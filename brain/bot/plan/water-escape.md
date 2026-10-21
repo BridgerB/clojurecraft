@@ -32,6 +32,8 @@ sourceRefs:
   - test/clojurecraft/swim_test.clj#a-bank-approach-clears-a-wall-touching-the-bodys-edge
   - test/clojurecraft/swim_test.clj#a-bank-left-below-a-rising-swim-is-dropped
   - src/clojurecraft/swim.clj#defn notch
+  - src/clojurecraft/swim.clj#defn diggable-cell?
+  - test/clojurecraft/swim_test.clj#the-escape-never-digs-ore-no-held-tool-can-take
   - src/clojurecraft/swim.clj#defn bank-block
   - src/clojurecraft/swim.clj#defn start-lay
   - test/clojurecraft/swim_test.clj#a-sea-against-a-cliff-is-left-by-a-block-laid-for-a-bank
@@ -129,6 +131,7 @@ The gym's water trial. `:shore` (priority 5, `--until shore`) is done by `:escap
 Four model fixtures from the issue, the siblings' deaths and the sim race: a two-deep pond with a bank three blocks away is left within 10 s with the air never under 200; ruststeve's roofed pool (water six deep under stone, the only air a pocket one block west and one down) is left through the pocket; a capped well is dug out through its cap with the pickaxe from the floor; a flooded cave with no bank (water three deep under three of air and a roof, walls straight from the water) is left by a notch dug in its wall, with no death. The shore goal wades in, is preempted, escapes, and ends done with `:escaped true`.
 
 ## Gotchas
+- **The escape digs only what a held tool can take.** `notch` and `obstacle` pick `diggable-cell?` blocks: solid and not ore above every held pickaxe's tier (`stairs/too-hard?`). A real race's bot Clj_r10 (issue #163), two health and no pickaxe in a flooded shaft, chose iron ore three times and each dig failed `:needs-tool` (`the-escape-never-digs-ore-no-held-tool-can-take`).
 - With `:go/goals []` nothing is in play but the escapes, and an untrapped bot's plan is done at once; the escape tests keep `:wood` in play (no tree, so it only waits).
 - A deep well whose floor is out of reach of its cap is still a death by vanilla arithmetic; there is no faster answer than the floor.
 - Lava deaths are modelled in the trap only: fire and the burning state are not in the server model yet.
