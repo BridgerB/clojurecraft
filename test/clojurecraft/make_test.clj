@@ -452,7 +452,14 @@
     (is (= {:intent/kind :toss} (make/take-table-along (assoc w :player/inventory full)))
         "no slot free and filler to spare: throw it first")
     (is (= :dig (:intent/kind (make/take-table-along (assoc w :player/inventory (dissoc full 3)))))
-        "a slot free: the dig")))
+        "a slot free: the dig")
+    (is (= {:plan/wait :inventory-full}
+           (make/take-table-along
+            (assoc
+             w
+             :player/inventory
+             (into {} (for [p (range 36)] [p {:item (recipe/item-id :stone_pickaxe) :count 1}])))))
+        "nothing to throw: the table is left standing")))
 
 (defn worn
   "w with its first tool of item name n carrying damage: the server's :damage component."
