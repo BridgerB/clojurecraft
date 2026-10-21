@@ -119,6 +119,26 @@
   [world]
   (boolean (seq (crowd world))))
 
+(defn blocking
+  "[eid entity] of an enderman standing in the burrow's stairs, blacklisted or not: its cell
+   below the mouth's height (:pearls/mouth), within burrow-span of the end (:pearls/shelter) and
+   not the end; nil when none, or with no burrow. The stairs are one cell wide: a walk out
+   through it stalls on its body and fails :no-path, and three fail the plan (gym batch
+   pearls-warped4-a, plan run 39544677155, run 2 at 426 s). One out of the sword's reach is
+   waited for where the bot stands; one within it is struck."
+  [world]
+  (let [end (:pearls/shelter world)
+        mouth (:pearls/mouth world)]
+    (when (and end mouth)
+      (entity/nearest (into {}
+                            (filter (fn [[_ e]]
+                                      (let [c (cell (:entity/pos e))]
+                                        (and (< (physics/y-of c) (physics/y-of mouth))
+                                             (not= c end)
+                                             (<= (physics/distance c end) burrow-span)))))
+                            (endermen (dissoc world :plan/blacklist)))
+                      (:player/pos world)))))
+
 (def stale-lookouts 12)               ; lookouts (five seconds each, a minute) stood with the burrow and nothing to do from it before it is given up for one cut beside the next enderman
 
 (defn stale?
@@ -668,9 +688,13 @@
    and angry, or the threat fought where the bot stands (:fight :intent/hold?; at hand by the
    distance in three, never on the plane alone: batch pearls-warped-b's run 3 held a fight
    twenty minutes on one two blocks off on the plane and fourteen below, and batch
-   pearls-warped-c's run 1 stood over one fourteen below for forty; never a calm one at hand,
-   which does not come: batch pearls-warped4-b's arena run 3, plan run 39596287510, held one
-   107 s from 21 s on, blacklisted it, and found the others gone); with no burrow, one at hand backed away
+   pearls-warped-c's run 1 stood over one fourteen below for forty; a calm one at hand only
+   within the sword's reach, combat/attack-reach, where the blow angers it, never one out of
+   it, which does not come: batch pearls-warped4-b's arena run 3, plan run 39596287510, held
+   one 3.8 off for 107 s from 21 s on, blacklisted it, and found the others gone); in the
+   burrow with one standing in its stairs out of reach (blocking), a :lookout where it is,
+   never a walk out through its body (batch pearls-warped4-a's run 2 failed :no-path three
+   times to its mouth); with no burrow, one at hand backed away
    from under 10 health, fought when it is coming or no pickaxe is held (a calm one given up on,
    a ghost, is left) (batch
    pearls-warped-a, plan run 39131478416: two landings in three walked up to a calm one, struck
@@ -722,11 +746,14 @@
                    pos)
         near? (and e (<= (physics/distance pos (:entity/pos e)) strike-range))
         angry? (and near? (entity/creepy? e))
+        in-reach? (and near?
+                       (<= (physics/distance (game/eye world) (combat/aim e)) combat/attack-reach))
         hurt? (< (:player/health world 20.0) combat/retreat-health)
         meal (when hurt? (blaze/meal world))
         home (shelter world)
         in? (and home (= home (intent/feet world)))
         [tid _] (when home (threat world))
+        [bid _] (when in? (blocking world))
         [qid q] (quarry world)
         dir (when (and (nil? home) (pickaxe? world) (or ce q near?)) (away world (or q ce e)))
         digs? (and dir (burrowable? world (intent/feet world) dir))
@@ -735,10 +762,10 @@
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
         far (endermen world seek-radius)]
     (cond (and home (not in?) (or ce near? hurt? tid)) way-home
-          (and in? (or ce angry? tid))
+          (and in? (or ce angry? in-reach? tid))
           {:intent/kind :fight
            :intent/target (cond ce ceid
-                                angry? eid
+                                (or angry? in-reach?) eid
                                 :else tid)
            :intent/hold? true
            :intent/for :pearls}
@@ -749,7 +776,7 @@
                    (and (not (pickaxe? world)) (not (contains? (:plan/blacklist world #{}) eid)))))
           {:intent/kind :fight :intent/target eid :intent/for :pearls}
           meal meal
-          (and hurt? in?) {:intent/kind :lookout :intent/for :pearls}
+          (and in? (or hurt? bid)) {:intent/kind :lookout :intent/for :pearls}
           digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
           site {:intent/kind :walk :intent/target site :intent/for :shelter}
           (and in? qid) {:intent/kind :provoke :intent/target qid :intent/for :pearls}

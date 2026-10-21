@@ -426,10 +426,11 @@
                              row
                              plan/goals))
         "at the end with it two off the mouth: a crowd, blacklisted or not")
-    (is (=
-         {:intent/kind :lookout :intent/for :pearls}
-         (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])}) row plan/goals))
-        "a calm one three blocks from the mouth: it waits for it to wander off")
+    (is
+     (= [:walk :pearls]
+        ((juxt :intent/kind :intent/for)
+         (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])}) row plan/goals)))
+     "a calm one three blocks from the mouth: out past it to a vantage to stare from")
     (is (=
          {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
          (plan/next-intent (burrowed [8.5 61.0 8.5] {7 (enderman [3.5 44.0 8.5])}) row plan/goals))
@@ -587,16 +588,24 @@
   ;; burrow's end it held a fight on a calm enderman 3.8 blocks off from 21 s to 128 s, which
   ;; never came (nothing had provoked it), blacklisted it, and found the others gone from the
   ;; arena's lit square; the run passed at 213 s where the arena's bots pass in about 50
-  (let [calm (enderman [5.5 61.0 8.5])
+  (let [calm (enderman [4.5 62.0 8.5])
         w (burrowed [8.5 61.0 8.5] {7 calm})]
+    (is (= 7 (first (pearls/blocking w))) "a calm one two stairs up, 4.1 off: in the stairs")
     (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals))
-        "a calm one on the stairs: a crowd at the mouth, waited out")
+        "out of the sword's reach and in the only way out: waited for where the bot stands")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
+           (plan/next-intent (assoc-in w [:world/entities 7 :entity/pos] [5.5 61.0 8.5])
+                             row
+                             plan/goals))
+        "on the last stair, three off: within the sword's reach, struck, and the blow angers it")
     (is (= {:intent/kind :fight :intent/target 7 :intent/hold? true :intent/for :pearls}
            (plan/next-intent (assoc-in w [:world/entities 7 :entity/creepy?] true) row plan/goals))
         "the same one coming: fought where the bot stands")
     (is (= {:intent/kind :lookout :intent/for :pearls}
            (plan/next-intent (assoc w :player/health 6.0) row plan/goals))
-        "hurt with it there: it stays in, no back-off out of the burrow")))
+        "hurt with it there: it stays in, no back-off out of the burrow")
+    (is (nil? (pearls/blocking (burrowed [8.5 61.0 8.5] {7 (enderman [0.5 64.0 8.5])})))
+        "one on the ground by the mouth is no block: a vantage is walked to past it")))
 
 (def north-wall
   "Stone four high across x 1 to 6 at z 12: it hides the head of an enderman standing north of
