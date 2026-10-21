@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T13:05:12.267Z",
+  "at" : "2026-10-21T13:07:30.078Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -125,11 +125,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 85,
-    "title" : "Bot stops at cobblestone: timeout",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 392,
     "title" : "Bot stops at portal: no-site",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -172,6 +167,11 @@
   }, {
     "number" : 92,
     "title" : "Bot stops at portal-kit: no-escape",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 85,
+    "title" : "Bot stops at cobblestone: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -336,10 +336,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 85,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 392,
     "move" : "leave",
     "why" : "hands-off label"
@@ -373,6 +369,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 92,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 85,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
