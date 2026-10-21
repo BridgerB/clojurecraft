@@ -190,3 +190,19 @@
           w0))]
     (is (some #(and (>= (nth (:player/pos %) 1) 65.0) (> (nth (:player/pos %) 2) 1.7)) states)
         "on the ledge, a block over the water's cell")))
+
+(deftest a-body-lifted-under-a-ceiling-still-reaches-the-ledge
+  ;; a flooded tunnel two high over its water (ceiling at y 67, water at y 64 on a floor at 63),
+  ;; a one-block ledge ahead whose top is 0.11 over the surface: the probe is 0.6 less what the
+  ;; body rose that tick, so the lifted body has room for the second impulse (issue #45)
+  (let [solid (fn [_ y z] (or (<= y 63) (>= y 67) (and (>= z 2) (<= y 64))))
+        fluid (fn [_ y z] (when (and (= y 64) (< z 2)) water))
+        w0 (assoc standing :player/pos [0.5 64.0 0.5] :player/on-ground? false)
+        states
+        (take
+         120
+         (iterate
+          #(ph/step solid fluid % {:control/forward? true :control/jump? true :control/yaw 0.0})
+          w0))]
+    (is (some #(and (>= (nth (:player/pos %) 1) 65.0) (> (nth (:player/pos %) 2) 1.7)) states)
+        "on the ledge under the ceiling")))

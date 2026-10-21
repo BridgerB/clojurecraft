@@ -44,7 +44,7 @@
 (def swim-up 0.04)                    ; vy added per tick while jumping in a liquid
 (def swim-down 0.04)                  ; vy taken per tick while sneaking in a liquid
 (def out-of-liquid-impulse 0.3)       ; the lift when pressing into a bank whose top is free
-(def bank-probe 0.6)                  ; how far up the box is moved to ask whether a bank's top is free
+(def bank-probe 0.6)                  ; how far up the box is moved to ask whether a bank's top is free, less what it rose this tick
 (def forward-input 0.98)              ; the movement input a held forward key gives (vanilla scales input by 0.98)
 (def jump-cooldown 10)                ; ticks after a jump before the next one
 (def water-contract [0.001 0.401 0.001]) ; the box shrinks by this before asking "in water?"
@@ -262,8 +262,14 @@
                  :else gravity)
          vy' (if liquid? (- (* vy inertia) g) (* (- vy gravity) vertical-drag))
          ;; the one real lift out of a liquid: pressing into a bank whose top is free, while the
-         ;; box touches the fluid at all
-         vy' (if (and touching? hit? (free? solid? fluid-at (aabb pos') [vx (+ vy' bank-probe) vz]))
+         ;; box touches the fluid at all; the probe is the 0.6 less what the body rose this tick,
+         ;; as vanilla asks it (a body already lifted needs less room over its head)
+         vy' (if (and touching?
+                      hit?
+                      (free? solid?
+                             fluid-at
+                             (aabb pos')
+                             [vx (+ vy' bank-probe (- (y-of pos) (y-of pos'))) vz]))
                out-of-liquid-impulse
                vy')
          fall (cond (or liquid? landed?) 0.0
