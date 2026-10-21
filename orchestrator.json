@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T00:31:07.525Z",
+  "at" : "2026-10-21T00:32:17.018Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -17,7 +17,7 @@
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
     "quiet" : true,
@@ -35,13 +35,13 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 446,
-    "title" : "Bot stops at fortress: inventory-full",
+    "number" : 162,
+    "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 162,
-    "title" : "Bot stops at portal: no-path",
+    "number" : 446,
+    "title" : "Bot stops at fortress: inventory-full",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -65,13 +65,13 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 344,
-    "title" : "Bot stops at cast-one: no-escape",
+    "number" : 62,
+    "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 62,
-    "title" : "Bot stops at ingots: timeout",
+    "number" : 344,
+    "title" : "Bot stops at cast-one: no-escape",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
@@ -90,14 +90,14 @@
     "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
-    "number" : 342,
-    "title" : "Bot stops at furnace: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 71,
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 342,
+    "title" : "Bot stops at furnace: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 370,
@@ -246,7 +246,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 135,
-    "move" : "assign"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -265,10 +266,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "assign",
-    "at" : "2026-10-20T18:40:27.489Z"
-  }, {
     "issue" : 135,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1614,5 +1611,10 @@
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T00:31:07.525Z"
+  }, {
+    "issue" : 135,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-21T00:32:17.018Z"
   } ]
 }
