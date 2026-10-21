@@ -2064,6 +2064,7 @@
          66
          {[:hotbar 0] cobblestone}
          600000)]
+    (println "TRACE" (pr-str (:sim/placed sim)) (pr-str (:sim/broken sim)) (pr-str (:player/pos w)))
     (is (= :done (:intent/status (:plan/intent w)))
         (pr-str (select-keys (:plan/intent w)
                              [:intent/status :intent/reason :intent/stage :intent/no-shaft])))
