@@ -285,8 +285,7 @@
   "One tick of a :pillar's climb: a jump from the ground (the feet cell kept as :intent/under),
    and once the body has risen clear-rise over that cell, a block into it against the top of the
    one under (place/use-item-on), looking straight down; the block shown, the next jump. Done on
-   the ground at :intent/top; failed :boxed with no room over the head (asked on the ground only: a body risen onto its new block
-   has the next jump's room still to be made), :not-held with the block
+   the ground at :intent/top; failed :boxed with no room over the head, :not-held with the block
    gone from the hand, :rejected after max-refusals placements the server answered with the cell
    empty, :no-answer when one goes unacked, :stuck after block-ms with no block put."
   [world {:intent/keys [item top under refusals since sent-at sequence] :or {refusals 0}}]
@@ -322,9 +321,8 @@
                          (place/face-cursors :up))
       (and under ground?) (assoc world :player/controls (assoc down :control/jump? true))
       under world
-      (and ground?
-           (not (some-> (terrain/block-at world [fx (+ fy 2) fz])
-                        blocks/replaceable?)))
+      (not (some-> (terrain/block-at world [fx (+ fy 2) fz])
+                   blocks/replaceable?))
       (intent/fail world :boxed)
       ground?
       (-> world
