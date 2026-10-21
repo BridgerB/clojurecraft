@@ -5,7 +5,9 @@
             [clojurecraft.blocks :as blocks]
             [clojurecraft.build :as build]
             [clojurecraft.capture :as capture]
+            [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as sr]
@@ -34,11 +36,13 @@
         m (sr/moment-of snap w)
         stage (sr/stage-of snap)
         prev (atom nil)
+        ring (atom [])
         trace (atom [])
         stop? (fn [x]
                 (let [i (:plan/intent x)]
                   (when (and i (= :build (:intent/kind i)) (not (intent/failed? i)))
                     (reset! prev x)
+                    (swap! ring #(conj (vec (take-last 5 %)) x))
                     (let [k [(:intent/op i) (:intent/kind (:intent/child i))]]
                       (when (not= k (:k (peek @trace)))
                         (swap! trace conj
@@ -61,6 +65,18 @@
                              (:intent/access i 0))
         op (build/next-op x plan)
         feet (intent/feet x)]
+    (doseq [r @ring
+            :let [c (:intent/child (:plan/intent r))]]
+      (println
+       "PROBE ring"
+       (:time/tick r)
+       (pr-str (:player/pos r))
+       "eye"
+       (pr-str (game/eye r))
+       (pr-str
+        (select-keys c [:intent/kind :intent/target :intent/stage :intent/status :intent/reason]))
+       "dist"
+       (when-let [t (:intent/target c)] (physics/distance (game/eye r) (physics/centre t)))))
     (doseq [t (take-last 40 @trace)] (println "PROBE trace" (pr-str (dissoc t :k))))
     (println "PROBE intent" (pr-str (dissoc i :intent/child)))
     (println "PROBE child" (pr-str (:intent/child i)))
