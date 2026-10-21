@@ -371,6 +371,8 @@
     (is (= {:intent/kind :stairs-down :intent/to-y 58 :intent/dir [1 0] :intent/for :trees}
            (wood/trees-descend w [trunk]))
         "down toward the trunk, one length")
+    (is (= :stairs-down (:intent/kind (wood/trees-descend w [[130 9 8]])))
+        "a hundred and twenty across, issue #108: far, but no nearer trees in reach")
     (is (nil? (wood/trees-descend w [[400 9 8]])) "a trunk past descend-reach is no descent")
     (is (nil? (wood/trees-descend w [[12 60 8]])) "a trunk within the near band is walked to")
     (is (nil? (wood/trees-descend (assoc w :plan/boxed-at #{(intent/feet w)}) [trunk]))

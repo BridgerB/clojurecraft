@@ -20,7 +20,7 @@
 (def far-radius 256)                  ; a trunk remembered on the way in, past the near band
 (def far-candidates 3)                ; routes planned on the way back to the surface
 (def max-trunk 8)                     ; logs followed up one trunk column
-(def descend-reach 96)                ; blocks on the plane to a trunk far below the eye a staircase down is cut toward
+(def descend-reach 160)               ; blocks on the plane to a trunk far below the eye a staircase down is cut toward
 (def continue-drop 3)                  ; blocks under the eye a trunk must be for the next length of a descent: the near band no route reaches
 (def cross-reach 48)                  ; blocks along the way to a trunk a crossing looks for open water
 (def surface-span 16)                 ; how far under the eye a column's top is looked for (and 8 over)
@@ -172,7 +172,10 @@
    (issue #57, snapshot real-4-s2-Clj_r07): bot Clj_r07 cut stairs up out of a stone pocket
    to the top of a mountain at y 238 with 844 trunks remembered, the nearest fifty-six below
    and sixty across; the near band stops forty-eight out and twelve down, the hunt's two
-   targets were ledges no route reached, and the plan waited :no-log until it failed."
+   targets were ledges no route reached, and the plan waited :no-log until it failed. Sim
+   world R4/22 (issue #108): on a snow mountain at y 180 with no pickaxe, the nearest trunks a
+   hundred and twenty across and a hundred and thirty-five below, past the old ninety-six, and
+   the plan failed :no-log."
   [world trunks]
   (let [feet (intent/feet world)
         fy (physics/y-of feet)
