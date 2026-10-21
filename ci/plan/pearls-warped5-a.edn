@@ -1,0 +1,21 @@
+;; Issue #263, branch feat/263-warped5, first batch (ring vantage, blocking): the hunt never leaves its burrow's reach after
+;; an enderman (a vantage within shelter-reach, else lookouts until the burrow is given up after a
+;; minute), a calm one at hand is waited out, another hostile near the burrow is met from it
+;; (threat), and the warped landing tries the next forest when the nearest has no floor.
+;; pearls-1-live guards the arena (2/3 in both of round 4's batches, 3/3 on main); pearls-12 is the
+;; stage (0/4 in pearls-warped4-b, 3 pearls held at best).
+{:plans/label "pearls-warped5-a"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 5
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
