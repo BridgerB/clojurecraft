@@ -1,5 +1,5 @@
 (ns probe.castsite
-  "Step each snapshot from its moment, printing what changes."
+  "Step each snapshot from its moment, printing the intents' changes."
   (:require [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
             [clojurecraft.plan :as plan]
@@ -7,14 +7,12 @@
             [clojurecraft.simrace :as simrace]))
 
 (defn view
+  "What changes between lines: the intent and its child's kind, aim and reason, no cells."
   [w]
   (let [i (:plan/intent w)
         c (:intent/child i)]
-    [(mapv long (intent/feet w))
-     (select-keys i [:intent/kind :intent/for :intent/stage :intent/dir :intent/status])
-     (select-keys c
-                  [:intent/kind :intent/for :intent/target :intent/status :intent/reason
-                   :intent/stage]) (:plan/wait w)]))
+    [(select-keys i [:intent/kind :intent/for :intent/build :intent/status :intent/reason])
+     (select-keys c [:intent/kind :intent/for :intent/status :intent/reason]) (:plan/wait w)]))
 
 (defn trace
   [path]
@@ -25,9 +23,9 @@
         n (volatile! 0)
         stop? (fn [world]
                 (let [v (view world)]
-                  (when (and (not= v @prev) (< @n 300))
+                  (when (and (not= v @prev) (< @n 400))
                     (vswap! n inc)
-                    (println (:time/now world) (pr-str v)))
+                    (println (:time/now world) (pr-str (mapv long (intent/feet world))) (pr-str v)))
                   (vreset! prev v)
                   (or (plan/done? world) (plan/failed? world))))]
     (println "TRACE" path (pr-str (:snapshot/signature snap)))
