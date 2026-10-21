@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T14:35:11.714Z",
+  "at" : "2026-10-21T14:40:53.870Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -40,23 +40,18 @@
     "pr" : 444,
     "session" : false
   }, {
-    "number" : 286,
-    "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : true
-  }, {
     "number" : 161,
     "title" : "Bot stops at portal-kit: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 286,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
+  }, {
     "number" : 284,
     "title" : "Bot stops at fortress: no-path",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 62,
-    "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -73,6 +68,11 @@
     "number" : 148,
     "title" : "Bot stops at water-bucket: no-spot",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 62,
+    "title" : "Bot stops at ingots: timeout",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 344,
@@ -256,19 +256,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 286,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 161,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 284,
+    "issue" : 286,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 62,
+    "issue" : 284,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -281,6 +277,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 148,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 62,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
