@@ -15,6 +15,8 @@ sourceRefs:
   - src/clojurecraft/window.clj#defn free-slot
   - src/clojurecraft/window.clj#What a full inventory throws away to make room
   - src/clojurecraft/window.clj#defn junk-slot
+  - src/clojurecraft/window.clj#defn worn-spare-slot
+  - test/clojurecraft/craft_test.clj#a-worn-tool-with-a-better-one-beside-it-is-thrown
   - src/clojurecraft/window.clj#def filler-keep
   - src/clojurecraft/window.clj#defn tossable
   - src/clojurecraft/window.clj#defmethod intent/run :toss
@@ -64,3 +66,4 @@ A view is a plain map describing one window the way the click rules need it, so 
 
 ## See also
 - [[craft-intent]], [[place-intent]] - the two users.
+- **Worn spares fill the slots too.** Race 39337645053 (issues #463, #457, #172, #446): bots at the flint and steel, the cast and the portal kit held 16 to 18 stone pickaxes, each worn under `spare-uses` by the stairs and tunnels and each made again as a spare, one slot apiece because tools do not stack; the Nether fortress tunnel filled 36 slots with netherrack, soul sand and soil, wart blocks and nuggets. `worn-spare-slot` makes a worn tool (`worn?`, moved here from `make.clj` with `uses-left`) junk when the inventory holds a better one of the same item, the most worn first and the last stack never; `junk` gains the Nether pick-ups and `filler-keep` gains netherrack (a filler, `stairs/fillers`).
