@@ -13,6 +13,7 @@
             [clojurecraft.scoop :as scoop]
             [clojurecraft.spec]
             [clojurecraft.stairs :as stairs]
+            [clojurecraft.stone :as stone]
             [clojurecraft.swim]
             [clojurecraft.terrain :as terrain]
             [clojurecraft.wood :as wood]
@@ -253,6 +254,21 @@
       (is (not (stairs/up-dry? away (stairs/up-cells (intent/feet away) [-1 0]))))
       (is (not (stairs/level-safe? away [[5 49 5] [5 48 5]]))
           "the way back into the boxed pocket stays refused"))))
+
+(deftest a-boxed-cell-with-no-retreat-is-climbed-out-of-for-wood
+  ;; issue #89 (real race, bot Clj_r32): in a cell a stair down had died boxed in, with the
+  ;; nearest trunk past the near band and no retreat left, the plan waited :no-log out
+  (let [w (assoc (remembered
+                  {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [12 60 8] 136}
+                  [8.5 50.0 8.5])
+                 :plan/boxed-at
+                 #{[8 50 8]})]
+    (is (= {:plan/wait :no-log} (wood/gather-next w))
+        "no climb is cut from a boxed cell for a trunk")
+    (is (nil? (stone/retreat w)) "and no way away from the pocket")
+    (is (= {:intent/kind :stairs-up :intent/to-y (+ 50 stairs/climb-stairs) :intent/for :boxed}
+           (wood/gather-or-out w))
+        "the gather act climbs out of the ground instead of waiting")))
 
 (deftest a-near-trunk-with-no-route-is-climbed-for-too
   ;; sim race 38395033917, world R3/24 (issue #75): at the bottom of two staircases that met, the

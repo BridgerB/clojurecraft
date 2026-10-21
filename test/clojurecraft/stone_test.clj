@@ -973,6 +973,25 @@
     (is (nil? (stone/seal-stone (at (blocks/default-state :kelp_plant)) (row :mine-stone)))
         "kelp is not")))
 
+(deftest a-block-in-the-sea-is-left-by-swimming-home-not-climbed-from
+  ;; issue #71 (real race, bot Clj_r19): the one block that stood in the sea, forty-five blocks
+  ;; from where the bot rose; every stair up from it was refused for the water, and the climb died
+  ;; :boxed there three times
+  (let [sea (into {} (for [x (range 16) z (range 16) y (range 56 64)] [[x y z] blocks/water-base]))
+        islet (assoc sea [8 63 8] (blocks/default-state :stone))
+        w (assoc (standing 64 :stone_pickaxe)
+                 :player/pos [8.5 64.0 8.5]
+                 :plan/go-at [1.5 64.0 1.5]
+                 :world/chunks {[0 0] (world/column islet)})
+        boxed (assoc w :plan/boxed-at #{[8 64 8]})]
+    (is (stone/islet? w) "water on all four sides of the block under the feet")
+    (is (not (stone/islet? (assoc w :player/pos [3.5 64.0 3.5]))) "over the sea itself is no block")
+    (is (nil? (stone/cross-home w)) "before a climb died here, the climb comes first")
+    (is (= {:intent/kind :cross :intent/target [1 64 1]} (stone/cross-home boxed)))
+    (is (nil? (stone/cross-home (dissoc boxed :plan/go-at))) "no landing to swim to")
+    (is (= {:intent/kind :cross :intent/target [1 64 1]} (stone/mine-next boxed (row :mine-stone)))
+        "the mine's last resort swims instead of climbing")))
+
 (deftest stone-beside-water-is-sealed-with-what-is-held-before-it-is-dug
   ;; issue #342 (the R1/30 sim moment): stones on the west bank of a cave lake had water on their
   ;; north side, the dig refused them, and the bot held planks and no filler

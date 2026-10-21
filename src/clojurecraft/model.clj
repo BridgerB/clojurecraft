@@ -223,6 +223,9 @@
    [:plan/backed-off
     "per creeper entity id {:pos where it stood the first time :times back-offs from it there}: a creeper that stands within a block of :pos through shun-after of them is shunned, a threat only within shunned-radius (combat/creeper-reach)"
     "after a back-off from a creeper began"]
+   [:plan/cornered
+    "entity ids a back-off could not get away from: it ended on its clock with the target still nearer than back-off-to, the bot in a dead end; :defend fights them to the end (combat/cornered, issue #161)"
+    "after a back-off ended on its clock"]
    [:pearls/shelter
     "the feet cell of the pearl hunt's burrow, where no enderman can stand within reach of the bot (pearls/shelter?), set when a :burrow ends (issue #263)"
     "after the hunt dug one"]
