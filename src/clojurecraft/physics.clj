@@ -154,15 +154,18 @@
 
 (defn no-fluid "A fluid oracle for a dry world." [_ _ _] nil)
 
-(defn touching-fluid?
-  "Does the player's box at pos overlap any water or lava, however little (touch-contract)?
-   Vanilla's test for being in a fluid, since 1.13: the bank impulse fires while the box is in it,
-   though the body is by then too far out for the 0.4 rule of in-fluid? to call it in the water
-   (issue #464: lifted to 0.1 under a one-block ledge, the body left the water and fell back)."
+(defn touching-water?
+  "Does the player's box at pos overlap any water, however little (touch-contract)? Vanilla's
+   test for being in water, since 1.13. The 0.4 rule of in-fluid? calls a body out of the water
+   when under 0.4 of it is in: the bank impulse and a jump are still the water's then (issue #464:
+   lifted to 0.1 under a one-block ledge, the body left the water and fell back)."
   [fluid-at pos]
-  (let [box (aabb pos)]
-    (or (in-fluid? fluid-at :water touch-contract box)
-        (in-fluid? fluid-at :lava touch-contract box))))
+  (in-fluid? fluid-at :water touch-contract (aabb pos)))
+
+(defn touching-fluid?
+  "Does the player's box at pos overlap any water or lava, however little (touch-contract)?"
+  [fluid-at pos]
+  (or (touching-water? fluid-at pos) (in-fluid? fluid-at :lava touch-contract (aabb pos))))
 
 (defn fluids-here
   "What the player at pos is in: {:in-water? :in-lava? :eye-in-water?}."
@@ -239,7 +242,10 @@
          touching? (or liquid? (touching-fluid? fluid-at pos))
          [vx vy vz] (map squash vel)
          jump-ticks (max 0 (dec (long jump-ticks)))
-         jumping? (and jump? on-ground? (zero? jump-ticks) (not liquid?))
+         ;; vanilla jumps from the ground, or, in water under 0.4 deep, from the air: the hop that
+         ;; takes a body out over a ledge it is in the last inch of the water under
+         jumping?
+         (and jump? (zero? jump-ticks) (not liquid?) (or on-ground? (touching-water? fluid-at pos)))
          vy (cond jumping? jump-velocity
                   (and liquid? jump?) (+ vy swim-up)
                   (and liquid? sneak?) (- vy swim-down)

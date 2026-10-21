@@ -206,3 +206,20 @@
           w0))]
     (is (some #(and (>= (nth (:player/pos %) 1) 65.0) (> (nth (:player/pos %) 2) 1.7)) states)
         "on the ledge under the ceiling")))
+
+(deftest a-body-in-the-last-inch-of-shallow-water-hops-onto-a-ledge
+  ;; a flowing pool 0.56 deep (level 3, on a floor at 63) under a one-block ledge: jumping lifts
+  ;; the body only to where under 0.4 of it is in the water, 0.4 short of the 0.6 the bank impulse
+  ;; needs under the ledge's top; vanilla jumps from the air there, and the hop clears it
+  ;; (issues #222 and #45: a body bobbed against the ledge for the whole window)
+  (let [solid (fn [_ y z] (or (<= y 63) (and (>= z 2) (<= y 64))))
+        fluid (fn [_ y z] (when (and (= y 64) (< z 2)) {:fluid/kind :water :fluid/level 3}))
+        w0 (assoc standing :player/pos [0.5 64.0 0.5])
+        states
+        (take
+         120
+         (iterate
+          #(ph/step solid fluid % {:control/forward? true :control/jump? true :control/yaw 0.0})
+          w0))]
+    (is (some #(and (>= (nth (:player/pos %) 1) 65.0) (> (nth (:player/pos %) 2) 1.7)) states)
+        "on the ledge")))
