@@ -291,46 +291,6 @@
   [[x y z]]
   [(+ x 0.5) y (+ z 0.5)])
 
-(defn vantage
-  "A walk to look from within the burrow's reach, with none of ms provokable from here: along
-   the route toward the nearest of the candidates nearest endermen in ms (path/plan, as far as
-   it goes), the last waypoint within shelter-reach of the burrow (:pearls/shelter) from which
-   the enderman is provokable?, past a walk's reach of the eye, not where a walk already
-   arrived (memory/arrived), and with a route from it home (intent/routable?: gym batch
-   pearls-warped-e's run 1, plan run 39164914828, provoked fifteen blocks from its burrow and
-   found no path home); nil when no route has one. The stone arena's endermen wander off its
-   lit square within the first minute, out of the mouth's line: gym batch pearls-warped4-b
-   (plan run 39596287510, probe 39616249061) run 2 stood at its mouth at 33 s with all three
-   16 to 28 blocks off and hidden, walked out to the nearest and met the zombies, a skeleton and
-   a creeper the dark round the arena spawned, its burrow out of reach by then; run 3 walked 55
-   blocks to one. Provoked from a vantage, the enderman follows the bot home, and the fight is
-   the burrow's."
-  [world ms]
-  (let [pos (:player/pos world)
-        feet (path/feet-cell pos)
-        home (:pearls/shelter world)
-        spent (memory/arrived world)
-        eye (game/eye world)
-        way-home (fn [w]
-                   (intent/routable?
-                    (assoc world :player/pos (feet-at w))
-                    {:intent/kind :walk :intent/target home :intent/for :shelter}))]
-    (->> ms
-         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
-         (take candidates)
-         (some (fn [[_ e]]
-                 (let [c (cell (:entity/pos e))
-                       i {:intent/kind :walk :intent/target c :intent/for :pearls}
-                       to (->> (:path/waypoints (path/plan world feet (intent/goal-of i) {}))
-                               (filter
-                                (fn [w]
-                                  (and (<= (physics/distance w home) shelter-reach)
-                                       (not (contains? spent w))
-                                       (> (physics/distance eye (physics/centre w)) intent/reach)
-                                       (provokable? (assoc world :player/pos (feet-at w)) e))))
-                               last)]
-                   (when (and to (way-home to)) (assoc i :intent/target to))))))))
-
 ;; ---------------------------------------------------------------- the kill and its drop
 
 (defn fresh-kill
@@ -558,6 +518,63 @@
                              {:intent/kind :walk :intent/target c :intent/for :shelter}))
                    c))))))
 
+(def vantage-reach 10)                ; cells on the plane from an enderman, at most, a vantage is looked for within (stare-from at the least): the nearer the stare, the surer it follows
+(def vantage-rise 2)                  ; cells up or down from an enderman's feet a vantage may stand: one on the stairs is three below the ground, and is waited out
+(def vantage-tries 8)                 ; vantages, nearest the feet first, a route is asked for before none is taken: the route is the costly test
+
+(defn vantage
+  "A walk to look from within the burrow's reach, with none of ms provokable from here: a cell
+   on the plane between stare-from and vantage-reach from the nearest of the candidates nearest
+   endermen in ms, within vantage-rise of its height and shelter-reach of the burrow
+   (:pearls/shelter), that the bot could stand in (standable?), from which the enderman is
+   provokable?, past a walk's reach of the eye (nearer, the walk arrives where it starts) and
+   not where a walk already arrived (memory/arrived); of those, nearest the feet first and
+   vantage-tries at most, the first a route reaches (intent/routable?) with a route from it
+   home (gym batch pearls-warped-e's run 1, plan run 39164914828, provoked fifteen blocks from
+   its burrow and found no path home); nil when none. Gym batch pearls-warped4-b (plan run
+   39596287510, probe 39616249061): the stone arena's endermen wander off its lit square within
+   the first minute, out of the mouth's line, and run 2 stood at its mouth at 33 s with all
+   three 16 to 28 blocks off and hidden, walked out to the nearest and met the zombies, a
+   skeleton and a creeper the dark round the arena spawned, its burrow out of reach by then;
+   pearls-12's run 3 stood in its burrow from 341 s to the end over a calm enderman four blocks
+   from the mouth, too near to stare at from there and hidden from the end, giving the burrow
+   up every minute and cutting the same one again beside it; run 4 walked from its mouth to an
+   enderman's cell, back in and out again 130 times. Provoked from a vantage, the enderman
+   follows the bot home, and the fight is the burrow's."
+  [world ms]
+  (let [pos (:player/pos world)
+        feet (intent/feet world)
+        home (:pearls/shelter world)
+        spent (memory/arrived world)
+        eye (game/eye world)
+        way-home (fn [c]
+                   (intent/routable? (assoc world :player/pos (feet-at c))
+                                     {:intent/kind :walk :intent/target home :intent/for :shelter}))
+        cells (fn [e]
+                (let [[ex ey ez :as ec] (cell (:entity/pos e))]
+                  (for [dx (range (- vantage-reach) (inc vantage-reach))
+                        dz (range (- vantage-reach) (inc vantage-reach))
+                        dy (range (- vantage-rise) (inc vantage-rise))
+                        :let [c [(+ ex dx) (+ ey dy) (+ ez dz)]
+                              on-plane (path/octile ec c)]
+                        :when (and (<= stare-from on-plane vantage-reach)
+                                   (<= (physics/distance c home) shelter-reach)
+                                   (not (contains? spent c))
+                                   (> (physics/distance eye (physics/centre c)) intent/reach)
+                                   (standable? world c)
+                                   (provokable? (assoc world :player/pos (feet-at c)) e))]
+                    c)))]
+    (->> ms
+         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
+         (take candidates)
+         (some (fn [[_ e]]
+                 (->> (cells e)
+                      (sort-by #(physics/distance feet %))
+                      (take vantage-tries)
+                      (some (fn [c]
+                              (let [i {:intent/kind :walk :intent/target c :intent/for :pearls}]
+                                (when (and (intent/routable? world i) (way-home c)) i))))))))))
+
 (defn bore
   "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) bore-length long
    the straight way toward the nearest enderman in ms standing less than descend-drop above or
@@ -667,7 +684,8 @@
    burrow failed :no-shelter six times where the bot stood, and it then provoked with no
    shelter and was slain); in the burrow, one
    provokable from where it stands provoked from there, and with one at the mouth (crowded?,
-   blacklisted or not), a :lookout where it is; in the burrow with none coming, out to its mouth
+   blacklisted or not), a walk to a vantage within the burrow's reach from which it can be
+   stared at (vantage), else a :lookout where it is; in the burrow with none coming, out to its mouth
    to look round (an angry one given up on that stands off the mouth never comes: batch
    pearls-warped-d, plan run 39160760074, run 1 took three pearls in six minutes, then stood in
    its burrow thirty-four over such ones); one not yet coming and provokable? from here within
@@ -735,7 +753,8 @@
           digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
           site {:intent/kind :walk :intent/target site :intent/for :shelter}
           (and in? qid) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
-          (and in? (crowded? world)) {:intent/kind :lookout :intent/for :pearls}
+          (and in? (crowded? world))
+          (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
           (and in? mouth) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
           (and qid
                (or (not (pickaxe? world))

@@ -1,4 +1,4 @@
-;; Issue #263, branch feat/263-warped5, first batch: the hunt never leaves its burrow's reach after
+;; Issue #263, branch feat/263-warped5, first batch (on the ring vantage): the hunt never leaves its burrow's reach after
 ;; an enderman (a vantage within shelter-reach, else lookouts until the burrow is given up after a
 ;; minute), a calm one at hand is waited out, another hostile near the burrow is met from it
 ;; (threat), and the warped landing tries the next forest when the nearest has no floor.

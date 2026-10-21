@@ -561,9 +561,12 @@
         {:intent/keys [kind target for]} (plan/next-intent stale row plan/goals)]
     (is (= 11 (memory/done-since (looked dug 11) :lookout :burrow)))
     (is (nil? (memory/done-since dug :lookout :burrow)) "no burrow ever cut")
-    (is (= {:intent/kind :lookout :intent/for :pearls}
-           (plan/next-intent (looked dug 11) row plan/goals))
-        "eleven lookouts: it still waits for the calm one to wander off")
+    (let [v (plan/next-intent (looked dug 11) row plan/goals)
+          c (:intent/target v)]
+      (is (= [:walk :pearls] [(:intent/kind v) (:intent/for v)])
+          "eleven lookouts, open ground round the mouth: out to a vantage to stare from")
+      (is (= 7 (first (pearls/quarry (assoc (looked dug 11) :player/pos (pearls/feet-at c)))))
+          "from which it can be stared at: no nearer than stare-from, with a clear line"))
     (is (pearls/stale? stale) "a minute of them: the burrow is given up")
     (is (nil? (pearls/shelter stale)))
     (is (and (= :walk kind) (= :pearls for) (not= [8 61 8] target) (not= [3 64 8] target))
