@@ -23,6 +23,8 @@
      :clear-way (stairs/clear-way? world cells)
      :level-clear (stairs/level-clear? world cells)}))
 
+(def st (atom {}))
+
 (doseq [p *command-line-args*]
   (let [snap (capture/read-world p)
         w0 (or (simrace/own-world snap)
@@ -35,7 +37,7 @@
             (when (and (= :walk (:intent/kind i))
                        (= :retreat (:intent/for i))
                        (< @n 2)
-                       (not= (:intent/id i) (:last-id @(def st (atom {})))))
+                       (not= (:intent/id i) (:last-id @st)))
               (swap! st assoc :last-id (:intent/id i))
               (swap! n inc)
               (let [feet (intent/feet world)]
