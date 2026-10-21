@@ -71,6 +71,28 @@
   (is (= 1 (intent/face-toward [3.5 70.0 0.5] [3 64 0])) "eye above → top")
   (is (= 2 (intent/face-toward [3.5 65.0 -5.0] [3 64 0])) "eye north → north face"))
 
+(deftest a-dig-finishes-at-the-pace-of-the-penalties-in-force-now
+  ;; sim race 39598424082 (issue #344, world R1/3): a granite dig by hand begun with the eyes
+  ;; under water was timed 187 s, 25 times the hand's pace, and went on being timed so after the
+  ;; body floated up with its eyes in air; the server weighs the finish by the rate it has then
+  (let [granite (blocks/default-state :granite)
+        w (assoc (world-state [0.5 64.0 0.5]) :player/on-ground? false :player/eye-in-water? true)
+        slow (intent/dig-time granite nil (intent/penalties w))
+        i {:intent/state granite
+           :intent/started 1000
+           :intent/finish-at (+ 1000 (intent/finish-delay slow))}
+        surfaced (assoc w :player/eye-in-water? false)
+        landed (assoc surfaced :player/on-ground? true)]
+    (is (= (:intent/finish-at i) (intent/finish-due w i)) "the penalties it began with still hold")
+    (is (< (intent/finish-due surfaced i) (:intent/finish-at i)) "eyes in air: shorter")
+    (is (< (intent/finish-due landed i) (intent/finish-due surfaced i))
+        "and on the ground: shorter still")
+    (is (= (+ 1000 (intent/finish-delay (intent/dig-time granite nil {})))
+           (intent/finish-due landed i))
+        "the unpenalised pace")
+    (is (= 500 (intent/finish-due landed (assoc i :intent/finish-at 500)))
+        "never later than the finish it was given")))
+
 (deftest dig-timeline-then-pickup
   (let [[w fx] (run (world-state [0.5 64.0 0.5])
                     (concat [go]
@@ -352,6 +374,35 @@
     (is (nil? (wood/trees-descend w [[400 9 8]])) "a trunk past descend-reach is no descent")
     (is (nil? (wood/trees-descend w [[12 60 8]])) "a trunk within the near band is walked to")
     (is (nil? (wood/trees-descend (assoc w :plan/boxed-at #{(intent/feet w)}) [trunk]))
+        "never from a cell where a climb died boxed")))
+
+(deftest the-next-length-down-goes-on-from-the-foot-of-the-last
+  ;; sim race 39593219246 (issue #135, world R4/4): out at the mouth of its own stairs, the bot cut
+  ;; a length down toward trunks forty below, was in the ground at its foot, and walked back up
+  ;; the air already dug to the mouth (intent/opening) to cut the same length again, every seven
+  ;; seconds for fifteen minutes
+  (let [cells
+        {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [12 9 8] 136 [12 10 8] 136}
+        w (remembered cells [8.5 50.0 8.5])
+        cut {:intent/kind :stairs-down :intent/for :trees :intent/status :done}
+        trunk [12 9 8]]
+    (is (not (stairs/out? w (intent/feet w))) "in the ground, at the foot of the length")
+    (is (nil? (wood/trees-descend w [trunk]))
+        "nothing was cut: a way down from the ground is not this")
+    (is (not (wood/descended? w)))
+    (is (wood/descended? (assoc w :plan/last cut)))
+    (is (not (wood/descended? (assoc w :plan/last (assoc cut :intent/for :surface)))))
+    (is (not (wood/descended? (assoc w :plan/last (assoc cut :intent/status :failed)))))
+    (is (= {:intent/kind :stairs-down :intent/to-y 44 :intent/dir [1 0] :intent/for :trees}
+           (wood/trees-descend (assoc w :plan/last cut) [trunk]))
+        "the next length goes on down toward the trunk")
+    (is (= {:intent/kind :stairs-down :intent/to-y 44 :intent/dir [1 0] :intent/for :trees}
+           (wood/trees-descend (assoc w :plan/last cut) [[12 43 8]]))
+        "a trunk under twelve below the eye, no route reaching it, is cut toward from the foot")
+    (is (nil? (wood/trees-descend (assoc w :plan/last cut) [[12 50 8]]))
+        "but not one level with the eye: that is the near band's")
+    (is (nil? (wood/trees-descend (assoc w :plan/last cut :plan/boxed-at #{(intent/feet w)})
+                                  [trunk]))
         "never from a cell where a climb died boxed")))
 
 (deftest a-trunk-across-powder-snow-is-walked-to

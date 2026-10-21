@@ -42,6 +42,7 @@
 (def stuck-ticks 40)                  ; 2 s without progress toward the bank → dig what is in the way
 (def progress 0.05)                   ; blocks nearer the bank that count as progress
 (def escape-timeout-ticks 2400)       ; 120 s: an escape longer than this has failed
+(def dig-credit-ticks 6000)           ; 300 s: the most the escape's finished digs add to that, so a wall dug by hand is not timed out
 (def search-every-ticks 20)           ; with no bank in reach yet, look again this often while rising
 (def notch-radius 4)                  ; how far on the plane a wall is notched into for a bank when there is none (a dig's reach)
 (def approach-radius 8)                ; how far on the plane a wall's bank-block cell is swum toward when it is out of the place reach
@@ -342,6 +343,17 @@
                              (dig-from-floor? world feet)))))
       (update :player/controls assoc :control/jump? true))))
 
+(defn dug-credit
+  "The :intent/dug a :swim-out has after its child dig finished: dug, plus the ticks the dig
+   took (from its start to now), at most dig-credit-ticks in all. A dig is progress toward the
+   bank, not time lost afloat, and by hand it is slow: sim race 39598424082 (issue #344, world
+   R4/16) swam fifty blocks to a cliff with no pickaxe, dug a notch in it at 37 s a block, and
+   its 120 s ran out between the second and the third cell, three times."
+  [world dug {:intent/keys [started]}]
+  (min dig-credit-ticks
+       (+ (or dug 0)
+          (max 0 (quot (- (:time/now world) (or started (:time/now world))) physics/tick-ms)))))
+
 (defn flooded?
   "Has the bank a swim-out keeps been flooded since it was picked: is it no longer a cell the
    feet could stand in (bank?), water now in it or over its floor? Reached, it holds
@@ -439,7 +451,7 @@
   ;; wood/into-water) on dry land in the open
   [world
    {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for shore to-y
-                  no-lay]} event]
+                  no-lay dug]} event]
   (let [tick (:time/tick world)
         started (or started tick)
         feet (intent/feet world)
@@ -454,11 +466,14 @@
       (-> world
           (assoc :player/controls {})
           intent/done)
-      (> (- tick started) escape-timeout-ticks)
+      (> (- tick started) (+ escape-timeout-ticks (or dug 0)))
       (-> world
           (assoc :player/controls {})
           (intent/fail :no-escape))
-      (and child (intent/done? child)) (intent/dissoc-intent world :intent/child :intent/best-tick)
+      (and child (intent/done? child))
+      (cond-> (intent/dissoc-intent world :intent/child :intent/best-tick)
+        (= :dig (:intent/kind child))
+        (intent/assoc-intent :intent/dug (dug-credit world dug child)))
       (and child (intent/failed? child) (= :out-of-reach (:intent/reason child)))
       (-> world
           (assoc :player/controls {:control/jump? true})
