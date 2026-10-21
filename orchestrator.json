@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T14:53:30.529Z",
+  "at" : "2026-10-21T14:58:05.674Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -90,11 +90,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 105,
-    "title" : "Bot stops at flint-and-steel: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 410,
     "title" : "Bot stops at fortress: not-held",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -132,6 +127,11 @@
   }, {
     "number" : 85,
     "title" : "Bot stops at cobblestone: timeout",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 105,
+    "title" : "Bot stops at flint-and-steel: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -296,10 +296,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 105,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 410,
     "move" : "leave",
     "why" : "hands-off label"
@@ -329,6 +325,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 85,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 105,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
