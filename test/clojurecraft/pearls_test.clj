@@ -529,6 +529,36 @@
     (is (= [6 61 8] (walk (set (apply concat steps)))) "down to the last stair")
     (is (= [3 64 8] (walk three-high)) "three high: it stands at the mouth")))
 
+(deftest a-burrow-crowded-by-a-calm-one-for-a-minute-is-given-up-for-one-beside-it
+  ;; gym batch pearls-warped4-a (plan run 39544677155): run 1 stood in its burrow from 308 s to
+  ;; the end over a calm enderman 2.7 blocks from the mouth that never moved, run 5 twenty-one
+  ;; minutes over one 3.9 off; run 5 then burrowed beside another by chance and killed it
+  (let [calm (enderman [0.5 64.0 8.5])
+        dug (memory/remember-intention (assoc (burrowed [8.5 61.0 8.5] {7 calm}) :time/now 0)
+                                       {:intent/id 1 :intent/kind :burrow}
+                                       :done)
+        looked (fn [w n]
+                 (reduce
+                  #(memory/remember-intention %1 {:intent/id (+ 10 %2) :intent/kind :lookout} :done)
+                  w
+                  (range n)))
+        stale (looked dug 12)
+        {:intent/keys [kind target for]} (plan/next-intent stale row plan/goals)]
+    (is (= 11 (memory/done-since (looked dug 11) :lookout :burrow)))
+    (is (nil? (memory/done-since (burrowed [8.5 61.0 8.5] {7 calm}) :lookout :burrow))
+        "no burrow ever cut")
+    (is (= {:intent/kind :lookout :intent/for :pearls}
+           (plan/next-intent (looked dug 11) row plan/goals))
+        "eleven lookouts: it still waits for the calm one to wander off")
+    (is (pearls/stale? stale) "a minute of them: the burrow is given up")
+    (is (nil? (pearls/shelter stale)))
+    (is (and (= :walk kind) (= :pearls for) (not= [8 61 8] target) (not= [3 64 8] target))
+        "the hunt walks out toward it, to cut a burrow beside it")
+    (is (not (pearls/stale? (looked (assoc-in dug [:world/entities 7 :entity/creepy?] true) 12)))
+        "one coming is no calm crowd")
+    (is (not (pearls/stale? (assoc (looked dug 12) :plan/blacklist #{7})))
+        "an angry one given up on keeps the burrow")))
+
 (deftest a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
   (let [kill {:intent/kind :fight
               :intent/for :pearls

@@ -362,6 +362,25 @@
               [?e :intention/target ?t]]
             (:world/facts world))))
 
+(defn done-since
+  "How many intentions of kind k ended :done after the newest :done of an intention of kind
+   since (0 when none have), or nil when no intention of kind since has ever ended :done. The
+   facts are appended in order, so a later fact is a greater entity: the lookouts stood since a
+   burrow was cut are the :lookout dones after the :burrow done (pearls/stale?)."
+  [world k since]
+  (let [db (:world/facts world)
+        b (d/q '[:find (max ?e) . :in $ ?k :where [?e :intention/kind ?k]
+                 [?e :intention/event :done]]
+               db
+               since)]
+    (when b
+      (or (d/q '[:find (count ?e) . :in $ ?k ?b :where [?e :intention/kind ?k]
+                 [?e :intention/event :done] [(> ?e ?b)]]
+               db
+               k
+               b)
+          0))))
+
 (defn intention-as-of
   "What the bot was trying to do at time t: the newest intention whose latest fact by then is
    :started, as that fact; nil when it was doing nothing. A Datalog over the facts, so the same

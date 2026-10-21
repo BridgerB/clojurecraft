@@ -49,6 +49,10 @@ sourceRefs:
   - src/clojurecraft/pearls.clj#defn digs-left
   - src/clojurecraft/pearls.clj#defn spare?
   - src/clojurecraft/memory.clj#defn arrived
+  - src/clojurecraft/memory.clj#defn done-since
+  - src/clojurecraft/pearls.clj#defn crowd "{eid entity} of the endermen standing
+  - src/clojurecraft/pearls.clj#defn stale?
+  - test/clojurecraft/pearls_test.clj#a-burrow-crowded-by-a-calm-one-for-a-minute-is-given-up-for-one-beside-it
   - test/clojurecraft/pearls_test.clj#a-worn-pickaxe-is-kept-for-the-burrow
   - test/clojurecraft/pearls_test.clj#a-walk-toward-one-never-ends-where-a-walk-already-arrived
   - test/clojurecraft/pearls_test.clj#a-burrow-is-cut-where-it-would-shelter-and-the-provoke-goes-from-its-mouth
@@ -135,6 +139,7 @@ The model's enderman (`mob/kinds`) is neutral until stared at (`sim/provoke`, fr
 - Gym batch pearls-263b (plan run 38895776486), with the burrow: `pearls-1-live` passed 3 of 5 where the open fight had died five times in five. One death came from a zombie the unlit midnight arena spawned, which the `:defend` row backed away from turn about with the hunt; the other from an enderman met in the open. The arena is lit now, and an enderman at hand, one coming or a hurt bot sends it back to its burrow.
 - No exploring beyond `seek-radius`: with no enderman tracked within 64 the bot roams sixteen blocks at a time and looks round until one comes, or the run's time ends. A cave pocket no route leaves (batch pearls-263f) holds it: the hunt never digs its way out.
 - One pickaxe, and netherrack makes no other: the stairs down and the tunnel toward an enderman (`descend`, `bore`) are cut only while a held pickaxe has `spare-digs` 32 left past them (`spare?`, `digs-left` over `make/uses-left`: the tier's durability less the `:damage` the server sends), a burrow's sixteen digs twice over. Gym batch pearls-warped3-a (plan run 39529384355) run 1 took three pearls from its burrow, then wore the iron pickaxe out on stairs, tunnels and bores at fourteen minutes (238 netherrack held) and, with no burrow to be cut, stood in `:lookout` for the last twenty-five; run 3 ended with 25 digs left. With the digs kept, the hunt still walks, looks out and roams toward endermen, and burrows when one is to be provoked.
+- A calm enderman by the mouth is waited out (`crowd`, a `:lookout` a time), but one that never moves would hold the bot for the run: gym batch pearls-warped4-a (plan run 39544677155) run 1 stood in its burrow from 308 s to the end, thirty-five minutes, over a calm one 2.7 blocks from the mouth, and run 5 twenty-one minutes over one 3.9 off. After `stale-lookouts` 12 lookouts (a minute) since the burrow was cut (`memory/done-since` over the `:lookout` and `:burrow` `:done` facts) with the crowd calm (none coming, none blacklisted), the burrow is given up (`stale?`, so `shelter` is nil): the hunt walks to the enderman and cuts a new burrow beside it, as run 5 did by chance at 1714 s and killed that enderman from the new end at 1731 s. An angry or blacklisted crowd never makes a burrow stale.
 - A walk toward one (`toward`) never ends where a walk already arrived (`memory/arrived`: the `:done` facts of `:walk` intentions). The same batch's run 3 (probe 39543118281) walked between the ends of the routes toward two endermen, each end four or more nearer one of them than the other end, for twenty-five minutes, and run 1 between its burrow's mouth and one such end ninety-eight times: what an end shows was seen the first time. Spent ends leave the hunt the lookout, the roam and the burrow.
 
 ## See also

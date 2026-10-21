@@ -95,22 +95,48 @@
                           (<= (physics/distance pos (:entity/pos e)) radius))))
            (:world/entities world)))))
 
-(defn crowded?
-  "Does an enderman stand within strike-range of the burrow's mouth (:pearls/mouth), height
-   counted? A walk out to it would end beside one too near to stare at (stare-from), and the hunt
-   would walk back in: batch pearls-warped-b's run 2 went from the end to the mouth and back for
-   two minutes while one stood there. Never on the plane alone: one under the mouth on the floor
-   below a ledge is no crowd (batch pearls-warped-d run 1's thirty-four minutes in the burrow).
-   Blacklisted or not: one a held fight gave up on (:unreachable, then blacklisted) is still
-   angry and still hits the bot that steps out to it (batch pearls-warped-b, plan run
-   39135767198: two landings in three left the burrow after a held fight timed out and were
-   slain by that enderman within seconds)."
+(defn crowd
+  "{eid entity} of the endermen standing within strike-range of the burrow's mouth
+   (:pearls/mouth), height counted, blacklisted or not; empty with no mouth. A walk out to one
+   would end beside it too near to stare at (stare-from), and the hunt would walk back in: batch
+   pearls-warped-b's run 2 went from the end to the mouth and back for two minutes while one
+   stood there. Never on the plane alone: one under the mouth on the floor below a ledge is no
+   crowd (batch pearls-warped-d run 1's thirty-four minutes in the burrow). Blacklisted or not:
+   one a held fight gave up on (:unreachable, then blacklisted) is still angry and still hits
+   the bot that steps out to it (batch pearls-warped-b, plan run 39135767198: two landings in
+   three left the burrow after a held fight timed out and were slain by that enderman within
+   seconds)."
   [world]
-  (let [m (some-> (:pearls/mouth world)
-                  physics/centre)]
-    (boolean (and m
-                  (some #(<= (physics/distance m (:entity/pos %)) strike-range)
-                        (vals (endermen (dissoc world :plan/blacklist))))))))
+  (if-let [m (some-> (:pearls/mouth world)
+                     physics/centre)]
+    (into {}
+          (filter (fn [[_ e]] (<= (physics/distance m (:entity/pos e)) strike-range)))
+          (endermen (dissoc world :plan/blacklist)))
+    {}))
+
+(defn crowded?
+  "Does an enderman stand within strike-range of the burrow's mouth (crowd)?"
+  [world]
+  (boolean (seq (crowd world))))
+
+(def stale-lookouts 12)               ; lookouts (five seconds each, a minute) stood in the burrow with a calm enderman by its mouth before the burrow is given up for one cut beside the enderman
+
+(defn stale?
+  "Is the hunt's burrow given up: its mouth crowded (crowd) by calm endermen only, none coming
+   (entity/creepy?) and none blacklisted, and stale-lookouts or more :lookout intents done since
+   the burrow was cut (memory/done-since)? A calm one by the mouth is waited out (a :lookout a
+   time), but one that never moves holds the bot for the run: gym batch pearls-warped4-a (plan
+   run 39544677155) run 1 stood in its burrow from 308 s to the end, thirty-five minutes, over a
+   calm enderman 2.7 blocks from the mouth that never stirred, and run 5 twenty-one minutes
+   over one 3.9 off. Given up, the burrow is no shelter (shelter), so the hunt walks to the
+   enderman and cuts a new burrow beside it, the way run 5 did at 1714 s by chance and killed
+   that enderman from the new burrow's end at 1731 s."
+  [world]
+  (let [c (crowd world)
+        bl (:plan/blacklist world #{})]
+    (boolean (and (seq c)
+                  (not-any? (fn [[eid e]] (or (entity/creepy? e) (contains? bl eid))) c)
+                  (>= (or (memory/done-since world :lookout :burrow) 0) stale-lookouts)))))
 
 (defn head
   "The point an enderman at pos is stared at: its eye, as the server's stare test measures it
@@ -325,11 +351,14 @@
                  (for [dx [-1 0 1] dz [-1 0 1] dy [-2 -1 0 1]] [(+ x dx) (+ y dy) (+ z dz)]))))
 
 (defn shelter
-  "The hunt's burrow (:pearls/shelter) while it is within shelter-reach of the feet and still a
-   shelter? by the terrain, else nil."
+  "The hunt's burrow (:pearls/shelter) while it is within shelter-reach of the feet, still a
+   shelter? by the terrain and not given up over a calm crowd at its mouth (stale?), else nil."
   [world]
   (let [s (:pearls/shelter world)]
-    (when (and s (<= (physics/distance (intent/feet world) s) shelter-reach) (shelter? world s))
+    (when (and s
+               (<= (physics/distance (intent/feet world) s) shelter-reach)
+               (shelter? world s)
+               (not (stale? world)))
       s)))
 
 (defn away
