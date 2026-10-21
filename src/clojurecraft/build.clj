@@ -1365,6 +1365,15 @@
   [{:intent/keys [kind reason]}]
   (and (= :dig kind) (= :target-gone reason)))
 
+(defn lava-gone?
+  "Did child, a lava scoop (scoop-at-station), find its source gone (:target-gone)? The cast's own
+   water, or the water the digs let in, turned it to obsidian between the choice and the aim; the
+   refill looks for another source. Real races 39245788157 and 39590862487 (issue #419): the
+   scoops of one pool failed :target-gone one after another with lava still in reach, and each
+   ended the build."
+  [{:intent/keys [kind reason fluid]}]
+  (and (= :scoop kind) (= :lava fluid) (= :target-gone reason)))
+
 (defn boxed-way?
   "Did child, a staircase or a tunnel (plan/boxing-kinds), fail :boxed: no way on from where the
    feet stand?"
@@ -1410,6 +1419,22 @@
   [world {:intent/keys [kind fluid aim]}]
   (boolean (and (= :scoop kind) (= :lava fluid) aim (seq (scoop/ray-walls world aim)))))
 
+(defn site-lost
+  "The world with the build's site given up and the intent done, or nil, when c, what op-child gave,
+   says the site is no use: :no-station at a :build (lava remains but no safe station reaches it),
+   or :no-stand at a :cast-one (no cell reaches the op and none can be cut). Either way the next
+   build chooses another site. Any other build fails with the keyword as it always did."
+  [world {:intent/keys [kind build origin]} c]
+  (when-let [say (cond (and (= :no-station c) (= :build kind))
+                       "build: no safe lava station at the site, a new site"
+                       (and (= :no-stand c) (= :cast-one build))
+                       "build: no stand at the site, a new site")]
+    (-> world
+        (assoc :player/controls {})
+        (memory/give-up-site origin)
+        intent/done
+        (game/say say))))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), except an active climb finishes before its
@@ -1439,6 +1464,11 @@
         (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
     (and child (intent/failed? child) (found-open? child))
     (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
+    (and child (intent/failed? child) (lava-gone? child))
+    (-> world
+        (assoc :player/controls {})
+        (intent/dissoc-intent :intent/child)
+        (game/say "build: the lava source was gone, choosing another"))
     (and child (intent/failed? child) (way-refilled? world child))
     ;; gravel fell into the way after the walk was planned: clear it again
     (-> world
@@ -1503,25 +1533,12 @@
                              (hand-dig-refused? world (:intent/target c))))
                   missing)
                 (tool-first world c))]
-      (cond (and (= :no-station c) (= :build (:intent/kind i)))
-            ;; lava remains but no safe station reaches it: do not choose this site again
-            (-> world
-                (assoc :player/controls {})
-                (memory/give-up-site (:intent/origin i))
-                intent/done
-                (game/say "build: no safe lava station at the site, a new site"))
-            (and (= :no-stand c) (= :cast-one (:intent/build i)))
-            ;; no cell reaches the op and none can be cut: the site is no use, a new one
-            (-> world
-                (assoc :player/controls {})
-                (memory/give-up-site (:intent/origin i))
-                intent/done
-                (game/say "build: no stand at the site, a new site"))
-            (keyword? c) (intent/fail world c)
-            :else
-            (intent/run-child
-             (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
-             event)))))
+      (or (site-lost world i c)
+          (cond (keyword? c) (intent/fail world c)
+                :else
+                (intent/run-child
+                 (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
+                 event))))))
 
 (defmethod intent/run :build
   ;; work the first op of the plan not satisfied (next-op, work-op); done when the last op holds.
@@ -1857,6 +1874,21 @@
        (or (pos? (get (make/counts world) :crafting_table 0)) (some? (make/take-table-along world)))
        (or (sticks-at-hand? world) (wood-near? world))))
 
+(defn water-needed?
+  "Does plan still pour water (an op not satisfied that pours :water_bucket) while an empty
+   bucket is held to fill and no water bucket is? A cast's water poured into the cell over the lava can land in the lava's own cell: the
+   lava turns to obsidian, the water goes with it and there is no source to scoop back, so the
+   bucket stays empty. Real races 39181279602 runner 4 and 39499334753 runner 2 (issue #455): the
+   next cell's water pour failed :not-held three times in 300 ms and the plan ended with two empty
+   buckets and no water in sight."
+  [world plan]
+  (boolean (and (held? world :bucket)
+                (not (held? world :water_bucket))
+                (some #(and (= :pour (:build/op %))
+                            (= :water_bucket (:build/item %))
+                            (not (satisfied? world %)))
+                      plan))))
+
 (defn held-first
   "What the needs planner does for what a build row holds before it starts: the tools of
    :goal/holds (a pickaxe for the way down to lava and the digs: sim race 38477665389, issue #70,
@@ -1868,6 +1900,7 @@
   (let [n (if plan (blocks-needed world plan) 0)
         holds (cond-> (or (:goal/holds goal) {})
                 (pos? n) (assoc :item/cobblestone n)
+                (water-needed? world plan) (assoc :item/water_bucket 1)
                 (carry-table? world) (assoc :item/crafting_table 1)
                 (carry-sticks? world) (assoc :item/stick kit-sticks))]
     (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))))

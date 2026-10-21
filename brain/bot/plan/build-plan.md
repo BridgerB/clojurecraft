@@ -128,6 +128,10 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#an-in-flight-refill-dig-preserves-the-feets-support
   - src/clojurecraft/build.clj#defn scoop-at-station
   - src/clojurecraft/build.clj#defn scoop-blocked?
+  - src/clojurecraft/build.clj#defn lava-gone?
+  - src/clojurecraft/build.clj#defn water-needed?
+  - test/clojurecraft/build_test.clj#a-lava-source-gone-before-the-aim-is-looked-for-again
+  - test/clojurecraft/build_test.clj#a-spent-water-bucket-is-asked-for-again
   - test/clojurecraft/build_test.clj#a-refill-reconsiders-a-scoop-whose-ray-filled
   - test/clojurecraft/build_test.clj#refill-scoops-a-source-under-flowing-lava
   - src/clojurecraft/build.clj#defn reach-sources
@@ -216,6 +220,10 @@ A return climb that exhausts its headings (`:stairs-up`, `:boxed`) beyond `site-
 Refill approaches use the pathfinder's footing rules, not solidity alone. `stands-beside` and `station-among` require a firm walking floor (`path/floor?`); magma is solid but cannot support a route. `barred` includes water and cells over awkward footing, so `out-first?` rejects a flooded or magma-lined straight approach and `round-corner` cuts a dry detour instead. Issue #162's R1/16 approach crossed water fed from an aquifer above the mine, while R1/42 selected magma footing beside the pool; repeated walks failed `:no-path` (`a-way-is-cut-round-water-and-awkward-footing`, `a-refill-stand-never-rests-on-magma`). When a fixed stance itself is flooded or has awkward footing, a failed walk gives up the site even nearby (`lost-way?`). A refill with no safe station also gives up its site, whether lava remains or not: geometric source counts do not prove it can be scooped. Both use `memory/give-up-site`, so the next planner pass chooses elsewhere instead of spending three failures at the same unsafe site (`an-unsafe-build-stance-gives-up-the-site`, `a-pool-without-a-safe-station-is-left`).
 
 The refill's clear ray can fill after its scoop child is chosen. `scoop-blocked?` checks a lava scoop's `:intent/aim` against the current terrain before `work-op` advances it, including a child already waiting for an answer or failed. A blocked child is dropped without spending a build attempt; the next refill chooses a clear source or digs its sight line again. Issue #227's R3/26 and R3/29 snapshots had gravel fall into the ray while the bucket was equipped, then retried that same blocked ray until `:no-scoop` (`a-refill-reconsiders-a-scoop-whose-ray-filled`). Water scoops retain their cast's side aim.
+
+A refill's source can turn to obsidian after it is chosen, when the cast's water or the water a dig let in reaches it. The scoop child then fails `:target-gone`; `lava-gone?` has `work-op` drop it, like a blocked ray, so the next refill chooses another source and a pool with none left ends in `:no-station` and a new site. Real races 39245788157 and 39590862487 (issue #419) failed the build on the first vanished source with lava still in reach (`a-lava-source-gone-before-the-aim-is-looked-for-again`).
+
+A water pour can land in the lava's own cell, where the lava becomes obsidian and the water goes with it: no source is left to scoop back and both buckets are empty. `held-first` adds a water bucket to the row's holds while a water pour is unsatisfied and none is held (`water-needed?`), so the build's next start asks the needs planner to fill one. Issue #455 failed `:not-held` three times in 300 ms at the next cell's water pour (`a-spent-water-bucket-is-asked-for-again`).
 
 Refill sight lines must be safe to excavate as well as reachable. `safe-source?` refuses a source whose ray walls touch lava at or above the stand's feet; lava below the feet may still be uncovered. Both `station-among` and `source-in-sight` apply this rule, so a new station avoids the dangerous opening and a resumed refill reconsiders it. Issue #231's R1/32 snapshot targeted a source at y -26 from a stand at y -25, but the rock on its ray held back lava at y -24. Opening it flooded the stand and three escapes failed `:no-footing`. With the unsafe sight line rejected, the snapshot casts its first obsidian after 30700 ms (`a-refill-never-opens-lava-over-its-stand`).
 
