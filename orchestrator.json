@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T19:44:10.549Z",
+  "at" : "2026-10-21T19:45:24.125Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -88,7 +88,7 @@
     "number" : 108,
     "title" : "Bot stops at water-bucket: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
@@ -223,7 +223,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 108,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 87,
     "move" : "leave",
