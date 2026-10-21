@@ -2,7 +2,8 @@
   "Real failures as snapshots (issue #299): a run's own recording, folded, becomes a snapshot of
    its failure that the model judges as it judges the run's sim snapshot; the model joined to a
    bot's world holds what the server held; a Nether moment plays in a Nether model."
-  (:require [clojure.test :refer [deftest is use-fixtures]]
+  (:require [clojure.java.io :as io]
+            [clojure.test :refer [deftest is use-fixtures]]
             [clojure.test.check :as tc]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
@@ -74,7 +75,8 @@
 
 (defn real-snapshot
   "The real snapshot of a recorded run, from its lines alone (real/fold, real/convert), written
-   and read back as the check reads it."
+   and read back as the check reads it. Each call writes its own temporary file: the tests run in
+   parallel, and a path they shared let one read back another's snapshot (a different moment)."
   [{:keys [lines]} difficulty]
   (let [folded (real/fold lines)
         r (:result folded)
@@ -86,9 +88,10 @@
                             :difficulty difficulty
                             :recording "test.edn"
                             :bot "Clj_test"})
-        path (str (System/getProperty "java.io.tmpdir") "/clojurecraft-real-test.edn.gz")]
-    (capture/write-world! path snap)
-    (capture/read-world path)))
+        file (java.io.File/createTempFile "clojurecraft-real-test" ".edn.gz")]
+    (try (capture/write-world! (str file) snap)
+         (capture/read-world (str file))
+         (finally (io/delete-file file true)))))
 
 (deftest a-runs-own-recording-judges-as-its-sim-snapshot-does
   ;; issue #299: a recording holds everything a sim snapshot needs (the bot's world at every
