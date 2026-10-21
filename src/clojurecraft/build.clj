@@ -1303,6 +1303,27 @@
                 (:player/in-water? world)
                 (not (intent/routable? world child)))))
 
+(def max-swims 3)                     ; swim-outs ended on the same feet cell before the build gives its site up
+
+(defn swum
+  "world with the running intent's count of swim-outs that ended on the same feet cell
+   (:intent/swims, with the cell as :intent/swum-at): one more when the feet are where the last
+   one ended, else one. A swim-out that moves the bot is progress; one that ends where it began
+   and is asked for again is a loop."
+  [world]
+  (let [feet (intent/feet world)
+        i (:plan/intent world)
+        n (if (= feet (:intent/swum-at i)) (inc (long (:intent/swims i 0))) 1)]
+    (intent/assoc-intent world :intent/swum-at feet :intent/swims n)))
+
+(defn swim-looped?
+  "Has the build's intent i swum out max-swims times on one feet cell (swum)? Sim snapshot
+   R3-4-1 (issue #178) stood in a shallow pool at health 1: the swim-out ended on dry land at
+   once, the next tick's body was in the water again with no route from it, and the pair ran for
+   the whole window."
+  [i]
+  (>= (long (:intent/swims i 0)) max-swims))
+
 (defn op-child
   "The child intent that works op next: lava to refill first when a lava pour has none, else
    whatever gets the feet centred for the op (a dig of the ground in the way, a walk to the
@@ -1495,7 +1516,16 @@
              (not (or (intent/done? child) (intent/failed? child))))
       (intent/run-child world event)
       (intent/dissoc-intent (intent/assoc-intent world :intent/op next) :intent/child))
-    (and child (intent/done? child)) (intent/dissoc-intent world :intent/child :intent/rejections)
+    (and (= :build (:intent/kind i)) (swim-looped? i))
+    (-> world
+        (assoc :player/controls {})
+        (memory/give-up-site (:intent/origin i))
+        intent/done
+        (game/say (str "build: swimming out never leaves the water, a new site, not "
+                       (:intent/origin i))))
+    (and child (intent/done? child))
+    (cond-> (intent/dissoc-intent world :intent/child :intent/rejections)
+      (= :swim-out (:intent/kind child)) swum)
     (and child (refused-for-the-body? world child))
     ;; the server refused a block into the bot's own body: the stand was wrong, not the op
     (-> world
