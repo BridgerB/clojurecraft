@@ -352,6 +352,16 @@
                k)]
     (when e (into {} (d/touch (d/entity db e))))))
 
+(defn arrived
+  "The set of targets of every walk that arrived (the :done facts of :walk intentions): the
+   cells the bot has already walked to. A walk back to one changes nothing the first did not
+   (pearls/toward: gym batch pearls-warped3-a, plan run 39529384355, walked between the ends of
+   two routes for twenty-five minutes)."
+  [world]
+  (set (d/q '[:find [?t ...] :where [?e :intention/kind :walk] [?e :intention/event :done]
+              [?e :intention/target ?t]]
+            (:world/facts world))))
+
 (defn intention-as-of
   "What the bot was trying to do at time t: the newest intention whose latest fact by then is
    :started, as that fact; nil when it was doing nothing. A Datalog over the facts, so the same

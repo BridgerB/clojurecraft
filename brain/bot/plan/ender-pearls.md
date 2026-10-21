@@ -3,9 +3,9 @@ title: Ender pearls
 description: How the bot gets twelve ender pearls (issue #263) - endermen hunted with the sword, never bartered; the loot table, the warped forest and the enderman's stare and teleport rules read from the jar; the :pearls plan (the kill's drop, the fight, a stare from range to provoke, a walk), the :provoke intent, the two goal rows, the sim test and the model's armour.
 type: reference
 tags: [bot, plan, combat, nether, goals, intents]
-aliases: [:pearls, :provoke, :burrow, :lookout, :pearls/shelter, :entity/creepy?, :intent/hold?, :ender-pearls, :ender-pearl, pearls-12, pearls-1, :unprovoked, :no-enderman, stare-from, stare-range, :toward, roam-goal, descend, descend-radius]
+aliases: [:pearls, :provoke, :burrow, :lookout, :pearls/shelter, :entity/creepy?, :intent/hold?, :ender-pearls, :ender-pearl, pearls-12, pearls-1, :unprovoked, :no-enderman, stare-from, stare-range, :toward, roam-goal, descend, descend-radius, spare-digs, spare?, memory/arrived]
 status: verified
-lastUpdated: 2026-10-19
+lastUpdated: 2026-10-21
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/pearls.clj#def hunt-radius 32.0
@@ -45,6 +45,12 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn tall-stair-cells
   - test/clojurecraft/pearls_test.clj#a-burrow-site-is-one-a-walk-reaches-and-none-a-walk-failed-toward
   - test/clojurecraft/pearls_test.clj#a-burrows-stairs-are-four-high-so-an-enderman-walks-down-them
+  - src/clojurecraft/pearls.clj#def spare-digs 32
+  - src/clojurecraft/pearls.clj#defn digs-left
+  - src/clojurecraft/pearls.clj#defn spare?
+  - src/clojurecraft/memory.clj#defn arrived
+  - test/clojurecraft/pearls_test.clj#a-worn-pickaxe-is-kept-for-the-burrow
+  - test/clojurecraft/pearls_test.clj#a-walk-toward-one-never-ends-where-a-walk-already-arrived
   - test/clojurecraft/pearls_test.clj#a-burrow-is-cut-where-it-would-shelter-and-the-provoke-goes-from-its-mouth
   - test/clojurecraft/pearls_test.clj#one-far-below-no-route-reaches-is-descended-to-by-stairs
   - test/clojurecraft/pearls_test.clj#a-lookout-that-found-nothing-roams-somewhere-else
@@ -128,6 +134,8 @@ The model's enderman (`mob/kinds`) is neutral until stared at (`sim/provoke`, fr
 - No emergency escape into water yet (the Nether has none; water poured there evaporates).
 - Gym batch pearls-263b (plan run 38895776486), with the burrow: `pearls-1-live` passed 3 of 5 where the open fight had died five times in five. One death came from a zombie the unlit midnight arena spawned, which the `:defend` row backed away from turn about with the hunt; the other from an enderman met in the open. The arena is lit now, and an enderman at hand, one coming or a hurt bot sends it back to its burrow.
 - No exploring beyond `seek-radius`: with no enderman tracked within 64 the bot roams sixteen blocks at a time and looks round until one comes, or the run's time ends. A cave pocket no route leaves (batch pearls-263f) holds it: the hunt never digs its way out.
+- One pickaxe, and netherrack makes no other: the stairs down and the tunnel toward an enderman (`descend`, `bore`) are cut only while a held pickaxe has `spare-digs` 32 left past them (`spare?`, `digs-left` over `make/uses-left`: the tier's durability less the `:damage` the server sends), a burrow's sixteen digs twice over. Gym batch pearls-warped3-a (plan run 39529384355) run 1 took three pearls from its burrow, then wore the iron pickaxe out on stairs, tunnels and bores at fourteen minutes (238 netherrack held) and, with no burrow to be cut, stood in `:lookout` for the last twenty-five; run 3 ended with 25 digs left. With the digs kept, the hunt still walks, looks out and roams toward endermen, and burrows when one is to be provoked.
+- A walk toward one (`toward`) never ends where a walk already arrived (`memory/arrived`: the `:done` facts of `:walk` intentions). The same batch's run 3 (probe 39543118281) walked between the ends of the routes toward two endermen, each end four or more nearer one of them than the other end, for twenty-five minutes, and run 1 between its burrow's mouth and one such end ninety-eight times: what an end shows was seen the first time. Spent ends leave the hunt the lookout, the roam and the burrow.
 
 ## See also
 - [[survival]] - the fight, the armour and the sword this hunt uses.

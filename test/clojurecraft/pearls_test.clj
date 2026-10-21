@@ -207,6 +207,62 @@
            (plan/next-intent (assoc w :player/pos [8.5 64.0 13.5]) row plan/goals))
         "from farther back, the step at the cliff's foot is a walk")))
 
+(deftest a-walk-toward-one-never-ends-where-a-walk-already-arrived
+  ;; gym batch pearls-warped3-a (plan run 39529384355, probe 39543118281) run 3: for twenty-five
+  ;; minutes the bot walked between the ends of the routes toward two endermen, each end four
+  ;; nearer one of them than the other end was; run 1 walked between its burrow's mouth and one
+  ;; such end, ninety-eight times
+  (let [w (-> (standing {7 (enderman [8.5 70.0 30.5])})
+              (assoc :time/now 0)
+              (assoc-in [:world/chunks [0 1]] (world/column cliff)))
+        been (memory/remember-intention
+              w
+              {:intent/id 1 :intent/kind :walk :intent/target [8 64 19] :intent/for :pearls}
+              :done)]
+    (is (= #{[8 64 19]} (memory/arrived been)) "where a walk arrived is a fact")
+    (is (= {:intent/kind :walk :intent/target [8 64 19] :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "the cliff's foot, not yet walked to")
+    (is (nil? (pearls/toward been (pearls/endermen been pearls/seek-radius)))
+        "walked to once: not again")
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent been row plan/goals))
+        "the lookout instead")
+    (let [open (-> (standing {})
+                   (assoc :time/now 0)
+                   (assoc-in [:world/chunks [1 0]] (world/column {})))
+          end (:intent/target (pearls/roam open))
+          roamed (memory/remember-intention
+                  open
+                  {:intent/id 2 :intent/kind :walk :intent/target end :intent/for :pearls}
+                  :done)]
+      (is (some? end) "a roam east on open ground")
+      (is (not= end (:intent/target (pearls/roam roamed)))
+          "roamed to once: the next heading, somewhere else"))))
+
+(deftest a-worn-pickaxe-is-kept-for-the-burrow
+  ;; gym batch pearls-warped3-a (plan run 39529384355) run 1: three kills from a burrow, then the
+  ;; stairs, tunnels and bores toward endermen wore the iron pickaxe out at fourteen minutes, and
+  ;; with no burrow to be cut it stood in :lookout for the last twenty-five
+  (let [worn (assoc (item :iron_pickaxe 1) :components {:damage 220})
+        below (enderman [8.5 40.0 8.5])
+        w (assoc-in (standing {7 below}) [:player/inventory 1] worn)
+        pocket (-> (standing {7 (enderman [8.5 64.0 20.5])})
+                   (assoc :world/chunks (cave (passage 8 8)))
+                   (assoc-in [:player/inventory 1] worn))]
+    (is (= 30 (pearls/digs-left w)) "an iron pickaxe has 250 digs, 220 spent")
+    (is (not (pearls/spare? w)) "fewer than a burrow's twice over")
+    (is (pearls/spare? (assoc-in w [:player/inventory 1 :components :damage] 218)))
+    (is (nil? (pearls/descend w {7 below})) "thirty digs left: no stairs down toward one")
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals)))
+    (is (nil? (pearls/bore pocket (pearls/endermen pocket pearls/descend-radius)))
+        "nor a tunnel toward one")
+    (is (= {:intent/kind :burrow :intent/dir [-1 0] :intent/for :pearls}
+           (plan/next-intent
+            (assoc-in (standing {7 (enderman [11.5 64.0 8.5])}) [:player/inventory 1] worn)
+            row
+            plan/goals))
+        "the burrow is what the digs are kept for")))
+
 (deftest the-provoke-stares-at-the-head-until-the-server-says-it-has-a-target
   (let [pos [8.5 64.0 15.5]
         w (assoc (standing {7 (enderman pos)})
