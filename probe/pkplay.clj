@@ -8,8 +8,8 @@
             [clojurecraft.simrace :as sr]))
 
 (defn play
-  ([path cap] (play path cap (fn [_ _] nil)))
-  ([path cap on-intent]
+  ([path cap] (play path cap (fn [_ _] nil) (fn [_] nil)))
+  ([path cap on-intent on-sample]
    (let [snap (capture/read-world path)
          w (sr/world-for! snap)
          m (sr/moment-of snap w)
@@ -36,6 +36,7 @@
                                  (->> (mapv #(math/round (double %)))))))
                   (when (> (- now @last-pos) 10000)
                     (vreset! last-pos now)
+                    (on-sample wd')
                     (say "POS"
                          now
                          (some-> (:player/pos wd')

@@ -65,7 +65,8 @@
                   z (+ fz dz)
                   cell [x top z]
                   bank [x (inc top) z]]
-            :when (= :water (terrain/fluid-kind world cell))]
+            :when (and (= :water (terrain/fluid-kind world cell))
+                       (<= (physics/distance (game/eye world) (physics/centre cell)) 4.5))]
       (ask (str " cand " cell)
            #(hash-map :clear (path/clear? world bank)
                       :clear2 (path/clear? world [x (+ top 2) z])
@@ -89,6 +90,15 @@
         (ask " terrain" #(layers wd 6 3 6))
         (when (= :swim-out k) (swim-questions wd))))))
 
+(defn sampler
+  "On every sample of a run while a swim-out is going, up to three times, what the swim sees."
+  [n]
+  (fn [wd]
+    (when (= :swim-out (get-in wd [:plan/intent :intent/kind])) (swap! n inc))
+    (when (and (= :swim-out (get-in wd [:plan/intent :intent/kind])) (<= 5 @n 7))
+      (out "-- sample at" (:time/now wd) (:player/pos wd))
+      (swim-questions wd))))
+
 (defn run-one
   [p]
   (let [snap (capture/read-world p)
@@ -111,7 +121,7 @@
     (ask " gather-next" #(wood/gather-next world))
     (ask " terrain" #(layers world 6 3 4))
     (when (:player/in-water? world) (swim-questions world))
-    (pkplay/play p 0 (hook (atom #{})))))
+    (pkplay/play p 0 (hook (atom #{})) (sampler (atom 0)))))
 
 (defn -main
   [& paths]
