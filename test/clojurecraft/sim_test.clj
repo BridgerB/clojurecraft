@@ -23,6 +23,7 @@
             [clojurecraft.main :as main]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
@@ -3475,4 +3476,32 @@
     (is (zero? (:stats/deaths w 0)) "alive")
     (is (:intent/to-the-end? (:plan/last w)) "the blaze-rods row's fight on one at hand")
     (is (= 2 (count (blaze/blazes w))) "one of the three killed")
+    (is (= [] (:sim/violations sim)))))
+
+(def blaze-spawner-cell [12 64 12])
+
+(deftest the-seventh-rod-from-a-spawner-in-the-models-nether
+  ;; issue #262's acceptance, a spawner and no fixture blazes: six rods given, one more wanted;
+  ;; the spawner on the floor four blocks from the landing wakes (mob/spawner), makes its first
+  ;; batch within 800 ticks and again, the bot camps by it, fights what comes and picks up the rod
+  ;; one kill in two drops (rolled from the model's seed)
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes {blaze-spawner-cell
+                                                                 mob/spawner-block}
+                                                                dimension/nether)
+                                    :spawn [8.5 64.0 8.5]
+                                    :dimension dimension/nether
+                                    :difficulty :easy
+                                    :food 20
+                                    :seed 3
+                                    :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}
+                                                [:hotbar 1] {:item (item :blaze_rod) :count 6}}})
+                         #(or (plan/done? %) (plan/failed? %))
+                         240000
+                         {:event/kind :go :go/goals [:blaze-rods]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (>= (inventory/item-count w blaze/rod) blaze/rods-wanted))
+    (is (seq (:sim/spawners sim)) "the model found the spawner")
+    (is (pos? (:sim/health sim)) "alive")
     (is (= [] (:sim/violations sim)))))
