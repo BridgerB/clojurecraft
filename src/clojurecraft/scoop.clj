@@ -193,6 +193,14 @@
           (filter #(surface-source? world %))
           (filter #(surface-water? world % (physics/y-of eye)))))))
 
+(defn at-hand?
+  "Is a surface source in reach and in sight (in-reach?, sees?): a scoop that needs no walk and
+   no stairs out of a mine? Sim snapshot real-5-s2-Clj_r17 (issue #54): a bot with a bucket and
+   no pickaxe came up out of its mine into the middle of a lake, four sources beside its feet, and
+   went for logs across the water to make the pickaxe a scoop holds for the climb out."
+  [world]
+  (boolean (some #(and (in-reach? world %) (sees? world %)) (sources world))))
+
 (def ice-states
   "Every state of the blocks the game's IceBlock turns to a water source when a player breaks them
    (stairs/lake-ice)."
@@ -292,9 +300,13 @@
   "A walk tagged for to the first of targets (the max-candidates first that it has not already
    arrived at) a route reaches (intent/routable?), or nil. A walk already arrived would end
    before it began, and start again every tick (gym batch water-a3 run 5 did, for four minutes,
-   at a remembered pool under stone)."
+   at a remembered pool under stone). Never a target in :plan/blacklist, where a walk that failed
+   :no-path left it: the way up to the landing (way-up) was walked at again every twelve seconds
+   after each failure, forty times and more, the landing itself the target (sim snapshot
+   real-5-s2-Clj_r08, issue #54, 510 cells blacklisted and the bot at a tenth of its health)."
   [world for targets]
   (->> targets
+       (remove (:plan/blacklist world #{}))
        (map (fn [t] {:intent/kind :walk :intent/target t :intent/for for}))
        (remove #(intent/arrived? world
                                  %

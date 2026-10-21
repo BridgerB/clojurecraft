@@ -219,6 +219,35 @@
   [world row]
   (intent/chain-next (:plan/last world) (:goal/id row) (drops-of-row row) {}))
 
+(defn walk-to
+  "A walk tagged for to the end of a route from which the block at t is dug and its drop picked up
+   (:intent/pickup?), a step down into the hole it leaves when it is a block of the floor
+   (:intent/step-down?)."
+  [world t for]
+  (cond-> {:intent/kind :walk :intent/target t :intent/for for :intent/pickup? true}
+    (= (inc (physics/y-of t)) (physics/y-of (beside world t))) (assoc :intent/step-down? true)))
+
+(def filler-want 8)                  ; filler a mine tops up to by hand once a staircase died boxed: a seal and a floor or two
+(def filler-states
+  "Every state of the blocks dug by hand for filler: dirt, and the grass over it."
+  (into #{} (mapcat blocks/states-of) [:dirt :grass_block]))
+(def filler-drops #{(blocks/items :dirt)}) ; what digging them gives
+
+(defn filler-dig
+  "A walk to the nearest dirt of filler-states that a route reaches and its dig exposes no fluid
+   to (exposed-of-states), tagged :filler for the chain that digs it and picks it up, or nil: only
+   once a staircase died :boxed here or before (:plan/boxed-at) and less than filler-want filler is
+   carried (stairs/carried-filler). A staircase refused for the water beside it is sealed from
+   what is carried, and the lake shores it was refused on gave the bots two dirt to seal with
+   (issues #342 and #65, real bot Clj_r15 landed at R1/30): the dirt they stood on was filler."
+  [world]
+  (when (and (seq (:plan/boxed-at world)) (< (stairs/carried-filler world) filler-want))
+    (->> (exposed-of-states world filler-states)
+         (take max-candidates)
+         (map #(walk-to world % :filler))
+         (filter #(intent/routable? world %))
+         first)))
+
 (defn stairs
   "The staircase to cut when nothing is in sight: stair-depth down from the feet, never below
    the row's :goal/depth, which a mine row's staircase carries as :intent/floor-to (how far a
@@ -236,13 +265,18 @@
 (def over-radius 3)                   ; blocks on the plane round the surface over stone within which the feet count as over it
 
 (defn surface-over
-  "The standable cell on top of the column of cell [x _ z]: above the highest solid block, the
-   body and head clear (path/standable?); nil when the column has none."
+  "The standable cell on top of the column of cell [x _ z]: above the highest solid block that
+   is not leaves, the body and head clear (path/standable?); nil when the column has none.
+   Leaves are no ground to cut a staircase down from: sim race 39550831606 world R4/25 (issue
+   #85): a bot with a wooden pickaxe, no filler and a health of one walked to the surface over
+   its stone, which was the top of a birch's canopy, every stair from there was refused for the
+   leaves it opened onto, and it walked back to the canopy after each level step for the whole
+   window."
   [world [x _ z]]
   (some (fn [y]
-          (when (some-> (terrain/block-at world [x y z])
-                        blocks/solid?)
-            (let [c [x (inc y) z]] (when (path/standable? world c) c))))
+          (let [id (terrain/block-at world [x y z])]
+            (when (and id (blocks/solid? id) (not (blocks/leaves? id)))
+              (let [c [x (inc y) z]] (when (path/standable? world c) c)))))
         (range terrain/top-y (dec chunk/min-y) -1)))
 
 (defn under-surface?
@@ -501,19 +535,13 @@
    where the lava had just caught it, and the flow followed it down."
   [world row]
   (or (continue-mine world row)
+      (intent/chain-next (:plan/last world) :filler filler-drops {})
       (let [missing (tool-missing world row)
             [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
-            walk-to (fn [t]
-                      (cond-> {:intent/kind :walk
-                               :intent/target t
-                               :intent/for (:goal/id row)
-                               :intent/pickup? true}
-                        (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
-                        (assoc :intent/step-down? true)))
             walk (when-not missing
                    (->> (exposed-of-states world (states-of-row row))
                         (take max-candidates)
-                        (map walk-to)
+                        (map #(walk-to world % (:goal/id row)))
                         (filter #(intent/routable? world %))
                         first))]
         (cond missing {:plan/wait missing}
@@ -524,6 +552,7 @@
                   (off-ice world)
                   (seal-stone world row)
                   (over-stone world row)
+                  (filler-dig world)
                   (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})

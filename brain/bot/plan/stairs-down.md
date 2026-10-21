@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, dig, mining, safety]
 aliases: [:stairs-down, :stairs-up, up-cells, under-sky?, descend, climb out, child intent, :boxed, stair-cells, safe?, intents composing intents, lay, step-lay, step-to-lay, floor-laying, fillers, cast staircase, cave lip, creep-speed, onto, aquifer, dry-head-distance, wet-head?, floor-distance]
 status: verified
-lastUpdated: 2026-10-18
+lastUpdated: 2026-10-21
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/stairs.clj#defn stair-cells
@@ -135,6 +135,8 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn water-over?
   - src/clojurecraft/stairs.clj#defn up-sealed?
   - test/clojurecraft/sim_test.clj#stairs-up-through-an-aquifer-are-sealed-with-cobblestone
+  - src/clojurecraft/stairs.clj#defn climb-reserve
+  - test/clojurecraft/stone_test.clj#a-seal-at-the-surface-keeps-nothing-for-a-climb-it-does-not-need
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[dig-timeline]]"
@@ -190,6 +192,7 @@ An ascent may regain a previously visited higher cell: height gained is progress
 - **The wood for a replacement can be below the feet.** A descent explicitly toward trees (`:intent/for :trees`) is also cut by hand (`by-hand?`), unlike a mining or lava descent. Issue #229's R4/5 moment held sticks and cobblestone but no table or pickaxe; it walked out to y 78 and repeatedly failed the descent toward wood `:no-pickaxe`. The saved moment now completes that descent and walks onward; `stairs-down-to-trees-with-no-pickaxe-are-cut-by-hand` also keeps ordinary descents tool-required.
 - **A carpet is a cell to open.** `next-to-open` names a cell with any collision box (`blocks/collision-top`), not only a full cube: a moss carpet two over the feet, in the stair up's head cell, was called open, and the jump rose into its box three times for ten seconds each, `:stair-not-taken` (sim race 39593216223, issue #66, world R2/39; `a-carpet-over-the-head-is-a-cell-to-open-in-a-stair-up`).
 - **Gravel falls into the stair.** The seventh live iron-kit run (local landing 2360,3000) cut its staircase through gravel at y 37-40: the gravel over the cells it opened fell into them, the walk onto the stair failed `:stair-not-taken`, then two digs found their cell already emptied and failed `:target-gone`, ending the plan. A cell refilled is dug again, a cell emptied counts as open, and the step goes back to digging; the server model drops gravel the way the game does ([[server-model]]), and `gravel-that-refills-a-stair-is-dug-again` cuts two stairs into a gravel cliff (it fails with the old stages). A falling block that lands on the bot's head is not handled.
+- **A seal keeps what the climb back needs, not always eight.** `down-lay` seals the water beside a stair with `climb-reserve` kept: a block for each block the feet are under the highest rock (not leaves) of their column, up to `lay-reserve`, so a bot at the surface seals with all it has and one eight stairs down keeps all eight; a floor laid through a cave still keeps `lay-reserve` whatever the depth. Real bot Clj_r15 at R1/30 (issue #65) was one stair down from a lake shore with two dirt and every stair was refused for the eight (`a-seal-at-the-surface-keeps-nothing-for-a-climb-it-does-not-need`); the deeper reserve is race 39070889905's (issue #342).
 
 ## See also
 - [[dig-timeline]] - the child.
