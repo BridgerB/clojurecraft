@@ -30,27 +30,29 @@
           {:keys [world] :as m} (sr/moment-of snap w)
           last* (volatile! nil)
           t0 (:time/now world)
-          stop? (fn [wd]
-                  (doseq [e (:bot/effects wd)
-                          :when (= :log (:effect/kind e))]
-                    (println "SAY" (- (:time/now wd) t0) (:effect/message e)))
-                  (let [b (brief wd)
-                        c (:intent/child (:plan/intent wd))]
-                    (when (and c (= :target-gone (:intent/reason c)) (:intent/target c))
-                      (let [[x y z] (:intent/target c)]
-                        (println "GONE"
-                                 (:intent/target c)
-                                 :lava-base
-                                 blocks/lava-base
-                                 (into {}
-                                       (for [dy [-1 0 1 2]
-                                             dx [-1 0 1]
-                                             dz [-1 0 1]]
-                                         [[dx dy dz]
-                                          (terrain/block-at wd [(+ x dx) (+ y dy) (+ z dz)])])))))
-                    (when (not= b @last*)
-                      (vreset! last* b)
-                      (println "AT" (- (:time/now wd) t0) (pr-str b))))
-                  (or (plan/done? wd) (plan/failed? wd)))]
+          stop?
+          (fn [wd]
+            (doseq [e (:bot/effects wd)
+                    :when (= :log (:effect/kind e))]
+              (println "SAY" (- (:time/now wd) t0) (:effect/message e)))
+            (let [b (brief wd)
+                  c (:intent/child (:plan/intent wd))]
+              (when (and c (#{:target-gone :needs-tool} (:intent/reason c)) (:intent/target c))
+                (let [[x y z] (:intent/target c)]
+                  (println "GONE"
+                           (:intent/target c)
+                           :lava-base
+                           blocks/lava-base
+                           (into {}
+                                 (for [dy [-1 0 1 2]
+                                       dx [-1 0 1]
+                                       dz [-1 0 1]]
+                                   [[dx dy dz]
+                                    (some-> (terrain/block-at wd [(+ x dx) (+ y dy) (+ z dz)])
+                                            blocks/name-of)])))))
+              (when (not= b @last*)
+                (vreset! last* b)
+                (println "AT" (- (:time/now wd) t0) (pr-str b))))
+            (or (plan/done? wd) (plan/failed? wd)))]
       (sim/play-from sr/step m stop? (sr/window-of snap) (sr/go-of w (:snapshot/until snap)) nil)))
   (shutdown-agents))
