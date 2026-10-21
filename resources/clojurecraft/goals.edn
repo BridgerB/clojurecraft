@@ -222,9 +222,9 @@
  {:goal/id :mine-iron
   :goal/priority 10
   :goal/doc
-  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest. A spare pickaxe is made before more ore is dug, gathering the wood when a walk to a trunk or stairs up to one can be started, so the last one is not worn out at the bottom. A walk back up the dug shaft is not that: it reaches the sky, not a tree. Four sticks are kept too, two more pickaxes' handles, gathered up at the trees before the descent: the stairs down, the tunnels and the climb out for the water dig some 390 blocks, three stone pickaxes' worth, and race 38477665442 bots Clj_r23 and Clj_r06 left the forest with three logs, made three pickaxes and broke the last on the climb (issue #39)"
+  "dig the nearest exposed iron ore with a stone pickaxe, or cut stairs down toward it and tunnel at y 16, where the game makes iron densest. A spare pickaxe is made before more ore is dug, gathering the wood when a walk to a trunk or stairs up to one can be started, so the last one is not worn out at the bottom. A walk back up the dug shaft is not that: it reaches the sky, not a tree. Four sticks are kept too, two more pickaxes' handles, gathered up at the trees before the descent: the stairs down, the tunnels and the climb out for the water dig some 390 blocks, three stone pickaxes' worth, and race 38477665442 bots Clj_r23 and Clj_r06 left the forest with three logs, made three pickaxes and broke the last on the climb (issue #39). Thirty-two since issue #338: the cast wears two pickaxes out, a stone pickaxe digs 130 blocks, and the Nether's tunnel to a fortress 250 to 340 blocks off needs a dozen, but sim world R2/12 came through its portal at minute 19 with one stick and the pickaxe broke at minute 22; there is no wood in the Nether, and by hand a block of basalt is 6 s, so 180 minutes of spiral went 3.7 blocks a minute. Sixteen planks are four logs, cut here at the trees"
   :goal/holds {:item/stone_pickaxe 1}
-  :goal/spares {:item/stone_pickaxe 1 :item/stick 4}
+  :goal/spares {:item/stone_pickaxe 1 :item/stick 32}
   :goal/provides {:item/raw_iron 1}
   :goal/act :mine
   :goal/blocks [:iron_ore :deepslate_iron_ore]

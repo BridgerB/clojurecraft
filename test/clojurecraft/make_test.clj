@@ -480,7 +480,7 @@
 (deftest sticks-for-two-more-pickaxes-are-gathered-before-the-iron
   ;; issue #39: bots Clj_r23 and Clj_r06 left the forest with three logs' worth, made three
   ;; stone pickaxes between the stairs down, the tunnels and the climb out for the water, and
-  ;; broke the last on the climb. Four sticks go down with the spare pickaxe, gathered at the
+  ;; broke the last on the climb. Thirty-two sticks (issue #338) go down with the spare pickaxe, gathered at the
   ;; trees while a walk to one can be started
   (let [col (world/column {[8 64 8] 136 [8 65 8] 136})
         with-tree (fn [held]
@@ -491,9 +491,14 @@
         row (fn [w] (:goal/id (make/next-row w (ingots 4) plan/goals)))]
     (is (= :gather-log (row (with-tree {:stone_pickaxe 2 :coal 1})))
         "a trunk in reach: the sticks' log, before the descent")
-    (is (= :craft/stick (row (with-tree {:stone_pickaxe 2 :coal 1 :oak_planks 2})))
+    (is (= :gather-log (row (with-tree {:stone_pickaxe 2 :coal 1 :oak_planks 2})))
+        "two planks are short of thirty-two sticks: the log (issue #338)")
+    (is (= :craft/stick (row (with-tree {:stone_pickaxe 2 :coal 1 :oak_planks 16})))
         "planks held: the sticks are made")
-    (is (= :mine-iron (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 4}))) "four held: the iron")
+    (is (= :gather-log (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 4})))
+        "four held is not the Nether's worth (issue #338)")
+    (is (= :mine-iron (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 32})))
+        "thirty-two held: the iron")
     (is (= :mine-iron (row (with-furnace (world-holding {:stone_pickaxe 2 :coal 1} false))))
         "no tree to walk to: no trip for the sticks")))
 
