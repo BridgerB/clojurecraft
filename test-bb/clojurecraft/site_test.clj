@@ -140,3 +140,91 @@ reasons: goal 12
 
 (deftest the-road-json-cannot-end-its-script-early
   (is (not (str/includes? (site/json-in-html {:says "</script><b>"}) "</"))))
+
+(def road-def (edn/read-string (slurp "ci/road.edn")))
+(def gym-stage (:road/gym-stage road-def))
+
+(def plan-md
+  "A plan run's report, as plan.yml's aggregate writes it (and comments on the plan's issue)."
+  "## plan dragon3-b (ci/plan/dragon3-b.edn) at ff8a0aa, run 39593702551
+
+## crystals (head)
+
+### crystals
+
+pass 3/3 [44%, 100%]; not counted: harness 0, disconnect 0
+
+| run | landing | outcome | s | reason | truth |
+|---|---|---|---|---|---|
+| 1 | 1,2 | pass | 700 | goal | ok |
+
+outcomes: pass 3
+reasons: goal 3
+
+## dragon (head)
+
+### dragon
+
+pass 3/3 [44%, 100%]; not counted: harness 0, disconnect 0
+
+outcomes: pass 3
+reasons: goal 3
+
+### sim forests
+
+worlds 10 in 1 shards; failing shards 0
+")
+
+(deftest a-gym-row-maps-to-its-road-stage
+  (is (= "dragon" (site/stage-of gym-stage "crystals" "crystals")))
+  (is (= "dragon" (site/stage-of gym-stage "dragon" "dragon")))
+  (is (= "end-portal" (site/stage-of gym-stage "end-portal" "end-portal")))
+  (is (= "the-end" (site/stage-of gym-stage "enter-end" "enter-end")))
+  (is (= "ender-pearls" (site/stage-of gym-stage "pearls-1" "ender-pearl")))
+  (is (= "ender-pearls" (site/stage-of gym-stage "pearls-12" "ender-pearls")))
+  (is (= "blaze-rods" (site/stage-of gym-stage "blaze-fortress" "blaze-rods")))
+  (is (= "blaze-rods" (site/stage-of gym-stage "blaze-7" "blaze-rods")))
+  (testing "an unlisted row falls back to the heading's goal, then to itself"
+    (is (= "dragon" (site/stage-of gym-stage "odd-name" "crystals")))
+    (is (= "fortress" (site/stage-of gym-stage "fortress" "fortress"))))
+  (testing "every mapped stage is a stage on the road"
+    (let [goals (edn/read-string {:default (fn [_ v] v)} (slurp "resources/clojurecraft/goals.edn"))
+          ids (set (map :id (:stages (site/road goals "fortress" road-def))))]
+      (is (every? ids (vals gym-stage))))))
+
+(deftest a-stage-status-follows-its-evidence
+  (is (= :proven (site/stage-status true [{:pass 0 :n 5} {:pass 1 :n 5}])) "any pass proves it")
+  (is (= :proven (site/stage-status false [{:pass 3 :n 3}])))
+  (is (= :no-pass (site/stage-status true [{:pass 0 :n 5}])))
+  (is (= :built (site/stage-status true [])) "a row and no gym run is built, not tried")
+  (is (= :unbuilt (site/stage-status false []))))
+
+(deftest the-road-reads-built-from-the-goal-table
+  (let [goals (edn/read-string {:default (fn [_ v] v)} (slurp "resources/clojurecraft/goals.edn"))
+        stages (into {} (map (juxt :id identity)) (:stages (site/road goals "fortress" road-def)))]
+    (is (every? :goal (map stages ["end-portal" "the-end" "dragon" "blaze-rods" "portal-room"]))
+        "the stages past the fortress have goal rows (the-end by enter-end)")
+    (testing "a stage with no row is not built"
+      (let [r (site/road (remove #(= :enter-end (:goal/id %)) goals) "fortress" road-def)]
+        (is (false? (:goal (some #(when (= "the-end" (:id %)) %) (:stages r)))))))))
+
+(deftest a-plan-run-becomes-a-gym-line
+  (let [summary (site/plan-summary gym-stage plan-md)
+        line (site/plan-line {:id 39593702551
+                              :created_at "2026-10-21T11:40:33Z"
+                              :head_branch "feat/267-dragon3"
+                              :head_sha "ff8a0aaa4d4d694c1623bba93f4d11babcc905d6"
+                              :conclusion "success"}
+                             summary)]
+    (is (= {:label "dragon3-b" :plan "ci/plan/dragon3-b.edn" :sha "ff8a0aa" :run 39593702551}
+           (select-keys summary [:label :plan :sha :run])))
+    (is (= [["dragon" "crystals" 3 3] ["dragon" "dragon" 3 3]]
+           (map (juxt :goal :row :pass :n) (:goals line))))
+    (is (= ["crystals" "dragon"] (:rows line)))
+    (is (= {:run 39593702551 :at "2026-10-21T11:40:33Z" :via "plan" :conclusion "success"}
+           (select-keys line [:run :at :via :conclusion])))
+    (testing "a report with no gym section still gives a line, so it is not read again"
+      (is (= []
+             (:goals (site/plan-line {:id 1}
+                                     (site/plan-summary gym-stage
+                                                        "## plan x (p) at s, run 1\n"))))))))
