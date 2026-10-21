@@ -36,6 +36,9 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-portal-behind-its-back-wall-is-entered-from-the-room
   - src/clojurecraft/build.clj#defn way-back
   - src/clojurecraft/build.clj#defn wading-out?
+  - src/clojurecraft/build.clj#defn swum
+  - src/clojurecraft/build.clj#defn swim-looped?
+  - test/clojurecraft/build_test.clj#a-swim-out-that-ends-where-it-began-again-and-again-gives-the-site-up
   - src/clojurecraft/build.clj#defn way-columns
   - test/clojurecraft/build_test.clj#the-lava-hunt-heads-for-lava-beyond-the-hunt-radius
   - test/clojurecraft/build_test.clj#a-tunnel-for-lava-is-not-cut-again-from-the-cell-one-boxed
@@ -67,6 +70,11 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn to-height
   - src/clojurecraft/build.clj#defn round-corner
   - src/clojurecraft/build.clj#defn in-room?
+  - src/clojurecraft/build.clj#defn flooded-room?
+  - src/clojurecraft/build.clj#defn near-enough?
+  - test/clojurecraft/build_test.clj#a-block-at-the-edge-of-reach-is-walked-to-not-dug
+  - src/clojurecraft/build.clj#defn site-lost
+  - test/clojurecraft/build_test.clj#a-flooded-room-is-no-site
   - test/clojurecraft/build_test.clj#a-corner-is-never-a-cell-of-the-room-the-cast-digs
   - src/clojurecraft/build.clj#defn way-refilled?
   - test/clojurecraft/build_test.clj#a-way-filled-by-falling-gravel-is-cleared-again
@@ -96,6 +104,9 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn stand-cell?
   - test/clojurecraft/build_test.clj#a-room-cell-behind-a-wall-is-cut-toward
   - src/clojurecraft/build.clj#defn refused-for-the-body?
+  - src/clojurecraft/build.clj#defn dig-rejected?
+  - test/clojurecraft/build_test.clj#a-portal-block-in-the-wall-is-a-wall-already
+  - test/clojurecraft/build_test.clj#a-dig-the-server-did-not-do-is-dug-again-before-the-build-fails
   - test/clojurecraft/build_test.clj#a-block-is-never-placed-into-the-bot
   - src/clojurecraft/build.clj#defn toward-stand
   - src/clojurecraft/build.clj#defn stand-walk
@@ -109,6 +120,8 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn floor-gap
   - src/clojurecraft/build.clj#defn bridge
   - test/clojurecraft/build_test.clj#a-way-over-a-hole-gets-a-floor
+  - src/clojurecraft/build.clj#defn before-gap
+  - test/clojurecraft/build_test.clj#a-bridge-walks-onto-the-floor-laid-before-the-gap-past-its-reach
   - src/clojurecraft/build.clj#defn refill
   - src/clojurecraft/build.clj#defn sight-block
   - src/clojurecraft/build.clj#defn lava-aim
@@ -123,6 +136,10 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#an-in-flight-refill-dig-preserves-the-feets-support
   - src/clojurecraft/build.clj#defn scoop-at-station
   - src/clojurecraft/build.clj#defn scoop-blocked?
+  - src/clojurecraft/build.clj#defn lava-gone?
+  - src/clojurecraft/build.clj#defn water-needed?
+  - test/clojurecraft/build_test.clj#a-lava-source-gone-before-the-aim-is-looked-for-again
+  - test/clojurecraft/build_test.clj#a-spent-water-bucket-is-asked-for-again
   - test/clojurecraft/build_test.clj#a-refill-reconsiders-a-scoop-whose-ray-filled
   - test/clojurecraft/build_test.clj#refill-scoops-a-source-under-flowing-lava
   - src/clojurecraft/build.clj#defn reach-sources
@@ -151,11 +168,14 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn lava-walk
   - src/clojurecraft/build.clj#defn uncap
   - src/clojurecraft/build.clj#defn toward-lava
+  - src/clojurecraft/build.clj#defn explore-lava
+  - test/clojurecraft/build_test.clj#the-lava-hunt-tunnels-away-from-the-landing-when-no-lava-is-loaded
   - src/clojurecraft/build.clj#defn castable?
   - src/clojurecraft/build.clj#defn hunt-target
   - test/clojurecraft/build_test.clj#the-lava-hunt-goes-down-past-lava-it-cannot-cast-from
   - test/clojurecraft/build_test.clj#the-lava-hunt-passes-sources-with-no-safe-stand
   - test/clojurecraft/build_test.clj#the-lava-hunt-leaves-a-boxed-pocket-by-the-way-out
+  - test/clojurecraft/build_test.clj#the-lava-hunt-climbs-to-a-source-just-over-the-feet
   - src/clojurecraft/memory.clj#defn site
   - test/clojurecraft/build_test.clj#the-plan-casts-the-ten-cells-in-layer-order
   - test/clojurecraft/build_test.clj#the-plan-never-places-into-its-own-stance-nor-into-the-room
@@ -207,9 +227,13 @@ The lava hunt's `sources-near` excludes sources within `give-up-radius` of a giv
 
 A return climb that exhausts its headings (`:stairs-up`, `:boxed`) beyond `site-reach` also gives up the site through `lost-way?`. Issue #363's R2/43 and R4/18 snapshots retried such climbs toward the same distant room until three build attempts failed. Ending the build and recording the given-up site lets the next planner pass choose elsewhere, including when the failed child is already present. Boxed descents still remember their pocket and seek the way out; nearby climbs and non-build executors retain their own failure handling (`a-boxed-climb-back-gives-up-the-distant-site`).
 
-Refill approaches use the pathfinder's footing rules, not solidity alone. `stands-beside` and `station-among` require a firm walking floor (`path/floor?`); magma is solid but cannot support a route. `barred` includes water and cells over awkward footing, so `out-first?` rejects a flooded or magma-lined straight approach and `round-corner` cuts a dry detour instead. Issue #162's R1/16 approach crossed water fed from an aquifer above the mine, while R1/42 selected magma footing beside the pool; repeated walks failed `:no-path` (`a-way-is-cut-round-water-and-awkward-footing`, `a-refill-stand-never-rests-on-magma`). When a fixed stance itself is flooded or has awkward footing, a failed walk gives up the site even nearby (`lost-way?`). A refill with no safe station also gives up its site, whether lava remains or not: geometric source counts do not prove it can be scooped. Both use `memory/give-up-site`, so the next planner pass chooses elsewhere instead of spending three failures at the same unsafe site (`an-unsafe-build-stance-gives-up-the-site`, `a-pool-without-a-safe-station-is-left`).
+Refill approaches use the pathfinder's footing rules, not solidity alone. `stands-beside` and `station-among` require a firm walking floor (`path/floor?`); magma is solid but cannot support a route. `barred` includes water and cells over awkward footing, so `out-first?` rejects a flooded or magma-lined straight approach and `round-corner` cuts a dry detour instead. Issue #162's R1/16 approach crossed water fed from an aquifer above the mine, while R1/42 selected magma footing beside the pool; repeated walks failed `:no-path` (`a-way-is-cut-round-water-and-awkward-footing`, `a-refill-stand-never-rests-on-magma`). When a fixed stance itself is flooded or has awkward footing, a failed walk gives up the site even nearby (`lost-way?`). A refill with no safe station also gives up its site, whether lava remains or not: geometric source counts do not prove it can be scooped. Both use `memory/give-up-site`, so the next planner pass chooses elsewhere instead of spending three failures at the same unsafe site (`an-unsafe-build-stance-gives-up-the-site`, `a-pool-without-a-safe-station-is-left`). A room the digs let an aquifer into is left the same way (`flooded-room?`: water in a cell of the room, which the site did not have when it was chosen): the floor row and the stands are awash and a route never crosses water, so a build that finds no stand (`site-lost`), or whose walk or dig fails `:no-path`, `:stuck` or `:out-of-reach` (`lost-way?`), gives its site up, a `:portal` build too, not only a `:cast-one`. Sim race 39470661984 (issue #196, world R3/40) found no stand for the first wall op three times with the floor row flowing, and sim race 39610239818 (issue #461, world R1/17) walked at a stand over aquifer water, failed `:no-path` twice, and failed `:out-of-reach` on the dig the swim's bob left short (`a-flooded-room-is-no-site`). A block in the way of a stand is dug only from inside reach with room to spare (`near-enough?`, `reach-slack` under the dig's 4.5), else walked to first (`clear-stand`): real snapshot real-5-s2-Clj_r09 (issue #461) began the refill's dig from 4.478 blocks, the walk's momentum had the eye at 4.5007 the next tick, and the dig failed `:out-of-reach` each cycle (`a-block-at-the-edge-of-reach-is-walked-to-not-dug`).
 
 The refill's clear ray can fill after its scoop child is chosen. `scoop-blocked?` checks a lava scoop's `:intent/aim` against the current terrain before `work-op` advances it, including a child already waiting for an answer or failed. A blocked child is dropped without spending a build attempt; the next refill chooses a clear source or digs its sight line again. Issue #227's R3/26 and R3/29 snapshots had gravel fall into the ray while the bucket was equipped, then retried that same blocked ray until `:no-scoop` (`a-refill-reconsiders-a-scoop-whose-ray-filled`). Water scoops retain their cast's side aim.
+
+A refill's source can turn to obsidian after it is chosen, when the cast's water or the water a dig let in reaches it. The scoop child then fails `:target-gone`; `lava-gone?` has `work-op` drop it, like a blocked ray, so the next refill chooses another source and a pool with none left ends in `:no-station` and a new site. Real races 39245788157 and 39590862487 (issue #419) failed the build on the first vanished source with lava still in reach (`a-lava-source-gone-before-the-aim-is-looked-for-again`).
+
+A water pour can land in the lava's own cell, where the lava becomes obsidian and the water goes with it: no source is left to scoop back and both buckets are empty. `held-first` adds a water bucket to the row's holds while a water pour is unsatisfied and none is held (`water-needed?`), so the build's next start asks the needs planner to fill one. Issue #455 failed `:not-held` three times in 300 ms at the next cell's water pour (`a-spent-water-bucket-is-asked-for-again`).
 
 Refill sight lines must be safe to excavate as well as reachable. `safe-source?` refuses a source whose ray walls touch lava at or above the stand's feet; lava below the feet may still be uncovered. Both `station-among` and `source-in-sight` apply this rule, so a new station avoids the dangerous opening and a resumed refill reconsiders it. Issue #231's R1/32 snapshot targeted a source at y -26 from a stand at y -25, but the rock on its ray held back lava at y -24. Opening it flooded the stand and three escapes failed `:no-footing`. With the unsafe sight line rejected, the snapshot casts its first obsidian after 30700 ms (`a-refill-never-opens-lava-over-its-stand`).
 
@@ -242,9 +266,12 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **`way-refilled?` drops a walk only for gravel in reach.** A falling block anywhere on a fifty-block straight way is no clear the bot can dig; the walk fails `:no-path` and `lost-way?` gives the site up (#135, R4/34). A build whose feet are in water with no route from them (`wading-out?`) swims out first (`:swim-out` for `:retreat`): a route never crosses water.
 - **A staircase can end inside the frame's box** (#45, real-3-s2-Clj_r05): the feet's own cell is the frame's rock and every way to the landing crosses a wall; no single corner (`round-corner`) is clear, the plain walk fails `:no-path`, and a cast-one gives the site up on the second such failure. A route of several corners round the box would keep the site (not built). `stance-block` takes the z-first line when the x-first one holds a solid cell a way may not dig (the frame's rock, cobblestone the plan places, a cell beside lava) and the z-first none (#45, real-6-s2-Clj_r05).
 - **No way, no stand: the site is given up.** A cast-one whose plain walk fails `:no-path` a second time (`lost-way?`, `:plan/attempts`) or whose op has no stand (`work-op`'s `:no-stand`) gives its site up and the planner chooses another; `way-back` goes to the landing whenever no route reaches it, however near (#74's two snapshots stood six blocks off with rock between). A portal's site holds a cast and is not given up for these.
+- **A dig the server did not do is dug again.** A child `:dig` that fails `:rejected` (the server acked the finish with the block standing: a lagging server drops a finish it found early and queued behind another) is counted in `:intent/rejections` and dug again by `stairs/rejected`, as a stair does, and only the third fails the build `:rejected` (`dig-rejected?`). Real race 39405014440 bot Clj_r13 and race 39407278017 bot Clj_r03 (issue #44) each failed the whole build on the first such dig, with the cast room unfinished (`a-dig-the-server-did-not-do-is-dug-again-before-the-build-fails`).
+- **A portal block in the wall is a wall.** `firm-ops` counts a `:nether_portal` cell as already walled: the game takes no block into one and no fluid flows into it, so the cobblestone for it was refused three times, `:rejected`, with the cast room unfinished (real race 39407278017 bot Clj_r03, issue #44; `a-portal-block-in-the-wall-is-a-wall-already`).
 - **A bubble column takes a block.** The model's `blocks/placeable-into?` accepts it as the game does (replaceable): #44's bridge over a magma stream was refused three times.
 
 ## Gotchas
+- **A swim-out that ends where it began, asked for again, gives the site up.** `wading-out?` asks for a `:swim-out` whenever the body is in water with no route; a swim-out ends on dry land, and a shallow pool flickers between the two, so a build at health 1 (sim snapshot R3-4-1, issue #178) swam out every 650 ms for the whole window. `swum` counts swim-outs ended on one feet cell (`:intent/swims`); `max-swims` of them make `swim-looped?` and the build gives its site up like `lost-way?` does. The `:cast-one` and `:portal` rows keep a spare pickaxe (`:goal/spares`) so a pickaxe worn out in the cast leaves another, and wood for it is up at the surface (issue #135).
 - **Hunt only sources with a safe stand to open.** `hunt-target` requires `stands-beside`, not just enough nearby sources. Issue #392's real snapshot tunnelled to a low source in a lava body extending above the feet; no stand could be opened safely, the last tunnel had zero steps left, and `:no-site` was waited out. Such sources are skipped both on approach and when already beside them, leaving the hunt free to seek another pool or descend toward the sea (`the-lava-hunt-passes-sources-with-no-safe-stand`). The snapshot no longer recurs over its window; followed on, it casts all ten obsidian cells and reaches `:portal` 589200 ms after its moment.
 - **A dig never takes obsidian**: `dig-op`'s done holds when its cell is obsidian (`no-dig-can-take-obsidian`).
 - **Water above, never beside.** The model ([[server-model]]) turns a lava source with water above or beside it to obsidian, as vanilla does; the bot puts the water above because on a server the source's open side flows first.
@@ -253,8 +280,11 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **No way opens a cell beside lava**: `diggable?` refuses a cell lava lies in or beside (`lava-touching?`), and `round-corner` goes round such cells as round the frame's rock (`barred`). Sim race 38843557186 runner 3 (issue #231, world R1/31) dug its way to a landing at the lava sea's height along the sea's edge; a cell beside a source opened, the lava flowed in, and no footing was in reach (`a-way-never-opens-a-cell-beside-lava`).
 - **The frame's rock is gone round, not through**: when the straight way at a stand's height from the feet to it crosses the frame's rock (`kept`, never dug), `toward-stand` goes first to a corner from which both legs keep off it (`round-corner`, `clear-of?`, within `round-reach` of the stand). The sim race at 76010d2 (issue #45, world R4/33) stood behind its own frame with the landing straight ahead through the rock; the cells past it were dug, the landing was out of reach and three walks at it failed `:no-path` (`a-landing-behind-the-frame-is-gone-round-to`). A walk along the way that fails `:no-path` with gravel or sand fallen onto it since (`way-refilled?`) is dropped, not failed, and the next clear digs it out: sim race 38837004562 (issue #45, world R1/6) cut its level way to the landing under a bed of gravel that refilled it, and three walks failed (`a-way-filled-by-falling-gravel-is-cleared-again`). A corner is never a cell of the room the cast digs (`in-room?`): sim race 38924530337 (issue #45, regressed, world R2/9) took a corner in the room's upper row, the bridge laid cobblestone under it, the room op dug it out again, and the walk to it failed :no-path.
 - **A stand inside the ground is dug, not walked** (`a-stand-inside-a-hill-is-dug`), and the frame's rock in the way is kept.
+- **A bridge walks to its gap before the walk to the stand is tried**: `bridge` lays the floor under the way to a stand cell by cell from where the feet are, and when the next gap lies past `place/place-reach` it walks onto the floor laid so far (`before-gap`) instead of falling to the plain walk over the gap, which has no route. Sim race 39550827333 (issue #162, world R3/43 seed 2) laid three cells from the end of the stairs up and failed `:no-path` three times with the fourth out of reach (`a-bridge-walks-onto-the-floor-laid-before-the-gap-past-its-reach`).
+- **The hunt climbs at most `hunt-rise` to a source**: with no safe source level or below the feet, `hunt-target` takes one whose cell over it lies at most `hunt-rise` (4) over them and `toward-lava` goes up to it (`to-height`) before the tunnel. Real race 39408516353 (issue #392, Clj_r05) sat at y -58 at the lava sea's edge with every source level or below roofed in lava (`the-lava-hunt-climbs-to-a-source-just-over-the-feet`). A source farther over is not climbed to: the tunnel under a lone source six blocks over the feet (issue #41) left the roof out of reach.
 - **A stand over water is not walked onto**: the place is made from a cell that already reaches the block (`a-pad-stand-over-water-is-placed-from-the-shore`, `a-stand-up-a-bank-is-passed-over-for-one-a-route-reaches`, issue #45).
 - **Lava is not renewable**: a scoop takes a source for good; a pool has many, and the stand reaches the next.
 - **A refill keeps its own support.** `safe-source?` rejects a blocked sight line through the cell under the feet, even when all lava lies below them. It applies to projected stations and actual eyes; an unobstructed alternative ray is still usable. Issue #228's R1/16 and R3/43 snapshots dug their own floor while refilling and fell into lava, where escapes timed out `:no-footing`. `work-op` drops an in-flight refill dig of that support and stops controls so the next refill chooses another station.
 - **The row against the frame is five wide**: a diagonal ray from the stair's last step (x 4) crossed x 4 of that row when the eye was 0.07 off the step's middle; it met rock, the lava landed in the room, and the bot was trapped in it. A stand aside aims further across the cell (`side-aim`).
 - **Blocks counted are the walls the cast opens, not its holes**: a cell dug as a hole is obsidian after (`blocks-needed`); counting it as a missing wall made every sealed-pool site ten blocks and none was chosen.
+- **No lava loaded at the sea's depth: tunnel away.** With no source in the 160 blocks the server sent and the feet already at `lava-depth`, `toward-lava` has neither a stair nor a tunnel target; `explore-lava` cuts level steps (`stone/tunnel-length` a call) along the plane axis away from the landing, so the chunks ahead load and the hunt asks again, instead of waiting `:no-site` out. Real race 39318301246 (issue #41, Clj_r21) stood at y -54 in deepslate with no lava loaded (`the-lava-hunt-tunnels-away-from-the-landing-when-no-lava-is-loaded`). A boxed feet cell takes the way out first, as a tunnel toward a source does.

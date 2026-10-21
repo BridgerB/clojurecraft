@@ -310,23 +310,30 @@
 (def shun-drift 1.0)                  ; blocks a creeper may stray from where it was first backed away from and still be the one standing still
 
 (defn noted
-  "The world with one more back-off from creeper eid (entity e) kept in :plan/backed-off, as
-   {eid {:pos where it stood the first time :times back-offs from it there}}: a creeper that
-   stands within shun-drift of that place has not come on in all those backings away. A creeper
-   that has moved on starts its count again; any other kind is not kept."
+  "The world with one more back-off from hostile eid (entity e) kept in :plan/backed-off, as
+   {eid {:pos where it stood the first time :times back-offs from it there}}: a mob that stands
+   within shun-drift of that place has not come on in all those backings away. One that has moved
+   on starts its count again. Any kind is kept, not only a creeper's: sim race 39076908669 (issue
+   #62, world R1/11) backed away at a third of a health from a zombie stuck in the rock three
+   blocks off, seven thousand times."
   [world eid e]
-  (if (= :creeper (entity/kind e))
-    (update-in world
-               [:plan/backed-off eid]
-               (fn [{:keys [pos times] :as seen}]
-                 (if (and seen (<= (physics/distance pos (:entity/pos e)) shun-drift))
-                   (assoc seen :times (inc times))
-                   {:pos (:entity/pos e) :times 1})))
-    world))
+  (update-in world
+             [:plan/backed-off eid]
+             (fn [{:keys [pos times] :as seen}]
+               (if (and seen (<= (physics/distance pos (:entity/pos e)) shun-drift))
+                 (assoc seen :times (inc times))
+                 {:pos (:entity/pos e) :times 1}))))
+
+(defn cornered
+  "The world with entity eid kept in :plan/cornered: a back-off from it ended on its clock, the
+   target still nearer than back-off-to, so there was nowhere to back off to."
+  [world eid]
+  (update world :plan/cornered (fnil conj #{}) eid))
 
 (defmethod intent/run :back-off
   ;; {:intent/kind :back-off :intent/target eid}: straight away from it, done once back-off-to
-  ;; is between them, it is gone, or back-off-timeout-ms has passed (a cornered bot plans again).
+  ;; is between them, it is gone, or back-off-timeout-ms has passed (a cornered bot plans again,
+  ;; and has the target kept in :plan/cornered: :defend fights what it could not get away from).
   ;; The first tick notes a creeper (noted), so :defend can tell one that stands still
   [world i _]
   (let [now (:time/now world)
@@ -334,11 +341,14 @@
         world (cond-> world (and e (nil? (:intent/since i))) (noted (:intent/target i) e))
         i (cond-> i (nil? (:intent/since i)) (assoc :intent/since now))
         world (assoc world :plan/intent i)]
-    (cond (or (entity/gone? world (:intent/target i))
-              (>= (horizontal world e) back-off-to)
-              (> (- now (:intent/since i)) back-off-timeout-ms))
+    (cond (or (entity/gone? world (:intent/target i)) (>= (horizontal world e) back-off-to))
           (-> world
               (assoc :player/controls {})
+              intent/done)
+          (> (- now (:intent/since i)) back-off-timeout-ms)
+          (-> world
+              (assoc :player/controls {})
+              (cornered (:intent/target i))
               intent/done)
           :else (assoc world :player/controls (intent/toward world (away-point world e) 0.0)))))
 
@@ -380,21 +390,22 @@
   (let [dy (- (physics/y-of (:entity/pos e)) (physics/y-of (:player/pos world)))]
     (and (<= (- under-feet) dy over-feet) (seen? world e))))
 
-(defn creeper-reach
-  "Blocks within which creeper eid (entity e) is a threat: creeper-radius, less once the bot has
-   backed away from it shun-after times and it still stands where it did (:plan/backed-off,
-   noted): shunned-radius, and after given-up-after back-offs given-up-radius. A creeper behind a
-   ledge or in a pocket that never closes in is no reason to go on backing away for the rest of
-   the plan: issues #69, #62 and #161, a starving bot at one health, back-off after back-off from
-   a creeper five blocks off that never moved, and the walk to the ore, the water or the stairs
-   never finished. One that moves on is counted afresh."
-  [world eid e]
+(defn reach
+  "Blocks within which hostile eid (entity e) is a threat, base at most: base, less once the bot
+   has backed away from it shun-after times and it still stands where it did (:plan/backed-off,
+   noted): shunned-radius, and after given-up-after back-offs given-up-radius, neither more than
+   base. A mob behind a ledge or in the rock that never closes in is no reason to go on backing
+   away for the rest of the plan: issues #69, #62 and #161, a starving bot at one health,
+   back-off after back-off from one that never moved, and the walk to the ore, the water or the
+   stairs never finished. One that moves on is counted afresh."
+  [world eid e base]
   (let [{:keys [pos times]} (get-in world [:plan/backed-off eid])
         still? (and pos (<= (physics/distance pos (:entity/pos e)) shun-drift))]
-    (cond (not still?) creeper-radius
-          (>= times given-up-after) given-up-radius
-          (>= times shun-after) shunned-radius
-          :else creeper-radius)))
+    (cond (not still?) base
+          (>= times given-up-after) (min base given-up-radius)
+          (>= times shun-after) (min base shunned-radius)
+          :else base)))
+
 
 (defmulti answers
   "The hostile kinds a goal row's act fights and hides from itself, by the row's :goal/plan: the
@@ -429,22 +440,23 @@
 
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers: within defend-radius of
-   the feet, a creeper within creeper-reach; none the plan blacklisted (a ghost), none of a kind
+   the feet, a creeper within creeper-radius, either less once shunned (reach); none the plan blacklisted (a ghost), none of a kind
    a row in play answers itself (answered-kinds), and only what can be fought from here
    (hittable?)."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
         left (answered-kinds world)]
-    (into {}
-          (filter
-           (fn [[eid e]]
-             (and (not (contains? bl eid))
-                  (not (contains? left (entity/kind e)))
-                  (<= (physics/distance pos (:entity/pos e))
-                      (if (= :creeper (entity/kind e)) (creeper-reach world eid e) defend-radius))
-                  (hittable? world e))))
-          (entity/hostiles world))))
+    (into
+     {}
+     (filter
+      (fn [[eid e]]
+        (and (not (contains? bl eid))
+             (not (contains? left (entity/kind e)))
+             (<= (physics/distance pos (:entity/pos e))
+                 (reach world eid e (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))
+             (hittable? world e))))
+     (entity/hostiles world))))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 
@@ -453,11 +465,14 @@
   ;; backed away from; anything else fought. A neutral mob turned on the bot (an angry enderman,
   ;; entity/neutral) is fought to the end whatever the health: it is faster than the bot and
   ;; teleports after it, so a back-off from it is only hits taken. Gym dragon-e run 1 struck one
-  ;; five times (40 to 10) then backed away under 10 health and died in its hands
+  ;; five times (40 to 10) then backed away under 10 health and died in its hands. What a
+  ;; back-off could not get away from (:plan/cornered: the bot was in a dead end) is fought to the
+  ;; end too: sim race 39593219246 (issue #161, world R3/41) backed away from a zombie two blocks
+  ;; off at under one health from the end of a one-wide tunnel, a quarter hour, never moving
   [world _ _]
   (when-let [[eid e] (entity/nearest (threats world) (:player/pos world))]
     (cond (= :creeper (entity/kind e)) {:intent/kind :back-off :intent/target eid}
-          (contains? entity/neutral (entity/kind e))
+          (or (contains? entity/neutral (entity/kind e)) (contains? (:plan/cornered world #{}) eid))
           {:intent/kind :fight :intent/target eid :intent/to-the-end? true}
           (< (:player/health world 20.0) retreat-health) {:intent/kind :back-off :intent/target eid}
           :else {:intent/kind :fight :intent/target eid})))

@@ -136,8 +136,10 @@
   "The items a floor is laid from, what a mine carries most of first: cobblestone, the stones
    that drop themselves, then dirt, then netherrack (what a descent in the Nether digs: gym batch
    pearls-warped-e, plan run 39164914828, run 3 had every stair refused in a pocket with no
-   filler to lay). Never gravel or sand, which fall out of a floor."
-  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack])
+   filler to lay), then the Nether's own rock a tunnel digs and carries (sim snapshot R3-38-1,
+   issue #410, held 55 soul soil and no filler). Never gravel or sand, which fall out of a floor."
+  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack :soul_soil
+   :blackstone :basalt])
 
 (defn filler
   "The first of fillers the inventory holds n or more of, or nil."
@@ -146,6 +148,22 @@
     (first (filter #(>= (get held % 0) n) fillers))))
 
 (def lay-reserve 8)                    ; filler a staircase down never lays into floors: what the climb back seals and steps with
+
+(defn climb-reserve
+  "The filler a seal keeps from feet for the climb back: a block for each block the feet are
+   under the highest rock (not leaves) of their column, up to lay-reserve, since the climb out
+   seals and steps once a stair. A bot at the surface keeps none and a bot eight stairs down all
+   of it. Issue #65 (a real bot, Clj_r15, landed at R1/30): one stair down from a lake shore,
+   holding two dirt, the one block of water beside the next stair was never sealed, for the
+   eight the climb back would need from nowhere, and every stair was refused until the staircase
+   was :boxed."
+  [world [x y z]]
+  (if-let [top (first (filter (fn [yy]
+                                (let [id (terrain/block-at world [x yy z])]
+                                  (and id (blocks/solid? id) (not (blocks/leaves? id)))))
+                              (range terrain/top-y (inc y) -1)))]
+    (min lay-reserve (- (long top) (long y)))
+    0))
 
 (defn carried-filler
   "How many of every filler the inventory holds, together."
@@ -374,8 +392,12 @@
    Race 39007359500 runner 5 bot Clj_r06 (issue #342) turned from water beside every descent,
    then waited :boxed on a dry shelf with no route away, five cobblestone and twenty dirt held."
   [world feet cells]
-  (when-let [laid (or (seal world feet cells) (lay world feet cells))]
-    (when (>= (- (carried-filler world) (count laid)) lay-reserve) laid)))
+  (let [sealed (seal world feet cells)
+        laid (or sealed (lay world feet cells))]
+    (when (and laid
+               (>= (- (carried-filler world) (count laid))
+                   (if sealed (climb-reserve world feet) lay-reserve)))
+      laid)))
 
 (def shapes
   "How each kind of staircase is cut: the cells a stair opens (top first, the new feet last), the
@@ -490,10 +512,14 @@
 
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
-  "The first of the stair's cells (top first) still solid, or nil when the stair is open."
+  "The first of the stair's cells (top first) still in the body's way, or nil when the stair is
+   open: a full cube, or a flat box too (blocks/collision-top: a carpet), which the head meets
+   going up the jump. Sim race 39593216223 (issue #66, world R2/39): a moss carpet over the head
+   was no cube, the stair was called open, and the jump rose into the carpet's box three times
+   for ten seconds each, :stair-not-taken."
   [world cells]
   (first (filter #(some-> (terrain/block-at world %)
-                          blocks/solid?)
+                          blocks/collision-top)
                  cells)))
 
 (defn boxed?
@@ -850,6 +876,51 @@
          (filter safe-toward?)
          first)))
 
+(defn shaft-cells
+  "The two cells a shaft up opens from feet [x y z], lowest first: the one over the head, which the
+   next block under the feet lifts the body into, and the one over that, which the :pillar's own
+   headroom check reads once the block is in and the body has risen. After the first level the
+   lower is open already, so a level digs one."
+  [[x y z]]
+  [[x (+ y 2) z] [x (+ y 3) z]])
+
+(defn pickaxe-held?
+  "Does the inventory hold a pickaxe of any material?"
+  [world]
+  (boolean (some (fn [[_ {:keys [item]}]] (= :pickaxe (:kind (blocks/tool item))))
+                 (:player/inventory world))))
+
+(defn shaft-safe?
+  "May the shaft's cells (shaft-cells) be dug (clear-way?: no water, lava or unloaded chunk in or
+   beside them), with no gravel or sand over them to fall on the bot, no fluid straight over
+   them and none beside them for the dig to let in?"
+  [world feet]
+  (let [cells (shaft-cells feet)]
+    (and (clear-way? world cells)
+         (not (falls-over? world [(second cells)]))
+         (not (water-over? world cells))
+         (not-any? #(intent/exposes-fluid? world %) cells))))
+
+(defn shaft?
+  "Is a climb out to the surface from feet cut as a shaft, one block dug and one laid under the
+   feet a level, rather than as stairs, three blocks dug a level? It is where no pickaxe is held
+   (every block is dug by hand, 7500 ms of stone and more of deepslate, so a stair is 30 s and a
+   hundred levels a long hour: sim snapshots R2-36-1 and R3-13-1, issue #135, and R2-45-1, issue
+   #178, each spent the judged window climbing), a filler is carried to lay, the cell over the
+   head is safe to dig (shaft-safe?), a solid block lies under the feet cell and the feet are
+   centred in it (the pillar lays its block against that block, and a body on a lip over a drop
+   jumps and lands, the block never in: sim snapshot R2-45-1, pillar :stuck at the first level),
+   and the intent has not given the shaft up (:intent/no-shaft)."
+  [world {:intent/keys [kind for no-shaft]} feet]
+  (boolean (and (= :stairs-up kind)
+                (= :surface for)
+                (not no-shaft)
+                (not (pickaxe-held? world))
+                (filler world 1)
+                (= :solid (path/classify world (update feet 1 dec)))
+                (intent/centred? world feet)
+                (shaft-safe? world feet))))
+
 (defmethod stairs-stage :plan
   [world {:intent/keys [kind dir turns visited] :or {turns 0 visited #{}} :as i} _]
   (let [dir (or dir (first directions))
@@ -867,6 +938,11 @@
                  needed)
         rock (when needed (rock-heading i #(fresh-safe? world (cells-of feet %))))]
     (cond (airborne? world) (assoc world :player/controls {}) ; land first
+          (shaft? world i feet)
+          (intent/assoc-intent world
+                               :intent/stage :shaft
+                               :intent/started-y (physics/y-of (:player/pos world))
+                               :intent/started-tick (:time/tick world))
           (fresh-safe? world cells)
           (intent/assoc-intent world
                                :intent/dir dir
@@ -903,6 +979,16 @@
                        (:intent/to-y i)
                        ", turning"))
           :else (turned world dir turns (str "stairs: refused toward " dir ", turning")))))
+
+(defn unshaft
+  "world with the climb's shaft given up for this intent (:intent/no-shaft, the reason: a child's
+   failure or :unsafe), back to :plan to cut stairs: a dig or a pillar the shaft could not do, or a
+   cell over the head it may not open."
+  [world why]
+  (-> world
+      (assoc :player/controls {})
+      (intent/assoc-intent :intent/stage :plan :intent/no-shaft why)
+      (intent/dissoc-intent :intent/child)))
 
 (defn refuse
   "Turn the staircase from a stair (or a level step) a child would not cut or lay, saying why;
@@ -949,6 +1035,32 @@
    (or into the one below): the cell is open, which is what the dig was for."
   [child]
   (and (intent/failed? child) (= :target-gone (:intent/reason child))))
+
+(defmethod stairs-stage :shaft
+  ;; the cells over the head (shaft-cells) dug by hand (a child :dig) while any is rock, then a child :pillar up
+  ;; one level (a block laid under the feet at the top of a jump), again until the intent is
+  ;; done; a child that fails, or a cell no longer safe to open, gives the shaft up (unshaft)
+  [world {:intent/keys [child]} event]
+  (let [feet (intent/feet world)
+        cell (first (filter #(= :solid (path/classify world %)) (shaft-cells feet)))
+        item (filler world 1)]
+    (cond (and child (or (intent/done? child) (fell? child)))
+          (intent/dissoc-intent world :intent/child)
+          (and child (intent/failed? child))
+          (unshaft world [(:intent/kind child) (:intent/reason child)])
+          child (intent/run-child world event)
+          (airborne? world) (assoc world :player/controls {})
+          (not (and item (shaft-safe? world feet))) (unshaft world :unsafe)
+          cell
+          (intent/run-child (intent/assoc-intent world :intent/child (intent/child-dig cell)) event)
+          :else
+          (intent/run-child (intent/assoc-intent world
+                                                 :intent/child
+                                                 {:intent/kind :pillar
+                                                  :intent/item item
+                                                  :intent/top (inc (long (second feet)))
+                                                  :intent/status :active})
+                            event))))
 
 (defn by-hand?
   "Is staircase i cut by hand where no tool of a block's kind is held at all? A stair up is:

@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, water, bucket, intents]
 aliases: [:scoop, scoop.clj, fill-bucket, water bucket, use-item, no-scoop, no-water, aim-point]
 status: verified
-lastUpdated: 2026-10-17
+lastUpdated: 2026-10-21
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/scoop.clj#defn scoop-next
@@ -61,6 +61,11 @@ sourceRefs:
   - test/clojurecraft/scoop_test.clj#the-act-scoops-in-reach-walks-to-water-in-sight-and-refuses-cave-water
   - test/clojurecraft/scoop_test.clj#a-scoop-the-server-never-answers-fails-no-scoop
   - test/clojurecraft/sim_test.clj#an-empty-bucket-is-filled-at-a-pond-from-its-bank
+  - src/clojurecraft/scoop.clj#defn at-hand?
+  - src/clojurecraft/make.clj#defn holds-waived?
+  - test/clojurecraft/make_test.clj#a-scoop-with-water-at-hand-needs-no-pickaxe
+  - src/clojurecraft/scoop.clj#defn first-walk
+  - src/clojurecraft/intent.clj#defn opening
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[sib-bucket-water-find]]"
@@ -105,6 +110,8 @@ No flag stands for "the bucket is in use" (steve's `usingHeldItem`): only the in
 - **A ray past a block's edge is a wall.** The game casts the bucket's ray exactly; samples of the line every 0.05 step past a block's edge the line grazes. So the ray must clear every cell it passes through or within `ray-margin` (0.03) of (`ray-cells`, `clear?`), and the eyes aim at the surface's centre or, when its ray is not clear, at a point `aim-offset` (a quarter block) off it (`surface-aim`; `centre-aim` for a scoop through a cell's side), and `sees?` is that some point is clear. Race 38759618225 runner 4 (issue #83, at 76010d2): bots Clj_r15, Clj_r38, Clj_r61 and Clj_r78 held the bucket and sent nine scoops each along lines within 0.03 of an edge of sand by a pond, dirt and sand under a lake, stone and granite in a cave (one stood at a corner of its cell, the line to the centre running down the edges of four columns); the server filled nothing, while the model's sampled ray filled the bucket, so only real runs failed. And `seen-source` read no blacklist, so after a scoop failed `:no-scoop` the next intent chose the same source, three in a row; it, and `overhead` for `from-below`, now leave blacklisted sources out (`a-ray-past-a-blocks-edge-is-a-wall`).
 - **A plant on the ray is a wall.** The game clips a bucket's ray against block outlines (`ClipContext.Block.OUTLINE`), and short grass, sugar cane, kelp and seagrass all have one: race 38477665442 (issue #83) had seven bots at beaches at y 63, where sugar cane grows on the sand by the water, send three scoops each that the server acked and never filled. `scoopable?` wants `blocks/air?` over the source (not merely nothing solid), and `sees?` wants every cell on the ray air or water (`a-plant-on-the-ray-is-a-wall`).
 - **Water under stone is no target.** The third live iron-kit run (local landing 2360,2360) reached the bucket and then scooped three times at aquifer sources beside it at y 23, each with stone directly above: the server acked every `use-item` and filled nothing, since the ray met the wall before any water. The rule had been "no water above"; it is now air above, and a source in reach must be in sight.
+- **A scoop with water at hand holds nothing.** The `:fill-bucket` row holds a pickaxe and keeps a spare for the climb out of a mine; `make/holds-waived?` drops both when `at-hand?` finds a surface source in reach and in sight. Real bot Clj_r17 (issue #54) came up into the middle of a lake with no pickaxe and went for logs across the water to make one (`a-scoop-with-water-at-hand-needs-no-pickaxe`).
+- **No walk at a blacklisted target.** `first-walk` and `intent/opening` leave out a target in `:plan/blacklist`, where a walk that failed `:no-path` left it: real bot Clj_r08 (issue #54) walked at the landing, then at its shaft's mouth, every twelve seconds for the window.
 
 ## Limits
 The sim treats a water cell as wholly water; the game clips the ray against the fluid's 8/9 shape. Scoops on the real server have filled the bucket (gym batch iron-a3 run 3, live run 13; [[mc-bucket-use-item]]).

@@ -42,8 +42,10 @@
 (def stuck-ticks 40)                  ; 2 s without progress toward the bank → dig what is in the way
 (def progress 0.05)                   ; blocks nearer the bank that count as progress
 (def escape-timeout-ticks 2400)       ; 120 s: an escape longer than this has failed
+(def dig-credit-ticks 6000)           ; 300 s: the most the escape's finished digs add to that, so a wall dug by hand is not timed out
 (def search-every-ticks 20)           ; with no bank in reach yet, look again this often while rising
 (def notch-radius 4)                  ; how far on the plane a wall is notched into for a bank when there is none (a dig's reach)
+(def approach-radius 8)                ; how far on the plane a wall's bank-block cell is swum toward when it is out of the place reach
 (def rise-clear 2)                    ; feet under a rise's top where it is still in its shaft: no bank is looked for deeper
 (def centre-slack 0.15)               ; how far off its column's centre a body rising up a shaft may drift
 (def shore-reach 64)                  ; how far along eight bearings a swim with no bank in reach looks for dry ground
@@ -58,6 +60,13 @@
   [world cell]
   (boolean (some-> (terrain/block-at world cell)
                    blocks/solid?)))
+
+(defn diggable-cell?
+  "Is the cell a solid block a dig can take: not ore above every held pickaxe's tier
+   (stairs/too-hard?), which a dig refuses :needs-tool? A real race's bot Clj_r10 (issue #163), in a flooded shaft at 2 health with no pickaxe, chose iron ore for its notch three times, each
+   dig refused, and the escape ended the plan."
+  [world cell]
+  (and (solid-cell? world cell) (not (stairs/too-hard? world cell))))
 
 (defn surface-y
   "The y of the first cell above the feet cell that is not the fluid kind: the water's
@@ -164,14 +173,15 @@
                    (remove #{feet}
                            (distinct (concat [(ahead feet bank) [nx y z] [x y nz] [nx y nz]]
                                              (for [cx xs cz zs] [cx y cz]))))))
-        head (first (filter #(solid-cell? world %) (map #(update % 1 inc) levels)))
-        level (when (and bank (<= (second bank) y)) (first (filter #(solid-cell? world %) levels)))
-        upper (first (filter #(solid-cell? world %) (map #(update % 1 + 2) levels)))]
+        head (first (filter #(diggable-cell? world %) (map #(update % 1 inc) levels)))
+        level (when (and bank (<= (second bank) y))
+                (first (filter #(diggable-cell? world %) levels)))
+        upper (first (filter #(diggable-cell? world %) (map #(update % 1 + 2) levels)))]
     (cond (lid? world feet) over
           head head
           level level
           upper upper
-          (solid-cell? world over) over
+          (diggable-cell? world over) over
           :else nil)))
 
 (defn iced?
@@ -202,7 +212,7 @@
                dz (range (- notch-radius) (inc notch-radius))
                :let [lower [(+ fx dx) (inc top) (+ fz dz)]
                      upper [(+ fx dx) (+ top 2) (+ fz dz)]
-                     cell (first (filter #(solid-cell? world %) [lower upper]))]
+                     cell (first (filter #(diggable-cell? world %) [lower upper]))]
                :when (and (solid-cell? world [(+ fx dx) top (+ fz dz)])
                           cell
                           (<= (physics/distance eye (physics/centre cell)) intent/reach))]
@@ -210,6 +220,31 @@
          (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
                                                            (physics/centre cell)) cell]))
          first)))
+
+(defn bank-cells
+  "The water cells at the float-top level to lay a filler into that makes a bank (see
+   bank-block), within radius on the plane and reach of the eye, nearest first; none unless the
+   feet are under the sky."
+  [world [fx _ fz :as feet] surface radius reach]
+  (when (terrain/under-sky? world feet)
+    (let [top (float-top world feet surface)
+          eye (game/eye world)]
+      (->> (for [dx (range (- radius) (inc radius))
+                 dz (range (- radius) (inc radius))
+                 :let [x (+ fx dx)
+                       z (+ fz dz)
+                       cell [x top z]
+                       bank [x (inc top) z]]
+                 :when (and (= :water (terrain/fluid-kind world cell))
+                            (path/clear? world bank)
+                            (path/clear? world [x (+ top 2) z])
+                            (in-the-open? world bank)
+                            (not (place/inside-player? world cell))
+                            (place/support world cell)
+                            (<= (physics/distance eye (physics/centre cell)) reach))]
+             cell)
+           (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
+                                                             (physics/centre cell)) cell]))))))
 
 (defn bank-block
   "With no bank in reach and the water open to the sky over the feet, the water cell at the
@@ -222,27 +257,18 @@
    39109674329 runner 4 bot Clj_r16 (issue #92) swam 73 blocks to a cliff three blocks over the
    water with 489 cobblestone and no pickaxe, dug a notch in it by hand (75 s a block under water)
    and was :no-escape three times in six minutes."
-  [world [fx _ fz :as feet] surface]
-  (when (terrain/under-sky? world feet)
-    (let [top (float-top world feet surface)
-          eye (game/eye world)]
-      (->> (for [dx (range (- notch-radius) (inc notch-radius))
-                 dz (range (- notch-radius) (inc notch-radius))
-                 :let [x (+ fx dx)
-                       z (+ fz dz)
-                       cell [x top z]
-                       bank [x (inc top) z]]
-                 :when (and (= :water (terrain/fluid-kind world cell))
-                            (path/clear? world bank)
-                            (path/clear? world [x (+ top 2) z])
-                            (in-the-open? world bank)
-                            (not (place/inside-player? world cell))
-                            (place/support world cell)
-                            (<= (physics/distance eye (physics/centre cell)) place/place-reach))]
-             cell)
-           (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
-                                                             (physics/centre cell)) cell]))
-           first))))
+  [world feet surface]
+  (first (bank-cells world feet surface notch-radius place/place-reach)))
+
+(defn wall-toward
+  "With no bank-block in reach, the nearest cell of one within approach-radius on the plane out of
+   the place reach (bank-cells), for the swim to head for until it is in reach; nil when none.
+   Sim race 39550831606 (issue #92, world R4/9): the sea met a cliff that leaned over the water
+   along the bot's reach, the cells under the lean were no bank, the open ones lay a block past
+   the place reach, and the escape dug a notch in the wall by hand, 37 s a block, until it timed
+   out, three times."
+  [world feet surface]
+  (first (bank-cells world feet surface approach-radius ##Inf)))
 
 (defn child-dig
   "A :dig child for cell that may expose water: the escape digs beside the water it is in."
@@ -317,6 +343,17 @@
                              (dig-from-floor? world feet)))))
       (update :player/controls assoc :control/jump? true))))
 
+(defn dug-credit
+  "The :intent/dug a :swim-out has after its child dig finished: dug, plus the ticks the dig
+   took (from its start to now), at most dig-credit-ticks in all. A dig is progress toward the
+   bank, not time lost afloat, and by hand it is slow: sim race 39598424082 (issue #344, world
+   R4/16) swam fifty blocks to a cliff with no pickaxe, dug a notch in it at 37 s a block, and
+   its 120 s ran out between the second and the third cell, three times."
+  [world dug {:intent/keys [started]}]
+  (min dig-credit-ticks
+       (+ (or dug 0)
+          (max 0 (quot (- (:time/now world) (or started (:time/now world))) physics/tick-ms)))))
+
 (defn flooded?
   "Has the bank a swim-out keeps been flooded since it was picked: is it no longer a cell the
    feet could stand in (bank?), water now in it or over its floor? Reached, it holds
@@ -328,31 +365,57 @@
   [world bank]
   (not (bank? world bank)))
 
+(def shore-clearance 3)               ; cells over the water's surface a shore column is first looked at: a roof higher is not the ground
+(def shore-depth 4)                   ; and cells under it the look goes on to find the ground
+
+(defn shore-ground?
+  "Is column [x z] ground at the water's surface: scanning down from shore-clearance over surface
+   to shore-depth under it, the first cell that is water or solid is solid and not a lake's ice;
+   false when it is water, or when the column is not loaded. Not the top of the column
+   (stairs/dry-top?): a block high over the sea made every column under it ground. Sim race
+   39550831606 runner 4 (issue #177, world R4/1): a row of cobblestone at y 105 over the sea made
+   the sea out to y 62 the 'shore' of the swim, and the escape swam to the middle of the sea
+   and floated there."
+  [world [x z] surface]
+  (true? (first (keep (fn [y]
+                        (let [cell [x y z]]
+                          (cond (terrain/fluid-kind world cell) false
+                                (solid-cell? world cell) (not (iced? world cell))
+                                :else nil)))
+                      (range (+ surface shore-clearance) (- surface shore-depth 1) -1)))))
+
 (defn far-shore
   "With no bank in reach and the water open to the sky over the feet: the nearest column, along
-   eight bearings from bank-radius out to shore-reach, whose top is dry ground (stairs/dry-top?),
-   as the point at the water's surface to swim toward. Each pass
+   eight bearings from bank-radius out to shore-reach, whose top at the water's surface is dry
+   ground (shore-ground?), as the point at the water's surface to swim toward. Each pass
    that looks for a bank looks again, so the bank found near the shore takes over. Before it, an
    escape at sea rose to the surface and floated there until it timed out: sim race
    38811426215 runner 8 (issue #89, worlds R4/21 and R1/32 at 76010d2) had bots under the sea floor
    with land 33 and 40 blocks off, the only way out up through the water. With none, the point
    over the landing (:plan/go-at), which is land: world R4/30's bot stood under the sea 180
-   blocks from it, no shore within reach. nil with neither."
-  [world [fx _ fz] surface]
-  (or (->> (range 8)
-           (keep (fn [k]
-                   (let [a (* k (/ math/PI 4))
-                         [dx dz] [(math/cos a) (math/sin a)]]
-                     (some (fn [d]
-                             (let [x (long (math/floor (+ fx 0.5 (* d dx))))
-                                   z (long (math/floor (+ fz 0.5 (* d dz))))]
-                               (when (stairs/dry-top? world [x z]) [d [x surface z]])))
-                           (range bank-radius (inc shore-reach))))))
-           (sort-by first)
-           (map second)
-           first)
-      (when-let [[hx _ hz] (:plan/go-at world)]
-        [(long (math/floor hx)) surface (long (math/floor hz))])))
+   blocks from it, no shore within reach. nil with neither. The shore chosen before (kept, the
+   swim-out's :intent/shore) is kept while its column is dry ground still: sim race 39550831606
+   runner 4 (issue #177, world R4/1) floated sixteen blocks from a shore on each side, and the
+   first bearing at that distance changed with the cell the feet were in, so each stroke west
+   made the east shore the nearer and each stroke east the west: it dithered about one cell
+   for the escape's 120 s, three times, :no-escape."
+  ([world feet surface] (far-shore world feet surface nil))
+  ([world [fx _ fz] surface kept]
+   (or (when (and kept (shore-ground? world [(first kept) (nth kept 2)] surface)) kept)
+       (->> (range 8)
+            (keep (fn [k]
+                    (let [a (* k (/ math/PI 4))
+                          [dx dz] [(math/cos a) (math/sin a)]]
+                      (some (fn [d]
+                              (let [x (long (math/floor (+ fx 0.5 (* d dx))))
+                                    z (long (math/floor (+ fz 0.5 (* d dz))))]
+                                (when (shore-ground? world [x z] surface) [d [x surface z]])))
+                            (range bank-radius (inc shore-reach))))))
+            (sort-by first)
+            (map second)
+            first)
+       (when-let [[hx _ hz] (:plan/go-at world)]
+         [(long (math/floor hx)) surface (long (math/floor hz))]))))
 
 (defn shore-controls
   "Rising with jump held: while the feet are more than two under top (the water's top), drawn to
@@ -388,7 +451,7 @@
   ;; wood/into-water) on dry land in the open
   [world
    {:intent/keys [bank started best-dist best-tick child next-search dig-when-down for shore to-y
-                  no-lay]} event]
+                  no-lay dug]} event]
   (let [tick (:time/tick world)
         started (or started tick)
         feet (intent/feet world)
@@ -403,11 +466,14 @@
       (-> world
           (assoc :player/controls {})
           intent/done)
-      (> (- tick started) escape-timeout-ticks)
+      (> (- tick started) (+ escape-timeout-ticks (or dug 0)))
       (-> world
           (assoc :player/controls {})
           (intent/fail :no-escape))
-      (and child (intent/done? child)) (intent/dissoc-intent world :intent/child :intent/best-tick)
+      (and child (intent/done? child))
+      (cond-> (intent/dissoc-intent world :intent/child :intent/best-tick)
+        (= :dig (:intent/kind child))
+        (intent/assoc-intent :intent/dug (dug-credit world dug child)))
       (and child (intent/failed? child) (= :out-of-reach (:intent/reason child)))
       (-> world
           (assoc :player/controls {:control/jump? true})
@@ -450,20 +516,31 @@
             laid (when-not (or b cap rise? no-lay)
                    (when-let [item (stairs/filler world 1)]
                      (when-let [cell (bank-block world feet surface)] [cell item])))
-            wall (when-not (or b cap laid rise?) (notch world feet surface))]
+            toward (when-not (or b cap laid rise? no-lay)
+                     (when (stairs/filler world 1) (wall-toward world feet surface)))
+            wall (when-not (or b cap laid toward rise?) (notch world feet surface))]
         (cond b
               (-> world
                   (intent/assoc-intent :intent/bank b :intent/target b)
                   (game/say (str "swim-out: bank " b)))
               cap (dig-or-sink world feet cap "no bank")
               laid (start-lay world laid "no bank")
+              ;; a wall's laid bank is just out of the place reach: swim along to it
+              toward
+              (-> world
+                  (assoc
+                   :player/controls
+                   (shore-controls world toward (or to-y (inc (float-top world feet surface)))))
+                  (intent/assoc-intent :intent/next-search (+ tick search-every-ticks)
+                                       :intent/shore toward)
+                  (game/say (str "swim-out: no bank, toward the wall at " toward)))
               wall (start-dig world wall "no bank, notching the wall")
               ;; nothing in reach: rise, toward a shore when the water is open over the feet
               ;; (the roof or a bank comes into reach, or the timeout ends it)
               :else
               (let [[fx _ fz] feet
                     shore (when-not (solid-cell? world [fx surface fz])
-                            (far-shore world feet surface))]
+                            (far-shore world feet surface shore))]
                 (-> world
                     (assoc
                      :player/controls

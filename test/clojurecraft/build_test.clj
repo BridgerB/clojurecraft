@@ -401,6 +401,18 @@
     (is (= down (hunt {[12 40 4] blocks/lava-base})) "a lone source: on down toward the sea")
     (is (= down (hunt (pool-at 50))) "a pool over the head: on down toward the sea")))
 
+(deftest the-lava-hunt-tunnels-away-from-the-landing-when-no-lava-is-loaded
+  ;; real race 39318301246 (issue #41, Clj_r21): at y -54 in deepslate with no lava in the 160
+  ;; blocks loaded, the stairs done and nothing to cut, the plan waited :no-site out
+  (let [w (-> (standing-at {[10 -54 10] blocks/air [10 -53 10] blocks/air} [10.5 -54.0 10.5])
+              (assoc :plan/go-at [2.5 64.0 10.5]))]
+    (is (nil? (build/hunt-target w)) "no source loaded")
+    (is (= {:intent/kind :tunnel :intent/dir [1 0] :intent/length 12 :intent/for :lava}
+           (build/toward-lava w))
+        "level steps east, away from the landing")
+    (is (= [0 1] (:intent/dir (build/toward-lava (assoc w :plan/go-at [10.5 64.0 2.5]))))
+        "south when the landing lies north")))
+
 (deftest the-lava-hunt-leaves-a-boxed-pocket-by-the-way-out
   ;; sim race 38515210080 (issue #41, world R4/36): at y 16 in the iron mine, the feet cell
   ;; boxed by an earlier descent, the lava sea forty blocks under: no stair was cut and the
@@ -689,12 +701,39 @@
                    {:intent/kind :dig
                     :intent/target (:build/pos op)
                     :intent/status :failed
-                    :intent/reason :rejected})
+                    :intent/reason :rejected}
+                   :intent/rejections (dec stairs/max-rejections))
           failed (intent/run (assoc w :plan/intent i) i tick)]
-      (is (intent/failed? (:plan/intent failed)))
+      (is (intent/failed? (:plan/intent failed)) "the third dig the server would not do fails it")
       (is (= :rejected (get-in failed [:plan/intent :intent/reason])))
       (is (= :failed (:plan/status (plan/fail-intent failed (:plan/intent failed)))))
       (is (= :rejected (:plan/reason (plan/fail-intent failed (:plan/intent failed))))))))
+
+(deftest a-dig-the-server-did-not-do-is-dug-again-before-the-build-fails
+  ;; real race 39405014440 bot Clj_r13 and race 39407278017 bot Clj_r03 (issue #44): the first
+  ;; dig a lagging server dropped failed the whole build :rejected, with the cast room unfinished
+  (let [origin [5 63 5]
+        w (standing-at (open-ground {[7 63 7] 1}) [5.5 63.0 5.5])
+        op (build/next-op w (build/plan-for :portal origin :south 0))
+        rejected {:intent/kind :dig
+                  :intent/target (:build/pos op)
+                  :intent/status :failed
+                  :intent/reason :rejected}
+        i {:intent/kind :build
+           :intent/build :portal
+           :intent/origin origin
+           :intent/facing :south
+           :intent/status :active
+           :intent/op op
+           :intent/child rejected}
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        again (:plan/intent (intent/run (assoc w :plan/intent i) i tick))]
+    (is (build/dig-rejected? rejected))
+    (is (not (build/dig-rejected? (assoc rejected :intent/kind :place))))
+    (is (not (build/dig-rejected? (assoc rejected :intent/reason :needs-tool))))
+    (is (= :active (:intent/status again)) "the build goes on")
+    (is (= 1 (:intent/rejections again)) "having counted the dig")
+    (is (not= rejected (:intent/child again)) "its next tick chooses the dig again")))
 
 (deftest a-room-cell-behind-a-wall-is-cut-toward
   ;; sim race 38660819204 (issue #74): the bot stood outside its own room, every cell that
@@ -926,12 +965,51 @@
 
 (deftest a-pool-without-a-safe-station-is-left
   (let [site [8 62 4]
-        i (assoc hill-intent :intent/origin site :intent/op hill-op)
+        i (assoc hill-intent :intent/kind :build :intent/origin site :intent/op hill-op)
         w (assoc (standing-at (open-ground {}) [8.5 63.0 7.5]) :plan/intent i)
-        out (with-redefs [build/op-child (fn [_ _ _] :no-station)]
-              (build/work-op w i hill-op {:event/kind :tick}))]
+        out (build/site-lost w i :no-station)]
     (is (intent/done? (:plan/intent out)))
-    (is (= #{site} (memory/given-up-sites out)))))
+    (is (= #{site} (memory/given-up-sites out)))
+    (is (nil? (build/site-lost w (assoc i :intent/build :portal) :no-stand))
+        "a build other than a cast-one fails for no stand as it did")
+    (is (nil? (build/site-lost w (assoc i :intent/kind :stairs-up) :no-station))
+        "only a build gives its site up for no station")))
+
+(deftest a-flooded-room-is-no-site
+  (let [site [8 62 4]
+        wet (build/cell site :south [1 0 1])
+        i (assoc hill-intent :intent/build :portal :intent/origin site :intent/op hill-op)
+        dry (assoc (standing-at (open-ground {}) [8.5 63.0 7.5]) :plan/intent i)
+        flooded
+        (assoc (standing-at (open-ground {wet blocks/water-base}) [8.5 63.0 7.5]) :plan/intent i)
+        walk {:intent/kind :walk
+              :intent/for :build
+              :intent/target [8 63 6]
+              :intent/status :failed
+              :intent/reason :no-path}
+        dig {:intent/kind :dig
+             :intent/target [9 63 6]
+             :intent/status :failed
+             :intent/reason :out-of-reach}]
+    (is (not (build/flooded-room? dry site :south)))
+    (is (build/flooded-room? flooded site :south) "water in a room cell")
+    (is (not (build/flooded-room? flooded nil nil)) "a build with no site is never flooded")
+    (testing "no stand in a flooded room: the site is given up, a portal build too"
+      (let [out (build/site-lost flooded i :no-stand)]
+        (is (intent/done? (:plan/intent out)))
+        (is (= #{site} (memory/given-up-sites out))))
+      (is (nil? (build/site-lost dry i :no-stand)) "a dry room fails for no stand as it did")
+      (is (nil? (build/site-lost flooded (assoc i :intent/kind :tunnel-to) :no-stand))
+          "only a build has a site"))
+    (testing "a walk or a dig that fails in a flooded room gives the site up"
+      (doseq [child [walk dig (assoc walk :intent/reason :stuck)]]
+        (is (build/lost-way? flooded i child))
+        (is (not (build/lost-way? dry i child)) "a dry room's walk and dig fail as they did")
+        (is (not (build/lost-way? flooded i (assoc child :intent/pickup? true)))))
+      (let [i (assoc i :intent/child dig)
+            out (build/work-op (assoc flooded :plan/intent i) i hill-op {:event/kind :tick})]
+        (is (intent/done? (:plan/intent out)))
+        (is (= #{site} (memory/given-up-sites out)))))))
 
 (deftest an-exhausted-walk-to-a-nearby-build-stand-gives-up-the-site
   (let [site [8 62 4]
@@ -1022,17 +1100,24 @@
     (is (= :lava (:intent/for (walk-at [10.5 63.0 8.5]))) "far from every stand: walked to")
     (is (nil? (walk-at [10.5 63.0 11.5])) "the eye within reach of the stands: already there")))
 
+(defn remembered-ground
+  "open-ground with extra blocks, standing at pos with every block seen (remembered)."
+  [extra pos]
+  (let [w (standing-at (open-ground extra) pos)]
+    (memory/remember-column w [0 0] (get-in w [:world/chunks [0 0]]))))
+
 (deftest a-build-fetches-its-kit-wood-only-from-the-surface
   ;; sim race 39076908669 (issue #178, world R2/21 seed 2): the pickaxe broke at the cast with no
   ;; table, one stick and no planks, and the hand-dug climb for a log took the run's last hour
-  (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])
-        trunk {:intent/kind :walk :intent/target [9 63 9] :intent/for :log}]
-    (with-redefs [wood/near-walk (constantly trunk)]
-      (is (true? (build/carry-table? w)) "out of the ground with a trunk near: a table is fetched")
-      (with-redefs [stairs/out? (constantly false)]
-        (is (not (build/carry-table? w)) "underground the build goes on without it")))
-    (with-redefs [wood/near-walk (constantly nil)]
-      (is (not (build/carry-table? w)) "no trunk a route reaches: nothing to fetch"))))
+  (let [pos [5.5 63.0 5.5]
+        trunk {[9 63 9] 136 [9 64 9] 136}
+        roof (into {} (for [x (range 16) z (range 16)] [[x 70 z] 1]))]
+    (is (true? (build/carry-table? (remembered-ground trunk pos)))
+        "out of the ground with a trunk near: a table is fetched")
+    (is (not (build/carry-table? (remembered-ground (merge trunk roof) pos)))
+        "underground the build goes on without it")
+    (is (not (build/carry-table? (remembered-ground {} pos)))
+        "no trunk a route reaches: nothing to fetch")))
 
 (deftest a-refill-never-opens-lava-over-its-stand
   ;; Issue #231, R1/32: the ray to a low source opened the wall under higher lava,
@@ -1371,12 +1456,10 @@
   (let [site [8 62 4]
         i (assoc hill-intent :intent/origin site :intent/op hill-op)
         w (assoc (standing-at (open-ground {}) [8.5 63.0 7.5]) :plan/intent i)
-        out (fn [i]
-              (with-redefs [build/op-child (fn [_ _ _] :no-stand)]
-                (build/work-op (assoc w :plan/intent i) i hill-op {:event/kind :tick})))]
-    (is (intent/done? (:plan/intent (out i))))
-    (is (= #{site} (memory/given-up-sites (out i))))
-    (is (= :no-stand (:intent/reason (:plan/intent (out (assoc i :intent/build :portal)))))
+        out (build/site-lost w i :no-stand)]
+    (is (intent/done? (:plan/intent out)))
+    (is (= #{site} (memory/given-up-sites out)))
+    (is (nil? (build/site-lost w (assoc i :intent/build :portal) :no-stand))
         "another build fails as it did")))
 
 (deftest rock-between-the-feet-and-the-landing-is-a-way-to-cut
@@ -1390,3 +1473,102 @@
     (is (nil? (build/way-back open i)) "a route to it: none to take")
     (is (= [5 63 7] (:intent/target (build/way-back walled i)))
         "rock between: the way cut toward it")))
+
+(deftest a-portal-block-in-the-wall-is-a-wall-already
+  ;; real race 39407278017 bot Clj_r03 (issue #44): the cast room's back wall met a nether portal's
+  ;; block; the game takes no block into one, the cobblestone was refused three times, :rejected
+  (let [portal [6 63 8]
+        w (standing-at (open-ground {portal (blocks/default-state :nether_portal) [7 63 8] 1})
+                       [5.5 63.0 5.5])
+        cast [:block [9 63 9] :obsidian]
+        [fall-clear place] (build/firm-ops portal [5 63 5] cast :wall)
+        open (build/firm-ops [8 63 8] [5 63 5] cast :wall)]
+    (is (build/holds? w (:build/done place)) "nothing to place into a portal block")
+    (is (build/holds? w (:build/done fall-clear)))
+    (is (not (build/holds? w (:build/done (second open)))) "an open cell still takes its block")
+    (is (build/holds? w (:build/done (second (build/firm-ops [7 63 8] [5 63 5] cast :wall))))
+        "and solid rock needs none")))
+(deftest a-spent-water-bucket-is-asked-for-again
+  ;; issue #455: a cast's water landing in the lava's own cell leaves no source to scoop back, and
+  ;; the next cell's water pour failed :not-held three times
+  (let [plan (build/portal-plan origin :south)
+        w (game/init fx/opts)
+        bare (assoc w :player/inventory {0 {:item (recipe/item-id :bucket) :count 2}})
+        full (assoc w :player/inventory {0 {:item (recipe/item-id :water_bucket) :count 1}})]
+    (is (true? (build/water-needed? bare plan)) "two empty buckets, a water pour to come")
+    (is (false? (build/water-needed? full plan)) "a water bucket held")
+    (is (false? (build/water-needed? bare [])) "no pour to come")
+    (is (false? (build/water-needed? w plan)) "no bucket to fill")))
+
+(deftest a-lava-source-gone-before-the-aim-is-looked-for-again
+  ;; issue #419: water turned the chosen source to obsidian before the scoop aimed
+  (is (true? (build/lava-gone?
+              {:intent/kind :scoop :intent/fluid :lava :intent/reason :target-gone})))
+  (is (false? (build/lava-gone? {:intent/kind :scoop :intent/reason :target-gone}))
+      "a water scoop is the scoop intent's own business")
+  (is (false? (build/lava-gone?
+               {:intent/kind :scoop :intent/fluid :lava :intent/reason :no-scoop}))))
+(deftest a-bridge-walks-onto-the-floor-laid-before-the-gap-past-its-reach
+  ;; sim race 39550827333 (issue #162, world R3/43 seed 2): the bridge laid three cells from the end
+  ;; of the stairs up, the fourth lay past the reach of the place, and the plain walk to the stand
+  ;; over the gap failed :no-path, three times in the plan
+  (let [cobble {1 {:item (recipe/item-id :cobblestone) :count 8}}
+        at (fn [gaps]
+             (assoc (standing-at (open-ground (into {} (for [x gaps] [[x 62 10] blocks/air])))
+                                 feet-pos)
+                    :player/inventory
+                    cobble))
+        stand [3 63 10]]
+    (is (= [6 62 10] (build/floor-gap (at (range 3 7)) stand)) "the first cell with no floor")
+    (is (= [7 63 10] (build/before-gap (at (range 3 7)) stand [6 62 10])) "the cell before it")
+    (is (= :place (:intent/kind (build/bridge (at (range 3 10)) stand))) "a gap in reach is laid")
+    (is (= {:intent/kind :walk :intent/target [7 63 10] :intent/for :build}
+           (build/bridge (at (range 3 7)) stand))
+        "a gap past the reach: onto the floor laid so far")))
+
+(deftest the-lava-hunt-climbs-to-a-source-just-over-the-feet
+  ;; real race 39408516353 (issue #392, Clj_r05): a tunnel at y -58 ended in the lava sea's edge
+  ;; with every source level or below the feet roofed in lava, and the hunt waited :no-site with a
+  ;; source and its stand four blocks up
+  (let [pos [10.5 41.0 10.5]
+        room {[10 41 10] blocks/air [10 42 10] blocks/air}
+        pool-at (fn [y] (into {} (for [x [11 12 13] z [2 3 4 5]] [[x y z] blocks/lava-base])))
+        hunt #(build/toward-lava (standing-at (open-ground (merge room %)) pos))]
+    (is (= {:intent/kind :stairs-up :intent/to-y 45 :intent/for :build} (hunt (pool-at 44)))
+        "a pool whose cell over it lies four over the feet: the stairs up first")
+    (is (= :stairs-down (:intent/kind (hunt (pool-at 46))))
+        "past hunt-rise: on down toward the sea as before")
+    (is (= :tunnel (:intent/kind (hunt (pool-at 40)))) "level or below: the tunnel as before")))
+
+(deftest a-swim-out-that-ends-where-it-began-again-and-again-gives-the-site-up
+  ;; sim snapshot R3-4-1 (issue #178): a shallow pool, the swim-out done on dry land at once and
+  ;; asked for again, for the whole window at health 1
+  (let [w (standing-at (open-ground {}) [10.5 63.0 10.5])
+        i {:intent/kind :build :intent/origin [4 60 4] :intent/status :active}
+        swum-n (fn [w n] (nth (iterate build/swum w) n))
+        at (fn [w] (assoc w :plan/intent i))]
+    (is (not (build/swim-looped? (:plan/intent (swum-n (at w) 2)))) "twice is not yet a loop")
+    (is (build/swim-looped? (:plan/intent (swum-n (at w) 3))) "three on one cell is")
+    (is (not (build/swim-looped?
+              (:plan/intent (build/swum (assoc (swum-n (at w) 2) :player/pos [11.5 63.0 10.5])))))
+        "a swim-out that moved the bot starts the count again")))
+
+(deftest a-block-at-the-edge-of-reach-is-walked-to-not-dug
+  ;; real snapshot real-5-s2-Clj_r09 (issue #461): the block in the way of the lava's stand was dug
+  ;; from 4.478 blocks, the walk's momentum carried the eye to 4.5007 the next tick, and the dig
+  ;; failed :out-of-reach
+  (let [origin [8 62 4]
+        stand [9 63 12]
+        rock {[5 63 12] (blocks/default-state :stone)}
+        child-at (fn [x]
+                   (build/clear-stand (standing-at (open-ground rock) [x 63.0 12.5])
+                                      stand
+                                      :cast-one
+                                      origin
+                                      :south))]
+    (is (= [5 63 12] (:intent/target (child-at 1.7))) "well within reach: dug from here")
+    (is (= :dig (:intent/kind (child-at 1.7))))
+    (is (= :walk (:intent/kind (child-at 1.3))) "at the edge of reach: walked closer first")
+    (is (= [5 63 12] (:intent/target (child-at 1.3))))
+    (is (build/near-enough? (standing-at (open-ground rock) [1.7 63.0 12.5]) [5 63 12]))
+    (is (not (build/near-enough? (standing-at (open-ground rock) [1.3 63.0 12.5]) [5 63 12])))))

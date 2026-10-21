@@ -314,13 +314,14 @@
 
 (defn start-intent
   "Make i the active intent, numbered from :plan/intents, remember that it started, and stop
-   waiting."
+   waiting. An intent that names a dead end (:intent/dead-end) puts that cell in :plan/boxed-at."
   [world i]
   (let [n (inc (:plan/intents world 0))
         i (assoc i :intent/status :active :intent/id n)]
     (-> world
         (assoc :plan/intents n :plan/intent i)
         (memory/remember-intention i :started)
+        (cond-> (:intent/dead-end i) (update :plan/boxed-at (fnil conj #{}) (:intent/dead-end i)))
         (dissoc :plan/waiting-since :plan/waiting-ticks)
         (game/say (str "intent " (:intent/kind i)
                        " " (or (:intent/target i) (:intent/recipe i)))))))
@@ -440,8 +441,9 @@
 (defn failed? "Has the plan given up (see :plan/reason)?" [world] (= :failed (:plan/status world)))
 
 (defn summary
-  "Every :plan/* attribute but the blacklist and the creepers backed away from, for the RESULT line."
+  "Every :plan/* attribute but the blacklist, the creepers backed away from and the mobs a
+   back-off was cornered by, for the RESULT line."
   [world]
   (into {}
         (filter (fn [[k _]] (= "plan" (namespace k))))
-        (dissoc world :plan/blacklist :plan/backed-off)))
+        (dissoc world :plan/blacklist :plan/backed-off :plan/cornered)))
