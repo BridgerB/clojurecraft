@@ -13,7 +13,8 @@
    :control/jump? bool :control/sneak? bool :control/yaw deg}. In a liquid the step uses
    vanilla's liquid rules (the siblings' ports of the client): no buoyancy to speak of, a swim-up
    of 0.04 a tick while jumping, and the one real lift, an impulse of 0.3 when pressing into a
-   bank whose top is free. Every tick the step also writes what it found: :player/in-water?,
+   bank whose top is free, asked while the box touches a fluid at all (touching-fluid?), a dry
+   body in a fluid's last inch included. Every tick the step also writes what it found: :player/in-water?,
    :player/in-lava?, :player/eye-in-water? and :player/fall-distance."
   (:require [clojure.math :as math]))
 
@@ -48,6 +49,7 @@
 (def jump-cooldown 10)                ; ticks after a jump before the next one
 (def water-contract [0.001 0.401 0.001]) ; the box shrinks by this before asking "in water?"
 (def lava-contract [0.1 0.4 0.1])     ; and by this for "in lava?"
+(def touch-contract [0.001 0.001 0.001]) ; and by this for "touching a fluid at all?": vanilla's own test since 1.13, which the bank impulse is asked under
 
 (defn aabb
   "[x0 y0 z0 x1 y1 z1] of a player whose feet centre is pos."
@@ -152,6 +154,16 @@
 
 (defn no-fluid "A fluid oracle for a dry world." [_ _ _] nil)
 
+(defn touching-fluid?
+  "Does the player's box at pos overlap any water or lava, however little (touch-contract)?
+   Vanilla's test for being in a fluid, since 1.13: the bank impulse fires while the box is in it,
+   though the body is by then too far out for the 0.4 rule of in-fluid? to call it in the water
+   (issue #464: lifted to 0.1 under a one-block ledge, the body left the water and fell back)."
+  [fluid-at pos]
+  (let [box (aabb pos)]
+    (or (in-fluid? fluid-at :water touch-contract box)
+        (in-fluid? fluid-at :lava touch-contract box))))
+
 (defn fluids-here
   "What the player at pos is in: {:in-water? :in-lava? :eye-in-water?}."
   [fluid-at pos]
@@ -224,6 +236,7 @@
      :as world} {:control/keys [forward? jump? sneak? yaw]}]
    (let [{:keys [in-water? in-lava?]} (fluids-here fluid-at pos)
          liquid? (or in-water? in-lava?)
+         touching? (or liquid? (touching-fluid? fluid-at pos))
          [vx vy vz] (map squash vel)
          jump-ticks (max 0 (dec (long jump-ticks)))
          jumping? (and jump? on-ground? (zero? jump-ticks) (not liquid?))
@@ -248,8 +261,9 @@
                  in-water? water-gravity
                  :else gravity)
          vy' (if liquid? (- (* vy inertia) g) (* (- vy gravity) vertical-drag))
-         ;; the one real lift out of a liquid: pressing into a bank whose top is free
-         vy' (if (and liquid? hit? (free? solid? fluid-at (aabb pos') [vx (+ vy' bank-probe) vz]))
+         ;; the one real lift out of a liquid: pressing into a bank whose top is free, while the
+         ;; box touches the fluid at all
+         vy' (if (and touching? hit? (free? solid? fluid-at (aabb pos') [vx (+ vy' bank-probe) vz]))
                out-of-liquid-impulse
                vy')
          fall (cond (or liquid? landed?) 0.0

@@ -173,3 +173,20 @@
             [_ y z] (:player/pos w)]
         (is (= 64.0 y))
         (is (< z 1.71))))))
+
+(deftest pressing-into-a-bank-from-deep-water-lifts-the-body-onto-it
+  ;; a pool four deep (water at y 61-64, floor 60) with a wall of stone at z 2 up to y 64, whose
+  ;; top is 0.11 over the surface: the first impulse comes with the box still well in the water,
+  ;; and the lift must go on while the box touches the water at all (vanilla since 1.13), or the
+  ;; body peaks 0.1 under the ledge and falls back (issue #464, in a flooded bore)
+  (let [solid (fn [_ y z] (or (<= y 60) (and (>= z 2) (<= y 64))))
+        fluid (fn [_ y z] (when (and (<= 61 y 64) (< z 2)) water))
+        w0 (assoc standing :player/pos [0.5 62.0 0.5] :player/on-ground? false)
+        states
+        (take
+         160
+         (iterate
+          #(ph/step solid fluid % {:control/forward? true :control/jump? true :control/yaw 0.0})
+          w0))]
+    (is (some #(and (>= (nth (:player/pos %) 1) 65.0) (> (nth (:player/pos %) 2) 1.7)) states)
+        "on the ledge, a block over the water's cell")))
