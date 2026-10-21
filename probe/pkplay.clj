@@ -69,5 +69,5 @@
   [& paths]
   (doseq [p paths]
     (println "==" p)
-    (try (play p 140) (catch Exception e (println "THREW" p (ex-message e)))))
+    (try (play p 700) (catch Exception e (println "THREW" p (ex-message e)))))
   (shutdown-agents))
