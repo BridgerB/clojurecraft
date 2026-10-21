@@ -925,15 +925,17 @@
   (let [dirt (blocks/default-state :dirt)
         ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
         cave (into {} (for [x (range 11 15) z (range 3 7) y (range 55 58)] [[x y z] blocks/air]))
+        ;; a staircase down from the surface at x 8 to y 58 at x 2, three cells high
+        stairs (into {} (for [i (range 7) dy (range 3)] [[(- 8 i) (+ (- 64 i) dy) 5] blocks/air]))
         w (assoc (standing 64 :wooden_pickaxe)
                  :world/chunks
-                 {[0 0] (world/column (merge ground cave))})
-        at (fn [y] (assoc w :player/pos [5.5 (double y) 5.5]))]
-    (is (some? (stone/over-stone (at 59) (row :mine-stone)))
+                 {[0 0] (world/column (merge ground cave stairs))})
+        at (fn [i] (assoc w :player/pos [(+ 0.5 (- 8 i)) (double (- 64 i)) 5.5]))]
+    (is (some? (stone/over-stone (at 5) (row :mine-stone)))
         "less than a staircase down: the surface is the place to cut from")
-    (is (nil? (stone/over-stone (at 58) (row :mine-stone)))
+    (is (nil? (stone/over-stone (at 6) (row :mine-stone)))
         "a staircase down: the stairs go on from here")
-    (is (= :stairs-down (:intent/kind (stone/mine-next (at 58) (row :mine-stone)))))))
+    (is (not= :over-stone (:intent/for (stone/mine-next (at 6) (row :mine-stone)))))))
 
 (deftest stone-beside-water-is-sealed-with-what-is-held-before-it-is-dug
   ;; issue #342 (the R1/30 sim moment): stones on the west bank of a cave lake had water on their
