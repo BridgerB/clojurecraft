@@ -123,7 +123,8 @@
                    {:intent/kind :dig
                     :intent/target (:build/pos op)
                     :intent/status :failed
-                    :intent/reason :rejected})
+                    :intent/reason :rejected}
+                   :intent/rejections 2)
           out (intent/run (assoc w :plan/intent i) i tick)]
       (is (intent/failed? (:plan/intent out)))
       (is (= :rejected (get-in out [:plan/intent :intent/reason]))))))
