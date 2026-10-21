@@ -50,17 +50,6 @@ jobs:
           [ -f "$plan" ] || { echo "::error::no plan file ($plan)"; exit 1; }
           echo "plan: $plan"
           echo "plan=$plan" >> "$GITHUB_OUTPUT"
-      - name: Jobs already running
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          busy=0
-          for id in $(gh api "repos/$GITHUB_REPOSITORY/actions/runs?status=in_progress&per_page=100" --jq '.workflow_runs[].id'); do
-            n=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$id/jobs?per_page=100" --jq '[.jobs[] | select(.status == "in_progress")] | length')
-            busy=$((busy + n))
-          done
-          echo "jobs in progress across this repository (this one included): $busy"
-          echo "BUSY=$busy" >> "$GITHUB_ENV"
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -82,7 +71,7 @@ jobs:
         env:
           SALT: ${{ inputs.salt }}
         run: |
-          clojure -M:plan plan --plan "${{ steps.pick.outputs.plan }}" --busy "$BUSY" ${SALT:+--salt "$SALT"} | tee plan.out
+          clojure -M:plan plan --plan "${{ steps.pick.outputs.plan }}" ${SALT:+--salt "$SALT"} | tee plan.out
           cat plan.out >> "$GITHUB_OUTPUT"
 
   world:

@@ -62,9 +62,8 @@
 
 (deftest the-matrix-and-width
   (is (= "{\"job\":[1,2,3,4]}" (plans/matrix plan)))
-  (is (= 4 (plans/width plan 20 0)))
-  (is (= 3 (plans/width plan 20 17)) "no wider than the free runners")
-  (is (= 1 (plans/width plan 20 25)) "always at least one"))
+  (is (= 4 (plans/width plan)) "every job at once: the fleet gives queued jobs runners")
+  (is (= 2 (plans/width (assoc plan :plans/max-parallel 2))) "the plan's own max-parallel"))
 
 (deftest the-report-names-experiments-arms-and-seeds
   (let [md (plans/report

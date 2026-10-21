@@ -134,10 +134,14 @@
   (str "{\"job\":[" (str/join "," (keys (schedule plan))) "]}"))
 
 (defn width
-  "How many of this plan's jobs to run at once: the plan's width, no more than the free
-   runners (cap minus busy jobs elsewhere), and at least one."
-  [{:plans/keys [max-parallel jobs]} cap busy]
-  (max 1 (min (or max-parallel jobs) (- cap busy))))
+  "How many of this plan's jobs to run at once: the plan's :plans/max-parallel, else its job
+   count. Never shrunk to the runners free when the plan starts: the width is fixed for the
+   whole run, and jobs held back by max-parallel are not queued, so the fleet (which gives a
+   lane back only to a queued job) never saw them. A plan begun beside 19 busy jobs ran its
+   four jobs one after another for nearly three hours (plan run 39529384355). At full width
+   the jobs queue and the fleet gives them runners."
+  [{:plans/keys [max-parallel jobs]}]
+  (or max-parallel jobs))
 
 (defn read-plan
   "A plan file, read and checked against its spec: a malformed plan fails in the plan job."
@@ -314,18 +318,18 @@
 
 (defn -main
   "clojure -M:plan <command> --key value ...
-     plan   --plan ci/plan/x.edn [--busy N] [--salt s]   matrix=..., width=..., label=... for $GITHUB_OUTPUT
+     plan   --plan ci/plan/x.edn [--salt s]   matrix=..., width=..., label=... for $GITHUB_OUTPUT
      work   --plan ci/plan/x.edn --job N --out dir [--worlds cache/worlds] [--salt s]
      report --dir artifacts
      pull   --run <run id>   download into data/runs/<id>/, print the report and every failure"
   [command & args]
-  (let [{:keys [plan job out worlds dir busy salt run]} (cli/options args)
+  (let [{:keys [plan job out worlds dir salt run]} (cli/options args)
         read (fn [p] (cond-> (read-plan p) salt (assoc :plans/salt salt)))]
     (case command
       "plan"
       (let [p (read plan)]
         (println (str "matrix=" (matrix p)))
-        (println (str "width=" (width p 20 (parse-long (or busy "0")))))
+        (println (str "width=" (width p)))
         (println (str "label=" (:plans/label p))))
       "work"
       (work! (read plan)
