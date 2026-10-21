@@ -1273,3 +1273,37 @@
                                              (sent fx))]
       (is (>= (- t-finish t-start) (intent/finish-delay 3000 2.6)))
       (is (> (intent/finish-delay 3000 2.6) (* 2 (intent/finish-delay 3000)))))))
+
+(deftest a-trunk-walled-in-by-its-leaves-is-tunnelled-to
+  ;; sim world R1/4 (issues #370, #186) and real-2/1 (issue #87): out on a platform four over a
+  ;; two-log oak whose leaves wall it in, no route reaches the trunk, and the plan waited :no-log
+  (let [leaves (blocks/default-state :oak_leaves)
+        ground (into {} (for [x (range 0 12) z (range 5 12)] [[x 63 z] 1]))
+        canopy (into {} (for [x (range 0 4) y (range 64 68) z (range 7 10)] [[x y z] leaves]))
+        deck (into {} (for [x (range 7 11) z (range 7 10)] [[x 68 z] 1]))
+        w (remembered (merge ground canopy deck {[1 64 8] 136 [1 65 8] 136}) [8.5 69.0 8.5])
+        trunk [1 64 8]
+        run {:intent/kind :tunnel-to
+             :intent/target trunk
+             :intent/trunk trunk
+             :intent/reach wood/tunnel-reach
+             :intent/steps wood/tunnel-steps
+             :intent/dry? true
+             :intent/for :trees}
+        done {:intent/kind :tunnel-to :intent/for :trees :intent/status :done}]
+    (is (stairs/out? w (intent/feet w)) "out of the ground, on the deck")
+    (is (nil? (wood/near-walk w)) "no route reaches the trunk through its leaves")
+    (is (= run (wood/trees-tunnel w)) "a level run through the leaves to a cell beside it")
+    (is (= run (wood/gather-next w)))
+    (is (nil? (wood/trees-tunnel (assoc w :plan/boxed-at #{[8 69 8]})))
+        "never from a cell where a climb died boxed")
+    (is (nil? (wood/trees-tunnel (assoc w :plan/blacklist #{trunk})))
+        "a trunk given up when a step was refused is not tunnelled to again")
+    (is (nil? (wood/trees-tunnel (assoc w :plan/trunk-failures {[1 8] wood/max-trunk-failures})))
+        "nor after failures in its column")
+    (is (nil? (wood/trees-tunnel (assoc w :player/pos [2.5 64.0 8.5])))
+        "beside the trunk there is nothing to tunnel to")
+    (is (not (wood/tunneled? w)))
+    (is (wood/tunneled? (assoc w :plan/last done)))
+    (is (not (wood/tunneled? (assoc w :plan/last (assoc done :intent/for :surface)))))
+    (is (not (wood/tunneled? (assoc w :plan/last (assoc done :intent/status :failed)))))))

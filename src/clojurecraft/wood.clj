@@ -29,6 +29,8 @@
 (def bridge-reach 12)                 ; blocks on the plane to a trunk no route reaches that a staircase is cut toward
 (def bridge-rise 3)                   ; blocks the trunk's bottom may lie over or under the feet for that staircase
 (def bridge-climb 2)                  ; stairs up that staircase cuts before the planner looks again
+(def tunnel-reach 2.0)                ; blocks from a trunk's bottom (feet cell centre) a tunnel through its leaves ends
+(def tunnel-steps 24)                 ; steps that tunnel takes before the planner looks again
 (def opening-drop 2)                  ; blocks under the feet a mouth may lie and still be the way out, not the way down
 
 (defn ground?
@@ -225,6 +227,55 @@
          (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)])
          :intent/for :surface}))))
 
+(defn tunneled?
+  "Did the intent that just ended tunnel through the trees (a done :tunnel-to :intent/for :trees)?
+   The next run goes on from where it stopped, and a staircase is not cut up beside it."
+  [world]
+  (let [{:intent/keys [kind for] :as l} (:plan/last world)]
+    (boolean (and l (= :tunnel-to kind) (= :trees for) (intent/done? l)))))
+
+(defn trees-tunnel
+  "Out of the ground (stairs/out?), or on from a run just tunnelled (tunneled?), with a standing
+   trunk no route reaches within bridge-reach on the plane and no more than twelve over or under
+   the eye, further than tunnel-reach from the feet: a level run through what walls it in
+   (:tunnel-to, fortress: a step at a time, leaves and all, dry, tunnel-steps of them before the
+   planner looks again), ending beside the trunk (tunnel-reach), where the walk to it has a route.
+   The run is given up, and the trunk with it, when a step is refused (:blocked fails the intent:
+   plan/fail-intent blacklists the trunk and counts it against its column, two failures skip the
+   column), and ends without a new run once the feet are beside the trunk. Not skipped for a
+   failed walk's neighbourhood (:plan/unreached) as the far trunks are: that failure is this one,
+   a tree whose leaves no path crosses. Sim world R1/4 (issues #370, #186) stood on its own
+   stairs at y 79, six blocks from a two-log oak whose leaves walled it in and four under the
+   feet, and world real-2/1 (issue #87) at y 110 on a snow mountain nine blocks from a spruce's
+   bottom in its leaves: no walk reached either, a staircase down toward them ended two blocks
+   short, bridge and descent took the bot up and down in turn, and the plan waited :no-log.
+   Never from a cell where a climb died :boxed."
+  [world]
+  (let [feet (intent/feet world)
+        eye-y (physics/y-of (game/eye world))
+        blacklist (:plan/blacklist world #{})
+        failures (:plan/trunk-failures world {})]
+    (when (and (or (tunneled? world) (stairs/out? world feet))
+               (not (contains? (:plan/boxed-at world #{}) feet)))
+      (when-let [trunk (->> (memory/positions-now world blocks/log-states)
+                            (memory/nearest-first (game/eye world) bridge-reach)
+                            (remove (fn [[x _ z :as p]]
+                                      (or (contains? blacklist p)
+                                          (>= (get failures [x z] 0) max-trunk-failures))))
+                            (filter #(standing-trunk? world %))
+                            (filter (fn [[_ ty _]] (<= (abs (- eye-y ty)) 12)))
+                            (filter #(< tunnel-reach
+                                        (physics/distance (physics/centre feet)
+                                                          (physics/centre %))))
+                            first)]
+        {:intent/kind :tunnel-to
+         :intent/target trunk
+         :intent/trunk trunk
+         :intent/reach tunnel-reach
+         :intent/steps tunnel-steps
+         :intent/dry? true
+         :intent/for :trees}))))
+
 (defn mouth-below?
   "Is a walk to target, [x y z], a way down from feet: its cell more than opening-drop under the
    feet's?"
@@ -275,6 +326,7 @@
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
           (when (descended? world) (trees-descend world trunks))
+          (when (tunneled? world) (trees-tunnel world))
           (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
             (or (opening-up world)
                 {:intent/kind :stairs-up
@@ -282,7 +334,8 @@
                  :intent/for :surface}))
           (trees-climb world trunks)
           (trees-descend world trunks)
-          (trees-bridge world trunks)))))
+          (when-not (tunneled? world) (trees-bridge world trunks))
+          (trees-tunnel world)))))
 
 (defn near-walk
   "A walk to the nearest standing trunk in the near band (search-radius, no more than 12 above or
