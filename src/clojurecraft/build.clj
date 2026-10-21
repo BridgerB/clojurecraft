@@ -914,19 +914,36 @@
                        (not (contains? blocks/lava-states (terrain/block-at world %)))))
          first)))
 
+(defn before-gap
+  "The cell of the straight way to stand (way-columns) just before gap, a cell floor-gap found, at
+   the stand's height: the last cell a floor holds the feet up in, from which the gap is the next
+   cell to lay. nil when gap is no column of the way."
+  [world stand [gx _ gz]]
+  (when-let [[x z] (last (take-while #(not= [gx gz] %) (way-columns (intent/feet world) stand)))]
+    [x (second stand) z]))
+
 (defn bridge
   "The child that lays the missing floor on the way to stand at the feet's height (floor-gap): a
    cobblestone placed in it, or in the lowest cell under it that is held up (foundation), when
-   it is in reach and a block is held; nil otherwise. Sim race 38665691522 and a probe at
+   it is in reach and a block is held; a walk onto the floor laid so far (before-gap) when the
+   gap lies beyond the reach of the place; nil otherwise. Sim race 38665691522 and a probe at
    8356e28 (issue #162, world R3/37): the refill's way out from the landing ran over a cave's
    open cell beside the room, the line clear and nothing to dig, and the walk there, with no
-   floor to stand on, failed :no-path three times."
+   floor to stand on, failed :no-path three times. Sim race 39550827333 (issue #162, world R3/43
+   seed 2): the bridge laid three cells from the end of the stairs up and the fourth lay past
+   the reach of the place, so the plain walk to the stand over the gap was tried and failed
+   :no-path, three times in the plan."
   [world stand]
   (when-let [gap (and (held? world :cobblestone) (floor-gap world stand))]
-    (when-let [c (and (<= (physics/distance (game/eye world) (physics/centre gap))
-                          place/place-reach)
-                      (foundation world gap))]
-      {:intent/kind :place :intent/item :cobblestone :intent/cell c})))
+    (if (<= (physics/distance (game/eye world) (physics/centre gap)) place/place-reach)
+      (when-let [c (foundation world gap)]
+        {:intent/kind :place :intent/item :cobblestone :intent/cell c})
+      (when-let [edge (before-gap world stand gap)]
+        (let [walk {:intent/kind :walk :intent/target edge :intent/for :build}]
+          (when (and (not (intent/centred? world edge))
+                     (path/standable? world edge)
+                     (intent/routable? world walk))
+            walk))))))
 
 (defn stand-walk
   "A walk to stand, a cell of the build's way, when the feet can stand in it as it is
@@ -1335,6 +1352,15 @@
   [{:intent/keys [kind reason]}]
   (and (= :dig kind) (= :target-gone reason)))
 
+(defn lava-gone?
+  "Did child, a lava scoop (scoop-at-station), find its source gone (:target-gone)? The cast's own
+   water, or the water the digs let in, turned it to obsidian between the choice and the aim; the
+   refill looks for another source. Real races 39245788157 and 39590862487 (issue #419): the
+   scoops of one pool failed :target-gone one after another with lava still in reach, and each
+   ended the build."
+  [{:intent/keys [kind reason fluid]}]
+  (and (= :scoop kind) (= :lava fluid) (= :target-gone reason)))
+
 (defn boxed-way?
   "Did child, a staircase or a tunnel (plan/boxing-kinds), fail :boxed: no way on from where the
    feet stand?"
@@ -1424,6 +1450,11 @@
             (game/say (str "build: placing " (:intent/cell child) " refused with the body in it")))
         (and child (intent/failed? child) (found-open? child))
         (intent/dissoc-intent (assoc world :player/controls {}) :intent/child)
+        (and child (intent/failed? child) (lava-gone? child))
+        (-> world
+            (assoc :player/controls {})
+            (intent/dissoc-intent :intent/child)
+            (game/say "build: the lava source was gone, choosing another"))
         (and child (intent/failed? child) (way-refilled? world child))
         ;; gravel fell into the way after the walk was planned: clear it again
         (-> world
@@ -1487,11 +1518,11 @@
                       missing)
                     (tool-first world c))]
           (or (site-lost world i c)
-              (if (keyword? c)
-                (intent/fail world c)
-                (intent/run-child
-                 (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
-                 event))))))
+              (cond (keyword? c) (intent/fail world c)
+                    :else
+                    (intent/run-child
+                     (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
+                     event))))))
 
 (defmethod intent/run :build
   ;; work the first op of the plan not satisfied (next-op, work-op); done when the last op holds.
@@ -1612,6 +1643,7 @@
 (def hunt-radius 48)                  ; blocks from the feet a lava source is walked, dug or tunnelled toward
 (def far-radius 160)                  ; blocks from the feet a source is tunnelled toward when none lies within hunt-radius: what a view shows
 (def hunt-checked 300)                ; the nearest far sources asked for a stand and a pool: each ask reads every loaded source
+(def hunt-rise 4)                     ; blocks over the feet the cell over a source may lie when none lies level or below: the stairs up go first
 (def max-candidates 3)                ; the nearest sources a route is planned to
 
 (defn sources-near
@@ -1702,21 +1734,30 @@
    :no-site with fifteen thousand sources of the lava sea loaded below. With none within
    hunt-radius the nearest within far-radius is taken, as far as the terrain loaded shows: real
    race 38929353563 (issue #41, Clj_r13 and Clj_r14) stood at y -54 over six thousand sources
-   loaded, the nearest farther than hunt-radius, and waited :no-site out."
+   loaded, the nearest farther than hunt-radius, and waited :no-site out.
+   With none level or below, one whose cell over it lies at most hunt-rise over the feet is taken
+   (toward-lava goes up to it first): real race 39408516353 (issue #392, Clj_r05) had followed a
+   tunnel at y -58 into the lava sea's edge, gave its far source up, and waited :no-site with
+   a source whose stand was nine blocks off and four over the feet, the three hundred nearest
+   sources all under the sea's lava."
   [world]
   (let [[fx fy fz] (intent/feet world)
         sources (lava-sources world)
-        target? (fn [[x y z :as src]]
-                  (and (<= (inc y) fy)
-                       (or (> fy (inc y)) (> (max (abs (- x fx)) (abs (- z fz))) 1))
-                       (seq (stands-beside world src))
-                       (castable? sources src)))]
-    (or (first (filter target? (sources-near world)))
-        (first (filter target? (take hunt-checked (sources-near world far-radius)))))))
+        usable? (memoize (fn [[x y z :as src]]
+                           (and (or (> fy (inc y)) (> (max (abs (- x fx)) (abs (- z fz))) 1))
+                                (seq (stands-beside world src))
+                                (castable? sources src))))
+        target? (fn [rise] (fn [[_ y _ :as src]] (and (<= (inc y) (+ fy rise)) (usable? src))))]
+    (some (fn [rise]
+            (let [target? (target? rise)]
+              (or (first (filter target? (sources-near world)))
+                  (first (filter target? (take hunt-checked (sources-near world far-radius)))))))
+          [0 hunt-rise])))
 
 (defn toward-lava
   "The way toward lava a frame can be cast from (hunt-target): stairs down (stone/stairs,
-   stair-depth at a time) while the feet are above the cell over it, else a tunnel of level
+   stair-depth at a time) while the feet are above the cell over it, stairs up (to-height) while
+   they are under it (a source at most hunt-rise over them), else a tunnel of level
    steps toward it, as many as the plane distance less one (the step onto the cell over the
    source is refused for the lava under it, and the roof is then in reach: uncap). With no such
    source loaded, stairs down to lava-depth. From a feet cell in :plan/boxed-at no stair is cut
@@ -1737,6 +1778,7 @@
           (or (stone/stairs world {:goal/depth to}) (stone/retreat world) (stone/climb world))
           (nil? src) nil
           (contains? (:plan/boxed-at world #{}) feet) (or (stone/retreat world) (stone/climb world))
+          (< (physics/y-of feet) to) (to-height world to)
           :else
           (let [steps (dec (long (max (abs (- sx (first feet))) (abs (- sz (nth feet 2))))))]
             (when (pos? steps)
@@ -1816,6 +1858,21 @@
        (or (pos? (get (make/counts world) :crafting_table 0)) (some? (make/take-table-along world)))
        (or (sticks-at-hand? world) (wood-near? world))))
 
+(defn water-needed?
+  "Does plan still pour water (an op not satisfied that pours :water_bucket) while an empty
+   bucket is held to fill and no water bucket is? A cast's water poured into the cell over the lava can land in the lava's own cell: the
+   lava turns to obsidian, the water goes with it and there is no source to scoop back, so the
+   bucket stays empty. Real races 39181279602 runner 4 and 39499334753 runner 2 (issue #455): the
+   next cell's water pour failed :not-held three times in 300 ms and the plan ended with two empty
+   buckets and no water in sight."
+  [world plan]
+  (boolean (and (held? world :bucket)
+                (not (held? world :water_bucket))
+                (some #(and (= :pour (:build/op %))
+                            (= :water_bucket (:build/item %))
+                            (not (satisfied? world %)))
+                      plan))))
+
 (defn held-first
   "What the needs planner does for what a build row holds before it starts: the tools of
    :goal/holds (a pickaxe for the way down to lava and the digs: sim race 38477665389, issue #70,
@@ -1827,6 +1884,7 @@
   (let [n (if plan (blocks-needed world plan) 0)
         holds (cond-> (or (:goal/holds goal) {})
                 (pos? n) (assoc :item/cobblestone n)
+                (water-needed? world plan) (assoc :item/water_bucket 1)
                 (carry-table? world) (assoc :item/crafting_table 1)
                 (carry-sticks? world) (assoc :item/stick kit-sticks))]
     (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))))

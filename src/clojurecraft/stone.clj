@@ -161,6 +161,13 @@
        (map first)
        first))
 
+(defn placeable-cell?
+  "Does the server let a block take the place of the one at pos: air, a plant it replaces, or a
+   fluid (blocks/placeable-into?)? false for a cell not loaded."
+  [world pos]
+  (boolean (some-> (terrain/block-at world pos)
+                   blocks/placeable-into?)))
+
 (defn seal-stone
   "A :place of a filler into the water beside the nearest stone of the row in sight that the dig
    refuses only for that water, or nil: the stone has one to three water cells beside it (six
@@ -171,7 +178,9 @@
    any other. Issue #342 (the R1/30 sim moment): the bot stood on the west bank of a cave lake
    beside two stones whose north sides were water, held three planks and no filler, and the dig
    refused both; it cut stairs down and climbed out again for the whole window, and its filler,
-   the cobblestone, was what the stone would have given it."
+   the cobblestone, was what the stone would have given it. Every wet cell is one a block takes
+   the place of (blocks/placeable-into?): a kelp plant holds water too, and sim race
+   39186569902 (issue #456, R1/24 seed 2) laid the seal into one three times, :rejected."
   [world row]
   (let [eye (game/eye world)
         blacklist (:plan/blacklist world #{})
@@ -179,7 +188,7 @@
     (some
      (fn [c]
        (let [wet (vec (for [d six-around :let [n (mapv + c d)] :when (terrain/fluid-at world n)] n))
-             item (when (seq wet)
+             item (when (and (seq wet) (every? #(placeable-cell? world %) wet))
                     (or (stairs/filler world (count wet)) (planks-held world (count wet))))
              target (first wet)]
          (when (and item
@@ -245,11 +254,16 @@
    stone lay in the wall of a cave lake, five blocks under the far bank; the mine cut its stairs
    down at the near bank, where every stair was refused for the water, up and down the same stairs
    until the plan failed :boxed, and the surface over the stone, eight blocks off along a strip of
-   grass, was routable all the while (a-stone-no-route-reaches-is-cut-down-to-from-the-surface-over-it)."
+   grass, was routable all the while (a-stone-no-route-reaches-is-cut-down-to-from-the-surface-over-it).
+   A staircase cut from the surface over the stone moves a block along for every block down, so
+   the feet count as over the surface within over-radius plus the blocks they are under it:
+   sim race 39598424082 (issue #349, R1/35 seed 1) cut six stairs east from the surface, stood
+   six along, and walked back up them to cut them again, a hundred times in the window."
   [world row]
   (let [feet (intent/feet world)
-        near? (fn [[ax _ az] [bx _ bz]]
-                (<= (physics/horizontal-distance [ax 0 az] [bx 0 bz]) over-radius))
+        near? (fn [[ax ay az] [bx by bz]]
+                (<= (physics/horizontal-distance [ax 0 az] [bx 0 bz])
+                    (+ over-radius (max 0 (- by ay)))))
         surfaces (->> (exposed-of-states world (states-of-row row))
                       (take max-candidates)
                       (keep #(surface-over world %))
@@ -400,6 +414,55 @@
                 :intent/for :off-ice}]
       (when (intent/routable? world walk) walk))))
 
+(def fall-wait-ticks 20)              ; planner ticks the mine waits for feet over a gap to fall before it plans anyway
+
+(defn unsupported?
+  "Are the feet over nothing a body rests on: not afloat, with air, water or lava in the cell
+   under them (path/classify), so the next tick drops them? Issue #105 (sim race 39550841573,
+   R2/32 seed 3): the bot dug the ice under its feet to scoop the lake and the water source
+   with it, and the planner, the instant the bucket was full, cut stairs from the lip of that
+   hole: every heading was refused for the water in the cells of its floor, four turns in four
+   ticks, :boxed before the body had fallen the one block into the hole it stood over."
+  [world]
+  (let [[x y z] (intent/feet world)]
+    (boolean (and (:player/pos world)
+                  (not (:player/in-water? world))
+                  (not (:player/in-lava? world))
+                  (contains? #{:clear :water :lava} (path/classify world [x (dec y) z]))))))
+
+(defn footing
+  "A walk onto the nearest cell beside the feet that stands (path/standable?), a block up or down
+   too, when the feet are over a gap (unsupported?), or nil: ending in that cell, since a body
+   that rests on the sliver of its box over a neighbour's edge falls no further and goes no
+   further. The same moment as unsupported?, a block of ice dug out under the feet two ticks
+   before, but the bot lay on the rim of the hole and no stair could be planned from it, nor a
+   retreat found from a cell with no floor: it waited :boxed to the end of its twenty seconds."
+  [world]
+  (when (unsupported? world)
+    (let [[x y z] (intent/feet world)
+          [px _ pz] (:player/pos world)]
+      (->> (for [dx [-1 0 1]
+                 dz [-1 0 1]
+                 dy [0 1 -1]
+                 :when (not (and (zero? dx) (zero? dz)))]
+             [(+ x dx) (+ y dy) (+ z dz)])
+           (filter #(path/standable? world %))
+           (sort-by (fn [[cx _ cz]]
+                      (physics/horizontal-distance [px 0 pz] [(+ cx 0.5) 0 (+ cz 0.5)])))
+           (map (fn [c] {:intent/kind :walk :intent/target c :intent/for :footing}))
+           (filter #(intent/routable? world %))
+           first))))
+
+(defn settle
+  "What the mine does with feet over a gap (unsupported?): wait for the fall, at most
+   fall-wait-ticks planner ticks, then step onto ground that stands (footing); nil when the feet
+   have a floor, or neither is there to do."
+  [world]
+  (when (and (unsupported? world) (not (path/near-lava-trap? world (intent/feet world))))
+    (if (< (:plan/waiting-ticks world 0) fall-wait-ticks)
+      {:plan/wait :unsupported}
+      (footing world))))
+
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
    (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
@@ -443,7 +506,7 @@
                   (climb world)
                   {:plan/wait :boxed})))))
 
-(defmethod plan/act :mine [world row] (mine-next world row))
+(defmethod plan/act :mine [world row] (or (settle world) (mine-next world row)))
 
 ;; ---------------------------------------------------------------- dig a held block again
 
