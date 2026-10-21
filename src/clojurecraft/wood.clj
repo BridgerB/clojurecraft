@@ -175,7 +175,10 @@
    targets were ledges no route reached, and the plan waited :no-log until it failed. Sim
    world R4/22 (issue #108): on a snow mountain at y 180 with no pickaxe, the nearest trunks a
    hundred and twenty across and a hundred and thirty-five below, past the old ninety-six, and
-   the plan failed :no-log."
+   the plan failed :no-log. A descent goes on toward the trunk it began for
+   (:intent/trunk of the last length), not the nearest then: two trunks either side of the shaft
+   turned the heading north and south at each length, and after the near trees' bridge and
+   tunnel, so a far descent never pre-empts a tree within reach (sim world R1/4, issue #370)."
   [world trunks]
   (let [feet (intent/feet world)
         fy (physics/y-of feet)
@@ -183,15 +186,18 @@
         drop-over (if continuing? continue-drop 12)]
     (when (and (or continuing? (stairs/out? world feet))
                (not (contains? (:plan/boxed-at world #{}) feet)))
-      (when-let [[tx ty tz] (first (filter
-                                    (fn [[tx ty tz]]
+      (when-let [[tx ty tz :as trunk]
+                 (let [near (filter (fn [[tx ty tz]]
                                       (and (> (- (physics/y-of (game/eye world)) ty) drop-over)
                                            (<= (physics/horizontal-distance (:player/pos world)
                                                                             [tx 0 tz])
                                                descend-reach)))
-                                    trunks))]
+                                    trunks)
+                       kept (when continuing? (:intent/trunk (:plan/last world)))]
+                   (or (some #(when (= kept %) %) near) (first near)))]
         (let [[fx _ fz] feet]
           {:intent/kind :stairs-down
+           :intent/trunk trunk
            :intent/to-y (max ty (- fy stone/stair-depth))
            :intent/dir
            (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)])
@@ -338,9 +344,9 @@
                  :intent/to-y (stairs/climb-to world terrain/top-y)
                  :intent/for :surface}))
           (trees-climb world trunks)
-          (trees-descend world trunks)
           (when-not (tunneled? world) (trees-bridge world trunks))
-          (trees-tunnel world)))))
+          (trees-tunnel world)
+          (trees-descend world trunks)))))
 
 (defn near-walk
   "A walk to the nearest standing trunk in the near band (search-radius, no more than 12 above or

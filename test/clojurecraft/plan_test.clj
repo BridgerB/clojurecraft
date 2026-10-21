@@ -1346,3 +1346,19 @@
     (is (seq (:player/controls (run (item (at 0.72 64.0)))))
         "0.2 off, 0.75 over the drop: walks on")
     (is (empty? (:player/controls (run (item (at 0.72 63.4))))) "within the pickup box: waits")))
+
+(deftest a-descent-goes-on-toward-the-trunk-it-began-for
+  ;; sim world R1/4 (issue #370): trunks either side of the shaft, the nearest one changing at
+  ;; every length, so the heading turned north and south and the bot zigzagged down
+  (let [w (remembered {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air} [8.5 50.0 8.5])
+        w (assoc w :player/pos [8.5 70.0 8.5])
+        near [[8 20 12]]
+        far [[8 20 -20]]
+        cut {:intent/kind :stairs-down :intent/for :trees :intent/status :done}
+        dir #(:intent/dir (wood/trees-descend (assoc w :plan/last (assoc cut :intent/trunk %))
+                                              (concat near far)))
+        pick (wood/trees-descend (assoc w :plan/last (assoc cut :intent/trunk (first far)))
+                                 (concat near far))]
+    (is (= [0 1] (dir (first near))) "the trunk it began for is the near one")
+    (is (= [0 -1] (dir (first far))) "or the far one, whichever it began for")
+    (is (= (first far) (:intent/trunk pick)) "the intent names the trunk it is for")))
