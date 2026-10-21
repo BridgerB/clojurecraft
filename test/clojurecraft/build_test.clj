@@ -1491,3 +1491,16 @@
     (is (= :stairs-down (:intent/kind (hunt (pool-at 46))))
         "past hunt-rise: on down toward the sea as before")
     (is (= :tunnel (:intent/kind (hunt (pool-at 40)))) "level or below: the tunnel as before")))
+
+(deftest a-swim-out-that-ends-where-it-began-again-and-again-gives-the-site-up
+  ;; sim snapshot R3-4-1 (issue #178): a shallow pool, the swim-out done on dry land at once and
+  ;; asked for again, for the whole window at health 1
+  (let [w (standing-at (open-ground {}) [10.5 63.0 10.5])
+        i {:intent/kind :build :intent/origin [4 60 4] :intent/status :active}
+        swum-n (fn [w n] (nth (iterate build/swum w) n))
+        at (fn [w] (assoc w :plan/intent i))]
+    (is (not (build/swim-looped? (:plan/intent (swum-n (at w) 2)))) "twice is not yet a loop")
+    (is (build/swim-looped? (:plan/intent (swum-n (at w) 3))) "three on one cell is")
+    (is (not (build/swim-looped?
+              (:plan/intent (build/swum (assoc (swum-n (at w) 2) :player/pos [11.5 63.0 10.5])))))
+        "a swim-out that moved the bot starts the count again")))

@@ -905,14 +905,18 @@
    (every block is dug by hand, 7500 ms of stone and more of deepslate, so a stair is 30 s and a
    hundred levels a long hour: sim snapshots R2-36-1 and R3-13-1, issue #135, and R2-45-1, issue
    #178, each spent the judged window climbing), a filler is carried to lay, the cell over the
-   head is safe to dig (shaft-safe?) and the intent has not given the shaft up
-   (:intent/no-shaft)."
+   head is safe to dig (shaft-safe?), a solid block lies under the feet cell and the feet are
+   centred in it (the pillar lays its block against that block, and a body on a lip over a drop
+   jumps and lands, the block never in: sim snapshot R2-45-1, pillar :stuck at the first level),
+   and the intent has not given the shaft up (:intent/no-shaft)."
   [world {:intent/keys [kind for no-shaft]} feet]
   (boolean (and (= :stairs-up kind)
                 (= :surface for)
                 (not no-shaft)
                 (not (pickaxe-held? world))
                 (filler world 1)
+                (= :solid (path/classify world (update feet 1 dec)))
+                (intent/centred? world feet)
                 (shaft-safe? world feet))))
 
 (defmethod stairs-stage :plan
