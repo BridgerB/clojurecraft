@@ -445,7 +445,7 @@
       (let [reaching (merge (attacking 270.0) (cloud [0.5 64.0 4.5] 1.0))]
         (is (= (dragon/shelter-walk [2 64 0]) (at [0.5 64.0 2.5] reaching))
             "the walk to the stand behind, out of its reach, never the back-off up the rim")
-        (is (not (cut? [0.5 64.0 2.5] reaching {:intent/kind :walk :intent/target [2 64 0]}))
+        (is (not (cut? [0.5 64.0 2.5] reaching (dragon/shelter-walk [2 64 0])))
             "which the breath does not end")
         (is (cut? [0.5 64.0 2.5] reaching {:intent/kind :walk :intent/target [0 64 3]})
             "a walk to a cell in its reach ends"))
