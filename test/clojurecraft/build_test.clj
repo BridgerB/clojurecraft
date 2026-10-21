@@ -1540,6 +1540,19 @@
         "past hunt-rise: on down toward the sea as before")
     (is (= :tunnel (:intent/kind (hunt (pool-at 40)))) "level or below: the tunnel as before")))
 
+(deftest a-swim-out-that-ends-where-it-began-again-and-again-gives-the-site-up
+  ;; sim snapshot R3-4-1 (issue #178): a shallow pool, the swim-out done on dry land at once and
+  ;; asked for again, for the whole window at health 1
+  (let [w (standing-at (open-ground {}) [10.5 63.0 10.5])
+        i {:intent/kind :build :intent/origin [4 60 4] :intent/status :active}
+        swum-n (fn [w n] (nth (iterate build/swum w) n))
+        at (fn [w] (assoc w :plan/intent i))]
+    (is (not (build/swim-looped? (:plan/intent (swum-n (at w) 2)))) "twice is not yet a loop")
+    (is (build/swim-looped? (:plan/intent (swum-n (at w) 3))) "three on one cell is")
+    (is (not (build/swim-looped?
+              (:plan/intent (build/swum (assoc (swum-n (at w) 2) :player/pos [11.5 63.0 10.5])))))
+        "a swim-out that moved the bot starts the count again")))
+
 (deftest a-block-at-the-edge-of-reach-is-walked-to-not-dug
   ;; real snapshot real-5-s2-Clj_r09 (issue #461): the block in the way of the lava's stand was dug
   ;; from 4.478 blocks, the walk's momentum carried the eye to 4.5007 the next tick, and the dig

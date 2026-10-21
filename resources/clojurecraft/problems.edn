@@ -195,6 +195,7 @@
    "The current dimension, from the respawn packet"]
   :problem/risks
   ["A cast's water poured over the lava can land in the lava's own cell: the lava turns to obsidian, the water goes with it and the bucket stays empty, so the next cell's water pour failed :not-held (issue #455); the build's row asks the needs planner for a water bucket again (build/water-needed?). A lava source the digs' water turned to obsidian before the scoop aimed fails :target-gone; the refill chooses another (build/lava-gone?, issue #419)"
+   "Sim snapshots R2-36-1 and R3-13-1 (issue #135) and R2-45-1 (issue #178) spent the judged window climbing to the surface for planks, deep in the rock with no pickaxe and every block of a stair dug by hand, 30 s a level: a climb out with no pickaxe held and a filler carried is now a shaft, one dig a level and a block laid under the feet (stairs/shaft?)"
    "A refill ray can cross the block supporting its own feet even when every lava cell is below them: reject that station and drop an in-flight refill dig of its support, rather than fall into lava and exhaust escapes with :no-footing (issue #228, R1/16 and R3/43)."
    "With no lava loaded at the sea's depth the hunt tunnels on, away from the landing, so new chunks load, rather than waiting :no-site (issue #41, real-4)."
    "A place whose retreat fails with the body afloat swims to a bank and looks for a spot there, rather than failing :no-spot in the open sea (issue #450, R3/34)."
