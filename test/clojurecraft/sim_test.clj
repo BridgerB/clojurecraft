@@ -2051,6 +2051,28 @@
     (is (:player/on-ground? w))
     (is (empty? (:sim/violations sim)))))
 
+(deftest a-climb-out-with-no-pickaxe-is-a-shaft-of-one-dig-a-level
+  ;; sim snapshots R2-36-1 and R3-13-1 (issue #135) and R2-45-1 (issue #178): a pickaxe worn out
+  ;; deep in the rock, every block of a stair up dug by hand, 30 s a level and a hundred levels
+  ;; to the sky. With a filler carried the climb digs the cell over the head and lays a block
+  ;; under the feet, a level a dig
+  (let [cobblestone {:item (get blocks/items :cobblestone) :count 32}
+        [w sim]
+        (intent-run-holding
+         {:intent/kind :stairs-up :intent/to-y 72 :intent/for :surface :intent/to-height? true}
+         pocket
+         66
+         {[:hotbar 0] cobblestone}
+         600000)]
+    (is (= :done (:intent/status (:plan/intent w)))
+        (pr-str (select-keys (:plan/intent w)
+                             [:intent/status :intent/reason :intent/stage :intent/no-shaft])))
+    (is (<= 72.0 (second (:player/pos w))) "six levels up")
+    (is (not (:intent/no-shaft (:plan/intent w))) "the shaft was never given up")
+    (is (every? (fn [[x _ z]] (and (= 8 x) (= 8 z))) (:sim/broken sim))
+        "only the column over the head was dug")
+    (is (empty? (:sim/violations sim)))))
+
 (deftest a-stair-up-saved-above-its-launch-floor-recovers
   (let [up {:intent/kind :stairs-up
             :intent/to-y 72

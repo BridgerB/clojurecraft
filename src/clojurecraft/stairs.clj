@@ -876,6 +876,45 @@
          (filter safe-toward?)
          first)))
 
+(defn shaft-cell
+  "The one cell a shaft up opens from feet [x y z]: the cell over the head, which the next block
+   under the feet lifts the body into."
+  [[x y z]]
+  [x (+ y 2) z])
+
+(defn pickaxe-held?
+  "Does the inventory hold a pickaxe of any material?"
+  [world]
+  (boolean (some (fn [[_ {:keys [item]}]] (= :pickaxe (:kind (blocks/tool item))))
+                 (:player/inventory world))))
+
+(defn shaft-safe?
+  "May the cell over the head be dug (clear-way?: no water, lava or unloaded chunk in or beside
+   it), with no gravel or sand over it to fall on the bot, no fluid straight over it and none
+   beside it for the dig to let in?"
+  [world feet]
+  (let [cell (shaft-cell feet)]
+    (and (clear-way? world [cell])
+         (not (falls-over? world [cell]))
+         (not (water-over? world [cell]))
+         (not (intent/exposes-fluid? world cell)))))
+
+(defn shaft?
+  "Is a climb out to the surface from feet cut as a shaft, one block dug and one laid under the
+   feet a level, rather than as stairs, three blocks dug a level? It is where no pickaxe is held
+   (every block is dug by hand, 7500 ms of stone and more of deepslate, so a stair is 30 s and a
+   hundred levels a long hour: sim snapshots R2-36-1 and R3-13-1, issue #135, and R2-45-1, issue
+   #178, each spent the judged window climbing), a filler is carried to lay, the cell over the
+   head is safe to dig (shaft-safe?) and the intent has not given the shaft up
+   (:intent/no-shaft)."
+  [world {:intent/keys [kind for no-shaft]} feet]
+  (boolean (and (= :stairs-up kind)
+                (= :surface for)
+                (not no-shaft)
+                (not (pickaxe-held? world))
+                (filler world 1)
+                (shaft-safe? world feet))))
+
 (defmethod stairs-stage :plan
   [world {:intent/keys [kind dir turns visited] :or {turns 0 visited #{}} :as i} _]
   (let [dir (or dir (first directions))
@@ -893,6 +932,11 @@
                  needed)
         rock (when needed (rock-heading i #(fresh-safe? world (cells-of feet %))))]
     (cond (airborne? world) (assoc world :player/controls {}) ; land first
+          (shaft? world i feet)
+          (intent/assoc-intent world
+                               :intent/stage :shaft
+                               :intent/started-y (physics/y-of (:player/pos world))
+                               :intent/started-tick (:time/tick world))
           (fresh-safe? world cells)
           (intent/assoc-intent world
                                :intent/dir dir
@@ -929,6 +973,15 @@
                        (:intent/to-y i)
                        ", turning"))
           :else (turned world dir turns (str "stairs: refused toward " dir ", turning")))))
+
+(defn unshaft
+  "world with the climb's shaft given up for this intent (:intent/no-shaft), back to :plan to cut
+   stairs: a dig or a pillar the shaft could not do, or a cell over the head it may not open."
+  [world]
+  (-> world
+      (assoc :player/controls {})
+      (intent/assoc-intent :intent/stage :plan :intent/no-shaft true)
+      (intent/dissoc-intent :intent/child)))
 
 (defn refuse
   "Turn the staircase from a stair (or a level step) a child would not cut or lay, saying why;
@@ -975,6 +1028,31 @@
    (or into the one below): the cell is open, which is what the dig was for."
   [child]
   (and (intent/failed? child) (= :target-gone (:intent/reason child))))
+
+(defmethod stairs-stage :shaft
+  ;; the cell over the head dug by hand (a child :dig) when it is rock, then a child :pillar up
+  ;; one level (a block laid under the feet at the top of a jump), again until the intent is
+  ;; done; a child that fails, or a cell no longer safe to open, gives the shaft up (unshaft)
+  [world {:intent/keys [child]} event]
+  (let [feet (intent/feet world)
+        cell (shaft-cell feet)
+        item (filler world 1)]
+    (cond (and child (or (intent/done? child) (fell? child)))
+          (intent/dissoc-intent world :intent/child)
+          (and child (intent/failed? child)) (unshaft world)
+          child (intent/run-child world event)
+          (airborne? world) (assoc world :player/controls {})
+          (not (and item (shaft-safe? world feet))) (unshaft world)
+          (= :solid (path/classify world cell))
+          (intent/run-child (intent/assoc-intent world :intent/child (intent/child-dig cell)) event)
+          :else
+          (intent/run-child (intent/assoc-intent world
+                                                 :intent/child
+                                                 {:intent/kind :pillar
+                                                  :intent/item item
+                                                  :intent/top (inc (long (second feet)))
+                                                  :intent/status :active})
+                            event))))
 
 (defn by-hand?
   "Is staircase i cut by hand where no tool of a block's kind is held at all? A stair up is:
