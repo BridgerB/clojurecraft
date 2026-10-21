@@ -242,7 +242,8 @@
    planner looks again), ending beside the trunk (tunnel-reach), where the walk to it has a route.
    The run is given up, and the trunk with it, when a step is refused (:blocked fails the intent:
    plan/fail-intent blacklists the trunk and counts it against its column, two failures skip the
-   column), and ends without a new run once the feet are beside the trunk. Not skipped for a
+   column), and ends without a new run once the feet are beside the trunk. Never across open
+   water (water-toward?: crossing is for that). Not skipped for a
    failed walk's neighbourhood (:plan/unreached) as the far trunks are: that failure is this one,
    a tree whose leaves no path crosses. Sim world R1/4 (issues #370, #186) stood on its own
    stairs at y 79, six blocks from a two-log oak whose leaves walled it in and four under the
@@ -264,6 +265,7 @@
                                           (>= (get failures [x z] 0) max-trunk-failures))))
                             (filter #(standing-trunk? world %))
                             (filter (fn [[_ ty _]] (<= (abs (- eye-y ty)) 12)))
+                            (remove #(water-toward? world feet % eye-y))
                             (filter #(< tunnel-reach
                                         (physics/distance (physics/centre feet)
                                                           (physics/centre %))))
