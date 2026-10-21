@@ -63,6 +63,9 @@
                              (pr-str (select-keys i
                                                   [:intent/kind :intent/stage :intent/target
                                                    :intent/at :intent/replans :intent/route]))
+                             (pr-str (select-keys (:intent/child i)
+                                                  [:intent/kind :intent/target :intent/for
+                                                   :intent/stage]))
                              (pr-str (get (:intent/waypoints i) (:intent/at i)))
                              (pr-str (count (:intent/waypoints i)))
                              (pr-str (terrain/fluid-at world (intent/feet world)))))
