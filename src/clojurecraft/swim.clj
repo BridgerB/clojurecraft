@@ -44,6 +44,7 @@
 (def escape-timeout-ticks 2400)       ; 120 s: an escape longer than this has failed
 (def search-every-ticks 20)           ; with no bank in reach yet, look again this often while rising
 (def notch-radius 4)                  ; how far on the plane a wall is notched into for a bank when there is none (a dig's reach)
+(def approach-radius 8)                ; how far on the plane a wall's bank-block cell is swum toward when it is out of the place reach
 (def rise-clear 2)                    ; feet under a rise's top where it is still in its shaft: no bank is looked for deeper
 (def centre-slack 0.15)               ; how far off its column's centre a body rising up a shaft may drift
 (def shore-reach 64)                  ; how far along eight bearings a swim with no bank in reach looks for dry ground
@@ -219,6 +220,31 @@
                                                            (physics/centre cell)) cell]))
          first)))
 
+(defn bank-cells
+  "The water cells at the float-top level to lay a filler into that makes a bank (see
+   bank-block), within radius on the plane and reach of the eye, nearest first; none unless the
+   feet are under the sky."
+  [world [fx _ fz :as feet] surface radius reach]
+  (when (terrain/under-sky? world feet)
+    (let [top (float-top world feet surface)
+          eye (game/eye world)]
+      (->> (for [dx (range (- radius) (inc radius))
+                 dz (range (- radius) (inc radius))
+                 :let [x (+ fx dx)
+                       z (+ fz dz)
+                       cell [x top z]
+                       bank [x (inc top) z]]
+                 :when (and (= :water (terrain/fluid-kind world cell))
+                            (path/clear? world bank)
+                            (path/clear? world [x (+ top 2) z])
+                            (in-the-open? world bank)
+                            (not (place/inside-player? world cell))
+                            (place/support world cell)
+                            (<= (physics/distance eye (physics/centre cell)) reach))]
+             cell)
+           (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
+                                                             (physics/centre cell)) cell]))))))
+
 (defn bank-block
   "With no bank in reach and the water open to the sky over the feet, the water cell at the
    float-top level to lay a filler into that makes one: within notch-radius on the plane and the
@@ -230,27 +256,18 @@
    39109674329 runner 4 bot Clj_r16 (issue #92) swam 73 blocks to a cliff three blocks over the
    water with 489 cobblestone and no pickaxe, dug a notch in it by hand (75 s a block under water)
    and was :no-escape three times in six minutes."
-  [world [fx _ fz :as feet] surface]
-  (when (terrain/under-sky? world feet)
-    (let [top (float-top world feet surface)
-          eye (game/eye world)]
-      (->> (for [dx (range (- notch-radius) (inc notch-radius))
-                 dz (range (- notch-radius) (inc notch-radius))
-                 :let [x (+ fx dx)
-                       z (+ fz dz)
-                       cell [x top z]
-                       bank [x (inc top) z]]
-                 :when (and (= :water (terrain/fluid-kind world cell))
-                            (path/clear? world bank)
-                            (path/clear? world [x (+ top 2) z])
-                            (in-the-open? world bank)
-                            (not (place/inside-player? world cell))
-                            (place/support world cell)
-                            (<= (physics/distance eye (physics/centre cell)) place/place-reach))]
-             cell)
-           (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
-                                                             (physics/centre cell)) cell]))
-           first))))
+  [world feet surface]
+  (first (bank-cells world feet surface notch-radius place/place-reach)))
+
+(defn wall-toward
+  "With no bank-block in reach, the nearest cell of one within approach-radius on the plane out of
+   the place reach (bank-cells), for the swim to head for until it is in reach; nil when none.
+   Sim race 39550831606 (issue #92, world R4/9): the sea met a cliff that leaned over the water
+   along the bot's reach, the cells under the lean were no bank, the open ones lay a block past
+   the place reach, and the escape dug a notch in the wall by hand, 37 s a block, until it timed
+   out, three times."
+  [world feet surface]
+  (first (bank-cells world feet surface approach-radius ##Inf)))
 
 (defn child-dig
   "A :dig child for cell that may expose water: the escape digs beside the water it is in."
@@ -484,13 +501,24 @@
             laid (when-not (or b cap rise? no-lay)
                    (when-let [item (stairs/filler world 1)]
                      (when-let [cell (bank-block world feet surface)] [cell item])))
-            wall (when-not (or b cap laid rise?) (notch world feet surface))]
+            toward (when-not (or b cap laid rise? no-lay)
+                     (when (stairs/filler world 1) (wall-toward world feet surface)))
+            wall (when-not (or b cap laid toward rise?) (notch world feet surface))]
         (cond b
               (-> world
                   (intent/assoc-intent :intent/bank b :intent/target b)
                   (game/say (str "swim-out: bank " b)))
               cap (dig-or-sink world feet cap "no bank")
               laid (start-lay world laid "no bank")
+              ;; a wall's laid bank is just out of the place reach: swim along to it
+              toward
+              (-> world
+                  (assoc
+                   :player/controls
+                   (shore-controls world toward (or to-y (inc (float-top world feet surface)))))
+                  (intent/assoc-intent :intent/next-search (+ tick search-every-ticks)
+                                       :intent/shore toward)
+                  (game/say (str "swim-out: no bank, toward the wall at " toward)))
               wall (start-dig world wall "no bank, notching the wall")
               ;; nothing in reach: rise, toward a shore when the water is open over the feet
               ;; (the roof or a bank comes into reach, or the timeout ends it)
