@@ -152,6 +152,11 @@
   ["Planks burned as fuel run dry after about 3 ingots and starve the wood chain"
    "Race 39088700340 bot Clj_r10 (issue #60) stood in a frozen sea with the water a block under the sheet and found no surface to scoop; ice is no water, but the game leaves a source where it breaks, so a sheet is dug (scoop/ice-water), never cut toward far pools"
    "Race 39037024176 runner 1 (issue #342) mined toward fluid-exposing rock and carried stair refusals between feet cells until furnace failed :boxed; exposed targets must pass the dig's fluid guard, and a completed stair must reset its turns"
+   "Sim race 39550831606 R4/1 (issue #177) dithered a cell wide for 120 s sixteen blocks from a shore on each side, the nearer shore changing with the cell the feet were in; the shore swum for is kept while it is dry ground"
+   "Sim race 39593216223 R4/2 (issue #62) walked back up to the surface over stone from the foot of the staircase cut from it, every twelve seconds until the run stalled; the feet count as over the surface a block more for each block they are below it"
+   "Sim race 39593216223 R4/42 (issue #62) alternated a retreat up its staircase and the same staircase down to the dead end at the mine's depth; a retreat names the cell it leaves boxed as it starts, so the descent that follows turns"
+   "Sim race 39593216223 R2/39 (issue #66) failed :stair-not-taken under a moss carpet two over the feet, which the jump rose into; a stair opens every cell with a collision box, not only a cube"
+   "Race 39181272601 bot Clj_r23 (issue #40) walked over a glacier to a landing in chunks not loaded and failed :no-path where it stood twelve times; a walk off the ice that failed is not chosen again"
    "Race 39070889905 runner 1 (issue #342) spent its escape filler on descent seals and could not seal the climb out; descent seals must keep the same lay-reserve as floors, while climbs may spend it"
    "Items in the furnace or grid are invisible to the inventory count, so steps flicker"
    "Closing the window with a loaded cursor drops the item on the ground"
@@ -272,6 +277,8 @@
    "A fortress tunnel digs a block out of its own body cells (gravel fallen in) before it chooses or works a step: no walk has a route from inside a block, and a step's entry asked one every tick for fifteen minutes (issue #338, R1-33-1)"
    "A tunnel at a dead end over a drop climbs onto a block laid beside its feet against the ledge before it retreats, the body on its footing while the block is laid, never a causeway; and a second retreat in a row into cells it already stood in is a pace, failed :blocked, not 32 steps counted a tunnel for four hours (issue #338, R3-6-1)"
    "A fortress tunnel replaces a lost pickaxe from held supplies before starting; a broken-tool tunnel yields without spending a failed attempt, and without replacement supplies even slow rock is cleared by hand rather than retrying no-pickaxe in the woodless Nether (issue #296)"
+   "A tunnel stands ringed with lava (an arrival portal cast into a lava lake) only by capping the lava beside the cells a step opens first, a block placed into it from the stand, when a solid neighbour holds each and a filler is carried; and a body held by the edge of a block with the cell under its centre air steps back onto a standable floor beside it before it chooses a step (issues #286, #284)"
+   "A step that lays a block (a replaced floor, a lava floor) is safe only with a filler carried, and soul soil, blackstone and basalt count as fillers: R3-38-1 dug a soul sand floor with none left and failed :not-held (issue #410)"
    "The model's natural Nether arrival needs room for a four-by-five portal frame in either horizontal axis, not just a standing cell: R4/12 and R4/4 arrived on isolated gravel above lava and correctly refused every tunnel step, blocked (issue #286)"]
   :problem/risks
   ["Stale overworld columns answer Nether lookups (a brick reported exactly 64 blocks off)"

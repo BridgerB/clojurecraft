@@ -136,8 +136,10 @@
   "The items a floor is laid from, what a mine carries most of first: cobblestone, the stones
    that drop themselves, then dirt, then netherrack (what a descent in the Nether digs: gym batch
    pearls-warped-e, plan run 39164914828, run 3 had every stair refused in a pocket with no
-   filler to lay). Never gravel or sand, which fall out of a floor."
-  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack])
+   filler to lay), then the Nether's own rock a tunnel digs and carries (sim snapshot R3-38-1,
+   issue #410, held 55 soul soil and no filler). Never gravel or sand, which fall out of a floor."
+  [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack :soul_soil
+   :blackstone :basalt])
 
 (defn filler
   "The first of fillers the inventory holds n or more of, or nil."
@@ -510,10 +512,14 @@
 
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
-  "The first of the stair's cells (top first) still solid, or nil when the stair is open."
+  "The first of the stair's cells (top first) still in the body's way, or nil when the stair is
+   open: a full cube, or a flat box too (blocks/collision-top: a carpet), which the head meets
+   going up the jump. Sim race 39593216223 (issue #66, world R2/39): a moss carpet over the head
+   was no cube, the stair was called open, and the jump rose into the carpet's box three times
+   for ten seconds each, :stair-not-taken."
   [world cells]
   (first (filter #(some-> (terrain/block-at world %)
-                          blocks/solid?)
+                          blocks/collision-top)
                  cells)))
 
 (defn boxed?
