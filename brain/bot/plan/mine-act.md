@@ -56,6 +56,7 @@ sourceRefs:
   - test/clojurecraft/stone_test.clj#a-boxed-pocket-retreats-along-a-short-route-to-new-rock
   - src/clojurecraft/stone.clj#defn climb
   - src/clojurecraft/stone.clj#defn cross-home
+  - src/clojurecraft/stone.clj#defn walk-home
   - test/clojurecraft/stone_test.clj#a-block-in-the-sea-is-left-by-swimming-home-not-climbed-from
   - src/clojurecraft/plan.clj#def boxing-kinds
   - test/clojurecraft/stone_test.clj#boxed-in-by-water-with-no-way-away-the-mine-climbs-out
@@ -116,6 +117,8 @@ The `:unboxed-away` route goal excludes both boxed cells and `:plan/boxed-route`
 
 ## Flint: dig a held gravel again (`:redig`)
 Gravel's loot table drops flint one time in ten, else the gravel itself. The `:flint-from-gravel` row needs one gravel and provides flint; its act starts a `:redig` intent, which runs three child intents in its own place (`link`, as stairs runs its digs): `:place` the held gravel in the pickup cell chosen by `redig-place` (in a passage if need be, since it is dug again at once), `:dig` what it placed, `:collect` with the row's drops (flint and gravel). One intent from placing to picking up matters: as three separate intents, the placing spent the gravel the row needs, and on the next tick the planner went for more gravel with `:dig-gravel` instead of digging the one it had just placed. When gravel comes back, the planner simply starts another `:redig`; there is no counter. In the sim, seed 4 rolls gravel four times and flint on the fifth dig, and the run replays to the same tick.
+
+**A causeway or bridge with nothing to stair into.** `walk-home` comes before the dead-end retreat: where a climb already died :boxed (`:plan/boxed-at`) and the landing (`:plan/go-at`) is routable on foot and farther than `home-walk-distance` (12), the mine walks there instead of retreating twelve blocks and stepping level again. Issue #62's four snapshots (R4/1, R2/38) held no filler on a one-wide dirt strip over the sea and looped stairs-down, :boxed, retreat for the whole window, `[:ingots :timeout]`; `islet?` misses a strip because dirt, not water, lies east and west.
 
 ## Gotchas
 - **Click reach is not pickup reach.** `redig-place` chooses a supported, clear cell immediately beside the feet, including a passage, and gives that cell to the child placement. With none, it retreats to fresh ground and tries placement again; it never cuts a placement niche. Issue #151's R3/14 and real runner 8 snapshots placed gravel through rock or round a corner, then walked into the intervening wall until three collects failed `:not-picked-up`. Both now collect gravel repeatedly and reach flint-and-steel within their kept windows.
