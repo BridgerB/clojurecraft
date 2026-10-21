@@ -21,7 +21,7 @@ sourceRefs:
   - src/clojurecraft/make.clj#defn craft-now
   - src/clojurecraft/make.clj#defn resolve-spares
   - src/clojurecraft/make.clj#defn without-worn
-  - src/clojurecraft/make.clj#defn uses-left
+  - src/clojurecraft/window.clj#defn uses-left
   - test/clojurecraft/make_test.clj#a-worn-pickaxe-is-no-spare
   - test/clojurecraft/make_test.clj#sticks-for-two-more-pickaxes-are-gathered-before-the-iron
   - test/clojurecraft/make_test.clj#a-pickaxe-for-the-coal-is-made-from-what-is-carried

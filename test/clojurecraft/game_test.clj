@@ -348,6 +348,7 @@
             :entity/pos [4.5 64.0 4.5]
             :entity/seen-at 0
             :entity/vel [0.25 0.0 0.0]
+            :entity/yaw 0.0
             :entity/health 7.5
             :entity/flags 1}
            (get-in w [:world/entities 60])))
