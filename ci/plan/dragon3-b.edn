@@ -1,6 +1,7 @@
 ;; issue #267, round 3 batch b: a breath near the feet is left by a walk to the nearest cell out
 ;; of every breath's reach (escape), never combat's straight back-off (dragon3-a's three bots ran
-;; into the fountain's pillar and died in the cloud); three runs a row.
+;; into the fountain's pillar and died in the cloud); three runs a row. Pushed on its own, so
+;; plan.yml picks this file.
 {:plans/label "dragon3-b"
  :plans/jobs 2
  :plans/issue 267
