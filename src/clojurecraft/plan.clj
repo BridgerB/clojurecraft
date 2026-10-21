@@ -423,8 +423,9 @@
 (defn failed? "Has the plan given up (see :plan/reason)?" [world] (= :failed (:plan/status world)))
 
 (defn summary
-  "Every :plan/* attribute but the blacklist and the creepers backed away from, for the RESULT line."
+  "Every :plan/* attribute but the blacklist, the creepers backed away from and the mobs a
+   back-off was cornered by, for the RESULT line."
   [world]
   (into {}
         (filter (fn [[k _]] (= "plan" (namespace k))))
-        (dissoc world :plan/blacklist :plan/backed-off)))
+        (dissoc world :plan/blacklist :plan/backed-off :plan/cornered)))
