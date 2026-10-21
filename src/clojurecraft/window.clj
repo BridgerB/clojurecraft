@@ -8,7 +8,8 @@
    slots and cursor); the server adopts it and then sends only what differs. We predict no
    changed slots, so every changed slot comes back; and an empty cursor, so the world drops
    :window/cursor on every click and the server corrects it only when it is not empty."
-  (:require [clojurecraft.game :as game]
+  (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.recipe :as recipe]))
@@ -119,23 +120,63 @@
    38805920624 runner 5 (issues #172, #192): eight bots stopped at 36 full slots, 450 to 830
    cobblestone, the stones that drop themselves, raw copper, lapis, sand and clay among them;
    a craft's result or a furnace's output shift-clicked into the inventory had nowhere to go, the
-   server answered nothing, and the resync after it found no free slot: :inventory-full."
+   server answered nothing, and the resync after it found no free slot: :inventory-full. The
+   Nether adds what a tunnel to the fortress picks up (race 39337645053, issue #446: soul sand
+   and soil, wart blocks, shroomlights, nuggets, quartz)."
   #{:sand :red_sand :sandstone :red_sandstone :clay_ball :raw_copper :lapis_lazuli :redstone
     :calcite :tuff_bricks :dripstone_block :pointed_dripstone :amethyst_shard :leaf_litter
     :moss_block :moss_carpet :big_dripleaf :small_dripleaf :wildflowers :wheat_seeds :oak_sapling
     :birch_sapling :spruce_sapling :jungle_sapling :acacia_sapling :dark_oak_sapling :cherry_sapling
-    :mangrove_propagule})
+    :mangrove_propagule :soul_sand :soul_soil :nether_wart_block :warped_wart_block :shroomlight
+    :lantern :gold_nugget :quartz})
 
 (def cobblestone-keep 128)            ; cobblestone a full inventory never throws below: a cast's walls, floors and seals
 
 (def filler-keep
   "How many of each building block a full inventory keeps when throwing surplus stacks."
-  (zipmap [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt]
+  (zipmap [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack]
           (repeat cobblestone-keep)))
+
+(def spare-uses 40)                   ; digs a tool must have left to count as a spare: a tunnel's twelve level steps dig about thirty
+
+(defn uses-left
+  "How many digs a slot's tool has left: its tier's durability (blocks/materials) less the
+   :damage component the server sends on a worn tool (packet/read-slot); nil for an item that
+   is no tool."
+  [{:keys [item components]}]
+  (when-let [{:keys [tier]} (blocks/tool item)]
+    (- (:durability (blocks/materials tier)) (get components :damage 0))))
+
+(defn worn?
+  "Is a slot's tool too worn to be a spare: fewer than spare-uses digs left?"
+  [slot]
+  (boolean (some-> (uses-left slot)
+                   (< spare-uses))))
+
+(defn worn-spare-slot
+  "The player slot (main inventory first) of a worn tool (worn?) that the inventory holds a
+   better one of the same item beside: the stack a full inventory throws first of its tools. The
+   last stack of a tool is never one, however worn. Race 39337645053 (issues #463, #457): bots at
+   the flint and steel and the cast held sixteen and eighteen stone pickaxes, each worn out by
+   the stairs and tunnels and each made again as a spare (make/resolve-spares), one slot apiece
+   because tools do not stack, and the craft that needed a slot failed :inventory-full."
+  [world]
+  (let [inv (:player/inventory world)
+        held (for [p inventory/main-then-hotbar
+                   :let [s (get inv p)]
+                   :when (and s (worn? s))]
+               [p (:item s) (uses-left s)])]
+    (some (fn [[p item n]]
+            (when (some (fn [q]
+                          (when-let [o (get inv q)]
+                            (and (not= q p) (= item (:item o)) (> (uses-left o) n))))
+                        inventory/main-then-hotbar)
+              p))
+          held)))
 
 (defn junk-slot
   "The player slot (main inventory first) of the stack a full inventory throws away: the first
-   holding junk, else a building-block stack whose loss still leaves filler-keep of its kind; nil when
+   holding junk, else a worn tool with a better one beside it (worn-spare-slot), else a building-block stack whose loss still leaves filler-keep of its kind; nil when
    there is neither."
   [world]
   (let [inv (:player/inventory world)
@@ -145,6 +186,7 @@
                    :when s]
                [p (recipe/item-name (:item s)) (:count s)])]
     (or (some (fn [[p n]] (when (junk n) p)) held)
+        (worn-spare-slot world)
         (some (fn [[p n c]]
                 (when-let [keep (filler-keep n)] (when (>= (- (get counts n 0) c) keep) p)))
               held))))
