@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T14:32:51.951Z",
+  "at" : "2026-10-21T14:35:11.714Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -42,7 +42,7 @@
   }, {
     "number" : 286,
     "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
     "number" : 161,
@@ -52,7 +52,7 @@
   }, {
     "number" : 284,
     "title" : "Bot stops at fortress: no-path",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 62,
@@ -97,7 +97,7 @@
   }, {
     "number" : 410,
     "title" : "Bot stops at fortress: not-held",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 66,
@@ -257,10 +257,14 @@
     "why" : "hands-off label"
   }, {
     "issue" : 286,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "leave",
+    "why" : "hands-off label"
   }, {
     "issue" : 161,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 284,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -293,6 +297,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 105,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 410,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
