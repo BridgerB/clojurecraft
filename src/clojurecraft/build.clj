@@ -1240,12 +1240,7 @@
               (let [work (cond (= :place op) (or (foundation world pos) pos)
                                :else pos)
                     alt (reachable-stand world stand work)]
-                (cond (nil? alt)
-                      (or (when build (way-back world i))
-                          ;; no route into the room: the way cut to the stand nearest the feet
-                          (when-let [cut (and build (nearest-stand-cell world i work))]
-                            (toward-stand world cut build origin facing))
-                          :no-stand)
+                (cond (nil? alt) (or (when build (way-back world i)) :no-stand)
                       (intent/centred? world alt) nil
                       :else {:intent/kind :walk :intent/target alt :intent/for :build})))))))
 
