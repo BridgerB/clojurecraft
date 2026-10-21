@@ -16,24 +16,34 @@
     {:feet feet
      :kind shape
      :to-y (:intent/to-y i)
+     :for (:intent/for i)
      :filler (stairs/carried-filler world)
      :boxed-at (:plan/boxed-at world)
-     :dirs (vec (for [d stairs/directions
-                      :let [cells (if (= :stairs-up shape)
-                                    (stairs/up-cells feet d)
-                                    (stairs/stair-cells feet d))]]
-                  {:d d
-                   :blocks (mapv #(some-> (terrain/block-at world %)
-                                          blocks/name-of)
-                                 cells)
-                   :class (mapv #(path/classify world %) cells)
-                   :clear (stairs/clear-way? world cells)
-                   :safe (stairs/safe? world cells)
-                   :down-safe (stairs/down-safe? world cells)
-                   :down-lay (stairs/down-lay world feet cells)
-                   :seal (stairs/seal world feet cells)
-                   :lay (stairs/lay world feet cells)
-                   :wet (vec (stairs/water-beside world cells))}))}))
+     :dirs (vec
+            (for [d stairs/directions
+                  :let [cells (if (= :stairs-up shape)
+                                (stairs/up-cells feet d)
+                                (stairs/stair-cells feet d))]]
+              {:d d
+               :blocks (mapv #(some-> (terrain/block-at world %)
+                                      blocks/name-of)
+                             cells)
+               :class (mapv #(path/classify world %) cells)
+               :clear (stairs/clear-way? world cells)
+               :safe (stairs/safe? world cells)
+               :down-safe (stairs/down-safe? world cells)
+               :down-lay (stairs/down-lay world feet cells)
+               :up-dry (stairs/up-dry? world cells)
+               :up-sealed (stairs/up-sealed? world cells)
+               :up-safe (stairs/up-safe? world cells)
+               :up-lay (stairs/up-lay world feet cells)
+               :step-lay (stairs/step-lay world feet cells)
+               :step-to-lay (stairs/step-to-lay world cells)
+               :wet-feet (stairs/wet-feet world cells)
+               :exposes (filterv #(intent/exposes-fluid? world %) cells)
+               :seal (stairs/seal world feet cells)
+               :lay (stairs/lay world feet cells)
+               :wet (vec (stairs/water-beside world cells))}))}))
 
 (defn -main
   [& paths]
