@@ -119,6 +119,19 @@
      #(into {} (map (fn [[k e]] [k [(entity/kind e) (:entity/pos e)]])) (entity/hostiles world)))
     (ask " logs-known" #(count (memory/positions-now world blocks/log-states)))
     (ask " gather-next" #(wood/gather-next world))
+    (doseq [[label f] [["continue-gather" wood/continue-gather] ["near-walk" wood/near-walk]
+                       ["climb-out" wood/climb-out] ["hunt" wood/hunt]
+                       ["into-water" wood/into-water] ["crossing" wood/crossing]
+                       ["return-walk" wood/return-walk]]]
+      (ask (str "  wood/" label) #(f world)))
+    (ask " nearest-logs"
+         #(->> (memory/positions-now world blocks/log-states)
+               (memory/nearest-first (game/eye world) 256)
+               (take 8)
+               (mapv (fn [c] [c (wood/standing-trunk? world c) (boolean ((wood/skipped world) c))
+                              (int (physics/distance (game/eye world) (physics/centre c)))]))))
+    (ask " trunk-failures" #(:plan/trunk-failures world))
+    (ask " unreached" #(:plan/unreached world))
     (ask " terrain" #(layers world 6 3 4))
     (when (:player/in-water? world) (swim-questions world))
     (pkplay/play p 0 (hook (atom #{})) (sampler (atom 0)))))
