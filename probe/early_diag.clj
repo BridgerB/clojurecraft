@@ -4,6 +4,7 @@
             [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
+            [clojurecraft.place :as place]
             [clojurecraft.simrace :as sr]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
@@ -40,6 +41,9 @@
                :step-lay (stairs/step-lay world feet cells)
                :step-to-lay (stairs/step-to-lay world cells)
                :wet-feet (stairs/wet-feet world cells)
+               :wet-support (mapv (fn [c] [c (terrain/fluid-at world c) (place/support world c)])
+                                  (stairs/wet-feet world cells))
+               :feet-fluid (terrain/fluid-at world feet)
                :exposes (filterv #(intent/exposes-fluid? world %) cells)
                :seal (stairs/seal world feet cells)
                :lay (stairs/lay world feet cells)
