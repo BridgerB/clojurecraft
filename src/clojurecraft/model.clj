@@ -154,6 +154,9 @@
    [:entity/phase
     "the ender dragon's phase, from its metadata (index 16): 0 circling, 3 landing, 4 taking off, 5 to 7 sitting on its perch, 9 dying (issue #267)"
     "inside :world/entities, the dragon, once its metadata said"]
+   [:entity/yaw
+    "the entity's body yaw in degrees as the server sends it (add-entity, the moves, entity-position-sync, teleport-entity): the dragon's says where its head and neck are (issue #267)"
+    "inside :world/entities, once the server said one"]
    [:entity/radius
     "an area effect cloud's radius in blocks, from its metadata (index 8): a dragon's breath cloud grows from 3 to 7 over its life, and the bot keeps out of all of it (issue #267)"
     "inside :world/entities, an area effect cloud, once its metadata said"]
