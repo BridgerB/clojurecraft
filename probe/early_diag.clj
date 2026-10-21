@@ -5,9 +5,25 @@
             [clojurecraft.intent :as intent]
             [clojurecraft.path :as path]
             [clojurecraft.place :as place]
+            [clojurecraft.scoop :as scoop]
             [clojurecraft.simrace :as sr]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
+
+(defn near-water
+  [world]
+  (let [[fx fy fz] (intent/feet world)]
+    (vec (for [dx (range -6 7)
+               dy (range -3 4)
+               dz (range -6 7)
+               :let [c [(+ fx dx) (+ fy dy) (+ fz dz)]
+                     f (terrain/fluid-at world c)]
+               :when (and f (= 0 (:fluid/level f)))]
+           {:c c
+            :black (contains? (:plan/blacklist world #{}) c)
+            :scoopable (scoop/surface-source? world c)
+            :reach (scoop/in-reach? world c)
+            :sees (scoop/sees? world c)}))))
 
 (defn why
   [world]
@@ -52,34 +68,38 @@
 (defn -main
   [& paths]
   (doseq [path paths]
-    (try (let [snap (capture/read-world path)
-               w (sr/world-for! snap)
-               lines (atom [])
-               dumps (atom 0)
-               walks (atom 0)
-               orig sr/step
-               logged (fn [world event]
-                        (let [w' (orig world event)]
-                          (doseq [e (:bot/effects w')
-                                  :when (= :log (:effect/kind e))]
-                            (swap! lines conj [(:time/now w') (:effect/message e)])
-                            (when (and (re-find #"^intent :walk" (str (:effect/message e)))
-                                       (< @walks 4))
-                              (swap! walks inc)
-                              (swap! lines conj
-                                [(:time/now w')
-                                 (str "WALK " (pr-str (:plan/intent w'))
-                                      " blacklist=" (count (:plan/blacklist w'))
-                                      " unwalkable=" (:plan/unwalkable w')
-                                      " attempts=" (:plan/attempts w'))]))
-                            (when (and (re-find #"refused toward|every stair refused"
-                                                (str (:effect/message e)))
-                                       (< @dumps 4))
-                              (swap! dumps inc)
-                              (swap! lines conj [(:time/now w') (str "WHY " (pr-str (why w')))])))
-                          w'))
-               r (with-redefs [sr/step logged] (sr/judged snap w))]
-           (println "DIAG" path (pr-str (:run/signature r)))
-           (doseq [[t m] (distinct @lines)] (println "LOG" path t m)))
-         (catch Exception e (println "CRASH" path (pr-str e)))))
+    (try
+      (let [snap (capture/read-world path)
+            w (sr/world-for! snap)
+            lines (atom [])
+            dumps (atom 0)
+            walks (atom 0)
+            orig sr/step
+            logged (fn [world event]
+                     (let [w' (orig world event)]
+                       (doseq [e (:bot/effects w')
+                               :when (= :log (:effect/kind e))]
+                         (swap! lines conj [(:time/now w') (:effect/message e)])
+                         (when (and (re-find #"^intent :walk" (str (:effect/message e)))
+                                    (< @walks 4))
+                           (swap! walks inc)
+                           (swap! lines conj
+                             [(:time/now w')
+                              (str "WALK " (pr-str (:plan/intent w'))
+                                   " blacklist=" (count (:plan/blacklist w'))
+                                   " unwalkable=" (:plan/unwalkable w')
+                                   " attempts=" (:plan/attempts w'))]))
+                         (when (and (re-find #"refused toward|every stair refused"
+                                             (str (:effect/message e)))
+                                    (< @dumps 4))
+                           (swap! dumps inc)
+                           (swap! lines conj [(:time/now w') (str "WHY " (pr-str (why w')))])
+                           (when (= 1 @dumps)
+                             (swap! lines conj
+                               [(:time/now w') (str "NEARWATER " (pr-str (near-water w')))]))))
+                       w'))
+            r (with-redefs [sr/step logged] (sr/judged snap w))]
+        (println "DIAG" path (pr-str (:run/signature r)))
+        (doseq [[t m] (distinct @lines)] (println "LOG" path t m)))
+      (catch Exception e (println "CRASH" path (pr-str e)))))
   (shutdown-agents))
