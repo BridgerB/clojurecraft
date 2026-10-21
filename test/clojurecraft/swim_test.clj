@@ -124,12 +124,24 @@
                  :world/chunks
                  {[0 0] (world/column (sea (range 8 16)))
                   [1 0] (world/column (sea (range 16)))
-                  [2 0] (world/column (sea (range 32 41)))})
+                  [2 0] (world/column (sea (range 9)))})
         feet [24 62 8]]
-    (is (= [41 64 8] (swim/far-shore w feet 64)) "east is the nearer, at sixteen; west is eighteen")
+    (is (= [41 64 8] (swim/far-shore w feet 64)) "east and west tie at seventeen, east first")
     (is (= [7 64 8] (swim/far-shore w feet 64 [7 64 8])) "the west shore chosen before is kept")
     (is (= [41 64 8] (swim/far-shore w feet 64 [20 64 8]))
-        "unless its column is water: a shore no more")))
+        "unless its column is water: a shore no more")
+    (let [roofed (assoc w
+                        :world/chunks
+                        {[0 0] (world/column (sea (range 8 16)))
+                         [1 0] (world/column (sea (range 16)))
+                         [2 0] (world/column (merge (sea (range 16))
+                                                    (into {}
+                                                          (for [x (range 16)]
+                                                            [[x 100 8]
+                                                             (blocks/default-state
+                                                              :cobblestone)]))))})]
+      (is (= [7 64 8] (swim/far-shore roofed feet 64))
+          "a block high over the sea does not make the sea round it a shore"))))
 
 (deftest a-deep-swim-rises-into-reach-before-notching
   (let [swim {:intent/kind :swim-out :intent/status :active}
