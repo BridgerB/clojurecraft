@@ -876,11 +876,13 @@
          (filter safe-toward?)
          first)))
 
-(defn shaft-cell
-  "The one cell a shaft up opens from feet [x y z]: the cell over the head, which the next block
-   under the feet lifts the body into."
+(defn shaft-cells
+  "The two cells a shaft up opens from feet [x y z], lowest first: the one over the head, which the
+   next block under the feet lifts the body into, and the one over that, which the :pillar's own
+   headroom check reads once the block is in and the body has risen. After the first level the
+   lower is open already, so a level digs one."
   [[x y z]]
-  [x (+ y 2) z])
+  [[x (+ y 2) z] [x (+ y 3) z]])
 
 (defn pickaxe-held?
   "Does the inventory hold a pickaxe of any material?"
@@ -889,15 +891,15 @@
                  (:player/inventory world))))
 
 (defn shaft-safe?
-  "May the cell over the head be dug (clear-way?: no water, lava or unloaded chunk in or beside
-   it), with no gravel or sand over it to fall on the bot, no fluid straight over it and none
-   beside it for the dig to let in?"
+  "May the shaft's cells (shaft-cells) be dug (clear-way?: no water, lava or unloaded chunk in or
+   beside them), with no gravel or sand over them to fall on the bot, no fluid straight over
+   them and none beside them for the dig to let in?"
   [world feet]
-  (let [cell (shaft-cell feet)]
-    (and (clear-way? world [cell])
-         (not (falls-over? world [cell]))
-         (not (water-over? world [cell]))
-         (not (intent/exposes-fluid? world cell)))))
+  (let [cells (shaft-cells feet)]
+    (and (clear-way? world cells)
+         (not (falls-over? world [(second cells)]))
+         (not (water-over? world cells))
+         (not-any? #(intent/exposes-fluid? world %) cells))))
 
 (defn shaft?
   "Is a climb out to the surface from feet cut as a shaft, one block dug and one laid under the
@@ -1035,12 +1037,12 @@
   (and (intent/failed? child) (= :target-gone (:intent/reason child))))
 
 (defmethod stairs-stage :shaft
-  ;; the cell over the head dug by hand (a child :dig) when it is rock, then a child :pillar up
+  ;; the cells over the head (shaft-cells) dug by hand (a child :dig) while any is rock, then a child :pillar up
   ;; one level (a block laid under the feet at the top of a jump), again until the intent is
   ;; done; a child that fails, or a cell no longer safe to open, gives the shaft up (unshaft)
   [world {:intent/keys [child]} event]
   (let [feet (intent/feet world)
-        cell (shaft-cell feet)
+        cell (first (filter #(= :solid (path/classify world %)) (shaft-cells feet)))
         item (filler world 1)]
     (cond (and child (or (intent/done? child) (fell? child)))
           (intent/dissoc-intent world :intent/child)
@@ -1049,7 +1051,7 @@
           child (intent/run-child world event)
           (airborne? world) (assoc world :player/controls {})
           (not (and item (shaft-safe? world feet))) (unshaft world :unsafe)
-          (= :solid (path/classify world cell))
+          cell
           (intent/run-child (intent/assoc-intent world :intent/child (intent/child-dig cell)) event)
           :else
           (intent/run-child (intent/assoc-intent world
