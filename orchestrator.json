@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T13:04:00.337Z",
+  "at" : "2026-10-21T13:05:12.267Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -43,7 +43,7 @@
     "number" : 286,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 446,
     "title" : "Bot stops at fortress: inventory-full",
@@ -277,7 +277,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 286,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 446,
     "move" : "leave",
