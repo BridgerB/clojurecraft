@@ -1731,12 +1731,11 @@
   [world]
   (let [[fx fy fz] (intent/feet world)
         sources (lava-sources world)
-        target? (fn [rise]
-                  (fn [[x y z :as src]]
-                    (and (<= (inc y) (+ fy rise))
-                         (or (> fy (inc y)) (> (max (abs (- x fx)) (abs (- z fz))) 1))
-                         (seq (stands-beside world src))
-                         (castable? sources src))))]
+        usable? (memoize (fn [[x y z :as src]]
+                           (and (or (> fy (inc y)) (> (max (abs (- x fx)) (abs (- z fz))) 1))
+                                (seq (stands-beside world src))
+                                (castable? sources src))))
+        target? (fn [rise] (fn [[_ y _ :as src]] (and (<= (inc y) (+ fy rise)) (usable? src))))]
     (some (fn [rise]
             (let [target? (target? rise)]
               (or (first (filter target? (sources-near world)))
