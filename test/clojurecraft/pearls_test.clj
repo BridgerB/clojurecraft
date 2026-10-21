@@ -586,15 +586,16 @@
     (let [angry (-> (burrowed [8.5 61.0 8.5] {7 (assoc calm :entity/creepy? true)})
                     (assoc :plan/blacklist #{7}))
           at (fn [p] (assoc-in angry [:world/entities 7 :entity/pos] p))]
-      (is (= 7 (first (pearls/angry-near (at [10.5 64.0 8.5])))) "angry, seven off the mouth")
-      (is (not (pearls/stale? (looked (at [10.5 64.0 8.5]) 12)))
+      (is (= 7 (first (pearls/angry-near (at [3.5 64.0 15.5]))))
+          "angry, seven off the mouth, nine from the end")
+      (is (not (pearls/stale? (looked (at [3.5 64.0 15.5]) 12)))
           "an angry one given up on near the mouth keeps the burrow")
       (is (= {:intent/kind :lookout :intent/for :pearls}
-             (plan/next-intent (looked (at [10.5 64.0 8.5]) 12) row plan/goals))
+             (plan/next-intent (looked (at [3.5 64.0 15.5]) 12) row plan/goals))
           "and the bot in it")
       (is
        (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
-          (plan/next-intent (assoc (at [10.5 64.0 8.5]) :player/pos [3.5 64.0 8.5]) row plan/goals))
+          (plan/next-intent (assoc (at [3.5 64.0 15.5]) :player/pos [3.5 64.0 8.5]) row plan/goals))
        "at the mouth: back in")
       (is (nil? (pearls/angry-near (at [3.5 44.0 8.5])))
           "one twenty below the mouth, in another cave, never comes: no danger")
