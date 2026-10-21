@@ -310,19 +310,19 @@
 (def shun-drift 1.0)                  ; blocks a creeper may stray from where it was first backed away from and still be the one standing still
 
 (defn noted
-  "The world with one more back-off from creeper eid (entity e) kept in :plan/backed-off, as
-   {eid {:pos where it stood the first time :times back-offs from it there}}: a creeper that
-   stands within shun-drift of that place has not come on in all those backings away. A creeper
-   that has moved on starts its count again; any other kind is not kept."
+  "The world with one more back-off from hostile eid (entity e) kept in :plan/backed-off, as
+   {eid {:pos where it stood the first time :times back-offs from it there}}: a mob that stands
+   within shun-drift of that place has not come on in all those backings away. One that has moved
+   on starts its count again. Any kind is kept, not only a creeper's: sim race 39076908669 (issue
+   #62, world R1/11) backed away at a third of a health from a zombie stuck in the rock three
+   blocks off, seven thousand times."
   [world eid e]
-  (if (= :creeper (entity/kind e))
-    (update-in world
-               [:plan/backed-off eid]
-               (fn [{:keys [pos times] :as seen}]
-                 (if (and seen (<= (physics/distance pos (:entity/pos e)) shun-drift))
-                   (assoc seen :times (inc times))
-                   {:pos (:entity/pos e) :times 1})))
-    world))
+  (update-in world
+             [:plan/backed-off eid]
+             (fn [{:keys [pos times] :as seen}]
+               (if (and seen (<= (physics/distance pos (:entity/pos e)) shun-drift))
+                 (assoc seen :times (inc times))
+                 {:pos (:entity/pos e) :times 1}))))
 
 (defn cornered
   "The world with entity eid kept in :plan/cornered: a back-off from it ended on its clock, the
@@ -390,21 +390,22 @@
   (let [dy (- (physics/y-of (:entity/pos e)) (physics/y-of (:player/pos world)))]
     (and (<= (- under-feet) dy over-feet) (seen? world e))))
 
-(defn creeper-reach
-  "Blocks within which creeper eid (entity e) is a threat: creeper-radius, less once the bot has
-   backed away from it shun-after times and it still stands where it did (:plan/backed-off,
-   noted): shunned-radius, and after given-up-after back-offs given-up-radius. A creeper behind a
-   ledge or in a pocket that never closes in is no reason to go on backing away for the rest of
-   the plan: issues #69, #62 and #161, a starving bot at one health, back-off after back-off from
-   a creeper five blocks off that never moved, and the walk to the ore, the water or the stairs
-   never finished. One that moves on is counted afresh."
-  [world eid e]
+(defn reach
+  "Blocks within which hostile eid (entity e) is a threat, base at most: base, less once the bot
+   has backed away from it shun-after times and it still stands where it did (:plan/backed-off,
+   noted): shunned-radius, and after given-up-after back-offs given-up-radius, neither more than
+   base. A mob behind a ledge or in the rock that never closes in is no reason to go on backing
+   away for the rest of the plan: issues #69, #62 and #161, a starving bot at one health,
+   back-off after back-off from one that never moved, and the walk to the ore, the water or the
+   stairs never finished. One that moves on is counted afresh."
+  [world eid e base]
   (let [{:keys [pos times]} (get-in world [:plan/backed-off eid])
         still? (and pos (<= (physics/distance pos (:entity/pos e)) shun-drift))]
-    (cond (not still?) creeper-radius
-          (>= times given-up-after) given-up-radius
-          (>= times shun-after) shunned-radius
-          :else creeper-radius)))
+    (cond (not still?) base
+          (>= times given-up-after) (min base given-up-radius)
+          (>= times shun-after) (min base shunned-radius)
+          :else base)))
+
 
 (defmulti answers
   "The hostile kinds a goal row's act fights and hides from itself, by the row's :goal/plan: the
@@ -439,22 +440,23 @@
 
 (defn threats
   "{eid entity} of the hostiles (entity/hostiles) the :defend row answers: within defend-radius of
-   the feet, a creeper within creeper-reach; none the plan blacklisted (a ghost), none of a kind
+   the feet, a creeper within creeper-radius, either less once shunned (reach); none the plan blacklisted (a ghost), none of a kind
    a row in play answers itself (answered-kinds), and only what can be fought from here
    (hittable?)."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
         left (answered-kinds world)]
-    (into {}
-          (filter
-           (fn [[eid e]]
-             (and (not (contains? bl eid))
-                  (not (contains? left (entity/kind e)))
-                  (<= (physics/distance pos (:entity/pos e))
-                      (if (= :creeper (entity/kind e)) (creeper-reach world eid e) defend-radius))
-                  (hittable? world e))))
-          (entity/hostiles world))))
+    (into
+     {}
+     (filter
+      (fn [[eid e]]
+        (and (not (contains? bl eid))
+             (not (contains? left (entity/kind e)))
+             (<= (physics/distance pos (:entity/pos e))
+                 (reach world eid e (if (= :creeper (entity/kind e)) creeper-radius defend-radius)))
+             (hittable? world e))))
+     (entity/hostiles world))))
 
 (defmethod plan/done-by :safe? [world _] (or (nil? (:player/pos world)) (empty? (threats world))))
 

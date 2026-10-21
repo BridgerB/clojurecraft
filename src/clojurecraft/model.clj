@@ -221,8 +221,8 @@
     "targets log walks failed :no-path toward; a log within unreached-radius of one is not chosen: the trees round a place no route reaches are as far from the feet"
     "after a walk fails :no-path"]
    [:plan/backed-off
-    "per creeper entity id {:pos where it stood the first time :times back-offs from it there}: a creeper that stands within a block of :pos through shun-after of them is shunned, a threat only within shunned-radius (combat/creeper-reach)"
-    "after a back-off from a creeper began"]
+    "per hostile entity id {:pos where it stood the first time :times back-offs from it there}: a mob that stands within a block of :pos through shun-after of them is shunned, a threat only within shunned-radius (combat/reach)"
+    "after a back-off from a hostile began"]
    [:plan/cornered
     "entity ids a back-off could not get away from: it ended on its clock with the target still nearer than back-off-to, the bot in a dead end; :defend fights them to the end (combat/cornered, issue #161)"
     "after a back-off ended on its clock"]

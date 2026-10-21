@@ -36,6 +36,9 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-portal-behind-its-back-wall-is-entered-from-the-room
   - src/clojurecraft/build.clj#defn way-back
   - src/clojurecraft/build.clj#defn wading-out?
+  - src/clojurecraft/build.clj#defn swum
+  - src/clojurecraft/build.clj#defn swim-looped?
+  - test/clojurecraft/build_test.clj#a-swim-out-that-ends-where-it-began-again-and-again-gives-the-site-up
   - src/clojurecraft/build.clj#defn way-columns
   - test/clojurecraft/build_test.clj#the-lava-hunt-heads-for-lava-beyond-the-hunt-radius
   - test/clojurecraft/build_test.clj#a-tunnel-for-lava-is-not-cut-again-from-the-cell-one-boxed
@@ -67,6 +70,11 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn to-height
   - src/clojurecraft/build.clj#defn round-corner
   - src/clojurecraft/build.clj#defn in-room?
+  - src/clojurecraft/build.clj#defn flooded-room?
+  - src/clojurecraft/build.clj#defn near-enough?
+  - test/clojurecraft/build_test.clj#a-block-at-the-edge-of-reach-is-walked-to-not-dug
+  - src/clojurecraft/build.clj#defn site-lost
+  - test/clojurecraft/build_test.clj#a-flooded-room-is-no-site
   - test/clojurecraft/build_test.clj#a-corner-is-never-a-cell-of-the-room-the-cast-digs
   - src/clojurecraft/build.clj#defn way-refilled?
   - test/clojurecraft/build_test.clj#a-way-filled-by-falling-gravel-is-cleared-again
@@ -160,6 +168,8 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn lava-walk
   - src/clojurecraft/build.clj#defn uncap
   - src/clojurecraft/build.clj#defn toward-lava
+  - src/clojurecraft/build.clj#defn explore-lava
+  - test/clojurecraft/build_test.clj#the-lava-hunt-tunnels-away-from-the-landing-when-no-lava-is-loaded
   - src/clojurecraft/build.clj#defn castable?
   - src/clojurecraft/build.clj#defn hunt-target
   - test/clojurecraft/build_test.clj#the-lava-hunt-goes-down-past-lava-it-cannot-cast-from
@@ -217,7 +227,7 @@ The lava hunt's `sources-near` excludes sources within `give-up-radius` of a giv
 
 A return climb that exhausts its headings (`:stairs-up`, `:boxed`) beyond `site-reach` also gives up the site through `lost-way?`. Issue #363's R2/43 and R4/18 snapshots retried such climbs toward the same distant room until three build attempts failed. Ending the build and recording the given-up site lets the next planner pass choose elsewhere, including when the failed child is already present. Boxed descents still remember their pocket and seek the way out; nearby climbs and non-build executors retain their own failure handling (`a-boxed-climb-back-gives-up-the-distant-site`).
 
-Refill approaches use the pathfinder's footing rules, not solidity alone. `stands-beside` and `station-among` require a firm walking floor (`path/floor?`); magma is solid but cannot support a route. `barred` includes water and cells over awkward footing, so `out-first?` rejects a flooded or magma-lined straight approach and `round-corner` cuts a dry detour instead. Issue #162's R1/16 approach crossed water fed from an aquifer above the mine, while R1/42 selected magma footing beside the pool; repeated walks failed `:no-path` (`a-way-is-cut-round-water-and-awkward-footing`, `a-refill-stand-never-rests-on-magma`). When a fixed stance itself is flooded or has awkward footing, a failed walk gives up the site even nearby (`lost-way?`). A refill with no safe station also gives up its site, whether lava remains or not: geometric source counts do not prove it can be scooped. Both use `memory/give-up-site`, so the next planner pass chooses elsewhere instead of spending three failures at the same unsafe site (`an-unsafe-build-stance-gives-up-the-site`, `a-pool-without-a-safe-station-is-left`).
+Refill approaches use the pathfinder's footing rules, not solidity alone. `stands-beside` and `station-among` require a firm walking floor (`path/floor?`); magma is solid but cannot support a route. `barred` includes water and cells over awkward footing, so `out-first?` rejects a flooded or magma-lined straight approach and `round-corner` cuts a dry detour instead. Issue #162's R1/16 approach crossed water fed from an aquifer above the mine, while R1/42 selected magma footing beside the pool; repeated walks failed `:no-path` (`a-way-is-cut-round-water-and-awkward-footing`, `a-refill-stand-never-rests-on-magma`). When a fixed stance itself is flooded or has awkward footing, a failed walk gives up the site even nearby (`lost-way?`). A refill with no safe station also gives up its site, whether lava remains or not: geometric source counts do not prove it can be scooped. Both use `memory/give-up-site`, so the next planner pass chooses elsewhere instead of spending three failures at the same unsafe site (`an-unsafe-build-stance-gives-up-the-site`, `a-pool-without-a-safe-station-is-left`). A room the digs let an aquifer into is left the same way (`flooded-room?`: water in a cell of the room, which the site did not have when it was chosen): the floor row and the stands are awash and a route never crosses water, so a build that finds no stand (`site-lost`), or whose walk or dig fails `:no-path`, `:stuck` or `:out-of-reach` (`lost-way?`), gives its site up, a `:portal` build too, not only a `:cast-one`. Sim race 39470661984 (issue #196, world R3/40) found no stand for the first wall op three times with the floor row flowing, and sim race 39610239818 (issue #461, world R1/17) walked at a stand over aquifer water, failed `:no-path` twice, and failed `:out-of-reach` on the dig the swim's bob left short (`a-flooded-room-is-no-site`). A block in the way of a stand is dug only from inside reach with room to spare (`near-enough?`, `reach-slack` under the dig's 4.5), else walked to first (`clear-stand`): real snapshot real-5-s2-Clj_r09 (issue #461) began the refill's dig from 4.478 blocks, the walk's momentum had the eye at 4.5007 the next tick, and the dig failed `:out-of-reach` each cycle (`a-block-at-the-edge-of-reach-is-walked-to-not-dug`).
 
 The refill's clear ray can fill after its scoop child is chosen. `scoop-blocked?` checks a lava scoop's `:intent/aim` against the current terrain before `work-op` advances it, including a child already waiting for an answer or failed. A blocked child is dropped without spending a build attempt; the next refill chooses a clear source or digs its sight line again. Issue #227's R3/26 and R3/29 snapshots had gravel fall into the ray while the bucket was equipped, then retried that same blocked ray until `:no-scoop` (`a-refill-reconsiders-a-scoop-whose-ray-filled`). Water scoops retain their cast's side aim.
 
@@ -261,6 +271,7 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **A bubble column takes a block.** The model's `blocks/placeable-into?` accepts it as the game does (replaceable): #44's bridge over a magma stream was refused three times.
 
 ## Gotchas
+- **A swim-out that ends where it began, asked for again, gives the site up.** `wading-out?` asks for a `:swim-out` whenever the body is in water with no route; a swim-out ends on dry land, and a shallow pool flickers between the two, so a build at health 1 (sim snapshot R3-4-1, issue #178) swam out every 650 ms for the whole window. `swum` counts swim-outs ended on one feet cell (`:intent/swims`); `max-swims` of them make `swim-looped?` and the build gives its site up like `lost-way?` does. The `:cast-one` and `:portal` rows keep a spare pickaxe (`:goal/spares`) so a pickaxe worn out in the cast leaves another, and wood for it is up at the surface (issue #135).
 - **Hunt only sources with a safe stand to open.** `hunt-target` requires `stands-beside`, not just enough nearby sources. Issue #392's real snapshot tunnelled to a low source in a lava body extending above the feet; no stand could be opened safely, the last tunnel had zero steps left, and `:no-site` was waited out. Such sources are skipped both on approach and when already beside them, leaving the hunt free to seek another pool or descend toward the sea (`the-lava-hunt-passes-sources-with-no-safe-stand`). The snapshot no longer recurs over its window; followed on, it casts all ten obsidian cells and reaches `:portal` 589200 ms after its moment.
 - **A dig never takes obsidian**: `dig-op`'s done holds when its cell is obsidian (`no-dig-can-take-obsidian`).
 - **Water above, never beside.** The model ([[server-model]]) turns a lava source with water above or beside it to obsidian, as vanilla does; the bot puts the water above because on a server the source's open side flows first.
@@ -276,3 +287,4 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **A refill keeps its own support.** `safe-source?` rejects a blocked sight line through the cell under the feet, even when all lava lies below them. It applies to projected stations and actual eyes; an unobstructed alternative ray is still usable. Issue #228's R1/16 and R3/43 snapshots dug their own floor while refilling and fell into lava, where escapes timed out `:no-footing`. `work-op` drops an in-flight refill dig of that support and stops controls so the next refill chooses another station.
 - **The row against the frame is five wide**: a diagonal ray from the stair's last step (x 4) crossed x 4 of that row when the eye was 0.07 off the step's middle; it met rock, the lava landed in the room, and the bot was trapped in it. A stand aside aims further across the cell (`side-aim`).
 - **Blocks counted are the walls the cast opens, not its holes**: a cell dug as a hole is obsidian after (`blocks-needed`); counting it as a missing wall made every sealed-pool site ten blocks and none was chosen.
+- **No lava loaded at the sea's depth: tunnel away.** With no source in the 160 blocks the server sent and the feet already at `lava-depth`, `toward-lava` has neither a stair nor a tunnel target; `explore-lava` cuts level steps (`stone/tunnel-length` a call) along the plane axis away from the landing, so the chunks ahead load and the hunt asks again, instead of waiting `:no-site` out. Real race 39318301246 (issue #41, Clj_r21) stood at y -54 in deepslate with no lava loaded (`the-lava-hunt-tunnels-away-from-the-landing-when-no-lava-is-loaded`). A boxed feet cell takes the way out first, as a tunnel toward a source does.
