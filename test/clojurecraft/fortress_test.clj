@@ -124,7 +124,7 @@
                     :intent/target (:build/pos op)
                     :intent/status :failed
                     :intent/reason :rejected}
-                   :intent/rejections 2)
+                   :intent/rejections 2) ; the third dig the server would not do (stairs/max-rejections)
           out (intent/run (assoc w :plan/intent i) i tick)]
       (is (intent/failed? (:plan/intent out)))
       (is (= :rejected (get-in out [:plan/intent :intent/reason]))))))
