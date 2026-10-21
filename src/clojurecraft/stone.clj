@@ -374,6 +374,33 @@
                            (when-not (or (= feet start) (contains? boxed start)) start)))]
       (when target {:intent/kind :walk :intent/target target :intent/for :retreat}))))
 
+(defn islet?
+  "Do the feet stand on a solid block with water on all four sides of it, a block in the sea
+   that no route leaves?"
+  [world]
+  (let [[x y z] (intent/feet world)]
+    (boolean (and (some-> (terrain/block-at world [x (dec y) z])
+                          blocks/solid?)
+                  (every? (fn [[dx dz]]
+                            (= :water (terrain/fluid-kind world [(+ x dx) (dec y) (+ z dz)])))
+                          [[1 0] [-1 0] [0 1] [0 -1]])))))
+
+(defn cross-home
+  "A :cross toward the landing (:plan/go-at), swum, from a block in the sea (islet?) under the open
+   sky where a climb out already died :boxed (:plan/boxed-at); nil elsewhere. Real race
+   (issue #71, snapshot real-3-s2-Clj_r19): a bot that dug up into the sea from a mine under it
+   rose and swam forty-five blocks to the one block that stood in the water, every stair up
+   from it was refused for the water on all sides, and the mine's last resort, the climb, died
+   :boxed there three times."
+  [world]
+  (let [feet (intent/feet world)]
+    (when-let [[hx hy hz] (:plan/go-at world)]
+      (when (and (contains? (:plan/boxed-at world #{}) feet)
+                 (islet? world)
+                 (terrain/under-sky? world feet))
+        {:intent/kind :cross
+         :intent/target [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]}))))
+
 (defn climb
   "Stairs up out of the ground, climb-stairs at a time (stairs/climb-to), when nothing can be
    tunnelled, cut or walked to from here and the feet are not out (stairs/out?); nil when they
@@ -411,43 +438,45 @@
    (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
    ends where the drop lands in reach, :intent/pickup?), or cut stairs down toward them, or at
    the row's depth a tunnel (tunnel-heading), or deeper stairs when none can be cut, or a retreat
-   when neither can, or a climb out when there is no way away either (climb); wait for the
+   when neither can, or a swim home from a block in the sea (cross-home), or a climb out when
+   there is no way away either (climb); wait for the
    tool. The live runs that waited at the depth with nothing in sight failed there; a tunnel's
    walls are where the ore shows. Beside a lava trap still in force (path/near-lava-trap?) the
    retreat comes before any stair or tunnel: sim race 38844683780 (issue #230) cut its stairs down
    where the lava had just caught it, and the flow followed it down."
   [world row]
-  (or (continue-mine world row)
-      (let [missing (tool-missing world row)
-            [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
-            walk-to (fn [t]
-                      (cond-> {:intent/kind :walk
-                               :intent/target t
-                               :intent/for (:goal/id row)
-                               :intent/pickup? true}
-                        (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
-                        (assoc :intent/step-down? true)))
-            walk (when-not missing
-                   (->> (exposed-of-states world (states-of-row row))
-                        (take max-candidates)
-                        (map walk-to)
-                        (filter #(intent/routable? world %))
-                        first))]
-        (cond missing {:plan/wait missing}
-              stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
-              walk walk
-              :else
-              (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
-                  (off-ice world)
-                  (seal-stone world row)
-                  (over-stone world row)
-                  (stairs world row)
-                  (when-let [d (tunnel-heading world)]
-                    {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
-                  (deeper world)
-                  (retreat world)
-                  (climb world)
-                  {:plan/wait :boxed})))))
+  (or
+   (continue-mine world row)
+   (let [missing (tool-missing world row)
+         [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
+         walk-to
+         (fn [t]
+           (cond->
+             {:intent/kind :walk :intent/target t :intent/for (:goal/id row) :intent/pickup? true}
+             (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
+             (assoc :intent/step-down? true)))
+         walk (when-not missing
+                (->> (exposed-of-states world (states-of-row row))
+                     (take max-candidates)
+                     (map walk-to)
+                     (filter #(intent/routable? world %))
+                     first))]
+     (cond missing {:plan/wait missing}
+           stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
+           walk walk
+           :else
+           (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
+               (off-ice world)
+               (seal-stone world row)
+               (over-stone world row)
+               (stairs world row)
+               (when-let [d (tunnel-heading world)]
+                 {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
+               (deeper world)
+               (retreat world)
+               (cross-home world)
+               (climb world)
+               {:plan/wait :boxed})))))
 
 (defmethod plan/act :mine [world row] (mine-next world row))
 
