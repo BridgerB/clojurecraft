@@ -723,6 +723,25 @@
                            (nil? (path/landing world cell)))
                       (straddling-ahead? world unit))))))
 
+(defn lava-ahead?
+  "Would a step toward goal take the body into lava: the goal's own cell, or the cell ledge-look
+   ahead on the plane at the feet's level or the one under it, lava? Race 39186410626 (issue
+   #231, world R2/41): the bot dug its table up beside a lava pool, the drop lay in the lava, and
+   the collect walked in after it, then could not climb the one-block ledge out and failed
+   :no-footing three times."
+  [world goal]
+  (let [[px _ pz] (:player/pos world)
+        [gx gy gz] goal
+        d (physics/horizontal-distance [px 0 pz] [gx 0 gz])
+        [_ fy _] (feet world)
+        lava? #(= :lava (path/classify world %))
+        ahead (when (pos? d)
+                [(long (math/floor (+ px (* ledge-look (/ (- gx px) d)))))
+                 (long (math/floor (+ pz (* ledge-look (/ (- gz pz) d)))))])]
+    (boolean (or (lava? [(long (math/floor gx)) (long (math/floor gy)) (long (math/floor gz))])
+                 (and ahead (lava? [(first ahead) fy (second ahead)]))
+                 (and ahead (lava? [(first ahead) (dec fy) (second ahead)]))))))
+
 (defmethod run :collect
   [world
    {:intent/keys [target since best-dist best-tick drops drops-before]
@@ -759,6 +778,11 @@
           (-> world
               (assoc :player/controls {})
               (game/say (str "collect: a ledge ahead, the drop at " (mapv long goal) " is left"))
+              done)
+          (and (> d 0.4) (lava-ahead? world goal))
+          (-> world
+              (assoc :player/controls {})
+              (game/say (str "collect: lava ahead, the drop at " (mapv long goal) " is left"))
               done)
           (> d 0.4) (assoc world :player/controls (toward world goal 0.0))
           :else (assoc world :player/controls {}))))

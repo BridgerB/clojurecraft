@@ -388,6 +388,12 @@
             (assoc :player/controls {})
             (intent/assoc-intent :intent/stage :equip)
             (intent/dissoc-intent :intent/child))
+        (and (intent/failed? child) (:player/in-water? world) (not= :swim-out (:intent/kind child)))
+        (-> world
+            (assoc :player/controls {})
+            (intent/assoc-intent
+             :intent/child
+             {:intent/kind :swim-out :intent/for :retreat :intent/status :active}))
         (intent/failed? child) (intent/fail (assoc world :player/controls {}) :no-spot)
         :else (intent/run-child world event)))
 

@@ -401,6 +401,18 @@
     (is (= down (hunt {[12 40 4] blocks/lava-base})) "a lone source: on down toward the sea")
     (is (= down (hunt (pool-at 50))) "a pool over the head: on down toward the sea")))
 
+(deftest the-lava-hunt-tunnels-away-from-the-landing-when-no-lava-is-loaded
+  ;; real race 39318301246 (issue #41, Clj_r21): at y -54 in deepslate with no lava in the 160
+  ;; blocks loaded, the stairs done and nothing to cut, the plan waited :no-site out
+  (let [w (-> (standing-at {[10 -54 10] blocks/air [10 -53 10] blocks/air} [10.5 -54.0 10.5])
+              (assoc :plan/go-at [2.5 64.0 10.5]))]
+    (is (nil? (build/hunt-target w)) "no source loaded")
+    (is (= {:intent/kind :tunnel :intent/dir [1 0] :intent/length 12 :intent/for :lava}
+           (build/toward-lava w))
+        "level steps east, away from the landing")
+    (is (= [0 1] (:intent/dir (build/toward-lava (assoc w :plan/go-at [10.5 64.0 2.5]))))
+        "south when the landing lies north")))
+
 (deftest the-lava-hunt-leaves-a-boxed-pocket-by-the-way-out
   ;; sim race 38515210080 (issue #41, world R4/36): at y 16 in the iron mine, the feet cell
   ;; boxed by an earlier descent, the lava sea forty blocks under: no stair was cut and the

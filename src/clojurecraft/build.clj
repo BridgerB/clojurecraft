@@ -1711,6 +1711,23 @@
     (or (first (filter target? (sources-near world)))
         (first (filter target? (take hunt-checked (sources-near world far-radius)))))))
 
+(defn explore-lava
+  "A tunnel of level steps at the lava sea's depth, away from the landing (the way the terrain
+   loaded so far has no lava: the chunks ahead are new), for the hunt when no source is loaded
+   at all (hunt-target nil) and the feet are already down at lava-depth: it kept the plan
+   waiting :no-site. Real race 39318301246 (issue #41, Clj_r21): at y -54 in deepslate with no
+   lava within the loaded 160 blocks, the stairs done, nothing left to cut. Away from the
+   landing along the longer plane distance, east when the feet are on it, so each call after
+   the tunnel's length goes on the same way."
+  [world feet]
+  (let [[hx hy hz] (:plan/go-at world feet)
+        [dx dz] (mapv - [0 0] (heading-to feet [hx hy hz]))
+        [dx dz] (if (= [0 0] [dx dz]) [1 0] [dx dz])]
+    {:intent/kind :tunnel
+     :intent/dir [dx dz]
+     :intent/length stone/tunnel-length
+     :intent/for :lava}))
+
 (defn toward-lava
   "The way toward lava a frame can be cast from (hunt-target): stairs down (stone/stairs,
    stair-depth at a time) while the feet are above the cell over it, else a tunnel of level
@@ -1732,8 +1749,8 @@
         to (if src (inc sy) lava-depth)]
     (cond (> (physics/y-of feet) to)
           (or (stone/stairs world {:goal/depth to}) (stone/retreat world) (stone/climb world))
-          (nil? src) nil
           (contains? (:plan/boxed-at world #{}) feet) (or (stone/retreat world) (stone/climb world))
+          (nil? src) (explore-lava world feet)
           :else
           (let [steps (dec (long (max (abs (- sx (first feet))) (abs (- sz (nth feet 2))))))]
             (when (pos? steps)
