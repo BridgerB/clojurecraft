@@ -1380,6 +1380,22 @@
   [world {:intent/keys [kind fluid aim]}]
   (boolean (and (= :scoop kind) (= :lava fluid) aim (seq (scoop/ray-walls world aim)))))
 
+(defn site-lost
+  "The world with the build's site given up and the intent done, or nil, when c, what op-child gave,
+   says the site is no use: :no-station at a :build (lava remains but no safe station reaches it),
+   or :no-stand at a :cast-one (no cell reaches the op and none can be cut). Either way the next
+   build chooses another site. Any other build fails with the keyword as it always did."
+  [world {:intent/keys [kind build origin]} c]
+  (when-let [say (cond (and (= :no-station c) (= :build kind))
+                       "build: no safe lava station at the site, a new site"
+                       (and (= :no-stand c) (= :cast-one build))
+                       "build: no stand at the site, a new site")]
+    (-> world
+        (assoc :player/controls {})
+        (memory/give-up-site origin)
+        intent/done
+        (game/say say))))
+
 (defn work-op
   "One tick of the running intent i working op next through a child (op-child): a new op drops
    the child of the old one (the world moved on), except an active climb finishes before its
@@ -1470,25 +1486,12 @@
                                  (hand-dig-refused? world (:intent/target c))))
                       missing)
                     (tool-first world c))]
-          (cond (and (= :no-station c) (= :build (:intent/kind i)))
-                ;; lava remains but no safe station reaches it: do not choose this site again
-                (-> world
-                    (assoc :player/controls {})
-                    (memory/give-up-site (:intent/origin i))
-                    intent/done
-                    (game/say "build: no safe lava station at the site, a new site"))
-                (and (= :no-stand c) (= :cast-one (:intent/build i)))
-                ;; no cell reaches the op and none can be cut: the site is no use, a new one
-                (-> world
-                    (assoc :player/controls {})
-                    (memory/give-up-site (:intent/origin i))
-                    intent/done
-                    (game/say "build: no stand at the site, a new site"))
-                (keyword? c) (intent/fail world c)
-                :else
+          (or (site-lost world i c)
+              (if (keyword? c)
+                (intent/fail world c)
                 (intent/run-child
                  (intent/assoc-intent world :intent/child (assoc c :intent/status :active))
-                 event)))))
+                 event))))))
 
 (defmethod intent/run :build
   ;; work the first op of the plan not satisfied (next-op, work-op); done when the last op holds.
