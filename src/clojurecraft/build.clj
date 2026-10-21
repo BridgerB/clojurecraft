@@ -914,19 +914,36 @@
                        (not (contains? blocks/lava-states (terrain/block-at world %)))))
          first)))
 
+(defn before-gap
+  "The cell of the straight way to stand (way-columns) just before gap, a cell floor-gap found, at
+   the stand's height: the last cell a floor holds the feet up in, from which the gap is the next
+   cell to lay. nil when gap is no column of the way."
+  [world stand [gx _ gz]]
+  (when-let [[x z] (last (take-while #(not= [gx gz] %) (way-columns (intent/feet world) stand)))]
+    [x (second stand) z]))
+
 (defn bridge
   "The child that lays the missing floor on the way to stand at the feet's height (floor-gap): a
    cobblestone placed in it, or in the lowest cell under it that is held up (foundation), when
-   it is in reach and a block is held; nil otherwise. Sim race 38665691522 and a probe at
+   it is in reach and a block is held; a walk onto the floor laid so far (before-gap) when the
+   gap lies beyond the reach of the place; nil otherwise. Sim race 38665691522 and a probe at
    8356e28 (issue #162, world R3/37): the refill's way out from the landing ran over a cave's
    open cell beside the room, the line clear and nothing to dig, and the walk there, with no
-   floor to stand on, failed :no-path three times."
+   floor to stand on, failed :no-path three times. Sim race 39550827333 (issue #162, world R3/43
+   seed 2): the bridge laid three cells from the end of the stairs up and the fourth lay past
+   the reach of the place, so the plain walk to the stand over the gap was tried and failed
+   :no-path, three times in the plan."
   [world stand]
   (when-let [gap (and (held? world :cobblestone) (floor-gap world stand))]
-    (when-let [c (and (<= (physics/distance (game/eye world) (physics/centre gap))
-                          place/place-reach)
-                      (foundation world gap))]
-      {:intent/kind :place :intent/item :cobblestone :intent/cell c})))
+    (if (<= (physics/distance (game/eye world) (physics/centre gap)) place/place-reach)
+      (when-let [c (foundation world gap)]
+        {:intent/kind :place :intent/item :cobblestone :intent/cell c})
+      (when-let [edge (before-gap world stand gap)]
+        (let [walk {:intent/kind :walk :intent/target edge :intent/for :build}]
+          (when (and (not (intent/centred? world edge))
+                     (path/standable? world edge)
+                     (intent/routable? world walk))
+            walk))))))
 
 (defn stand-walk
   "A walk to stand, a cell of the build's way, when the feet can stand in it as it is
@@ -1609,6 +1626,7 @@
 (def hunt-radius 48)                  ; blocks from the feet a lava source is walked, dug or tunnelled toward
 (def far-radius 160)                  ; blocks from the feet a source is tunnelled toward when none lies within hunt-radius: what a view shows
 (def hunt-checked 300)                ; the nearest far sources asked for a stand and a pool: each ask reads every loaded source
+(def hunt-rise 4)                     ; blocks over the feet the cell over a source may lie when none lies level or below: the stairs up go first
 (def max-candidates 3)                ; the nearest sources a route is planned to
 
 (defn sources-near
@@ -1699,17 +1717,25 @@
    :no-site with fifteen thousand sources of the lava sea loaded below. With none within
    hunt-radius the nearest within far-radius is taken, as far as the terrain loaded shows: real
    race 38929353563 (issue #41, Clj_r13 and Clj_r14) stood at y -54 over six thousand sources
-   loaded, the nearest farther than hunt-radius, and waited :no-site out."
+   loaded, the nearest farther than hunt-radius, and waited :no-site out.
+   With none level or below, one whose cell over it lies at most hunt-rise over the feet is taken
+   (toward-lava goes up to it first): real race 39408516353 (issue #392, Clj_r05) had followed a
+   tunnel at y -58 into the lava sea's edge, gave its far source up, and waited :no-site with
+   a source whose stand was nine blocks off and four over the feet, the three hundred nearest
+   sources all under the sea's lava."
   [world]
   (let [[fx fy fz] (intent/feet world)
         sources (lava-sources world)
-        target? (fn [[x y z :as src]]
-                  (and (<= (inc y) fy)
-                       (or (> fy (inc y)) (> (max (abs (- x fx)) (abs (- z fz))) 1))
-                       (seq (stands-beside world src))
-                       (castable? sources src)))]
-    (or (first (filter target? (sources-near world)))
-        (first (filter target? (take hunt-checked (sources-near world far-radius)))))))
+        usable? (memoize (fn [[x y z :as src]]
+                           (and (or (> fy (inc y)) (> (max (abs (- x fx)) (abs (- z fz))) 1))
+                                (seq (stands-beside world src))
+                                (castable? sources src))))
+        target? (fn [rise] (fn [[_ y _ :as src]] (and (<= (inc y) (+ fy rise)) (usable? src))))]
+    (some (fn [rise]
+            (let [target? (target? rise)]
+              (or (first (filter target? (sources-near world)))
+                  (first (filter target? (take hunt-checked (sources-near world far-radius)))))))
+          [0 hunt-rise])))
 
 (defn explore-lava
   "A tunnel of level steps at the lava sea's depth, away from the landing (the way the terrain
@@ -1730,7 +1756,8 @@
 
 (defn toward-lava
   "The way toward lava a frame can be cast from (hunt-target): stairs down (stone/stairs,
-   stair-depth at a time) while the feet are above the cell over it, else a tunnel of level
+   stair-depth at a time) while the feet are above the cell over it, stairs up (to-height) while
+   they are under it (a source at most hunt-rise over them), else a tunnel of level
    steps toward it, as many as the plane distance less one (the step onto the cell over the
    source is refused for the lava under it, and the roof is then in reach: uncap). With no such
    source loaded, stairs down to lava-depth. From a feet cell in :plan/boxed-at no stair is cut
@@ -1751,6 +1778,7 @@
           (or (stone/stairs world {:goal/depth to}) (stone/retreat world) (stone/climb world))
           (contains? (:plan/boxed-at world #{}) feet) (or (stone/retreat world) (stone/climb world))
           (nil? src) (explore-lava world feet)
+          (< (physics/y-of feet) to) (to-height world to)
           :else
           (let [steps (dec (long (max (abs (- sx (first feet))) (abs (- sz (nth feet 2))))))]
             (when (pos? steps)
