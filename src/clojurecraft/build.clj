@@ -1166,11 +1166,7 @@
    Any walk or dig of a :build that fails :no-path, :stuck or :out-of-reach while water stands in
    its room (flooded-room?) gives it up too: sim race 39610239818 (issue #461, world R1/17): the
    room's digs let an aquifer in, the walk to a stand over the water stalled and failed
-   :no-path twice, and the dig the bob of the swim left out of reach failed the third build. A stair
-   up or down refused :boxed with the feet in water gives it up too: real race (issue #130,
-   Clj_r18) dug its room beside an aquifer, swam out three times, the walk to a stand failed
-   :no-path and the stairs down and up were refused within 600 ms for the water; the third
-   failure ended the plan, where another site was dry."
+   :no-path twice, and the dig the bob of the swim left out of reach failed the third build."
   [world {:intent/keys [kind build origin facing access]} {:intent/keys [reason target] :as child}]
   (boolean
    (and (= :build kind)
@@ -1192,12 +1188,6 @@
                           (or (= :water (path/classify world target))
                               (= :water (path/classify world (update target 1 inc)))
                               (= :awkward (path/classify world (update target 1 dec)))))))
-            ;; a stair refused :boxed with the body in water: no stair is cut from water, and the
-            ;; swim-outs have not left it
-            (and (= :boxed reason)
-                 (#{:stairs-up :stairs-down} (:intent/kind child))
-                 (or (:player/in-water? world)
-                     (= :water (terrain/fluid-kind world (intent/feet world)))))
             ;; a flooded room (flooded-room?) is no site: its walks stall and its digs fall short
             (and (#{:no-path :stuck :out-of-reach} reason)
                  (#{:walk :dig} (:intent/kind child))

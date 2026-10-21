@@ -390,13 +390,21 @@
 
 (defn take-table-along
   "A dig of the bot's placed crafting table, to carry it on, when no table is held and the
-   remembered one is within reach; nil otherwise."
+   remembered one is within reach; nil otherwise. With every slot full the dig waits for a :toss
+   of junk (window/tossable), or for :inventory-full when none can go, the table left standing: the table's drop needs an empty slot, and the pickaxe
+   crafted at it took the one the table left. Sim race R2/36 (issue #135) dug its table at y -3
+   with 36 slots held, failed :collect :not-picked-up, and climbed from the cast at y -55
+   with sticks and no table."
   [world]
   (let [pos (near world :crafting_table)]
     (when (and pos
                (zero? (get (counts world) :crafting_table 0))
                (<= (physics/distance (game/eye world) (physics/centre pos)) intent/reach))
-      {:intent/kind :dig :intent/target pos :intent/for :take-table})))
+      (let [v (window/view world :inventory)]
+        (cond (window/free-slot world v)
+              {:intent/kind :dig :intent/target pos :intent/for :take-table}
+              (window/tossable world v) {:intent/kind :toss}
+              :else {:plan/wait :inventory-full})))))
 
 (defn take-table
   "A dig of the bot's placed crafting table, to carry it on (take-table-along), when row goes out
