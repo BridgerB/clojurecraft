@@ -59,6 +59,13 @@
   (boolean (some-> (terrain/block-at world cell)
                    blocks/solid?)))
 
+(defn diggable-cell?
+  "Is the cell a solid block a dig can take: not ore above every held pickaxe's tier
+   (stairs/too-hard?), which a dig refuses :needs-tool? A real race's bot Clj_r10 (issue #163), in a flooded shaft at 2 health with no pickaxe, chose iron ore for its notch three times, each
+   dig refused, and the escape ended the plan."
+  [world cell]
+  (and (solid-cell? world cell) (not (stairs/too-hard? world cell))))
+
 (defn surface-y
   "The y of the first cell above the feet cell that is not the fluid kind: the water's
    surface cell, or the roof over it."
@@ -164,14 +171,15 @@
                    (remove #{feet}
                            (distinct (concat [(ahead feet bank) [nx y z] [x y nz] [nx y nz]]
                                              (for [cx xs cz zs] [cx y cz]))))))
-        head (first (filter #(solid-cell? world %) (map #(update % 1 inc) levels)))
-        level (when (and bank (<= (second bank) y)) (first (filter #(solid-cell? world %) levels)))
-        upper (first (filter #(solid-cell? world %) (map #(update % 1 + 2) levels)))]
+        head (first (filter #(diggable-cell? world %) (map #(update % 1 inc) levels)))
+        level (when (and bank (<= (second bank) y))
+                (first (filter #(diggable-cell? world %) levels)))
+        upper (first (filter #(diggable-cell? world %) (map #(update % 1 + 2) levels)))]
     (cond (lid? world feet) over
           head head
           level level
           upper upper
-          (solid-cell? world over) over
+          (diggable-cell? world over) over
           :else nil)))
 
 (defn iced?
@@ -202,7 +210,7 @@
                dz (range (- notch-radius) (inc notch-radius))
                :let [lower [(+ fx dx) (inc top) (+ fz dz)]
                      upper [(+ fx dx) (+ top 2) (+ fz dz)]
-                     cell (first (filter #(solid-cell? world %) [lower upper]))]
+                     cell (first (filter #(diggable-cell? world %) [lower upper]))]
                :when (and (solid-cell? world [(+ fx dx) top (+ fz dz)])
                           cell
                           (<= (physics/distance eye (physics/centre cell)) intent/reach))]

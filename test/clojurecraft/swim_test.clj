@@ -502,3 +502,17 @@
         (is (nil? (:intent/child next)))))
     (let [far (assoc w :player/pos [10.5 62.97 8.5])]
       (is (nil? (swim/bank-block far (intent/feet far) 64)) "no wall within reach"))))
+
+(deftest the-escape-never-digs-ore-no-held-tool-can-take
+  ;; a real race's bot Clj_r10 (issue #163): iron ore was the nearest wall of a flooded shaft and
+  ;; the bot held no pickaxe, so each dig was refused :needs-tool
+  (let [ore [5 64 5]
+        rock [6 64 5]
+        w (assoc (game/init fx/opts)
+                 :world/chunks
+                 {[0 0] (world/column {ore (blocks/default-state :iron_ore)
+                                       rock (blocks/default-state :stone)})}
+                 :player/inventory {})]
+    (is (swim/solid-cell? w ore))
+    (is (not (swim/diggable-cell? w ore)) "iron ore with no pickaxe")
+    (is (swim/diggable-cell? w rock) "stone is dug by hand if it must be")))
