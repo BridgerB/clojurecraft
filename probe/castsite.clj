@@ -1,6 +1,7 @@
 (ns probe.castsite
   "Step each snapshot from its moment, printing the intents' changes."
-  (:require [clojurecraft.capture :as capture]
+  (:require [clojure.math :as math]
+            [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
             [clojurecraft.plan :as plan]
             [clojurecraft.sim :as sim]
@@ -37,3 +38,41 @@
                    nil)))
 
 (defn -main [& paths] (doseq [p paths] (trace p)) (shutdown-agents))
+
+(defn ticks
+  "Print every every-th tick between from and to ms of the snapshot at path: the body, the
+   controls and the walk's route."
+  [path from to every]
+  (let [snap (capture/read-world path)
+        w (simrace/world-for! snap)
+        m (simrace/moment-of snap w)
+        k (volatile! 0)
+        stop? (fn [world]
+                (let [t (:time/now world)
+                      i (:plan/intent world)]
+                  (when (and (<= from t to) (zero? (mod (vswap! k inc) every)))
+                    (println t
+                             (pr-str (mapv #(/ (math/round (* 100.0 %)) 100.0) (:player/pos world)))
+                             (pr-str (mapv #(/ (math/round (* 100.0 %)) 100.0) (:player/vel world)))
+                             (pr-str (keys (filter val (:player/controls world))))
+                             (pr-str (select-keys world
+                                                  [:player/in-water? :player/on-ground?
+                                                   :player/in-lava? :player/horizontal-collision?]))
+                             (pr-str (select-keys i
+                                                  [:intent/kind :intent/stage :intent/target
+                                                   :intent/at :intent/replans :intent/route]))
+                             (pr-str (get (:intent/waypoints i) (:intent/at i)))
+                             (pr-str (count (:intent/waypoints i)))))
+                  (> t to)))]
+    (println "TICKS" path from to)
+    (sim/play-from simrace/step
+                   m
+                   stop?
+                   (simrace/window-of snap)
+                   (simrace/go-of w (:snapshot/until snap))
+                   nil)))
+
+(defn -main2
+  [path from to every]
+  (ticks path (parse-long from) (parse-long to) (parse-long every))
+  (shutdown-agents))
