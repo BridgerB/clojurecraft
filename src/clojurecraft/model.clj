@@ -154,6 +154,9 @@
    [:entity/phase
     "the ender dragon's phase, from its metadata (index 16): 0 circling, 3 landing, 4 taking off, 5 to 7 sitting on its perch, 9 dying (issue #267)"
     "inside :world/entities, the dragon, once its metadata said"]
+   [:entity/yaw
+    "the entity's body yaw in degrees as the server sends it (add-entity, the moves, entity-position-sync, teleport-entity): the dragon's says where its head and neck are (issue #267)"
+    "inside :world/entities, once the server said one"]
    [:entity/radius
     "an area effect cloud's radius in blocks, from its metadata (index 8): a dragon's breath cloud grows from 3 to 7 over its life, and the bot keeps out of all of it (issue #267)"
     "inside :world/entities, an area effect cloud, once its metadata said"]
@@ -332,6 +335,9 @@
    [:intent/taken "steps a :tunnel-to has taken" ":tunnel-to, after its first step"]
    [:intent/tunnel-visited
     "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"
+    ":tunnel-to, after choosing its first step"]
+   [:intent/retreats
+    "retreats in a row a :tunnel-to has stepped, into cells it already stood in (fortress/retreat?); a fresh step resets it, and more than fortress/retreats-allowed fail the tunnel :blocked (issue #338)"
     ":tunnel-to, after choosing its first step"]
    [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
     ":tunnel-to, during a step"]

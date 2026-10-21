@@ -454,6 +454,15 @@
       (is (= :found (:path/status r)) "and drops into the snowfield")
       (is (sound-route? w [5 65 1] r)))))
 
+(deftest a-bot-on-the-rim-of-a-hole-in-the-ice-is-on-the-ice
+  ;; issue #105 (sim race 39550841573, R2/32 seed 3): the ice under the feet dug out for the
+  ;; water under it, the body on the sheet's edge, in a cell with no ice under it
+  (let [ice (blocks/default-state :ice)
+        sheet (fill ice (range 0 10) [63] (range 16))
+        holed (assoc sheet [2 63 8] blocks/air)]
+    (is (path/on-ice? (world-of holed [2.5 64.0 8.5])) "over the hole, the rim beside it")
+    (is (not (path/on-ice? (world-of holed [10.5 64.0 8.5]))) "on land beside the sheet")))
+
 (deftest a-bot-on-a-sheet-of-ice-walks-off-it-but-never-onto-it
   ;; race 39088700340 bot Clj_r02 (issue #71) climbed out of a frozen sea onto the ice, and no
   ;; route led off the sheet: ice is no floor to a route
