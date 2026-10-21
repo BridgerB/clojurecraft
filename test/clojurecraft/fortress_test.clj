@@ -211,7 +211,11 @@
     (is (not (fortress/safe? (rock {[2 64 0] lava}) [0 64 0] [1 0 0])) "lava beyond the cell")
     (is (not (fortress/safe? (rock {[1 66 0] lava}) [0 64 0] [1 0 0])) "lava over the head's cell")
     (is (not (fortress/safe? (rock {[1 64 0] lava}) [0 64 0] [1 0 0])) "lava in the cell itself")
-    (is (fortress/safe? (rock {[1 63 0] lava}) [0 64 0] [1 0 0])
+    (is (fortress/safe? (assoc (rock {[1 63 0] lava})
+                               :player/inventory
+                               {0 {:item (recipe/item-id :cobblestone) :count 1}})
+                        [0 64 0]
+                        [1 0 0])
         "lava in the floor is filled: the floor op places into it")
     (is (not (fortress/safe? (rock {[1 63 0] air [1 62 0] air [1 61 0] air}) [0 64 0] [1 0 0]))
         "never out over a drop: an air floor is not a tunnel")

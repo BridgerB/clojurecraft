@@ -165,9 +165,12 @@
 
 (defn seal-ops
   "The ops that cap the lava beside the cells the step from feet by move opens, each placed from
-   the feet, before the step's own ops (step-plan); none when there is none."
+   the feet, before the step's own ops (step-plan); none when there is none or the step is not
+   sealed? (a step that safe? refuses stays refused, and is dropped as before)."
   [world feet move]
-  (mapv #(build/place-op % feet nil :seal) (lava-beside world feet move)))
+  (if (sealed? world feet move)
+    (mapv #(build/place-op % feet nil :seal) (lava-beside world feet move))
+    []))
 
 (defn dry?
   "Does the step from feet by move open no cell that is water or has water beside it (other than
