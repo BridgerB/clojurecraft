@@ -1,11 +1,16 @@
 {
-  "at" : "2026-10-21T23:01:59.394Z",
+  "at" : "2026-10-21T23:04:11.935Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
+  }, {
+    "number" : 286,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 135,
@@ -40,6 +45,10 @@
   } ],
   "moves" : [ {
     "issue" : 338,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 286,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
