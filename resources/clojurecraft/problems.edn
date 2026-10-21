@@ -184,7 +184,6 @@
    "The current dimension, from the respawn packet"]
   :problem/risks
   ["A refill ray can cross the block supporting its own feet even when every lava cell is below them: reject that station and drop an in-flight refill dig of its support, rather than fall into lava and exhaust escapes with :no-footing (issue #228, R1/16 and R3/43)."
-   "A collect must not walk after a drop lying in lava: the lift out of lava reaches half a block over its surface, and a one-block ledge keeps the bot in it until the flee times out :no-footing (issue #231, R2/41)."
    "With no lava loaded at the sea's depth the hunt tunnels on, away from the landing, so new chunks load, rather than waiting :no-site (issue #41, real-4)."
    "A place whose retreat fails with the body afloat swims to a bank and looks for a spot there, rather than failing :no-spot in the open sea (issue #450, R3/34)."
    "Water from a later cast can flow through an earlier cell whose source was already scooped: cleanup must test for a remaining source, not any water, or it retries an uncollectable flow and fails :target-gone (issue #419, R1/20)."

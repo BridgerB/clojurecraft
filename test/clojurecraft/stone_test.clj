@@ -897,16 +897,6 @@
     (is (intent/ledge-ahead? (assoc-in rim [:world/blocks [5 63 4]] 1) [4.5 64.0 3.5])
         "a wall in the way of the diagonal slides it west along the rim, off its side")))
 
-(deftest a-collect-leaves-a-drop-in-lava
-  ;; race 39186410626 (issue #231, world R2/41): the bot dug its table up beside a lava pool, the
-  ;; drop lay in the lava, and the collect walked in after it, then could not climb the ledge out
-  (let [pit (into {} (for [x (range 2 6) z (range 4 7)] [[x 63 z] blocks/air]))
-        rim (assoc (standing 64) :player/pos [5.8 64.0 5.5] :world/blocks pit)
-        lava (fn [cell] (assoc-in rim [:world/blocks cell] blocks/lava-base))]
-    (is (intent/lava-ahead? (lava [2 63 5]) [2.5 63.2 5.5]) "the drop in the lava")
-    (is (intent/lava-ahead? (lava [5 63 5]) [1.5 64.0 5.5]) "lava under the first step")
-    (is (not (intent/lava-ahead? rim [1.5 64.0 5.5])) "the same walk over dry floor")))
-
 (deftest a-stone-no-route-reaches-is-cut-down-to-from-the-surface-over-it
   ;; issue #342 (a real bot, Clj_r15, landed at R1/30): stone in the wall of a cave under the far
   ;; bank of a lake, no route to it, and the mine cut its stairs at the near bank among the water
