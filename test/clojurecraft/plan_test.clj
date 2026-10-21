@@ -334,7 +334,10 @@
            (wood/trees-descend w [trunk]))
         "down toward the trunk, one length")
     (is (nil? (wood/trees-descend w [[400 9 8]])) "a trunk past descend-reach is no descent")
-    (is (nil? (wood/trees-descend w [[12 60 8]])) "a trunk within the near band is walked to")
+    (is (nil? (wood/trees-descend w [[12 61 8]])) "a trunk within the bridge's rise is bridged to")
+    (is (= {:intent/kind :stairs-down :intent/to-y 60 :intent/dir [1 0] :intent/for :trees}
+           (wood/trees-descend w [[12 60 8]]))
+        "four under the feet with no route (issue #87, Clj_r22): a staircase down, to its foot")
     (is (nil? (wood/trees-descend (assoc w :plan/boxed-at #{(intent/feet w)}) [trunk]))
         "never from a cell where a climb died boxed")))
 
