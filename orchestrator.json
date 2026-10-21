@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T17:20:33.430Z",
+  "at" : "2026-10-21T17:22:50.406Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -85,6 +85,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 87,
+    "title" : "Bot stops at ingots: no-log",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 108,
     "title" : "Bot stops at water-bucket: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -97,11 +102,6 @@
   }, {
     "number" : 85,
     "title" : "Bot stops at cobblestone: timeout",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 87,
-    "title" : "Bot stops at ingots: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -222,6 +222,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 87,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 108,
     "move" : "wait",
     "why" : "session starting"
@@ -231,10 +235,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 85,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 87,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
