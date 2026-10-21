@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T18:37:43.649Z",
+  "at" : "2026-10-21T18:38:55.807Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -29,6 +29,17 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
+    "quiet" : true,
+    "number" : 178,
+    "checks" : "red",
+    "title" : "Bot stops at portal: timeout",
+    "copilot" : true,
+    "draft" : false,
+    "nudges" : 2,
+    "pr" : 444,
+    "session" : false
+  }, {
     "number" : 130,
     "title" : "Bot stops at cast-one: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -43,17 +54,6 @@
     "title" : "Bot stops at portal-kit: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
-  }, {
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "quiet" : true,
-    "number" : 178,
-    "checks" : "red",
-    "title" : "Bot stops at portal: timeout",
-    "copilot" : true,
-    "draft" : false,
-    "nudges" : 2,
-    "pr" : 444,
-    "session" : false
   }, {
     "number" : 89,
     "title" : "Bot stops at portal-kit: no-log",
@@ -98,7 +98,7 @@
     "number" : 108,
     "title" : "Bot stops at water-bucket: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 92,
     "title" : "Bot stops at portal-kit: no-escape",
@@ -182,6 +182,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 178,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 130,
     "move" : "leave",
     "why" : "hands-off label"
@@ -191,10 +195,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 71,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -231,7 +231,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 108,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 92,
     "move" : "leave",
