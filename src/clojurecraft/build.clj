@@ -164,13 +164,18 @@
 (defn firm-ops
   "Make pos a firm wall from stand where the rock is missing (issue #124): a falling block there
    (gravel, sand) dug out (:fall-clear), then a block placed; both done once pos is firm (solid and
-   not falling) or guard holds. In solid rock both hold from the start and nothing is placed."
+   not falling) or guard holds. In solid rock both hold from the start and nothing is placed.
+   A portal block there is a wall already: no block is placed into it (the game does not take
+   one) and no fluid flows into it. Real race 39407278017 bot Clj_r03 (issue #44): the cast
+   room's back wall met a nether portal's block, and the cobblestone for it was refused three
+   times, :rejected."
   [pos stand guard step]
-  [{:build/op :dig
-    :build/pos pos
-    :build/stand stand
-    :build/step :fall-clear
-    :build/done [:or guard [:firm pos] [:not-solid pos]]} (place-op pos stand guard step)])
+  (let [walled (into [:or] (remove nil? [guard [:block pos :nether_portal]]))]
+    [{:build/op :dig
+      :build/pos pos
+      :build/stand stand
+      :build/step :fall-clear
+      :build/done [:or guard [:firm pos] [:not-solid pos]]} (place-op pos stand walled step)]))
 
 (def stair
   "The steps the upper cells are cast from, [x feet] in the row three in front of the frame

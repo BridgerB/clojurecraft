@@ -1417,3 +1417,18 @@
     (is (nil? (build/way-back open i)) "a route to it: none to take")
     (is (= [5 63 7] (:intent/target (build/way-back walled i)))
         "rock between: the way cut toward it")))
+
+(deftest a-portal-block-in-the-wall-is-a-wall-already
+  ;; real race 39407278017 bot Clj_r03 (issue #44): the cast room's back wall met a nether portal's
+  ;; block; the game takes no block into one, the cobblestone was refused three times, :rejected
+  (let [portal [6 63 8]
+        w (standing-at (open-ground {portal (blocks/default-state :nether_portal) [7 63 8] 1})
+                       [5.5 63.0 5.5])
+        cast [:block [9 63 9] :obsidian]
+        [fall-clear place] (build/firm-ops portal [5 63 5] cast :wall)
+        open (build/firm-ops [8 63 8] [5 63 5] cast :wall)]
+    (is (build/holds? w (:build/done place)) "nothing to place into a portal block")
+    (is (build/holds? w (:build/done fall-clear)))
+    (is (not (build/holds? w (:build/done (second open)))) "an open cell still takes its block")
+    (is (build/holds? w (:build/done (second (build/firm-ops [7 63 8] [5 63 5] cast :wall))))
+        "and solid rock needs none")))

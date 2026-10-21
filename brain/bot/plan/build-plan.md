@@ -97,6 +97,7 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-room-cell-behind-a-wall-is-cut-toward
   - src/clojurecraft/build.clj#defn refused-for-the-body?
   - src/clojurecraft/build.clj#defn dig-rejected?
+  - test/clojurecraft/build_test.clj#a-portal-block-in-the-wall-is-a-wall-already
   - test/clojurecraft/build_test.clj#a-dig-the-server-did-not-do-is-dug-again-before-the-build-fails
   - test/clojurecraft/build_test.clj#a-block-is-never-placed-into-the-bot
   - src/clojurecraft/build.clj#defn toward-stand
@@ -245,6 +246,7 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **A staircase can end inside the frame's box** (#45, real-3-s2-Clj_r05): the feet's own cell is the frame's rock and every way to the landing crosses a wall; no single corner (`round-corner`) is clear, the plain walk fails `:no-path`, and a cast-one gives the site up on the second such failure. A route of several corners round the box would keep the site (not built). `stance-block` takes the z-first line when the x-first one holds a solid cell a way may not dig (the frame's rock, cobblestone the plan places, a cell beside lava) and the z-first none (#45, real-6-s2-Clj_r05).
 - **No way, no stand: the site is given up.** A cast-one whose plain walk fails `:no-path` a second time (`lost-way?`, `:plan/attempts`) or whose op has no stand (`work-op`'s `:no-stand`) gives its site up and the planner chooses another; `way-back` goes to the landing whenever no route reaches it, however near (#74's two snapshots stood six blocks off with rock between). A portal's site holds a cast and is not given up for these.
 - **A dig the server did not do is dug again.** A child `:dig` that fails `:rejected` (the server acked the finish with the block standing: a lagging server drops a finish it found early and queued behind another) is counted in `:intent/rejections` and dug again by `stairs/rejected`, as a stair does, and only the third fails the build `:rejected` (`dig-rejected?`). Real race 39405014440 bot Clj_r13 and race 39407278017 bot Clj_r03 (issue #44) each failed the whole build on the first such dig, with the cast room unfinished (`a-dig-the-server-did-not-do-is-dug-again-before-the-build-fails`).
+- **A portal block in the wall is a wall.** `firm-ops` counts a `:nether_portal` cell as already walled: the game takes no block into one and no fluid flows into it, so the cobblestone for it was refused three times, `:rejected`, with the cast room unfinished (real race 39407278017 bot Clj_r03, issue #44; `a-portal-block-in-the-wall-is-a-wall-already`).
 - **A bubble column takes a block.** The model's `blocks/placeable-into?` accepts it as the game does (replaceable): #44's bridge over a magma stream was refused three times.
 
 ## Gotchas
