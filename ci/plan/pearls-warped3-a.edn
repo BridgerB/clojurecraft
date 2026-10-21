@@ -1,0 +1,20 @@
+;; Issue #263, branch feat/263-warped3: a burrow's stairs are four high, so a provoked enderman
+;; walks down them to the last stair (probe 39206015361: under a hill it stood on the first of
+;; three-high stairs); a burrow site must be routable and not blacklisted.
+;; pearls-12 is the stage (pearls-warped2-b: 0/3, six held fights timed out :unreachable, thirteen
+;; :no-path site walks); pearls-1-live guards the arena.
+{:plans/label "pearls-warped3-a"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
