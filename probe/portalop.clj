@@ -4,6 +4,7 @@
   (:require [clojurecraft.build :as build]
             [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
+            [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.scene :as scene]
             [clojurecraft.sim :as sim]
@@ -25,6 +26,16 @@
              (pr-str (mapv (juxt :build/step :build/op :build/pos)
                            (remove #(build/satisfied? world %) p))))
     (println "CHILD" (pr-str (build/op-child world i op)))
+    (let [{:build/keys [stand pos]} op
+          o (:intent/origin i)
+          f (:intent/facing i)]
+      (println "STAND standable?" (path/standable? world stand)
+               "centred?" (intent/centred? world stand)
+               "clear-stand" (pr-str (build/clear-stand world stand (:intent/build i) o f))
+               "reachable-stand" (pr-str (build/reachable-stand world stand pos))
+               "nearest-stand-cell" (pr-str (build/nearest-stand-cell world i pos))
+               "way-back" (pr-str (build/way-back world i))
+               "room-stand" (pr-str (build/room-stand world i pos))))
     (doseq [line (scene/slice world)] (println "  SLICE" line))))
 
 (defn trace
