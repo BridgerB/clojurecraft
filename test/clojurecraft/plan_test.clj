@@ -1307,3 +1307,17 @@
     (is (wood/tunneled? (assoc w :plan/last done)))
     (is (not (wood/tunneled? (assoc w :plan/last (assoc done :intent/for :surface)))))
     (is (not (wood/tunneled? (assoc w :plan/last (assoc done :intent/status :failed)))))))
+
+(deftest the-leaf-under-the-feet-is-a-blocker-of-a-drop-below-it
+  ;; sim world R1/4 (issues #186, #370): a log dug from the top of the canopy fell into the hole
+  ;; under the leaves the bot stood on, out of the pickup box, and the collect timed out
+  (let [col (world/column {[0 63 0] 252 [0 62 0] 136})
+        w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})
+        under #(clojurecraft.intent/leaf-under w %)]
+    (is (= [0 63 0] (under [0.5 62.5 0.5])) "the drop two under the feet, a leaf between")
+    (is (nil? (under [0.5 63.5 0.5])) "within the pickup box: nothing to dig")
+    (is (nil? (under [4.5 62.5 0.5])) "not in the bot's column")
+    (is (nil? (clojurecraft.intent/leaf-under
+               (assoc w :world/chunks {[0 0] (world/column {[0 63 0] 1})})
+               [0.5 62.5 0.5]))
+        "stone under the feet is the pathfinder's, not a leaf's")))
