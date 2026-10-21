@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T20:30:53.313Z",
+  "at" : "2026-10-21T20:33:12.086Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -75,11 +75,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 40,
-    "title" : "Bot stops at ingots: no-path",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 108,
     "title" : "Bot stops at water-bucket: no-log",
     "labels" : [ "bot-failure", "real", "sim" ],
@@ -98,6 +93,11 @@
     "number" : 370,
     "title" : "Bot stops at portal: no-log",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 40,
+    "title" : "Bot stops at ingots: no-path",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 465,
@@ -199,10 +199,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 40,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 461,
     "move" : "leave",
     "why" : "hands-off label"
@@ -212,6 +208,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 370,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 40,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
