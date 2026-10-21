@@ -1,4 +1,5 @@
-{:aliases {:brain {:extra-paths ["dev"] :main-opts ["-m" "clojurecraft.brain"]}
+{:aliases {:probe {:extra-paths ["probe"] :main-opts ["-m" "probe.pkplay"]}
+           :brain {:extra-paths ["dev"] :main-opts ["-m" "clojurecraft.brain"]}
            :capture {:main-opts ["-m" "clojurecraft.capture"]}
            :datagen {:extra-deps {org.clojure/data.json {:mvn/version "2.5.2"}}
                      :extra-paths ["dev"]
