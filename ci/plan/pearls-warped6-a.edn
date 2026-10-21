@@ -1,0 +1,21 @@
+;; Issue #263, branch feat/263-warped6, first batch: the arena is a room carved out of a block of
+;; stone, walled seven high, so nothing the dark round it spawns walks in (round 5's arena losses);
+;; the hunt cuts stairs up toward endermen far above as it cuts them down (ascend: round 5's
+;; pearls-12 runs spent most of their forty minutes in the caves under the forest floor), and a
+;; vantage is never farther from the burrow than from the enderman (run 1 was slain walking home).
+;; pearls-1-live guards the arena (2/3 and 3/3 in round 5); pearls-12 is the stage (0/5, 5 held).
+{:plans/label "pearls-warped6-a"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 5
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
