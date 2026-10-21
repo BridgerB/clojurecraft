@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T18:48:13.075Z",
+  "at" : "2026-10-21T18:58:39.582Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -95,11 +95,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : true
   }, {
-    "number" : 92,
-    "title" : "Bot stops at portal-kit: no-escape",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 87,
     "title" : "Bot stops at ingots: no-log",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -142,6 +137,11 @@
   }, {
     "number" : 156,
     "title" : "Bot stops at portal-kit: stuck",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 92,
+    "title" : "Bot stops at portal-kit: no-escape",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -227,12 +227,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 108,
-    "move" : "wait",
-    "why" : "session starting"
-  }, {
-    "issue" : 92,
-    "move" : "leave",
-    "why" : "hands-off label"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 87,
     "move" : "leave",
@@ -270,6 +266,10 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 92,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 75,
     "move" : "leave",
     "why" : "hands-off label"
@@ -287,10 +287,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "assign",
-    "at" : "2026-10-21T07:12:11.631Z"
-  }, {
     "issue" : 135,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1635,5 +1631,10 @@
     "issue" : 108,
     "move" : "assign",
     "at" : "2026-10-21T18:37:43.649Z"
+  }, {
+    "issue" : 108,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-21T18:58:39.582Z"
   } ]
 }
