@@ -517,6 +517,7 @@
 (s/def :intent/route #{:found :partial :none})
 (s/def :intent/at nat-int?)
 (s/def :intent/replans nat-int?)
+(s/def :intent/ice? boolean?)
 (s/def :intent/max-nodes pos-int?)
 (s/def :intent/planned-chunks nat-int?)
 (s/def :path/waypoints (s/coll-of ::block-pos :kind vector?))
