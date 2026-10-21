@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T11:28:17.303Z",
+  "at" : "2026-10-21T11:29:29.123Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -17,6 +17,11 @@
     "number" : 135,
     "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim" ],
+    "copilot" : true
+  }, {
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "labels" : [ "bot-failure", "sim", "agent-stuck" ],
@@ -29,11 +34,6 @@
     "nudges" : 2,
     "pr" : 444,
     "session" : false
-  }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
-    "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
   }, {
     "number" : 446,
     "title" : "Bot stops at fortress: inventory-full",
@@ -256,7 +256,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 135,
-    "move" : "assign"
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 178,
     "move" : "leave",
@@ -275,11 +276,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-21T05:38:02.067Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T05:39:10.833Z"
@@ -1624,5 +1620,10 @@
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T11:28:17.303Z"
+  }, {
+    "issue" : 135,
+    "move" : "unassign",
+    "why" : "no pull request and no session since the assignment",
+    "at" : "2026-10-21T11:29:29.123Z"
   } ]
 }
