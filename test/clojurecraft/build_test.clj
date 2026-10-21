@@ -963,6 +963,42 @@
     (is (nil? (build/site-lost w (assoc i :intent/kind :stairs-up) :no-station))
         "only a build gives its site up for no station")))
 
+(deftest a-flooded-room-is-no-site
+  (let [site [8 62 4]
+        wet (build/cell site :south [1 0 1])
+        i (assoc hill-intent :intent/build :portal :intent/origin site :intent/op hill-op)
+        dry (assoc (standing-at (open-ground {}) [8.5 63.0 7.5]) :plan/intent i)
+        flooded
+        (assoc (standing-at (open-ground {wet blocks/water-base}) [8.5 63.0 7.5]) :plan/intent i)
+        walk {:intent/kind :walk
+              :intent/for :build
+              :intent/target [8 63 6]
+              :intent/status :failed
+              :intent/reason :no-path}
+        dig {:intent/kind :dig
+             :intent/target [9 63 6]
+             :intent/status :failed
+             :intent/reason :out-of-reach}]
+    (is (not (build/flooded-room? dry site :south)))
+    (is (build/flooded-room? flooded site :south) "water in a room cell")
+    (is (not (build/flooded-room? flooded nil nil)) "a build with no site is never flooded")
+    (testing "no stand in a flooded room: the site is given up, a portal build too"
+      (let [out (build/site-lost flooded i :no-stand)]
+        (is (intent/done? (:plan/intent out)))
+        (is (= #{site} (memory/given-up-sites out))))
+      (is (nil? (build/site-lost dry i :no-stand)) "a dry room fails for no stand as it did")
+      (is (nil? (build/site-lost flooded (assoc i :intent/kind :tunnel-to) :no-stand))
+          "only a build has a site"))
+    (testing "a walk or a dig that fails in a flooded room gives the site up"
+      (doseq [child [walk dig (assoc walk :intent/reason :stuck)]]
+        (is (build/lost-way? flooded i child))
+        (is (not (build/lost-way? dry i child)) "a dry room's walk and dig fail as they did")
+        (is (not (build/lost-way? flooded i (assoc child :intent/pickup? true)))))
+      (let [i (assoc i :intent/child dig)
+            out (build/work-op (assoc flooded :plan/intent i) i hill-op {:event/kind :tick})]
+        (is (intent/done? (:plan/intent out)))
+        (is (= #{site} (memory/given-up-sites out)))))))
+
 (deftest an-exhausted-walk-to-a-nearby-build-stand-gives-up-the-site
   (let [site [8 62 4]
         target [10 63 7]
@@ -1504,3 +1540,23 @@
     (is (not (build/swim-looped?
               (:plan/intent (build/swum (assoc (swum-n (at w) 2) :player/pos [11.5 63.0 10.5])))))
         "a swim-out that moved the bot starts the count again")))
+
+(deftest a-block-at-the-edge-of-reach-is-walked-to-not-dug
+  ;; real snapshot real-5-s2-Clj_r09 (issue #461): the block in the way of the lava's stand was dug
+  ;; from 4.478 blocks, the walk's momentum carried the eye to 4.5007 the next tick, and the dig
+  ;; failed :out-of-reach
+  (let [origin [8 62 4]
+        stand [9 63 12]
+        rock {[5 63 12] (blocks/default-state :stone)}
+        child-at (fn [x]
+                   (build/clear-stand (standing-at (open-ground rock) [x 63.0 12.5])
+                                      stand
+                                      :cast-one
+                                      origin
+                                      :south))]
+    (is (= [5 63 12] (:intent/target (child-at 1.7))) "well within reach: dug from here")
+    (is (= :dig (:intent/kind (child-at 1.7))))
+    (is (= :walk (:intent/kind (child-at 1.3))) "at the edge of reach: walked closer first")
+    (is (= [5 63 12] (:intent/target (child-at 1.3))))
+    (is (build/near-enough? (standing-at (open-ground rock) [1.7 63.0 12.5]) [5 63 12]))
+    (is (not (build/near-enough? (standing-at (open-ground rock) [1.3 63.0 12.5]) [5 63 12])))))
