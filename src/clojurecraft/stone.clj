@@ -210,6 +210,14 @@
   [world row]
   (intent/chain-next (:plan/last world) (:goal/id row) (drops-of-row row) {}))
 
+(defn walk-to
+  "A walk tagged for to the end of a route from which the block at t is dug and its drop picked up
+   (:intent/pickup?), a step down into the hole it leaves when it is a block of the floor
+   (:intent/step-down?)."
+  [world t for]
+  (cond-> {:intent/kind :walk :intent/target t :intent/for for :intent/pickup? true}
+    (= (inc (physics/y-of t)) (physics/y-of (beside world t))) (assoc :intent/step-down? true)))
+
 (def filler-want 8)                  ; filler a mine tops up to by hand once a staircase died boxed: a seal and a floor or two
 (def filler-states
   "Every state of the blocks dug by hand for filler: dirt, and the grass over it."
@@ -227,8 +235,7 @@
   (when (and (seq (:plan/boxed-at world)) (< (stairs/carried-filler world) filler-want))
     (->> (exposed-of-states world filler-states)
          (take max-candidates)
-         (map (fn [t]
-                {:intent/kind :walk :intent/target t :intent/for :filler :intent/pickup? true}))
+         (map #(walk-to world % :filler))
          (filter #(intent/routable? world %))
          first)))
 
@@ -442,17 +449,10 @@
       (intent/chain-next (:plan/last world) :filler filler-drops {})
       (let [missing (tool-missing world row)
             [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
-            walk-to (fn [t]
-                      (cond-> {:intent/kind :walk
-                               :intent/target t
-                               :intent/for (:goal/id row)
-                               :intent/pickup? true}
-                        (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
-                        (assoc :intent/step-down? true)))
             walk (when-not missing
                    (->> (exposed-of-states world (states-of-row row))
                         (take max-candidates)
-                        (map walk-to)
+                        (map #(walk-to world % (:goal/id row)))
                         (filter #(intent/routable? world %))
                         first))]
         (cond missing {:plan/wait missing}

@@ -5,7 +5,7 @@ type: reference
 tags: [bot, plan, mining, goals]
 aliases: [:mine, stone.clj, mine-next, :goal/blocks, :goal/depth, mine-stone, mine-coal, mine-iron, dig-gravel, none-in-sight, intent/pickup?, step-down?, :redig, flint-from-gravel, flint]
 status: verified
-lastUpdated: 2026-10-18
+lastUpdated: 2026-10-21
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/stone.clj#defn mine-next
@@ -59,6 +59,9 @@ sourceRefs:
   - src/clojurecraft/stone.clj#defmethod intent/run :redig
   - test/clojurecraft/sim_test.clj#one-gravel-is-placed-and-dug-again-until-it-drops-flint
   - test/clojurecraft/sim_test.clj#ore-is-mined-with-a-pickaxe-from-the-main-inventory
+  - src/clojurecraft/stone.clj#defn filler-dig
+  - test/clojurecraft/stone_test.clj#a-mine-boxed-with-little-filler-digs-dirt-for-it-before-another-stair
+  - test/clojurecraft/stone_test.clj#the-surface-over-stone-is-the-ground-not-the-canopy-over-it
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[make-goals]]"
@@ -109,6 +112,8 @@ Gravel's loot table drops flint one time in ten, else the gravel itself. The `:f
 - The depths are where the game makes each ore densest (iron peaks at y 16; coal is densest high up, around y 96, and absent below y 0, so its stairs stop at 40: at 0, the twelfth live run tunnelled thirteen minutes in deepslate for coal it never found): where a tunnel is cut. Iron's went 16, then 0 (the second live run waited at 16 with the only iron in sight out of reach), then back to 16 when tunnels came, since a tunnel at the peak shows the most.
 - `:mine-stone` holds a wooden pickaxe by item, not by tag, as it always has: a bot that has only a stone pickaxe plans a wooden one before more cobblestone.
 - Before rows named their blocks, the chain was tagged `:intent/for :stone` and the walk keyed its arrival off that; it is now the row's id and `:intent/pickup?`.
+- **The surface over stone is ground, not canopy.** `surface-over` skips leaves: sim race 39550831606 world R4/25 (issue #85) walked to the top of a birch's canopy over its stone, every stair from there was refused for the leaves, and each level step was followed by the walk back (`the-surface-over-stone-is-the-ground-not-the-canopy-over-it`).
+- **A boxed mine digs its filler.** Once a staircase died `:boxed` (`:plan/boxed-at`) and under `filler-want` (8) filler is carried, `filler-dig` walks to the nearest dirt whose dig exposes no fluid, tagged `:filler`, and the chain digs and collects it before another stair is cut. Real bot Clj_r15 at R1/30 (issues #342 and #65) stood on lake shores with one or two dirt to seal with (`a-mine-boxed-with-little-filler-digs-dirt-for-it-before-another-stair`).
 
 ## See also
 - [[make-goals]] - how the planner reaches a mining row (its holds, then its provides).
