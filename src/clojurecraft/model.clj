@@ -344,6 +344,9 @@
    [:intent/from-feet
     "the feet a tunnel toward a bank (scoop/to-bank) began at, to judge whether it came nearer"
     ":tunnel for :bank; a :tunnel-to toward a portal room's frame (stronghold/to-room)"]
+   [:intent/dead-end
+    "the feet cell a mine's retreat walk left, where no stair, tunnel or deeper stair could be cut: :plan/boxed-at takes it when the walk starts, so the descent that follows is not cut to the same dead end again"
+    ":walk for :retreat, from the mine (stone/mine-next)"]
    [:intent/from "the feet a :tunnel-to's step started from, where its ops are worked"
     ":tunnel-to, during a step"]
    [:intent/trunk "bottom log of the trunk a gather chain works; a failure blacklists it whole"
@@ -451,9 +454,6 @@
     "walk, once planned"] [:intent/at "index of the next waypoint" "walk, once planned"]
    [:intent/replans "routes planned for this walk; more than intent/max-replans fails :no-path"
     "walk, once planned"]
-   [:intent/ice?
-    "true when the walk was planned from a sheet of ice: its routes take the sheet for floor even when the feet have stepped off it (intent/route!)"
-    "walk, once planned from ice"]
    [:intent/max-nodes "node expansion budget for this walk's route checks and replans"
     "walk, when a longer search is needed"]
    [:intent/planned-chunks

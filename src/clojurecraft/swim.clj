@@ -38,7 +38,6 @@
 (def bank-radius 16)                  ; how far on the plane a bank is looked for (gym shore-w1 run 6: none within 12 from mid-sea)
 (def bank-rise 1)                     ; a bank at most this far above the highest feet level afloat (steve's landing set W)
 (def bank-drop 3)                     ; or this far below it: a roofed pool's air pocket is sideways and down
-(def drop-cost 2)                     ; blocks of distance each block a bank lies under the float-top counts for: it is swum down to, and a body afloat sinks slowly
 (def float-depth 1.03)                ; feet below an open surface when afloat with jump held (vanilla's equilibrium)
 (def stuck-ticks 40)                  ; 2 s without progress toward the bank → dig what is in the way
 (def progress 0.05)                   ; blocks nearer the bank that count as progress
@@ -111,11 +110,7 @@
 (defn banks
   "Cells the feet could stand in, nearest first, within bank-radius of feet on the plane and
    between bank-drop under the float-top and bank-rise over it (a ledge higher than that is
-   out of the impulse's lift); blacklist removes cells that failed. Nearest by the distance on
-   the plane plus drop-cost for each block under the float-top: a pocket in the rock under the
-   pool is swum down to, not along, and sim race 39186407147 (issue #156, world R3/32) failed
-   :stuck three times at three such pockets a block off with a dry floor three blocks off at the
-   surface. Under the open sky (the feet
+   out of the impulse's lift); blacklist removes cells that failed. Under the open sky (the feet
    with nothing over them but water and air, terrain/under-sky?), only banks in the open
    (in-the-open?): a pocket under the rock beside the water, or a ledge under it, is no way out
    of the sea over it. Issue #89 (sim race 38811426215 runner 8, worlds R4/21 and R1/32): a bot that dug up into the sea from its tunnel
@@ -128,18 +123,17 @@
           blacklist
           (if (terrain/under-sky? world feet) #(in-the-open? world %) any?)))
   ([world [fx _ fz :as feet] surface blacklist keep?]
-   (let [top (float-top world feet surface)]
-     (->> (for [dx (range (- bank-radius) (inc bank-radius))
-                dz (range (- bank-radius) (inc bank-radius))
-                y (range (- top bank-drop) (+ top bank-rise 1))
-                :let [cell [(+ fx dx) y (+ fz dz)]]
-                :when (and (not (blacklist cell)) (bank? world cell) (keep? cell))]
-            cell)
-          (sort-by (fn [cell] [(+ (physics/horizontal-distance (physics/centre feet)
-                                                               (physics/centre cell))
-                                  (* drop-cost (max 0 (- top (physics/y-of cell)))))
-                               (- (physics/y-of cell))]))
-          first))))
+   (->> (for [dx (range (- bank-radius) (inc bank-radius))
+              dz (range (- bank-radius) (inc bank-radius))
+              :let [top (float-top world feet surface)]
+              y (range (- top bank-drop) (+ top bank-rise 1))
+              :let [cell [(+ fx dx) y (+ fz dz)]]
+              :when (and (not (blacklist cell)) (bank? world cell) (keep? cell))]
+          cell)
+        (sort-by (fn [cell] [(physics/horizontal-distance (physics/centre feet)
+                                                          (physics/centre cell))
+                             (- (physics/y-of cell))]))
+        first)))
 
 (defn ahead
   "The cell one step from feet toward bank on the plane, along the larger axis of the way."
@@ -359,31 +353,57 @@
   [world bank]
   (not (bank? world bank)))
 
+(def shore-clearance 3)               ; cells over the water's surface a shore column is first looked at: a roof higher is not the ground
+(def shore-depth 4)                   ; and cells under it the look goes on to find the ground
+
+(defn shore-ground?
+  "Is column [x z] ground at the water's surface: scanning down from shore-clearance over surface
+   to shore-depth under it, the first cell that is water or solid is solid and not a lake's ice;
+   false when it is water, or when the column is not loaded. Not the top of the column
+   (stairs/dry-top?): a block high over the sea made every column under it ground. Sim race
+   39550831606 runner 4 (issue #177, world R4/1): a row of cobblestone at y 105 over the sea made
+   the sea out to y 62 the 'shore' of the swim, and the escape swam to the middle of the sea
+   and floated there."
+  [world [x z] surface]
+  (true? (first (keep (fn [y]
+                        (let [cell [x y z]]
+                          (cond (terrain/fluid-kind world cell) false
+                                (solid-cell? world cell) (not (iced? world cell))
+                                :else nil)))
+                      (range (+ surface shore-clearance) (- surface shore-depth 1) -1)))))
+
 (defn far-shore
   "With no bank in reach and the water open to the sky over the feet: the nearest column, along
-   eight bearings from bank-radius out to shore-reach, whose top is dry ground (stairs/dry-top?),
-   as the point at the water's surface to swim toward. Each pass
+   eight bearings from bank-radius out to shore-reach, whose top at the water's surface is dry
+   ground (shore-ground?), as the point at the water's surface to swim toward. Each pass
    that looks for a bank looks again, so the bank found near the shore takes over. Before it, an
    escape at sea rose to the surface and floated there until it timed out: sim race
    38811426215 runner 8 (issue #89, worlds R4/21 and R1/32 at 76010d2) had bots under the sea floor
    with land 33 and 40 blocks off, the only way out up through the water. With none, the point
    over the landing (:plan/go-at), which is land: world R4/30's bot stood under the sea 180
-   blocks from it, no shore within reach. nil with neither."
-  [world [fx _ fz] surface]
-  (or (->> (range 8)
-           (keep (fn [k]
-                   (let [a (* k (/ math/PI 4))
-                         [dx dz] [(math/cos a) (math/sin a)]]
-                     (some (fn [d]
-                             (let [x (long (math/floor (+ fx 0.5 (* d dx))))
-                                   z (long (math/floor (+ fz 0.5 (* d dz))))]
-                               (when (stairs/dry-top? world [x z]) [d [x surface z]])))
-                           (range bank-radius (inc shore-reach))))))
-           (sort-by first)
-           (map second)
-           first)
-      (when-let [[hx _ hz] (:plan/go-at world)]
-        [(long (math/floor hx)) surface (long (math/floor hz))])))
+   blocks from it, no shore within reach. nil with neither. The shore chosen before (kept, the
+   swim-out's :intent/shore) is kept while its column is dry ground still: sim race 39550831606
+   runner 4 (issue #177, world R4/1) floated sixteen blocks from a shore on each side, and the
+   first bearing at that distance changed with the cell the feet were in, so each stroke west
+   made the east shore the nearer and each stroke east the west: it dithered about one cell
+   for the escape's 120 s, three times, :no-escape."
+  ([world feet surface] (far-shore world feet surface nil))
+  ([world [fx _ fz] surface kept]
+   (or (when (and kept (shore-ground? world [(first kept) (nth kept 2)] surface)) kept)
+       (->> (range 8)
+            (keep (fn [k]
+                    (let [a (* k (/ math/PI 4))
+                          [dx dz] [(math/cos a) (math/sin a)]]
+                      (some (fn [d]
+                              (let [x (long (math/floor (+ fx 0.5 (* d dx))))
+                                    z (long (math/floor (+ fz 0.5 (* d dz))))]
+                                (when (shore-ground? world [x z] surface) [d [x surface z]])))
+                            (range bank-radius (inc shore-reach))))))
+            (sort-by first)
+            (map second)
+            first)
+       (when-let [[hx _ hz] (:plan/go-at world)]
+         [(long (math/floor hx)) surface (long (math/floor hz))]))))
 
 (defn shore-controls
   "Rising with jump held: while the feet are more than two under top (the water's top), drawn to
@@ -484,33 +504,35 @@
             toward (when-not (or b cap laid rise? no-lay)
                      (when (stairs/filler world 1) (wall-toward world feet surface)))
             wall (when-not (or b cap laid toward rise?) (notch world feet surface))]
-        (cond
-          b
-          (-> world
-              (intent/assoc-intent :intent/bank b :intent/target b)
-              (game/say (str "swim-out: bank " b)))
-          cap (dig-or-sink world feet cap "no bank")
-          laid (start-lay world laid "no bank")
-          ;; a wall's laid bank is just out of the place reach: swim along to it
-          toward
-          (-> world
-              (assoc :player/controls
-                     (shore-controls world toward (or to-y (inc (float-top world feet surface)))))
-              (intent/assoc-intent :intent/next-search (+ tick search-every-ticks)
-                                   :intent/shore toward)
-              (game/say (str "swim-out: no bank, toward the wall at " toward)))
-          wall (start-dig world wall "no bank, notching the wall")
-          ;; nothing in reach: rise, toward a shore when the water is open over the feet
-          ;; (the roof or a bank comes into reach, or the timeout ends it)
-          :else
-          (let [[fx _ fz] feet
-                shore (when-not (solid-cell? world [fx surface fz]) (far-shore world feet surface))]
-            (-> world
-                (assoc :player/controls
-                       (shore-controls world shore (or to-y (inc (float-top world feet surface)))))
-                (intent/assoc-intent :intent/next-search (+ tick search-every-ticks))
-                (cond-> shore (intent/assoc-intent :intent/shore shore))
-                (cond-> (nil? shore) (intent/dissoc-intent :intent/shore))))))
+        (cond b
+              (-> world
+                  (intent/assoc-intent :intent/bank b :intent/target b)
+                  (game/say (str "swim-out: bank " b)))
+              cap (dig-or-sink world feet cap "no bank")
+              laid (start-lay world laid "no bank")
+              ;; a wall's laid bank is just out of the place reach: swim along to it
+              toward
+              (-> world
+                  (assoc
+                   :player/controls
+                   (shore-controls world toward (or to-y (inc (float-top world feet surface)))))
+                  (intent/assoc-intent :intent/next-search (+ tick search-every-ticks)
+                                       :intent/shore toward)
+                  (game/say (str "swim-out: no bank, toward the wall at " toward)))
+              wall (start-dig world wall "no bank, notching the wall")
+              ;; nothing in reach: rise, toward a shore when the water is open over the feet
+              ;; (the roof or a bank comes into reach, or the timeout ends it)
+              :else
+              (let [[fx _ fz] feet
+                    shore (when-not (solid-cell? world [fx surface fz])
+                            (far-shore world feet surface shore))]
+                (-> world
+                    (assoc
+                     :player/controls
+                     (shore-controls world shore (or to-y (inc (float-top world feet surface)))))
+                    (intent/assoc-intent :intent/next-search (+ tick search-every-ticks))
+                    (cond-> shore (intent/assoc-intent :intent/shore shore))
+                    (cond-> (nil? shore) (intent/dissoc-intent :intent/shore))))))
       (> (- tick best-tick) stuck-ticks)
       (if-let [cell (obstacle world feet bank)]
         (dig-or-sink world feet cell "stuck")

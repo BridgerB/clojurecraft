@@ -455,8 +455,9 @@
    ravine's floor sixty under its landing, the sky open and no hunt target in its band, and world
    R4/39 under rock at y 47 where its climb out had died :boxed, and both waited :no-log with
    trees remembered sixty blocks off. A real race (issue #89, snapshot real-3-s2-Clj_r32) smelted
-   its iron at y 16 in a cell a stair down had died :boxed in; the furnace placed at its side
-   closed the way a retreat had walked, and the plan waited :no-log out beside a stone pickaxe."
+   its iron at y 16 in a cell a stair down had died :boxed in, with the nearest trunk past the near
+   band; the retreat gave a walk at the moment of the snapshot and none by the time the wait ran
+   out, and the plan waited :no-log out beside a stone pickaxe."
   [world]
   (when-not (:player/in-water? world)
     (or (scoop/pit-climb world)

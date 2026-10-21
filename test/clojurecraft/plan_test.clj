@@ -235,7 +235,7 @@
 
 (deftest a-boxed-cell-with-no-retreat-is-climbed-out-of-for-wood
   ;; issue #89 (real race, bot Clj_r32): in a cell a stair down had died boxed in, with the
-  ;; furnace just placed at its side, no retreat was left and the plan waited :no-log out
+  ;; nearest trunk past the near band and no retreat left, the plan waited :no-log out
   (let [w (assoc (remembered
                   {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [12 60 8] 136}
                   [8.5 50.0 8.5])

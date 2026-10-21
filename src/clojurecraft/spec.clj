@@ -457,6 +457,7 @@
 (s/def :intent/move (s/coll-of #{-1 0 1} :kind vector? :count 3)) ; a :tunnel step's [dx dy dz]
 (s/def :intent/from ::block-pos)
 (s/def :intent/from-feet ::block-pos)
+(s/def :intent/dead-end ::block-pos)
 (s/def :intent/taken nat-int?)
 (s/def :intent/tunnel-visited (s/coll-of ::block-pos :kind set?))
 (s/def :intent/retreats nat-int?)
@@ -519,7 +520,6 @@
 (s/def :intent/route #{:found :partial :none})
 (s/def :intent/at nat-int?)
 (s/def :intent/replans nat-int?)
-(s/def :intent/ice? boolean?)
 (s/def :intent/max-nodes pos-int?)
 (s/def :intent/planned-chunks nat-int?)
 (s/def :path/waypoints (s/coll-of ::block-pos :kind vector?))
