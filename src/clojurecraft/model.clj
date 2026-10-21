@@ -330,6 +330,9 @@
    [:intent/tunnel-visited
     "the feet cells this tunnel-to has started steps from; fresh steps and short floored turns precede a retreat"
     ":tunnel-to, after choosing its first step"]
+   [:intent/retreats
+    "retreats in a row a :tunnel-to has stepped, into cells it already stood in (fortress/retreat?); a fresh step resets it, and more than fortress/retreats-allowed fail the tunnel :blocked (issue #338)"
+    ":tunnel-to, after choosing its first step"]
    [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
     ":tunnel-to, during a step"]
    [:intent/from-feet
