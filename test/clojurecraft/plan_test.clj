@@ -368,7 +368,11 @@
                                            wood/far-radius
                                            (memory/positions-now w blocks/log-states)))]
     (is (stairs/out? w (intent/feet w)) "on open ground under the sky")
-    (is (= {:intent/kind :stairs-down :intent/to-y 58 :intent/dir [1 0] :intent/for :trees}
+    (is (= {:intent/kind :stairs-down
+            :intent/trunk trunk
+            :intent/to-y 58
+            :intent/dir [1 0]
+            :intent/for :trees}
            (wood/trees-descend w [trunk]))
         "down toward the trunk, one length")
     (is (= :stairs-down (:intent/kind (wood/trees-descend w [[130 9 8]])))
@@ -395,10 +399,18 @@
     (is (wood/descended? (assoc w :plan/last cut)))
     (is (not (wood/descended? (assoc w :plan/last (assoc cut :intent/for :surface)))))
     (is (not (wood/descended? (assoc w :plan/last (assoc cut :intent/status :failed)))))
-    (is (= {:intent/kind :stairs-down :intent/to-y 44 :intent/dir [1 0] :intent/for :trees}
+    (is (= {:intent/kind :stairs-down
+            :intent/trunk trunk
+            :intent/to-y 44
+            :intent/dir [1 0]
+            :intent/for :trees}
            (wood/trees-descend (assoc w :plan/last cut) [trunk]))
         "the next length goes on down toward the trunk")
-    (is (= {:intent/kind :stairs-down :intent/to-y 44 :intent/dir [1 0] :intent/for :trees}
+    (is (= {:intent/kind :stairs-down
+            :intent/trunk [12 43 8]
+            :intent/to-y 44
+            :intent/dir [1 0]
+            :intent/for :trees}
            (wood/trees-descend (assoc w :plan/last cut) [[12 43 8]]))
         "a trunk under twelve below the eye, no route reaching it, is cut toward from the foot")
     (is (nil? (wood/trees-descend (assoc w :plan/last cut) [[12 50 8]]))
