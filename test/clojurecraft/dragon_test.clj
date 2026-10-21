@@ -379,15 +379,20 @@
                                            {:event/kind :tick :event/now 1000 :event/rand 0.5}))]
       (is (intent/done? (perch [-1.5 64.0 0.5] (sitting 270.0)))
           "its head turned onto the feet: the perch hands back")
-      (is (not (intent/done? (perch [2.5 64.0 0.5] (sitting 270.0)))) "behind it: on"))
-    (is (= {:intent/kind :back-off :intent/target dragon-eid}
-           (at [7.5 64.0 0.5]
-               (assoc (sitting 90.0)
-                      50
-                      {:entity/type (mob/type-id :area_effect_cloud)
-                       :entity/pos [0.5 64.0 0.5]
-                       :entity/radius 3.0})))
-        "every stand under a breath and the head on the feet: away from it")
+      (is (not (intent/done? (perch [2.5 64.0 0.5] (sitting 270.0)))) "behind it: on")
+      (let [clouded (assoc (sitting 90.0)
+                           50
+                           {:entity/type (mob/type-id :area_effect_cloud)
+                            :entity/pos [0.5 64.0 0.5]
+                            :entity/radius 3.0})]
+        (is (= {:intent/kind :perch :intent/target dragon-eid} (at [7.5 64.0 0.5] clouded))
+            "every stand under a breath: the perch where the feet are, never out of the basin")
+        (is (not (intent/done? (perch [7.5 64.0 0.5] clouded)))
+            "and with no stand to go to it holds")))
+    (is
+     (= (dragon/standing-walk [2 64 0]) (at [-1.5 64.0 0.5] (sitting 270.0)))
+     "the head turned onto the feet in the basin: straight to the stand behind, low under it
+         (gym dragon2-a runs 1 and 3 walked out up the rim into the neck)")
     (is (plan/interrupts? (round-fountain [12.5 64.0 0.5] (sitting 90.0))
                           {:goal/plan :dragon}
                           {:intent/kind :walk :intent/target [-2 64 0]})
@@ -395,7 +400,11 @@
     (is (not (plan/interrupts? (round-fountain [4.5 64.0 0.5] (sitting 90.0))
                                {:goal/plan :dragon}
                                {:intent/kind :walk :intent/target [4 64 5]}))
-        "never the walk out from under it")))
+        "never the walk out from under it")
+    (is (not (plan/interrupts? (round-fountain [-0.5 64.0 -1.5] (sitting 90.0))
+                               {:goal/plan :dragon}
+                               {:intent/kind :walk :intent/target [2 64 0]}))
+        "nor a walk in the basin")))
 
 (deftest every-look-of-the-dragon-row-is-away-from-an-endermans-eyes
   ;; gym dragon-f run 3: three endermen stared at in turn on the walks to and from the stand

@@ -547,13 +547,15 @@
       [(first look) 90.0]
       look)))
 
+(declare fountain-stand)
+
 (defmethod intent/run :perch
   ;; {:intent/kind :perch :intent/target eid}: the best sword in hand, then by the fountain facing
   ;; the dragon (look-away: never into an enderman's eyes); once it has held perched (perched?)
   ;; for perch-ticks, hit it while its box is in reach, walking in toward the fountain while it
   ;; is not (no nearer than walk-in-to, and never under its head: bite-on-way?). Done when it is
   ;; gone (dead), a breath is near (the planner backs off), its head has turned onto the feet
-  ;; (in-bite?: the planner finds a stand behind it) or after perch-hold-ms (the planner looks
+  ;; (in-bite?) with a stand behind it to go to (the planner walks there) or after perch-hold-ms (the planner looks
   ;; again)
   [world {:intent/keys [target stage perched] :or {perched 0} :as i} _]
   (let [now (:time/now world)
@@ -564,7 +566,7 @@
         sat? (>= perched perch-ticks)]
     (cond (or (entity/gone? world target)
               (breath-near world)
-              (in-bite? e (:player/pos world))
+              (and (in-bite? e (:player/pos world)) (some? (fountain-stand world)))
               (> (- now (:intent/since i)) perch-hold-ms))
           (-> world
               (assoc :player/controls {})
@@ -622,6 +624,12 @@
          (sort-by #(physics/horizontal-distance (:player/pos world) (physics/centre %)))
          first)))
 
+(defn in-basin?
+  "Are the feet within walk-in-to of the fountain on the plane: in the exit portal's basin, under
+   the sitting dragon's head and neck, which reach down to its rim?"
+  [world]
+  (<= (from-fountain world) walk-in-to))
+
 (defn toward-dragon
   "The next intent toward the dragon dead: while a crystal stands or the feet are up a pillar or
    a spike, the crystals' (toward-crystals); a breath near, combat's :back-off from it; away from
@@ -629,10 +637,12 @@
    under a breath, or one on the straight way to the stand (breath-on-way?), the :perch where
    the feet are (gym dragon-b: a fireball's cloud on the basin after the dragon took off, and
    the plan waited :no-fountain until it failed; gym dragon-d: the walk back to the stand went
-   through a fireball's cloud lying between and died in it). With no stand and the sitting
-   dragon's head on the feet (in-bite?), combat's :back-off from it. A wait :no-fountain with no
-   ground round the fountain loaded, :no-dragon with no dragon shown. A walk to the stand while
-   the sitting dragon's head is on the straight way goes round it first (around)."
+   through a fireball's cloud lying between and died in it). A wait :no-fountain with no
+   ground round the fountain loaded, :no-dragon with no dragon shown. From outside the basin
+   (in-basin?), a walk to the stand while the sitting dragon's head is on the straight way goes
+   round it first (around); inside it, straight, low under the head: gym dragon2-a runs 1 and 3,
+   the head turned onto them, walked out of the basin (a way round, a back-off from the dragon),
+   up its rim into the neck, and died there."
   [world]
   (let [[eid d] (dragon world)
         pos (:player/pos world)
@@ -642,14 +652,14 @@
         blocked? (and far? (breath-on-way? world pos (physics/centre stand)))]
     (cond (or (seq (crystals world)) (on-pillar? world) (on-spike? world)) (toward-crystals world)
           breath {:intent/kind :back-off :intent/target (first breath)}
-          (and (nil? stand) eid (in-bite? d pos)) {:intent/kind :back-off :intent/target eid}
           (and (nil? stand) eid (some? (ground world 0 0 sky)))
           {:intent/kind :perch :intent/target eid}
           (nil? stand) {:plan/wait :no-fountain}
           (and blocked? eid) {:intent/kind :perch :intent/target eid}
           far?
-          (standing-walk (or (some->> (around d pos (physics/centre stand))
-                                      (ground-cell world))
+          (standing-walk (or (when-not (in-basin? world)
+                               (some->> (around d pos (physics/centre stand))
+                                        (ground-cell world)))
                              stand))
           (nil? eid) {:plan/wait :no-dragon}
           :else {:intent/kind :perch :intent/target eid})))
@@ -706,8 +716,8 @@
   ;; any running intent but a :back-off ends when a breath is near (breath-near) and the feet are
   ;; down off the pillars and spikes: gym dragon-d runs 1 and 3 walked into a fireball's cloud
   ;; and died in it, six a second, nothing else ending a walk; and a walk whose straight way
-  ;; passes before the sitting dragon's head (bite-on-way?), unless the feet are there already
-  ;; (the walk out from it)
+  ;; passes before the sitting dragon's head (bite-on-way?), from outside the basin, unless the
+  ;; feet are there already (the walk out from it)
   [world _ i]
   (let [[_ d] (dragon world)
         pos (:player/pos world)]
@@ -717,8 +727,15 @@
              (some? (breath-near world)))
         (and (= :walk (:intent/kind i))
              (:intent/target i)
+             (not (in-basin? world))
              (not (before-head? d pos))
              (bite-on-way? d pos (physics/centre (:intent/target i)))))))
+
+(defmethod combat/answers :dragon
+  ;; the dragon is the row's own: gym dragon2-a run 1's :defend fought the perched dragon at hand
+  ;; by :fight's aim point, off its stand
+  [_]
+  #{:ender_dragon})
 
 (defmethod plan/steer :dragon
   ;; every look the row's intents make, a walk's and a back-off's as well as the perch's, turned
