@@ -930,14 +930,14 @@
     (is (stone/unsupported? w) "air under the feet")
     (is (not (stone/unsupported? (standing 64 :stone_pickaxe))) "stone under them")
     (is (not (stone/unsupported? (assoc w :player/in-water? true))) "afloat: the swim's business")
-    (is (= {:plan/wait :unsupported} (stone/mine-next w (row :dig-gravel))) "wait for the fall")
-    (let [held (stone/mine-next (assoc w :plan/waiting-ticks stone/fall-wait-ticks)
-                                (row :dig-gravel))
+    (is (= {:plan/wait :unsupported} (stone/settle w)) "wait for the fall")
+    (is (nil? (stone/settle (standing 64 :stone_pickaxe))) "nothing to settle with a floor")
+    (let [held (stone/settle (assoc w :plan/waiting-ticks stone/fall-wait-ticks))
           [x y z] (:intent/target held)]
       (is (= [:walk :footing] [(:intent/kind held) (:intent/for held)])
           "a body that has not fallen rests on the rim: it steps onto ground that stands")
       (is (= 64 y))
-      (is (<= 1 (max (abs (- x 5)) (abs (- z 5))) 1) "a neighbouring cell"))
+      (is (= 1 (max (abs (- x 5)) (abs (- z 5)))) "a neighbouring cell"))
     (is (nil? (stone/footing (standing 64 :stone_pickaxe))) "nothing to do with a floor")))
 
 (deftest stone-beside-kelp-is-not-sealed

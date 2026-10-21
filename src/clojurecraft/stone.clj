@@ -161,6 +161,13 @@
        (map first)
        first))
 
+(defn placeable-cell?
+  "Does the server let a block take the place of the one at pos: air, a plant it replaces, or a
+   fluid (blocks/placeable-into?)? false for a cell not loaded."
+  [world pos]
+  (boolean (some-> (terrain/block-at world pos)
+                   blocks/placeable-into?)))
+
 (defn seal-stone
   "A :place of a filler into the water beside the nearest stone of the row in sight that the dig
    refuses only for that water, or nil: the stone has one to three water cells beside it (six
@@ -181,23 +188,22 @@
     (some
      (fn [c]
        (let [wet (vec (for [d six-around :let [n (mapv + c d)] :when (terrain/fluid-at world n)] n))
-             item (when (seq wet)
+             item (when (and (seq wet) (every? #(placeable-cell? world %) wet))
                     (or (stairs/filler world (count wet)) (planks-held world (count wet))))
              target (first wet)]
-         (when
-           (and
-            item
-            (<= (count wet) 3)
-            (every? #(= :water (terrain/fluid-kind world %)) wet)
-            (every? #(some-> (terrain/block-at world %)
-                             blocks/placeable-into?)
-                    wet)
-            (not (intent/fluid-over-falling? world c))
-            (not (intent/bed-over-fluid? world c))
-            (every? #(and (reachable? %) (place/support world %) (not (contains? blacklist %))) wet)
-            (intent/routable?
-             world
-             {:intent/kind :walk :intent/target c :intent/for (:goal/id row) :intent/pickup? true}))
+         (when (and item
+                    (<= (count wet) 3)
+                    (every? #(= :water (terrain/fluid-kind world %)) wet)
+                    (not (intent/fluid-over-falling? world c))
+                    (not (intent/bed-over-fluid? world c))
+                    (every?
+                     #(and (reachable? %) (place/support world %) (not (contains? blacklist %)))
+                     wet)
+                    (intent/routable? world
+                                      {:intent/kind :walk
+                                       :intent/target c
+                                       :intent/for (:goal/id row)
+                                       :intent/pickup? true}))
            {:intent/kind :place
             :intent/item item
             :intent/cell target
@@ -447,6 +453,16 @@
            (filter #(intent/routable? world %))
            first))))
 
+(defn settle
+  "What the mine does with feet over a gap (unsupported?): wait for the fall, at most
+   fall-wait-ticks planner ticks, then step onto ground that stands (footing); nil when the feet
+   have a floor, or neither is there to do."
+  [world]
+  (when (and (unsupported? world) (not (path/near-lava-trap? world (intent/feet world))))
+    (if (< (:plan/waiting-ticks world 0) fall-wait-ticks)
+      {:plan/wait :unsupported}
+      (footing world))))
+
 (defn mine-next
   "The next step of mining a row: continue its chain; else, holding the tool its blocks need
    (and first putting it in hand when it is only in the main inventory), walk to the nearest exposed one a route reaches (of the max-candidates nearest; a walk that
@@ -458,42 +474,39 @@
    retreat comes before any stair or tunnel: sim race 38844683780 (issue #230) cut its stairs down
    where the lava had just caught it, and the flow followed it down."
   [world row]
-  (or
-   (continue-mine world row)
-   (let [missing (tool-missing world row)
-         [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
-         walk-to
-         (fn [t]
-           (cond->
-             {:intent/kind :walk :intent/target t :intent/for (:goal/id row) :intent/pickup? true}
-             (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
-             (assoc :intent/step-down? true)))
-         walk (when-not missing
-                (->> (exposed-of-states world (states-of-row row))
-                     (take max-candidates)
-                     (map walk-to)
-                     (filter #(intent/routable? world %))
-                     first))]
-     (cond missing {:plan/wait missing}
-           stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
-           walk walk
-           :else
-           (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
-               (when (and (unsupported? world) (< (:plan/waiting-ticks world 0) fall-wait-ticks))
-                 {:plan/wait :unsupported})
-               (footing world)
-               (off-ice world)
-               (seal-stone world row)
-               (over-stone world row)
-               (stairs world row)
-               (when-let [d (tunnel-heading world)]
-                 {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
-               (deeper world)
-               (retreat world)
-               (climb world)
-               {:plan/wait :boxed})))))
+  (or (continue-mine world row)
+      (let [missing (tool-missing world row)
+            [_ stowed-item :as stowed] (intent/stowed-tool world (first (states-of-row row)))
+            walk-to (fn [t]
+                      (cond-> {:intent/kind :walk
+                               :intent/target t
+                               :intent/for (:goal/id row)
+                               :intent/pickup? true}
+                        (= (inc (physics/y-of t)) (physics/y-of (beside world t)))
+                        (assoc :intent/step-down? true)))
+            walk (when-not missing
+                   (->> (exposed-of-states world (states-of-row row))
+                        (take max-candidates)
+                        (map walk-to)
+                        (filter #(intent/routable? world %))
+                        first))]
+        (cond missing {:plan/wait missing}
+              stowed {:intent/kind :equip :intent/item (recipe/item-name stowed-item)}
+              walk walk
+              :else
+              (or (when (path/near-lava-trap? world (intent/feet world)) (retreat world))
+                  (off-ice world)
+                  (seal-stone world row)
+                  (over-stone world row)
+                  (stairs world row)
+                  (when-let [d (tunnel-heading world)]
+                    {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
+                  (deeper world)
+                  (retreat world)
+                  (climb world)
+                  {:plan/wait :boxed})))))
 
-(defmethod plan/act :mine [world row] (mine-next world row))
+(defmethod plan/act :mine [world row] (or (settle world) (mine-next world row)))
 
 ;; ---------------------------------------------------------------- dig a held block again
 
