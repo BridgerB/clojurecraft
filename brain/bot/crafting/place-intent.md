@@ -5,7 +5,7 @@ type: reference
 tags: [bot, crafting, intents, placement]
 aliases: [:place, place.clj, spot, place a crafting table, rejected placement, no-spot]
 status: verified
-lastUpdated: 2026-10-15
+lastUpdated: 2026-10-21
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/place.clj#defmethod intent/run :place
@@ -52,6 +52,8 @@ sourceRefs:
   - src/clojurecraft/stone.clj#defn afloat-no-spot?
   - test/clojurecraft/sim_test.clj#a-redig-whose-place-found-no-spot-afloat-gets-ashore-and-places
   - test/clojurecraft/sim_test.clj#a-redig-afloat-at-a-ponds-edge-gets-ashore-before-it-places
+  - src/clojurecraft/place.clj#defn water-spot
+  - test/clojurecraft/place_test.clj#on-a-pillar-in-the-sea-the-block-goes-into-the-water-beside-it
 related:
   - "[[bot/crafting/_moc|Crafting]]"
   - "[[placement-judged-by-server]]"
@@ -90,6 +92,7 @@ related:
 - **Ashore first.** A spot is sought round the feet, and afloat at a pond's edge every cell round them is water and the bank above the impulse's reach, so the place fails `:no-spot` the tick it starts, three times in half a second, before the trap can preempt it. Sim race 38515210080 world R4/41 (issue #95, 15 runs; four real bots of race 38515209959): the bucket filled, the bot was afloat in the column its source had left, two under the bank, and the gravel to dig again for flint found no spot. `place/ashore` wraps the `:place` and `:redig` acts: with `:player/in-water?` the act is a `:swim-out` for `:retreat` first (done on dry land, [[water-escape]]), and the place is asked for again from the bank (`a-redig-afloat-at-a-ponds-edge-gets-ashore-before-it-places`).- **Never twice into a body.** The game refuses a block into any player's box, its own included, and answers with the cell still air. Race 38515209959 runner 9 bot Clj_r17 (issue #106): bot Clj_r24 had landed at the same cell and walked through the furnace's spot collecting the same drops, and the same spot was sent three times in two seconds. A cell answered empty is now given up for another (`give-up`, `:intent/refused`, `a-cell-refused-with-nothing-in-it-is-given-up-for-another`). The same race's other three were the flower (bots Clj_r25 and Clj_r12 on a red tulip, fixed above) and the niche placed into before the slow server's break (bot Clj_r02, fixed above). The issue's snapshots hold the tick after the child place had already failed, so `stone/afloat-no-spot?` lets the `:redig` itself take the retreat in the failed child's place and start the place again ashore (`a-redig-whose-place-found-no-spot-afloat-gets-ashore-and-places`).
 - The local world is never written by the intent; only the server's `block-update` makes the table appear, and then memory records it (`memory/watched?` includes tables and furnaces, `memory/placed-kinds`), and `make/near` finds either within 24 blocks.
 - A swap click's answer changes slot state ids exactly like a craft click; the intent waits for it.
+- **Into the water beside the feet, last.** With no dry spot, no niche and no fresh rock to walk to (the retreat done or failed: `walk-off` goes back to the equip either way, once), `water-spot` takes a water cell touching the feet that has a solid neighbour to click (`support`): a block placed into a source or a flow takes its place, and the cell is sent as a given cell (`:intent/cell`), judged by the server alone. Sim race 39601680523 world R1/10 (issue #148): the bot stood on the one cobblestone it had pillared up in open sea, no pickaxe, and its table failed `:no-spot` three times; the water two cells off in the aquifer test is not beside the feet, so that furnace still goes back to fresh rock.
 
 ## See also
 - [[open-container-intent]] - what follows a placement.

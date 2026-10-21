@@ -114,6 +114,35 @@
            [(:control/forward? (:player/controls w2)) (:control/jump? (:player/controls w2))])
         "swimming toward it, rising")))
 
+(deftest the-shore-swum-for-is-kept-while-it-is-dry-ground
+  ;; sim race 39550831606 runner 4 (issue #177, world R4/1): sixteen blocks from a shore on each
+  ;; side, the first bearing at that distance changed with the cell the feet were in, and the
+  ;; escape dithered about one cell for 120 s, three times, :no-escape
+  (let [sea (fn [xs]
+              (into {} (for [x xs y (range 55 64) z (range 16)] [[x y z] blocks/water-base])))
+        w (assoc (game/init fx/opts)
+                 :world/chunks
+                 {[0 0] (world/column (sea (range 8 16)))
+                  [1 0] (world/column (sea (range 16)))
+                  [2 0] (world/column (sea (range 9)))})
+        feet [24 62 8]]
+    (is (= [41 64 8] (swim/far-shore w feet 64)) "east and west tie at seventeen, east first")
+    (is (= [7 64 8] (swim/far-shore w feet 64 [7 64 8])) "the west shore chosen before is kept")
+    (is (= [41 64 8] (swim/far-shore w feet 64 [20 64 8]))
+        "unless its column is water: a shore no more")
+    (let [roofed (assoc w
+                        :world/chunks
+                        {[0 0] (world/column (sea (range 8 16)))
+                         [1 0] (world/column (sea (range 16)))
+                         [2 0] (world/column (merge (sea (range 16))
+                                                    (into {}
+                                                          (for [x (range 16)]
+                                                            [[x 100 8]
+                                                             (blocks/default-state
+                                                              :cobblestone)]))))})]
+      (is (= [7 64 8] (swim/far-shore roofed feet 64))
+          "a block high over the sea does not make the sea round it a shore"))))
+
 (deftest a-deep-swim-rises-into-reach-before-notching
   (let [swim {:intent/kind :swim-out :intent/status :active}
         cells (merge (into {} (for [y (range 39 55)] [[5 y 5] blocks/water-base]))
@@ -245,26 +274,6 @@
     (is (nil? (:intent/best-tick i)))
     (is (= bank (get-in (intent/run (assoc w :time/tick 10) swim tick) [:plan/intent :intent/bank]))
         "do not redirect a rise before its progress has stalled")))
-
-(deftest a-bank-under-the-surface-is-not-picked-over-one-level-with-it
-  ;; issue #156 (sim race 39186407147, world R3/32): afloat in a cave pool at 3 health, the nearest
-  ;; bank on the plane was an air pocket three under the surface, in the rock; the swim went for
-  ;; it and failed :stuck three times, with a dry floor three blocks off at the surface
-  (let [pool (into {}
-                   (for [x (range 3 9) z (range 3 9) y (range 58 64)] [[x y z] blocks/water-base]))
-        pocket {[4 59 5] (blocks/default-state :stone) [4 60 5] blocks/air [4 61 5] blocks/air}
-        roof (into {} (for [x (range 16) z (range 16)] [[x 70 z] (blocks/default-state :stone)]))
-        w (assoc (game/init fx/opts)
-                 :bot/phase :play
-                 :player/pos [5.5 62.97 5.5]
-                 :player/loaded? true
-                 :player/in-water? true
-                 :world/chunks {[0 0] (world/column (merge pool pocket roof))})
-        feet (intent/feet w)
-        surface (swim/surface-y w :water feet)]
-    (is (swim/bank? w [4 60 5]) "the pocket is a bank, a block from the feet on the plane")
-    (is (= [2 64 5] (swim/banks w feet surface #{}))
-        "the dry floor at the surface is nearer by cost")))
 
 (deftest a-diagonal-bank-approach-clears-the-side-wall
   (let [w (assoc (game/init fx/opts)

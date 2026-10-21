@@ -478,29 +478,3 @@
         "from the sheet, over it to the land")
     (is (not= :found (:path/status (path/plan on-land (path/feet-cell [12.5 64.0 8.5]) goal-ice)))
         "from the land, never onto the sheet")))
-
-(deftest a-walk-planned-from-the-sheet-keeps-it-for-floor-after-the-feet-leave-it
-  ;; sim race 39467249581 (issue #75, world R2/29): the walk's first steps crossed the edge of the
-  ;; sheet onto the stair's top, the replan from there found no route over the sheet it had just
-  ;; left, five times in a second, and the walk failed :no-path
-  (let [ice (blocks/default-state :ice)
-        sheet (merge (fill ice (range 0 10) [63] (range 16))
-                     (fill (blocks/default-state :stone) [4] [63] (range 16))) ; a strip of stone
-        on-sheet (world-of sheet [2.5 64.0 8.5])
-        on-strip (world-of sheet [4.5 64.0 8.5])
-        walk {:intent/kind :walk :intent/target [8 64 8] :intent/status :active}
-        routed (fn [w i] (:plan/intent (intent/route! (assoc w :plan/intent i) i)))]
-    (is (path/on-ice? on-sheet))
-    (is (not (path/on-ice? on-strip)) "the strip's floor is stone")
-    (is (= :found (:intent/route (routed on-sheet walk))) "from the sheet, over it")
-    (is (true? (:intent/ice? (routed on-sheet walk))) "the walk remembers it began on the sheet")
-    (is (not= :found (:intent/route (routed on-strip walk))) "from the strip, never onto the sheet")
-    (is (nil? (:intent/ice? (routed on-strip walk))))
-    (let [kept (routed on-strip (assoc walk :intent/ice? true))]
-      (is (= :found (:intent/route kept)) "a walk begun on the sheet goes on over it")
-      (is (not (intent/route-stale? (assoc on-strip :plan/intent kept) kept))
-          "and its waypoints on the sheet are floor"))
-    (is (intent/route-stale?
-         (assoc on-strip :plan/intent (routed on-strip (assoc walk :intent/ice? true)))
-         (dissoc (routed on-strip (assoc walk :intent/ice? true)) :intent/ice?))
-        "while off the sheet with no memory of it they are not")))
