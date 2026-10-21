@@ -24,7 +24,7 @@
         seed (Long/parseLong seed)
         last-s (volatile! -1)
         stop? (fn [world]
-                (let [s (quot (:time/now world) 60000)]
+                (let [s (quot (or (:time/now world) 0) 60000)]
                   (when (> s @last-s)
                     (vreset! last-s s)
                     (let [c (make/counts world)
