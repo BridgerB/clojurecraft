@@ -82,14 +82,20 @@
   "On the first swim-out or back-off of a run, what the code sees in that world."
   [seen]
   (fn [wd i]
-    (let [k (:intent/kind i)]
-      (when (and (#{:swim-out :back-off} k) (not (contains? @seen k)))
+    (let [k (if (and (= :stairs-up (:intent/kind i)) (= :boxed (:intent/for i)))
+              :stairs-boxed
+              (:intent/kind i))]
+      (when (and (#{:swim-out :back-off :stairs-boxed} k) (not (contains? @seen k)))
         (swap! seen conj k)
         (out "-- first" k "at" (:time/now wd))
         (ask " feet" #(vector (intent/feet wd) (:player/pos wd) (:player/health wd)))
         (ask
          " hostiles"
          #(into {} (map (fn [[k e]] [k [(entity/kind e) (:entity/pos e)]])) (entity/hostiles wd)))
+        (ask " out?" #(stairs/out? wd (intent/feet wd)))
+        (ask " under-sky" #(terrain/under-sky? wd (intent/feet wd)))
+        (ask " gather-next" #(wood/gather-next wd))
+        (ask " boxed-at" #(:plan/boxed-at wd))
         (ask " terrain" #(layers wd 6 3 6))
         (when (= :swim-out k) (swim-questions wd))))))
 
