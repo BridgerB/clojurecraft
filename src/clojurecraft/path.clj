@@ -108,16 +108,21 @@
 (defn on-ice?
   "Do the feet stand on a sheet of ice: is one of the two blocks under the feet's cell (a touch
    under the position, as intent/feet reads it) ice, the second for a floor laid over the sheet?
-   false with no position."
+   Or, with nothing solid under the feet's cell, is the block under one of its four neighbours
+   ice: the body rests on the rim of a hole dug in the sheet (issue #105, sim race 39550841573,
+   R2/32 seed 3: the bot dug the ice under its feet to scoop the lake and lay on the sheet's
+   edge, where no route stepped onto the sheet to walk off it). false with no position."
   [world]
   (boolean (when-let [[x y z] (:player/pos world)]
-             (some (fn [d]
-                     (contains? ice-states
-                                (terrain/block-at world
-                                                  [(long (math/floor x))
-                                                   (- (long (math/floor (+ y 0.5))) d)
-                                                   (long (math/floor z))])))
-                   [1 2]))))
+             (let [cx (long (math/floor x))
+                   cy (long (math/floor (+ y 0.5)))
+                   cz (long (math/floor z))
+                   ice-at? #(contains? ice-states (terrain/block-at world %))]
+               (or (some (fn [d] (ice-at? [cx (- cy d) cz])) [1 2])
+                   (and (not (some-> (terrain/block-at world [cx (dec cy) cz])
+                                     blocks/solid?))
+                        (some (fn [[dx dz]] (ice-at? [(+ cx dx) (dec cy) (+ cz dz)]))
+                              [[1 0] [-1 0] [0 1] [0 -1]])))))))
 
 (defn cell-key
   "One long naming the cell [x y z]: x and z in 26 bits each, y in 12, which holds every cell
