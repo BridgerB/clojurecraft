@@ -689,12 +689,39 @@
                    {:intent/kind :dig
                     :intent/target (:build/pos op)
                     :intent/status :failed
-                    :intent/reason :rejected})
+                    :intent/reason :rejected}
+                   :intent/rejections (dec stairs/max-rejections))
           failed (intent/run (assoc w :plan/intent i) i tick)]
-      (is (intent/failed? (:plan/intent failed)))
+      (is (intent/failed? (:plan/intent failed)) "the third dig the server would not do fails it")
       (is (= :rejected (get-in failed [:plan/intent :intent/reason])))
       (is (= :failed (:plan/status (plan/fail-intent failed (:plan/intent failed)))))
       (is (= :rejected (:plan/reason (plan/fail-intent failed (:plan/intent failed))))))))
+
+(deftest a-dig-the-server-did-not-do-is-dug-again-before-the-build-fails
+  ;; real race 39405014440 bot Clj_r13 and race 39407278017 bot Clj_r03 (issue #44): the first
+  ;; dig a lagging server dropped failed the whole build :rejected, with the cast room unfinished
+  (let [origin [5 63 5]
+        w (standing-at (open-ground {[7 63 7] 1}) [5.5 63.0 5.5])
+        op (build/next-op w (build/plan-for :portal origin :south 0))
+        rejected {:intent/kind :dig
+                  :intent/target (:build/pos op)
+                  :intent/status :failed
+                  :intent/reason :rejected}
+        i {:intent/kind :build
+           :intent/build :portal
+           :intent/origin origin
+           :intent/facing :south
+           :intent/status :active
+           :intent/op op
+           :intent/child rejected}
+        tick {:event/kind :tick :event/now 0 :event/rand 0.5}
+        again (:plan/intent (intent/run (assoc w :plan/intent i) i tick))]
+    (is (build/dig-rejected? rejected))
+    (is (not (build/dig-rejected? (assoc rejected :intent/kind :place))))
+    (is (not (build/dig-rejected? (assoc rejected :intent/reason :needs-tool))))
+    (is (= :active (:intent/status again)) "the build goes on")
+    (is (= 1 (:intent/rejections again)) "having counted the dig")
+    (is (not= rejected (:intent/child again)) "its next tick chooses the dig again")))
 
 (deftest a-room-cell-behind-a-wall-is-cut-toward
   ;; sim race 38660819204 (issue #74): the bot stood outside its own room, every cell that

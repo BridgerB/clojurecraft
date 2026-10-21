@@ -147,12 +147,24 @@
            :intent/dir dir
            :intent/for :surface})))))
 
+(defn descended?
+  "Did the intent that just ended cut a length of stairs down toward the trees (a done :stairs-down
+   :intent/for :trees)? The next length goes on from where it stopped, in the ground."
+  [world]
+  (let [{:intent/keys [kind for] :as l} (:plan/last world)]
+    (boolean (and l (= :stairs-down kind) (= :trees for) (intent/done? l)))))
+
 (defn trees-descend
   "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk below
    the eye by more than the near band's twelve: stairs down toward it, one length
    (stone/stair-depth, never below the trunk's feet) at a time, the planner looking again
    between. The way down from a height is a cut one: trees-climb's mirror. Only a trunk within
-   descend-reach on the plane, and never from a cell where a climb died :boxed. Real race
+   descend-reach on the plane, and never from a cell where a climb died :boxed. Once a length is
+   cut (descended?) the next goes on from its end, in the ground: out? is true only at the
+   mouth, and from the length's foot the walk up the air already dug (intent/opening) took the
+   bot back to it, every seven seconds, to cut the same length again. Sim race 39593219246
+   (issue #135, world R4/4) went up and down five blocks of its own stairs for fifteen minutes
+   with the trunks forty below and the food at zero. Real race
    (issue #57, snapshot real-4-s2-Clj_r07): bot Clj_r07 cut stairs up out of a stone pocket
    to the top of a mountain at y 238 with 844 trunks remembered, the nearest fifty-six below
    and sixty across; the near band stops forty-eight out and twelve down, the hunt's two
@@ -160,7 +172,8 @@
   [world trunks]
   (let [feet (intent/feet world)
         fy (physics/y-of feet)]
-    (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
+    (when (and (or (descended? world) (stairs/out? world feet))
+               (not (contains? (:plan/boxed-at world #{}) feet)))
       (when-let [[tx ty tz] (first (filter (fn [[tx ty tz]]
                                              (and (> (- (physics/y-of (game/eye world)) ty) 12)
                                                   (<= (physics/horizontal-distance (:player/pos
@@ -257,6 +270,7 @@
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
+          (when (descended? world) (trees-descend world trunks))
           (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
             (or (opening-up world)
                 {:intent/kind :stairs-up
