@@ -22,7 +22,7 @@
                (simrace/prepared (capture/read-world (:snapshot/file snap))))
         m (simrace/moment-of snap w0)
         observe (fn [world]
-                  (when (and (:plan/waiting world) (zero? @st))
+                  (when (and (= [2041 106 2826] (:intent/target (:plan/intent world))) (zero? @st))
                     (reset! st 1)
                     (let [feet (intent/feet world)
                           trunks (->> (memory/positions-now world blocks/log-states)
@@ -30,7 +30,7 @@
                                       (remove (wood/skipped world))
                                       (filter #(wood/standing-trunk? world %))
                                       (take 6))]
-                      (println "WAIT at" (:time/now world)
+                      (println "LOOP at" (:time/now world)
                                "feet" feet
                                "eye" (game/eye world)
                                "waiting" (:plan/waiting world))
@@ -45,6 +45,13 @@
                       (ask " trees-bridge" #(wood/trees-bridge world trunks))
                       (ask " hunt" #(wood/hunt world))
                       (ask " return-walk" #(wood/return-walk world))
+                      (ask " opening-up" #(wood/opening-up world))
+                      (ask " intent"
+                           #(select-keys (:plan/intent world)
+                                         [:intent/kind :intent/for :intent/target]))
+                      (ask " last"
+                           #(select-keys (:plan/last world)
+                                         [:intent/kind :intent/for :intent/target :intent/to-y]))
                       (doseq [t trunks]
                         (ask (str " log-walk " t)
                              #(let [i (wood/log-walk world t)] [i (intent/routable? world i)])))))
