@@ -588,6 +588,22 @@
     (is (not (build/carry-sticks? sticks)) "sticks held already")
     (is (not (build/carry-sticks? bare)) "nothing to make them from: no trip out for them")))
 
+(deftest a-build-fills-its-kit-with-sticks-while-the-trees-are-near
+  ;; issue #338 (worlds R2/6, R2/12, R3/24): the Nether's tunnel wears a stone pickaxe out every
+  ;; 130 blocks, and the kit's two sticks were gone in the first: five hours of basalt by hand
+  (let [kit {0 {:item (recipe/item-id :stone_pickaxe) :count 1}
+             1 {:item (recipe/item-id :cobblestone) :count 8}
+             2 {:item (recipe/item-id :crafting_table) :count 1}}
+        bare (assoc (standing-at (open-ground trench) feet-pos) :player/inventory kit)
+        sticks (fn [n]
+                 (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :stick) :count n}))]
+    (is (= build/kit-sticks (build/kit-sticks-wanted bare)) "no trunk near: the two sticks")
+    (with-redefs [build/wood-near? (constantly true)]
+      (is (= build/kit-sticks-fill (build/kit-sticks-wanted bare)))
+      (is (build/carry-sticks? (sticks build/kit-sticks))
+          "two sticks held: the trees are near, fill up")
+      (is (not (build/carry-sticks? (sticks build/kit-sticks-fill))) "a full kit"))))
+
 (deftest a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
   ;; sim race 38843552659 (issue #186, world R1/18): on a ravine's floor sixty under the landing,
   ;; the sky open and no hunt target in its band, the bot waited :no-log

@@ -14,6 +14,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
 (def netherrack (blocks/default-state :netherrack))
@@ -879,3 +880,34 @@
     (is (= (assoc east-leg :search/tunnels 1)
            (:intent/search (plan/next-intent out goal plan/goals)))
         "and the next look goes on along it")))
+
+(deftest a-tunnel-floors-from-dirt-before-the-pickaxe-heads
+  ;; issue #338, world R3/24: the last cobblestone went into floors; the pack held 221 dirt and a
+  ;; table, one stick short of a pickaxe
+  (let [stack (fn [item n] {:item (recipe/item-id item) :count n})
+        w {:player/inventory {0 (stack :cobblestone 5) 1 (stack :dirt 5) 2 (stack :blackstone 5)}}]
+    (is (= :dirt (fortress/filler w 1)))
+    (is (= :cobblestone (fortress/filler (update w :player/inventory dissoc 1 2) 1))
+        "only heads left")
+    (is (nil? (fortress/filler (assoc w :player/inventory {0 (stack :dirt 1)}) 2)))
+    (is (= [:cobblestone :cobbled_deepslate :blackstone] (take-last 3 fortress/tunnel-fillers)))
+    (is (= (set stairs/fillers) (set fortress/tunnel-fillers)) "the same materials, reordered")))
+
+(deftest a-placed-table-is-taken-along-once-the-pickaxe-is-made
+  ;; issue #338: a table left behind is four planks for the next pickaxe, and none were left
+  (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        table-cell [1 64 0]
+        table (blocks/default-state :crafting_table)
+        w (-> (rock {table-cell table})
+              (assoc :world/facts (memory/empty-facts)
+                     :player/dimension dimension/nether
+                     :time/now 0
+                     :player/inventory {0 {:item (recipe/item-id :stone_pickaxe) :count 1}})
+              (memory/observe table-cell table))
+        next #(plan/next-intent % goal plan/goals)]
+    (is (= {:intent/kind :dig :intent/target table-cell :intent/for :take-table} (next w)))
+    (is (= :tunnel-to
+           (:intent/kind (next (assoc-in w
+                                [:player/inventory 1]
+                                {:item (recipe/item-id :crafting_table) :count 1}))))
+        "a table held: tunnel on")))

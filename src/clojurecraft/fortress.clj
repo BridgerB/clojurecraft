@@ -20,6 +20,7 @@
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
+            [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.terrain :as terrain]))
 
@@ -53,6 +54,23 @@
 ;; ---------------------------------------------------------------- a step as data
 
 (def up [0 1 0])
+
+(def pickaxe-heads
+  "The blocks a stone pickaxe's head is made of (recipes.edn): kept for the next pickaxe."
+  #{:cobblestone :cobbled_deepslate :blackstone})
+
+(def tunnel-fillers
+  "stairs/fillers with the pickaxe heads last: a floor is laid from dirt, netherrack and the other
+   rock first, so the pack still has three blocks for the next pickaxe. Sim race 39637511514
+   (issue #338, world R3/24) laid its last cobblestone into floors and held 221 dirt and a table,
+   one stick short of a pickaxe."
+  (into (vec (remove pickaxe-heads stairs/fillers)) (filter pickaxe-heads stairs/fillers)))
+
+(defn filler
+  "The first of tunnel-fillers the inventory holds n or more of, or nil."
+  [world n]
+  (let [held (recipe/counts (:player/inventory world))]
+    (first (filter #(>= (get held % 0) n) tunnel-fillers))))
 
 (defmethod build/holds? :walk-floor [world [_ p]] (path/floor? world p))
 
@@ -111,7 +129,7 @@
    runs into the tunnel."
   [world lava]
   (and (<= (count lava) max-seals)
-       (some? (stairs/filler world (count lava)))
+       (some? (filler world (count lava)))
        (every? #(= % (build/foundation world %)) lava)))
 
 (defn safe-but-lava?
@@ -125,7 +143,7 @@
         floor (plus (plus feet move) [0 -1 0])
         at #(terrain/block-at world %)
         lava? #(contains? blocks/lava-states (at %))
-        filler? (some? (stairs/filler world 1))]
+        filler? (some? (filler world 1))]
     (and
      (every? some? (map at (conj cells floor)))
      (not-any? lava? cells)
@@ -233,7 +251,7 @@
          (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
          (= floor (build/foundation world floor))
          (not (stairs/over-fluid? world floor))
-         (some? (stairs/filler world 1))
+         (some? (filler world 1))
          (dry? world feet move)
          (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
                 feet
@@ -255,7 +273,7 @@
          (build/holds? world [:solid (plus feet [0 -1 0])])
          (contains? #{:air :cave_air :void_air} (blocks/name-of (terrain/block-at world floor)))
          (= floor (build/foundation world floor))
-         (some? (stairs/filler world 1))
+         (some? (filler world 1))
          (or (not dry-only?) (dry? world feet move))
          (safe? (assoc-in world [:world/blocks floor] (blocks/default-state :cobblestone))
                 feet
@@ -413,7 +431,7 @@
           (let [next (build/next-op world (into (seal-ops world from move) (step-plan from move)))
                 next (cond-> next
                        (= :place (:build/op next))
-                       (assoc :build/item (or (stairs/filler world 1) :cobblestone)))]
+                       (assoc :build/item (or (filler world 1) :cobblestone)))]
             (cond (nil? next)
                   (reduce
                    intent/dissoc-intent
@@ -547,9 +565,10 @@
     (plan/next-intent world (assoc goal :goal/plan :build) table)))
 
 (defmethod plan/next-intent :fortress
-  ;; replace a missing pickaxe from held supplies, then tunnel to the nearest brick on record;
-  ;; with none, the next leg of the spiral search (exploring); with nowhere safe, or outside the
-  ;; Nether, wait
+  ;; replace a missing pickaxe from held supplies and take the placed table along (the next
+  ;; pickaxe is made where the bot stands, not out of four more planks), then tunnel to the
+  ;; nearest brick on record; with none, the next leg of the spiral search (exploring); with
+  ;; nowhere safe, or outside the Nether, wait
   [world goal table]
   (let [nether? (= dimension/nether (dimension/of world))
         brick (when nether? (nearest-brick world))
@@ -558,6 +577,8 @@
           :else
           (or (when (build/pickaxe-at-hand? world)
                 (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
+              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+              (make/take-table-along world)
               (when brick
                 {:intent/kind :tunnel-to :intent/target brick :intent/steps steps-per-tunnel})
               (when search

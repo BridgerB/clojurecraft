@@ -1849,7 +1849,8 @@
        (nil? (make/take-table-along world))
        (or (table-at-hand? world) (wood-near? world))))
 
-(def kit-sticks 2)                    ; sticks a build carries: one pickaxe's worth, made again where the cast wore the last out
+(def kit-sticks 2)                    ; sticks a build carries when no trunk is near: one pickaxe's worth, made again where the cast wore the last out
+(def kit-sticks-fill 32)              ; sticks it carries when the trees are a short trip: sixteen stone pickaxes' handles, two logs, for the Nether's tunnel
 
 (defn sticks-at-hand?
   "Could kit-sticks be made without going out for anything: the needs planner's next step toward
@@ -1860,17 +1861,26 @@
                            plan/goals)]
     (boolean (and (map? row) (not (make/fetch? row))))))
 
+(defn kit-sticks-wanted
+  "The sticks a build's kit holds now: kit-sticks-fill while the trees are a short trip (wood-near?),
+   where the logs for them are cut once for the whole road, else kit-sticks. A stone pickaxe digs
+   about 130 blocks and the Nether's tunnel wears one out every few minutes: sim races at fb6986b
+   (issue #338, worlds R2/6, R2/12, R3/24) came through the portal with one stick or none and dug
+   basalt by hand at 6 to 7 s a block, 3.7 blocks a minute, for five hours."
+  [world]
+  (if (wood-near? world) kit-sticks-fill kit-sticks))
+
 (defn carry-sticks?
-  "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or placed
-   within reach already (the table first: carry-table?, so the planks a table needs are never
-   spent on sticks), and they can be made from what is held (sticks-at-hand?) or their wood is a
-   short trip (wood-near?). A table and
+  "Should a build take kit-sticks-wanted into its kit beside the table: fewer held, a table held or
+   placed within reach already (the table first: carry-table?, so the planks a table needs are
+   never spent on sticks), and they can be made from what is held (sticks-at-hand?) or their wood
+   is a short trip (wood-near?). A table and
    cobblestone make no pickaxe without sticks: a probe of world R3/12 seed 1 from spawn on main
    (Refs #178) wore out its pickaxes in the cast holding a table, 684 cobblestone and one plank,
    no sticks, and cut stairs up through deepslate by hand for a log, fifteen seconds a block,
    until its ninety minutes ran out."
   [world]
-  (and (< (get (make/counts world) :stick 0) kit-sticks)
+  (and (< (get (make/counts world) :stick 0) (kit-sticks-wanted world))
        (or (pos? (get (make/counts world) :crafting_table 0)) (some? (make/take-table-along world)))
        (or (sticks-at-hand? world) (wood-near? world))))
 
@@ -1902,7 +1912,7 @@
                 (pos? n) (assoc :item/cobblestone n)
                 (water-needed? world plan) (assoc :item/water_bucket 1)
                 (carry-table? world) (assoc :item/crafting_table 1)
-                (carry-sticks? world) (assoc :item/stick kit-sticks))]
+                (carry-sticks? world) (assoc :item/stick (kit-sticks-wanted world)))]
     (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))))
 
 (defmethod plan/next-intent :build
