@@ -115,7 +115,8 @@
   ([ms s] (+ (* ms finish-margin s) finish-slack)))
 (def swing-every 350)                 ; ms between arm swings while digging
 (def collect-timeout 10000)           ; ms a collect may take before it fails
-(def leaf-drop 0.9)                   ; blocks a drop may lie under the feet and still be in the pickup box
+(def leaf-drop 0.7)                   ; blocks a drop may lie under the feet and still be in the pickup box (grown 0.5 down, the drop 0.25 tall)
+(def centre-tolerance 0.05)           ; horizontal distance from a drop below the feet at which a collect stops walking: over its cell, to fall in
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
 (def ledge-look 0.6)                  ; blocks ahead of the feet a collect looks for a floor before stepping
 
@@ -687,7 +688,8 @@
    the leaves the bot stands on, out of the pickup box and in no wall ahead (blocker). nil
    otherwise. Sim world R1/4 (issues #186, #370): the bot dug the top log of a two-log oak from
    the leaves over it, the log fell into the hole under its feet, and the collect waited out its
-   ten seconds :not-picked-up."
+   ten seconds :not-picked-up. A bot on a leaf beside the hole, its box over the edge,
+   is not this: collect centres over a drop below the feet (centre-tolerance) to fall in."
   [world goal]
   (let [[px py pz] (:player/pos world)
         [gx gy gz] goal
@@ -803,5 +805,9 @@
               (assoc :player/controls {})
               (game/say (str "collect: a ledge ahead, the drop at " (mapv long goal) " is left"))
               done)
-          (> d 0.4) (assoc world :player/controls (toward world goal 0.0))
+          (> d
+             (if (< leaf-drop (- (physics/y-of (:player/pos world)) (nth goal 1)))
+               centre-tolerance
+               0.4))
+          (assoc world :player/controls (toward world goal 0.0))
           :else (assoc world :player/controls {}))))

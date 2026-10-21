@@ -1321,3 +1321,26 @@
                (assoc w :world/chunks {[0 0] (world/column {[0 63 0] 1})})
                [0.5 62.5 0.5]))
         "stone under the feet is the pathfinder's, not a leaf's")))
+
+(deftest a-collect-centres-over-a-drop-below-the-feet
+  ;; sim world R1/4 (issues #186, #370): the bot stood on a leaf beside the hole its log fell
+  ;; into, its box over the edge, the log a quarter block out of the pickup box, and the collect
+  ;; waited 0.2 blocks from the drop's centre, doing nothing, until it timed out
+  (let [col (world/column {[0 62 0] 136 [1 63 0] 252})
+        at (fn [x y]
+             (assoc (game/init fx/opts)
+                    :player/pos [x y 0.5]
+                    :time/now 1000
+                    :time/tick 10
+                    :world/chunks {[0 0] col}))
+        run (fn [w]
+              (clojurecraft.intent/run w
+                                       {:intent/kind :collect :intent/target [0 63 0]}
+                                       {:event/kind :tick}))
+        item (fn [w]
+               (assoc w
+                      :world/entities
+                      {1 {:entity/type blocks/item-entity-type :entity/pos [0.5 63.25 0.5]}}))]
+    (is (seq (:player/controls (run (item (at 0.72 64.0)))))
+        "0.2 off, 0.75 over the drop: walks on")
+    (is (empty? (:player/controls (run (item (at 0.72 63.4))))) "within the pickup box: waits")))
