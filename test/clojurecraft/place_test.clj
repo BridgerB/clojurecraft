@@ -347,11 +347,14 @@
            (select-keys (:intent/child afloat) [:intent/kind :intent/for]))
         "afloat: a swim out to a bank")
     (is (= :retreat (:intent/stage afloat)) "the place goes on from the bank")
-    (is (= :no-spot (:intent/reason dry)) "on dry land the failed retreat is still :no-spot")
-    (testing "a swim out that fails is the end"
+    (is
+     (= :equip (:intent/stage dry))
+     "on dry land the failed retreat looks for a spot again (issue #148: walk-off never fails the place)")
+    (testing "a swim out that fails is not swum again"
       (let [i (assoc-in i [:intent/child :intent/kind] :swim-out)
             failed (:plan/intent (intent/run (assoc w :plan/intent i) i tick))]
-        (is (= :no-spot (:intent/reason failed)))))))
+        (is (= :equip (:intent/stage failed)))
+        (is (nil? (:intent/child failed)))))))
 
 (deftest sealed-in-sand-with-nowhere-it-climbs
   ;; sim race 38659291345 world R1/1 (issue #148): sand had fallen round the bot at y 59 under
