@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-21T14:03:50.068Z",
+  "at" : "2026-10-21T14:06:09.883Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -24,6 +24,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 37,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
     "quiet" : true,
     "number" : 178,
@@ -34,11 +39,6 @@
     "nudges" : 2,
     "pr" : 444,
     "session" : false
-  }, {
-    "number" : 37,
-    "title" : "Bot stops at ingots: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
   }, {
     "number" : 286,
     "title" : "Bot stops at fortress: blocked",
@@ -65,11 +65,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 148,
-    "title" : "Bot stops at water-bucket: no-spot",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 62,
     "title" : "Bot stops at ingots: timeout",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -78,6 +73,11 @@
     "number" : 344,
     "title" : "Bot stops at cast-one: no-escape",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 148,
+    "title" : "Bot stops at water-bucket: no-spot",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 162,
@@ -95,9 +95,9 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 71,
-    "title" : "Bot stops at portal-kit: boxed",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "number" : 410,
+    "title" : "Bot stops at fortress: not-held",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 89,
@@ -105,9 +105,9 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 410,
-    "title" : "Bot stops at fortress: not-held",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "number" : 71,
+    "title" : "Bot stops at portal-kit: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 45,
@@ -248,11 +248,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
+    "issue" : 37,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 37,
+    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -272,15 +272,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 148,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 62,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 344,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 148,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -296,11 +296,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 71,
+    "issue" : 89,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 89,
+    "issue" : 71,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
