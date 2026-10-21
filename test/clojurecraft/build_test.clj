@@ -1432,3 +1432,34 @@
     (is (not (build/holds? w (:build/done (second open)))) "an open cell still takes its block")
     (is (build/holds? w (:build/done (second (build/firm-ops [7 63 8] [5 63 5] cast :wall))))
         "and solid rock needs none")))
+(deftest a-bridge-walks-onto-the-floor-laid-before-the-gap-past-its-reach
+  ;; sim race 39550827333 (issue #162, world R3/43 seed 2): the bridge laid three cells from the end
+  ;; of the stairs up, the fourth lay past the reach of the place, and the plain walk to the stand
+  ;; over the gap failed :no-path, three times in the plan
+  (let [cobble {1 {:item (recipe/item-id :cobblestone) :count 8}}
+        at (fn [gaps]
+             (assoc (standing-at (open-ground (into {} (for [x gaps] [[x 62 10] blocks/air])))
+                                 feet-pos)
+                    :player/inventory
+                    cobble))
+        stand [3 63 10]]
+    (is (= [6 62 10] (build/floor-gap (at (range 3 7)) stand)) "the first cell with no floor")
+    (is (= [7 63 10] (build/before-gap (at (range 3 7)) stand [6 62 10])) "the cell before it")
+    (is (= :place (:intent/kind (build/bridge (at (range 3 10)) stand))) "a gap in reach is laid")
+    (is (= {:intent/kind :walk :intent/target [7 63 10] :intent/for :build}
+           (build/bridge (at (range 3 7)) stand))
+        "a gap past the reach: onto the floor laid so far")))
+
+(deftest the-lava-hunt-climbs-to-a-source-just-over-the-feet
+  ;; real race 39408516353 (issue #392, Clj_r05): a tunnel at y -58 ended in the lava sea's edge
+  ;; with every source level or below the feet roofed in lava, and the hunt waited :no-site with a
+  ;; source and its stand four blocks up
+  (let [pos [10.5 41.0 10.5]
+        room {[10 41 10] blocks/air [10 42 10] blocks/air}
+        pool-at (fn [y] (into {} (for [x [11 12 13] z [2 3 4 5]] [[x y z] blocks/lava-base])))
+        hunt #(build/toward-lava (standing-at (open-ground (merge room %)) pos))]
+    (is (= {:intent/kind :stairs-up :intent/to-y 45 :intent/for :build} (hunt (pool-at 44)))
+        "a pool whose cell over it lies four over the feet: the stairs up first")
+    (is (= :stairs-down (:intent/kind (hunt (pool-at 46))))
+        "past hunt-rise: on down toward the sea as before")
+    (is (= :tunnel (:intent/kind (hunt (pool-at 40)))) "level or below: the tunnel as before")))
