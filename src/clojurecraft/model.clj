@@ -386,6 +386,9 @@
    [:intent/confirm-left "ticks left to wait for the server's word after FINISH"
     "dig, :confirm stage"]
    [:intent/to-y "feet height at or below which the staircase is done" "stairs-down"]
+   [:intent/tall
+    "cells high the body a stair down is cut for (stairs/tall-stair-cells): each stair opens the new feet and that many over them, four for an enderman's three (issue #263)"
+    "stairs-down from a :burrow"]
    [:intent/floor-to
     "the height a mine's staircases are cut toward a few stairs at a time (its row's :goal/depth): how far down a floor laid through a cave must go on"
     "stairs-down from the mine act (stone/stairs), when the row has a depth"]
@@ -398,7 +401,8 @@
    [:intent/rejections
     "digs of the current stair (or level step) the server did not do, each dug again; stairs/max-rejections fail :rejected"
     "stairs-down, after a child dig rejected"]
-   [:intent/cells "the three cells the current stair opens, top first"
+   [:intent/cells
+    "the cells the current stair opens, top first: three, or four for a stair cut for a taller body (:intent/tall)"
     "stairs-down, while a stair is cut"]
    [:intent/level-cells
     "the two cells a level step opens, head then feet, when every stair down was refused"

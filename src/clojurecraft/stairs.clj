@@ -80,6 +80,17 @@
   [[x y z] [dx dz]]
   [[(+ x dx) (inc y) (+ z dz)] [(+ x dx) y (+ z dz)] [(+ x dx) (dec y) (+ z dz)]])
 
+(defn tall-stair-cells
+  "The cells a stair ahead of feet [x y z] in direction [dx dz] opens for a body n cells tall to
+   walk down it (mob/tall), top first: the new feet a block down and the n cells over them. A
+   body steps off at its old height before it falls, so the column it steps into must be clear
+   from the new feet to n over the old ones: stair-cells is the player's (n 2), and an enderman
+   (3) needs four. Gym batch pearls-warped2-b (plan run 39182782203, probe 39206015361): under a
+   hill every provoked enderman stood on the first three-high stair, stepped no lower, wandered
+   off a ledge, and six held fights in six timed out :unreachable."
+  [[x y z] [dx dz] n]
+  (mapv (fn [dy] [(+ x dx) (+ y dy) (+ z dz)]) (range (dec n) -2 -1)))
+
 (defn up-cells
   "The three cells a stair up ahead of feet [x y z] in direction [dx dz] opens, top first: the one
    over the head, which the jump needs, then the new head and the new feet a block up and ahead.
@@ -842,7 +853,10 @@
 (defmethod stairs-stage :plan
   [world {:intent/keys [kind dir turns visited] :or {turns 0 visited #{}} :as i} _]
   (let [dir (or dir (first directions))
-        {shape-safe? :safe? lay :lay cells-of :cells} (shapes kind)
+        {shape-safe? :safe? lay :lay shape-cells :cells} (shapes kind)
+        cells-of (if-let [n (:intent/tall i)]
+                   #(tall-stair-cells %1 %2 n)
+                   shape-cells)
         fresh? (fn [cells] (or (= :stairs-up kind) (not (contains? visited (last cells)))))
         fresh-safe? (fn [world cells] (and (fresh? cells) (shape-safe? world cells)))
         feet (intent/feet world)

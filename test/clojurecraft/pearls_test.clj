@@ -428,6 +428,51 @@
     (is (= :netherrack (stairs/filler {:player/inventory {0 (item :netherrack 3)}} 2))
         "a Nether descent lays its floors from what it digs")))
 
+(deftest a-burrow-site-is-one-a-walk-reaches-and-none-a-walk-failed-toward
+  ;; batch pearls-warped2-b (plan run 39182782203) run 1: thirteen walks to a burrow site failed
+  ;; :no-path in a row, the same site chosen again after each
+  (let [seen {7 (enderman [8.5 64.0 15.5])}
+        cave (assoc-in (standing seen {[8 62 7] air}) [:player/inventory 1] (item :iron_pickaxe 1))
+        ring (into {[8 62 7] air}
+                   (for [dx [-1 0 1]
+                         dz [-1 0 1]
+                         y [64 65]
+                         :when (not= 0 dx dz)]
+                     [[(+ 8 dx) y (+ 8 dz)] stone]))
+        boxed (assoc-in (standing seen ring) [:player/inventory 1] (item :iron_pickaxe 1))]
+    (is (= [7 64 8] (pearls/burrow-site cave [0 -1])) "the nearest")
+    (is (not= [7 64 8] (pearls/burrow-site (assoc cave :plan/blacklist #{[7 64 8]}) [0 -1]))
+        "a site a walk failed toward is passed over")
+    (is (some? (pearls/burrow-site (assoc cave :plan/blacklist #{[7 64 8]}) [0 -1]))
+        "for the next one")
+    (is (nil? (pearls/burrow-site boxed [0 -1]))
+        "walled in two high: cells two off would shelter, but no walk reaches one")))
+
+(deftest a-burrows-stairs-are-four-high-so-an-enderman-walks-down-them
+  ;; batch pearls-warped2-b (plan run 39182782203, probe 39206015361): a burrow cut into a hill,
+  ;; its stairs three high, held every provoked enderman on the first stair (a body steps off at
+  ;; its old height, 2.9 tall), and six held fights in six timed out :unreachable. The model's
+  ;; enderman (mob/step-toward, mob/tall) walks down the four-high stairs to the last one, two
+  ;; cells from the bot at the tunnel's end, and no further
+  (let [mouth [3 64 8]
+        rock? (fn [[x y _]] (<= y (if (>= x 4) 69 63))) ; a hill rising from x 4
+        walk (fn [opened]
+               (let [free? (fn [c] (or (contains? opened c) (not (rock? c))))]
+                 (mob/cell-of (nth (iterate #(mob/step-toward free? % [8.5 61.0 8.5] 0.3 0.0 3)
+                                            [3.5 64.0 8.5])
+                                   200))))
+        steps (pearls/burrow-steps mouth [1 0])
+        three-high (set (concat (stairs/stair-cells mouth [1 0])
+                                (stairs/stair-cells [4 63 8] [1 0])
+                                (stairs/stair-cells [5 62 8] [1 0])
+                                (stairs/level-cells [6 61 8] [1 0])
+                                (stairs/level-cells [7 61 8] [1 0])))]
+    (is (= [[4 66 8] [4 65 8] [4 64 8] [4 63 8]] (first steps)) "a stair opens four cells")
+    (is (= [8 61 8] (last (last steps))) "the tunnel's end")
+    (is (= 3 (mob/tall :enderman)))
+    (is (= [6 61 8] (walk (set (apply concat steps)))) "down to the last stair")
+    (is (= [3 64 8] (walk three-high)) "three high: it stands at the mouth")))
+
 (deftest a-kill-is-picked-up-where-it-fell-a-kill-with-no-drop-is-left
   (let [kill {:intent/kind :fight
               :intent/for :pearls

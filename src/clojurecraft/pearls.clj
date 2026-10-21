@@ -363,12 +363,14 @@
                         :intent/for :pearls}))))))))
 
 (defn burrow-steps
-  "The cells a burrow cut from feet along dir opens, a step at a time: burrow-depth stairs
-   (stairs/stair-cells, the feet a block down and on at each), then burrow-length level steps
-   (stairs/level-cells); the last cell of the last step is where the bot ends."
+  "The cells a burrow cut from feet along dir opens, a step at a time: burrow-depth stairs an
+   enderman walks down (stairs/tall-stair-cells for mob/tall, four high: the feet a block down
+   and on at each), then burrow-length level steps (stairs/level-cells, two high); the last cell
+   of the last step is where the bot ends."
   [feet dir]
-  (let [stairs (reductions (fn [cells _] (stairs/stair-cells (last cells) dir))
-                           (stairs/stair-cells feet dir)
+  (let [n (mob/tall :enderman)
+        stairs (reductions (fn [cells _] (stairs/tall-stair-cells (last cells) dir n))
+                           (stairs/tall-stair-cells feet dir n)
                            (range (dec burrow-depth)))
         tunnel (reductions (fn [cells _] (stairs/level-cells (last cells) dir))
                            (stairs/level-cells (last (last stairs)) dir)
@@ -398,20 +400,31 @@
 
 (defn burrow-site
   "The cell nearest the feet, within site-reach on the plane and a block up or down at most,
-   not the feet, that the bot could stand in (standable?) and cut a burrow along dir from
-   (burrowable?); nil when there is none. Gym batch pearls-warped-e (plan run 39164914828) run
-   1: on broken ground :burrow failed :no-shelter six times in a row where the bot stood, and
-   it then provoked an enderman with no shelter and was slain in the open."
+   not the feet, that the bot could stand in (standable?), cut a burrow along dir from
+   (burrowable?), and walk to (intent/routable?), and that a walk has not failed toward
+   (:plan/blacklist); nil when there is none. Gym batch pearls-warped-e (plan run 39164914828)
+   run 1: on broken ground :burrow failed :no-shelter six times in a row where the bot stood,
+   and it then provoked an enderman with no shelter and was slain in the open. Batch
+   pearls-warped2-b (plan run 39182782203) run 1: a site with no way to it was chosen again
+   after each failed walk, thirteen :no-path in a row. The route is asked last and one cell at
+   a time (some, not a chunked filter): it is the costly test."
   [world dir]
-  (let [[x y z :as feet] (intent/feet world)]
+  (let [[x y z :as feet] (intent/feet world)
+        bl (:plan/blacklist world #{})]
     (->> (for [dx (range (- site-reach) (inc site-reach))
                dz (range (- site-reach) (inc site-reach))
                dy [0 1 -1]]
            [(+ x dx) (+ y dy) (+ z dz)])
          (remove #{feet})
          (sort-by #(physics/distance feet %))
-         (filter (fn [c] (and (standable? world c) (burrowable? world c dir))))
-         first)))
+         (some (fn [c]
+                 (when (and (not (contains? bl c))
+                            (standable? world c)
+                            (burrowable? world c dir)
+                            (intent/routable?
+                             world
+                             {:intent/kind :walk :intent/target c :intent/for :shelter}))
+                   c))))))
 
 (defn bore
   "A tunnel (:tunnel, stairs.clj: level steps, turning where one is refused) bore-length long
@@ -437,10 +450,11 @@
 (defmethod intent/run :burrow
   ;; {:intent/kind :burrow :intent/dir [dx dz]}: stairs down burrow-depth (stairs.clj, refusing
   ;; water, lava and drops, turning where refused), then a tunnel burrow-length on along the
-  ;; heading the stairs ended on: the stairs are three high, so an enderman follows down them,
-  ;; and the tunnel two high, so it stops at its mouth, two cells from the bot. Done when the
-  ;; feet stand in a shelter?, kept as :pearls/shelter, with where it began as :pearls/mouth;
-  ;; failed :no-shelter when they do not, or with a child's reason
+  ;; heading the stairs ended on: the stairs are four high (:intent/tall, mob/tall), so an
+  ;; enderman follows down them, and the tunnel two high, so it stops at its mouth, two cells
+  ;; from the bot (three-high stairs under a hill held it at the first: probe 39206015361).
+  ;; Done when the feet stand in a shelter?, kept as :pearls/shelter, with where it began as
+  ;; :pearls/mouth; failed :no-shelter when they do not, or with a child's reason
   [world {:intent/keys [stage dir mouth] :as i} event]
   (let [mouth (or mouth (intent/feet world))
         i (assoc i :intent/mouth mouth :intent/stage (or stage :down))
@@ -453,7 +467,8 @@
        event
        {:intent/kind :stairs-down
         :intent/to-y (- (physics/y-of mouth) burrow-depth)
-        :intent/dir dir}
+        :intent/dir dir
+        :intent/tall (mob/tall :enderman)}
        (fn [w child]
          (intent/assoc-intent w :intent/stage :along :intent/dir (:intent/dir child dir))))
       :along
