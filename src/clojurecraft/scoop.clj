@@ -193,6 +193,14 @@
           (filter #(surface-source? world %))
           (filter #(surface-water? world % (physics/y-of eye)))))))
 
+(defn at-hand?
+  "Is a surface source in reach and in sight (in-reach?, sees?): a scoop that needs no walk and
+   no stairs out of a mine? Sim snapshot real-5-s2-Clj_r17 (issue #54): a bot with a bucket and
+   no pickaxe came up out of its mine into the middle of a lake, four sources beside its feet, and
+   went for logs across the water to make the pickaxe a scoop holds for the climb out."
+  [world]
+  (boolean (some #(and (in-reach? world %) (sees? world %)) (sources world))))
+
 (def ice-states
   "Every state of the blocks the game's IceBlock turns to a water source when a player breaks them
    (stairs/lake-ice)."

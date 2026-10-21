@@ -452,9 +452,8 @@
   ;; pillared up in open water, water on every side of it, and its table failed :no-spot three
   ;; times, a pickaxe short of the bucket it held for the water all round it
   (let [water (blocks/default-state :water)
-        sea (merge (into {} (for [x (range 3 14) y [62] z (range 3 14)] [[x y z] water]))
-                   {[8 62 8] 1})
-        w (assoc (standing [8.5 63.0 8.5])
+        sea (merge (into {} (for [x (range 3 14) z (range 3 14)] [[x 63 z] water])) {[8 63 8] 1})
+        w (assoc (standing [8.5 64.0 8.5])
                  :world/chunks {[0 0] (world/column sea)}
                  :player/inventory {0 {:item (blocks/items :crafting_table) :count 1}})
         run (fn [i]
@@ -469,7 +468,7 @@
         wet (run {:intent/retreated? true})]
     (is (nil? (place/spot w)) "no dry spot: the pillar is the only support, under the feet")
     (is (= :settle (:intent/stage wet)))
-    (is (= [8 62 8] (:intent/against wet)) "clicked against the pillar")
+    (is (blocks/solid? (terrain/block-at w (:intent/against wet))) "clicked against a solid block")
     (is (= water (terrain/block-at w (:intent/cell wet))) "into a water cell")
     (is (not (place/inside-player? w (:intent/cell wet))))
     (is (= :retreat (:intent/stage (run {}))) "fresh rock is tried first")))

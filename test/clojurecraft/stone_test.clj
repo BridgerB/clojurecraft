@@ -976,3 +976,22 @@
     (is (= [13 64 5] (stone/surface-over w [13 57 5])) "under the leaves, on the ground")
     (is (= 64 (second (:intent/target (stone/over-stone w (row :mine-stone)))))
         "never the leaves")))
+
+(deftest a-mine-boxed-with-little-filler-digs-dirt-for-it-before-another-stair
+  ;; issues #342 and #65 (real bot Clj_r15, landed at R1/30): the shores a staircase was refused on
+  ;; for the water beside it, two dirt carried to seal with and dirt underfoot
+  (let [dirt (blocks/default-state :dirt)
+        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] dirt]))
+        w (assoc (standing 64 :wooden_pickaxe) :world/chunks {[0 0] (world/column ground)})
+        boxed (assoc w :plan/boxed-at #{[2 50 2]})
+        filler (stone/filler-dig boxed)]
+    (is (nil? (stone/filler-dig w)) "no staircase died boxed: stairs as before")
+    (is (= [:walk :filler] [(:intent/kind filler) (:intent/for filler)]) (pr-str filler))
+    (is (= filler (stone/mine-next boxed (row :mine-stone))) "before another stair is cut")
+    (is (nil? (stone/filler-dig
+               (assoc-in boxed [:player/inventory 5] {:item (blocks/items :cobblestone) :count 8})))
+        "filler enough held")
+    (is (= {:intent/kind :dig :intent/target (:intent/target filler) :intent/for :filler}
+           (stone/mine-next (assoc boxed :plan/last (assoc filler :intent/status :done))
+                            (row :mine-stone)))
+        "the walk is followed by the dig")))

@@ -290,8 +290,8 @@
            [s face])))
 
 (defn water-spot
-  "The water cell round the feet to place a block into when there is no dry spot, nearest ring
-   first (around): a water cell (a block placed into a source or a flow takes its place,
+  "The water cell beside the feet (the ring of cells touching them, around) to place a block into
+   when there is no dry spot: a water cell (a block placed into a source or a flow takes its place,
    blocks/placeable-into?) with a solid neighbour to click (support), not refused, not inside
    the player, within reach. nil when none. Sim race 39601680523 world R1/10 (issue #148): the
    bot stood on the one cobblestone it had pillared up in the open sea, water on every side
@@ -304,6 +304,7 @@
         fz (long (math/floor pz))
         eye (game/eye world)]
     (first (for [[dx dy dz] around
+                 :when (= 1 (max (abs dx) (abs dz)))
                  :let [target [(+ fx dx) (+ fy dy) (+ fz dz)]
                        t (terrain/block-at world target)]
                  :when (and t

@@ -24,6 +24,7 @@
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
+            [clojurecraft.scoop :as scoop]
             [clojurecraft.smelt :as smelt]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.window :as window]
@@ -228,13 +229,20 @@
           [counts nil]
           (:goal/spares row)))
 
+(defn holds-waived?
+  "Is what the row holds and keeps spare not wanted now: a scoop with a surface source already in
+   reach (scoop/at-hand?), which needs no stairs out of a mine for its tool?"
+  [world row]
+  (and (= :scoop (:goal/act row)) (scoop/at-hand? world)))
+
 (defn resolve-row
   "Try to get times × row done: [counts row-to-act-on] (a producer whose needs are met, maybe
    this row), or [counts :stuck]. What the row holds is resolved once, then its spares
-   (resolve-spares); what it needs, times over."
+   (resolve-spares), neither when holds-waived?; what it needs, times over."
   [world table counts row times path]
-  (let [[c a] (resolve-holds world table counts row path)
-        [c a] (if a [c a] (resolve-spares world table counts row path))
+  (let [waived? (holds-waived? world row)
+        [c a] (if waived? [counts nil] (resolve-holds world table counts row path))
+        [c a] (if (or a waived?) [c a] (resolve-spares world table counts row path))
         [c a] (if a
                 [c a]
                 (reduce (fn [[c _] [k n]]
