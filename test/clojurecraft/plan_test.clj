@@ -371,6 +371,8 @@
     (is (= {:intent/kind :stairs-down :intent/to-y 58 :intent/dir [1 0] :intent/for :trees}
            (wood/trees-descend w [trunk]))
         "down toward the trunk, one length")
+    (is (= :stairs-down (:intent/kind (wood/trees-descend w [[130 9 8]])))
+        "a hundred and twenty across, issue #108: far, but no nearer trees in reach")
     (is (nil? (wood/trees-descend w [[400 9 8]])) "a trunk past descend-reach is no descent")
     (is (nil? (wood/trees-descend w [[12 60 8]])) "a trunk within the near band is walked to")
     (is (nil? (wood/trees-descend (assoc w :plan/boxed-at #{(intent/feet w)}) [trunk]))
@@ -1273,3 +1275,74 @@
                                              (sent fx))]
       (is (>= (- t-finish t-start) (intent/finish-delay 3000 2.6)))
       (is (> (intent/finish-delay 3000 2.6) (* 2 (intent/finish-delay 3000)))))))
+
+(deftest a-trunk-walled-in-by-its-leaves-is-tunnelled-to
+  ;; sim world R1/4 (issues #370, #186) and real-2/1 (issue #87): out on a platform four over a
+  ;; two-log oak whose leaves wall it in, no route reaches the trunk, and the plan waited :no-log
+  (let [leaves (blocks/default-state :oak_leaves)
+        ground (into {} (for [x (range 0 12) z (range 5 12)] [[x 63 z] 1]))
+        canopy (into {} (for [x (range 0 4) y (range 64 68) z (range 7 10)] [[x y z] leaves]))
+        deck (into {} (for [x (range 7 11) z (range 7 10)] [[x 68 z] 1]))
+        w (remembered (merge ground canopy deck {[1 64 8] 136 [1 65 8] 136}) [8.5 69.0 8.5])
+        trunk [1 64 8]
+        run {:intent/kind :tunnel-to
+             :intent/target trunk
+             :intent/trunk trunk
+             :intent/reach wood/tunnel-reach
+             :intent/steps wood/tunnel-steps
+             :intent/dry? true
+             :intent/for :trees}
+        done {:intent/kind :tunnel-to :intent/for :trees :intent/status :done}]
+    (is (stairs/out? w (intent/feet w)) "out of the ground, on the deck")
+    (is (nil? (wood/near-walk w)) "no route reaches the trunk through its leaves")
+    (is (= run (wood/trees-tunnel w)) "a level run through the leaves to a cell beside it")
+    (is (= run (wood/gather-next w)))
+    (is (nil? (wood/trees-tunnel (assoc w :plan/boxed-at #{[8 69 8]})))
+        "never from a cell where a climb died boxed")
+    (is (nil? (wood/trees-tunnel (assoc w :plan/blacklist #{trunk})))
+        "a trunk given up when a step was refused is not tunnelled to again")
+    (is (nil? (wood/trees-tunnel (assoc w :plan/trunk-failures {[1 8] wood/max-trunk-failures})))
+        "nor after failures in its column")
+    (is (nil? (wood/trees-tunnel (assoc w :player/pos [2.5 64.0 8.5])))
+        "beside the trunk there is nothing to tunnel to")
+    (is (not (wood/tunneled? w)))
+    (is (wood/tunneled? (assoc w :plan/last done)))
+    (is (not (wood/tunneled? (assoc w :plan/last (assoc done :intent/for :surface)))))
+    (is (not (wood/tunneled? (assoc w :plan/last (assoc done :intent/status :failed)))))))
+
+(deftest the-leaf-under-the-feet-is-a-blocker-of-a-drop-below-it
+  ;; sim world R1/4 (issues #186, #370): a log dug from the top of the canopy fell into the hole
+  ;; under the leaves the bot stood on, out of the pickup box, and the collect timed out
+  (let [col (world/column {[0 63 0] 252 [0 62 0] 136})
+        w (assoc (game/init fx/opts) :player/pos [0.5 64.0 0.5] :world/chunks {[0 0] col})
+        under #(clojurecraft.intent/leaf-under w %)]
+    (is (= [0 63 0] (under [0.5 62.5 0.5])) "the drop two under the feet, a leaf between")
+    (is (nil? (under [0.5 63.5 0.5])) "within the pickup box: nothing to dig")
+    (is (nil? (under [4.5 62.5 0.5])) "not in the bot's column")
+    (is (nil? (clojurecraft.intent/leaf-under
+               (assoc w :world/chunks {[0 0] (world/column {[0 63 0] 1})})
+               [0.5 62.5 0.5]))
+        "stone under the feet is the pathfinder's, not a leaf's")))
+
+(deftest a-collect-centres-over-a-drop-below-the-feet
+  ;; sim world R1/4 (issues #186, #370): the bot stood on a leaf beside the hole its log fell
+  ;; into, its box over the edge, the log a quarter block out of the pickup box, and the collect
+  ;; waited 0.2 blocks from the drop's centre, doing nothing, until it timed out
+  (let [col (world/column {[0 62 0] 136 [1 63 0] 252})
+        at (fn [x y]
+             (assoc (game/init fx/opts)
+                    :player/pos [x y 0.5]
+                    :time/now 1000
+                    :time/tick 10
+                    :world/chunks {[0 0] col}))
+        run (fn [w]
+              (clojurecraft.intent/run w
+                                       {:intent/kind :collect :intent/target [0 63 0]}
+                                       {:event/kind :tick}))
+        item (fn [w]
+               (assoc w
+                      :world/entities
+                      {1 {:entity/type blocks/item-entity-type :entity/pos [0.5 63.25 0.5]}}))]
+    (is (seq (:player/controls (run (item (at 0.72 64.0)))))
+        "0.2 off, 0.75 over the drop: walks on")
+    (is (empty? (:player/controls (run (item (at 0.72 63.4))))) "within the pickup box: waits")))
