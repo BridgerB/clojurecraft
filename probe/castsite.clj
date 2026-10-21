@@ -75,7 +75,7 @@
 
 (defn -main2
   [path from to every]
-  (ticks path (parse-long from) (parse-long to) (parse-long every))
+  (ticks path (parse-long (str from)) (parse-long (str to)) (parse-long (str every)))
   (shutdown-agents))
 
 (defn ask
@@ -103,8 +103,8 @@
     (doseq [f fns]
       (println f
                "=>"
-               (try (let [s (pr-str ((requiring-resolve (symbol f)) world))]
+               (try (let [s (pr-str ((requiring-resolve (symbol (str f))) world))]
                       (subs s 0 (min 800 (count s))))
                     (catch Exception e (str "ERR " e)))))))
 
-(defn -main3 [path ms & fns] (ask path (parse-long ms) fns) (shutdown-agents))
+(defn -main3 [path ms & fns] (ask path (parse-long (str ms)) fns) (shutdown-agents))
