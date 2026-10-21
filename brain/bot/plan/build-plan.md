@@ -109,6 +109,8 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn floor-gap
   - src/clojurecraft/build.clj#defn bridge
   - test/clojurecraft/build_test.clj#a-way-over-a-hole-gets-a-floor
+  - src/clojurecraft/build.clj#defn before-gap
+  - test/clojurecraft/build_test.clj#a-bridge-walks-onto-the-floor-laid-before-the-gap-past-its-reach
   - src/clojurecraft/build.clj#defn refill
   - src/clojurecraft/build.clj#defn sight-block
   - src/clojurecraft/build.clj#defn lava-aim
@@ -160,6 +162,7 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#the-lava-hunt-goes-down-past-lava-it-cannot-cast-from
   - test/clojurecraft/build_test.clj#the-lava-hunt-passes-sources-with-no-safe-stand
   - test/clojurecraft/build_test.clj#the-lava-hunt-leaves-a-boxed-pocket-by-the-way-out
+  - test/clojurecraft/build_test.clj#the-lava-hunt-climbs-to-a-source-just-over-the-feet
   - src/clojurecraft/memory.clj#defn site
   - test/clojurecraft/build_test.clj#the-plan-casts-the-ten-cells-in-layer-order
   - test/clojurecraft/build_test.clj#the-plan-never-places-into-its-own-stance-nor-into-the-room
@@ -261,6 +264,8 @@ Entry walks directly into the portal when a route reaches it; otherwise `approac
 - **No way opens a cell beside lava**: `diggable?` refuses a cell lava lies in or beside (`lava-touching?`), and `round-corner` goes round such cells as round the frame's rock (`barred`). Sim race 38843557186 runner 3 (issue #231, world R1/31) dug its way to a landing at the lava sea's height along the sea's edge; a cell beside a source opened, the lava flowed in, and no footing was in reach (`a-way-never-opens-a-cell-beside-lava`).
 - **The frame's rock is gone round, not through**: when the straight way at a stand's height from the feet to it crosses the frame's rock (`kept`, never dug), `toward-stand` goes first to a corner from which both legs keep off it (`round-corner`, `clear-of?`, within `round-reach` of the stand). The sim race at 76010d2 (issue #45, world R4/33) stood behind its own frame with the landing straight ahead through the rock; the cells past it were dug, the landing was out of reach and three walks at it failed `:no-path` (`a-landing-behind-the-frame-is-gone-round-to`). A walk along the way that fails `:no-path` with gravel or sand fallen onto it since (`way-refilled?`) is dropped, not failed, and the next clear digs it out: sim race 38837004562 (issue #45, world R1/6) cut its level way to the landing under a bed of gravel that refilled it, and three walks failed (`a-way-filled-by-falling-gravel-is-cleared-again`). A corner is never a cell of the room the cast digs (`in-room?`): sim race 38924530337 (issue #45, regressed, world R2/9) took a corner in the room's upper row, the bridge laid cobblestone under it, the room op dug it out again, and the walk to it failed :no-path.
 - **A stand inside the ground is dug, not walked** (`a-stand-inside-a-hill-is-dug`), and the frame's rock in the way is kept.
+- **A bridge walks to its gap before the walk to the stand is tried**: `bridge` lays the floor under the way to a stand cell by cell from where the feet are, and when the next gap lies past `place/place-reach` it walks onto the floor laid so far (`before-gap`) instead of falling to the plain walk over the gap, which has no route. Sim race 39550827333 (issue #162, world R3/43 seed 2) laid three cells from the end of the stairs up and failed `:no-path` three times with the fourth out of reach (`a-bridge-walks-onto-the-floor-laid-before-the-gap-past-its-reach`).
+- **The hunt climbs at most `hunt-rise` to a source**: with no safe source level or below the feet, `hunt-target` takes one whose cell over it lies at most `hunt-rise` (4) over them and `toward-lava` goes up to it (`to-height`) before the tunnel. Real race 39408516353 (issue #392, Clj_r05) sat at y -58 at the lava sea's edge with every source level or below roofed in lava (`the-lava-hunt-climbs-to-a-source-just-over-the-feet`). A source farther over is not climbed to: the tunnel under a lone source six blocks over the feet (issue #41) left the roof out of reach.
 - **A stand over water is not walked onto**: the place is made from a cell that already reaches the block (`a-pad-stand-over-water-is-placed-from-the-shore`, `a-stand-up-a-bank-is-passed-over-for-one-a-route-reaches`, issue #45).
 - **Lava is not renewable**: a scoop takes a source for good; a pool has many, and the stand reaches the next.
 - **A refill keeps its own support.** `safe-source?` rejects a blocked sight line through the cell under the feet, even when all lava lies below them. It applies to projected stations and actual eyes; an unobstructed alternative ray is still usable. Issue #228's R1/16 and R3/43 snapshots dug their own floor while refilling and fell into lava, where escapes timed out `:no-footing`. `work-op` drops an in-flight refill dig of that support and stops controls so the next refill chooses another station.
