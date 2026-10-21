@@ -264,6 +264,28 @@
     (let [[going _] (fx/fold intent-step backing [(tick 1000) (tick 2000)])]
       (is (not (contains? going :plan/cornered)) "a back-off still going has cornered nothing"))))
 
+(deftest a-zombie-that-stands-still-is-shunned-too
+  ;; issue #62 (sim race 39076908669, world R1/11): at a third of a health a zombie stuck three
+  ;; blocks off was backed away from, the climb went back toward it, and so on, seven thousand
+  ;; times
+  (let [zombie (mob :zombie [8.5 64.0 5.5] 20.0)
+        hurt (assoc (standing {7 zombie}) :player/health 0.3)
+        seen (fn [times] {:plan/backed-off {7 {:pos [8.5 64.0 5.5] :times times}}})]
+    (is (= #{7} (set (keys (combat/threats hurt))))
+        "never backed away from: a threat at three blocks")
+    (is (= #{7} (set (keys (combat/threats (merge hurt (seen 1)))))) "once: still one")
+    (is (= #{7} (set (keys (combat/threats (merge hurt (seen combat/shun-after))))))
+        "twice and it stood: three blocks is still inside shunned-radius")
+    (is (empty? (combat/threats (merge (assoc hurt :player/pos [8.5 64.0 9.5])
+                                       (seen combat/shun-after))))
+        "four blocks off and shunned: not a threat")
+    (is (empty? (combat/threats (merge hurt (seen combat/given-up-after))))
+        "given up on: only one at the feet is")
+    (let [w
+          (assoc hurt :plan/intent {:intent/kind :back-off :intent/target 7 :intent/status :active})
+          [w _] (fx/fold intent-step w [(tick 50)])]
+      (is (= 1 (get-in w [:plan/backed-off 7 :times])) "the first tick of a back-off notes it"))))
+
 (deftest back-offs-from-a-creeper-count-where-it-stood
   (let [w (assoc (standing {8 (mob :creeper [13.0 64.0 8.5] 20.0)})
                  :plan/intent
@@ -277,7 +299,7 @@
     (is (= 2 (get-in twice [:plan/backed-off 8 :times])))
     (is (= {:pos [9.5 64.0 8.5] :times 1} (get-in moved [:plan/backed-off 8]))
         "a creeper that came on starts its count again")
-    (is (nil? (:plan/backed-off (combat/noted w 7 zombie))) "only creepers are kept"))
+    (is (= 1 (get-in (combat/noted w 7 zombie) [:plan/backed-off 7 :times])) "any kind is kept"))
   (let [w (assoc (standing {8 (mob :creeper [13.0 64.0 8.5] 20.0)})
                  :plan/intent
                  {:intent/kind :back-off :intent/target 8 :intent/status :active})

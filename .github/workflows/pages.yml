@@ -4,7 +4,7 @@ name: pages
 # gh-pages branch's data (data/, written by each race lane's batch, bb page; orchestrator.json,
 # written by the copilot workflow). Each batch a lane publishes dispatches this after its push; a
 # dispatch by hand builds and deploys the branch as it is. On the way it adds the gym runs not yet
-# recorded to data/gyms.ndjson on the branch (bb site gyms) and asks GitHub for the bot-failure
+# recorded to data/gyms.ndjson on the branch (bb site gyms: gym.yml runs and plan.yml reports) and asks GitHub for the bot-failure
 # issues and the pull requests that fix them (bb site agents, the Agents tab's history); either may
 # fail without stopping the deploy. GitHub's built-in branch build is not used: its actions are on
 # the deprecated Node.js 20.

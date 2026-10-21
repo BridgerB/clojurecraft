@@ -62,4 +62,20 @@
                :eyes-of-ender 264
                :eye-throw 265
                :stronghold 265
-               :portal-room 265}}
+               :portal-room 265}
+ ;; the stage whose goal row has another name (the road says the-end, goals.edn enter-end)
+ :road/goal-row {:the-end :enter-end}
+ ;; a gym row (a plan's :exp/goal, or a gym heading) -> the road stage it is evidence for
+ :road/gym-stage {"blaze-1" "blaze-rods"
+                  "blaze-7" "blaze-rods"
+                  "blaze-fortress" "blaze-rods"
+                  "pearls-1" "ender-pearls"
+                  "pearls-1-live" "ender-pearls"
+                  "pearls-12" "ender-pearls"
+                  "ender-pearl" "ender-pearls"
+                  "eyes" "eyes-of-ender"
+                  "throw" "eye-throw"
+                  "end-portal" "end-portal"
+                  "enter-end" "the-end"
+                  "crystals" "dragon"
+                  "dragon" "dragon"}}

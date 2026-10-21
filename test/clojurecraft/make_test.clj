@@ -444,6 +444,23 @@
                              plan/goals)))
         "a table already held is not dug for")))
 
+(deftest a-full-inventory-throws-junk-before-the-table-is-dug-up
+  ;; sim race R2/36 (issue #135): the table dug up at y -3 had no slot to drop into (the pickaxe
+  ;; crafted at it took the table's), the collect failed :not-picked-up and the table stayed
+  (let [w (world-holding {:stone_pickaxe 1} true)
+        full (into {} (for [p (range 36)] [p {:item (recipe/item-id :cobblestone) :count 64}]))]
+    (is (= {:intent/kind :toss} (make/take-table-along (assoc w :player/inventory full)))
+        "no slot free and filler to spare: throw it first")
+    (is (= :dig (:intent/kind (make/take-table-along (assoc w :player/inventory (dissoc full 3)))))
+        "a slot free: the dig")
+    (is (= {:plan/wait :inventory-full}
+           (make/take-table-along
+            (assoc
+             w
+             :player/inventory
+             (into {} (for [p (range 36)] [p {:item (recipe/item-id :stone_pickaxe) :count 1}])))))
+        "nothing to throw: the table is left standing")))
+
 (defn worn
   "w with its first tool of item name n carrying damage: the server's :damage component."
   [w n damage]

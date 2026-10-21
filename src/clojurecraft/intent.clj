@@ -115,6 +115,8 @@
   ([ms s] (+ (* ms finish-margin s) finish-slack)))
 (def swing-every 350)                 ; ms between arm swings while digging
 (def collect-timeout 10000)           ; ms a collect may take before it fails
+(def leaf-drop 0.7)                   ; blocks a drop may lie under the feet and still be in the pickup box (grown 0.5 down, the drop 0.25 tall)
+(def centre-tolerance 0.05)           ; horizontal distance from a drop below the feet at which a collect stops walking: over its cell, to fall in
 (def collect-stall-ticks 20)          ; blocked this long with no progress → name the blocker
 (def ledge-look 0.6)                  ; blocks ahead of the feet a collect looks for a floor before stepping
 
@@ -680,6 +682,24 @@
                             blocks/leaves?)
                    spots))))
 
+(defn leaf-under
+  "The leaf block the player stands on, when goal, a point, lies in its column more than
+   leaf-drop below the feet: a drop dug out of a trunk from the top of the canopy rests under
+   the leaves the bot stands on, out of the pickup box and in no wall ahead (blocker). nil
+   otherwise. Sim world R1/4 (issues #186, #370): the bot dug the top log of a two-log oak from
+   the leaves over it, the log fell into the hole under its feet, and the collect waited out its
+   ten seconds :not-picked-up. A bot on a leaf beside the hole, its box over the edge,
+   is not this: collect centres over a drop below the feet (centre-tolerance) to fall in."
+  [world goal]
+  (let [[px py pz] (:player/pos world)
+        [gx gy gz] goal
+        cell [(long (math/floor px)) (dec (long (math/floor py))) (long (math/floor pz))]]
+    (when (and (< (physics/horizontal-distance [px 0 pz] [gx 0 gz]) 1.0)
+               (< leaf-drop (- py gy))
+               (some-> (terrain/block-at world cell)
+                       blocks/leaves?))
+      cell)))
+
 (defn unsupported?
   "Would a body standing at feet level fy with its feet centre at [x _ z] have nothing under its
    box: every cell under the cells the box overlaps at that level clear (path/classify :clear: air,
@@ -771,6 +791,11 @@
               (assoc :player/controls {})
               (assoc-intent :intent/blocked-by (blocker world goal))
               done)
+          (and (> (- tick best-tick) collect-stall-ticks) (leaf-under world goal))
+          (-> world
+              (assoc :player/controls {})
+              (assoc-intent :intent/blocked-by (leaf-under world goal))
+              done)
           (> (- now since) collect-timeout)
           (-> world
               (assoc :player/controls {})
@@ -780,5 +805,9 @@
               (assoc :player/controls {})
               (game/say (str "collect: a ledge ahead, the drop at " (mapv long goal) " is left"))
               done)
-          (> d 0.4) (assoc world :player/controls (toward world goal 0.0))
+          (> d
+             (if (< leaf-drop (- (physics/y-of (:player/pos world)) (nth goal 1)))
+               centre-tolerance
+               0.4))
+          (assoc world :player/controls (toward world goal 0.0))
           :else (assoc world :player/controls {}))))
