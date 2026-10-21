@@ -1,0 +1,9 @@
+;; issue #267, round 3 batch b: a breath near the feet is left by a walk to the nearest cell out
+;; of every breath's reach (escape), never combat's straight back-off (dragon3-a's three bots ran
+;; into the fountain's pillar and died in the cloud); three runs a row.
+{:plans/label "dragon3-b"
+ :plans/jobs 2
+ :plans/issue 267
+ :plans/experiments
+ [{:exp/name "crystals" :exp/kind :gym :exp/goal "crystals" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}
+  {:exp/name "dragon" :exp/kind :gym :exp/goal "dragon" :exp/runs 3 :exp/bots 1 :exp/est-s 1600}]}

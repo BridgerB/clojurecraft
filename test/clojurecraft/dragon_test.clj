@@ -226,9 +226,13 @@
     (is (= {:intent/kind :perch :intent/target dragon-eid}
            (dragon/toward-dragon (standing {} [12.5 64.0 0.5] {} (merge d cloud))))
         "the basin under a cloud: wait out here")
-    (is (= {:intent/kind :back-off :intent/target 50}
+    (is (= (dragon/shelter-walk [7 64 0])
            (dragon/toward-dragon (standing {} [3.5 64.0 0.5] {} (merge d cloud))))
-        "in it: away")))
+        "in it: the walk to the nearest cell out of its reach (escape)")
+    (is (= {:intent/kind :back-off :intent/target 50}
+           (dragon/toward-dragon
+            (assoc (standing {} [3.5 64.0 0.5] {} (merge d cloud)) :world/chunks {})))
+        "no ground loaded to walk to: away")))
 
 (deftest a-breath-on-the-way-to-the-stand-is-waited-out-where-the-feet-are
   ;; gym dragon-d runs 1 and 3: the walk back to the stand went through a fireball's cloud lying
@@ -439,7 +443,7 @@
       (is (dragon/lull? (round-fountain [20.5 64.0 0.5] flying))))
     (testing "a breath near the feet in the basin, the dragon grounded"
       (let [reaching (merge (attacking 270.0) (cloud [0.5 64.0 4.5] 1.0))]
-        (is (= (dragon/standing-walk [2 64 0]) (at [0.5 64.0 2.5] reaching))
+        (is (= (dragon/shelter-walk [2 64 0]) (at [0.5 64.0 2.5] reaching))
             "the walk to the stand behind, out of its reach, never the back-off up the rim")
         (is (not (cut? [0.5 64.0 2.5] reaching {:intent/kind :walk :intent/target [2 64 0]}))
             "which the breath does not end")
@@ -451,15 +455,25 @@
         (is (dragon/holds? (round-fountain [2.5 64.0 0.5] held)))
         (is (not (intent/done? (perch [2.5 64.0 0.5] held))) "the perch holds")
         (is (not (cut? [2.5 64.0 0.5] held {:intent/kind :perch :intent/target dragon-eid})))
-        (is (= {:intent/kind :back-off :intent/target 50}
-               (at [2.5 64.0 0.5] (merge (attacking 270.0) (cloud [2.5 64.0 1.5] 1.5))))
-            "in the breath itself: away, the lesser hurt")
-        (is (= {:intent/kind :back-off :intent/target 50}
-               (at [2.5 64.0 0.5] (merge flying (cloud [2.5 64.0 3.4] 1.5))))
-            "the dragon flying: away, as before")
-        (is (= {:intent/kind :back-off :intent/target 50}
-               (at [7.5 64.0 0.5] (merge (attacking 270.0) (cloud [7.5 64.0 2.5] 1.0))))
-            "outside the basin: away, as before")))
+        (let [fled (fn [pos es]
+                     (let [w (round-fountain pos es)
+                           {:intent/keys [kind for target]} (dragon/toward-dragon w)]
+                       (and (= [:walk :shelter] [kind for])
+                            (not (dragon/breathed? w target))
+                            (< (physics/horizontal-distance pos (physics/centre target)) 4.0)
+                            target)))]
+          (is
+           (= [4 64 -2] (fled [2.5 64.0 0.5] (merge (attacking 270.0) (cloud [2.5 64.0 1.5] 1.5))))
+           "in the breath itself: the walk to the nearest cell out of its reach behind the
+               head, never straight away into the pillar (gym dragon3-a run 2)")
+          (is (fled [2.5 64.0 0.5] (merge flying (cloud [2.5 64.0 3.4] 1.5)))
+              "the dragon flying: the walk out of its reach")
+          (is (fled [7.5 64.0 0.5] (merge (attacking 270.0) (cloud [7.5 64.0 2.5] 1.0)))
+              "outside the basin: the same")
+          (is (not (cut? [2.5 64.0 0.5]
+                         (merge (attacking 270.0) (cloud [2.5 64.0 1.5] 1.5))
+                         (dragon/shelter-walk [4 64 -2])))
+              "which the breath does not end"))))
     (testing "the scanning turn is held still through"
       (is (= {:intent/kind :perch :intent/target dragon-eid} (at [-1.5 64.0 0.5] (sitting 270.0)))
           "before its head as it scans: the perch where the feet are")
