@@ -10,8 +10,9 @@
     (let [snap (capture/read-world path)
           w (sr/world-for! snap)
           lines (atom [])
+          orig sr/step
           logged (fn [world event]
-                   (let [w' (sr/step world event)]
+                   (let [w' (orig world event)]
                      (doseq [e (:bot/effects w')
                              :when (= :log (:effect/kind e))]
                        (swap! lines conj [(:time/now w') (:effect/message e)]))
