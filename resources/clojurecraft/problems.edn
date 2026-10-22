@@ -327,7 +327,7 @@
   :problem/risks
   ["A meal preempts work mid-intent: a smelt abandoned leaves its input in the furnace"
    "Another slot selected mid-meal stops the eating (set-carried-item)"
-   "Sim race 39768347249 R2/30 (issue #515): sheep on a tree crown five over the walk's end drew three fights that failed :unreachable and ended the plan; an animal is game only within combat/over-feet of its route's end (hunt/fightable-from-route?)"
+   "Sim race 39768347249 R2/30 (issue #515): sheep on a tree crown five over the walk's end drew three fights that failed :unreachable and ended the plan; an animal is game only within intent/pickup-rise of its route's end (hunt/fightable-from-route?)"
    "Nothing edible held: the bar stays empty until a food producer (passive animals killed) exists"
    "Swings inside a mob's 10-tick hurt invulnerability do nothing"
    "A creeper fought instead of fled"]
