@@ -251,10 +251,14 @@
   (summon "enderman" d "{NoAI:1b,PersistenceRequired:1b}"))
 
 (def pearl-kit
-  "What a pearl row gives (issue #263): an iron sword, an iron pickaxe for the burrow the hunt
+  "What a pearl row gives (issue #263): an iron sword, two iron pickaxes for the burrows the hunt
    fights from, the iron helmet and chestplate #259's armour row makes (put on by the
-   :wear-armour row), and food for the fights' hunger: what a chained run carries by then."
-  ["minecraft:iron_sword 1" "minecraft:iron_pickaxe 1" "minecraft:iron_helmet 1"
+   :wear-armour row), and food for the fights' hunger: what a chained run carries by then. Two
+   pickaxes because the chain's :cast-one and :portal rows keep a spare (:goal/spares, #485), so
+   a run comes into the Nether holding two, and because one is 250 digs: gym batch
+   pearls-warped6-b (plan run 39700288080) cut eleven to thirteen burrows a run at ten to
+   sixteen digs each, and twelve pearls are about twenty-four kills."
+  ["minecraft:iron_sword 1" "minecraft:iron_pickaxe 2" "minecraft:iron_helmet 1"
    "minecraft:iron_chestplate 1" "minecraft:cooked_beef 16"])
 
 (def pearl-arena

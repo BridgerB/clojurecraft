@@ -118,6 +118,12 @@
     (cond-> {:intent/kind :walk :intent/target target :intent/for :log :intent/trunk bottom}
       (>= (- (physics/y-of target) feet-y) intent/pickup-rise) (assoc :intent/pickup? true))))
 
+(defn toward
+  "The cardinal heading from feet toward trunk on the plane: along the axis with the larger
+   distance, x on a tie, so a staircase cut that way closes on the trunk."
+  [[fx _ fz] [tx _ tz]]
+  (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)]))
+
 (defn trees-climb
   "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk above
   the eye: stairs up toward it, to-height only (the open sky over the feet is not the trees),
@@ -139,16 +145,11 @@
                                                                               [tx 0 tz])
                                                  search-radius)))
                                       trunks))]
-        (let [[fx _ fz] feet
-              [tx _ tz] above
-              dir (if (>= (abs (- tx fx)) (abs (- tz fz)))
-                    [(if (< fx tx) 1 -1) 0]
-                    [0 (if (< fz tz) 1 -1)])]
-          {:intent/kind :stairs-up
-           :intent/to-y (stairs/climb-to world (nth above 1))
-           :intent/to-height? true
-           :intent/dir dir
-           :intent/for :surface})))))
+        {:intent/kind :stairs-up
+         :intent/to-y (stairs/climb-to world (nth above 1))
+         :intent/to-height? true
+         :intent/dir (toward feet above)
+         :intent/for :surface}))))
 
 (defn descended?
   "Did the intent that just ended cut a length of stairs down toward the trees (a done :stairs-down
@@ -186,7 +187,7 @@
         drop-over (if continuing? continue-drop 12)]
     (when (and (or continuing? (stairs/out? world feet))
                (not (contains? (:plan/boxed-at world #{}) feet)))
-      (when-let [[tx ty tz :as trunk]
+      (when-let [[_ ty _ :as trunk]
                  (let [near (filter (fn [[tx ty tz]]
                                       (and (> (- (physics/y-of (game/eye world)) ty) drop-over)
                                            (<= (physics/horizontal-distance (:player/pos world)
@@ -195,15 +196,13 @@
                                     trunks)
                        kept (when continuing? (:intent/trunk (:plan/last world)))]
                    (or (some #(when (= kept %) %) near) (first near)))]
-        (let [[fx _ fz] feet]
-          {:intent/kind :stairs-down
-           :intent/trunk trunk
-           :intent/to-y (max ty (- fy stone/stair-depth))
-           :intent/dir
-           (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)])
-           :intent/for :trees})))))
+        {:intent/kind :stairs-down
+         :intent/trunk trunk
+         :intent/to-y (max ty (- fy stone/stair-depth))
+         :intent/dir (toward feet trunk)
+         :intent/for :trees}))))
 
-(declare water-toward?)
+(declare water-toward? crossing valley descended-valley?)
 
 (defn trees-bridge
   "Out of the ground (stairs/out?) with a standing trunk close by and level with the feet that no
@@ -303,6 +302,16 @@
   (let [o (intent/opening world)]
     (when (and o (not (mouth-below? (intent/feet world) (:intent/target o)))) o)))
 
+(defn far-trunks
+  "The far-candidates nearest standing trunks remembered within far-radius of the eye that are
+   not given up (skipped): the trunks the way out and the last resorts head for."
+  [world]
+  (->> (memory/positions-now world blocks/log-states)
+       (memory/nearest-first (game/eye world) far-radius)
+       (remove (skipped world))
+       (filter #(standing-trunk? world %))
+       (take far-candidates)))
+
 (defn climb-out
   "No trunk in the near band, and a standing trunk remembered further off: walk to the nearest one
    a route reaches (intent/routable?), under the open sky or not. Not out of the ground
@@ -328,20 +337,19 @@
    broke."
   [world]
   (let [feet (intent/feet world)
-        trunks (->> (memory/positions-now world blocks/log-states)
-                    (memory/nearest-first (game/eye world) far-radius)
-                    (remove (skipped world))
-                    (filter #(standing-trunk? world %))
-                    (take far-candidates))]
+        trunks (far-trunks world)]
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
+          (when (descended-valley? world) (valley world))
           (when (descended? world) (trees-descend world trunks))
           (when (tunneled? world) (trees-tunnel world))
           (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
-            (or (opening-up world)
+            (or (when (:player/in-water? world) (crossing world))
+                (opening-up world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
+                 :intent/dir (toward feet (first trunks))
                  :intent/for :surface}))
           (trees-climb world trunks)
           (when-not (tunneled? world) (trees-bridge world trunks))
@@ -549,9 +557,54 @@
         (when (and (scoop/boxed-here? world) (not (terrain/under-sky? world (intent/feet world))))
           (or (stone/retreat world) (stone/climb world))))))
 
-(defn gather-or-out
-  "The :gather act: gather-next, or when it waits :no-log the way out (way-out) before the wait.
-   Kept apart from gather-next, which make/spare-worth? asks whether a log can be started now: a
-   spare never sends the bot out of a pit for wood."
+(def valley-floor 16)                 ; blocks under a trunk's bottom a valley's stairs down go no deeper than
+
+(defn descended-valley?
+  "Did the intent that just ended cut a length of a valley's stairs down (a done :stairs-down
+   :intent/for :valley)? The next length goes on from where it stopped."
   [world]
-  (let [n (gather-next world)] (or (when (= {:plan/wait :no-log} n) (way-out world)) n)))
+  (let [{:intent/keys [kind for] :as l} (:plan/last world)]
+    (boolean (and l (= :stairs-down kind) (= :valley for) (intent/done? l)))))
+
+(defn valley
+  "The last resort before the wait: a length of stairs down toward the nearest trunk
+   (far-trunks, within descend-reach on the plane), stone/stair-depth deep whatever the trunk's
+   height, from a perch no walk, hunt or crossing leaves. Out of the ground (stairs/out?), and
+   never from a cell where a climb died :boxed; or on from the foot of a length just cut
+   (descended-valley?) while the foot is still in the ground, toward the trunk it began for, no deeper
+   than valley-floor under that trunk's bottom: from the foot the walk up the stairs just cut
+   (intent/opening) took the bot back to the perch, every few seconds, to cut the same length
+   again (sim snapshot real-2-s2-Clj_r15, issue #186, played on). That snapshot stood on the
+   top of an ice spike with the nearest trunk thirty-five blocks off at its own height across a
+   valley no route crosses: the trunk is no lower than the eye, so trees-descend never cut, and
+   nothing else applied. Once down on open ground the trunk is above the eye and trees-climb
+   cuts the way up toward it; each leg closes on the trunk. nil with no trunk in reach."
+  [world]
+  (let [feet (intent/feet world)
+        [_ fy _] feet
+        continuing? (descended-valley? world)]
+    (when (and (if continuing? (not (stairs/out? world feet)) (stairs/out? world feet))
+               (not (contains? (:plan/boxed-at world #{}) feet)))
+      (when-let [[_ ty _ :as trunk]
+                 (let [near (filter (fn [[tx _ tz]]
+                                      (<= (physics/horizontal-distance (:player/pos world)
+                                                                       [tx 0 tz])
+                                          descend-reach))
+                                    (far-trunks world))
+                       kept (when continuing? (:intent/trunk (:plan/last world)))]
+                   (or (some #(when (= kept %) %) near) (first near)))]
+        (when (or (not continuing?) (> fy (- ty valley-floor)))
+          {:intent/kind :stairs-down
+           :intent/trunk trunk
+           :intent/to-y (- fy stone/stair-depth)
+           :intent/dir (toward feet trunk)
+           :intent/for :valley})))))
+
+(defn gather-or-out
+  "The :gather act: gather-next, or when it waits :no-log the way out (way-out), else the valley
+   (a perch's way down toward the trees), before the wait. Kept apart from gather-next, which
+   make/spare-worth? asks whether a log can be started now: a spare never sends the bot out of a
+   pit, or down a valley, for wood."
+  [world]
+  (let [n (gather-next world)]
+    (or (when (= {:plan/wait :no-log} n) (or (way-out world) (valley world))) n)))

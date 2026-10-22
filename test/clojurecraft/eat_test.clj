@@ -2,6 +2,7 @@
   "Eating (issue #259): the :eat row, its done predicate and the :eat intent over canned worlds,
    and a hungry bot against the server model."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.fixtures :as fx :refer [packet]]
             [clojurecraft.game :as game]
@@ -56,6 +57,20 @@
   (let [w (assoc (standing 6 {2 (item :bread 3)}) :plan/goals #{:wood})]
     (is (= :eat (:goal/id (plan/choose w plan/goals))))
     (is (= {:intent/kind :eat :intent/item :bread} (plan/next-intent w eat-row plan/goals)))))
+
+(deftest with-the-portal-kit-held-the-meal-is-eaten-up-to-food-18
+  ;; issue #501: R1/2 entered the Nether at food 16 with food held, and health comes back there
+  ;; only from food 18
+  (let [kit {0 (item :flint_and_steel 1) 1 (item :water_bucket 1) 2 (item :bread 3)}
+        row #(plan/next-intent % eat-row plan/goals)]
+    (is (= {:intent/kind :eat :intent/item :bread} (row (standing 16 kit)))
+        "food 16 with the kit: eat")
+    (is (nil? (row (standing 18 kit))) "food 18: no")
+    (is (nil? (row (standing 16 (dissoc kit 1))))
+        "without the bucket the portal is not next: under 14 only")
+    (is (= {:intent/kind :eat :intent/item :bread} (row (standing 13 (dissoc kit 1)))))
+    (is (nil? (row (assoc (standing 16 kit) :player/dimension dimension/nether)))
+        "in the Nether the meal waits for under 14")))
 
 (deftest fed-unknown-or-foodless-the-eat-row-is-done
   (is (plan/done-by (standing 14 {2 (item :bread 3)}) eat-row) "at the threshold it is fed")

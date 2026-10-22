@@ -3,14 +3,17 @@
    that drops meat and picks the meat up; the :eat row eats it raw.
 
    Requiring this namespace registers the :hunt row's rules: an always row at priority 0, after
-   the meal in the table. Done by :provisioned?: not hungry (eat/hungry?), or food held, or no
-   animal to hunt and no kill to pick up. Planned by :hunt: the drop of a kill just made (the
+   the meal in the table. Done by :provisioned?: no meat wanted (wants-meat?: hungry with nothing
+   edible held, or in the overworld with the portal's iron and under provision-wanted foods, for
+   the Nether's sake), or no animal to hunt and no kill to pick up. Planned by :hunt: the drop of a kill just made (the
    last intent a :fight for :hunt, done, where its target was last seen) is collected; else a
    walk to the nearest animal a route reaches, and from beside it a :fight."
   (:require [clojure.math :as math]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]))
@@ -29,16 +32,39 @@
 (def starving-radius 48)              ; blocks a starving bot hunts within (a server shows animals this far, and the model populates three chunks round the player)
 (def strike-range 4.5)                ; blocks on the plane from which a hunt fights instead of walking: past a walk's reach (intent/reach 4), so a walk that arrived is never asked again
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
+(def provision-wanted 3)              ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held
 
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
+
+(defn edible-held
+  "How many edible items (eat/edible) are held in the hotbar and the main inventory."
+  [world]
+  (reduce +
+          0
+          (for [[p {:keys [item count]}] (:player/inventory world)
+                :when (and (< -1 p eat/store-slots) (eat/edible (recipe/item-name item)))]
+            count)))
+
+(defn provisioning?
+  "Is the bot in the overworld with the portal's iron in hand (flint and steel and a water
+   bucket, the portal kit's goods) and fewer than provision-wanted edible items held? Sim race
+   39712220957 (issue #501, world R1/2) reached a fortress hurt at food 16 with nothing to eat:
+   health comes back only from food 18, and a rest in the Nether failed :no-heal."
+  [world]
+  (and (= dimension/overworld (dimension/of world))
+       (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
+       (pos? (inventory/item-count world (recipe/item-id :water_bucket)))
+       (< (edible-held world) provision-wanted)))
 
 (defn reach
   "Blocks from the feet within which an animal is hunted: hunt-radius, and starving-radius once the
    food the server sent is at or under starving-below (issues #69, #62, #135: bots at food 0 and
-   one health, nothing to eat within 24 blocks, starving for hours)."
+   one health, nothing to eat within 24 blocks, starving for hours), and while provisioning? (no
+   hurry, but the Nether has no game: as far as a server shows animals)."
   [world]
-  (if (some-> (:player/food world)
-              (<= starving-below))
+  (if (or (some-> (:player/food world)
+                  (<= starving-below))
+          (provisioning? world))
     starving-radius
     hunt-radius))
 
@@ -76,13 +102,17 @@
   [world]
   (= :hunt (:intent/for (:plan/intent world))))
 
+(defn wants-meat?
+  "Does the bot need a hunt: hungry with nothing edible held, or provisioning? for the Nether?"
+  [world]
+  (or (and (eat/hungry? world) (nil? (eat/food-held world))) (provisioning? world)))
+
 (defmethod plan/done-by :provisioned?
   ;; never while a hunt intent runs: the hunt test's first run (feat/259-hunt 8ed7f50) killed its
   ;; cow, which left game with none, and the planner, the row done, abandoned the fight :goal-met
   ;; the tick the cow died, before the fight was done: no kill to collect, the beef left lying
   [world _]
-  (or (not (eat/hungry? world))
-      (some? (eat/food-held world))
+  (or (not (wants-meat? world))
       (and (not (hunting? world)) (nil? (fresh-kill world)) (nil? (game world)))))
 
 (defmethod plan/next-intent :hunt

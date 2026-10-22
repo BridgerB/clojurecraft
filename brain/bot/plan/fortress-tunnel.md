@@ -26,6 +26,8 @@ sourceRefs:
   - test/clojurecraft/fortress_test.clj#a-tunnel-turns-onto-ground-instead-of-pacing-in-the-portal
   - test/clojurecraft/fortress_test.clj#a-tunnel-climbs-out-of-a-dead-end-on-a-block-laid-beside-the-feet
   - test/clojurecraft/fortress_test.clj#a-tunnel-pacing-two-cells-is-blocked
+  - test/clojurecraft/fortress_test.clj#a-tunnel-waits-in-the-air-for-the-ground-before-it-fails
+  - src/clojurecraft/fortress.clj#def air-grace
   - src/clojurecraft/fortress.clj#def brick-states
   - src/clojurecraft/fortress.clj#defn bricks
   - test/clojurecraft/fortress_test.clj#fortress-bricks-use-the-indexed-current-sightings
@@ -58,6 +60,7 @@ sourceRefs:
   - src/clojurecraft/fortress.clj#defn arrived?
   - src/clojurecraft/fortress.clj#def aside
   - src/clojurecraft/fortress.clj#defn off-step?
+  - src/clojurecraft/path.clj#defn rests
   - test/clojurecraft/fortress_test.clj#a-step-the-feet-left-is-chosen-again
   - test/clojurecraft/sim_test.clj#the-fortress-from-a-nether-landing-and-its-recording-replays
 related:
@@ -69,7 +72,7 @@ related:
 
 # Fortress tunnel
 
-The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) is done when a fortress block on record (`nether_bricks`, its fence or stairs, at y 32 or more, so never one under the lava sea) is within 6 blocks of the feet. Its planner (`plan/next-intent :fortress`) starts a `:tunnel-to` (not stone's `:tunnel`, which digs along a direction for ore) to the nearest one on record, or, with none, the next leg of a spiral search (below).
+The `:fortress` target (`goals.edn`, `:goal/dimension "minecraft:the_nether"`) is done when a fortress block on record (`nether_bricks`, its fence or stairs, at y 32 or more, so never one under the lava sea) is within 6 blocks of the feet. A `:tunnel-to` started with the feet off the ground waits up to `air-grace` 40 ticks (`:intent/airborne`) for them to land before it may fail `:blocked`: no step is safe from the air, and a bot knocked off a ledge failed three tunnels in three ticks (issue #502, R4-31-1). Its planner (`plan/next-intent :fortress`) starts a `:tunnel-to` (not stone's `:tunnel`, which digs along a direction for ore) to the nearest one on record, or, with none, the next leg of a spiral search (below).
 
 `bricks` asks `memory/positions-now` for `brick-states`, the indexed current sightings remembered by the facts' identity, before filtering the height; it never scans all sightings with `memory/latest`. Issue #328's snapshot, once streamed chunks restored its dug room ([[server-model]]), could tunnel but exhausted the judge's four-minute budget in that full scan on every tick. The indexed query preserves the dimension and recency rules without repeating the whole-memory query.
 
@@ -111,6 +114,8 @@ The later R4/12 and R4/4 reproductions of #286 were a different dead end: the [[
 A real arrival can be possible and still ring the stand with lava: issue #286's `real-5-s1-Clj_r11` came through a portal cast into a one-deep lava lake, lava north and south of it and obsidian east and west, and `safe?` refused every step at every tick, `:blocked` fifty milliseconds apart. A block placed into a source or a flow replaces it and nothing is dug, so no lava runs into the tunnel; `next-move` now takes, after a fresh step, a floored turn and a climb-out and before a retreat, a step once the lava beside the cells it opens is capped (`sealed?`: some lava, `sealable?` every cell of it has a solid neighbour to place against and a filler is carried for all of them, at most `max-seals`, and `safe-but-lava?`, `safe?` with the lava clause left out, holds). The step plan then starts with the placements (`seal-ops`, step `:seal`, worked from the feet), recomputed from the world each tick, so a cell capped is not capped again and `safe?` holds by the time the first dig runs.
 
 Issue #284's R1-32-2 and R3-17-1 failed `:no-path` three times in a row from a different cause: a step down or up carried the centre half a block past the edge of the block under it, the body held by that edge alone and the cell under the feet air. A walk has no route from a cell with no floor, so the entry walk of every step chosen from there failed. The step was dropped as `off-step?` and chosen again from where the feet were. `recentre` (a perched feet cell, `perched?`) now comes before `next-move`: a level step onto a standable cell beside the feet whose floor is solid, never counted as a retreat.
+
+Issue #284 came back (R1-26-1, sim race 39718481292): `recentre` chose the right level step, east onto the ledge's block, but the walk of that step failed `:no-path` three times. The pathfinder began from the first standable neighbour of the floorless feet cell, a block across a one-wide gap to the west, not the block the box rested on ([[pathfinder]], `path/rests`). The route now starts on the block under the box, so the recentring walk is found and the step lands centred.
 
 Issue #410's R3-38-1 dug a soul sand floor (walkable only as a route's last resort, so replaced) with no filler left and failed `:not-held` three times: `safe?` now asks for a filler wherever a step lays a block (a replaced floor, a lava floor), so a tunnel with none fails `:blocked` rather than reaching the place op, and `stairs/fillers` ends with the Nether's own rock a tunnel digs and carries: soul soil, blackstone, basalt.
 
