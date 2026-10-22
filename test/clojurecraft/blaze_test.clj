@@ -239,6 +239,23 @@
     (is (= {:plan/wait :other-dimension}
            (next-intent (assoc (standing {}) :player/dimension dimension/overworld))))))
 
+(deftest a-rest-that-cannot-heal-is-not-taken
+  ;; sim race 39712220957 (issue #501): hurt at food 16 with nothing to eat, three rests of ninety
+  ;; seconds, no health back, the run ended :no-heal
+  (let [hurt #(assoc % :player/health 8.0)]
+    (is (blaze/heals? (standing {})) "food 20: health comes back by itself")
+    (is (not (blaze/heals? (assoc (standing {}) :player/food 16))) "food under 18, nothing to eat")
+    (is (blaze/heals? (assoc (standing {1 (item :cooked_beef 4)} {}) :player/food 16))
+        "food held: the meal first")
+    (is (= blaze/rest-intent (next-intent (hurt (standing {})))) "fed: a rest")
+    (is (= {:plan/wait :no-blaze} (next-intent (hurt (assoc (standing {}) :player/food 16))))
+        "food 16, nothing to eat: no rest, the act goes on")
+    (is (= {:intent/kind :eat :intent/item :cooked_beef}
+           (next-intent (hurt (assoc (standing {1 (item :cooked_beef 4)} {}) :player/food 16))))
+        "with food held it eats")
+    (is (nil? (blaze/warily (assoc (standing {}) :player/health 12.0 :player/food 16)))
+        "wary the same")))
+
 (deftest a-blaze-at-hand-is-fought-first
   ;; gym blaze-fire-b run 3 (run 39136853644): blazes half a block to two off followed the bot
   ;; into four covers in eight seconds, and it died from 14 health without a swing

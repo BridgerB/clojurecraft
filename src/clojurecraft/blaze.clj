@@ -214,6 +214,14 @@
                        (eat/food-held world))]
     {:intent/kind :eat :intent/item food}))
 
+(defn heals?
+  "Can a rest bring the health back: the food the server last sent at or over hunger/heal-level
+   (natural regeneration), or edible food held (the meal first)? Sim race 39712220957 (issue
+   #501, world R1/2) rested three times ninety seconds at food 16 with nothing to eat, health
+   falling, and the run ended :no-heal."
+  [world]
+  (or (>= (:player/food world hunger/heal-level) hunger/heal-level) (some? (eat/food-held world))))
+
 (defn watchers
   "{eid entity} of the blazes alive within cover-range of the feet that have the bot in sight
    (combat/seen?: a clear line from the eye to each): what shoots at it, and what a bot in
@@ -288,7 +296,8 @@
 
 (defn healing
   "What a hurt bot does: out of the watching blazes' sight (hide); else the meal; else back away
-   from the nearest watcher; else, with none watching, a :rest. Cover before the meal where
+   from the nearest watcher; else, with none watching and a rest able to heal (heals?), a :rest;
+   else nil, and the act fights on (a dead bot is back with a full bar; a stopped one is not). Cover before the meal where
    there is cover: a meal takes a second and a half standing still, two hits from a burst, and
    gym blazefort-k run 3 (run 38913023560) ate at 9.4 by its spawner and was dead before the
    food came. The meal before the back-off where there is none: gym blaze-7 run 1 (run
@@ -300,7 +309,8 @@
     (cond away away
           (meal world) (meal world)
           weid {:intent/kind :back-off :intent/target weid}
-          :else rest-intent)))
+          (heals? world) rest-intent
+          :else nil)))
 
 (defn wary?
   "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run
@@ -318,7 +328,7 @@
   (let [away (hide world)]
     (cond away away
           (meal world) (meal world)
-          (empty? (watchers world)) rest-intent
+          (and (empty? (watchers world)) (heals? world)) rest-intent
           :else nil)))
 
 (defn fires
@@ -390,12 +400,13 @@
         [beid] (quarry world)
         [_ lying] (rod-lying world)
         sp (nearest-spawner world)
+        heal (delay (when (hurt? world) (healing world)))
         wary (delay (when (wary? world) (warily world)))
         away (delay (when (outnumbered? world) (hide world)))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
           heid {:intent/kind :fight :intent/target heid :intent/to-the-end? true}
-          (hurt? world) (healing world)
+          @heal @heal
           @wary @wary
           @away @away
           (and lying (drops/under-reach? world lying)) (fetch-walk lying)
