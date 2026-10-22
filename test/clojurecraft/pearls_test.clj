@@ -298,13 +298,18 @@
 
 (defn rock
   "Four chunk columns (x 0 to 31, z 0 to 31) of stone from the floor up to y 79, with the cells of
-   open (world coordinates) left as air: a pocket deep in the rock, open to the sky from y 80."
+   open (world coordinates) left as air, under the floor too: a pocket deep in the rock, open to
+   the sky from y 80."
   [open]
   (into {}
         (for [cx [0 1]
               cz [0 1]]
           [[cx cz]
-           (world/column (into {}
+           (world/column (into (into {}
+                                     (for [[x y z] open
+                                           :when (and (< y 64)
+                                                      (= [cx cz] [(quot x 16) (quot z 16)]))]
+                                       [[(mod x 16) y (mod z 16)] 0]))
                                (for [lx (range 16)
                                      lz (range 16)
                                      y (range 64 80)
