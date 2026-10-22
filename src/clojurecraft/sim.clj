@@ -1246,6 +1246,35 @@
             told
             (:sim/items sim))))
 
+(def overworld-keys
+  "The model's attributes that are the overworld's while the player is in another dimension."
+  [:sim/columns :sim/decoded :sim/placed :sim/broken :sim/view-distance])
+
+(defn leave-overworld
+  "The model with the overworld's columns and the blocks placed and broken in it set aside
+   (:sim/overworld) for a way back (return-overworld), when the player is in it; unchanged in any
+   other dimension, where they are already set aside. A portal or an end portal replaces them with
+   the other dimension's."
+  [sim]
+  (cond-> sim
+    (= dimension/overworld (:sim/dimension sim dimension/overworld))
+    (assoc :sim/overworld (select-keys sim overworld-keys))))
+
+(defn return-overworld
+  "The model with the overworld back as leave-overworld set it aside: its columns, its placed and
+   broken blocks, its view distance, and none of the other dimension's items, mobs, fluids or
+   falling blocks, which the client dropped. Unchanged with no overworld set aside. Sim race
+   39723238841 (issue #504): a death in the Nether respawned the player in the overworld's
+   dimension over the Nether's columns, which hold nothing at the spawn, so the bot stood in
+   unloaded chunks on stairs-down for hours."
+  [sim]
+  (if-let [overworld (:sim/overworld sim)]
+    (-> (apply dissoc sim :sim/overworld overworld-keys)
+        (merge overworld)
+        (assoc :sim/items {} :sim/mobs {} :sim/fluids {} :sim/falls {} :sim/falling {})
+        (dissoc :sim/spawners :sim/spawners-at))
+    sim))
+
 (defmethod on-packet [:play :client-command]
   [sim {:keys [action]}]
   ;; a dead player asking to respawn gets a new life at spawn, full health and breath, a fresh
@@ -1255,7 +1284,8 @@
     (let [[x y z] (:sim/respawn sim)]
       (-> sim
           (cond-> (not= dimension/overworld (:sim/dimension sim dimension/overworld))
-                  (assoc :sim/view #{}))
+                  (-> return-overworld
+                      (assoc :sim/view #{})))
           (assoc :sim/health max-health
                  :sim/air max-air
                  :sim/player-pos [x y z]
@@ -1473,7 +1503,7 @@
           (nil? since) (assoc sim :sim/portal-since now)
           (< (- now since) portal-ms) sim
           :else
-          (let [sim (arrive sim)
+          (let [sim (arrive (leave-overworld sim))
                 [x y z] (:sim/player-pos sim)]
             (-> sim
                 (assoc :sim/dimension dimension/nether)
@@ -2764,6 +2794,7 @@
    (:sim/end's :crystals, end/spikes' when absent)."
   [sim]
   (let [{:keys [columns dragon dragon-yaw crystals]} (:sim/end sim)
+        sim (leave-overworld sim)
         [x y z] end/spawn
         platform (end/platform)
         sim (-> sim
