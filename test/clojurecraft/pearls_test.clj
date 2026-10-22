@@ -585,6 +585,65 @@
                                plan/goals))
           "at the mouth with it there: home"))))
 
+(defn lured
+  "w with its burrow cut at time 0 and n lures walked since (a walk out to the mouth and one back
+   in, two :walk intentions done each)."
+  [w n]
+  (reduce
+   #(memory/remember-intention %1 {:intent/id (+ 10 %2) :intent/kind :walk} :done)
+   (memory/remember-intention (assoc w :time/now 0) {:intent/id 1 :intent/kind :burrow} :done)
+   (range (* 2 n))))
+
+(deftest an-angry-one-blacklisted-that-never-comes-to-the-lure-holds-the-burrow-no-longer
+  ;; gym batch pearls-warped8-a (plan run 39731473452, probe 39776733945) run 1: from the 49th
+  ;; minute to the end it walked from its burrow to the mouth and back every 34 s over one angry,
+  ;; blacklisted after a held fight timed out :unreachable, 4.2 blocks from the mouth, that never
+  ;; moved; the burrow never went stale
+  (let [angry (assoc (enderman [3.5 64.0 12.5]) :entity/creepy? true)
+        given-up (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})]
+    (is (= 7 (first (pearls/angry-near (lured given-up 2)))) "two lures: still held")
+    (is (not (pearls/lured-out? (lured given-up 2))))
+    (is (pearls/lured-out? (lured given-up pearls/lure-tries)))
+    (is (nil? (pearls/angry-near (lured given-up pearls/lure-tries)))
+        "lure-tries lures it never came to: no longer held")
+    (is (= 7
+           (first (pearls/angry-near (lured (dissoc given-up :plan/blacklist) pearls/lure-tries))))
+        "one not given up on still holds the bot in")))
+
+(deftest one-coming-with-no-way-home-is-fought-not-stood-under
+  ;; gym batch pearls-warped8-b (plan run 39775345028, probe 39848848462) run 3: out at its
+  ;; burrow's first stair, the walk home failed :no-path, and the bot stood in :lookout while the
+  ;; angry enderman beside it took its health from 19.4 to nothing in three seconds
+  (let [angry (assoc (enderman [5.5 64.0 10.5]) :entity/creepy? true)
+        cut-off {[5 63 8] stone [5 62 8] stone}
+        w (assoc (burrowed [3.5 64.0 8.5] {7 angry} cut-off) :plan/blacklist #{7})]
+    (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+           (plan/next-intent (assoc (burrowed [3.5 64.0 8.5] {7 angry}) :plan/blacklist #{7})
+                             row
+                             plan/goals))
+        "a way home: home")
+    (is (= {:intent/kind :fight :intent/target 7 :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "none: fought where it stands")))
+
+(deftest a-fire-the-bot-stands-in-is-put-out-first
+  ;; gym batch pearls-warped8-b (plan run 39775345028, probe 39849820209) run 1: its walk ended in
+  ;; a fire lit on gravel in its path, and it stood there in :lookout until it died
+  (let [fire (blocks/default-state :fire)]
+    (is (nil? (pearls/burning-at (standing {}))))
+    (is (= {:intent/kind :dig :intent/target [8 64 8]}
+           (plan/next-intent (standing {} {[8 64 8] fire}) row plan/goals))
+        "at the feet")
+    (is (= [8 65 8] (pearls/burning-at (standing {} {[8 65 8] fire}))) "at the head")))
+
+(deftest no-sword-held-no-hunt
+  ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held
+  ;; after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
+  (let [w (standing {7 (enderman [8.5 64.0 20.5])})]
+    (is (not= {:plan/wait :no-sword} (plan/next-intent w row plan/goals)))
+    (is (= {:plan/wait :no-sword}
+           (plan/next-intent (update w :player/inventory dissoc 0) row plan/goals)))))
+
 (def ledge-wall
   "Stone three high (y 64 to 66) along x 4, the burrow's first stair left open: from the mouth at
    x 3 the only way east is down through the burrow."

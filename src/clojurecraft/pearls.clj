@@ -157,8 +157,18 @@
 (def danger-radius 16.0)              ; blocks from the burrow's mouth an angry enderman keeps the bot in from: the enderman's own stare range (EndermanLookForPlayerGoal: within 16 an angry one stands while looked at and rushes when not; farther, one with a target teleports to it after 30 ticks, so one farther that has not come has lost its target); eight let a burrow go stale with one angry nine to sixteen off that would rush the bot stepping out. The wait within is bounded by the lure (lure?), where one that never comes held batch pearls-warped-d run 1 thirty-four minutes
 (def danger-rise 8)                   ; blocks above or below the burrow's mouth an angry enderman keeps the bot in from: one seventeen below in another cave never comes (batch pearls-warped-c run 1's forty minutes); one five or six below on the slope beside the mouth comes the moment the bot steps out (batch pearls-warped6-a run 4, three times, the third its death)
 
+(def lure-tries 3)                    ; lures (a walk out to the burrow's mouth and one back in) after which a blacklisted angry enderman near the mouth that has not come holds the burrow no longer
+
+(defn lured-out?
+  "Has the bot walked lure-tries times out to its burrow's mouth and back since the burrow was cut
+   (memory/done-since: two :walk intentions done a lure, every walk since the burrow counted), so
+   that a blacklisted angry enderman near the mouth that never came is no reason to stay?"
+  [world]
+  (>= (or (memory/done-since world :walk :burrow) 0) (* 2 lure-tries)))
+
 (defn angry-near
-  "[eid entity] of the nearest angry enderman (entity/creepy?), blacklisted or not, within
+  "[eid entity] of the nearest angry enderman (entity/creepy?), blacklisted or not (not once
+   lured-out?), within
    danger-radius of the burrow's mouth (:pearls/mouth) and danger-rise of its height; nil when
    none, or with no burrow. One a held fight gave up on (:unreachable, then blacklisted) is
    still angry and still hits the bot that walks out: gym batch pearls-warped5-a (plan run
@@ -169,19 +179,24 @@
    run 4's held fight gave up on one standing by the mouth, which then stood 3 to 9 blocks off
    on the plane and 5 or 6 below it, on the slope, past the four the rise then allowed; the
    burrow went stale three times, and each walk out cost the bot half its health, the third its
-   life at 597 s. Batch pearls-warped5-b's run 2 was slain the same way by one six below."
+   life at 597 s. Batch pearls-warped5-b's run 2 was slain the same way by one six below.
+   Blacklisted ones only until the bot is lured-out?: one that has not come in lure-tries lures
+   cannot reach the mouth (batch pearls-warped6-a's run 4 came the moment the bot stepped out), and
+   gym batch pearls-warped8-a (plan run 39731473452, probe 39776733945) run 1 walked to the mouth
+   and back every 34 s for four hours, its burrow never stale, over one blacklisted after a held
+   fight timed out :unreachable, standing 4.2 blocks from the mouth and never moving."
   [world]
   (when-let [m (:pearls/mouth world)]
     (let [c (physics/centre m)]
-      (entity/nearest (into {}
-                            (filter (fn [[_ e]]
-                                      (let [p (:entity/pos e)]
-                                        (and (entity/creepy? e)
-                                             (<= (physics/distance c p) danger-radius)
-                                             (<= (abs (- (physics/y-of p) (physics/y-of c)))
-                                                 danger-rise)))))
-                            (endermen (dissoc world :plan/blacklist) stare-range))
-                      (:player/pos world)))))
+      (entity/nearest
+       (into {}
+             (filter (fn [[_ e]]
+                       (let [p (:entity/pos e)]
+                         (and (entity/creepy? e)
+                              (<= (physics/distance c p) danger-radius)
+                              (<= (abs (- (physics/y-of p) (physics/y-of c))) danger-rise)))))
+             (endermen (if (lured-out? world) world (dissoc world :plan/blacklist)) stare-range))
+       (:player/pos world)))))
 
 (def stale-lookouts 12)               ; lookouts (five seconds each, a minute) stood with the burrow and nothing to do from it before it is given up for one cut beside the next enderman
 (def lure-lookouts 6)                 ; lookouts (half a minute) stood in the burrow over an angry enderman near its mouth that has not come before the bot shows itself at the mouth to bring it
@@ -391,6 +406,22 @@
   [(+ x 0.5) y (+ z 0.5)])
 
 ;; ---------------------------------------------------------------- the kill and its drop
+
+(def fires #{:fire :soul_fire})        ; blocks that burn whoever stands in them
+
+(defn burning-at
+  "The cell of the feet or the head that holds fire (fires), the feet's first, or nil. Gym batch
+   pearls-warped8-b (plan run 39775345028, probe 39849820209) run 1's walk ended in a fire lit on
+   gravel in its path, and it stood there in :lookout, an :eat between, from 16 health to its
+   death in seventeen seconds."
+  [world]
+  (let [[x y z] (intent/feet world)]
+    (some (fn [c]
+            (when (contains? fires
+                             (some-> (terrain/block-at world c)
+                                     blocks/name-of))
+              c))
+          [[x y z] [x (inc y) z]])))
 
 (defn fresh-kill
   "The hunt's kill whose drop may still be picked up: the last intent, when it is a :fight for
@@ -937,7 +968,10 @@
    it and were slain), under 10 health, or with another hostile within the :defend row's reach
    (threat: batch pearls-warped4-a's runs 3 and 4 were slain by mobs that row fought in the
    open at the forest's edge with a burrow cut), back to it (gym batch pearls-263b: a bot
-   that met one in the open, or backed away hurt, died); in it, the one coming, one at hand
+   that met one in the open, or backed away hurt, died) when a route reaches it, else on as
+   with no burrow, so that one coming at hand is fought (batch pearls-warped8-b, plan run
+   39775345028, probe 39848848462: run 3's walk home from its first stair failed :no-path and
+   it stood in :lookout while the enderman beside it killed it in three seconds); in it, the one coming, one at hand
    and angry, or the threat fought where the bot stands (:fight :intent/hold?; at hand by the
    distance in three, never on the plane alone: batch pearls-warped-b's run 3 held a fight
    twenty minutes on one two blocks off on the plane and fourteen below, and batch
@@ -1033,49 +1067,48 @@
         mouth (:pearls/mouth world)
         way-home {:intent/kind :walk :intent/target home :intent/for :shelter}
         far (endermen world seek-radius)]
-    (cond (and home (not in?) (or ce near? hurt? tid aid)) way-home
-          (and in? (or ce angry? in-reach? tid))
-          {:intent/kind :fight
-           :intent/target (cond ce ceid
-                                (or angry? in-reach?) eid
-                                :else tid)
-           :intent/hold? true
-           :intent/for :pearls}
-          (and near? hurt? (not in?))
-          {:intent/kind :back-off :intent/target eid :intent/for :pearls}
-          (and near?
-               (or (entity/creepy? e)
-                   (and (not (pickaxe? world)) (not (contains? (:plan/blacklist world #{}) eid)))))
-          {:intent/kind :fight :intent/target eid :intent/for :pearls}
-          meal meal
-          (or (and hurt? (nil? home) (nil? ce)) (and in? (or hurt? bid)))
-          {:intent/kind :lookout :intent/for :pearls}
-          (and in? aid (lure? world)) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
-          (and in? aid) {:intent/kind :lookout :intent/for :pearls}
-          digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
-          site {:intent/kind :walk :intent/target site :intent/for :shelter}
-          (and in? qid) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
-          (and in? (crowded? world))
-          (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
-          (and in? mouth) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
-          (and qid
-               (or (not (pickaxe? world))
-                   (= mouth (intent/feet world))
-                   (and home (intent/routable? world way-home))))
-          {:intent/kind :provoke :intent/target qid :intent/for :pearls}
-          (and qid home) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
-          ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
-          home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
-          :else
-          (or (when-let [[_ e] (routable world far)]
-                {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})
-              (descend world (endermen world descend-radius))
-              (ascend world (endermen world descend-radius))
-              (toward world far)
-              (bore world (endermen world descend-radius))
-              (when (= :lookout (:intent/kind (:plan/last world)))
-                (or (roam world) (dig-out world)))
-              {:intent/kind :lookout :intent/for :pearls}))))
+    (cond
+      (and home (not in?) (or ce near? hurt? tid aid) (intent/routable? world way-home)) way-home
+      (and in? (or ce angry? in-reach? tid))
+      {:intent/kind :fight
+       :intent/target (cond ce ceid
+                            (or angry? in-reach?) eid
+                            :else tid)
+       :intent/hold? true
+       :intent/for :pearls}
+      (and near? hurt? (not in?)) {:intent/kind :back-off :intent/target eid :intent/for :pearls}
+      (and near?
+           (or (entity/creepy? e)
+               (and (not (pickaxe? world)) (not (contains? (:plan/blacklist world #{}) eid)))))
+      {:intent/kind :fight :intent/target eid :intent/for :pearls}
+      meal meal
+      (or (and hurt? (nil? home) (nil? ce)) (and in? (or hurt? bid)))
+      {:intent/kind :lookout :intent/for :pearls}
+      (and in? aid (lure? world)) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and in? aid) {:intent/kind :lookout :intent/for :pearls}
+      digs? {:intent/kind :burrow :intent/dir dir :intent/for :pearls}
+      site {:intent/kind :walk :intent/target site :intent/for :shelter}
+      (and in? qid) {:intent/kind :provoke :intent/target qid :intent/for :pearls}
+      (and in? (crowded? world))
+      (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
+      (and in? mouth) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      (and qid
+           (or (not (pickaxe? world))
+               (= mouth (intent/feet world))
+               (and home (intent/routable? world way-home))))
+      {:intent/kind :provoke :intent/target qid :intent/for :pearls}
+      (and qid home) {:intent/kind :walk :intent/target mouth :intent/for :shelter}
+      ce {:intent/kind :fight :intent/target ceid :intent/for :pearls}
+      home (or (vantage world far) {:intent/kind :lookout :intent/for :pearls})
+      :else
+      (or (when-let [[_ e] (routable world far)]
+            {:intent/kind :walk :intent/target (cell (:entity/pos e)) :intent/for :pearls})
+          (descend world (endermen world descend-radius))
+          (ascend world (endermen world descend-radius))
+          (toward world far)
+          (bore world (endermen world descend-radius))
+          (when (= :lookout (:intent/kind (:plan/last world))) (or (roam world) (dig-out world)))
+          {:intent/kind :lookout :intent/for :pearls}))))
 
 (defmethod combat/answers :pearls
   ;; the hunt provokes endermen and fights them from its burrow; an angry one (entity/creepy?)
@@ -1093,13 +1126,20 @@
     (into (comp (map (comp entity/kind val)) (remove shunned)) (entity/hostiles world))))
 
 (defmethod plan/next-intent :pearls
+  ;; a fire the bot stands in put out first (a :dig: the server breaks fire on the first click,
+  ;; as blaze/put-out does); then the kill's drop; with no sword held no hunt at all, a wait that fails the plan
+  ;; (:no-sword): gym batch pearls-warped8-b (plan run 39775345028) runs 1 and 3 respawned with
+  ;; nothing held after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
   [world _ _]
   (let [k (fresh-kill world)
-        [_ d] (when k (drop-of world k))]
-    (cond d
+        [_ d] (when k (drop-of world k))
+        fire (burning-at world)]
+    (cond fire {:intent/kind :dig :intent/target fire}
+          d
           {:intent/kind :collect-drops
            :intent/item pearl
            :intent/target (cell (:entity/pos d))
            :intent/for :pearls}
           (and k (body? world k)) {:plan/wait :drop}
+          (nil? (combat/sword world)) {:plan/wait :no-sword}
           :else (hunt world))))
