@@ -1,10 +1,10 @@
 ;; Issue #263, round 8: what dig-out (feat/263-warped8) answers in batch pearls-warped8-a's walled-in
 ;; runs (plan run 39731473452: run 2 at y 45 in its own diggings, run 3 on a ledge over a pit).
-;; Folds the bot at the branch's code over a recording to the given second, then asks dig-out from
-;; there and, standing at the end of the walk it gives, again, with the first cut's solid cells for
+;; Folds the bot at the recording's own code over it to the given second, loads the branch's
+;; pearls.clj over the namespace, then asks dig-out from there and, standing at the end of the walk it gives, again, with the first cut's solid cells for
 ;; each heading.
 ;;
-;;   clojure -M p263_digout.clj <run.edn.zst> <seconds>
+;;   clojure -M p263_digout.clj <run.edn.zst> <seconds> <the branch's pearls.clj>
 (require '[clojurecraft.main :as main]
          '[clojurecraft.game :as game]
          '[clojurecraft.record :as record]
@@ -49,6 +49,9 @@
                                    {:world w :t0 t0 :done? (and off (>= off stop-ms))})))
                          {:world world0}
                          path-arg))
+
+;; the fold ran the recording's own code, so the bot stood where it stood; now the branch's hunt
+(load-file (nth *command-line-args* 2))
 
 (let [w (:world final)
       d (pearls/dig-out w)]
