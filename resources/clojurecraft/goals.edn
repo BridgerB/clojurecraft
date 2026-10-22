@@ -353,10 +353,9 @@
  {:goal/id :ender-pearls
   :goal/priority 19
   :goal/target? true
-  :goal/aside? true
   :goal/until "pearls-12"
   :goal/doc
-  "twelve ender pearls, from endermen hunted with the sword, never bartered (issue #263): the game's loot table drops a pearl one kill in two, so about twenty-four kills, in a warped forest of the Nether, where endermen are the only hostile that spawns. Each one within 24 with a clear line is provoked by a stare at its head from 6 blocks or more, so it comes to the bot; within 4.5 it is fought at its legs, never its face; the pearl is picked up where it died. An aside until the stages before it (the fortress, the blaze rods) are proven and the chain is raised to it"
+  "twelve ender pearls, from endermen hunted with the sword, never bartered (issue #263): the game's loot table drops a pearl one kill in two, so about twenty-four kills, in a warped forest of the Nether, where endermen are the only hostile that spawns. Each one within 24 with a clear line is provoked by a stare at its head from 6 blocks or more, so it comes to the bot; within 4.5 it is fought at its legs, never its face; the pearl is picked up where it died. A step of the chain since the real race reached the blaze rods and was raised to it: an aside before, so plan/through stopped at the blaze rods"
   :goal/provides {:item/ender_pearl 12}
   :goal/done? :provided?
   :goal/plan :pearls}
