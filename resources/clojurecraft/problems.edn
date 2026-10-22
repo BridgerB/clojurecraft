@@ -382,6 +382,7 @@
    "Hurt and watched by blazes past the at-hand radius, the running tunnel (32 steps) goes on until the bot is dead (issue #502, R4/31): blaze/under-fire? ends any intent but the answer to it when healing or warily has something to do"
    "A rod hanging over a drop beside a fortress bridge (issue #502, R4/31): the collect stepped down the rim after it and the bot's momentum carried it off into the lava sea; a drop with no floor under it and none within a fall (drops/over-void?) is left, never walked toward"
    "Four tunnels in a row to one stand beside a spawner, each :blocked (issue #502): a stand tried is blacklisted and skipped, another face or level is tried, and a spawner with two blocked stands is given up for the next remembered one"
+   "A tunnel in a pocket none of whose fresh steps is safe, the branch a few cells back never tried (issue #502, R3-5-2 and R4-11-1): the world keeps the tunnel's trail, and the tunnel steps back along it from a cell that leads nowhere (fortress/step-back) before it fails :blocked"
    "A fortress's edge reached with no spawner on record (issue #507): the next leg of the fortress row's spiral search is tunnelled, not a wait"
    "Wither skeletons beside the spawner" "Peaceful: no blazes at all"]
   :problem/done
