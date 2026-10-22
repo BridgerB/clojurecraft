@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T20:30:57.739Z",
+  "at" : "2026-10-22T20:33:15.649Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -128,11 +128,6 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 227,
-    "title" : "Bot stops at portal: no-scoop",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 44,
     "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -246,10 +241,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 45,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 227,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
