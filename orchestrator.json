@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T14:13:49.082Z",
+  "at" : "2026-10-22T14:14:57.241Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -48,15 +48,15 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 518,
-    "title" : "Bot stops at portal: no-bucket",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : true
-  }, {
     "number" : 227,
     "title" : "Bot stops at portal: no-scoop",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 518,
+    "title" : "Bot stops at portal: no-bucket",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
   }, {
     "number" : 501,
     "title" : "Bot stops at blaze-rods: no-heal",
@@ -100,11 +100,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 518,
+    "issue" : 227,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 227,
+    "issue" : 518,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
