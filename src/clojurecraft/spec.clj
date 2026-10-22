@@ -599,6 +599,8 @@
 (s/def :race/seed (s/nilable string?))
 (s/def :race/commit (s/nilable string?))
 (s/def :race/until string?)
+(s/def :race/unplayed nat-int?)
+(s/def :race/down? boolean?)
 (s/def :sample/runner (s/nilable int?))
 (s/def :sample/server (s/nilable int?))
 (s/def :race/server int?)

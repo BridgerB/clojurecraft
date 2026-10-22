@@ -28,6 +28,14 @@
   [{:keys [reason]}]
   (contains? infra-reasons reason))
 
+(defn unplayed?
+  "Did the run fail before its plan began (no :plan/status in its RESULT's :plan, which main
+   leaves out until the bot's :go): its connection refused, or its server gone before it landed.
+   Such a run says nothing about the bot's play (race 39817745908: a crashed server's slots
+   recorded 2,864 [:wood :crashed] runs that never connected)."
+  [r]
+  (and (not (:ok r)) (nil? (get-in r [:plan :plan/status]))))
+
 (defn mark
   "A RESULT with what bb failures reads, when it failed: :run/signature, and :run/infra? when
    the reason is not the bot's play. A passing RESULT is unchanged."
