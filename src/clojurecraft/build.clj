@@ -1404,13 +1404,23 @@
 
 (def hand-dig-limit 10000)            ; ms by hand past which a block is never dug by hand: deepslate's 15 s, not stone's 7.5
 
+(def hand-dig-reach 24)               ; blocks from the site within which stone is dug by hand: the cast's last few, not the way to it
+
 (defn hand-dig-refused?
   "Is a dig of rock at cell, with no pickaxe held, refused for the hand: a pickaxe can be made
-   without going out (pickaxe-at-hand?), or the block takes longer than hand-dig-limit by hand
-   (deepslate, the lava's depth), which a trip out for a pickaxe beats. Stone by hand is left to
-   the hand when a pickaxe needs a trip: a cast's last few blocks are best dug."
-  [world cell]
-  (or (> (intent/dig-time (terrain/block-at world cell)) hand-dig-limit) (pickaxe-at-hand? world)))
+   without going out (pickaxe-at-hand?), the block takes longer than hand-dig-limit by hand
+   (deepslate, the lava's depth), or the cell lies more than hand-dig-reach from the site's
+   origin (nil: no site), a way of tens of blocks at 7.5 s each, which a trip out for a pickaxe
+   beats. Stone by hand near the site is left to the hand when a pickaxe needs a trip: a cast's
+   last few blocks are best dug. Sim race 39723238841 (issue #504, world R1/5): a bot returning to
+   its portal wore out its stone pickaxe at y 21 with one stick held and dug the eighty blocks
+   still to go by hand, ten minutes."
+  [world cell origin]
+  (boolean (or (> (intent/dig-time (terrain/block-at world cell)) hand-dig-limit)
+               (pickaxe-at-hand? world)
+               (and origin
+                    (> (physics/distance (physics/centre cell) (physics/centre origin))
+                       hand-dig-reach)))))
 
 (defn found-open?
   "Did child, a dig, find its cell already open (:target-gone, intent/open?)? The cell is open,
@@ -1509,7 +1519,7 @@
    in the cast's room at y -20 and dug deepslate by hand, fifteen seconds a block, for the last
    half hour of its ninety minutes. A tunnel-to only refuses the hand when a replacement is at
    hand: without wood in the Nether, even slow rock must be cleared to reach the fortress."
-  [world {:intent/keys [child op] :as i} next event]
+  [world {:intent/keys [child op origin] :as i} next event]
   (cond
     (not= next op)
     (if (and (= :stairs-up (:intent/kind child))
@@ -1600,7 +1610,7 @@
           c (or (when (and missing
                            (if (= :tunnel-to (:intent/kind i))
                              (pickaxe-at-hand? world)
-                             (hand-dig-refused? world (:intent/target c))))
+                             (hand-dig-refused? world (:intent/target c) origin)))
                   missing)
                 (tool-first world c))]
       (or (site-lost world i c)

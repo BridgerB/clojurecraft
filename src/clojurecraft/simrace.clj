@@ -234,7 +234,9 @@
                                (dissoc :world/chunks)
                                (update :world/facts d/serializable))
            :snapshot/sim (cond-> (dissoc sim :sim/columns :sim/decoded)
-                           (:capture/nether-file w) (update :sim/nether dissoc :columns :decoded))}
+                           (:capture/nether-file w) (update :sim/nether dissoc :columns :decoded)
+                           (:sim/overworld sim)
+                           (update :sim/overworld dissoc :sim/columns :sim/decoded))}
     (:capture/nether-file w) (assoc :snapshot/nether-file (:capture/nether-file w))))
 
 (defn snapshot-name
@@ -249,6 +251,16 @@
                      seed
                      ".edn.gz"))))
 
+(defn stranded?
+  "Is a snapshot's player in the overworld holding none of its columns after a death: a respawn
+   from the Nether written before issue #504, when the model left the Nether's columns over the
+   overworld's, the bot's chunks none and the view streamed from them? Its view is streamed
+   again. A bot that never died (a moment before it has loaded) is not."
+  [chunks world sim]
+  (boolean (and (empty? chunks)
+                (pos? (:stats/deaths world 0))
+                (not= dimension/nether (:sim/dimension sim)))))
+
 (defn moment-of
   "The moment a snapshot holds, ready to play on (sim/play-from): the captured world's chunks the
    bot held reattached (decoded once, prepared), the model's columns too, the facts a DataScript
@@ -257,7 +269,9 @@
    pending and the tick seed restarted; a plan with no landing (a snapshot written before run
    named one, issue #37) gets the captured world's. With w's captured Nether (:capture/nether),
    the model's Nether gets its columns back, and a moment past the portal holds the Nether's
-   columns, the bot's chunks among them, where one before it holds the overworld's."
+   columns, the bot's chunks among them, where one before it holds the overworld's. The overworld
+   set aside while the player is in another dimension (:sim/overworld, sim/leave-overworld) gets
+   w's columns back."
   [{:snapshot/keys [chunks world sim next]} w]
   (let [nether (:capture/nether w)
         here (if (and nether (= dimension/nether (:sim/dimension sim)))
@@ -270,7 +284,15 @@
                        (update :world/facts d/from-serializable)
                        (cond-> (nil? (:plan/go-at world)) (assoc :plan/go-at (spawn-of w))))
             :sim (cond-> (assoc sim :sim/columns (:columns here) :sim/decoded (:decoded here))
-                   (and nether (:sim/nether sim)) (update :sim/nether merge nether))})))
+                   (and nether (:sim/nether sim)) (update :sim/nether merge nether)
+                   (:sim/overworld sim)
+                   (update :sim/overworld assoc
+                           :sim/columns (:capture/columns w)
+                           :sim/decoded (:capture/decoded w))
+                   (stranded? chunks world sim)
+                   (-> (assoc :sim/view #{})
+                       (dissoc :sim/view-at)
+                       sim/stream))})))
 
 (defn own-world
   "The world a self-contained snapshot is played in, prepared: the columns it carries

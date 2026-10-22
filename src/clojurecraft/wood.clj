@@ -30,6 +30,7 @@
 (def bridge-rise 3)                   ; blocks the trunk's bottom may lie over or under the feet for that staircase
 (def bridge-climb 2)                  ; stairs up that staircase cuts before the planner looks again
 (def tunnel-reach 2.0)                ; blocks from a trunk's bottom (feet cell centre) a tunnel through its leaves ends
+(def foot-reach 40)                   ; blocks on the plane to a trunk a tunnel runs from the foot of a descent
 (def tunnel-steps 24)                 ; steps that tunnel takes before the planner looks again
 (def opening-drop 2)                  ; blocks under the feet a mouth may lie and still be the way out, not the way down
 
@@ -258,16 +259,23 @@
    feet, and world real-2/1 (issue #87) at y 110 on a snow mountain nine blocks from a spruce's
    bottom in its leaves: no walk reached either, a staircase down toward them ended two blocks
    short, bridge and descent took the bot up and down in turn, and the plan waited :no-log.
+   Also from the foot of a descent toward the trees (a done stairs-down for :trees or :valley, in
+   the ground level with the trunk) and on from a run, within foot-reach: sim snapshot R2-43-1
+   (issue #135) cut stairs down to the trunk's height fifteen blocks off inside a hill, where
+   out? is false, so climb-out cut stairs up to the top of the world, walked back down and
+   cut the same descent again, for the whole window.
    Never from a cell where a climb died :boxed."
   [world]
   (let [feet (intent/feet world)
         eye-y (physics/y-of (game/eye world))
         blacklist (:plan/blacklist world #{})
-        failures (:plan/trunk-failures world {})]
-    (when (and (or (tunneled? world) (stairs/out? world feet))
+        failures (:plan/trunk-failures world {})
+        from-foot? (or (descended? world) (descended-valley? world) (tunneled? world))
+        reach (if from-foot? foot-reach bridge-reach)]
+    (when (and (or from-foot? (stairs/out? world feet))
                (not (contains? (:plan/boxed-at world #{}) feet)))
       (when-let [trunk (->> (memory/positions-now world blocks/log-states)
-                            (memory/nearest-first (game/eye world) bridge-reach)
+                            (memory/nearest-first (game/eye world) reach)
                             (remove (fn [[x _ z :as p]]
                                       (or (contains? blacklist p)
                                           (>= (get failures [x z] 0) max-trunk-failures))))
@@ -343,7 +351,8 @@
                 trunks)
           (when (descended-valley? world) (valley world))
           (when (descended? world) (trees-descend world trunks))
-          (when (tunneled? world) (trees-tunnel world))
+          (when (or (tunneled? world) (descended? world) (descended-valley? world))
+            (trees-tunnel world))
           (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
             (or (when (:player/in-water? world) (crossing world))
                 (opening-up world)
