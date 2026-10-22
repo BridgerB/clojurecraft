@@ -23,6 +23,8 @@ sourceRefs:
   - src/clojurecraft/fortress.clj#defn next-move
   - src/clojurecraft/fortress.clj#defn climb-out?
   - src/clojurecraft/fortress.clj#defn retreat?
+  - src/clojurecraft/fortress.clj#defn step-back
+  - test/clojurecraft/fortress_test.clj#a-tunnel-steps-back-along-its-trail-from-a-cell-no-fresh-step-leaves
   - test/clojurecraft/fortress_test.clj#a-tunnel-turns-onto-ground-instead-of-pacing-in-the-portal
   - test/clojurecraft/fortress_test.clj#a-tunnel-climbs-out-of-a-dead-end-on-a-block-laid-beside-the-feet
   - test/clojurecraft/fortress_test.clj#a-tunnel-pacing-two-cells-is-blocked
@@ -126,6 +128,9 @@ After a chained run has reached `:nether`, a death can respawn it in the overwor
 
 ## Reach and climb
 A `:tunnel-to` is done at its target from `reach` 6 (`arrived?`, from the feet cell's centre), or from `:intent/reach` when the intent gives one; its steps go up or down first only past `climb-past` 3 blocks off, or past `:intent/climb` when given. The blaze rods' tunnel to a spawner goes into the open cell beside it on its floor (reach 0.5, climb 0), or to within 2 of it when none is known ([[blaze-rods]]): from 6 off, gym blaze-fortress-b stood in the wall four over the spawner, and with climb 3 blaze-fortress-c run 3 came up three under its floor, out of reach of every blaze and rod. A target straight over or under the feet used to leave no move at all; `moves` then tries every direction (`aside`).
+
+## The way back
+A cell no fresh step leaves used to cost one retreat, then a pace, then `:blocked` (three of them fail the plan): sim snapshots R3-5-2 (a cavern's rim, a pillar of laid blocks over the void) and R4-11-1 (a pocket dug down into the bedrock, lava ringing it) stood in such cells with the branch that went on a few cells back never tried. The world keeps a trail for the target (`:fortress/trail`, `trail-of`: the feet cells steps began from, oldest first, and the cells found to lead nowhere), across the tunnels of one target (another target starts a new one). A fresh step pushes the cell it leaves; with no fresh step, the step back to the trail's last cell (`step-back`: one step away and `safe?`) is taken, that cell dropped and the one left marked dead, and `next-move` is given the trail and the dead cells as visited, so a dead end is entered once and a branch explored from the cell it began at. A step back is no retreat (`:intent/retreats` stays 0); with an empty trail, or a last cell not a step away, the retreat count of before stands.
 
 ## A step the feet left
 A step's move and the cell it started from are kept on the intent until the step is stood in. When the feet are in none of its cells (`off-step?`: knocked back by a fireball, or moved by a fight or a cover walk between its ticks), or its walk back to the cell it started from fails `:no-path` (`lost-way?`), the step is dropped and chosen again from where the feet are, never failed. Gym blaze-fortress-h run 1 failed its tunnel into the spawner's room `:no-path` twice, and the plan with it (issue #262).

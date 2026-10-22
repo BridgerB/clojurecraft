@@ -335,6 +335,43 @@
   ([world target r]
    (<= (physics/distance (physics/centre (intent/feet world)) (physics/centre target)) r)))
 
+;; ---------------------------------------------------------------- the way back
+
+(def trail-cap 512)                   ; cells of the way back a tunnel keeps
+
+(defn trail-of
+  "The way back the world keeps for a tunnel to target: {:trail/target target :trail/cells the
+   feet cells steps began from, oldest first :trail/dead the cells found to lead nowhere}. A
+   trail kept for another target is not this one's: an empty one."
+  [world target]
+  (let [t (:fortress/trail world)]
+    (if (= target (:trail/target t)) t {:trail/target target :trail/cells [] :trail/dead #{}})))
+
+(defn step-back
+  "The move from feet back to the last cell of trail, or nil when the trail is empty, that cell is
+   not one step away (a respawn, a knock) or the step is not safe? (and dry? when dry-only?). The
+   way out of a cell no fresh step leaves: sim snapshots R3-5-2 and R4-11-1 (issue #502) went
+   into pockets whose every fresh step was refused, retreated once, paced and failed :blocked
+   with the branch that went on a few cells back never tried."
+  [world feet trail dry-only?]
+  (when-let [to (peek (:trail/cells trail))]
+    (let [move (mapv - to feet)]
+      (when (and (some #{move} (for [[dx dz] aside dy [-1 0 1]] [dx dy dz]))
+                 (safe? world feet move)
+                 (or (not dry-only?) (dry? world feet move)))
+        move))))
+
+(defn leave-cell
+  "The trail once a step is chosen from feet: when the step goes back (back? true) its last cell
+   is dropped and feet marked dead, no fresh step being left there; else feet join its cells, the
+   oldest forgotten past trail-cap."
+  [trail feet back?]
+  (if back?
+    (-> trail
+        (update :trail/cells pop)
+        (update :trail/dead conj feet))
+    (update trail :trail/cells #(vec (take-last trail-cap (conj % feet))))))
+
 ;; ---------------------------------------------------------------- the :tunnel-to intent
 
 (def step-keys
@@ -401,19 +438,26 @@
           (intent/assoc-intent (assoc world :player/controls {}) :intent/airborne (inc airborne))
           (nil? move)
           (let [back (recentre world feet)
-                m (or back (next-move world feet target climb (boolean dry?) tunnel-visited))
-                retreated
-                (if (and m (not back) (retreat? feet m tunnel-visited)) (inc (long retreats)) 0)]
+                trail (trail-of world target)
+                seen (-> tunnel-visited
+                         (into (:trail/cells trail))
+                         (into (:trail/dead trail)))
+                ahead (when-not back (next-move world feet target climb (boolean dry?) seen))
+                fresh? (and ahead (not (retreat? feet ahead seen)))
+                undo (when-not (or back fresh?) (step-back world feet trail (boolean dry?)))
+                m (or back undo ahead)
+                retreated (if (and ahead (not fresh?) (not undo)) (inc (long retreats)) 0)]
             (cond (or (nil? m) (> retreated retreats-allowed))
                   (-> world
                       (assoc :player/controls {})
                       (intent/fail :blocked))
                   :else
-                  (intent/assoc-intent (assoc world :player/controls {})
-                                       :intent/move m
-                                       :intent/from feet
-                                       :intent/retreats retreated
-                                       :intent/tunnel-visited (conj tunnel-visited feet))))
+                  (cond-> (intent/assoc-intent (assoc world :player/controls {})
+                                               :intent/move m
+                                               :intent/from feet
+                                               :intent/retreats retreated
+                                               :intent/tunnel-visited (conj tunnel-visited feet))
+                    (or undo fresh?) (assoc :fortress/trail (leave-cell trail feet (some? undo))))))
           :else
           (let [next (build/next-op world (into (seal-ops world from move) (step-plan from move)))
                 next (cond-> next

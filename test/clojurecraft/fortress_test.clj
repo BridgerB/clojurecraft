@@ -704,6 +704,56 @@
         (is (= [1 0 0] (:intent/move out)))
         (is (= 0 (:intent/retreats out)))))))
 
+(deftest a-tunnel-steps-back-along-its-trail-from-a-cell-no-fresh-step-leaves
+  ;; issue #502's R3-5-2 and R4-11-1: pockets whose every fresh step was refused, one retreat,
+  ;; a pace and :blocked, with the branch a few cells back never tried
+  (let [wall (blocks/default-state :obsidian)
+        w (assoc (rock (into {} (for [[x z] [[1 0] [0 1] [0 -1]] y (range 63 67)] [[x y z] wall])))
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/on-ground? true
+                 :player/vel [0.0 0.0 0.0])
+        target [10 64 0]
+        trail {:trail/target target :trail/cells [[-1 63 0] [-1 65 0] [-1 64 0]] :trail/dead #{}}
+        tick {:event/kind :tick :event/now 0}
+        i {:intent/kind :tunnel-to
+           :intent/target target
+           :intent/steps 32
+           :intent/status :active
+           :intent/retreats 1}
+        run (fn [world & [i']]
+              (let [i (merge i i')] (intent/run (assoc world :plan/intent i) i tick)))]
+    (is (= [-1 0 0] (fortress/step-back (assoc w :fortress/trail trail) [0 64 0] trail false))
+        "the last cell of the trail is one step away")
+    (is (nil? (fortress/step-back w [0 64 0] (assoc trail :trail/cells [[-3 64 0]]) false))
+        "a cell not a step away is no way back")
+    (is (nil? (fortress/step-back w [0 64 0] (assoc trail :trail/cells []) false))
+        "an empty trail has none")
+    (testing "no fresh step: a step back, not a second retreat in a row"
+      (let [out (run (assoc w :fortress/trail trail))
+            kept (:fortress/trail out)]
+        (is (= :active (get-in out [:plan/intent :intent/status])))
+        (is (= [-1 0 0] (get-in out [:plan/intent :intent/move])))
+        (is (= 0 (get-in out [:plan/intent :intent/retreats])) "a step back is no pace")
+        (is (= [[-1 63 0] [-1 65 0]] (:trail/cells kept)) "its last cell is dropped")
+        (is (= #{[0 64 0]} (:trail/dead kept)) "the cell left leads nowhere")))
+    (testing "the same cell with no trail is the pace of before"
+      (let [out (run w {:intent/tunnel-visited #{[-1 63 0] [-1 64 0] [-1 65 0]}})]
+        (is (= :failed (get-in out [:plan/intent :intent/status])))
+        (is (= :blocked (get-in out [:plan/intent :intent/reason])))))
+    (testing "a fresh step keeps the cell it began from"
+      (let [out (run (assoc (rock {})
+                            :bot/phase :play
+                            :bot/effects []
+                            :time/now 0
+                            :time/tick 0
+                            :player/on-ground? true
+                            :player/vel [0.0 0.0 0.0]))]
+        (is (= [[0 64 0]] (get-in out [:fortress/trail :trail/cells])))
+        (is (= target (get-in out [:fortress/trail :trail/target])))))))
+
 (deftest a-tunnel-waits-in-the-air-for-the-ground-before-it-fails
   ;; issue #502's R4-31-1: a bot knocked off a ledge started three tunnels in the air and each
   ;; failed :blocked within a tick, which failed the plan

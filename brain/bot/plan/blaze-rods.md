@@ -67,6 +67,7 @@ sourceRefs:
   - test/clojurecraft/blaze_test.clj#watched-by-a-volley-the-bot-takes-cover
   - test/clojurecraft/blaze_test.clj#a-camp-ends-when-the-bot-is-hit
   - test/clojurecraft/blaze_test.clj#a-rest-ends-rested-hit-or-watched
+  - test/clojurecraft/blaze_test.clj#a-tunnel-to-the-spawner-first-makes-the-pickaxe-it-lacks
   - test/clojurecraft/blaze_test.clj#a-fire-by-the-spawner-is-put-out
   - test/clojurecraft/sim_test.clj#watched-by-three-of-the-models-blazes-the-bot-hides
   - src/clojurecraft/intent.clj#def standing-walks
@@ -112,6 +113,9 @@ The `:defend` row (priority 0) still answers anything else hostile within 4 firs
 
 ## The :rest intent
 `{:intent/kind :rest}` (`rest-intent`) stands still out of sight: done when the health is back to `rested` 18, or a blaze watches the bot that did not when it began (`:intent/blazes`, the watchers then), or the health falls under what it was then (`:intent/health`: shot from somewhere unseen), and the act looks again; failed `:no-heal` after `rest-ms` 90 s (no food in the bar, nothing comes back). An intent and not the planner wait `:healing` it replaced: the slow heal brings a point every four seconds, and a wait fails the plan after 20 s.
+
+## The pickaxe on the way
+Before a tunnel to the spawner (`to-spawner`) or on the search, the act makes the pickaxe the bot lacks from what it holds (`build/pickaxe-at-hand?`, `make/decide`: the `:fortress` row's rule, nothing gathered). The same R4-6-2 tunnelled by hand with no pickaxe, three sticks, 569 cobblestone and a table held: each step ended `:no-pickaxe`, the tunnel `done`, and the act asked again every 150 ms, 25 blocks in fifteen minutes.
 
 ## Gym rows (gym.clj)
 Three rows play this one goal from three starts, each named by `:gym/name` (the registry finds a row by it first, and the trial matrix carries it, [[gym-on-runners]]):

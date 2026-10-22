@@ -124,6 +124,8 @@ sourceRefs:
   - test/clojurecraft/build_test.clj#a-bridge-walks-onto-the-floor-laid-before-the-gap-past-its-reach
   - src/clojurecraft/build.clj#defn refill
   - src/clojurecraft/build.clj#defn sight-block
+  - src/clojurecraft/build.clj#defn plant-in-sight
+  - test/clojurecraft/build_test.clj#a-cast-digs-the-vein-before-its-water-scoop
   - src/clojurecraft/build.clj#defn lava-aim
   - src/clojurecraft/scoop.clj#defn ray-walls
   - src/clojurecraft/scoop.clj#defn surface-points
@@ -209,7 +211,7 @@ Issue #124 replaced ruststeve's template mold (a pad, a rim, platforms, walled c
 2. `cell-ops` for each cell, from its stand (`stands`): its walls made firm where the rock is missing (`firm-ops`: behind it, under it, either side, and behind the cell over it; a falling block there dug out first), the hole and the cell over it dug, lava poured low against the hole's back wall, water poured into the cell **directly over the lava** against the same wall, so it lands on the source and turns it to obsidian, and the water scooped straight back from that cell. Water is never poured beside the lava: on a server a source with a side open flows within about 1.5 s, and that flow meeting water is cobblestone where the frame cell should be. The plan's tests hold that every water op targets the cell directly above its lava cell (`the-plan-casts-the-ten-cells-in-layer-order`). Every op but the scoop is done once the cell is obsidian.
 3. `interior-ops` (the 2x3 inside dug out, never obsidian), `light-op` (flint and steel on the top of cell (1,0) from two in front), `enter-op` (stand in the portal until the dimension is the Nether).
 
-In solid rock the cast places four blocks: the walls its own digging opened (the bottom cells' over cells are the columns' side walls; the columns' top over cells are the top cells' side walls). `cast-one-plan` is the room and the first cell, with a `:verify` that it is obsidian and the water taken back.
+In solid rock the cast places four blocks: the walls its own digging opened (the bottom cells' over cells are the columns' side walls; the columns' top over cells are the top cells' side walls). `cast-one-plan` is the room and the first cell, with a `:verify` that it is obsidian and the water taken back. A plant or vein (`blocks/solid?` false: a sculk vein, glow lichen) on the scoop's line to its water stops the bucket's ray though nothing is built of it, so the scoop was sent three times unanswered and failed `:no-scoop` (issue #227, R2/15); `op-child` digs it first (`plant-in-sight`).
 
 Water cleanup and the first-cast verification use `:no-water-source`, not `:no-water`: only a source can be scooped. A later cast's water can flow through an earlier, already-scooped cell (issue #419, R1/20), which must not select that earlier scoop again and fail `:target-gone`. Re-reading these predicates also drops a failed scoop child when the plan moves on to the remaining source. `:no-water` still means no water of any level.
 
