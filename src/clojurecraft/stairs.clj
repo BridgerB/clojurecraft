@@ -254,6 +254,35 @@
   (when (clear-way? world cells)
     (when-let [cells (seq laid)] (when (filler world (count cells)) (vec cells)))))
 
+(def max-void-reserve 16)              ; most filler a bridge over a deep void keeps, twice lay-reserve
+
+(defn void-rise
+  "How many cells straight up from cell [x y z] are not solid, at most max-void-reserve: the
+   height of open air over a bridge's end, a block of pillar each to climb out of it."
+  [world [x y z]]
+  (count (take max-void-reserve
+               (take-while #(not (some-> (terrain/block-at world [x % z])
+                                         blocks/solid?))
+                           (iterate inc (inc (long y)))))))
+
+(defn bridge-reserve
+  "The filler a level step of a stair down keeps after its floor is laid: lay-reserve, or the
+   open air over the step's feet cell (void-rise) when that is more, up to max-void-reserve,
+   since the climb back out of a void rises a block a block laid (the :pillar). Issue #37 (real
+   bot Clj_r16): a bridge kept eight and was :boxed ten blocks short of the roof it hung under."
+  [world cells]
+  (max lay-reserve (void-rise world (last cells))))
+
+(defn floor-reserve
+  "The filler a floor laid for cells (the last is the new feet cell) keeps for the way back: the
+   bridge-reserve for a descent, or for a row's deeper stairs, which start with no stairs intent;
+   lay-reserve for a climb, whose own steps are the way back. Issue #37 (real bot Clj_r16,
+   snapshot real-7-s2): `lay` kept eight whatever hung over the floor, and the descent floored
+   eleven levels and a bridge over a void with sixteen dirt, the way back a block a level and a
+   block a cell, and was :boxed on the bridge with none."
+  [world cells]
+  (if (= :stairs-up (:intent/kind (:plan/intent world))) lay-reserve (bridge-reserve world cells)))
+
 (defn lay
   "The cells to lay, in order, before a stair down (or a level step) from feet whose cells may
    be opened (clear-way?) can be cut: the floor and what holds it (floor-laying), when enough of
@@ -268,7 +297,7 @@
    other descents)."
   [world feet cells]
   (when-let [laid (cells-to-lay world cells (floor-laying world feet cells))]
-    (when (>= (- (carried-filler world) (count laid)) lay-reserve) laid)))
+    (when (>= (- (carried-filler world) (count laid)) (floor-reserve world cells)) laid)))
 
 #_{:splint/disable [naming/conversion-functions]} ; "the step to lay", not a conversion
 (defn step-to-lay
@@ -557,25 +586,6 @@
                (every? #(place/support world %) wet)
                (filler world (count laid)))
       laid)))
-
-(def max-void-reserve 16)              ; most filler a bridge over a deep void keeps, twice lay-reserve
-
-(defn void-rise
-  "How many cells straight up from cell [x y z] are not solid, at most max-void-reserve: the
-   height of open air over a bridge's end, a block of pillar each to climb out of it."
-  [world [x y z]]
-  (count (take max-void-reserve
-               (take-while #(not (some-> (terrain/block-at world [x % z])
-                                         blocks/solid?))
-                           (iterate inc (inc (long y)))))))
-
-(defn bridge-reserve
-  "The filler a level step of a stair down keeps after its floor is laid: lay-reserve, or the
-   open air over the step's feet cell (void-rise) when that is more, up to max-void-reserve,
-   since the climb back out of a void rises a block a block laid (the :pillar). Issue #37 (real
-   bot Clj_r16): a bridge kept eight and was :boxed ten blocks short of the roof it hung under."
-  [world cells]
-  (max lay-reserve (void-rise world (last cells))))
 
 (defn reserve-level-lay
   "The cells level-lay would lay before a level step of a staircase of kind from feet, nil for a
