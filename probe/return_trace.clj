@@ -45,7 +45,7 @@
     (let [snap (capture/read-world p)
           w (simrace/world-for! snap)]
       (with-redefs [simrace/step (tracer)]
-        (let [r (simrace/replay snap w (* 60000 simrace/default-max-minutes))]
+        (let [r (simrace/replay snap w (* 60000 100))]
           (println "REPLAY" (pr-str (select-keys r [:run/signature :run/ms :run/respawns]))))))
     (flush))
   (shutdown-agents))
