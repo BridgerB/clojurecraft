@@ -1,0 +1,22 @@
+;; Issue #263, branch feat/263-warped7, second batch: after pearls-warped7-a (pearls-1-live 2/3,
+;; pearls-12 0/5 with 5 and 4 held, three deaths), the one at hand is the nearest not given up on
+;; (run 4 planned a walk to one within reach 18,760 times beside two blacklisted ones), a walk is
+;; never planned to one within reach, a tunnel never toward one nearer than its own length (run 4's
+;; fifteen tunnels over one 5 off and 4 below), an angry one within 16 of the mouth keeps the bot in
+;; (run 1 walked out past one farther than 8 and was slain), and after half a minute of it not
+;; coming the bot walks to the mouth to lure it and straight back in (run 2's thirty-two minutes).
+{:plans/label "pearls-warped7-b"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 5
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}

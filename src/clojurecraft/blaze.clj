@@ -113,15 +113,35 @@
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (some (fn [[_ e :as ee]] (when (reachable? world e) ee))))))
 
+(defn fetch-walk
+  "The walk onto the cell drop e lies in: the feet there are in the pickup box of a drop in a pit
+   under the floor (:intent/for :rod ends standing in the cell)."
+  [e]
+  {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e)) :intent/for :rod})
+
+(defn fetchable?
+  "Can the bot pick drop e up: its cell is not solid (a drop a block was placed over, no
+   contact reaches), and it lies in reach of the pickup box from the floor, or a route walks
+   onto its cell (under-reach?)?"
+  [world e]
+  (and (not (some-> (terrain/block-at world (hunt/cell (:entity/pos e)))
+                    blocks/solid?))
+       (or (not (drops/under-reach? world e)) (intent/routable? world (fetch-walk e)))))
+
 (defn rod-lying
   "[eid entity] of the nearest drop that may be a rod (drops/holds?) within drops/drop-radius of
-   the feet, not in a cell a pickup failed in (the cell is blacklisted), or nil."
+   the feet, not in a cell a pickup failed in (the cell is blacklisted), the first of the
+   candidates nearest that is fetchable?, or nil. Sim race 39712220957 (issue #500): drops of the
+   tunnel's own digs, lying in pits the bot's floor was over, were gone to and stood over until
+   the collect failed :not-picked-up, three times, and the plan with it."
   [world]
-  (let [bl (:plan/blacklist world #{})]
-    (entity/nearest (into {}
-                          (remove (fn [[_ e]] (contains? bl (hunt/cell (:entity/pos e)))))
-                          (drops/lying world rod (:player/pos world) drops/drop-radius))
-                    (:player/pos world))))
+  (let [bl (:plan/blacklist world #{})
+        pos (:player/pos world)]
+    (->> (drops/lying world rod pos drops/drop-radius)
+         (remove (fn [[_ e]] (contains? bl (hunt/cell (:entity/pos e)))))
+         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
+         (take candidates)
+         (some (fn [[_ e :as ee]] (when (fetchable? world e) ee))))))
 
 (defn nearest-spawner
   "The spawner on record in the bot's dimension nearest the eye, within spawner-radius and not
@@ -193,6 +213,15 @@
   (when-let [food (and (< (:player/food world hunger/heal-level) hunger/heal-level)
                        (eat/food-held world))]
     {:intent/kind :eat :intent/item food}))
+
+(defn heals?
+  "Can a rest bring the health back: the food the server last sent at or over hunger/heal-level
+   (natural regeneration), or edible food held (the meal first)? Sim race 39712220957 (issue
+   #501, world R1/2) rested three times ninety seconds at food 16 with nothing to eat, health
+   falling, and the run ended :no-heal: a rest that cannot heal holds in cover instead of
+   failing, and never goes back out to fight at that health."
+  [world]
+  (or (>= (:player/food world hunger/heal-level) hunger/heal-level) (some? (eat/food-held world))))
 
 (defn watchers
   "{eid entity} of the blazes alive within cover-range of the feet that have the bot in sight
@@ -268,7 +297,8 @@
 
 (defn healing
   "What a hurt bot does: out of the watching blazes' sight (hide); else the meal; else back away
-   from the nearest watcher; else, with none watching, a :rest. Cover before the meal where
+   from the nearest watcher; else, with none watching, a :rest (held in cover when it cannot heal,
+   heals?: a death is no plan, the bot stays alive). Cover before the meal where
    there is cover: a meal takes a second and a half standing still, two hits from a burst, and
    gym blazefort-k run 3 (run 38913023560) ate at 9.4 by its spawner and was dead before the
    food came. The meal before the back-off where there is none: gym blaze-7 run 1 (run
@@ -291,7 +321,7 @@
 
 (defn warily
   "What a wary bot does before the next fight: out of the watching blazes' sight (hide); else
-   the meal; else, with no blaze watching, a :rest until rested; else nil, and it fights on.
+   the meal; else, with no blaze watching, a :rest until rested (held when it cannot heal); else nil, and it fights on.
    Gym blazefort-k run 3 (run 38913023560) fought on at 11.5, watched by the spawner's burst,
    and was under 10 a second later."
   [world]
@@ -370,14 +400,16 @@
         [beid] (quarry world)
         [_ lying] (rod-lying world)
         sp (nearest-spawner world)
+        heal (delay (when (hurt? world) (healing world)))
         wary (delay (when (wary? world) (warily world)))
         away (delay (when (outnumbered? world) (hide world)))
         fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
           heid {:intent/kind :fight :intent/target heid :intent/to-the-end? true}
-          (hurt? world) (healing world)
+          @heal @heal
           @wary @wary
           @away @away
+          (and lying (drops/under-reach? world lying)) (fetch-walk lying)
           lying
           {:intent/kind :collect-drops
            :intent/item :blaze_rod
@@ -437,5 +469,5 @@
             (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
     (cond (or (>= now-health rested) (< now-health health) (seq (remove seen here)))
           (intent/done world)
-          (> (- now since) rest-ms) (intent/fail world :no-heal)
+          (and (> (- now since) rest-ms) (heals? world)) (intent/fail world :no-heal)
           :else world)))

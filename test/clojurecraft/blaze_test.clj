@@ -87,6 +87,24 @@
              (next-intent
               (assoc (with-spawner (standing {7 near})) :plan/blacklist #{7 spawner-at})))))))
 
+(deftest a-drop-in-a-pit-is-walked-onto-and-one-in-stone-is-left
+  ;; sim race 39712220957 (issue #500): drops lying under the floor, or in a block placed over
+  ;; them, were stood over until the collect failed :not-picked-up
+  (let [pit-floor-y 63
+        drop (fn [y] (entity :item [10.5 y 9.5]))
+        pit (assoc-in (standing {40 (drop (+ pit-floor-y 0.25))})
+             [:world/blocks [10 pit-floor-y 9]]
+             blocks/air)
+        near (standing {40 (drop 64.0)})]
+    (is
+     (= {:intent/kind :walk :intent/target [10 pit-floor-y 9] :intent/for :rod} (next-intent pit))
+     "a drop in a pit under the floor: the feet onto its cell, the pickup box is half a block deep")
+    (is (some? (blaze/rod-lying pit)))
+    (is (= :collect-drops (:intent/kind (next-intent near))) "one on the floor: pressed toward")
+    (is (nil? (blaze/rod-lying (standing {40 (drop (+ pit-floor-y 0.25))})))
+        "one inside the stone under the floor: no contact reaches it, left")
+    (is (= {:plan/wait :no-blaze} (next-intent (standing {40 (drop (+ pit-floor-y 0.25))}))))))
+
 (def boxed-in
   "Stone round the feet cell [8 64 8], two high, and a roof over it: no route leaves it."
   (merge (into {}
@@ -220,6 +238,40 @@
           "fed, it fights on"))
     (is (= {:plan/wait :other-dimension}
            (next-intent (assoc (standing {}) :player/dimension dimension/overworld))))))
+
+(deftest a-rest-that-cannot-heal-holds-in-cover-and-never-fights-on
+  ;; sim race 39712220957 (issue #501): hurt at food 16 with nothing to eat, three rests of ninety
+  ;; seconds, no health back, the run ended :no-heal
+  (let [hurt #(assoc % :player/health 8.0)]
+    (is (blaze/heals? (standing {})) "food 20: health comes back by itself")
+    (is (not (blaze/heals? (assoc (standing {}) :player/food 16))) "food under 18, nothing to eat")
+    (is (blaze/heals? (assoc (standing {1 (item :cooked_beef 4)} {}) :player/food 16))
+        "food held: the meal first")
+    (is (= blaze/rest-intent (next-intent (hurt (standing {})))) "fed: a rest")
+    (is (= blaze/rest-intent (next-intent (hurt (assoc (standing {}) :player/food 16))))
+        "food 16, nothing to eat: still a rest, never back out to fight at that health")
+    (let [rest-for (fn [food now]
+                     (intent/run (assoc (standing {})
+                                        :player/health 8.0
+                                        :player/food food
+                                        :time/now now
+                                        :plan/intent
+                                        (assoc blaze/rest-intent
+                                               :intent/status :active
+                                               :intent/since 0
+                                               :intent/health 8.0))
+                                 (assoc blaze/rest-intent :intent/since 0 :intent/health 8.0)
+                                 {:event/kind :tick :event/now now}))]
+      (is (= :failed (:intent/status (:plan/intent (rest-for 20 (inc blaze/rest-ms)))))
+          "fed and no health back in rest-ms: :no-heal")
+      (is (not= :failed (:intent/status (:plan/intent (rest-for 16 (inc blaze/rest-ms)))))
+          "it cannot heal: held, not failed"))
+    (is (= {:intent/kind :eat :intent/item :cooked_beef}
+           (next-intent (hurt (assoc (standing {1 (item :cooked_beef 4)} {}) :player/food 16))))
+        "with food held it eats")
+    (is (= blaze/rest-intent
+           (blaze/warily (assoc (standing {}) :player/health 12.0 :player/food 16)))
+        "wary the same")))
 
 (deftest a-blaze-at-hand-is-fought-first
   ;; gym blaze-fire-b run 3 (run 39136853644): blazes half a block to two off followed the bot

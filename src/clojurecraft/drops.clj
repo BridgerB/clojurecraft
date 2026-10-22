@@ -38,6 +38,16 @@
                          (<= (physics/distance at (:entity/pos e)) radius))))
           (:world/entities world))))
 
+(def pickup-fall 0.5)                 ; blocks under the feet the server's pickup box reaches (inflated 0.5 vertically)
+
+(defn under-reach?
+  "Does drop e lie too far under the feet for the pickup box: a block's depth under the bot's
+   floor, where standing over it picks nothing up? Sim race 39712220957 (issue #500, world R1/18):
+   a tunnel's digs lay in pits under the bot's path, and a :collect-drops stood over each, within
+   underfoot of it, until it failed :not-picked-up."
+  [world e]
+  (<= (- (physics/y-of (:entity/pos e)) (physics/y-of (:player/pos world))) (- pickup-fall)))
+
 (defn nearest
   "[eid entity] of the drop of the item named item nearest the feet within drop-radius of the
    point at, or nil when none lies there."
