@@ -61,24 +61,26 @@
         "a chicken is not hunted")
     (is (plan/done-by (standing 8 {} {7 (animal :zombie [11.5 64.0 8.5])}) hunt-row))))
 
-(deftest with-the-portal-iron-in-hand-meals-are-hunted-for-the-nether
+(deftest on-the-way-to-the-nether-meals-are-hunted-for-it
   ;; sim race 39712220957 (issue #501): a bot at food 16 reached a fortress with nothing to eat,
-  ;; hurt, and no food under 18 heals: a rest failed :no-heal
+  ;; hurt, and no food under 18 heals: a rest failed :no-heal. Sim issues #525 to #537: fifteen
+  ;; snapshots in the Nether, none with food, the portal's kit having come when the nearest
+  ;; animal was a hundred blocks off: the stock is hunted for from the first minute
   (let [cow {5 (animal :cow [11.5 64.0 8.5])}
-        kit {0 (item :flint_and_steel 1) 1 (item :water_bucket 1)}]
-    (is (not (plan/done-by (standing 20 kit cow) hunt-row))
-        "fed, kit held, no food: a cow is hunted")
+        bound #(assoc % :plan/goals #{:nether})
+        fed (fn [n] (bound (standing 20 {2 (item :bread n)} cow)))]
+    (is (not (plan/done-by (bound (standing 20 {} cow)) hunt-row))
+        "fed, no food, the Nether ahead: a cow is hunted, with no kit held yet")
     (is (= {:intent/kind :fight :intent/target 5 :intent/for :hunt}
-           (plan/next-intent (standing 20 kit cow) hunt-row plan/goals)))
-    (is (plan/done-by (standing 20 (assoc kit 2 (item :bread 3)) cow) hunt-row)
-        "provision-wanted foods held")
-    (is (not (plan/done-by (standing 20 (assoc kit 2 (item :bread 2)) cow) hunt-row))
-        "two is under it")
-    (is (plan/done-by (standing 20 {} cow) hunt-row) "no kit yet: no trip for food")
-    (is (plan/done-by (standing 20 {0 (item :flint_and_steel 1)} cow) hunt-row)
-        "the water bucket is the kit's too")
-    (is (plan/done-by (standing 20 kit {}) hunt-row) "no animal: the portal is not held up")
-    (is (plan/done-by (assoc (standing 20 kit cow) :player/dimension "minecraft:the_nether")
+           (plan/next-intent (bound (standing 20 {} cow)) hunt-row plan/goals)))
+    (is (plan/done-by (fed hunt/provision-wanted) hunt-row) "provision-wanted foods held")
+    (is (not (plan/done-by (fed (dec hunt/provision-wanted)) hunt-row)) "one under it")
+    (is (plan/done-by (standing 20 {} cow) hunt-row)
+        "a run that never goes there: no trip for food")
+    (is (plan/done-by (assoc (standing 20 {} cow) :plan/goals #{:wood}) hunt-row)
+        "the Nether is not in play")
+    (is (plan/done-by (bound (standing 20 {} {})) hunt-row) "no animal: the portal is not held up")
+    (is (plan/done-by (assoc (bound (standing 20 {} cow)) :player/dimension "minecraft:the_nether")
                       hunt-row)
         "the Nether has no game: only the overworld provisions")))
 

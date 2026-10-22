@@ -458,6 +458,35 @@
            ((juxt :intent/status :intent/reason) (:plan/intent (rest w1 (+ 1001 blaze/rest-ms)))))
         "nothing came back")))
 
+
+(deftest a-rest-that-cannot-heal-ends-where-the-bot-is-no-longer-wary
+  ;; sim issues #525, #532 and #536 (R2-29-1, R1-28-1, R1-44-1): rested for hours at 15.8, 17.1 and
+  ;; 16.2 health with the food at 17 and nothing to eat: health stopped under 18, and a rest that
+  ;; ended only at rested never ended
+  (let [stand (fn [health food inv]
+                (assoc (standing inv {}) :player/health health :player/food food))
+        rest-status (fn [w]
+                      (let [w (assoc w
+                                     :time/now 2000
+                                     :plan/intent
+                                     (assoc blaze/rest-intent
+                                            :intent/status :active
+                                            :intent/since 1000
+                                            :intent/health 12.0))]
+                        (:intent/status
+                         (:plan/intent
+                          (intent/run w (:plan/intent w) {:event/kind :tick :event/now 2000})))))]
+    (is (blaze/rested? (stand 16.2 17 {})) "it cannot heal and is not wary: nothing to wait for")
+    (is (blaze/rested? (stand 14.0 17 {})) "eat-under")
+    (is (not (blaze/rested? (stand 13.9 17 {}))) "wary: held in cover")
+    (is (not (blaze/rested? (stand 16.2 20 {}))) "food 20: health comes back, the rest goes on")
+    (is (not (blaze/rested? (stand 16.2 17 {1 (item :cooked_beef 2)})))
+        "food held: the meal, then the heal")
+    (is (blaze/rested? (stand 18.0 20 {})) "rested")
+    (is (= :done (rest-status (stand 16.2 17 {}))))
+    (is (= :active (rest-status (stand 13.0 17 {}))) "wary and unable to heal: it stays in cover")
+    (is (not= blaze/rest-intent (next-intent (stand 16.2 17 {})))
+        "the act does not rest again where it is not wary")))
 (deftest a-tunnel-to-the-spawner-first-makes-the-pickaxe-it-lacks
   ;; sim race 39742401798 (issue #504) R4-6-2: no pickaxe, three sticks, cobblestone and a table
   ;; held; each tunnel step ended :no-pickaxe and the bot dug by hand

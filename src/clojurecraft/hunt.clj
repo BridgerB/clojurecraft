@@ -4,8 +4,8 @@
 
    Requiring this namespace registers the :hunt row's rules: an always row at priority 0, after
    the meal in the table. Done by :provisioned?: no meat wanted (wants-meat?: hungry with nothing
-   edible held, or in the overworld with the portal's iron and under provision-wanted foods, for
-   the Nether's sake), or no animal to hunt and no kill to pick up. Planned by :hunt: the drop of a kill just made (the
+   edible held, or in the overworld on a run through the Nether and under provision-wanted foods,
+   for the Nether's sake), or no animal to hunt and no kill to pick up. Planned by :hunt: the drop of a kill just made (the
    last intent a :fight for :hunt, done, where its target was last seen) is collected; else a
    walk to the nearest animal a route reaches, and from beside it a :fight."
   (:require [clojure.math :as math]
@@ -13,7 +13,6 @@
             [clojurecraft.eat :as eat]
             [clojurecraft.entity :as entity]
             [clojurecraft.intent :as intent]
-            [clojurecraft.inventory :as inventory]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
@@ -33,7 +32,7 @@
 (def starving-radius 48)              ; blocks a starving bot hunts within (a server shows animals this far, and the model populates three chunks round the player)
 (def strike-range 4.5)                ; blocks on the plane from which a hunt fights instead of walking: past a walk's reach (intent/reach 4), so a walk that arrived is never asked again
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
-(def provision-wanted 3)              ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held
+(def provision-wanted 6)              ; edible items held on the way to the Nether: it has no animals, and health comes back there only from food held (about a point and a half of food a point of health)
 
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
 
@@ -46,15 +45,24 @@
                 :when (and (< -1 p eat/store-slots) (eat/edible (recipe/item-name item)))]
             count)))
 
+(defn nether-bound?
+  "Does the run go through the Nether: its portal row (:nether) is among the goals in play
+   (:plan/goals)? A world with no goal set (a bare test world) is not."
+  [world]
+  (contains? (:plan/goals world #{}) :nether))
+
 (defn provisioning?
-  "Is the bot in the overworld with the portal's iron in hand (flint and steel and a water
-   bucket, the portal kit's goods) and fewer than provision-wanted edible items held? Sim race
-   39712220957 (issue #501, world R1/2) reached a fortress hurt at food 16 with nothing to eat:
-   health comes back only from food 18, and a rest in the Nether failed :no-heal."
+  "Is the bot in the overworld on a run through the Nether (nether-bound?) with fewer than
+   provision-wanted edible items held, whatever it holds besides? Sim race 39712220957 (issue
+   #501, world R1/2) reached a fortress hurt at food 16 with nothing to eat: health comes back
+   only from food 18, and a rest in the Nether failed :no-heal. Held back till the portal's kit
+   was in hand it came too late: sim issues #525 to #537 (fifteen snapshots, none with food) were
+   deep in the rock by then, 127 to 179 blocks from the nearest animal (R1/14 at two minutes saw
+   three within 54), and the model, like a server, shows about three animals within 48 blocks of
+   a landing: the bot hunts what it sees from the first minute."
   [world]
   (and (= dimension/overworld (dimension/of world))
-       (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
-       (pos? (inventory/item-count world (recipe/item-id :water_bucket)))
+       (nether-bound? world)
        (< (edible-held world) provision-wanted)))
 
 (defn reach
