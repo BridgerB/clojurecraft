@@ -593,11 +593,15 @@
              2 {:item (recipe/item-id :crafting_table) :count 1}}
         bare (assoc (standing-at (open-ground trench) feet-pos) :player/inventory kit)
         planks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :oak_planks) :count 2})
-        sticks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :stick) :count 2})]
+        three (assoc-in planks [:player/inventory 4] {:item (recipe/item-id :stick) :count 3})
+        sticks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :stick) :count 4})]
     (is (build/carry-sticks? planks) "a table held and planks for sticks: sticks for the kit")
     (is (not= :build (:intent/kind (plan/next-intent planks cast-one-row plan/goals)))
         "made before the build")
-    (is (not (build/carry-sticks? sticks)) "sticks held already")
+    (is
+     (build/carry-sticks? three)
+     "three sticks are one pickaxe and a half: the climb out after the cast wears out two (issue #135, R3-4-1)")
+    (is (not (build/carry-sticks? sticks)) "four sticks held already")
     (is (not (build/carry-sticks? bare)) "nothing to make them from: no trip out for them")))
 
 (deftest a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
@@ -1601,3 +1605,15 @@
     (is (= [5 63 12] (:intent/target (child-at 1.3))))
     (is (build/near-enough? (standing-at (open-ground rock) [1.7 63.0 12.5]) [5 63 12]))
     (is (not (build/near-enough? (standing-at (open-ground rock) [1.3 63.0 12.5]) [5 63 12])))))
+
+(deftest a-cast-digs-the-vein-before-its-water-scoop
+  ;; issue #227, sim R2/15: a sculk vein in the cell before the cast's water stopped the bucket's
+  ;; ray; the scoop was sent three times unanswered and the build failed :no-scoop
+  (let [aim [5.5 63.6 8.5]
+        vein [5 64 7]
+        w (standing-at (open-ground {[5 63 8] blocks/water-base}) [5.5 63.0 5.5])
+        veined (assoc-in w [:world/blocks vein] (blocks/default-state :sculk_vein))
+        rocked (assoc-in w [:world/blocks vein] 1)]
+    (is (nil? (build/plant-in-sight w aim)) "a clear line needs no dig")
+    (is (= vein (build/plant-in-sight veined aim)) "the vein is the block to dig")
+    (is (nil? (build/plant-in-sight rocked aim)) "a solid wall is the cast's, never dug here")))
