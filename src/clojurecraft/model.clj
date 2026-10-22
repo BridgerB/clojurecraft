@@ -556,7 +556,9 @@
    [:race/seed "the world seed the runner's server made" "a race summary"]
    [:race/commit "the code that raced" "a race summary"]
    [:race/until "the race's target" "a race summary"]
-   [:sample/runner "the runner a sample was taken on" "a race sample"]
+   [:race/unplayed "a server's bots in a row that never got into play" "a server's health"]
+   [:race/down? "whether the race called its server down and its slots wait for it"
+    "a server's health"] [:sample/runner "the runner a sample was taken on" "a race sample"]
    [:sample/server "which of the runner's servers, when it carries more than one; nil with one"
     "a race sample"]
    [:race/server "which of the runner's servers the race ran on"

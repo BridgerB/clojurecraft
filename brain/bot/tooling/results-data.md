@@ -5,7 +5,7 @@ type: decision
 tags: [bot, tooling, race, page]
 aliases: [results page, gh-pages, summary.json, data/days, data/batches, gyms.ndjson, agents.json, bb site, pages.yml, rounds.edn]
 status: verified
-lastUpdated: 2026-10-16
+lastUpdated: 2026-10-22
 verifiedAgainst: HEAD
 sourceRefs:
   - bb/clojurecraft/page.clj#defn changes
@@ -20,6 +20,12 @@ sourceRefs:
   - bb/clojurecraft/site.clj#defn gym-summary
   - bb/clojurecraft/site.clj#defn by-whom
   - bb/clojurecraft/site.clj#defn legacy!
+  - bb/clojurecraft/site.clj#defn recount!
+  - bb/clojurecraft/page.clj#defn played
+  - bb/clojurecraft/page.clj#defn rebuilt
+  - bb/clojurecraft/page.clj#defn round
+  - test-bb/clojurecraft/page_test.clj#a-run-that-never-got-into-play-is-no-run
+  - test-bb/clojurecraft/page_test.clj#a-stored-batch-drops-the-runs-that-never-played
   - test-bb/clojurecraft/page_test.clj#two-writers-in-either-order-keep-both-batches
   - test-bb/clojurecraft/page_test.clj#the-legacy-file-is-absorbed-whole-then-removed
 related:
@@ -59,6 +65,10 @@ Limits it lives within: a Pages site may be 1 GB and a pushed file 100 MB; Pages
 Up to sixteen lanes publish, and the deploy writes `gyms.ndjson`. A publish (`update-branch!`) works the branch in its own worktree from a depth-1 fetch (the lanes' checkouts are shallow), applies its change, commits and pushes; a push another writer won is fetched again and the change recomputed on the new tip (`publish-change` reads what the branch holds then), up to eight tries with a random wait growing between. A batch is kept by its key (run, kind, runner, batch), so a retry or a republish replaces rather than repeats it (`with-batches`), and the day files and the summary depend only on the batches, not on the order writers came (`two-writers-in-either-order-keep-both-batches`). A publish that never gets through hands its rounds back: `bb churn` keeps them in the lane's `.pages-held.edn` and sends them with its next batch (`read-held`), so a batch is never lost to a busy branch.
 
 The old layout migrates itself: the first publish of this code finds `rounds.edn`, lays every line out as batches in their days, and removes it and the pages built beside it (`changes`, `the-legacy-file-is-absorbed-whole-then-removed`). A lane still on the old code may write `rounds.edn` again before the fleet replaces it; the next publish absorbs that too. The git history of `gh-pages` keeps the old file.
+
+## Runs that never played
+
+A run whose bot never got into play (its server refused it or was gone before it landed: `failures/unplayed?`, a real RESULT with no `:plan/status`) is no run of the bot's. `bb failures` reports it under "infrastructure stops (not filed)", and `page/round` keeps it out of the batch's runs, reach and stops, counting it alone as `:unplayed` (the day's totals sum it). Batches stored before that rule (race 39817745908's dead server: 2,864 such runs in eight batches on Oct 22, published as `[wood crashed]`, most of that day's real stops) are counted the same way where the page reads them: `page/day` takes each batch as `page/played` counts it (a real batch without `:unplayed`: its `[wood crashed]` row, its issue and its count off `:runs`; those runs reached nothing and died never, and no other real batch on the branch, Oct 13 to 22, has such a row), and `bb site build` rebuilds every day file and the summary from the branch's batches (`recount!`, `page/rebuilt`), so the site shows the corrected days while the branch keeps every batch as it was written. The next publish of a day writes its corrected files to the branch too.
 
 ## The site
 
