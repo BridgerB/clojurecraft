@@ -458,6 +458,26 @@
            ((juxt :intent/status :intent/reason) (:plan/intent (rest w1 (+ 1001 blaze/rest-ms)))))
         "nothing came back")))
 
+(deftest a-rest-that-cannot-heal-ends-once-the-bot-is-no-longer-wary
+  ;; sim race 39742401798 (issue #504) R4-6-2: rested for hours at health 14.7, food 17, nothing
+  ;; to eat; the rest held in cover for ever and the run stalled
+  (let [rest-at (fn [health food]
+                  (let [i (assoc blaze/rest-intent
+                                 :intent/status :active
+                                 :intent/since 0
+                                 :intent/health 12.0)]
+                    (:intent/status (:plan/intent (intent/run (assoc (standing {})
+                                                                     :player/health health
+                                                                     :player/food food
+                                                                     :time/now 1000
+                                                                     :plan/intent i)
+                                                              i
+                                                              {:event/kind :tick
+                                                               :event/now 1000})))))]
+    (is (= :done (rest-at 14.7 17)) "not wary and no way to heal: the rest is over")
+    (is (= :active (rest-at 13.0 17)) "still wary: held in cover, as before")
+    (is (= :active (rest-at 14.7 20)) "it heals by itself: rested to the end")))
+
 (deftest a-fire-by-the-spawner-is-put-out
   ;; gym blaze-7a run 3 (run 38891910129): the floor by the spawner lit, and no blaze for three
   ;; minutes

@@ -506,7 +506,10 @@
   ;; {:intent/kind :rest}: stand still out of sight until the health is back to rested, or a
   ;; blaze watches the bot that did not when the rest began (:intent/blazes), or the health
   ;; falls under what it was then (:intent/health: shot from somewhere unseen) (done, and the
-  ;; act looks again), failed :no-heal after rest-ms (no food in the bar, nothing comes back).
+  ;; act looks again), failed :no-heal after rest-ms (no food in the bar, nothing comes back), done
+  ;; when it cannot heal (heals?) and the health is back at eat-under or over, no longer a bot
+  ;; to hold in cover (sim race 39742401798 R4-6-2, issue #504: rested for hours at 14.7 with the
+  ;; food at 17 and nothing to eat, a stall for ever).
   ;; An intent, not a planner wait: the slow heal brings a point every four seconds, and a wait
   ;; fails the plan after plan/wait-ticks (20 s)
   [world {:intent/keys [since health] seen :intent/blazes} _]
@@ -520,7 +523,10 @@
         (-> world
             (assoc :player/controls {})
             (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
-    (cond (or (>= now-health rested) (< now-health health) (seq (remove seen here)))
+    (cond (or (>= now-health rested)
+              (< now-health health)
+              (seq (remove seen here))
+              (and (>= now-health eat-under) (not (heals? world))))
           (intent/done world)
           (and (> (- now since) rest-ms) (heals? world)) (intent/fail world :no-heal)
           :else world)))
