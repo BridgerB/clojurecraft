@@ -615,7 +615,7 @@
   ;; burrow's first stair, the walk home failed :no-path, and the bot stood in :lookout while the
   ;; angry enderman beside it took its health from 19.4 to nothing in three seconds
   (let [angry (assoc (enderman [5.5 64.0 10.5]) :entity/creepy? true)
-        cut-off {[5 63 8] stone [5 62 8] stone}
+        cut-off {[7 62 8] stone [7 61 8] stone}
         w (assoc (burrowed [3.5 64.0 8.5] {7 angry} cut-off) :plan/blacklist #{7})]
     (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
            (plan/next-intent (assoc (burrowed [3.5 64.0 8.5] {7 angry}) :plan/blacklist #{7})
