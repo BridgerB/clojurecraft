@@ -286,7 +286,7 @@
         {:intent/kind :stairs-down :intent/for :valley :intent/trunk [12 60 8] :intent/status :done}
         on (assoc w :plan/last leg)]
     (is (not (stairs/out? w (intent/feet w))) "in the ground")
-    (is (wood/valley-leg? on))
+    (is (wood/descended-valley? on))
     (is (= {:intent/kind :stairs-down
             :intent/trunk [12 60 8]
             :intent/to-y (- 50 stone/stair-depth)
@@ -294,8 +294,8 @@
             :intent/for :valley}
            (wood/gather-next on))
         "on, before the walk up to the mouth")
-    (is (not (wood/valley-leg? w)) "nothing cut before")
-    (is (not (wood/valley-leg? (assoc w :plan/last (assoc leg :intent/for :trees))))
+    (is (not (wood/descended-valley? w)) "nothing cut before")
+    (is (not (wood/descended-valley? (assoc w :plan/last (assoc leg :intent/for :trees))))
         "a descent toward the trees is trees-descend's")
     (is (nil? (wood/valley
                (assoc (remembered

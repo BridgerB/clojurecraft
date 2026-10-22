@@ -202,7 +202,7 @@
          :intent/dir (toward feet trunk)
          :intent/for :trees}))))
 
-(declare water-toward? crossing valley valley-leg?)
+(declare water-toward? crossing valley descended-valley?)
 
 (defn trees-bridge
   "Out of the ground (stairs/out?) with a standing trunk close by and level with the feet that no
@@ -341,7 +341,7 @@
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
-          (when (valley-leg? world) (valley world))
+          (when (descended-valley? world) (valley world))
           (when (descended? world) (trees-descend world trunks))
           (when (tunneled? world) (trees-tunnel world))
           (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
@@ -559,7 +559,7 @@
 
 (def valley-floor 16)                 ; blocks under a trunk's bottom a valley's stairs down go no deeper than
 
-(defn valley-leg?
+(defn descended-valley?
   "Did the intent that just ended cut a length of a valley's stairs down (a done :stairs-down
    :intent/for :valley)? The next length goes on from where it stopped."
   [world]
@@ -571,7 +571,7 @@
    (far-trunks, within descend-reach on the plane), stone/stair-depth deep whatever the trunk's
    height, from a perch no walk, hunt or crossing leaves. Out of the ground (stairs/out?), and
    never from a cell where a climb died :boxed; or on from the foot of a length just cut
-   (valley-leg?) while the foot is still in the ground, toward the trunk it began for, no deeper
+   (descended-valley?) while the foot is still in the ground, toward the trunk it began for, no deeper
    than valley-floor under that trunk's bottom: from the foot the walk up the stairs just cut
    (intent/opening) took the bot back to the perch, every few seconds, to cut the same length
    again (sim snapshot real-2-s2-Clj_r15, issue #186, played on). That snapshot stood on the
@@ -582,7 +582,7 @@
   [world]
   (let [feet (intent/feet world)
         [_ fy _] feet
-        continuing? (valley-leg? world)]
+        continuing? (descended-valley? world)]
     (when (and (if continuing? (not (stairs/out? world feet)) (stairs/out? world feet))
                (not (contains? (:plan/boxed-at world #{}) feet)))
       (when-let [[_ ty _ :as trunk]
