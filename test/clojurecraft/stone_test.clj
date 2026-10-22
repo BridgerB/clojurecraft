@@ -269,7 +269,9 @@
         corridor (merge (into {} (for [x (range 5 16) y [32 33]] [[x y 5] 0]))
                         (into {} (for [z (range 5 16) y [32 33]] [[15 y z] 0]))
                         {[5 32 7] lava [3 32 5] lava [5 32 3] lava [6 30 5] lava})
-        w (assoc (standing 32 :stone_pickaxe) :world/chunks {[0 0] (world/column corridor)})
+        w (-> (standing 32 :stone_pickaxe)
+              (assoc :world/chunks {[0 0] (world/column corridor)})
+              (assoc-in [:player/inventory 5] {:item (blocks/items :cobblestone) :count 8}))
         died (plan/fail-intent
               (assoc w :plan/blacklist #{} :plan/attempts 0)
               {:intent/kind :stairs-down :intent/reason :boxed :intent/status :failed :intent/id 7})
@@ -1084,6 +1086,17 @@
     (is (nil? (stone/filler-dig (boxed :stick))) "no pickaxe: granite gives nothing by hand")
     (is (contains? stone/filler-drops (blocks/items :granite)) "the chain collects it")
     (is (contains? stone/filler-drops (blocks/items :cobblestone)))))
+(deftest a-boxed-mine-with-a-log-and-no-filler-crafts-planks-to-lay
+  ;; issue #37 (real bot Clj_r16, a one-wide strip over open air): its planks and dirt were laid
+  ;; into a climb, a birch log was left, and every later climb died :boxed
+  (let [boxed (fn [& items] (assoc (apply standing 64 items) :plan/boxed-at #{[2 50 2]}))
+        crafted (stone/log-planks (boxed :stone_pickaxe :birch_log))]
+    (is (= {:intent/kind :craft :intent/recipe :birch_planks :intent/window :inventory} crafted))
+    (is (nil? (stone/log-planks (assoc (boxed :stone_pickaxe :birch_log) :plan/boxed-at #{})))
+        "no staircase died boxed")
+    (is (nil? (stone/log-planks (boxed :stone_pickaxe :birch_log :birch_planks)))
+        "planks held already")
+    (is (nil? (stone/log-planks (boxed :stone_pickaxe))) "no log")))
 (deftest a-staircase-cut-from-the-surface-over-stone-is-not-walked-back-from
   ;; sim race 39593216223 (issue #62, world R4/2): the stairs cut from the surface over the stone
   ;; went six down and six along; outside over-radius of that surface, the walk back to it began

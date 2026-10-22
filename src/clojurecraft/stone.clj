@@ -263,6 +263,27 @@
          (filter #(intent/routable? world %))
          first)))
 
+(defn log-planks
+  "A :craft of a held log into its planks in the inventory's grid, or nil: only once a staircase
+   died :boxed (:plan/boxed-at), with less than filler-want filler carried (stairs/carried-filler),
+   no planks held (stairs/planks-of) and a log whose planks recipe is known. Planks are the last
+   thing a floor is laid from (stairs/filler), and a log is four of them. Issue #37 (real bot
+   Clj_r16, a one-wide strip of granite over open air): the planks and the dirt were laid into a
+   climb, a birch log was held, and nothing else could be dug or laid."
+  [world]
+  (let [held (recipe/counts (:player/inventory world))
+        recipe-id (some (fn [[item c]]
+                          (let [n (name item)]
+                            (when (and (pos? c) (str/ends-with? n "_log"))
+                              (keyword (str (subs n 0 (- (count n) 4)) "_planks")))))
+                        held)]
+    (when (and recipe-id
+               (seq (:plan/boxed-at world))
+               (< (stairs/carried-filler world) filler-want)
+               (nil? (stairs/planks-of held 1))
+               (recipe/by-id recipe-id))
+      {:intent/kind :craft :intent/recipe recipe-id :intent/window :inventory})))
+
 (defn adjoins-boxed?
   "Do the feet [x y z] stand in :plan/boxed-at or on a cell beside one on the plane, at the same
    height: a staircase, tunnel or deeper stair started there ends :boxed as the one beside it
@@ -630,6 +651,7 @@
                   (seal-stone world row)
                   (over-stone world row)
                   (filler-dig world)
+                  (log-planks world)
                   (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})

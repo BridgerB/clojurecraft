@@ -76,6 +76,8 @@ sourceRefs:
   - test/clojurecraft/sim_test.clj#ore-is-mined-with-a-pickaxe-from-the-main-inventory
   - src/clojurecraft/stone.clj#defn filler-dig
   - src/clojurecraft/stone.clj#defn filler-states-for
+  - src/clojurecraft/stone.clj#defn log-planks
+  - test/clojurecraft/stone_test.clj#a-boxed-mine-with-a-log-and-no-filler-crafts-planks-to-lay
   - test/clojurecraft/stone_test.clj#a-boxed-mine-digs-stone-and-granite-for-filler-when-it-holds-a-pickaxe
   - test/clojurecraft/stone_test.clj#a-mine-boxed-with-little-filler-digs-dirt-for-it-before-another-stair
   - test/clojurecraft/stone_test.clj#the-surface-over-stone-is-the-ground-not-the-canopy-over-it
@@ -135,7 +137,7 @@ Gravel's loot table drops flint one time in ten, else the gravel itself. The `:f
 - `:mine-stone` holds a wooden pickaxe by item, not by tag, as it always has: a bot that has only a stone pickaxe plans a wooden one before more cobblestone.
 - Before rows named their blocks, the chain was tagged `:intent/for :stone` and the walk keyed its arrival off that; it is now the row's id and `:intent/pickup?`.
 - **The surface over stone is ground, not canopy.** `surface-over` skips leaves: sim race 39550831606 world R4/25 (issue #85) walked to the top of a birch's canopy over its stone, every stair from there was refused for the leaves, and each level step was followed by the walk back (`the-surface-over-stone-is-the-ground-not-the-canopy-over-it`).
-- **A boxed mine digs its filler.** Once a staircase died `:boxed` (`:plan/boxed-at`) and under `filler-want` (8) filler is carried, `filler-dig` walks to the nearest dirt (and, with a pickaxe held, stone, cobblestone, granite, diorite, andesite or tuff: `filler-states-for`) whose dig exposes no fluid, tagged `:filler`, and the chain digs and collects it before another stair is cut. Real bot Clj_r15 at R1/30 (issues #342 and #65) stood on lake shores with one or two dirt to seal with (`a-mine-boxed-with-little-filler-digs-dirt-for-it-before-another-stair`). Issue #37 (Clj_r15 at R1, Clj_r16 at R3, a one-wide strip of granite over open air): the dirt in reach was dug and climbed away and every climb after was `:boxed` with stone underfoot (`a-boxed-mine-digs-stone-and-granite-for-filler-when-it-holds-a-pickaxe`).
+- **A boxed mine digs its filler.** Once a staircase died `:boxed` (`:plan/boxed-at`) and under `filler-want` (8) filler is carried, `filler-dig` walks to the nearest dirt (and, with a pickaxe held, stone, cobblestone, granite, diorite, andesite or tuff: `filler-states-for`) whose dig exposes no fluid, tagged `:filler`, and the chain digs and collects it before another stair is cut. Real bot Clj_r15 at R1/30 (issues #342 and #65) stood on lake shores with one or two dirt to seal with (`a-mine-boxed-with-little-filler-digs-dirt-for-it-before-another-stair`). Issue #37 (Clj_r15 at R1, Clj_r16 at R3, a one-wide strip of granite over open air): the dirt in reach was dug and climbed away and every climb after was `:boxed` with stone underfoot (`a-boxed-mine-digs-stone-and-granite-for-filler-when-it-holds-a-pickaxe`). A strip over open air has no cell to stand beside (`beside`) and its drop would fall, so Clj_r16 gets its filler from a held log instead: `log-planks`, a `:craft` of its planks in the inventory grid, once boxed with no planks and under `filler-want` filler, after `filler-dig` (`a-boxed-mine-with-a-log-and-no-filler-crafts-planks-to-lay`).
 
 ## See also
 - [[make-goals]] - how the planner reaches a mining row (its holds, then its provides).
