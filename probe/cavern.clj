@@ -57,17 +57,25 @@
            :target (:intent/target p)
            :digs digs
            :why (let [at #(clojurecraft.blocks/name-of (clojurecraft.terrain/block-at world %))
-                      seen (set (map :from @steps))]
-                  (vec (for [m (take 3
-                                     (clojurecraft.fortress/moves from
-                                                                  (:intent/target p)
-                                                                  (or (:intent/climb p) 3)))
-                             :let [to (mapv + from m)]]
-                         [m (mapv at [(mapv + to [0 1 0]) to (mapv + to [0 -1 0])]) :lava
-                          (count (clojurecraft.fortress/lava-beside world from m)) :safe
-                          (boolean (clojurecraft.fortress/safe? world from m)) :seal
-                          (boolean (clojurecraft.fortress/sealed? world from m)) :seen
-                          (contains? seen to)])))
+                      solid? #(clojurecraft.blocks/solid? (clojurecraft.terrain/block-at world %))
+                      m (first (clojurecraft.fortress/moves from
+                                                            (:intent/target p)
+                                                            (or (:intent/climb p) 3)))
+                      to (mapv + from m)
+                      drop-of (fn [c]
+                                (loop [d 0
+                                       c c]
+                                  (cond (> d 40) [:deep]
+                                        (solid? c) [d (at c)]
+                                        (nil? (clojurecraft.terrain/block-at world c)) [d :unloaded]
+                                        :else (recur (inc d) (mapv + c [0 -1 0])))))
+                      span (loop [n 0
+                                  c to]
+                             (cond (or (> n 60) (solid? c) (solid? (mapv + c [0 1 0]))) n
+                                   :else (recur (inc n) (mapv + c [(first m) 0 (last m)]))))]
+                  [m :safe (boolean (clojurecraft.fortress/safe? world from m)) :cells
+                   (mapv at [(mapv + to [0 1 0]) to (mapv + to [0 -1 0])]) :span span :drop
+                   (drop-of (mapv + to [0 -1 0]))])
            :search (some-> (:intent/search p)
                            (select-keys [:search/leg :search/heading]))})))))
 
