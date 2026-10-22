@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-22T20:01:10.938Z",
+  "at" : "2026-10-22T20:02:21.063Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 537,
     "title" : "Bot stops at blaze-rods: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 536,
     "title" : "Bot stops at blaze-rods: timeout",
@@ -123,15 +123,15 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
-    "number" : 514,
-    "title" : "Bot stops at blaze-rods: no-footing",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : true
-  }, {
     "number" : 162,
     "title" : "Bot stops at portal: no-path",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
+  }, {
+    "number" : 514,
+    "title" : "Bot stops at blaze-rods: no-footing",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : true
   }, {
     "number" : 45,
     "title" : "Bot stops at cast-one: no-path",
@@ -155,8 +155,7 @@
   } ],
   "moves" : [ {
     "issue" : 537,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "assign"
   }, {
     "issue" : 527,
     "move" : "leave",
@@ -210,11 +209,11 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 514,
+    "issue" : 162,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 162,
+    "issue" : 514,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -231,11 +230,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-21T08:27:32.777Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T08:28:42.060Z"
@@ -1576,5 +1570,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-22T20:01:10.938Z"
+  }, {
+    "issue" : 537,
+    "move" : "assign",
+    "at" : "2026-10-22T20:02:21.063Z"
   } ]
 }
