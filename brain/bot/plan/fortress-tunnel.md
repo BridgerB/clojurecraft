@@ -37,12 +37,18 @@ sourceRefs:
   - src/clojurecraft/fortress.clj#defmethod plan/next-intent :fortress
   - src/clojurecraft/fortress.clj#defn exploring
   - src/clojurecraft/fortress.clj#defn leg-over?
+  - src/clojurecraft/fortress.clj#defn leg-progress
+  - src/clojurecraft/fortress.clj#defn rock-run
+  - src/clojurecraft/fortress.clj#defn turns-by-rock
   - src/clojurecraft/fortress.clj#defn leg-target
   - src/clojurecraft/fortress.clj#defn explore-y
   - test/clojurecraft/fortress_test.clj#the-spiral-turns-right-and-its-legs-grow
   - test/clojurecraft/fortress_test.clj#a-leg-keeps-to-the-heights-over-the-lava-sea-and-under-the-roof
   - test/clojurecraft/fortress_test.clj#the-first-leg-goes-east-and-the-edge-of-the-world-turns-it
   - test/clojurecraft/fortress_test.clj#a-leg-goes-on-until-its-end-then-the-spiral-turns
+  - test/clojurecraft/fortress_test.clj#a-leg-looks-for-rock-ahead
+  - test/clojurecraft/fortress_test.clj#a-leg-that-ended-turns-to-the-rock-it-can-dig
+  - test/clojurecraft/fortress_test.clj#a-leg-that-gains-no-ground-is-given-up
   - test/clojurecraft/fortress_test.clj#an-exploring-tunnel-keeps-its-leg-for-the-planner
   - src/clojurecraft/fortress.clj#defmethod plan/done-by :at-fortress?
   - src/clojurecraft/fortress.clj#defmethod plan/done-by :nether-access?
@@ -92,6 +98,7 @@ With no brick on record the tunnel used to aim 48 blocks east, then 48 more, for
 
 - **Legs of a square spiral.** The first leg goes east, each next one a quarter turn right (`turn-right`: east, south, west, north), `leg-length` blocks long: 160 for the first two (`explore-spacing`: a server shows 96 either side of the feet, `nether-view` 6 chunks), then each pair one spacing longer, so the strips swept lie a spacing apart and nothing is swept twice. The target is the leg's end (`leg-target`) at the height `explore-y` of where the leg began, the feet's own kept within y 52 to 90 (`explore-band`: over the lava sea at y 31 and its lakes, under the roof), so a tunnel in the bedrock climbs (a target more than 3 above sends the steps up first) and one that drifted into the roof comes down.
 - **A leg is over** (`leg-over?`) when its end is within reach by the ground, when the world ends two blocks ahead (`open-ahead?`, `look-ahead`: a real server shows 96 blocks, so only the model's captured Nether ends in front of a tunnel, and a leg that cannot go the way it turns tries the next heading), when more tunnels were spent on it than its length asks (a wall it cannot go round), or when the feet are farther from where it began than its length and 64 (another trip's).
+- **A leg that gains no ground is given up** (`leg-progress`, `stall-tunnels`, `stall-gain`). Sim world R2/12 (issue #338, traced on probe/cavern-trace): the first leg east ran into a cavern sixty blocks across and thirty deep (air at every height from y 47 to 59, no roof), and the tunnel zigzagged along its rim, each step a refused air floor ahead and a side step to the z toward the target, which flips at the target's z: 25 steps and 45 digs a minute for 3 blocks of net progress a minute (11 digs a block against 2 in rock, R1/35's 33 blocks a minute), for fourteen minutes; the next leg, south, did the same inside a rock island the cavern surrounds, for fourteen more, eight pickaxes of sticks gone. A look of the planner that is not `stall-gain` (8 blocks; a tunnel in rock gains 32) nearer the leg's end than the best so far counts as stalled, and `stall-tunnels` (3, about four minutes) in a row end the leg. The next leg turns right or left, whichever has the longer `rock-run` (cells ahead, up to `rock-look`, with floor, feet and head solid), so a leg that stalled at a cavern turns to rock it can dig, then back, then on again.
 - **A search already running is kept** while its leg goes on; with none (the first look, a death, a failed tunnel that forgot it) the first leg starts east at the feet.
 - **Measured, 4 seeds a world, to the fortress in 330 simulated minutes** (probe runs on the commit of the issue 338 branch): R4/33 4 of 4 (54, 54, 57, 248 min), R3/13 4 of 4, R3/21 4 of 4 (85 to 87), R1/43 3 of 4 (112), against none of the 23 runs on main. R2/4 and R2/5 stay 0 of 8: no brick lies within 300 blocks of their landings (the nearest 310 and 337, `capture_nether`'s bricks), a spiral takes hours to reach one, and its cavern floors pace a ledge for half an hour at a time (every step ahead an air floor, refused).
 - **What did not help** (same worlds and seeds). Bridging an air floor (the step plan already lays a floor; `safe?` refused an air one) over solid ground within two blocks: bridging every step wandered a cavern, laid 500 blocks in 170 minutes and failed `:not-held`; bridging only toward the target with 24 filler kept still left R3/13 and R3/21 at 1 of 8 and R1/43 at 1 of 4 (its pickaxe worn out, no filler, `:not-held`; a floor in a fungus or wart cell, a cell the server keeps, failed `:rejected` until `blocks/replaceable?` limited it). Ending a leg after three looks that gained under four blocks along its heading, with netherrack, basalt and blackstone as floor filler and no bridging: R4/33 4 of 4 and R3 8 of 8 as before (a few minutes sooner), R1/43 1 of 4, no gain for the added rules. All were taken out; the cavern ledge pacing stays open.

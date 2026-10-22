@@ -250,6 +250,12 @@
    [:search/tunnels
     "the tunnels the leg has taken, one more at each look of the planner; too many end the leg"
     "inside :fortress/search"]
+   [:search/best
+    "the least horizontal distance from the feet to the leg's end at a look of the planner (fortress/leg-progress)"
+    "inside :fortress/search, from the leg's second look"]
+   [:search/stalled
+    "the looks in a row that brought the feet no stall-gain nearer than :search/best; stall-tunnels end the leg (issue #338)"
+    "inside :fortress/search, from the leg's second look"]
    [:fortress/trail
     "the way back a :tunnel-to to a target keeps across its tunnels: {:trail/target :trail/cells :trail/dead}; a cell no fresh step leaves is stepped back from to the last cell, never entered again (fortress/step-back, issue #502); another target starts a new one"
     "after a :tunnel-to chose a fresh step or a step back"]
