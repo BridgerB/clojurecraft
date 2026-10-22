@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T17:06:37.904Z",
+  "at" : "2026-10-22T17:14:37.657Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -88,15 +88,10 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 44,
-    "title" : "Bot stops at cast-one: rejected",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 514,
-    "title" : "Bot stops at blaze-rods: no-footing",
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 526,
     "title" : "Bot stops at blaze-rods: blocked",
@@ -108,19 +103,29 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
-    "number" : 135,
-    "title" : "Bot stops at cast-one: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 284,
-    "title" : "Bot stops at fortress: no-path",
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 514,
+    "title" : "Bot stops at blaze-rods: no-footing",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : true
+  }, {
+    "number" : 284,
+    "title" : "Bot stops at fortress: no-path",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 227,
+    "title" : "Bot stops at portal: no-scoop",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 518,
@@ -130,11 +135,6 @@
   }, {
     "number" : 162,
     "title" : "Bot stops at portal: no-path",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 227,
-    "title" : "Bot stops at portal: no-scoop",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -176,11 +176,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 44,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 514,
+    "issue" : 135,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -192,7 +188,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 135,
+    "issue" : 44,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 178,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 514,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -200,7 +204,7 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 178,
+    "issue" : 227,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -209,10 +213,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 162,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 227,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
