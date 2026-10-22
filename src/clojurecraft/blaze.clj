@@ -426,12 +426,26 @@
 
 (defmethod combat/answers :blaze-rods [_] #{:blaze})
 
+(defn under-fire?
+  "Is the bot hurt (hurt?, or wary? when the answer to that is something to do: warily) with blazes
+   watching, in an intent that is not the answer (a fight, a meal, a rest, a back-off, the walk
+   to cover)? Sim snapshot R4-31-1 (issue #502): a tunnel of 32 steps went on while two blazes
+   10 off, past the at-hand radius, shot the bot from 16.8 health to none in ten seconds, since
+   nothing ends a running intent but itself and the planner is asked only then."
+  [world i]
+  (and (not (contains? #{:fight :eat :rest :back-off} (:intent/kind i)))
+       (not= :cover (:intent/for i))
+       (seq (watchers world))
+       (some? (cond (hurt? world) (healing world)
+                    (wary? world) (warily world)))))
+
 (defmethod plan/interrupts? :blaze-rods
   ;; any running intent but a fight ends when a blaze is at hand (at-hand-blaze), and the act
   ;; fights it: gym blaze-fire-b run 3 (run 39136853644) tunnelled on with one hitting it in melee
-  ;; from 20 health to 13.8, since nothing else ends a running intent
+  ;; from 20 health to 13.8, since nothing else ends a running intent; and one hurt and watched
+  ;; (under-fire?) by blazes further off, whatever the intent but the answer to it
   [world _ i]
-  (and (not= :fight (:intent/kind i)) (some? (at-hand-blaze world))))
+  (or (and (not= :fight (:intent/kind i)) (some? (at-hand-blaze world))) (under-fire? world i)))
 
 (defmethod plan/next-intent :blaze-rods
   [world _ _]

@@ -508,3 +508,17 @@
     (is (>= (inventory/item-count w blaze/rod) blaze/rods-wanted))
     (is (pos? (:sim/health sim)) "alive")
     (is (= [] (:sim/violations sim)))))
+
+(deftest a-hurt-bot-watched-from-afar-stops-what-it-is-doing
+  ;; sim snapshot R4-31-1 (issue #502): a tunnel went on under fire from blazes ten off, past the
+  ;; at-hand radius, from 16.8 health to none
+  (let [far (entity :blaze [8.5 65.0 23.5] :entity/health 20.0)
+        tunnel {:intent/kind :tunnel-to :intent/target [8 64 30]}
+        hurt (assoc (standing {8 far}) :player/health 9.0)]
+    (is (blaze/under-fire? hurt tunnel))
+    (is (plan/interrupts? hurt row tunnel))
+    (testing "not at full health, not when the intent is the answer, not with nothing watching"
+      (is (not (plan/interrupts? (standing {8 far}) row tunnel)))
+      (is (not (blaze/under-fire? hurt {:intent/kind :rest})))
+      (is (not (blaze/under-fire? hurt {:intent/kind :walk :intent/for :cover})))
+      (is (not (blaze/under-fire? (assoc (standing {}) :player/health 9.0) tunnel))))))
