@@ -1,26 +1,26 @@
 {
-  "at" : "2026-10-22T20:25:10.240Z",
+  "at" : "2026-10-22T20:28:36.143Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 537,
     "title" : "Bot stops at blaze-rods: timeout",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : true
   }, {
     "number" : 536,
     "title" : "Bot stops at blaze-rods: timeout",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 535,
     "title" : "Bot stops at blaze-rods: timeout",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 534,
     "title" : "Bot stops at blaze-rods: timeout",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 532,
@@ -55,7 +55,7 @@
   }, {
     "number" : 539,
     "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim" ],
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 533,
@@ -75,7 +75,7 @@
   }, {
     "number" : 538,
     "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 286,
@@ -155,8 +155,23 @@
   } ],
   "moves" : [ {
     "issue" : 537,
-    "move" : "wait",
-    "why" : "session starting"
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 536,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 535,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 534,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 532,
+    "move" : "assign"
   }, {
     "issue" : 527,
     "move" : "leave",
@@ -170,11 +185,19 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 539,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 524,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 338,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 538,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -231,10 +254,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "assign",
-    "at" : "2026-10-21T08:31:01.361Z"
-  }, {
     "issue" : 135,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1575,5 +1594,9 @@
     "issue" : 537,
     "move" : "assign",
     "at" : "2026-10-22T20:23:59.278Z"
+  }, {
+    "issue" : 532,
+    "move" : "assign",
+    "at" : "2026-10-22T20:28:36.143Z"
   } ]
 }
