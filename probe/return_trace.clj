@@ -1,44 +1,41 @@
 (ns probe.return-trace
-  "Probe: replay a snapshot's run from its landing, print the lead-up to each death and every
-   intent change and 10 s sample after it."
+  "Probe: replay a snapshot's run from its landing and print, after the first death, the site on
+   record and every intent change with its whole map, and a position every 30 s."
   (:require [clojurecraft.capture :as capture]
+            [clojurecraft.memory :as memory]
             [clojurecraft.simrace :as simrace]))
 
 (def real-step simrace/step)
 
 (defn line
   [world]
-  (let [i (:plan/intent world)]
-    [(:time/now world) (:player/dimension world)
-     (some->> (:player/pos world)
-              (mapv long)) (:player/health world) (:player/food world)
-     (select-keys i [:intent/kind :intent/goal :intent/status :intent/target :intent/stage])]))
+  [(:time/now world) (:player/dimension world)
+   (some->> (:player/pos world)
+            (mapv long)) (:player/health world)
+   (into {} (remove (comp #{:intent/id} key)) (:plan/intent world))])
 
 (defn tracer
   []
-  (let [ring (atom [])
-        last-t (atom 0)
+  (let [last-t (atom 0)
         last-kind (atom nil)
         deaths (atom 0)]
     (fn [world event]
       (let [w (real-step world event)
             d (:stats/deaths w 0)
             t (:time/now w 0)
-            kind (get-in w [:plan/intent :intent/kind])
-            nether? (= "minecraft:the_nether" (:player/dimension w))
-            sample? (>= (- t @last-t) (if (pos? @deaths) 10000 2000))]
-        (when (and (not= kind @last-kind) (or nether? (pos? @deaths)))
-          (swap! ring #(vec (take-last 60 (conj % (into [:kind] (line w)))))))
-        (when (and sample? (or nether? (pos? @deaths)))
-          (reset! last-t t)
-          (swap! ring #(vec (take-last 60 (conj % (into [:s] (line w))))))
-          (when (pos? @deaths) (println "AFTER" (pr-str (line w)))))
-        (when (and (not= kind @last-kind) (pos? @deaths)) (println "AFTERKIND" (pr-str (line w))))
-        (reset! last-kind kind)
+            intent (:plan/intent w)
+            key* [(:intent/kind intent) (:intent/target intent) (:intent/to-y intent)]]
         (when (> d @deaths)
-          (println "DEATH" d "at" t)
-          (doseq [l @ring] (println "LEAD" (pr-str l)))
-          (reset! deaths d))
+          (reset! deaths d)
+          (println "DEATH" d
+                   "at" t
+                   "site" (pr-str (memory/site w))
+                   "given-up" (pr-str (memory/given-up-sites w))))
+        (when (and (pos? @deaths) (not= key* @last-kind)) (println "KIND" (pr-str (line w))))
+        (when (and (pos? @deaths) (>= (- t @last-t) 30000))
+          (reset! last-t t)
+          (println "POS" (pr-str (line w))))
+        (reset! last-kind key*)
         w))))
 
 (defn -main
