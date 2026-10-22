@@ -7,6 +7,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.hunt :as hunt]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -142,3 +143,32 @@
     (is (not (plan/done-by (wide 4) hunt-row)) "starving: it is hunted")
     (is (= {:intent/kind :walk :intent/target [38 64 8] :intent/for :hunt}
            (plan/next-intent (wide 4) hunt-row plan/goals)))))
+
+(deftest an-animal-up-a-tree-is-not-game-from-beneath-it
+  ;; sim race 39768347249 (issue #515, R2/30): sheep on a spruce crown five over the walk's end
+  ;; were fought three times from beneath and the third :unreachable ended the plan. The route is
+  ;; given (a flat floor has none to a cell in the air): found, ending at [11 64 8].
+  (let [on (fn [y] (standing 20 {} {5 (animal :sheep [11.5 y 8.5])}))
+        fightable? (fn [y]
+                     (let [w (on y)]
+                       (with-redefs [path/plan (constantly {:path/status :found
+                                                            :path/waypoints [[10 64 8] [11 64 8]]})]
+                         (hunt/fightable-from-route? w (get-in w [:world/entities 5])))))]
+    (is (fightable? 65.0) "a step up is within a blow and the meat's pickup")
+    (is (not (fightable? 69.5)) "five over is out of reach from where the walk ends")
+    (is (with-redefs [path/plan (constantly {:path/status :none :path/waypoints []})]
+          (let [w (on 69.5)] (hunt/fightable-from-route? w (get-in w [:world/entities 5]))))
+        "no route found yet is not held against it")))
+
+(deftest a-fight-that-left-the-animal-alive-is-no-kill
+  ;; issue #178 (R2/37): a starving bot at 0.7 health broke the fight off, the animal still
+  ;; standing, and collected the meat of a kill that never was, again and again
+  (let [w (assoc (standing 0 {} {5 (animal :cow [11.7 64.0 8.2])})
+                 :plan/last
+                 {:intent/kind :fight
+                  :intent/for :hunt
+                  :intent/target 5
+                  :intent/target-pos [11.7 64.0 8.2]
+                  :intent/status :done})]
+    (is (nil? (hunt/fresh-kill w)))
+    (is (= :fight (:intent/kind (plan/next-intent w hunt-row plan/goals))))))

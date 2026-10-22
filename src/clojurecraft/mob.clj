@@ -404,6 +404,48 @@
 
 (defn loot-item "The item id of a loot row [item lo hi]." [[item]] (recipe/item-id item))
 
+;; ---------------------------------------------------------------- the Nether's own spawns (issue #263)
+
+(def warped-kinds
+  "The kinds a warped forest's monster list spawns, with their weights: the enderman alone
+   (weight 1, in packs of enderman-pack), as vanilla's warped_forest biome lists them. The
+   Nether spawns by biome; the model tells a warped forest by its floor (warped-floor?)."
+  [[:enderman 1]])
+
+(def enderman-pack 4)                 ; endermen a warped forest's spawn tries for at once (the biome's spawner: minCount and maxCount both 4)
+(def pack-walk 6)                     ; each pack member steps nextInt(6) - nextInt(6) on x and on z from the last (NaturalSpawner.spawnCategoryForPosition)
+
+(def warped-floor-states
+  "The states of warped nylium: the warped forest's floor, where the model spawns its endermen.
+   The captured Nether's biome containers are not decoded (chunk/read-section keeps the blocks
+   alone), so the floor is the forest's sign, as it is the bot's."
+  (blocks/states-of :warped_nylium))
+
+(defn warped-floor?
+  "Is state id a warped forest's floor (warped nylium)?"
+  [id]
+  (contains? warped-floor-states id))
+
+(defn nether-spot?
+  "May an enderman spawn with its feet in cell [x y z]: warped nylium under them and its tall
+   cells free? Any light: the model's light is 0 everywhere, under the Nether's limit of 7
+   (the dimension's monster_spawn_light_level) that vanilla's Monster.checkMonsterSpawnRules
+   tests, so the shroomlit cells it would refuse are not told apart."
+  [at free? [x y z :as cell]]
+  (let [below (at [x (dec y) z])]
+    (boolean (and below (warped-floor? below) (stands-in? free? cell (tall :enderman))))))
+
+(defn nether-spots
+  "The cells of column x z from lo to hi an enderman may spawn in (nether-spot?), lowest first."
+  [at free? x z lo hi]
+  (for [y (range lo (inc hi)) :when (nether-spot? at free? [x y z])] [x y z]))
+
+(defn pack-step
+  "How far the next pack member stands from the last on one axis for rolls r1 and r2 in
+   [0, 1): floor(pack-walk r1) - floor(pack-walk r2), vanilla's nextInt(6) - nextInt(6)."
+  [r1 r2]
+  (- (long (math/floor (* pack-walk r1))) (long (math/floor (* pack-walk r2)))))
+
 ;; ---------------------------------------------------------------- spawners
 
 (def spawner-block

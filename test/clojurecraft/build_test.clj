@@ -593,11 +593,15 @@
              2 {:item (recipe/item-id :crafting_table) :count 1}}
         bare (assoc (standing-at (open-ground trench) feet-pos) :player/inventory kit)
         planks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :oak_planks) :count 2})
-        sticks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :stick) :count 2})]
+        three (assoc-in planks [:player/inventory 4] {:item (recipe/item-id :stick) :count 3})
+        sticks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :stick) :count 4})]
     (is (build/carry-sticks? planks) "a table held and planks for sticks: sticks for the kit")
     (is (not= :build (:intent/kind (plan/next-intent planks cast-one-row plan/goals)))
         "made before the build")
-    (is (not (build/carry-sticks? sticks)) "sticks held already")
+    (is
+     (build/carry-sticks? three)
+     "three sticks are one pickaxe and a half: the climb out after the cast wears out two (issue #135, R3-4-1)")
+    (is (not (build/carry-sticks? sticks)) "four sticks held already")
     (is (not (build/carry-sticks? bare)) "nothing to make them from: no trip out for them")))
 
 (deftest a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
