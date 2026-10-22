@@ -397,7 +397,7 @@
         cx (long (math/floor x))
         cz (long (math/floor z))
         top (long (math/floor (+ (double y) 1.0e-3)))]
-    [x (if (or (solid? cx (dec top) cz) (not (solid? cx (- top 2) cz))) top (dec top)) z]))
+    [x (double (if (or (solid? cx (dec top) cz) (not (solid? cx (- top 2) cz))) top (dec top))) z]))
 
 (defn hittable?
   "Can entity e be fought from where the bot stands: its feet no more than over-feet over the
