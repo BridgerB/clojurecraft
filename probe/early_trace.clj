@@ -1,8 +1,13 @@
 (ns probe.early-trace
   (:require [clojurecraft.capture :as capture]
             [clojurecraft.plan :as plan]
+            [clojurecraft.scene :as scene]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as sr]))
+
+(def ks
+  [:intent/kind :intent/stage :intent/level-steps :intent/to-y :intent/for :intent/level-dir
+   :intent/dir :intent/turns])
 
 (defn -main
   [path every-ms from-ms]
@@ -16,7 +21,11 @@
                 (let [t (- (:time/now wd) (:time/now world))]
                   (when (and (>= t from) (>= (- t @last-t) every))
                     (vreset! last-t t)
-                    (println "TRACE" t (pr-str (:player/pos wd)) (pr-str (:plan/intent wd))))
+                    (println "TRACE"
+                             t
+                             (mapv #(format "%.1f" %) (:player/pos wd))
+                             (pr-str (select-keys (scene/facts wd) [:held]))
+                             (pr-str (select-keys (:plan/intent wd) ks))))
                   (or (plan/done? wd) (plan/failed? wd))))
         _
         (sim/play-from sr/step m stop? (sr/window-of snap) (sr/go-of w (:snapshot/until snap)) nil)]
