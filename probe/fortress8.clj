@@ -63,7 +63,9 @@
 (let [[file seed until minutes every] *command-line-args*
       seed (Long/parseLong seed)
       minutes (Long/parseLong minutes)
-      every (* 60000 (Long/parseLong every))
+      every (if-let [e (System/getenv "EVERY_S")]
+              (* 1000 (Long/parseLong e))
+              (* 60000 (Long/parseLong every)))
       w0 (simrace/prepared (capture/read-world file))
       nether (simrace/nether-file (java.io.File. file))
       w (cond-> (assoc w0 :capture/file file)
@@ -75,7 +77,21 @@
               (let [k (quot (:time/now world) every)]
                 (when (not= k @last-at)
                   (reset! last-at k)
-                  (println file (quot (:time/now world) 60000) "min" (inv-line world))
+                  (if-let [lo (System/getenv "FINE_FROM")]
+                    (when (>= (:time/now world) (* 60000 (Long/parseLong lo)))
+                      (let [p (:plan/last world)]
+                        (println "FINE"
+                                 (quot (:time/now world) 1000)
+                                 "s"
+                                 (pr-str (mapv #(math/round (double %)) (:player/pos world)))
+                                 (:intent/kind p)
+                                 (:intent/steps p)
+                                 (:intent/retreats p)
+                                 (pr-str (:intent/search p))
+                                 (count (:intent/tunnel-visited p))
+                                 (pr-str (:plan/waiting world))
+                                 (pr-str (:intent/op p)))))
+                    (println file (quot (:time/now world) 60000) "min" (inv-line world)))
                   (flush)))
               (or (plan/done? world) (plan/failed? world)))
       {:keys [world]} (sim/run+ simrace/step
