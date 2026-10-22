@@ -1645,7 +1645,9 @@
              (build/seal-source (held [[:bucket 1] [:water_bucket 1] [:cobblestone 8]]) over)))
       (is (nil? (build/seal-source (held [[:bucket 1] [:water_bucket 1]]) over)) "no filler"))
     (testing "a bot already holding water buckets only pours one out where the cast has obsidian"
-      (let [full (held [[:water_bucket 2] [:cobblestone 8]])
+      (let [full (assoc-in (held [[:water_bucket 2] [:cobblestone 8]])
+                  [:world/blocks over]
+                  (blocks/default-state :air))
             none (update full :world/blocks dissoc under)
             spare (build/spare-pour-op full i)]
         (is (nil? (build/spare-pour-op none i)) "no cast cell, no safe place")
