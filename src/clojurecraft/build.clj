@@ -2070,10 +2070,10 @@
     (boolean (and (map? row) (not (make/fetch? row))))))
 
 (defn carry-sticks?
-  "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or placed
-   within reach already (the table first: carry-table?, so the planks a table needs are never
-   spent on sticks), and they can be made from what is held (sticks-at-hand?) or their wood is a
-   short trip (wood-near?). A table and
+  "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or
+   placed within reach already (the table first: carry-table?, so the planks a table needs are
+   never spent on sticks), and they can be made from what is held (sticks-at-hand?) or their wood
+   is a short trip (wood-near?). A table and
    cobblestone make no pickaxe without sticks: a probe of world R3/12 seed 1 from spawn on main
    (Refs #178) wore out its pickaxes in the cast holding a table, 684 cobblestone and one plank,
    no sticks, and cut stairs up through deepslate by hand for a log, fifteen seconds a block,
@@ -2122,7 +2122,10 @@
   ;; build the row's plan (:goal/build) at the site remembered while its pool can finish it
   ;; (spent?), else at one chosen now (the :build intent remembers it), its access steps up to the
   ;; lava's height (station); with none, hunt for lava (lava-hunt), else wait :no-site.
-  ;; A reachable lit portal skips the kit and table collection: only entry remains (lit-entry)
+  ;; A reachable lit portal skips the kit but not the placed table, taken along on the way in: a
+  ;; pickaxe made at the portal leaves the table standing, and the Nether has no wood for another
+  ;; (sim race probe 39782256061, issue #338, R2/12 seed 2: table held at 15 minutes, gone at 16
+  ;; in the Nether, one stick, one plank; the tunnel dug by hand for the next hour)
   [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]}
         (let [{:site/keys [origin facing] :as site} (memory/site world)]
@@ -2139,9 +2142,9 @@
     (or (when-not (and entry
                        (or (intent/centred? world (:build/stand entry))
                            (stand-walk world (:build/stand entry))))
-          (or (held-first world goal table ops)
-              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
-              (make/take-table-along world)))
+          (held-first world goal table ops))
+        (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+        (make/take-table-along world)
         (cond origin
               {:intent/kind :build
                :intent/build build
