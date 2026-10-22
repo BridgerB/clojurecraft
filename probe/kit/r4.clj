@@ -1,24 +1,21 @@
 (ns kit.r4
-  (:require [clojure.math :as math]
-            [clojurecraft.capture :as capture]
+  (:require [clojurecraft.capture :as capture]
+            [clojurecraft.intent :as intent]
+            [clojurecraft.place :as place]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as sr]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.stone :as stone]))
 
 (defn -main
-  "Prints where the bot is and what it does at growing times after the snapshot's moment."
+  "Prints, tick by tick from the snapshot's moment, the intent with its child, and what the placing planners answer."
   [& [path]]
   (let [snap (capture/read-world path)
-        mom (sr/moment-of snap (sr/world-for! snap))]
-    (doseq [ms [1000 5000 20000 60000 200000]]
-      (let [wd (:world (sim/play-from sr/step mom (constantly false) ms nil nil))
-            [x y z] (mapv #(long (math/floor %)) (:player/pos wd))]
-        (println "T" ms
-                 "pos" (:player/pos wd)
-                 "ground" (:player/on-ground? wd)
-                 "ctl" (:player/controls wd)
-                 "intent" (pr-str (:plan/intent wd))
-                 "below" (terrain/block-at wd [x (dec y) z])
-                 "at" (terrain/block-at wd [x y z])
-                 "plan" (select-keys wd [:plan/status :plan/wait :plan/failures]))))
+        mom (sr/moment-of snap (sr/world-for! snap))
+        w0 (:world mom)]
+    (println "REDIG-PLACE" (pr-str (stone/redig-place w0 :gravel)))
+    (println "FRESH-ROCK" (pr-str (place/fresh-rock w0)))
+    (println "FEET" (intent/feet w0) "inwater" (:player/in-water? w0))
+    (doseq [ms (range 50 1500 50)]
+      (let [wd (:world (sim/play-from sr/step mom (constantly false) ms nil nil))]
+        (println "T" ms (pr-str (:plan/intent wd)) (:player/controls wd))))
     (shutdown-agents)))
