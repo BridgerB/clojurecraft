@@ -558,6 +558,18 @@
                (filler world (count laid)))
       laid)))
 
+(defn reserve-level-lay
+  "The cells level-lay would lay before a level step of a staircase of kind from feet, nil for a
+   stair down when laying them would leave less than lay-reserve filler (a stair up's step is
+   the climb the reserve is for). Issue #37 (real bot Clj_r16, snapshot real-7-s2, and sim
+   R3/15): a descent over a void was refused its floors at the reserve (lay), then level-lay
+   floored fifteen level steps of a bridge with the same dirt and the three planks, past the
+   reserve, to none, and every stair up from the bridge's end was :boxed with nothing to lay."
+  [world kind cells feet]
+  (when-let [laid (level-lay world feet cells)]
+    (when (or (not= :stairs-down kind) (>= (- (carried-filler world) (count laid)) lay-reserve))
+      laid)))
+
 #_{:splint/disable [naming/conversion-functions]} ; "the next cell to open", not a conversion
 (defn next-to-open
   "The first of the stair's cells (top first) still in the body's way, or nil when the stair is
@@ -841,7 +853,7 @@
         laid (fn [d]
                (let [cells (level-cells feet d)]
                  (or (and (level-clear? world cells) (lay world feet cells))
-                     (level-lay world feet cells))))
+                     (reserve-level-lay world kind cells feet))))
         pick (fn [ws]
                (or (first (filter #(level-safe? world (level-cells feet %)) ws))
                    (first (filter laid ws))))
