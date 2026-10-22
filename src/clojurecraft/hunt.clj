@@ -103,16 +103,23 @@
   "[eid entity] of the nearest animal of game-kinds, alive, not blacklisted, within reach
    (hunt-radius, starving-radius when starving), the first of the candidates nearest that a route
    reaches (intent/routable?) and a fight can reach from its end (fightable-from-route?); nil
-   when there is none."
+   when there is none, and none while the body is in water: no route is walked from there, the
+   rows that swim out come first. Never an animal standing in a cell of the blacklist, where a
+   walk to it that failed :no-path left it (fail-intent blacklists the walk's cell, not the
+   animal). Sim snapshot R1-41-1 (issue #162): the bot surfaced in open sea, a sheep stood on
+   the far shore, and the walk at its cell failed :no-path every twelve seconds, twelve in a row
+   ending the plan."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
         radius (reach world)]
     (->> (:world/entities world)
          (filter (fn [[eid e]]
-                   (and (game-kinds (entity/kind e))
+                   (and (not (:player/in-water? world))
+                        (game-kinds (entity/kind e))
                         (not (entity/dead? e))
                         (not (contains? bl eid))
+                        (not (contains? bl (cell (:entity/pos e))))
                         (<= (physics/distance pos (:entity/pos e)) radius))))
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (take candidates)

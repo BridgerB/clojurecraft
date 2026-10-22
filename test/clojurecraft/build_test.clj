@@ -1633,3 +1633,55 @@
     (is (nil? (build/plant-in-sight w aim)) "a clear line needs no dig")
     (is (= vein (build/plant-in-sight veined aim)) "the vein is the block to dig")
     (is (nil? (build/plant-in-sight rocked aim)) "a solid wall is the cast's, never dug here")))
+
+(defn kit-of
+  "Inventory slots holding the items in kit, a vector of [item count]."
+  [kit]
+  (into {} (map-indexed (fn [slot [item n]] [slot {:item (recipe/item-id item) :count n}]) kit)))
+
+(deftest a-cleanup-scoop-never-takes-the-last-empty-bucket
+  ;; issue #518 (snapshots R4-8-1, real-2-s1-Clj_r24): one empty and one water bucket held, the
+  ;; first cell's water source scooped, two water buckets and no empty one for the lava refill
+  (let [at #(build/cell origin :south %)
+        over (at [1 1 0])
+        under (at [1 0 0])
+        w (-> (game/init fx/opts)
+              (assoc :world/chunks {})
+              (assoc :world/blocks
+                     {over (get-in scoop/fluids [:water :source])
+                      under (blocks/default-state :obsidian)}))
+        held (fn [kit] (assoc w :player/inventory (kit-of kit)))
+        i {:intent/kind :build :intent/origin origin :intent/facing :south}]
+    (testing "the scoop that would strand the last empty bucket"
+      (is (true? (build/last-bucket-scoop? (held [[:bucket 1] [:water_bucket 1]]))))
+      (is (false? (build/last-bucket-scoop? (held [[:bucket 2] [:water_bucket 1]]))) "a spare")
+      (is (false? (build/last-bucket-scoop? (held [[:bucket 1]]))) "no water bucket held"))
+    (testing "a filler is placed into the source instead"
+      (is (= {:intent/kind :place :intent/item :cobblestone :intent/cell over}
+             (build/seal-source (held [[:bucket 1] [:water_bucket 1] [:cobblestone 8]]) over)))
+      (is (nil? (build/seal-source (held [[:bucket 1] [:water_bucket 1]]) over)) "no filler"))
+    (testing "a bot already holding water buckets only pours one out where the cast has obsidian"
+      (let [full (assoc-in (held [[:water_bucket 2] [:cobblestone 8]])
+                  [:world/blocks over]
+                  (blocks/default-state :air))
+            none (update full :world/blocks dissoc under)
+            spare (build/spare-pour-op full i)]
+        (is (nil? (build/spare-pour-op none i)) "no cast cell, no safe place")
+        (is (= :water_bucket (:build/item spare)))
+        (is (= over (:build/into spare)))
+        (is (= [:water-source over] (:build/done spare)))
+        (is (nil? (build/spare-pour-op (held [[:water_bucket 2]]) i)) "no filler to seal it")))))
+
+(deftest a-stand-no-line-can-dig-to-is-no-station
+  ;; issue #162 (snapshot real-4-s1-Clj_r08): the lava's stand lay behind cells beside lava the
+  ;; build never digs, and the walk at it failed :no-path three times
+  (let [stand [3 5 0]
+        stone (blocks/default-state :stone)
+        rock (into {} (for [x [1 2 3] y [5 6]] [[x y 0] stone]))
+        w (-> (game/init fx/opts)
+              (assoc :player/pos [0.5 5.0 0.5] :world/chunks {})
+              (assoc :world/blocks rock))
+        lava (assoc-in w [:world/blocks [2 5 1]] blocks/lava-base)]
+    (is (true? (build/way-open? w stand :portal origin :south)) "stone to dig through")
+    (is (false? (build/way-open? lava stand :portal origin :south))
+        "a cell of the line beside lava is never dug")))
