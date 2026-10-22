@@ -118,6 +118,12 @@
     (cond-> {:intent/kind :walk :intent/target target :intent/for :log :intent/trunk bottom}
       (>= (- (physics/y-of target) feet-y) intent/pickup-rise) (assoc :intent/pickup? true))))
 
+(defn toward
+  "The cardinal heading from feet toward trunk on the plane: along the axis with the larger
+   distance, x on a tie, so a staircase cut that way closes on the trunk."
+  [[fx _ fz] [tx _ tz]]
+  (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)]))
+
 (defn trees-climb
   "Out of the ground (stairs/out?) with a remembered trunk no walk reaches and the trunk above
   the eye: stairs up toward it, to-height only (the open sky over the feet is not the trees),
@@ -139,16 +145,11 @@
                                                                               [tx 0 tz])
                                                  search-radius)))
                                       trunks))]
-        (let [[fx _ fz] feet
-              [tx _ tz] above
-              dir (if (>= (abs (- tx fx)) (abs (- tz fz)))
-                    [(if (< fx tx) 1 -1) 0]
-                    [0 (if (< fz tz) 1 -1)])]
-          {:intent/kind :stairs-up
-           :intent/to-y (stairs/climb-to world (nth above 1))
-           :intent/to-height? true
-           :intent/dir dir
-           :intent/for :surface})))))
+        {:intent/kind :stairs-up
+         :intent/to-y (stairs/climb-to world (nth above 1))
+         :intent/to-height? true
+         :intent/dir (toward feet above)
+         :intent/for :surface}))))
 
 (defn descended?
   "Did the intent that just ended cut a length of stairs down toward the trees (a done :stairs-down
@@ -186,7 +187,7 @@
         drop-over (if continuing? continue-drop 12)]
     (when (and (or continuing? (stairs/out? world feet))
                (not (contains? (:plan/boxed-at world #{}) feet)))
-      (when-let [[tx ty tz :as trunk]
+      (when-let [[_ ty _ :as trunk]
                  (let [near (filter (fn [[tx ty tz]]
                                       (and (> (- (physics/y-of (game/eye world)) ty) drop-over)
                                            (<= (physics/horizontal-distance (:player/pos world)
@@ -195,15 +196,13 @@
                                     trunks)
                        kept (when continuing? (:intent/trunk (:plan/last world)))]
                    (or (some #(when (= kept %) %) near) (first near)))]
-        (let [[fx _ fz] feet]
-          {:intent/kind :stairs-down
-           :intent/trunk trunk
-           :intent/to-y (max ty (- fy stone/stair-depth))
-           :intent/dir
-           (if (>= (abs (- tx fx)) (abs (- tz fz))) [(if (< fx tx) 1 -1) 0] [0 (if (< fz tz) 1 -1)])
-           :intent/for :trees})))))
+        {:intent/kind :stairs-down
+         :intent/trunk trunk
+         :intent/to-y (max ty (- fy stone/stair-depth))
+         :intent/dir (toward feet trunk)
+         :intent/for :trees}))))
 
-(declare water-toward?)
+(declare water-toward? crossing)
 
 (defn trees-bridge
   "Out of the ground (stairs/out?) with a standing trunk close by and level with the feet that no
@@ -339,9 +338,11 @@
           (when (descended? world) (trees-descend world trunks))
           (when (tunneled? world) (trees-tunnel world))
           (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
-            (or (opening-up world)
+            (or (when (:player/in-water? world) (crossing world))
+                (opening-up world)
                 {:intent/kind :stairs-up
                  :intent/to-y (stairs/climb-to world terrain/top-y)
+                 :intent/dir (toward feet (first trunks))
                  :intent/for :surface}))
           (trees-climb world trunks)
           (when-not (tunneled? world) (trees-bridge world trunks))

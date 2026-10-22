@@ -213,6 +213,13 @@
                            (map #(path/classify world [x % z])
                                 (range (dec y) (- y bridge-depth) -1)))))))
 
+(defn bridging?
+  "Is the intent running one that may lay a floor over a fluid: a descent toward the trees
+   (:stairs-down, :intent/for :trees)? Its way down ends at the water, where the swim to the
+   trunk takes over (wood/crossing); the mine's stairs and a level step's causeway never bridge."
+  [world]
+  (let [{:intent/keys [kind for]} (:plan/intent world)] (and (= :stairs-down kind) (= :trees for))))
+
 (defn floor-laying
   "The cells to lay, in order, so that a floor lies under the new feet of a stair (or a level
    step) from feet whose floor is missing: the floor cell alone when a solid block borders it to
@@ -231,7 +238,8 @@
         holder [x (dec ny) z]
         kind #(path/classify world %)]
     (cond (= :solid (kind floor)) []
-          (or (not= :clear (kind floor)) (over-fluid? world floor)) nil
+          (or (not= :clear (kind floor)) (and (over-fluid? world floor) (not (bridging? world))))
+          nil
           (place/support world floor) [floor]
           (and (= :clear (kind holder)) (place/support world holder)) [holder floor]
           :else nil)))
