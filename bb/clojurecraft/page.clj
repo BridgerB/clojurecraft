@@ -154,10 +154,14 @@
 
 (defn round
   "The round as a value (see the namespace): runs and marks are what the report job downloaded,
-   the rest is the run's own facts."
-  [runs marks milestones {:keys [kind run commit at started ended issues runner batch]}]
-  (let [{:keys [deaths died]} (deaths runs)]
+   the rest is the run's own facts. A run that never got into play (failures/unplayed?: its
+   server refused it or was gone) is no run of the bot's: it is kept out of every count and
+   counted alone as :round/unplayed."
+  [all marks milestones {:keys [kind run commit at started ended issues runner batch]}]
+  (let [runs (remove failures/unplayed? all)
+        {:keys [deaths died]} (deaths runs)]
     (cond-> {:round/run run
+             :round/unplayed (- (count all) (count runs))
              :round/kind kind
              :round/commit commit
              :round/at at
@@ -232,6 +236,7 @@
       (:round/runner r) (assoc :runner (:round/runner r))
       (:round/batch r) (assoc :batch (:round/batch r))
       (:round/deaths r) (assoc :deaths (:round/deaths r) :died (:round/died r 0))
+      (:round/unplayed r) (assoc :unplayed (:round/unplayed r))
       (seq issues) (assoc :issues issues)
       (:round/first-at r) (assoc :first (:round/first-at r))
       (:round/leader r) (assoc :leader (:round/leader r)))))
@@ -292,7 +297,8 @@
   "One row from batches (a run's, or a day's of one kind): counts summed, failures summed by
    signature, each milestone's fastest the least and its median weighted (speeds), the earliest
    start and first reach, the latest end, the runners, the furthest leader; deaths only over the
-   batches that counted them, with the runs they cover as :death-runs."
+   batches that counted them, with the runs they cover as :death-runs; the runs that never got
+   into play (:unplayed, played) over the batches that kept them out."
   [bs]
   (let [some-of (fn [k] (some k bs))
         sum (fn [k xs] (reduce + 0 (keep k xs)))
@@ -316,6 +322,7 @@
       (assoc :deaths (sum :deaths counted)
              :died (sum :died counted)
              :death-runs (sum :runs counted))
+      (seq (keep :unplayed bs)) (assoc :unplayed (sum :unplayed bs))
       (seq (keep :issues bs)) (assoc :issues (apply merge (keep :issues bs)))
       (seq (keep :first bs)) (assoc :first (apply merge-with earliest (keep :first bs)))
       (seq (keep :leader bs)) (assoc :leader (best-leader (keep :leader bs))))))
@@ -327,27 +334,46 @@
   [bs]
   (let [c (combine bs)
         top (vec (take summary-failures (:failures c)))
-        t (assoc (select-keys c [:runs :ok :deaths :died :death-runs :reached :speed :first])
-                 :rounds (count (distinct (map :run bs)))
-                 :commits (vec (distinct (keep :commit bs)))
-                 :stops
-                 (reduce (fn [m [stage _ n]] (update m (keyword stage) (fnil + 0) n))
-                         {}
-                         (:failures c))
-                 :failures top)]
+        t (assoc
+           (select-keys c [:runs :ok :unplayed :deaths :died :death-runs :reached :speed :first])
+           :rounds (count (distinct (map :run bs)))
+           :commits (vec (distinct (keep :commit bs)))
+           :stops
+           (reduce (fn [m [stage _ n]] (update m (keyword stage) (fnil + 0) n)) {} (:failures c))
+           :failures top)]
     (cond-> t (:issues c) (assoc :issues (select-keys (:issues c) (map sig-key top))))))
 
+(defn played
+  "A batch without the runs that never got into play, for a batch stored before bb churn kept
+   them out (one without :unplayed): a real batch's [wood crashed] rows are bots whose server
+   refused them (race 39817745908's dead server: 2,864 in eight batches, most of the real stops
+   that day). They reached nothing, died never and had no times, so their row, its issue and its
+   count off :runs are all they were; the count goes to :unplayed. A real bot that crashes at its
+   first target on its own lands here too: no other real batch on the branch (Oct 13 to 22) has
+   the row. A sim batch, a newer one, or one without the row is unchanged."
+  [b]
+  (let [unplayed? (fn [[stage reason]] (= ["wood" "crashed"] [stage reason]))
+        n (reduce + 0 (map #(nth % 2) (filter unplayed? (:failures b))))]
+    (cond (or (not= "real" (:kind b)) (contains? b :unplayed) (zero? n)) b
+          :else
+          (cond-> (assoc b
+                         :runs (max 0 (- (:runs b 0) n))
+                         :unplayed n
+                         :failures (vec (remove unplayed? (:failures b))))
+            (:issues b) (update :issues dissoc (sig-key [:wood :crashed]))))))
+
 (defn day
-  "A day's file from its batches: its runs (one row a run and kind, by start), and its totals
-   per kind ({:real totals :sim totals}, a kind with no batch absent)."
-  [date bs]
-  {:date date
-   :runs (->> (group-by (juxt :run :kind) bs)
-              vals
-              (map combine)
-              (sort-by (juxt #(str (:started %)) :run :kind))
-              vec)
-   :totals (into {} (for [[k kbs] (group-by :kind bs)] [(keyword k) (totals kbs)]))})
+  "A day's file from its batches, each as it counts (played): its runs (one row a run and kind,
+   by start), and its totals per kind ({:real totals :sim totals}, a kind with no batch absent)."
+  [date stored]
+  (let [bs (map played stored)]
+    {:date date
+     :runs (->> (group-by (juxt :run :kind) bs)
+                vals
+                (map combine)
+                (sort-by (juxt #(str (:started %)) :run :kind))
+                vec)
+     :totals (into {} (for [[k kbs] (group-by :kind bs)] [(keyword k) (totals kbs)]))}))
 
 (defn with-day
   "summary ({:days [{:date :real :sim}]}, oldest first) with a day's totals in place of its own."
@@ -417,6 +443,20 @@
         summary' (reduce with-day (or summary {:days []}) (map (fn [[d dbs]] (day d dbs)) by-day))]
     (cond-> (assoc files summary-file (json-line (assoc summary' :updated now)))
       (some? legacy) (merge (zipmap (cons legacy-file stale-files) (repeat nil))))))
+
+(defn rebuilt
+  "Every day file and the summary rebuilt from the days' batches as the branch holds them
+   (days: {day ndjson-text}; summary: summary.json's value or nil, whose days with no batches are
+   kept, and its :updated): {path text}. The site serves these (bb site build), so a rule for what
+   a batch counts (played) reaches the days published before it, and the branch's record stays
+   as it was written. Pure."
+  [days summary]
+  (let [ds (for [[d text] (sort days)] (day d (read-ndjson text)))
+        summary' (reduce with-day (or summary {:days []}) ds)]
+    (into {summary-file (json-line (cond-> summary'
+                                     (:updated summary) (assoc :updated (:updated summary))))}
+          (map (fn [d] [(day-path (:date d)) (json-line d)]))
+          ds)))
 
 (defn publish-change
   "The change a publish of bs makes (changes), reading the branch through read (a path's text,

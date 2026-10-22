@@ -2621,11 +2621,11 @@
 
 (def kit-start
   "What the kit starts from: the stone pickaxe, a crafting table, the furnace's eight
-   cobblestone and four logs."
+   cobblestone and eight logs (twenty-four sticks are three of them)."
   {[:hotbar 0] {:item (item :stone_pickaxe) :count 1}
    [:hotbar 1] {:item (item :crafting_table) :count 1}
    [:main 0] {:item (item :cobblestone) :count 8}
-   [:main 1] {:item (item :oak_log) :count 4}})
+   [:main 1] {:item (item :oak_log) :count 8}})
 
 (defn recording
   "step, with every event written to tap before it is applied and only the effects that event
