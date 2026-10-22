@@ -528,6 +528,20 @@
   (is (every? (fn [[dx _ dz]] (= 1 (+ (abs dx) (abs dz)))) (fortress/moves [0 64 0] [5 64 5]))
       "one block along one axis"))
 
+(deftest a-target-straight-overhead-is-climbed-toward-before-any-step-down
+  ;; issue #286, sim snapshot R2-39-1: a fortress 35 blocks straight over the feet; the second
+  ;; direction's step down was safe and was taken before the fourth direction's step up
+  (let [overhead (fortress/moves [0 21 0] [0 55 0])
+        ups (take-while (fn [[_ dy _]] (= 1 dy)) overhead)]
+    (is (= 4 (count ups)) "all four directions' steps up come first")
+    (is (every? (fn [[_ dy _]] (not= 1 dy)) (drop 4 overhead)) "then level and down")
+    (is (= [0 -1 1] (nth (fortress/moves [0 21 0] [0 24 0]) 4))
+        "a target within the climb keeps each direction's own order"))
+  (is (= [-1 1 0] (first (fortress/moves [0 50 0] [-600 55 0])))
+      "far off to the side the step is still toward the target, up first")
+  (is (= [[-1 1 0] [-1 0 0] [-1 -1 0]] (take 3 (fortress/moves [0 50 0] [-600 55 0])))
+      "and each direction keeps its own heights, as before"))
+
 (deftest a-blocked-tunnel-can-retreat
   (let [wall (blocks/default-state :obsidian)
         w (rock (into {} (for [[x z] [[1 0] [0 1] [0 -1]] y (range 63 67)] [[x y z] wall])))]
