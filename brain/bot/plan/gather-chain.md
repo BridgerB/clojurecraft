@@ -65,6 +65,16 @@ sourceRefs:
   - test/clojurecraft/plan_test.clj#a-trunk-above-the-band-is-walked-to
   - src/clojurecraft/intent.clj#defn opening
   - test/clojurecraft/plan_test.clj#a-shaft-to-the-sky-is-walked-not-cut
+  - src/clojurecraft/wood.clj#defn toward
+  - src/clojurecraft/wood.clj#defn far-trunks
+  - src/clojurecraft/wood.clj#defn valley
+  - src/clojurecraft/wood.clj#defn descended-valley?
+  - src/clojurecraft/stairs.clj#defn bridging?
+  - test/clojurecraft/plan_test.clj#a-climb-out-is-cut-toward-the-trunk
+  - test/clojurecraft/plan_test.clj#a-bot-in-the-water-swims-for-the-trees-before-it-climbs
+  - test/clojurecraft/plan_test.clj#a-perch-across-a-valley-is-descended-for-the-trees
+  - test/clojurecraft/plan_test.clj#a-valley-goes-on-from-the-foot-of-its-last-length
+  - test/clojurecraft/stone_test.clj#a-descent-toward-the-trees-lays-its-floor-over-water
 related:
   - "[[bot/plan/_moc|Plan]]"
   - "[[collect-intent]]"
@@ -109,6 +119,7 @@ On a sheet of ice (`path/on-ice?`) `gather-next` takes `stone/off-ice` after the
 - The mirror: a trunk far below the eye (past the near band's twelve), out of the ground, no walk reaching it, is descended toward with `:stairs-down` (`wood/trees-descend`, within `descend-reach` on the plane, never from a boxed cell). Real race (issue #57, snapshot real-4-s2-Clj_r07): bot on a mountain top at y 238, nearest trunk 56 below and 60 across, waited `:no-log`; it now cuts stairs down toward it.
   Once a length is cut the next goes on from its foot (`wood/descended?`: the last intent a done `:stairs-down` `:intent/for :trees`), in the ground, where `stairs/out?` no longer holds: from the foot the walk up the air already dug (`intent/opening`) took the bot back to the mouth every seven seconds to cut the same length again. Sim race 39593219246 (issue #135, world R4/4) did it for fifteen minutes with the trunks forty below and the food at zero (`the-next-length-down-goes-on-from-the-foot-of-the-last`).
 
+- The climb out never pillars up in the air to find the trees. Sim snapshots R1/4 (issue #186) and R2/29, R4/16 (issue #89), and real-2 s2 Clj_r15 (issue #186) each ended on a pillar of the bot's own steps in the open air, ten to twenty over a sea, a valley or a cliff, with the trunks twenty to sixty blocks off and no route to any; the stairs of a climb out had gone east whichever way the trees lay, the water's surface had been climbed from instead of crossed, and the floors of a way back down are refused over water (`a-floor-is-never-laid-over-water`). Now: the climb out is cut `toward` the nearest trunk (`:intent/dir`, as `trees-climb`'s is; `a-climb-out-is-cut-toward-the-trunk`); a bot afloat under the open sky `crossing`s before it climbs (`a-bot-in-the-water-swims-for-the-trees-before-it-climbs`); a stair down for the trees or a valley lays its floor over water (`stairs/bridging?`, `a-descent-toward-the-trees-lays-its-floor-over-water`), the descent ending at the water where the crossing takes over; and the gather act's last resort before the wait, `valley` (`gather-or-out`, never `gather-next`, so a spare is not sent), cuts stairs down toward the nearest trunk whatever its height from a perch no walk, hunt or crossing leaves (`a-perch-across-a-valley-is-descended-for-the-trees`), on from the foot of each length while it is in the ground and no deeper than `valley-floor` under the trunk (`descended-valley?`, `a-valley-goes-on-from-the-foot-of-its-last-length`: the walk up the air already dug took the bot back to the perch every few seconds), the trunk then above the eye and `trees-climb`'s.
 - A grove no route reaches is one failure. `plan/fail-intent` adds the target of a log walk that failed `:no-path` to `:plan/unreached`, and `wood/skipped` passes over every log within `unreached-radius` (8) of one, so the far-candidates are not twelve trunks of one grove, a walk each (twelve unwalkable walks fail the plan). Real race 39042120284 bot Clj_r14 (issue #75, snapshot real-1-s1) stood on a shore with the trees two hundred blocks off across the sea; the hunt and the crossing never had their turn.
 ## See also
 - [[collect-intent]] - where a blocker is named.

@@ -11,6 +11,7 @@
             [clojurecraft.make]
             [clojurecraft.memory :as memory]
             [clojurecraft.mob :as mob]
+            [clojurecraft.path :as path]
             [clojurecraft.pearls :as pearls]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
@@ -174,7 +175,18 @@
                                  (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
                              row
                              plan/goals))
-        "a pocket with an enderman twelve blocks off through the rock: a tunnel toward it")))
+        "a pocket with an enderman twelve blocks off through the rock: a tunnel toward it")
+    ;; batch pearls-warped7-a (plan run 39714009099, probe 39720871893) run 4: fifteen tunnels
+    ;; east and west over one 5 blocks off and 4 below in a cave, about 100 digs in a minute
+    (let [pocket (-> (standing {7 (enderman [8.5 60.0 13.5])})
+                     (assoc :world/chunks (cave (passage 8 8)))
+                     (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
+      (is (nil? (pearls/bore pocket (pearls/endermen pocket pearls/descend-radius)))
+          "one five off through the rock, four below: a tunnel of eight would run past it")
+      (let [eight (assoc-in pocket [:world/entities 7 :entity/pos] [8.5 60.0 16.5])]
+        (is (= :tunnel
+               (:intent/kind (pearls/bore eight (pearls/endermen eight pearls/descend-radius))))
+            "eight off: the tunnel ends beside it")))))
 
 (def cliff
   "Stone six high (y 64 to 69) across z 20 to 31 of the chunk column [0 1]: a ledge no route
@@ -238,6 +250,27 @@
       (is (some? end) "a roam east on open ground")
       (is (not= end (:intent/target (pearls/roam roamed)))
           "roamed to once: the next heading, somewhere else"))))
+
+(deftest a-roam-with-every-near-end-walked-to-goes-farther
+  ;; batch pearls-warped6-b (plan run 39700288080, probe 39711523945) run 5: six pearls in
+  ;; twenty-two minutes from one stretch of the floor, then no enderman within 64 for most of
+  ;; the last sixteen, every end the roam found within thirty blocks already walked to (86 of
+  ;; them), and lookouts from the twenty-seventh minute to the end
+  (let [open (reduce #(assoc-in %1 [:world/chunks [%2 0]] (world/column {}))
+                     (assoc (standing {}) :time/now 0)
+                     [1 2 3])
+        far? (fn [c] (>= (path/octile [8 64 8] c) (* 2 pearls/roam-reach)))
+        roamed (fn [[w ends] n]
+                 (if-let [end (:intent/target (pearls/roam w))]
+                   [(memory/remember-intention w
+                                               {:intent/id n :intent/kind :walk :intent/target end}
+                                               :done) (conj ends end)]
+                   (reduced [w ends])))
+        [_ ends] (reduce roamed [open []] (range 12))]
+    (is (= (count ends) (count (set ends))) "each end somewhere else")
+    (is (not (far? (first ends))) "the first sixteen off")
+    (is (some far? ends) "the near ends spent, one thirty-two off or more")
+    (is (= 64 (second (first (filter far? ends)))) "on the floor, by the route's own measure")))
 
 (deftest a-worn-pickaxe-is-kept-for-the-burrow
   ;; gym batch pearls-warped3-a (plan run 39529384355) run 1: three kills from a burrow, then the
@@ -381,6 +414,14 @@
                              row
                              plan/goals))
         "hurt in the burrow with none coming: it stays, not out to the mouth")
+    ;; batch pearls-warped7-a (plan run 39714009099, probe 39723064504) run 5: pearls from five
+    ;; kills, then, its burrow given up and its health at 7, roamed the floor with no enderman
+    ;; within 32 and was slain at 36 minutes
+    (is
+     (= {:intent/kind :lookout :intent/for :pearls}
+        (plan/next-intent (assoc (standing {7 far}) :player/health 6.0) row plan/goals))
+     "hurt with no burrow and none coming: it stands where it is till its health is back, no
+         walk or roam in the open")
     (is (= :eat
            (:intent/kind (plan/next-intent (-> (burrowed [8.5 61.0 8.5] {7 far})
                                                (assoc :player/health 6.0 :player/food 15)
@@ -396,12 +437,20 @@
   ;; and were slain; the third's run 2 went from the end to the mouth and back for two minutes
   ;; while a calm one stood beside the mouth. Batch pearls-warped-d (plan run 39160760074) run 1:
   ;; three pearls in six minutes, then thirty-four in the burrow over such ones standing off
-  (let [angry (assoc (enderman [3.5 64.0 20.5]) :entity/creepy? true)]
+  (let [angry (assoc (enderman [3.5 64.0 20.5]) :entity/creepy? true)
+        given-up (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})]
+    (is
+     (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent given-up row plan/goals))
+     "in the burrow, the one given up on angry twelve off the mouth, within its stare range of
+         16 (danger-radius): kept in")
     (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
-           (plan/next-intent (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})
+           (plan/next-intent (looked given-up 6) row plan/goals))
+        "half a minute of it not coming: out to the mouth to lure it")
+    (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+           (plan/next-intent (assoc-in given-up [:world/entities 7 :entity/pos] [3.5 64.0 26.5])
                              row
                              plan/goals))
-        "in the burrow, the one given up on angry twelve blocks off: out to the mouth")
+        "eighteen off, past its stare range: out to the mouth at once, as before")
     (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
            (plan/next-intent (assoc (burrowed [3.5 64.0 8.5]
                                               {7 (assoc angry :entity/pos [5.5 64.0 10.5])})
@@ -481,6 +530,23 @@
     (is (nil? (pearls/descend (standing {7 below}) {7 below})) "no pickaxe: no stairs")
     (is (nil? (pearls/descend w {7 (enderman [8.5 59.0 8.5])}))
         "five below is a slope's worth, not another level: the roam's")
+    ;; batch pearls-warped6-b (plan run 39700288080, probe 39711523945) run 2: four flights down
+    ;; toward endermen 47 to 69 blocks off on the plane and 10 to 14 below, about 90 digs, in the
+    ;; five minutes after its first kill, and the pickaxe worn out at eleven minutes; the flights
+    ;; that paid, run 4's seven kills and run 5's four, went toward ones 12 to 31 off
+    (is (nil? (pearls/descend w {7 (enderman [48.5 40.0 8.5])}))
+        "forty off on the plane, as far below: walked toward first, no flight toward it")
+    (is (not= :stairs-down
+              (:intent/kind (plan/next-intent
+                             (assoc-in w [:world/entities 7 :entity/pos] [48.5 40.0 8.5])
+                             row
+                             plan/goals))))
+    (is (= 56 (:intent/to-y (pearls/descend w {7 (enderman [40.5 40.0 8.5])})))
+        "thirty-two off: within cut-reach, the flight as before")
+    (is
+     (= :stairs-down (:intent/kind (pearls/descend w {7 below 9 (enderman [8.5 65.0 30.5])})))
+     "one on this level too, hidden and far: the flight toward the near one below still goes
+         (run 4's paying flights went with one to seven on its level within 128)")
     (let [w (burrowed [3.5 64.0 8.5] {7 (enderman [12.5 40.0 8.5])} ledge-wall)]
       (is (nil? (pearls/toward w (pearls/endermen w pearls/seek-radius)))
           "the only route east ends in the burrow, five nearer on the plane: never into it")
@@ -640,22 +706,69 @@
       (is (not (pearls/stale? (looked (at [3.5 64.0 15.5]) 12)))
           "an angry one given up on near the mouth keeps the burrow")
       (is (= {:intent/kind :lookout :intent/for :pearls}
-             (plan/next-intent (looked (at [3.5 64.0 15.5]) 12) row plan/goals))
+             (plan/next-intent (looked (at [3.5 64.0 15.5]) 5) row plan/goals))
           "and the bot in it")
+      ;; batch pearls-warped7-a (plan run 39714009099, probe 39720871893) run 2 stood eight
+      ;; minutes over one 5 off and 5 above the end, then twenty-four over one 10 off and 3 above
+      ;; that never moved; it comes the moment the bot shows itself (batch pearls-warped6-a run 4)
+      (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+             (plan/next-intent (looked (at [3.5 64.0 15.5]) 6) row plan/goals))
+          "half a minute of it not coming: out to the mouth to bring it, and straight back in")
+      (is (= {:intent/kind :lookout :intent/for :pearls}
+             (plan/next-intent (memory/remember-intention
+                                (looked (at [3.5 64.0 15.5]) 12)
+                                {:intent/id 30 :intent/kind :walk :intent/target [8 61 8]}
+                                :done)
+                               row
+                               plan/goals))
+          "back in from the mouth: the half minute counts again from the walk")
       (is
        (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
           (plan/next-intent (assoc (at [3.5 64.0 15.5]) :player/pos [3.5 64.0 8.5]) row plan/goals))
        "at the mouth: back in")
       (is (nil? (pearls/angry-near (at [3.5 44.0 8.5])))
           "one twenty below the mouth, in another cave, never comes: no danger")
-      (is (nil? (pearls/angry-near (at [14.5 64.0 8.5])))
-          "eleven off: past danger-radius, the mouth is walked to as before"))
+      (is (= 7 (first (pearls/angry-near (at [14.5 64.0 8.5]))))
+          "eleven off: within its own stare range of 16, it rushes the bot that steps out")
+      (is (nil? (pearls/angry-near (at [21.5 64.0 8.5])))
+          "eighteen off: past danger-radius, the mouth is walked to as before"))
     ;; batch pearls-warped4-b (plan run 39596287510, probe 39616249061): the arena's endermen
     ;; wander out of the mouth's line within the first minute, and the forest's stand hidden
     ;; behind its ledges; a burrow with nothing to do from it is given up the same way
     (is (not (pearls/stale? (looked (burrowed [8.5 61.0 8.5] {}) 11))) "no crowd, no minute yet")
     (is (pearls/stale? (looked (burrowed [8.5 61.0 8.5] {}) 12))
         "a minute of lookouts with none by the mouth: given up too")))
+
+(deftest a-calm-one-given-up-on-at-hand-gets-no-burrow-cut-for-it
+  ;; batch pearls-warped6-b (plan run 39700288080) run 4: a provoke of one by the mouth failed
+  ;; :unprovoked at 408 s and it stood there, calm and blacklisted; the burrow went stale after
+  ;; every minute of lookouts and, with it still at hand, the hunt cut the same burrow again from
+  ;; the same cell, six times in six minutes (about sixty digs), and the pickaxe wore out at
+  ;; thirty-two minutes with four pearls held
+  (let [calm (enderman [11.5 64.0 8.5])
+        w (assoc-in (standing {7 calm}) [:player/inventory 1] (item :iron_pickaxe 1))
+        ghost (assoc w :plan/blacklist #{7})]
+    (is (= {:intent/kind :burrow :intent/dir [-1 0] :intent/for :pearls}
+           (plan/next-intent w row plan/goals))
+        "a calm one three off, not given up on: the burrow it is met from, as before")
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent ghost row plan/goals))
+        "the same one given up on (:unprovoked): no burrow for it, the hunt looks for another")
+    (is (= :fight
+           (:intent/kind (plan/next-intent (assoc-in ghost [:world/entities 7 :entity/creepy?] true)
+                                           row
+                                           plan/goals)))
+        "an angry one given up on at hand is fought, as before")
+    ;; batch pearls-warped7-a (plan run 39714009099, probe 39720871893) run 4: three endermen in
+    ;; one spot 3.8 off, two blacklisted and one not; the blacklisted one nearest by a hair got
+    ;; no burrow, and the walk to the other, within reach, was planned 18,760 times in fifteen
+    ;; minutes
+    (let [two (assoc-in ghost [:world/entities 9] (enderman [11.5 64.0 8.6]))]
+      (is (= 9 (first (pearls/at-hand two))) "the one not given up on, though a hair farther")
+      (is (= {:intent/kind :burrow :intent/dir [-1 0] :intent/for :pearls}
+             (plan/next-intent two row plan/goals))
+          "is met from a burrow")
+      (is (nil? (pearls/routable two {9 (enderman [11.5 64.0 8.6])}))
+          "and a walk to one within reach is never planned: it would arrive where it begins"))))
 
 (deftest a-calm-one-at-hand-in-the-burrow-is-waited-out-never-held-a-fight
   ;; batch pearls-warped4-b's arena run 3 (plan run 39596287510, probe 39616249061): from its
