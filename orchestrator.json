@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T02:48:28.634Z",
+  "at" : "2026-10-22T02:49:37.003Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -21,7 +21,7 @@
     "number" : 501,
     "title" : "Bot stops at blaze-rods: no-heal",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 500,
     "title" : "Bot stops at blaze-rods: not-picked-up",
@@ -47,7 +47,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 501,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 130,
     "move" : "leave",
