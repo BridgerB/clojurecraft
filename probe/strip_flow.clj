@@ -47,7 +47,6 @@
          "start-cell" (path/start-cell world feet)
          "x" 1)
     (out "retreat" (pr-str (stone/retreat world)))
-    (out "flow-exit" (pr-str (stone/flow-exit world)))
     (out "walk-home" (pr-str (stone/walk-home world)))
     (out "climb" (pr-str (stone/climb world)))
     (cells world feet 6)))
