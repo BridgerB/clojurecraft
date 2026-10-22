@@ -516,6 +516,10 @@
         "four held is not the Nether's worth (issue #338)")
     (is (= :mine-iron (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 32})))
         "thirty-two held: the iron")
+    (is (= :mine-iron (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 16})))
+        "half held: the stock is not topped up for two sticks")
+    (is (= :gather-log (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 15})))
+        "under half: the trees")
     (is (= :mine-iron (row (with-furnace (world-holding {:stone_pickaxe 2 :coal 1} false))))
         "no tree to walk to: no trip for the sticks")))
 

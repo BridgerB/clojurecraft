@@ -196,19 +196,26 @@
           counts
           (recipe/counts (into {} (filter (comp window/worn? val)) (:player/inventory world)))))
 
+(def bulk-spare 8)                    ; a spare of this many is a stock, not a tool: topped up once half of it is gone
+
+(defn stocked?
+  "Is spare need k, n of it kept, a stock (bulk-spare or more) of which counts still holds half?
+   Topped up from the trees only below half: with the tunnel's thirty-two sticks (issue #338)
+   each pickaxe made would send the bot up from the mine for two more."
+  [counts k n]
+  (and (>= n bulk-spare) (>= (get counts (keyword (name k)) 0) (quot n 2))))
+
 (defn resolve-spares
   "[counts action] for the tools a row keeps one more of than it holds (:goal/spares, beside
    :goal/holds): planned when spare-worth? says the producer can be done. A mine is never one.
    A gather is one only when a log can be started now. A worn tool is no spare (without-worn):
-   it breaks in the next tunnel, and a new one is made while the table and sticks are at hand."
+   it breaks in the next tunnel, and a new one is made while the table and sticks are at hand.
+   A stock (stocked?) is left alone while half full."
   [world table counts row path]
   (reduce (fn [[c _] [k n]]
-            (let [[_ a] (resolve-need world
-                                      table
-                                      (without-worn world c)
-                                      k
-                                      (+ n (get (:goal/holds row) k 0))
-                                      path)]
+            (let [target (+ n (get (:goal/holds row) k 0))
+                  [_ a] (when-not (stocked? c k target)
+                          (resolve-need world table (without-worn world c) k target path))]
               (if (and a (spare-worth? world a)) (reduced [c a]) [c nil])))
           [counts nil]
           (:goal/spares row)))
