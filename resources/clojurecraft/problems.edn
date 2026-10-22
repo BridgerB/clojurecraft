@@ -158,6 +158,7 @@
    "Sim race 39593216223 R2/39 (issue #66) failed :stair-not-taken under a moss carpet two over the feet, which the jump rose into; a stair opens every cell with a collision box, not only a cube"
    "Race 39181272601 bot Clj_r23 (issue #40) walked over a glacier to a landing in chunks not loaded and failed :no-path where it stood twelve times; a walk off the ice that failed is not chosen again"
    "Race 39070889905 runner 1 (issue #342) spent its escape filler on descent seals and could not seal the climb out; descent seals must keep the same lay-reserve as floors, while climbs may spend it"
+   "Sim R3/15 (issue #37) stood on mineshaft planks over open air holding only gravel and was :boxed; a boxed stair up with a block to pillar from (gravel last) goes up as a shaft, and a bridge over a void keeps a block a block of the air over it"
    "Items in the furnace or grid are invisible to the inventory count, so steps flicker"
    "Closing the window with a loaded cursor drops the item on the ground"
    "No reachable surface water in a dry biome; the bot hangs at fill-water"

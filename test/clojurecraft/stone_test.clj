@@ -877,14 +877,49 @@
              (assoc (standing 64)
                     :player/inventory {0 {:item (blocks/items :dirt) :count n}}
                     :world/chunks {[0 0] (world/column {[6 63 5] blocks/air})}))
-        need (inc stairs/lay-reserve)]
+        need (inc stairs/max-void-reserve)
+        roofed
+        (fn [n y]
+          (assoc-in (at n) [:world/chunks [0 0]] (world/column {[6 63 5] blocks/air [6 y 5] 1})))]
     (is (= [[6 63 5]] (stairs/level-lay (at 1) feet cells)) "the floor is laid from any filler")
     (is (nil? (stairs/reserve-level-lay (at stairs/lay-reserve) :stairs-down cells feet))
         "a descent never lays into the reserve")
+    (is (nil? (stairs/reserve-level-lay (at stairs/max-void-reserve) :stairs-down cells feet))
+        "over open air it keeps a block a block of the void to pillar out of")
     (is (= [[6 63 5]] (stairs/reserve-level-lay (at need) :stairs-down cells feet))
         "it lays what the reserve leaves")
+    (is (= [[6 63 5]]
+           (stairs/reserve-level-lay (roofed (inc stairs/lay-reserve) 68) :stairs-down cells feet))
+        "under a low roof the reserve is lay-reserve")
+    (is (nil? (stairs/reserve-level-lay (roofed 12 77) :stairs-down cells feet))
+        "under a roof twelve up, the floor leaves eleven, short of twelve")
     (is (= [[6 63 5]] (stairs/reserve-level-lay (at 1) :stairs-up cells feet))
         "a climb's step is what the reserve is for")))
+
+(deftest a-boxed-climb-pillars-up-from-gravel
+  ;; issue #37 (sim snapshots R3-15-1 and R3-15-2): a bot on mineshaft planks over open air holding
+  ;; only gravel had every stair and level step refused for the floor it lacked, and was :boxed;
+  ;; it goes up as a shaft of pillars (gravel stays on a block), once
+  (let [intent {:intent/kind :stairs-up :intent/to-y 70 :intent/for :boxed :intent/status :active}
+        with
+        (fn [items i]
+          (assoc (standing 64)
+                 :player/inventory
+                 (into {} (map-indexed (fn [n [k c]] [n {:item (blocks/items k) :count c}])) items)
+                 :plan/intent i))
+        boxed (stairs/box (with {:gravel 20} intent))]
+    (is (= :gravel (stairs/pillar-item (with {:gravel 20} intent))))
+    (is (= :cobblestone (stairs/pillar-item (with {:gravel 20 :cobblestone 2} intent)))
+        "a filler first, gravel last")
+    (is (= :shaft (:intent/stage (:plan/intent boxed))) "the shaft instead of :boxed")
+    (is (not= :failed (:intent/status (:plan/intent boxed))))
+    (is (= :boxed
+           (:intent/reason (:plan/intent (stairs/box (with
+                                                      {:gravel 20}
+                                                      (assoc intent :intent/no-shaft :unsafe))))))
+        "a shaft given up is not tried again")
+    (is (= :boxed (:intent/reason (:plan/intent (stairs/box (with {:stick 4} intent)))))
+        "nothing to pillar from")))
 
 (deftest a-level-step-seals-the-water-beside-the-cells-it-digs
   ;; sim races 39081494214 R1/31 and 39074159590 R3/44 (issue #105): a climb up under a lake for
