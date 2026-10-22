@@ -36,13 +36,35 @@
 
 (defn cell "The block cell a point is in." [p] (mapv #(long (math/floor %)) p))
 
+(defn edible-held
+  "How many edible items (eat/edible) are held in the hotbar and the main inventory."
+  [world]
+  (reduce +
+          0
+          (for [[p {:keys [item count]}] (:player/inventory world)
+                :when (and (< -1 p eat/store-slots) (eat/edible (recipe/item-name item)))]
+            count)))
+
+(defn provisioning?
+  "Is the bot in the overworld with the portal's iron in hand (flint and steel and a water
+   bucket, the portal kit's goods) and fewer than provision-wanted edible items held? Sim race
+   39712220957 (issue #501, world R1/2) reached a fortress hurt at food 16 with nothing to eat:
+   health comes back only from food 18, and a rest in the Nether failed :no-heal."
+  [world]
+  (and (= dimension/overworld (dimension/of world))
+       (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
+       (pos? (inventory/item-count world (recipe/item-id :water_bucket)))
+       (< (edible-held world) provision-wanted)))
+
 (defn reach
   "Blocks from the feet within which an animal is hunted: hunt-radius, and starving-radius once the
    food the server sent is at or under starving-below (issues #69, #62, #135: bots at food 0 and
-   one health, nothing to eat within 24 blocks, starving for hours)."
+   one health, nothing to eat within 24 blocks, starving for hours), and while provisioning? (no
+   hurry, but the Nether has no game: as far as a server shows animals)."
   [world]
-  (if (some-> (:player/food world)
-              (<= starving-below))
+  (if (or (some-> (:player/food world)
+                  (<= starving-below))
+          (provisioning? world))
     starving-radius
     hunt-radius))
 
@@ -79,26 +101,6 @@
    meat's collect?"
   [world]
   (= :hunt (:intent/for (:plan/intent world))))
-
-(defn edible-held
-  "How many edible items (eat/edible) are held in the hotbar and the main inventory."
-  [world]
-  (reduce +
-          0
-          (for [[p {:keys [item count]}] (:player/inventory world)
-                :when (and (< -1 p eat/store-slots) (eat/edible (recipe/item-name item)))]
-            count)))
-
-(defn provisioning?
-  "Is the bot in the overworld with the portal's iron in hand (flint and steel and a water
-   bucket, the portal kit's goods) and fewer than provision-wanted edible items held? Sim race
-   39712220957 (issue #501, world R1/2) reached a fortress hurt at food 16 with nothing to eat:
-   health comes back only from food 18, and a rest in the Nether failed :no-heal."
-  [world]
-  (and (= dimension/overworld (dimension/of world))
-       (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
-       (pos? (inventory/item-count world (recipe/item-id :water_bucket)))
-       (< (edible-held world) provision-wanted)))
 
 (defn wants-meat?
   "Does the bot need a hunt: hungry with nothing edible held, or provisioning? for the Nether?"
