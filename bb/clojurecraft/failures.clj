@@ -54,21 +54,30 @@
              :else nil)
        (catch Exception _ nil)))
 
-(defn infra?
-  "Did a failed run stop for a reason that is not the bot's play?"
+(defn source
+  "Where a run came from: :sim (a captured world against the model) or :real (a server)."
   [r]
-  (boolean (or (:run/infra? r) (contains? infra-reasons (:reason r)))))
+  (if (:run/file r) :sim :real))
+
+(defn unplayed?
+  "Did a real run fail before its plan began (no :plan/status in its RESULT's :plan, which the bot
+   leaves out until its :go): its server refused it or was gone before it landed. Its race marks
+   it :run/infra? (race/marked); this finds it in RESULTs from before (race 39817745908's dead
+   server: 2,864 [:wood :crashed] runs that never connected). A sim run always has a plan."
+  [r]
+  (and (= :real (source r)) (not (:ok r)) (nil? (get-in r [:plan :plan/status]))))
+
+(defn infra?
+  "Did a failed run stop for a reason that is not the bot's play: marked so, a reason in
+   infra-reasons, or a real run that never got into play (unplayed?)?"
+  [r]
+  (boolean (or (:run/infra? r) (contains? infra-reasons (:reason r)) (unplayed? r))))
 
 (defn key-of
   "The signature a run is filed under: [target reason] (a signature written with the last
    intent's kind as a third element is filed with the rest of its kind)."
   [r]
   (vec (take 2 (:run/signature r))))
-
-(defn source
-  "Where a run came from: :sim (a captured world against the model) or :real (a server)."
-  [r]
-  (if (:run/file r) :sim :real))
 
 (defn failed
   "The runs that failed with a signature to file: no pass, no infrastructure stop."
