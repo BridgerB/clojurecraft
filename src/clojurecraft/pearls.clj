@@ -140,7 +140,7 @@
                       (:player/pos world)))))
 
 (def danger-radius 8.0)               ; blocks from the burrow's mouth an angry enderman keeps the bot in from: within two seconds of one that steps out; farther off, one that never comes held batch pearls-warped-d run 1 thirty-four minutes
-(def danger-rise 4)                   ; blocks above or below the burrow's mouth an angry enderman keeps the bot in from: one seventeen below in another cave never comes (batch pearls-warped-c run 1's forty minutes)
+(def danger-rise 8)                   ; blocks above or below the burrow's mouth an angry enderman keeps the bot in from: one seventeen below in another cave never comes (batch pearls-warped-c run 1's forty minutes); one five or six below on the slope beside the mouth comes the moment the bot steps out (batch pearls-warped6-a run 4, three times, the third its death)
 
 (defn angry-near
   "[eid entity] of the nearest angry enderman (entity/creepy?), blacklisted or not, within
@@ -149,7 +149,12 @@
    still angry and still hits the bot that walks out: gym batch pearls-warped5-a (plan run
    39625347094, probe 39668407179) run 4 held a fight on one at 1498 s that never came, gave
    the burrow up a minute later with it standing 7 blocks off (no crowd: past strike-range of
-   the mouth), walked out toward another and was slain by it at 1640 s."
+   the mouth), walked out toward another and was slain by it at 1640 s. The height counts as
+   the radius does, not less: batch pearls-warped6-a (plan run 39687964414, probe 39699149771)
+   run 4's held fight gave up on one standing by the mouth, which then stood 3 to 9 blocks off
+   on the plane and 5 or 6 below it, on the slope, past the four the rise then allowed; the
+   burrow went stale three times, and each walk out cost the bot half its health, the third its
+   life at 597 s. Batch pearls-warped5-b's run 2 was slain the same way by one six below."
   [world]
   (when-let [m (:pearls/mouth world)]
     (let [c (physics/centre m)]
@@ -510,11 +515,20 @@
    killed them, and then stood thirty-two minutes at y 33 to 50 with every enderman on the
    floor above it, 20 to 30 blocks up, no route up and a roam that gained no height; runs 2, 3
    and 4 of the same batch spent most of their forty minutes in the caves under the floor the
-   same way. The forest's endermen spawn on its floor; a bot under it hunts nothing."
+   same way. The forest's endermen spawn on its floor; a bot under it hunts nothing. Only with
+   none of ms on this level (less than descend-drop above or below the feet): one on this level
+   is walked toward, tunnelled toward or looked out for first, and a climb toward a far ledge
+   over a forest that still has endermen on the floor is the stairs' wear for nothing (batch
+   pearls-warped6-a's run 1, plan run 39687964414, climbed toward one thirty above on a ledge
+   with one three above seventeen blocks off, was refused under the ledge's overhang, stepped
+   aside downhill, and cut 161 stairs up and 25 down in nineteen minutes, down to y 28)."
   [world ms]
   (let [pos (:player/pos world)
-        fy (physics/y-of (path/feet-cell pos))]
-    (when (and (spare? world) (not (contains? (:plan/boxed-at world) (intent/feet world))))
+        fy (physics/y-of (path/feet-cell pos))
+        level? (fn [[_ e]] (< (abs (- (physics/y-of (cell (:entity/pos e))) fy)) descend-drop))]
+    (when (and (spare? world)
+               (not (contains? (:plan/boxed-at world) (intent/feet world)))
+               (not-any? level? ms))
       (->> ms
            (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
            (take candidates)

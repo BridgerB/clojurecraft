@@ -444,7 +444,21 @@
                                     #{7})
                              row
                              plan/goals))
-        "an angry one far below the mouth cannot come to it: out to the mouth")))
+        "an angry one far below the mouth cannot come to it: out to the mouth")
+    ;; batch pearls-warped6-a (plan run 39687964414, probe 39699149771) run 4: one a held fight
+    ;; gave up on stood 3 to 9 blocks off the mouth and 5 or 6 below it on the slope beside, and
+    ;; came the moment the bot stepped out, three times, the third its death at 597 s
+    (let [below (assoc angry :entity/pos [0.5 58.0 8.5])]
+      (is (= {:intent/kind :lookout :intent/for :pearls}
+             (plan/next-intent (assoc (burrowed [8.5 61.0 8.5] {7 below}) :plan/blacklist #{7})
+                               row
+                               plan/goals))
+          "an angry one six below the mouth and three off it, blacklisted: the bot stays in")
+      (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
+             (plan/next-intent (assoc (burrowed [3.5 64.0 8.5] {7 below}) :plan/blacklist #{7})
+                               row
+                               plan/goals))
+          "at the mouth with it there: home"))))
 
 (def ledge-wall
   "Stone three high (y 64 to 66) along x 4, the burrow's first stair left open: from the mouth at
@@ -508,7 +522,9 @@
                           (assoc-in w [:world/entities 9] (enderman [8.5 40.0 8.5]))
                           row
                           plan/goals)))
-        "one as far below too: the stairs down first, as before")))
+        "one as far below too: the stairs down first, as before")
+    (is (nil? (pearls/ascend w {7 above 9 (enderman [8.5 65.0 30.5])}))
+        "one on this level too, hidden: no climb while the level still has one to hunt")))
 
 (deftest a-burrow-is-cut-where-it-would-shelter-and-the-provoke-goes-from-its-mouth
   ;; batch pearls-warped-e (plan run 39164914828) run 1: on broken ground :burrow failed
