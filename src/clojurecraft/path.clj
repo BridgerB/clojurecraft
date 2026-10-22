@@ -471,20 +471,38 @@
   [[x y z]]
   [(long (math/floor x)) (long (math/floor y)) (long (math/floor z))])
 
+(defn rests
+  "The cells at the height of cell from whose columns the body's box overlaps, the one under most
+   of it first, when from is the feet cell of the player's position; nil otherwise (no position,
+   or a cell asked about from elsewhere). A box over a ledge's edge rests on the block beside the
+   feet cell, which start-cell is to begin a search from, not on another neighbour."
+  [world [_ y _ :as from]]
+  (let [[px _ pz :as pos] (:player/pos world)]
+    (when (and pos (= from (feet-cell pos)))
+      (let [lo (fn [v] (long (math/floor (- v physics/half-width))))
+            hi (fn [v] (long (math/floor (+ v physics/half-width))))
+            away (fn [[x _ z]] (physics/horizontal-distance [px 0 pz] [(+ x 0.5) 0 (+ z 0.5)]))]
+        (->> (for [x (distinct [(lo px) (hi px)]) z (distinct [(lo pz) (hi pz)])] [x y z])
+             (sort-by away)
+             vec)))))
+
 (defn start-cell
-  "Where a search from the feet at cell from begins: from itself when it is standable, else the
+  "Where a search from the feet at cell from begins: from itself when it is standable, else a
+   standable cell the body rests on (rests), else the
    nearest standable cell within one block on the plane and one up or down. A player whose feet
    sit on a block edge floors into the neighbouring column, which on a hillside is inside the
    hill (recorded by the gym at landing 21280,18720: the feet at x 21281.0 on a stone edge, the
    cell they floor into solid, every plan :none); the box rests on the cell beside it. nil when
    nothing near can be stood on. world is a world or its cells."
-  [world [x y z :as from]]
-  (let [at (cells world)]
-    (if (standable? at from)
-      from
-      (->> (for [dy [0 -1 1] dx [0 -1 1] dz [0 -1 1]] [(+ x dx) (+ y dy) (+ z dz)])
-           (filter #(standable? at %))
-           first))))
+  ([world from] (start-cell world from nil))
+  ([world [x y z :as from] under-box]
+   (let [at (cells world)]
+     (if (standable? at from)
+       from
+       (->> (concat under-box
+                    (for [dy [0 -1 1] dx [0 -1 1] dz [0 -1 1]] [(+ x dx) (+ y dy) (+ z dz)]))
+            (filter #(standable? at %))
+            first)))))
 
 (defn traps-in-force
   "The traps of :world/traps younger than trap-ttl at :time/now: the only part of the clock a
@@ -494,17 +512,17 @@
     (filterv (fn [{:trap/keys [at]}] (<= (- now at) trap-ttl)) (:world/traps world))))
 
 (def plan-on
-  "[chunks blocks traps ice? from goal max-nodes] → the route plan gives over that terrain with those
+  "[chunks blocks traps ice? from goal max-nodes under-box] → the route plan gives over that terrain with those
    traps in force, the sheet of ice floor when ice? (the bot stands on it, on-ice?), remembered by the terrain's identity (memo/by): an act asked whether each of
    its candidates could be walked to every tick, a full search each (a race's profile: a sixth of
    all its CPU), over terrain that changes when a chunk arrives or a block changes."
-  (memo/by [:identical :identical :equal :equal :equal :equal :equal]
+  (memo/by [:identical :identical :equal :equal :equal :equal :equal :equal]
            256
-           (fn [chunks blocks traps ice? from goal max-nodes]
+           (fn [chunks blocks traps ice? from goal max-nodes under-box]
              ;; every trap here is in force, so the clock is not needed: trap-factor counts them all at 0
              (let [world
                    {:world/chunks chunks :world/blocks blocks :world/traps traps :path/ice? ice?}
-                   start (start-cell world from)
+                   start (start-cell world from under-box)
                    [x y z] from
                    departure (when (and (not= start from)
                                         (blocks/solid? (terrain/block-at world [x (dec y) z]))
@@ -533,4 +551,5 @@
             (on-ice? world)
             from
             goal
-            max-nodes)))
+            max-nodes
+            (rests world from))))
