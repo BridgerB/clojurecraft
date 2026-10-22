@@ -9,6 +9,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.fortress :as fortress]
+            [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
@@ -88,7 +89,8 @@
   ;; table standing, and the next, with sticks and 937 cobblestone in hand, had no table to be made at
   (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
         pick {:item (recipe/item-id :stone_pickaxe) :count 1}
-        w (memory/observe (assoc (rock {})
+        w (memory/observe (assoc (merge (game/init {:host "sim" :port 0 :name "Clj_test"})
+                                        (rock {}))
                                  :world/facts (memory/empty-facts)
                                  :time/now 0
                                  :player/dimension dimension/nether
