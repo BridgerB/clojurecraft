@@ -374,6 +374,8 @@
    "A blaze hovering out of reach, never attacked"
    "A spawner's delay (natural ones 10 to 40 s) longer than a planner wait, failing a plan that only had to stand there"
    "A rod lying where no walk reaches it: on the spawner, in lava"
+   "A drop lying in a pit under the floor (a half block of pickup reach) or inside a block placed over it, stood over until the collect fails :not-picked-up (issue #500): the pit's cell is walked onto (fetch-walk), the one in stone left"
+   "Hurt in the Nether with no food held: health comes back only from food 18, and a rest fails :no-heal (issue #501): the hunt row stocks provision-wanted foods in the overworld once the portal's iron is held, and a rest that cannot heal (food under 18, nothing to eat) is held in cover, not failed"
    "Wither skeletons beside the spawner" "Peaceful: no blazes at all"]
   :problem/done
   "RCON: seven or more blaze rods in the bot's inventory (clear <bot> minecraft:blaze_rod 0), from the nether arena's spawner and from a fortress pad."
