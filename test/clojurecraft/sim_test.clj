@@ -3530,7 +3530,8 @@
                                                                          :netherrack)}
                                                               dimension/nether)
                                   :at [8.5 64.0 8.5]}})
-              (assoc :sim/player-pos [1.27 62.0 1.7]
+              (assoc :sim/phase :play
+                     :sim/player-pos [1.27 62.0 1.7]
                      :sim/portal-since 0
                      :sim/placed placed
                      :sim/broken #{[2 63 2]}))
