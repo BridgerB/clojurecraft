@@ -693,7 +693,7 @@
                  :player/on-ground? true
                  :player/vel [0.0 0.0 0.0])
         target [10 64 0]
-        trail {:trail/target target :trail/cells [[-1 64 0]] :trail/dead #{}}
+        trail {:trail/target target :trail/cells [[-1 63 0] [-1 65 0] [-1 64 0]] :trail/dead #{}}
         tick {:event/kind :tick :event/now 0}
         i {:intent/kind :tunnel-to
            :intent/target target
@@ -714,10 +714,10 @@
         (is (= :active (get-in out [:plan/intent :intent/status])))
         (is (= [-1 0 0] (get-in out [:plan/intent :intent/move])))
         (is (= 0 (get-in out [:plan/intent :intent/retreats])) "a step back is no pace")
-        (is (= [] (:trail/cells kept)) "its last cell is dropped")
+        (is (= [[-1 63 0] [-1 65 0]] (:trail/cells kept)) "its last cell is dropped")
         (is (= #{[0 64 0]} (:trail/dead kept)) "the cell left leads nowhere")))
     (testing "the same cell with no trail is the pace of before"
-      (let [out (run w {:intent/tunnel-visited #{[-1 64 0]}})]
+      (let [out (run w {:intent/tunnel-visited #{[-1 63 0] [-1 64 0] [-1 65 0]}})]
         (is (= :failed (get-in out [:plan/intent :intent/status])))
         (is (= :blocked (get-in out [:plan/intent :intent/reason])))))
     (testing "a fresh step keeps the cell it began from"
