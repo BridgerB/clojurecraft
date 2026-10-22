@@ -250,6 +250,15 @@
    [:search/tunnels
     "the tunnels the leg has taken, one more at each look of the planner; too many end the leg"
     "inside :fortress/search"]
+   [:fortress/trail
+    "the way back a :tunnel-to to a target keeps across its tunnels: {:trail/target :trail/cells :trail/dead}; a cell no fresh step leaves is stepped back from to the last cell, never entered again (fortress/step-back, issue #502); another target starts a new one"
+    "after a :tunnel-to chose a fresh step or a step back"]
+   [:trail/target "the target the trail was kept for" "inside :fortress/trail"]
+   [:trail/cells
+    "the feet cells steps began from, oldest first, the last one a step back from the feet"
+    "inside :fortress/trail"]
+   [:trail/dead "the feet cells found to lead nowhere, which no fresh step enters again"
+    "inside :fortress/trail"]
    [:plan/boxed-at
     "feet cells where a staircase or a tunnel died :boxed: no descent or tunnel starts there again, no stair steps onto one"
     "after a :boxed staircase or tunnel"]

@@ -26,6 +26,7 @@
    damage-event log is where to look if they kill. The bot does not put itself out: no water
    works in the Nether, and the gym rows give Fire Resistance until potions exist."
   (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.build :as build]
             [clojurecraft.combat :as combat]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.drops :as drops]
@@ -37,6 +38,7 @@
             [clojurecraft.hunt :as hunt]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
@@ -448,7 +450,10 @@
   (or (and (not= :fight (:intent/kind i)) (some? (at-hand-blaze world))) (under-fire? world i)))
 
 (defmethod plan/next-intent :blaze-rods
-  [world _ _]
+  ;; a tunnel to the spawner or on the search first makes the pickaxe it lacks from what is held
+  ;; (the :fortress row's rule): sim race 39742401798 R4-6-2 (issue #504) tunnelled 25 blocks in
+  ;; fifteen minutes by hand, each :no-pickaxe step ended the tunnel and the act asked again
+  [world goal table]
   (let [[heid] (at-hand-blaze world)
         [beid] (quarry world)
         [_ lying] (rod-lying world)
@@ -456,7 +461,9 @@
         heal (delay (when (hurt? world) (healing world)))
         wary (delay (when (wary? world) (warily world)))
         away (delay (when (outnumbered? world) (hide world)))
-        fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))]
+        fire (delay (when (and sp (at-spawner? world sp)) (put-out world sp)))
+        pick (delay (when (build/pickaxe-at-hand? world)
+                      (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))]
     (cond (not= dimension/nether (dimension/of world)) {:plan/wait :other-dimension}
           heid {:intent/kind :fight :intent/target heid :intent/to-the-end? true}
           @heal @heal
@@ -469,6 +476,7 @@
            :intent/target (hunt/cell (:entity/pos lying))}
           beid {:intent/kind :fight :intent/target beid :intent/yield? true}
           @fire @fire
+          (and (or (nil? sp) (not (at-spawner? world sp))) @pick) @pick
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
           sp {:intent/kind :camp :intent/spawner sp}
           :else (or (search world) {:plan/wait :no-blaze}))))
