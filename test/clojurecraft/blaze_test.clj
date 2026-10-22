@@ -291,6 +291,22 @@
     (is (= {:plan/wait :other-dimension}
            (next-intent (assoc (standing {}) :player/dimension dimension/overworld))))))
 
+(deftest rotten-flesh-is-eaten-when-it-is-all-there-is-to-heal-on
+  ;; issue #501's R1-10-2 and R2-44-2: eight and two rotten flesh held, hurt at food 13 and 14,
+  ;; rested for ever; the Nether's zombified piglins drop it and it gives four food
+  (let [hurt #(assoc % :player/health 8.0)
+        flesh (fn [food] (assoc (hurt (standing {1 (item :rotten_flesh 8)} {})) :player/food food))]
+    (is (blaze/heals? (flesh 13)) "a rest can heal with it to eat")
+    (is (= {:intent/kind :eat :intent/item :rotten_flesh} (next-intent (flesh 13))))
+    (is (= {:intent/kind :eat :intent/item :rotten_flesh} (next-intent (flesh 14))))
+    (is (= blaze/rest-intent (next-intent (flesh 18))) "fed: the rest heals by itself")
+    (is (= {:intent/kind :eat :intent/item :cooked_beef}
+           (next-intent
+            (assoc (flesh 14)
+                   :player/inventory
+                   {0 (item :iron_sword 1) 1 (item :rotten_flesh 8) 2 (item :cooked_beef 2)})))
+        "real food first")))
+
 (deftest a-rest-that-cannot-heal-holds-in-cover-and-never-fights-on
   ;; sim race 39712220957 (issue #501): hurt at food 16 with nothing to eat, three rests of ninety
   ;; seconds, no health back, the run ended :no-heal

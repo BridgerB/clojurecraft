@@ -32,6 +32,8 @@ sourceRefs:
   - src/clojurecraft/blaze.clj#defn at-spawner?
   - src/clojurecraft/blaze.clj#defn stand
   - src/clojurecraft/blaze.clj#defn cells-beside
+  - src/clojurecraft/eat.clj#defn scrap-held
+  - test/clojurecraft/blaze_test.clj#rotten-flesh-is-eaten-when-it-is-all-there-is-to-heal-on
   - src/clojurecraft/blaze.clj#defn given-up?
   - src/clojurecraft/blaze.clj#defn search
   - test/clojurecraft/blaze_test.clj#a-blocked-tunnel-tries-another-stand-then-gives-the-spawner-up

@@ -31,6 +31,7 @@
 (def steps-per-tunnel 32)             ; steps a :tunnel-to takes before the planner looks again
 (def explore-spacing 160)             ; blocks between the strips an exploring tunnel sweeps: a server shows 96 either side of the feet
 (def explore-band [52 90])            ; the heights an exploring tunnel keeps to: over the lava sea (y 31) and its lakes, under the roof
+(def air-grace 40)                    ; ticks a tunnel waits for the feet to land before it may fail :blocked: no step is safe from the air (issue #502, R4/31)
 (def look-ahead 2)                    ; blocks ahead that must be loaded for a leg to go on: the world's edge turns it
 (def climb-past 3)                    ; a target more than this above or below makes a step go up or down
 (def retreats-allowed 1)              ; retreats in a row a tunnel takes before it is blocked: a second one paces two cells
@@ -374,15 +375,17 @@
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
   ;; :intent/reach, reach when absent) or after :intent/steps steps, failed :blocked when no step
-  ;; is safe, or when the only safe steps retreat into cells already stood in more than
+  ;; is safe (after waiting up to air-grace ticks for feet in the air to land: a step is judged
+  ;; from the ground, and a bot knocked off a ledge by a blaze failed three tunnels in three ticks), or when the only safe steps retreat into cells already stood in more than
   ;; retreats-allowed times in a row (a pace between two cells, each counted as a step: sim
   ;; snapshot R3-6-1, issue #338, paced a ledge 32 steps a tunnel for four hours). Steps go up or
   ;; down first past :intent/climb blocks off (climb-past when absent); with :intent/dry? only
   ;; steps that open no cell by water (dry?: the overworld's, issue #265)
   [world
-   {:intent/keys [target steps taken move from climb dry? tunnel-visited child search retreats]
+   {:intent/keys [target steps taken move from climb dry? tunnel-visited child search retreats
+                  airborne]
     r :intent/reach
-    :or {taken 0 r reach climb climb-past tunnel-visited #{} retreats 0}
+    :or {taken 0 r reach climb climb-past tunnel-visited #{} retreats 0 airborne 0}
     :as i} event]
   (let [world (cond-> world search (assoc :fortress/search search)) ; the spiral's leg, kept for the planner's next look
         feet (intent/feet world)]
@@ -394,6 +397,8 @@
           (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
           (buried world feet)
           (build/work-op (assoc world :player/controls {}) i (buried world feet) event)
+          (and (nil? move) (not (:player/on-ground? world)) (< airborne air-grace))
+          (intent/assoc-intent (assoc world :player/controls {}) :intent/airborne (inc airborne))
           (nil? move)
           (let [back (recentre world feet)
                 m (or back (next-move world feet target climb (boolean dry?) tunnel-visited))

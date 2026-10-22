@@ -231,11 +231,11 @@
   (< (:player/health world 20.0) combat/retreat-health))
 
 (defn meal
-  "An :eat of the food held when the food is under hunger/heal-level (health comes back only from
+  "An :eat of the food held (rotten flesh when it is all there is, eat/scrap-held) when the food is under hunger/heal-level (health comes back only from
    there, and fast while the meal's saturation lasts), or nil."
   [world]
   (when-let [food (and (< (:player/food world hunger/heal-level) hunger/heal-level)
-                       (eat/food-held world))]
+                       (or (eat/food-held world) (eat/scrap-held world)))]
     {:intent/kind :eat :intent/item food}))
 
 (defn heals?
@@ -245,7 +245,8 @@
    falling, and the run ended :no-heal: a rest that cannot heal holds in cover instead of
    failing, and never goes back out to fight at that health."
   [world]
-  (or (>= (:player/food world hunger/heal-level) hunger/heal-level) (some? (eat/food-held world))))
+  (or (>= (:player/food world hunger/heal-level) hunger/heal-level)
+      (some? (or (eat/food-held world) (eat/scrap-held world)))))
 
 (defn watchers
   "{eid entity} of the blazes alive within cover-range of the feet that have the bot in sight

@@ -72,6 +72,15 @@
   [world]
   (if (portal-kit? world) portal-fed hungry-below))
 
+(defn scrap-held
+  "The name of rotten flesh when it is held in the hotbar or the main inventory, else nil: food
+   only a bot that cannot heal eats (unsafe: it may make the eater hungry for half a minute, a
+   cost under a point of food against the four it gives). Zombified piglins drop it in the
+   Nether, where nothing else is to be had: sim snapshots R1-10-2 and R2-44-2 (issue #501) held
+   eight and two while they rested hurt at food 13 and 14 for ever."
+  [world]
+  (when (pos? (inventory/held world #{(recipe/item-id :rotten_flesh)})) :rotten_flesh))
+
 (defn hungry?
   "Is the food the server last sent (set-health) under hungry-under? Not before the first
    set-health: what the bot does not know is no reason to eat."
