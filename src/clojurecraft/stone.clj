@@ -231,22 +231,72 @@
 (def filler-states
   "Every state of the blocks dug by hand for filler: dirt, and the grass over it."
   (into #{} (mapcat blocks/states-of) [:dirt :grass_block]))
-(def filler-drops #{(blocks/items :dirt)}) ; what digging them gives
+(def stone-filler-row
+  "The blocks that give a filler to a pick: stone and the stones that drop themselves."
+  {:goal/blocks [:stone :cobblestone :granite :diorite :andesite :tuff]})
+(def filler-drops
+  "What digging a block of filler-states or of stone-filler-row gives."
+  (into #{(blocks/items :dirt)} (drops-of-row stone-filler-row)))
+
+(defn filler-states-for
+  "The states a boxed mine digs for filler: dirt and the grass over it, and, when a pickaxe is
+   held (nothing is missing for stone-filler-row), the stones as well: a strip of granite over open
+   air, or a hillside of stone, is filler too."
+  [world]
+  (cond-> filler-states
+    (nil? (tool-missing world stone-filler-row)) (into (states-of-row stone-filler-row))))
 
 (defn filler-dig
-  "A walk to the nearest dirt of filler-states that a route reaches and its dig exposes no fluid
-   to (exposed-of-states), tagged :filler for the chain that digs it and picks it up, or nil: only
-   once a staircase died :boxed here or before (:plan/boxed-at) and less than filler-want filler is
-   carried (stairs/carried-filler). A staircase refused for the water beside it is sealed from
-   what is carried, and the lake shores it was refused on gave the bots two dirt to seal with
-   (issues #342 and #65, real bot Clj_r15 landed at R1/30): the dirt they stood on was filler."
+  "A walk to the nearest block of filler-states-for that a route reaches and its dig exposes no
+   fluid to (exposed-of-states), tagged :filler for the chain that digs it and picks it up, or nil:
+   only once a staircase died :boxed here or before (:plan/boxed-at) and less than filler-want
+   filler is carried (stairs/carried-filler). A staircase refused for the water beside it is sealed
+   from what is carried, and the lake shores it was refused on gave the bots two dirt to seal with
+   (issues #342 and #65, real bot Clj_r15 landed at R1/30): the dirt they stood on was filler. Real
+   bots Clj_r15 (R1) and Clj_r16 (R3, issue #37) dug the dirt they could reach, climbed it away,
+   and failed :boxed with stone and granite round them."
   [world]
   (when (and (seq (:plan/boxed-at world)) (< (stairs/carried-filler world) filler-want))
-    (->> (exposed-of-states world filler-states)
+    (->> (exposed-of-states world (filler-states-for world))
          (take max-candidates)
          (map #(walk-to world % :filler))
          (filter #(intent/routable? world %))
          first)))
+
+(defn log-planks
+  "A :craft of a held log into its planks in the inventory's grid, or nil: only once a staircase
+   died :boxed (:plan/boxed-at), with less than filler-want filler carried (stairs/carried-filler),
+   no planks held (stairs/planks-of) and a log whose planks recipe is known. Planks are the last
+   thing a floor is laid from (stairs/filler), and a log is four of them. Issue #37 (real bot
+   Clj_r16, a one-wide strip of granite over open air): the planks and the dirt were laid into a
+   climb, a birch log was held, and nothing else could be dug or laid."
+  [world]
+  (let [held (recipe/counts (:player/inventory world))
+        recipe-id (some (fn [[item c]]
+                          (let [n (name item)]
+                            (when (and (pos? c) (str/ends-with? n "_log"))
+                              (keyword (str (subs n 0 (- (count n) 4)) "_planks")))))
+                        held)]
+    (when (and recipe-id
+               (seq (:plan/boxed-at world))
+               (< (stairs/carried-filler world) filler-want)
+               (nil? (stairs/planks-of held 1))
+               (recipe/by-id recipe-id))
+      {:intent/kind :craft :intent/recipe recipe-id :intent/window :inventory})))
+
+(defn adjoins-boxed?
+  "Do the feet [x y z] stand in :plan/boxed-at or on a cell beside one on the plane, at the same
+   height: a staircase, tunnel or deeper stair started there ends :boxed as the one beside it
+   did. A corridor or strip with nothing to lay was cut again from the cell next to the last
+   one that died, a cell a lap, for the whole window (issues #37, #71 and #62's causeway and
+   pillar cases); from there the order falls through to the walk home, the retreat and the
+   climb. The cells a boxed climb crossed (:plan/boxed-route) count as boxed too: the bot's own
+   stairs-up ends :boxed away from the cell that died, and the next stairs-down began from there
+   (issue #37, one-wide strips of floor over open air)."
+  [world [x y z :as feet]]
+  (let [boxed (into (:plan/boxed-at world #{}) (:plan/boxed-route world))]
+    (boolean (or (contains? boxed feet)
+                 (some (fn [[dx dz]] (contains? boxed [(+ x dx) y (+ z dz)])) stairs/directions)))))
 
 (defn stairs
   "The staircase to cut when nothing is in sight: stair-depth down from the feet, never below
@@ -258,7 +308,7 @@
   [world {:goal/keys [depth act]}]
   (let [feet (long (math/floor (physics/y-of (:player/pos world))))
         to (cond-> (- feet stair-depth) depth (max depth))]
-    (when (and (< to feet) (not (contains? (:plan/boxed-at world #{}) (intent/feet world))))
+    (when (and (< to feet) (not (adjoins-boxed? world (intent/feet world))))
       (cond-> {:intent/kind :stairs-down :intent/to-y to}
         (and depth (= :mine act)) (assoc :intent/floor-to depth)))))
 
@@ -354,7 +404,7 @@
                                                                                home))
                                                0)])
                         stairs/directions)]
-    (when-not (contains? (:plan/boxed-at world #{}) feet)
+    (when-not (adjoins-boxed? world feet)
       (first (filter (fn [d]
                        (let [cells (stairs/level-cells feet d)]
                          (and (not= back d)
@@ -391,7 +441,7 @@
                     (let [cells (stairs/stair-cells feet d)]
                       (or (stairs/level-safe? world cells)
                           (and (stairs/level-clear? world cells) (stairs/lay world feet cells)))))]
-    (when (and (not (contains? (:plan/boxed-at world #{}) feet))
+    (when (and (not (adjoins-boxed? world feet))
                (> to (+ chunk/min-y floor-margin))
                (some cuttable? stairs/directions))
       {:intent/kind :stairs-down :intent/to-y to})))
@@ -465,6 +515,27 @@
                  (terrain/under-sky? world feet))
         {:intent/kind :cross
          :intent/target [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]}))))
+
+(def home-walk-distance 12)           ; feet this far or nearer the landing have nothing to walk home for
+
+(defn walk-home
+  "A walk to the landing (:plan/go-at) when the feet stand where a climb already died :boxed
+   (:plan/boxed-at) and the landing is routable on foot and farther than home-walk-distance;
+   nil elsewhere. A bridge or causeway over open water or air is no islet (islet? wants water on
+   all four sides) and no stair is cut from it, but it leads to the shore the bot came from.
+   Sim worlds R4/1 and R2/38 (issue #62's four snapshots, which fail `[:ingots :timeout]`): a bot
+   with no filler left on a one-wide dirt strip stepped level along it, was :boxed at the limit,
+   retreated twelve blocks back, and stepped level again, for the whole window."
+  [world]
+  (let [feet (intent/feet world)]
+    (when-let [[hx hy hz] (:plan/go-at world)]
+      (let [home [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]
+            walk {:intent/kind :walk :intent/target home :intent/for :retreat}]
+        (when (and (adjoins-boxed? world feet)
+                   (> (physics/distance (physics/centre feet) (physics/centre home))
+                      home-walk-distance)
+                   (intent/routable? world walk))
+          walk)))))
 
 (defn climb
   "Stairs up out of the ground, climb-stairs at a time (stairs/climb-to), when nothing can be
@@ -580,10 +651,12 @@
                   (seal-stone world row)
                   (over-stone world row)
                   (filler-dig world)
+                  (log-planks world)
                   (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
                   (deeper world)
+                  (walk-home world)
                   (dead-end-retreat world)
                   (cross-home world)
                   (climb world)

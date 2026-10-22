@@ -17,12 +17,12 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.fortress :as fortress]
             [clojurecraft.game :as game]
-            [clojurecraft.gym :as gym]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.main :as main]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
+            [clojurecraft.mob :as mob]
             [clojurecraft.packet :as packet]
             [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
@@ -464,6 +464,9 @@
   [trees]
   (apply merge (map tree-blocks trees)))
 
+(def wood-ms 150000) ; simulated ms a forest run may take: the wood gym row's old cap, kept here when
+                     ; the gym's trials went to the job's length (one forest property runs many)
+
 (deftest the-wood-goal-holds-in-generated-forests
   ;; the bot against the model in 2,000 worlds test.check builds (docs/RICH-HICKEY.md: "thousands of
   ;; generated worlds in the time one real run takes"): 1-3 trees of mixed species and heights
@@ -484,7 +487,7 @@
                                                   (game/init fx/opts)
                                                   sim0
                                                   #(or (plan/done? %) (plan/failed? %))
-                                                  (:gym/timeout-ms (gym/gym "wood"))
+                                                  wood-ms
                                                   {:event/kind :go :go/goals [:wood]})]
                              (and (if (some #(<= (:mound %) 1) trees)
                                     (and (plan/done? w) (= 1 (inventory/logs-held w)))
@@ -518,7 +521,7 @@
                          (sim/init {:column (world/column-bytes (forest trees))
                                     :spawn [0.5 64.0 0.5]})
                          #(or (plan/done? %) (plan/failed? %))
-                         (:gym/timeout-ms (gym/gym "wood"))
+                         wood-ms
                          {:event/kind :go :go/goals [:wood]})]
     (is (plan/done? w) (pr-str (plan/summary w)))
     (is (= 1 (inventory/logs-held w)) "one log, no second dug for a drop left on the mound")
@@ -3475,4 +3478,40 @@
     (is (zero? (:stats/deaths w 0)) "alive")
     (is (:intent/to-the-end? (:plan/last w)) "the blaze-rods row's fight on one at hand")
     (is (= 2 (count (blaze/blazes w))) "one of the three killed")
+    (is (= [] (:sim/violations sim)))))
+
+(def blaze-spawner-cell [12 64 12])
+
+(deftest the-seventh-rod-from-a-spawner-in-the-models-nether
+  ;; issue #262's acceptance, a spawner and no fixture blazes: six rods given, one more wanted;
+  ;; the spawner on the floor four blocks from the landing wakes (mob/spawner), makes its first
+  ;; batch within 800 ticks and again, the bot camps by it, fights what comes and picks up the rod
+  ;; one kill in two drops (rolled from the model's seed). It wears iron armour, as the stage's bot
+  ;; does (the first run without died to a batch of four), and the wall west of the landing is
+  ;; its cover
+  (let [[w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:column (world/column-bytes (assoc nether-wall
+                                                                       blaze-spawner-cell
+                                                                       mob/spawner-block)
+                                                                dimension/nether)
+                                    :spawn [8.5 64.0 8.5]
+                                    :dimension dimension/nether
+                                    :difficulty :easy
+                                    :food 20
+                                    :seed 3
+                                    :inventory {[:hotbar 0] {:item (item :iron_sword) :count 1}
+                                                [:hotbar 1] {:item (item :blaze_rod) :count 6}
+                                                [:armour 0] {:item (item :iron_helmet) :count 1}
+                                                [:armour 1] {:item (item :iron_chestplate) :count 1}
+                                                [:armour 2] {:item (item :iron_leggings) :count 1}
+                                                [:armour 3] {:item (item :iron_boots) :count 1}}})
+                         #(or (plan/done? %) (plan/failed? %) (pos? (:stats/deaths % 0)))
+                         240000
+                         {:event/kind :go :go/goals [:blaze-rods]})]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (>= (inventory/item-count w blaze/rod) blaze/rods-wanted))
+    (is (seq (:sim/spawners sim)) "the model found the spawner")
+    (is (zero? (:stats/deaths w 0)) "alive")
+    (is (pos? (:sim/health sim)))
     (is (= [] (:sim/violations sim)))))

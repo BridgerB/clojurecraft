@@ -6,6 +6,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
@@ -268,7 +269,9 @@
         corridor (merge (into {} (for [x (range 5 16) y [32 33]] [[x y 5] 0]))
                         (into {} (for [z (range 5 16) y [32 33]] [[15 y z] 0]))
                         {[5 32 7] lava [3 32 5] lava [5 32 3] lava [6 30 5] lava})
-        w (assoc (standing 32 :stone_pickaxe) :world/chunks {[0 0] (world/column corridor)})
+        w (-> (standing 32 :stone_pickaxe)
+              (assoc :world/chunks {[0 0] (world/column corridor)})
+              (assoc-in [:player/inventory 5] {:item (blocks/items :cobblestone) :count 8}))
         died (plan/fail-intent
               (assoc w :plan/blacklist #{} :plan/attempts 0)
               {:intent/kind :stairs-down :intent/reason :boxed :intent/status :failed :intent/id 7})
@@ -992,6 +995,24 @@
     (is (= {:intent/kind :cross :intent/target [1 64 1]} (stone/mine-next boxed (row :mine-stone)))
         "the mine's last resort swims instead of climbing")))
 
+(deftest a-causeway-with-no-stair-is-walked-home
+  ;; issue #62's four snapshots (worlds R4/1 and R2/38): a one-wide dirt strip over the sea, no
+  ;; filler held, every stair refused; the strip leads back to the shore the bot came from
+  (let [sea (into {} (for [x (range 16) z (range 16) y (range 56 64)] [[x y z] blocks/water-base]))
+        strip (into sea (for [x (range 16)] [[x 63 8] (blocks/default-state :dirt)]))
+        w (assoc (standing 64 :stone_pickaxe)
+                 :player/pos [15.5 64.0 8.5]
+                 :plan/go-at [1.5 64.0 8.5]
+                 :world/chunks {[0 0] (world/column strip)})
+        boxed (assoc w :plan/boxed-at #{[15 64 8]})]
+    (is (not (stone/islet? w)) "a strip is no islet: dirt east and west")
+    (is (nil? (stone/walk-home w)) "before a climb died here, the climb comes first")
+    (is (= {:intent/kind :walk :intent/target [1 64 8] :intent/for :retreat}
+           (stone/walk-home boxed)))
+    (is (nil? (stone/walk-home (dissoc boxed :plan/go-at))) "no landing to walk to")
+    (is (nil? (stone/walk-home (assoc boxed :player/pos [4.5 64.0 8.5])))
+        "near the landing there is nothing to walk home for")))
+
 (deftest stone-beside-water-is-sealed-with-what-is-held-before-it-is-dug
   ;; issue #342 (the R1/30 sim moment): stones on the west bank of a cave lake had water on their
   ;; north side, the dig refused them, and the bot held planks and no filler
@@ -1052,6 +1073,30 @@
            (stone/mine-next (assoc boxed :plan/last (assoc filler :intent/status :done))
                             (row :mine-stone)))
         "the walk is followed by the dig")))
+(deftest a-boxed-mine-digs-stone-and-granite-for-filler-when-it-holds-a-pickaxe
+  ;; issue #37 (real bots Clj_r15 at R1, Clj_r16 at R3): the dirt in reach was dug and climbed away,
+  ;; then every climb was :boxed with a strip of granite, or stone, underfoot
+  (let [granite (blocks/default-state :granite)
+        ground (into {} (for [x (range 16) z (range 16) y (range 60 64)] [[x y z] granite]))
+        chunks {[0 0] (world/column ground)}
+        boxed (fn [& items]
+                (assoc (apply standing 64 items) :world/chunks chunks :plan/boxed-at #{[2 50 2]}))
+        filler (stone/filler-dig (boxed :stone_pickaxe))]
+    (is (= [:walk :filler] [(:intent/kind filler) (:intent/for filler)]) (pr-str filler))
+    (is (nil? (stone/filler-dig (boxed :stick))) "no pickaxe: granite gives nothing by hand")
+    (is (contains? stone/filler-drops (blocks/items :granite)) "the chain collects it")
+    (is (contains? stone/filler-drops (blocks/items :cobblestone)))))
+(deftest a-boxed-mine-with-a-log-and-no-filler-crafts-planks-to-lay
+  ;; issue #37 (real bot Clj_r16, a one-wide strip over open air): its planks and dirt were laid
+  ;; into a climb, a birch log was left, and every later climb died :boxed
+  (let [boxed (fn [& items] (assoc (apply standing 64 items) :plan/boxed-at #{[2 50 2]}))
+        crafted (stone/log-planks (boxed :stone_pickaxe :birch_log))]
+    (is (= {:intent/kind :craft :intent/recipe :birch_planks :intent/window :inventory} crafted))
+    (is (nil? (stone/log-planks (assoc (boxed :stone_pickaxe :birch_log) :plan/boxed-at #{})))
+        "no staircase died boxed")
+    (is (nil? (stone/log-planks (boxed :stone_pickaxe :birch_log :birch_planks)))
+        "planks held already")
+    (is (nil? (stone/log-planks (boxed :stone_pickaxe))) "no log")))
 (deftest a-staircase-cut-from-the-surface-over-stone-is-not-walked-back-from
   ;; sim race 39593216223 (issue #62, world R4/2): the stairs cut from the surface over the stone
   ;; went six down and six along; outside over-radius of that surface, the walk back to it began
@@ -1109,3 +1154,36 @@
         "a staircase that ends there is refused its last stair")
     (is (nil? (:intent/dead-end (stone/dead-end-retreat (assoc boxed :player/in-water? true))))
         "out of water first: a swim, not a walk from a cell")))
+
+(deftest a-cell-adjoining-a-boxed-one-is-boxed-for-the-descent
+  (let [w (assoc (standing 48) :plan/boxed-at #{[6 48 5]})
+        row {:goal/depth 16}]
+    (is (stone/adjoins-boxed? w [5 48 5]) "beside a boxed cell")
+    (is (stone/adjoins-boxed? w [6 48 5]) "on it")
+    (is (not (stone/adjoins-boxed? w [5 49 5])) "a level above is another cell")
+    (is (not (stone/adjoins-boxed? w [4 48 5])) "two away is free")
+    (is (nil? (stone/stairs w row)) "no stair from beside the cell a staircase died on")
+    (is (some? (stone/stairs (assoc w :plan/boxed-at #{}) row)))
+    (let [r (assoc w :plan/boxed-at #{} :plan/boxed-route #{[6 48 5]})]
+      (is (stone/adjoins-boxed? r [5 48 5]) "beside a cell a boxed climb crossed")
+      (is (nil? (stone/stairs r row)) "no descent from a strip a boxed climb crossed"))))
+
+(deftest planks-are-the-last-filler-and-no-descent-spends-them
+  (let [planks (standing 48 :birch_planks :birch_planks :birch_planks)
+        both (standing 48 :birch_planks :birch_planks :birch_planks :dirt)]
+    (is (= :birch_planks (stairs/filler planks 3)) "nothing else held: planks")
+    (is (nil? (stairs/filler planks 4)) "not more than held")
+    (is (= :dirt (stairs/filler both 1)) "a filler first")
+    (is (zero? (stairs/carried-filler planks)) "a descent's reserve counts none")))
+
+(deftest a-water-cell-with-no-support-is-laid-after-a-supported-one-beside-it
+  (let [w (-> (standing 64 :cobblestone :cobblestone)
+              (assoc :world/blocks
+                     {[5 64 5] blocks/water-base
+                      [6 64 5] blocks/water-base
+                      [6 63 5] blocks/water-base
+                      [7 64 5] blocks/water-base}))
+        cells (stairs/up-cells [5 64 5] [0 1])]
+    (is (= [[6 64 5]] (stairs/wet-feet w cells)) "the one water cell beside the feet")
+    (is (nil? (place/support w [6 64 5])) "no solid neighbour of its own")
+    (is (= [[7 64 5] [6 64 5]] (stairs/dry-feet w [5 64 5] cells)) "the supported one first")))

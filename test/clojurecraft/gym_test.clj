@@ -64,6 +64,21 @@
   (is (= "data get entity Clj_g1 Dimension"
          (gym/fill-in "data get entity {name} Dimension" "Clj_g1" [0 0 0]))))
 
+(deftest the-pearl-arena-is-a-walled-lit-room-with-no-roof
+  ;; issue #263: the dark round the lit square spawned the zombies that came down the burrow's
+  ;; stairs (batches pearls-warped4-a, 4-b and 5-b lost four arena runs in twelve to them). The
+  ;; arena is a block of stone with the room carved out: a wall seven high round the square,
+  ;; nothing walks in; and no roof, since a surface landing stands on the highest solid block
+  (let [[stone air light] (filter #(str/starts-with? % "fill") gym/pearl-arena)
+        at (fn [cmd] (gym/fill-in cmd "Clj_g1" [100 200 64]))]
+    (is (= "fill 87 56 187 113 70 213 minecraft:stone" (at stone))
+        "stone 27 square, eight under the landing to six over it")
+    (is (= "fill 88 64 188 112 70 212 minecraft:air" (at air))
+        "the room 25 square carved to the stone's top: a wall one thick, no roof")
+    (is (= "fill 88 69 188 112 69 212 minecraft:light[level=15]" (at light))
+        "light blocks five over the floor, inside the wall")
+    (is (= ["time set midnight" "weather clear"] (take 2 gym/pearl-arena)) "midnight, no rain")))
+
 (deftest the-summons-are-commands-round-the-landing
   ;; issue #261: what the fight rows meet, written as fill-in templates and run in the row's
   ;; dimension
@@ -345,8 +360,8 @@
 (deftest the-plan-is-goals-by-runs
   (let [m (gym/plan-matrix ["wood" "pickaxe"] 2)]
     (is (= 4 (count (re-seq #"\"run\"" m))))
-    (is (str/includes? m "{\"goal\":\"wood\",\"run\":2,\"minutes\":10}"))
-    (is (str/includes? m "{\"goal\":\"pickaxe\",\"run\":1,\"minutes\":13}"))))
+    (is (str/includes? m "{\"goal\":\"wood\",\"run\":2,\"minutes\":308}"))
+    (is (str/includes? m "{\"goal\":\"pickaxe\",\"run\":1,\"minutes\":308}"))))
 
 (deftest landings-are-paired-and-checked
   (let [g (landings/grid [20000 20000] 20 640)]

@@ -244,7 +244,7 @@
       (dissoc :plan/intent)))
 
 (def placing-kinds #{:place :redig})  ; intents whose target is a cell they chose to put a block in, not a place they failed to reach
-(def boxing-kinds #{:stairs-down :tunnel}) ; intents that die :boxed standing in a pocket, which :plan/boxed-at remembers
+(def boxing-kinds #{:stairs-down :stairs-up :tunnel}) ; intents that die :boxed standing in a pocket, or under an overhang no stair up is cut through, which :plan/boxed-at remembers
 (def crossing-kinds #{:cross})         ; intents whose target is a trunk the way to it failed, not a place to give up
 
 (defn fail-intent
@@ -260,9 +260,10 @@
    walked, so the target is given up and the next candidate is tried (three such walks, each a
    different place, used to end a run that was still searching), but max-unwalkable of them in
    a row fail the plan too, so a search whose places keep changing cannot run for hours. A
-   staircase or a tunnel that died :boxed (boxing-kinds) records the cell it stood on in
-   :plan/boxed-at, so the next descent or tunnel does not start there and a later stair will not
-   step back onto it. Its visited cells join :plan/boxed-route: a retreat back along the failed
+   staircase (down or up) or a tunnel that died :boxed (boxing-kinds) records the cell it stood
+   on in :plan/boxed-at, so the next descent, climb or tunnel does not start there and a later
+   stair will not step back onto it (the pearl hunt's climb toward an enderman on a ledge, issue
+   #263, is refused under the ledge's overhang and must not be cut again from the same cell). Its visited cells join :plan/boxed-route: a retreat back along the failed
    search is not new rock (issue #161, R1/29). A walk for a log that failed :no-path adds its
    target to :plan/unreached, the places a choice of logs passes over together with the trees round them
    (issue #75). A :cross (crossing-kinds) blacklists nothing and counts against its trunk's column
