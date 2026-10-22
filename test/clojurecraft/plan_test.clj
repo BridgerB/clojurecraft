@@ -852,12 +852,13 @@
   (is (nil? (plan/goals-for "play"))))
 
 (deftest the-current-stage-is-the-furthest-target
-  (is (= "blaze-rods" (plan/current-until)))
+  (is (= "pearls-12" (plan/current-until)))
   ;; A gym stage names only its own target. A fresh run plays every step up to it.
-  (is (= [:blaze-rods] (plan/goals-for (plan/current-until))))
+  (is (= [:ender-pearls] (plan/goals-for (plan/current-until))))
   (let [chain (plan/through (plan/current-until))]
     (is (= [:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket :water-bucket
-            :flint-and-steel :iron-kit :portal-kit :cast-one :portal :nether :fortress :blaze-rods]
+            :flint-and-steel :iron-kit :portal-kit :cast-one :portal :nether :fortress :blaze-rods
+            :ender-pearls]
            chain))
     (is (= [:wood] (plan/through "wood")))
     (is (nil? (plan/through "play")))
@@ -1482,3 +1483,28 @@
     (is (= [0 1] (dir (first near))) "the trunk it began for is the near one")
     (is (= [0 -1] (dir (first far))) "or the far one, whichever it began for")
     (is (= (first far) (:intent/trunk pick)) "the intent names the trunk it is for")))
+
+(deftest a-descent-that-ends-level-with-the-trunk-tunnels-on
+  ;; sim snapshot R2-43-1 (issue #135): stairs down inside a hill ended level with a trunk fifteen
+  ;; blocks off; out? is false there, so the climb-out cut stairs up to the top of the world, and
+  ;; the bot walked down its own stairs and cut the same descent again for the whole window
+  (let [rock (into {} (for [x (range 0 16) y (range 58 71) z (range 4 13)] [[x y z] 1]))
+        w (remembered (merge rock
+                             {[0 61 8] blocks/air [0 62 8] blocks/air [14 61 8] 136 [14 62 8] 136})
+                      [0.5 61.0 8.5])
+        leg
+        {:intent/kind :stairs-down :intent/for :trees :intent/trunk [14 61 8] :intent/status :done}
+        run {:intent/kind :tunnel-to
+             :intent/target [14 61 8]
+             :intent/trunk [14 61 8]
+             :intent/reach wood/tunnel-reach
+             :intent/steps wood/tunnel-steps
+             :intent/dry? true
+             :intent/for :trees}]
+    (is (not (stairs/out? w (intent/feet w))) "in the ground")
+    (is (nil? (wood/trees-tunnel w)) "no tunnel from the ground a descent did not end in")
+    (is (= run (wood/trees-tunnel (assoc w :plan/last leg))) "on from the foot, level")
+    (is (= run (wood/trees-tunnel (assoc w :plan/last (assoc leg :intent/for :valley)))))
+    (is (not= :stairs-up (:intent/kind (wood/climb-out (assoc w :plan/last leg))))
+        "not up to the top of the world")
+    (is (nil? (wood/trees-tunnel (assoc w :plan/last (assoc leg :intent/status :failed)))))))

@@ -593,11 +593,15 @@
              2 {:item (recipe/item-id :crafting_table) :count 1}}
         bare (assoc (standing-at (open-ground trench) feet-pos) :player/inventory kit)
         planks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :oak_planks) :count 2})
-        sticks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :stick) :count 2})]
+        three (assoc-in planks [:player/inventory 4] {:item (recipe/item-id :stick) :count 3})
+        sticks (assoc-in bare [:player/inventory 3] {:item (recipe/item-id :stick) :count 4})]
     (is (build/carry-sticks? planks) "a table held and planks for sticks: sticks for the kit")
     (is (not= :build (:intent/kind (plan/next-intent planks cast-one-row plan/goals)))
         "made before the build")
-    (is (not (build/carry-sticks? sticks)) "sticks held already")
+    (is
+     (build/carry-sticks? three)
+     "three sticks are one pickaxe and a half: the climb out after the cast wears out two (issue #135, R3-4-1)")
+    (is (not (build/carry-sticks? sticks)) "four sticks held already")
     (is (not (build/carry-sticks? bare)) "nothing to make them from: no trip out for them")))
 
 (deftest a-pit-deep-under-the-landing-is-climbed-out-of-for-wood
@@ -663,6 +667,35 @@
            (get-in (run {} {[5 62 6] (blocks/default-state :deepslate)})
                    [:plan/intent :intent/reason]))
         "deepslate, fifteen seconds a block by hand: a trip out for a pickaxe beats it")))
+
+(deftest a-build-far-from-its-site-never-digs-stone-by-hand
+  ;; sim race 39723238841 (issue #504, R1/5): the pickaxe broke at y 21 on the way back to the
+  ;; portal with one stick and no planks, and the eighty blocks still to go were dug by hand,
+  ;; 7.5 s each; a trip out for the wood beats it, a few blocks at the site do not
+  (let [op {:build/op :dig :build/pos [5 62 6] :build/stand [5 63 5] :build/step :room}
+        run (fn [origin]
+              (let [i {:intent/kind :build
+                       :intent/build :cast-one
+                       :intent/origin origin
+                       :intent/facing :south
+                       :intent/status :active
+                       :intent/op op}]
+                (build/work-op (assoc (standing-at (open-ground {[5 62 6] (blocks/default-state
+                                                                           :stone)})
+                                                   [5.5 63.0 5.5])
+                                      :plan/intent i
+                                      :player/inventory {})
+                               i
+                               op
+                               {:event/kind :tick :event/now 0 :event/rand 0.5})))]
+    (is (= :dig (get-in (run [4 64 4]) [:plan/intent :intent/child :intent/kind]))
+        "the cast's room at the site: the hand digs on")
+    (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])]
+      (is (build/hand-dig-refused? w [5 62 6] [80 20 4])
+          "eighty blocks from the site: the pickaxe is made again first")
+      (is (not (build/hand-dig-refused? w [5 62 6] [4 64 4])) "at the site the hand digs on"))
+    (is (not (build/hand-dig-refused? (standing-at (open-ground {}) [5.5 63.0 5.5]) [5 62 6] nil))
+        "no site, no distance")))
 
 (deftest a-build-replans-for-a-broken-pickaxe-before-the-last-attempt
   (let [origin [5 63 5]

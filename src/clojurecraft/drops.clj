@@ -9,9 +9,11 @@
    it is held than when it began, or when no such drop lies there (nothing to pick up is not a
    failure). A drop says what it holds in its metadata (entity/metadata-facts, :entity/item); one
    that has not said yet may hold it. No packet: the server hands a drop over on contact."
-  (:require [clojurecraft.entity :as entity]
+  (:require [clojure.math :as math]
+            [clojurecraft.entity :as entity]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.recipe :as recipe]))
 
@@ -48,6 +50,18 @@
   [world e]
   (<= (- (physics/y-of (:entity/pos e)) (physics/y-of (:player/pos world))) (- pickup-fall)))
 
+(defn over-void?
+  "Does drop e hang over a drop it cannot be fetched from: its cell open, nothing to stand on
+   under it and no landing within path/max-fall below (path/landing)? Sim snapshot R4-31-1 (issue
+   #502): a blaze's rod fell over the edge of a fortress's bridge, the collect walked after it,
+   stepped down the rim, and its momentum, with the intent already done, carried the bot off the
+   bridge into the lava sea forty blocks down. A rod there is lost; the bot is not."
+  [world e]
+  (let [cell (mapv #(long (math/floor %)) (:entity/pos e))]
+    (and (= :clear (path/classify world cell))
+         (not (path/floor? world (update cell 1 dec)))
+         (nil? (path/landing world cell)))))
+
 (defn nearest
   "[eid entity] of the drop of the item named item nearest the feet within drop-radius of the
    point at, or nil when none lies there."
@@ -59,7 +73,8 @@
 (defmethod intent/run :collect-drops
   ;; done when one more of the item is held than at the start, or no drop of it lies within
   ;; drop-radius of the target cell; :not-picked-up past intent/collect-timeout; a step over a
-  ;; drop with no landing (intent/ledge-ahead?) leaves the drop, as :collect does
+  ;; drop with no landing (intent/ledge-ahead?) leaves the drop, as :collect does, and so does a
+  ;; drop hanging over one (over-void?): never walked toward at all
   [world {:intent/keys [item target since before]} _]
   (let [now (:time/now world)
         held (inventory/item-count world (recipe/item-id item))
@@ -69,7 +84,7 @@
         [_ e] (nearest world item (physics/centre target))
         p (:entity/pos e)
         d (when p (physics/horizontal-distance (:player/pos world) p))]
-    (cond (or (> held before) (nil? e)) (intent/done (stop world))
+    (cond (or (> held before) (nil? e) (over-void? world e)) (intent/done (stop world))
           (> (- now since) intent/collect-timeout) (intent/fail (stop world) :not-picked-up)
           (<= d underfoot) (stop world)
           (intent/ledge-ahead? world p) (intent/done (stop world))

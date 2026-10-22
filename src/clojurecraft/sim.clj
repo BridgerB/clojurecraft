@@ -91,6 +91,7 @@
 
 (def player-eid 1)                    ; the player's entity id, as the model's login gives it
 (def mob-salt 0x2545F4914F6CDD1D)     ; the mobs' rolls start from :seed mixed with this, apart from the loot's (mob-roll)
+(def wild-salt 0x6A09E667F3BCC909)    ; the Nether's own spawns roll from :seed mixed with this, apart from the mobs' (wild-roll): a Nether run with no warped forest rolls its blazes as before
 
 (defn player-eid-of
   "The player's entity id: the real server's for a model joined to a real bot mid-play
@@ -290,6 +291,7 @@
         (with-food-value (assoc hunger/fresh :food/level (or food food/max-food)))
         (assoc :sim/sent-health [max-health (or food food/max-food) false]))
     (or difficulty (seq mobs)) (assoc :sim/mob-rng (bit-xor (long (or seed 0)) mob-salt))
+    difficulty (assoc :sim/wild-rng (bit-xor (long (or seed 0)) wild-salt))
     stronghold (assoc :sim/stronghold stronghold)
     end (assoc :sim/end end)
     (seq mobs)
@@ -1244,6 +1246,35 @@
             told
             (:sim/items sim))))
 
+(def overworld-keys
+  "The model's attributes that are the overworld's while the player is in another dimension."
+  [:sim/columns :sim/decoded :sim/placed :sim/broken :sim/view-distance])
+
+(defn leave-overworld
+  "The model with the overworld's columns and the blocks placed and broken in it set aside
+   (:sim/overworld) for a way back (return-overworld), when the player is in it; unchanged in any
+   other dimension, where they are already set aside. A portal or an end portal replaces them with
+   the other dimension's."
+  [sim]
+  (cond-> sim
+    (= dimension/overworld (:sim/dimension sim dimension/overworld))
+    (assoc :sim/overworld (select-keys sim overworld-keys))))
+
+(defn return-overworld
+  "The model with the overworld back as leave-overworld set it aside: its columns, its placed and
+   broken blocks, its view distance, and none of the other dimension's items, mobs, fluids or
+   falling blocks, which the client dropped. Unchanged with no overworld set aside. Sim race
+   39723238841 (issue #504): a death in the Nether respawned the player in the overworld's
+   dimension over the Nether's columns, which hold nothing at the spawn, so the bot stood in
+   unloaded chunks on stairs-down for hours."
+  [sim]
+  (if-let [overworld (:sim/overworld sim)]
+    (-> (apply dissoc sim :sim/overworld overworld-keys)
+        (merge overworld)
+        (assoc :sim/items {} :sim/mobs {} :sim/fluids {} :sim/falls {} :sim/falling {})
+        (dissoc :sim/spawners :sim/spawners-at))
+    sim))
+
 (defmethod on-packet [:play :client-command]
   [sim {:keys [action]}]
   ;; a dead player asking to respawn gets a new life at spawn, full health and breath, a fresh
@@ -1253,7 +1284,8 @@
     (let [[x y z] (:sim/respawn sim)]
       (-> sim
           (cond-> (not= dimension/overworld (:sim/dimension sim dimension/overworld))
-                  (assoc :sim/view #{}))
+                  (-> return-overworld
+                      (assoc :sim/view #{})))
           (assoc :sim/health max-health
                  :sim/air max-air
                  :sim/player-pos [x y z]
@@ -1471,7 +1503,7 @@
           (nil? since) (assoc sim :sim/portal-since now)
           (< (- now since) portal-ms) sim
           :else
-          (let [sim (arrive sim)
+          (let [sim (arrive (leave-overworld sim))
                 [x y z] (:sim/player-pos sim)]
             (-> sim
                 (assoc :sim/dimension dimension/nether)
@@ -2012,6 +2044,16 @@
   (let [[{r :sim/rng} x] (roll {:sim/rng (:sim/mob-rng sim (bit-xor (:sim/rng sim) mob-salt))})]
     [(assoc sim :sim/mob-rng r) x]))
 
+(defn wild-roll
+  "[sim' r]: the next roll of the Nether's own spawns' stream, r in [0, 1), from :sim/wild-rng
+   (started at :seed mixed with wild-salt, or from the loot's :sim/rng for a model kept before
+   it), never from the mobs' :sim/mob-rng, so a try that finds no warped floor costs the mobs'
+   stream nothing and a Nether run that meets no warped forest rolls its fortress's spawners
+   as before (issue #263). The endermen it spawns act and despawn by mob-roll, as every mob."
+  [sim]
+  (let [[{r :sim/rng} x] (roll {:sim/rng (:sim/wild-rng sim (bit-xor (:sim/rng sim) wild-salt))})]
+    [(assoc sim :sim/wild-rng r) x]))
+
 (defn overworld?
   "Is the player in the overworld, where the day turns and the night rule spawns?"
   [sim]
@@ -2445,6 +2487,75 @@
   [sim]
   (= dimension/nether (:sim/dimension sim)))
 
+(defn wild-spawning?
+  "Does the Nether's own spawning run: a difficulty above peaceful, in the Nether? Vanilla
+   spawns the Nether's hostiles by biome; the model spawns a warped forest's (mob/warped-kinds)."
+  [sim]
+  (boolean (and (#{:easy :normal :hard} (:sim/difficulty sim)) (in-nether? sim))))
+
+(defn spawn-pack
+  "The model with a pack of n of kind walked out from [x y z]: each member mob/pack-step off
+   the last on x and on z (four wild-rolls), at the pack's height, placed where it stands (a cell
+   mob/nether-spot? and no nearer the player than mob/spawn-near) and skipped where it does
+   not, as NaturalSpawner.spawnCategoryForPosition walks and skips them."
+  [sim kind [x y z] n]
+  (let [player (:sim/player-pos sim)
+        at #(block-at sim %)
+        free? (free-fn sim)]
+    (first (reduce (fn [[sim x z] _]
+                     (let [[sim a] (wild-roll sim)
+                           [sim b] (wild-roll sim)
+                           [sim c] (wild-roll sim)
+                           [sim d] (wild-roll sim)
+                           x (+ x (mob/pack-step a b))
+                           z (+ z (mob/pack-step c d))
+                           pos [(+ x 0.5) (double y) (+ z 0.5)]]
+                       [(cond-> sim
+                          (and (mob/nether-spot? at free? [x y z])
+                               (>= (physics/distance pos player) mob/spawn-near))
+                          (add-mob kind pos {})) x z]))
+                   [sim x z]
+                   (range n)))))
+
+(defn try-nether-spawn
+  "Every mob/spawn-every ticks in the Nether (wild-spawning?, under mob/hostile-cap), one try
+   at a warped forest's pack: a column rolled in the ring mob/spawn-near to mob/spawn-far round
+   the player as try-spawn rolls one, its spots within mob/spawn-band of the player's feet
+   (mob/nether-spots: warped nylium under the feet, an enderman's three cells free, any light),
+   one of them rolled, a kind rolled by weight (mob/warped-kinds) and a pack of
+   mob/enderman-pack walked out from it (spawn-pack). A column with no warped floor spawns
+   nothing: the Nether's other biomes' hostiles are not modelled. Every roll is a wild-roll,
+   so the overworld's night rule rolls as it did, and a fortress's spawners too until an
+   enderman spawns (its turns roll from mob-roll)."
+  [sim]
+  (let [player (:sim/player-pos sim)]
+    (cond (not (and player
+                    (wild-spawning? sim)
+                    (zero? (mod (quot (:sim/now sim) physics/tick-ms) mob/spawn-every))
+                    (< (hostiles-near sim) mob/hostile-cap)))
+          sim
+          :else
+          (let [[sim r1] (wild-roll sim)
+                [sim r2] (wild-roll sim)
+                angle (* 2.0 math/PI r1)
+                dist (+ mob/spawn-near (* r2 (- mob/spawn-far mob/spawn-near)))
+                [px py pz] player
+                x (long (math/floor (+ px (* dist (math/cos angle)))))
+                z (long (math/floor (+ pz (* dist (math/sin angle)))))
+                fy (long (math/floor py))
+                spots (vec (mob/nether-spots #(block-at sim %)
+                                             (free-fn sim)
+                                             x
+                                             z
+                                             (- fy mob/spawn-band)
+                                             (+ fy mob/spawn-band)))]
+            (cond (empty? spots) sim
+                  :else
+                  (let [[sim r3] (wild-roll sim)
+                        [sim r4] (wild-roll sim)
+                        spot (spots (min (dec (count spots)) (long (* r3 (count spots)))))]
+                    (spawn-pack sim (mob/pick mob/warped-kinds r4) spot mob/enderman-pack)))))))
+
 (defn spawner-cells
   "The set of cells holding a spawner block in the decoded columns within one chunk of the
    player's column (a spawner wakes within 16 blocks, never farther than the next column)."
@@ -2574,8 +2685,10 @@
 
 (defn tick-mobs
   "One game tick of the mobs: the day moves on (:sim/day-time), chunks coming near get their
-   animals (populate), a hostile is tried for (try-spawn), the Nether's spawners run
-   (tick-spawners), every mob acts in id order (act-mob), and far hostiles despawn (despawn). A model with no difficulty and no mobs only keeps its day."
+   animals (populate), a hostile is tried for (try-spawn), the Nether's warped forests spawn
+   their endermen (try-nether-spawn) and its spawners run (tick-spawners), every mob acts in id
+   order (act-mob), and far hostiles despawn (despawn). A model with no difficulty and no mobs
+   only keeps its day."
   [sim]
   (let [sim (cond-> sim (:sim/day-time sim) (update :sim/day-time inc))]
     (cond (not (or (:sim/difficulty sim) (seq (:sim/mobs sim)))) sim
@@ -2583,6 +2696,7 @@
           (let [sim (-> sim
                         populate
                         try-spawn
+                        try-nether-spawn
                         tick-spawners)]
             (despawn (reduce act-mob sim (sort (keys (:sim/mobs sim)))))))))
 
@@ -2680,6 +2794,7 @@
    (:sim/end's :crystals, end/spikes' when absent)."
   [sim]
   (let [{:keys [columns dragon dragon-yaw crystals]} (:sim/end sim)
+        sim (leave-overworld sim)
         [x y z] end/spawn
         platform (end/platform)
         sim (-> sim
