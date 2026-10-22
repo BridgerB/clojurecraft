@@ -40,6 +40,8 @@ sourceRefs:
   - src/clojurecraft/stairs.clj#defn up-dry?
   - src/clojurecraft/stairs.clj#defn wet-feet
   - src/clojurecraft/stairs.clj#defn dry-feet
+  - src/clojurecraft/stairs.clj#defn planks-of
+  - src/clojurecraft/stairs.clj#defn filler
   - test/clojurecraft/stone_test.clj#a-stair-up-is-not-cut-from-feet-in-fed-water
   - src/clojurecraft/stairs.clj#defn floors-affordable?
   - test/clojurecraft/stone_test.clj#a-stair-down-lays-floors-only-while-the-filler-reaches-its-depth
@@ -181,6 +183,8 @@ An ascent may regain a previously visited higher cell: height gained is progress
 
 ## Tunnels
 `{:intent/kind :tunnel :intent/dir d :intent/length n}` is level steps alone: `tunnel-plan` takes the next along its heading when `level-safe?`, else a step to one side, keeping the heading, so the tunnel goes round what refused it; the side is the first of the two allowed and then the only one (`:intent/side`), so it never steps back and forth; `:boxed` when neither the heading nor that side allows a step. It never turns back down itself: when it turned a quarter at each refusal, live run 8 (refused east at y 16) tunnelled west beside its own tunnel and gym batch iron-a2 run 4 walked its tunnel back and forth for eight minutes (`a-tunnel-goes-round-what-refuses-it`). The `:level` stage is the staircase's own. Done after n steps; a tunnel toward a bank (`:intent/for :bank`, `scoop/to-bank`) that ends no nearer its water on the plane than it began (`:intent/from-feet`, `no-nearer?`, by `nearer-by` 1) gives that water and the sources round it (`pond-sources`, within `pond-reach` 6) up into `:plan/blacklist`: sim race 38839767273 runner 6 (issue #69, worlds R3/8 and R4/35 at 3f836ff) walked an open corridor past its water, its heading turning as it passed, eight steps east and eight back, two thousand tunnels until the run's ninety minutes were spent (`a-bank-tunnel-that-comes-no-nearer-gives-the-pond-up`). Not when a walk to the bank has a route at the tunnel's end (`intent/routable?`): the tunnel opened the way. Sim world R4/30 seed 1 (issue #69's second round, ef4e73b against 5e93cae) gave up a pond its tunnel had just opened the walk to, and tunnelled on to other water. The mine act cuts one at a row's depth ([[mine-act]]).
+
+**Planks and the mouth of a hole (issues #37, #130).** `filler` falls back to a planks item when no filler of `fillers` is held; `carried-filler` counts none, so a descent's reserve never spends them, but a climb's seal or step can be laid from them (a bot on a strip over air held only planks and sticks). `dry-feet` lays the water beside wet feet, and a cell of them with no solid neighbour (the mouth of a water-filled hole) is laid after a water cell beside it that has one: the helpers come first in the list and the lay stage places in order.
 
 ## Gotchas
 - **A boxed tunnel for lava ends instead of failing.** `box`: with `:intent/for :lava` and a target it adds the feet to `:plan/boxed-at`, gives the source up and ends done, as a bank tunnel gives its water up. See [[build-plan]].

@@ -6,6 +6,7 @@
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
             [clojurecraft.stairs :as stairs]
             [clojurecraft.stone :as stone]
@@ -1140,3 +1141,23 @@
     (let [r (assoc w :plan/boxed-at #{} :plan/boxed-route #{[6 48 5]})]
       (is (stone/adjoins-boxed? r [5 48 5]) "beside a cell a boxed climb crossed")
       (is (nil? (stone/stairs r row)) "no descent from a strip a boxed climb crossed"))))
+
+(deftest planks-are-the-last-filler-and-no-descent-spends-them
+  (let [planks (standing 48 :birch_planks :birch_planks :birch_planks)
+        both (standing 48 :birch_planks :birch_planks :birch_planks :dirt)]
+    (is (= :birch_planks (stairs/filler planks 3)) "nothing else held: planks")
+    (is (nil? (stairs/filler planks 4)) "not more than held")
+    (is (= :dirt (stairs/filler both 1)) "a filler first")
+    (is (zero? (stairs/carried-filler planks)) "a descent's reserve counts none")))
+
+(deftest a-water-cell-with-no-support-is-laid-after-a-supported-one-beside-it
+  (let [w (-> (standing 64 :cobblestone :cobblestone)
+              (assoc :world/blocks
+                     {[5 64 5] blocks/water-base
+                      [6 64 5] blocks/water-base
+                      [6 63 5] blocks/water-base
+                      [7 64 5] blocks/water-base}))
+        cells (stairs/up-cells [5 64 5] [0 1])]
+    (is (= [[6 64 5]] (stairs/wet-feet w cells)) "the one water cell beside the feet")
+    (is (nil? (place/support w [6 64 5])) "no solid neighbour of its own")
+    (is (= [[7 64 5] [6 64 5]] (stairs/dry-feet w [5 64 5] cells)) "the supported one first")))
