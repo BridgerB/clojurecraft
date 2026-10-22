@@ -1,0 +1,20 @@
+;; Issue #263, branch feat/263-warped7, first batch: after pearls-warped6-b (pearls-1-live 3/3,
+;; pearls-12 0/5 with 6 and 4 held, the kit's one pickaxe worn out at 11 and 32 minutes), the kit
+;; carries two iron pickaxes (the chain's spare, #485), stairs and tunnels go only toward an
+;; enderman within 32 on the plane (cut-reach), a calm one given up on at hand gets no burrow cut
+;; for it, and a roam with every end sixteen off walked to looks thirty-two and forty-eight off.
+{:plans/label "pearls-warped7-a"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 5
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
