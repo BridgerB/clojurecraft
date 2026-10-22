@@ -41,6 +41,31 @@
       (is (contains? #{:walk :stairs-up} (:intent/kind child))
           "no pickup cell: leave, never cut a niche"))))
 
+(defn on-a-stub
+  "Standing at y 64 on one block of cobblestone over open air, holding gravel and cobblestone:
+   issue #349's R4/2 bot, out on a stub with no cell beside it a block could stand on."
+  []
+  (let [air (into {} (for [x (range 1 10) z (range 1 10) y (range 50 75)] [[x y z] blocks/air]))]
+    (assoc (standing 64 :gravel :cobblestone)
+           :world/blocks
+           (assoc air [5 63 5] (blocks/default-state :cobblestone)))))
+
+(deftest redig-lays-a-foothold-where-nothing-beside-the-feet-can-hold-the-block
+  (let [w (on-a-stub)
+        child (stone/foothold w)]
+    (is (=
+         {:intent/kind :place :intent/item :cobblestone :intent/cell [6 63 5] :intent/for :foothold}
+         child)
+        "a filler into the cell beside the stub, against its side, with room over it")
+    (is (nil? (stone/foothold (assoc w :player/inventory {}))) "nothing to lay: no foothold")
+    (let [i {:intent/kind :redig
+             :intent/item :gravel
+             :intent/status :active
+             :intent/child (assoc child :intent/status :done)}
+          next (stone/redig-stage (assoc w :plan/intent i) i {:event/kind :tick})]
+      (is (nil? (get-in next [:plan/intent :intent/child]))
+          "a foothold laid is not the placed block: the redig goes on to place the gravel"))))
+
 (deftest redig-places-on-the-neighbouring-stair
   (doseq [dy [-1 1]]
     (let [cell [4 (+ 64 dy) 5]

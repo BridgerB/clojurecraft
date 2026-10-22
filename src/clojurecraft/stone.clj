@@ -703,11 +703,41 @@
                 (= :no-spot (:intent/reason child))
                 (:player/in-water? world))))
 
+(defn foothold
+  "The child :place of a filler block (stairs/filler) into a cell under the feet's level, one of
+   the four beside the feet column or the one under it, that a click can reach (place/support)
+   and that is no part of the player, so that the cell over it is a spot for a block to be
+   placed and dug again; nil when no filler is held or no such cell is there. Sim race
+   39768353246 (issue #349, R4/2): a bot out on a stub of cobblestone over the sea, no cell
+   beside it with a floor under it and no route off, had its redig answered by a stairs up that
+   was done at once under the open sky, again and again for fifteen minutes."
+  [world]
+  (when-let [item (stairs/filler world 1)]
+    (let [[fx fy fz] (intent/feet world)
+          eye (game/eye world)
+          cell (first (for [[dx dz] [[1 0] [-1 0] [0 1] [0 -1] [0 0]]
+                            :let [c [(+ fx dx) (dec fy) (+ fz dz)]
+                                  over [(+ fx dx) fy (+ fz dz)]
+                                  t (terrain/block-at world c)
+                                  o (terrain/block-at world over)]
+                            :when (and t
+                                       o
+                                       (blocks/replaceable? t)
+                                       (blocks/replaceable? o)
+                                       (terrain/confirmed? world c)
+                                       (place/support world c)
+                                       (not (place/inside-player? world c))
+                                       (<= (physics/distance eye (physics/centre c))
+                                           place/place-reach))]
+                        c))]
+      (when cell {:intent/kind :place :intent/item item :intent/cell cell :intent/for :foothold}))))
+
 (defn redig-place
   "The child placement in a neighbouring cell the feet can stand in, level or one step up or
-   down, or a retreat to fresh ground when none is there. Issue #151's R3/14 and real runner 8
-   snapshots placed gravel through a wall or round a corner: within click reach, but not within
-   pickup reach."
+   down, or a retreat to fresh ground when none is there; under the open sky, where a stairs up
+   would be done before it began, a foothold (foothold) laid for the placement instead. Issue
+   #151's R3/14 and real runner 8 snapshots placed gravel through a wall or round a corner:
+   within click reach, but not within pickup reach."
   [world item]
   (let [[fx fy fz] (intent/feet world)
         refused (set (for [[dx dy dz] place/around
@@ -715,8 +745,12 @@
                            :when (not (and (= 1 (+ (abs dx) (abs dz)))
                                            (path/standable? world cell)))]
                        cell))
-        [cell] (place/spot world true refused)]
-    (if cell {:intent/kind :place :intent/item item :intent/cell cell} (place/fresh-rock world))))
+        [cell] (place/spot world true refused)
+        retreat (when-not cell (place/fresh-rock world))]
+    (cond cell {:intent/kind :place :intent/item item :intent/cell cell}
+          (and (= :stairs-up (:intent/kind retreat)) (stairs/out? world [fx fy fz]))
+          (or (foothold world) retreat)
+          :else retreat)))
 
 (defmethod redig-stage :place
   ;; a place that found no spot afloat is not the redig's failure: a :swim-out for :retreat
@@ -726,7 +760,9 @@
         (intent/assoc-intent world
                              :intent/child
                              {:intent/kind :swim-out :intent/for :retreat :intent/status :active})
-        (and (contains? #{:swim-out :walk :stairs-up} (:intent/kind child)) (intent/done? child))
+        (and (or (contains? #{:swim-out :walk :stairs-up} (:intent/kind child))
+                 (= :foothold (:intent/for child)))
+             (intent/done? child))
         (intent/dissoc-intent world :intent/child)
         :else
         (link

@@ -68,6 +68,8 @@ sourceRefs:
   - test/clojurecraft/sim_test.clj#coal-and-iron-are-mined-where-they-lie
   - src/clojurecraft/stone.clj#defn link
   - src/clojurecraft/stone.clj#defn redig-place
+  - src/clojurecraft/stone.clj#defn foothold
+  - test/clojurecraft/stone_test.clj#redig-lays-a-foothold-where-nothing-beside-the-feet-can-hold-the-block
   - test/clojurecraft/stone_test.clj#redig-places-only-where-the-drop-can-be-collected
   - test/clojurecraft/stone_test.clj#redig-places-on-the-neighbouring-stair
   - test/clojurecraft/stone_test.clj#redig-tries-placement-again-after-reaching-fresh-ground
@@ -128,6 +130,7 @@ Gravel's loot table drops flint one time in ten, else the gravel itself. The `:f
 
 ## Gotchas
 - **Click reach is not pickup reach.** `redig-place` chooses a supported, clear cell immediately beside the feet, including a passage, and gives that cell to the child placement. With none, it retreats to fresh ground and tries placement again; it never cuts a placement niche. Issue #151's R3/14 and real runner 8 snapshots placed gravel through rock or round a corner, then walked into the intervening wall until three collects failed `:not-picked-up`. Both now collect gravel repeatedly and reach flint-and-steel within their kept windows.
+- **A stub over open air gets a foothold.** With no cell beside the feet to place on and no route away, `redig-place` under the open sky (`stairs/out?`) answers with `foothold`: a filler laid against the stub's side or under the feet, so the cell over it is a spot for the gravel; a stairs up there is done before it begins and the redig used to repeat it for the whole window. Issue #349's R4/2 stood so on a cobblestone over the sea for fifteen minutes.
 - **A stair is pickup ground too.** The neighbouring cell may be one step up or down, not only level with the feet. Issue #349's R1/4 and R4/42 snapshots held gravel but retreated along stairs indefinitely because no same-height neighbour had headroom; the next placement search must accept a standable stair.
 - **Exposed is not safe to dig.** `exposed-of-states` excludes blocks whose dig would expose a fluid (`intent/exposes-fluid?`), using the live terrain rather than permanently blacklisting them. Race 39037024176 runner 1 (issue #342) repeatedly walked to stone beside water, received `:unsafe`, and descended into another boxed pocket. A dry observation makes those blocks candidates again. Together with resetting turns after each completed stair, the kept snapshot reaches the furnace 363.3 seconds after its moment instead of failing `[:furnace :boxed]` after 54.15 seconds.
 - **Lava that caught the bot is still coming.** Ore within `path/lava-trap-reach` (4) on the plane of a lava trap still in force (`:world/traps`, ten minutes) is left alone (`path/near-lava-trap?`): sim race 38844683780 (issue #230, world R2/9) fled lava falling from ten blocks up, then mined the iron two blocks off under the same flow and was caught again until the flee found no footing; and where it was caught, the mine retreats before it cuts a stair, which the flow followed down (`ore-beside-a-lava-trap-is-left-alone`).
