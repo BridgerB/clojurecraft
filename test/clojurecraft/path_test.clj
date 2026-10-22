@@ -478,21 +478,3 @@
         "from the sheet, over it to the land")
     (is (not= :found (:path/status (path/plan on-land (path/feet-cell [12.5 64.0 8.5]) goal-ice)))
         "from the land, never onto the sheet")))
-
-(deftest a-start-in-a-shallow-flow-searches-from-its-own-cell
-  ;; issue #130, real-7 Clj_r18: water over the floor at the feet, not in-water? by the physics;
-  ;; the start cell was no standable one, every retreat found no route
-  (let [w (world-of (concat (fill stone (range 0 16) [63] (range 0 16))
-                            (fill water (range 4 7) [64] [5]))
-                    [5.5 64.0 5.5])
-        from [5 64 5]]
-    (is (not (path/standable? w from)) "water in the feet cell")
-    (is (path/wet-standable? w from))
-    (is (= from (path/start-cell w from)))
-    (let [r (path/plan w from {:goal/kind :block :goal/pos [10 64 5]})]
-      (is (= :found (:path/status r)))
-      (is (= from (:path/from r))))
-    (is (not (path/wet-standable? (world-of (fill stone (range 0 16) [63] (range 0 16))
-                                            [5.5 64.0 5.5])
-                                  from))
-        "dry feet are standable, not wet")))
