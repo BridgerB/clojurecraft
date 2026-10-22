@@ -508,8 +508,8 @@
         row (fn [w] (:goal/id (make/next-row w (ingots 4) plan/goals)))]
     (is (= :gather-log (row (with-tree {:stone_pickaxe 2 :coal 1})))
         "a trunk in reach: the sticks' log, before the descent")
-    (is (= :gather-log (row (with-tree {:stone_pickaxe 2 :coal 1 :oak_planks 2})))
-        "two planks are short of thirty-two sticks: the log (issue #338)")
+    (is (= :craft/stick (row (with-tree {:stone_pickaxe 2 :coal 1 :oak_planks 2})))
+        "two planks make sticks first, the logs for the rest follow (issue #338)")
     (is (= :craft/stick (row (with-tree {:stone_pickaxe 2 :coal 1 :oak_planks 16})))
         "planks held: the sticks are made")
     (is (= :gather-log (row (with-tree {:stone_pickaxe 2 :coal 1 :stick 4})))

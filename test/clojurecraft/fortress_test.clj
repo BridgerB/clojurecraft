@@ -942,6 +942,7 @@
         full (into kit (for [p (range 3 36)] [p (stack :basalt 64)]))
         w (assoc (rock {})
                  :world/facts (memory/empty-facts)
+                 :window/grid {}
                  :player/dimension dimension/nether
                  :player/inventory full)
         next #(plan/next-intent % goal plan/goals)]

@@ -15,6 +15,7 @@
             [clojurecraft.build :as build]
             [clojurecraft.dimension :as dimension]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.make :as make]
             [clojurecraft.memory :as memory]
             [clojurecraft.path :as path]
@@ -397,6 +398,12 @@
   [world]
   (not (or (:player/on-ground? world) (:player/in-water? world) (:player/in-lava? world))))
 
+(defn full-pack?
+  "Is every slot of the main inventory and the hotbar taken? Asked before window/tossable, whose
+   view needs the whole window's attributes."
+  [world]
+  (every? #(some? (get-in world [:player/inventory %])) inventory/main-then-hotbar))
+
 (defmethod intent/run :tunnel-to
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
@@ -587,7 +594,8 @@
     (cond (not nether?) {:plan/wait :other-dimension}
           :else
           (or (when (build/pickaxe-at-hand? world)
-                (or (when (and (nil? (:window/open world))
+                (or (when (and (full-pack? world)
+                               (nil? (:window/open world))
                                (window/tossable world (window/view world :inventory)))
                       {:intent/kind :toss})
                     (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))
