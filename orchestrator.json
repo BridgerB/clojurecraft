@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T02:47:23.564Z",
+  "at" : "2026-10-22T02:48:28.634Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -16,6 +16,16 @@
     "number" : 37,
     "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 501,
+    "title" : "Bot stops at blaze-rods: no-heal",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 500,
+    "title" : "Bot stops at blaze-rods: not-picked-up",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 130,
@@ -36,16 +46,14 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 501,
+    "move" : "assign"
+  }, {
     "issue" : 130,
     "move" : "leave",
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-21T07:24:54.917Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T07:26:04.264Z"
@@ -1389,5 +1397,9 @@
     "issue" : 108,
     "move" : "assign",
     "at" : "2026-10-21T20:34:22.284Z"
+  }, {
+    "issue" : 501,
+    "move" : "assign",
+    "at" : "2026-10-22T02:48:28.634Z"
   } ]
 }
