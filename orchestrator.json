@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T09:35:43.564Z",
+  "at" : "2026-10-22T09:45:34.462Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -21,6 +21,11 @@
     "number" : 286,
     "title" : "Bot stops at fortress: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 514,
+    "title" : "Bot stops at blaze-rods: no-footing",
+    "labels" : [ "bot-failure", "sim" ],
     "copilot" : false
   }, {
     "number" : 135,
