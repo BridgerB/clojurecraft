@@ -26,5 +26,5 @@
       stop? (fn [world]
               (when (zero? (mod (vswap! n inc) 2)) (line world))
               (or (> @n 3000) (> (:time/now world) 3104000)))]
-  (sim/play-from sr/step m stop? (sr/window-of snap w) (sr/go-of w nil) nil)
+  (sim/play-from sr/step m stop? (sr/window-of snap) (sr/go-of w nil) nil)
   (println "done"))
