@@ -231,22 +231,58 @@
 (def filler-states
   "Every state of the blocks dug by hand for filler: dirt, and the grass over it."
   (into #{} (mapcat blocks/states-of) [:dirt :grass_block]))
-(def filler-drops #{(blocks/items :dirt)}) ; what digging them gives
+(def stone-filler-row
+  "The blocks that give a filler to a pick: stone and the stones that drop themselves."
+  {:goal/blocks [:stone :cobblestone :granite :diorite :andesite :tuff]})
+(def filler-drops
+  "What digging a block of filler-states or of stone-filler-row gives."
+  (into #{(blocks/items :dirt)} (drops-of-row stone-filler-row)))
+
+(defn filler-states-for
+  "The states a boxed mine digs for filler: dirt and the grass over it, and, when a pickaxe is
+   held (nothing is missing for stone-filler-row), the stones as well: a strip of granite over open
+   air, or a hillside of stone, is filler too."
+  [world]
+  (cond-> filler-states
+    (nil? (tool-missing world stone-filler-row)) (into (states-of-row stone-filler-row))))
 
 (defn filler-dig
-  "A walk to the nearest dirt of filler-states that a route reaches and its dig exposes no fluid
-   to (exposed-of-states), tagged :filler for the chain that digs it and picks it up, or nil: only
-   once a staircase died :boxed here or before (:plan/boxed-at) and less than filler-want filler is
-   carried (stairs/carried-filler). A staircase refused for the water beside it is sealed from
-   what is carried, and the lake shores it was refused on gave the bots two dirt to seal with
-   (issues #342 and #65, real bot Clj_r15 landed at R1/30): the dirt they stood on was filler."
+  "A walk to the nearest block of filler-states-for that a route reaches and its dig exposes no
+   fluid to (exposed-of-states), tagged :filler for the chain that digs it and picks it up, or nil:
+   only once a staircase died :boxed here or before (:plan/boxed-at) and less than filler-want
+   filler is carried (stairs/carried-filler). A staircase refused for the water beside it is sealed
+   from what is carried, and the lake shores it was refused on gave the bots two dirt to seal with
+   (issues #342 and #65, real bot Clj_r15 landed at R1/30): the dirt they stood on was filler. Real
+   bots Clj_r15 (R1) and Clj_r16 (R3, issue #37) dug the dirt they could reach, climbed it away,
+   and failed :boxed with stone and granite round them."
   [world]
   (when (and (seq (:plan/boxed-at world)) (< (stairs/carried-filler world) filler-want))
-    (->> (exposed-of-states world filler-states)
+    (->> (exposed-of-states world (filler-states-for world))
          (take max-candidates)
          (map #(walk-to world % :filler))
          (filter #(intent/routable? world %))
          first)))
+
+(defn log-planks
+  "A :craft of a held log into its planks in the inventory's grid, or nil: only once a staircase
+   died :boxed (:plan/boxed-at), with less than filler-want filler carried (stairs/carried-filler),
+   no planks held (stairs/planks-of) and a log whose planks recipe is known. Planks are the last
+   thing a floor is laid from (stairs/filler), and a log is four of them. Issue #37 (real bot
+   Clj_r16, a one-wide strip of granite over open air): the planks and the dirt were laid into a
+   climb, a birch log was held, and nothing else could be dug or laid."
+  [world]
+  (let [held (recipe/counts (:player/inventory world))
+        recipe-id (some (fn [[item c]]
+                          (let [n (name item)]
+                            (when (and (pos? c) (str/ends-with? n "_log"))
+                              (keyword (str (subs n 0 (- (count n) 4)) "_planks")))))
+                        held)]
+    (when (and recipe-id
+               (seq (:plan/boxed-at world))
+               (< (stairs/carried-filler world) filler-want)
+               (nil? (stairs/planks-of held 1))
+               (recipe/by-id recipe-id))
+      {:intent/kind :craft :intent/recipe recipe-id :intent/window :inventory})))
 
 (defn adjoins-boxed?
   "Do the feet [x y z] stand in :plan/boxed-at or on a cell beside one on the plane, at the same
@@ -615,6 +651,7 @@
                   (seal-stone world row)
                   (over-stone world row)
                   (filler-dig world)
+                  (log-planks world)
                   (stairs world row)
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
