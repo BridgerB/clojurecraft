@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T15:21:20.813Z",
+  "at" : "2026-10-22T15:22:30.880Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -16,7 +16,7 @@
     "number" : 524,
     "title" : "Bot stops at fortress: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "copilot" : false
   }, {
     "number" : 338,
     "title" : "Bot stops at fortress: timeout",
@@ -84,13 +84,12 @@
     "copilot" : true
   } ],
   "moves" : [ {
+    "issue" : 525,
+    "move" : "assign"
+  }, {
     "issue" : 504,
     "move" : "leave",
     "why" : "hands-off label"
-  }, {
-    "issue" : 524,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
   }, {
     "issue" : 338,
     "move" : "leave",
@@ -141,10 +140,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "assign",
-    "at" : "2026-10-21T08:10:05.173Z"
-  }, {
     "issue" : 135,
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
@@ -1486,5 +1481,9 @@
     "move" : "unassign",
     "why" : "no pull request and no session since the assignment",
     "at" : "2026-10-22T15:21:20.813Z"
+  }, {
+    "issue" : 525,
+    "move" : "assign",
+    "at" : "2026-10-22T15:22:30.880Z"
   } ]
 }
