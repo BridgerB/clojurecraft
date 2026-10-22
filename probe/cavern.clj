@@ -56,6 +56,18 @@
            :move move
            :target (:intent/target p)
            :digs digs
+           :why (let [at #(clojurecraft.blocks/name-of (clojurecraft.terrain/block-at world %))
+                      seen (set (map :from @steps))]
+                  (vec (for [m (take 3
+                                     (clojurecraft.fortress/moves from
+                                                                  (:intent/target p)
+                                                                  (or (:intent/climb p) 3)))
+                             :let [to (mapv + from m)]]
+                         [m (mapv at [(mapv + to [0 1 0]) to (mapv + to [0 -1 0])]) :lava
+                          (count (clojurecraft.fortress/lava-beside world from m)) :safe
+                          (boolean (clojurecraft.fortress/safe? world from m)) :seal
+                          (boolean (clojurecraft.fortress/sealed? world from m)) :seen
+                          (contains? seen to)])))
            :search (some-> (:intent/search p)
                            (select-keys [:search/leg :search/heading]))})))))
 
@@ -118,7 +130,8 @@
                (pr-str (:move s))
                "digs"
                (:digs s)
-               (pr-str (:target s))))))
+               (pr-str (:target s))
+               (pr-str (:why s))))))
 
 (defn inv-line
   [world]
