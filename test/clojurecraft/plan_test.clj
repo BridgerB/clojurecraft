@@ -163,8 +163,27 @@
   (let [w (remembered
            {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [8 69 8] 1 [8 70 8] 136}
            [8.5 50.0 8.5])]
-    (is (= {:intent/kind :stairs-up :intent/to-y (+ 50 stairs/climb-stairs) :intent/for :surface}
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y (+ 50 stairs/climb-stairs)
+            :intent/dir [-1 0]
+            :intent/for :surface}
            (wood/gather-next w)))))
+
+(deftest a-climb-out-is-cut-toward-the-trunk
+  ;; sim snapshots of issues #186 and #89 (worlds R4/16, R2/29, R1/4): the climb out of the
+  ;; ground took the first heading east whichever side the trees lay, left a mountain by its east
+  ;; face into the sky and pillared up in the air until its own steps were a floor; no route
+  ;; reached a trunk from the top and the plan waited :no-log. The climb is cut toward the
+  ;; nearest trunk, the way trees-climb's is
+  (doseq [[trunk dir] {[2 70 8] [-1 0] [14 70 8] [1 0] [8 70 2] [0 -1] [8 70 14] [0 1]}]
+    (let [[tx ty tz] trunk
+          w (remembered {[8 50 8] blocks/air
+                         [8 51 8] blocks/air
+                         [8 52 8] blocks/air
+                         [tx (dec ty) tz] 1
+                         trunk 136}
+                        [8.5 50.0 8.5])]
+      (is (= dir (:intent/dir (wood/gather-next w))) (str "toward the trunk at " trunk)))))
 
 (deftest boxed-under-the-sea-the-bot-digs-up-into-it
   ;; sim race 38806318231 runner 1 and 38811426215 runner 8 (issue #89): bots under the sea floor
@@ -233,6 +252,59 @@
     (is (nil? (wood/trees-bridge far [[15 64 8]]))
         "a trunk past bridge-reach is not climbed toward")))
 
+(deftest a-perch-across-a-valley-is-descended-for-the-trees
+  ;; sim snapshot real-2-s2-Clj_r15 (issue #186): the bot stood on the top of an ice spike with the
+  ;; nearest trunk thirty-five blocks off at its own height across a valley no route crosses; no
+  ;; walk, climb, hunt or crossing applied, and the plan waited :no-log. The gather act cuts a
+  ;; length of stairs down toward the trunk; a spare never does
+  (let [chasm (into {} (for [x (range 16) y (range 40 64) z (range 16)] [[x y z] blocks/air]))
+        platforms (fn [y & boxes]
+                    (into {}
+                          (for [[x0 x1] boxes x (range x0 (inc x1)) z (range 6 11)] [[x y z] 1])))
+        perch (remembered (merge chasm (platforms 63 [0 2] [13 15]) {[15 64 8] 136 [15 65 8] 136})
+                          [1.5 64.0 8.5])
+        down {:intent/kind :stairs-down
+              :intent/trunk [15 64 8]
+              :intent/to-y (- 64 stone/stair-depth)
+              :intent/dir [1 0]
+              :intent/for :valley}]
+    (is (stairs/out? perch (intent/feet perch)) "on open ground")
+    (is (= {:plan/wait :no-log} (wood/gather-next perch)) "no walk, climb, hunt or crossing")
+    (is (= down (wood/valley perch)) "down toward the trunk, whatever its height")
+    (is (= down (wood/gather-or-out perch)) "the gather act takes it before the wait")
+    (is (nil? (wood/valley (assoc perch :plan/boxed-at #{(intent/feet perch)})))
+        "never from a cell where a climb died boxed")))
+
+(deftest a-valley-goes-on-from-the-foot-of-its-last-length
+  ;; sim snapshot real-2-s2-Clj_r15 (issue #186) played on: from the foot of the first length, in
+  ;; the ice, the walk up the air already dug took the bot back to the perch every few seconds to
+  ;; cut the same length again. The next length goes on from the foot, toward the same trunk,
+  ;; until the bot is out on open ground, and no deeper than valley-floor under the trunk
+  (let [w (remembered {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [12 60 8] 136}
+                      [8.5 50.0 8.5])
+        leg
+        {:intent/kind :stairs-down :intent/for :valley :intent/trunk [12 60 8] :intent/status :done}
+        on (assoc w :plan/last leg)]
+    (is (not (stairs/out? w (intent/feet w))) "in the ground")
+    (is (wood/descended-valley? on))
+    (is (= {:intent/kind :stairs-down
+            :intent/trunk [12 60 8]
+            :intent/to-y (- 50 stone/stair-depth)
+            :intent/dir [1 0]
+            :intent/for :valley}
+           (wood/gather-next on))
+        "on, before the walk up to the mouth")
+    (is (not (wood/descended-valley? w)) "nothing cut before")
+    (is (not (wood/descended-valley? (assoc w :plan/last (assoc leg :intent/for :trees))))
+        "a descent toward the trees is trees-descend's")
+    (is (nil? (wood/valley
+               (assoc (remembered
+                       {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [12 70 8] 136}
+                       [8.5 50.0 8.5])
+                      :plan/last
+                      (assoc leg :intent/trunk [12 70 8]))))
+        "never deeper than valley-floor under the trunk")))
+
 (deftest a-mouth-below-the-feet-is-the-way-down-not-out
   ;; sim world R2/16 (issue #87): stairs cut up from the mouth at y 83 toward trees on a cliff
   ;; ended on a ledge at y 99 that was not out of the ground; the opening walked the bot back
@@ -283,7 +355,10 @@
         "the trunk is in the near band: within 12 of the eye, on stone")
     (is (not (intent/routable? w (wood/log-walk w [12 60 8]))) "sealed in stone: no route")
     (is (nil? (wood/near-walk w)))
-    (is (= {:intent/kind :stairs-up :intent/to-y (+ 50 stairs/climb-stairs) :intent/for :surface}
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y (+ 50 stairs/climb-stairs)
+            :intent/dir [1 0]
+            :intent/for :surface}
            (wood/gather-next w))
         "climbed for, never walked at")))
 
@@ -300,6 +375,7 @@
     (is (not (intent/routable? pit (wood/log-walk pit [12 64 8]))) "two deep: no jump climbs it")
     (is (= {:intent/kind :stairs-up
             :intent/to-y (stairs/climb-to pit terrain/top-y)
+            :intent/dir [1 0]
             :intent/for :surface}
            (wood/gather-next pit))))
   (let [ground (remembered {[12 64 8] 136 [14 64 8] 1 [14 65 8] 1 [14 66 8] 1} [8.5 64.0 8.5])]
@@ -447,6 +523,23 @@
     (is (wood/water-toward? w (intent/feet w) [14 64 8] (physics/y-of (game/eye w))))
     (is (= {:intent/kind :cross :intent/target [14 64 8]} (wood/gather-next w)))))
 
+(deftest a-bot-in-the-water-swims-for-the-trees-before-it-climbs
+  ;; sim snapshot R1-4-1 (issue #186): the bot dug up under the sea, swam to the surface and cut
+  ;; stairs up from the water, a pillar twenty blocks over the sea, with the trees across the
+  ;; water; from the top no floor could be laid down over the sea and it waited :no-log. At the
+  ;; surface under the open sky it crosses first
+  (let [lake (into {}
+                   (for [x (range 16)
+                         z (range 16)
+                         y (range 60 64)
+                         :when (not (>= x 13))]
+                     [[x y z] blocks/water-base]))
+        w (assoc (remembered (merge lake {[14 64 8] 136 [14 65 8] 136}) [4.5 63.0 4.5])
+                 :player/in-water?
+                 true)]
+    (is (not (stairs/out? w (intent/feet w))) "afloat: no floor to step onto")
+    (is (= {:intent/kind :cross :intent/target [14 64 8]} (wood/gather-next w)))))
+
 (def quarry
   "A quarry two wide and two deep in the stone, open to the sky, as the stone mine digs round its
    feet: the floor at y 62 under [8 8] and [9 8], and a trunk on the ground four blocks east."
@@ -474,6 +567,7 @@
     (is (nil? (wood/hunt w)) "no ground a hunt could walk to")
     (is (= {:intent/kind :stairs-up
             :intent/to-y (stairs/climb-to w terrain/top-y)
+            :intent/dir [1 0]
             :intent/for :surface}
            (wood/gather-next w))))
   (let [ground (remembered {[12 64 8] 136 [12 65 8] 136} [8.5 64.0 8.5])
@@ -514,6 +608,7 @@
     (is (nil? (wood/hunt w)) "no ground a hunt could walk to")
     (is (= {:intent/kind :stairs-up
             :intent/to-y (stairs/climb-to w terrain/top-y)
+            :intent/dir [0 -1]
             :intent/for :surface}
            (wood/gather-next w))))
   ;; played on (issue check, PR #114): the first stair up put the bot in the notch, one deep
@@ -554,6 +649,7 @@
     (is (not (intent/routable? w (wood/log-walk w [8 64 2]))) "every jump out meets leaves")
     (is (= {:intent/kind :stairs-up
             :intent/to-y (stairs/climb-to w terrain/top-y)
+            :intent/dir [0 -1]
             :intent/for :surface}
            (wood/gather-next w)))))
 
