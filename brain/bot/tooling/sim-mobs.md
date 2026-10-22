@@ -5,7 +5,7 @@ type: reference
 tags: [bot, tooling, sim, combat]
 aliases: [mob.clj, :sim/mobs, :mobs fixture, with-mobs, tick-mobs, attack handler, night rule, day-time]
 status: verified
-lastUpdated: 2026-10-16
+lastUpdated: 2026-10-21
 verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/mob.clj#def kinds
@@ -22,6 +22,12 @@ sourceRefs:
   - test/clojurecraft/sim_test.clj#a-respawned-bot-is-told-the-mobs-about-it-again
   - src/clojurecraft/sim.clj#defn tick-mobs
   - src/clojurecraft/sim.clj#defn try-spawn
+  - src/clojurecraft/mob.clj#defn spawner-awake?
+  - src/clojurecraft/mob.clj#defn spawner-spawns
+  - src/clojurecraft/sim.clj#defn tick-spawners
+  - src/clojurecraft/sim.clj#defn spawn-batch
+  - test/clojurecraft/mob_test.clj#a-spawner-near-the-player-makes-blazes-within-eight-hundred-ticks
+  - test/clojurecraft/sim_test.clj#the-seventh-rod-from-a-spawner-in-the-models-nether
   - src/clojurecraft/sim.clj#defn hurt-mob
   - src/clojurecraft/sim.clj#defmethod on-packet [:play :attack]
   - src/clojurecraft/sim.clj#defn populate-column
@@ -50,6 +56,7 @@ Health, hitbox, walking speed in blocks a tick (a zombie's 0.23 attribute walks 
 ## Spawning and despawning
 - The day turns in `:sim/day-time` (given by `:day-time`, a model with a `:difficulty` keeps it); night is 13000-23000 of each 24000. `simrace/day-time-of` starts a run at one of eight times by its seed, so some lanes start at night.
 - `try-spawn`, every 100 ticks under the cap of 70 hostiles within 128: a column rolled in the ring 24-48 from the player, its spots within 16 of the player's feet that have solid under them, room for a body and darkness (`mob/roofed?`: a solid block that is not leaves overhead, dark day and night since no torch is modelled; or any spot at night), one rolled, a kind rolled by weight (zombie, skeleton, creeper, spider 100 each, enderman 10). A model's rate, not vanilla's per-chunk rule.
+- `tick-spawners` (the Nether only, at a difficulty above peaceful): a blaze spawner block in a captured Nether is a block state like any other, so capture (#353) keeps it. The model finds the spawners in the nine columns round the player whenever it enters a column (`:sim/spawners {cell due-ms}`), and `tick-spawner` runs each as vanilla's BaseSpawner does (`mob/spawner`): awake with the player within 16 of its centre; the first tick awake rolls a delay of 200 to 800 ticks; then a batch of two to four tries (`spawn-batch`), cut to the room under its cap of six blazes within four blocks (`spawner-room`, `spawner-crowded?`), each try a cell of the 9x3x9 box (`spawner-spot`) where a blaze's two cells are free and no other blaze was put (`spawner-fits?`); light is the model's fixed `interior-light` of 0, under the blaze's limit of 11. Rolls come from `mob-roll`, as every other. The natural Nether hostiles (piglins, ghasts, magma cubes) are not modelled: the spawner is the Nether's only spawning. Blazes are not `:hostile` in `mob/kinds`, so the overworld's night rule never picks one and `despawn` never takes one. A broken spawner stops; `arrive` forgets the list.
 - `despawn`: a hostile not persistent goes at once beyond 128, and by a roll of 1 in 800 a tick beyond 32 (`Mob.checkDespawn`).
 - `populate`: each chunk within three of the player gets its animals once (`:sim/populated`): one time in ten a herd of three of one kind on the grass at its middle, persistent, as a server populates a chunk it generates.
 - Every roll comes from the mobs' own stream (`mob-roll`, `:sim/mob-rng`), never the loot's, so gravel's flint falls the same with mobs or without.
