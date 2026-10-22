@@ -7,6 +7,7 @@
             [clojurecraft.game :as game]
             [clojurecraft.hunt :as hunt]
             [clojurecraft.memory :as memory]
+            [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.sim :as sim]
@@ -145,9 +146,16 @@
 
 (deftest an-animal-up-a-tree-is-not-game-from-beneath-it
   ;; sim race 39768347249 (issue #515, R2/30): sheep on a spruce crown five over the walk's end
-  ;; were fought three times from beneath and the third :unreachable ended the plan
-  (let [on (fn [y] (standing 20 {} {5 (animal :sheep [11.5 y 8.5])}))]
-    (is (hunt/fightable-from-route? (on 65.0) (get-in (on 65.0) [:world/entities 5]))
-        "a step up is within a blow")
-    (is (not (hunt/fightable-from-route? (on 69.5) (get-in (on 69.5) [:world/entities 5])))
-        "five over is out of reach from where the walk ends")))
+  ;; were fought three times from beneath and the third :unreachable ended the plan. The route is
+  ;; given (a flat floor has none to a cell in the air): found, ending at [11 64 8].
+  (let [on (fn [y] (standing 20 {} {5 (animal :sheep [11.5 y 8.5])}))
+        fightable? (fn [y]
+                     (let [w (on y)]
+                       (with-redefs [path/plan (constantly {:path/status :found
+                                                            :path/waypoints [[10 64 8] [11 64 8]]})]
+                         (hunt/fightable-from-route? w (get-in w [:world/entities 5])))))]
+    (is (fightable? 65.0) "a step up is within a blow and the meat's pickup")
+    (is (not (fightable? 69.5)) "five over is out of reach from where the walk ends")
+    (is (with-redefs [path/plan (constantly {:path/status :none :path/waypoints []})]
+          (let [w (on 69.5)] (hunt/fightable-from-route? w (get-in w [:world/entities 5]))))
+        "no route found yet is not held against it")))
