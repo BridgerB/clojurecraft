@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T03:25:00.368Z",
+  "at" : "2026-10-22T03:26:10.103Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -36,7 +36,7 @@
     "number" : 504,
     "title" : "Bot stops at blaze-rods: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   } ],
   "moves" : [ {
     "issue" : 338,
@@ -64,7 +64,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 504,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   } ],
   "log" : [ {
     "issue" : 135,
