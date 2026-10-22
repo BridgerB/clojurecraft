@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-22T20:23:59.278Z",
+  "at" : "2026-10-22T20:25:10.240Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 537,
     "title" : "Bot stops at blaze-rods: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 536,
     "title" : "Bot stops at blaze-rods: timeout",
@@ -155,7 +155,8 @@
   } ],
   "moves" : [ {
     "issue" : 537,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 527,
     "move" : "leave",
