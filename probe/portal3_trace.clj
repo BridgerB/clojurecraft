@@ -3,6 +3,7 @@
   (:require [clojurecraft.capture :as capture]
             [clojurecraft.intent :as intent]
             [clojurecraft.main :as main]
+            [clojurecraft.path :as path]
             [clojurecraft.plan :as plan]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as sr]))
@@ -15,6 +16,8 @@
         stage (sr/stage-of snap)
         seen (atom nil)
         n (atom 0)
+        seen2 (atom nil)
+        n2 (atom 0)
         stop? (fn [wd]
                 (let [i (:plan/intent wd)
                       ch (:intent/child i)
@@ -42,6 +45,17 @@
                              "unwalk" (:plan/unwalkable wd)
                              "bl" (count (:plan/blacklist wd))
                              "water?" (:player/in-water? wd)))
+                  (when (and id (= :walk (:intent/kind i)) (not= id @seen2) (< @n2 4))
+                    (reset! seen2 id)
+                    (swap! n2 inc)
+                    (let [r (path/plan wd (path/feet-cell (:player/pos wd)) (intent/goal-of i))]
+                      (println "ROUTE"
+                               path
+                               (:intent/target i)
+                               (:path/status r)
+                               (count (:path/waypoints r))
+                               (pr-str (take 25 (:path/waypoints r)))
+                               (pr-str (map #(path/classify wd %) (take 25 (:path/waypoints r)))))))
                   (or (plan/done? wd) (plan/failed? wd) (contains? (:plan/reached wd) stage))))]
     (sim/play-from sr/step m stop? (sr/window-of snap) (sr/go-of w (:snapshot/until snap)) nil)
     (println "END" path)))
