@@ -140,6 +140,10 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn scoop-blocked?
   - src/clojurecraft/build.clj#defn lava-gone?
   - src/clojurecraft/build.clj#defn water-needed?
+  - src/clojurecraft/build.clj#defn last-bucket-scoop?
+  - src/clojurecraft/build.clj#defn seal-source
+  - src/clojurecraft/build.clj#defn spare-pour-op
+  - test/clojurecraft/build_test.clj#a-cleanup-scoop-never-takes-the-last-empty-bucket
   - test/clojurecraft/build_test.clj#a-lava-source-gone-before-the-aim-is-looked-for-again
   - test/clojurecraft/build_test.clj#a-spent-water-bucket-is-asked-for-again
   - test/clojurecraft/build_test.clj#a-refill-reconsiders-a-scoop-whose-ray-filled
@@ -236,6 +240,8 @@ The refill's clear ray can fill after its scoop child is chosen. `scoop-blocked?
 A refill's source can turn to obsidian after it is chosen, when the cast's water or the water a dig let in reaches it. The scoop child then fails `:target-gone`; `lava-gone?` has `work-op` drop it, like a blocked ray, so the next refill chooses another source and a pool with none left ends in `:no-station` and a new site. Real races 39245788157 and 39590862487 (issue #419) failed the build on the first vanished source with lava still in reach (`a-lava-source-gone-before-the-aim-is-looked-for-again`).
 
 A water pour can land in the lava's own cell, where the lava becomes obsidian and the water goes with it: no source is left to scoop back and both buckets are empty. `held-first` adds a water bucket to the row's holds while a water pour is unsatisfied and none is held (`water-needed?`), so the build's next start asks the needs planner to fill one. Issue #455 failed `:not-held` three times in 300 ms at the next cell's water pour (`a-spent-water-bucket-is-asked-for-again`).
+
+A resumed cast can find the cleanup scoop of a cell whose water source is still there while the bot holds one empty bucket and one water bucket (issue #518). The scoop would end with two water buckets and no empty one, and the next lava pour fails `:no-bucket`. `last-bucket-scoop?` catches it and `op-child` removes the source with a filler block instead (`seal-source`, `stairs/filler`): the cleanup's job is to delete the source, not to collect water. The filler is dug out where a later op needs the cell open (the next cell's hole dig, the interior digs). A bot already holding water buckets and no empty one pours one into the cell over a cast frame cell (`spare-pour-op`, obsidian under it), where the cleanup then seals it with a filler, and refills with the freed bucket.
 
 Refill sight lines must be safe to excavate as well as reachable. `safe-source?` refuses a source whose ray walls touch lava at or above the stand's feet; lava below the feet may still be uncovered. Both `station-among` and `source-in-sight` apply this rule, so a new station avoids the dangerous opening and a resumed refill reconsiders it. Issue #231's R1/32 snapshot targeted a source at y -26 from a stand at y -25, but the rock on its ray held back lava at y -24. Opening it flooded the stand and three escapes failed `:no-footing`. With the unsafe sight line rejected, the snapshot casts its first obsidian after 30700 ms (`a-refill-never-opens-lava-over-its-stand`).
 

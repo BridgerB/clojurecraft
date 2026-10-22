@@ -81,6 +81,7 @@
   [world [_ p]]
   (not (contains? blocks/water-states (terrain/block-at world p))))
 (defmethod holds? :no-water-source [world [_ p]] (not (scoop/source? world p :water)))
+(defmethod holds? :water-source [world [_ p]] (scoop/source? world p :water))
 (defmethod holds? :dimension [world [_ d]] (= d (:player/dimension world)))
 (defmethod holds? :feet [world [_ p]] (= p (intent/feet world)))
 (defmethod holds? :no-lava
@@ -1336,13 +1337,69 @@
   [i]
   (>= (long (:intent/swims i 0)) max-swims))
 
+(defn held-count
+  "How many of item (a name) the inventory holds."
+  [world item]
+  (long (inventory/item-count world (recipe/item-id item))))
+
+(defn last-bucket-scoop?
+  "Would a scoop take the last empty bucket while a water bucket is held already? Issue #518
+   (snapshots R4-8-1, real-2-s1-Clj_r24): the resumed cast's cleanup scoop of the first cell's
+   water source ended with two water buckets and no empty one, and the next lava pour found
+   nothing to refill with, :no-bucket three times."
+  [world]
+  (and (= 1 (held-count world :bucket)) (held? world :water_bucket)))
+
+(defn seal-source
+  "The child that removes the water source at pos without a bucket: a filler block (stairs/filler)
+   placed into it takes the source's place, to be dug out where a later op needs the cell open
+   (the next cell's hole, the interior); nil when no filler is held or no solid neighbour holds
+   the click (place/support)."
+  [world pos]
+  (when-let [item (stairs/filler world 1)]
+    (when (place/support world pos) {:intent/kind :place :intent/item item :intent/cell pos})))
+
+(defn spare-pour-op
+  "A pour op that frees a bucket for a bot holding water buckets and no empty one: the water poured
+   into the cell over a cast frame cell (the cell under it is obsidian, where the cast pours its own
+   water), open and with a neighbour to click; the cleanup scoop of that cell then seals it with a
+   filler (last-bucket-scoop?). nil unless a filler is held and such a cell exists."
+  [world {:intent/keys [origin facing]}]
+  (let [at #(cell origin facing %)]
+    (when (stairs/filler world 1)
+      (some (fn [[dx dy :as c]]
+              (let [[sx :as s] (stands c)
+                    over (at [dx (inc dy) 0])]
+                (when (and (holds? world (cast? at c))
+                           (holds? world [:not-solid over])
+                           (holds? world [:no-water over])
+                           (holds? world [:no-lava over])
+                           (place/support world over))
+                  {:build/op :pour
+                   :build/item :water_bucket
+                   :build/stand (at s)
+                   :build/aim (aim origin facing [dx (inc dy) 0] [(side-aim (- sx dx)) 0.5 -0.02])
+                   :build/into over
+                   :build/cell c
+                   :build/step :spare
+                   :build/done [:water-source over]})))
+            (reverse frame-cells)))))
+
 (defn op-child
-  "The child intent that works op next: lava to refill first when a lava pour has none, else
+  "The child intent that works op next: lava to refill first when a lava pour has none (a spare
+   water bucket poured out first when no empty bucket is held, spare-pour-op), else
    whatever gets the feet centred for the op (a dig of the ground in the way, a walk to the
    stand, or a place already in reach from the shore; a swim out of the water the walk has no
-   route from, wading-out?), else the op's own action; or a keyword, why it cannot be worked."
+   route from, wading-out?), else the op's own action; or a keyword, why it cannot be worked.
+   A cleanup scoop that would take the last empty bucket while a water bucket is held (issue #518,
+   last-bucket-scoop?) places a filler into the source instead (seal-source)."
   [world i {:build/keys [op pos item aim into done] :as this}]
-  (cond (and (= op :pour) (= item :lava_bucket) (not (held? world :lava_bucket))) (refill world i)
+  (cond (and (= op :pour) (= item :lava_bucket) (not (held? world :lava_bucket)))
+        (if-let [spare (and (not (held? world :bucket))
+                            (held? world :water_bucket)
+                            (spare-pour-op world i))]
+          (op-child world i spare)
+          (refill world i))
         (and (= op :pour) (= item :water_bucket) (stray-lava? world into)) :stray-lava
         :else
         (let [c (approach-stand world i this)]
@@ -1364,6 +1421,8 @@
                   :scoop
                   (let [plant (when aim (plant-in-sight world aim))]
                     (cond plant (way-dig plant)
+                          (and (last-bucket-scoop? world) (seal-source world pos))
+                          (seal-source world pos)
                           :else
                           (cond-> {:intent/kind :scoop :intent/target pos}
                             aim (assoc :intent/aim aim))))
