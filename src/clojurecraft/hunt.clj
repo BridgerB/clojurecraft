@@ -38,7 +38,11 @@
 (def candidates 3)                    ; nearest animals asked for a route, as the other acts ask
 (def provision-wanted 6)              ; edible items held before the portal is lit: the Nether has no animals, and health comes back there only from food held (issue #501: three raw meats were eaten to the bar's 18 before the portal, and the Nether leg began with none)
 (def forage-ms 360000)                ; ms the search for animals goes on, from its first leg, however many legs: then the bot goes on with what it holds, never holding the portal up
-(def forage-reaches [48 32 16])       ; blocks a forage leg walks from the feet, farthest first: a server shows animals this far (starving-radius)
+(def forage-reach 48)                 ; blocks the first two forage legs walk from the feet: a server shows animals this far (starving-radius)
+(def forage-far 96)                   ; blocks the farthest leg walks: a server loads six chunks round the bot
+(def forage-near-reaches [48 32 16])  ; blocks a leg falls back to when none has a route farther, farthest first
+(def forage-partial-min 12)           ; blocks on the plane a route that spent its budget (:partial) must still go from the feet to be walked
+(def forage-retry-ms 10000)           ; ms after a look that found no route at any heading before the bot looks again
 (def forage-wary 32)                  ; blocks round the bot within which a hostile stops the search: sim run R1/5 (issue #501) searched at night through creepers, zombies and skeletons, the defence backing it off a hundred times, until it died
 (def forage-health 14)                ; health under which the bot does not go looking: hurt, it stays where it is
 (def forage-headings [[1 0] [0 1] [-1 0] [0 -1]]) ; the four ways a forage leg goes, a quarter turn right of the last
@@ -142,24 +146,44 @@
    :goal/pos [(- x (* dx reach)) y (- z (* dz reach))]
    :goal/range (dec (* 2 reach))})
 
+(defn forage-reaches
+  "The reaches the leg-th leg tries, farthest first: forage-reach blocks for the first two legs and
+   forage-reach more for each two after, up to forage-far, then forage-near-reaches: the legs
+   go round a square that grows, as the fortress search's spiral does."
+  [leg]
+  (let [far (min forage-far (* forage-reach (inc (quot (long leg) 2))))]
+    (distinct (cons far forage-near-reaches))))
+
+(defn walkable-end
+  "The cell a route r from feet is walked to: the last waypoint of a :found route, or of a :partial
+   one (the budget spent) that still goes forage-partial-min blocks on the plane from the feet;
+   nil otherwise."
+  [feet {:path/keys [status waypoints]}]
+  (let [to (last waypoints)]
+    (when (and to
+               (or (= :found status)
+                   (and (= :partial status)
+                        (>= (physics/horizontal-distance feet to) forage-partial-min))))
+      to)))
+
 (defn forage-leg
   "[to leg] of the next forage leg after state's ({:forage/since :forage/leg}): the end of the
-   first route that reaches a forage-goal, along the heading the leg turns to (forage-headings,
-   a quarter right of the last) and then the headings after it, forage-reaches farthest first;
-   nil when no heading has a route at any reach. leg is the one after the leg that found one."
+   first route that reaches a forage-goal (walkable-end), along the heading the leg turns to
+   (forage-headings, a quarter right of the last) and then the headings after it, at the leg's
+   forage-reaches farthest first; nil when no heading has a route at any reach. leg is the one
+   after the leg that found one."
   [world {:forage/keys [leg]}]
   (let [feet (intent/feet world)
         start (path/feet-cell (:player/pos world))]
     (some (fn [[reach k]]
             (let [heading (nth forage-headings (mod (+ (long leg) k) (count forage-headings)))
-                  r (path/plan world start (forage-goal feet heading reach) {})
-                  to (last (:path/waypoints r))]
-              (when (and (= :found (:path/status r)) to) [to (+ (long leg) k 1)])))
-          (for [reach forage-reaches k (range (count forage-headings))] [reach k]))))
+                  r (path/plan world start (forage-goal feet heading reach) {})]
+              (when-let [to (walkable-end feet r)] [to (+ (long leg) k 1)])))
+          (for [reach (forage-reaches leg) k (range (count forage-headings))] [reach k]))))
 
 (defn foraging?
-  "Does the bot go on looking for animals: provisioning?, the search not spent (:forage/spent: no
-   heading had a route), forage-ms not past since its first leg, no failed intent in a row
+  "Does the bot go on looking for animals: provisioning?, forage-ms not past since its first leg, no look
+   for a route lately that found none (:forage/retry-at), no failed intent in a row
    (:plan/attempts, and :plan/unwalkable for a walk that failed :no-path, which counts apart: a
    leg that failed ends the search for the moment, as twelve such walks in a row would end the
    plan), no :build running (a cast is never left half made), the feet under
@@ -168,9 +192,9 @@
    nothing looked for animals past the 48 blocks the server shows, and herds are about one chunk
    in ten."
   [world]
-  (let [{:forage/keys [since spent]} (:hunt/forage world)]
+  (let [{:forage/keys [since retry-at]} (:hunt/forage world)]
     (boolean (and (provisioning? world)
-                  (not spent)
+                  (or (nil? retry-at) (>= (:time/now world 0) retry-at))
                   (zero? (:plan/attempts world 0))
                   (zero? (:plan/unwalkable world 0))
                   (not= :build (:intent/kind (:plan/intent world)))
@@ -220,18 +244,26 @@
 (defmethod intent/run :forage
   ;; {:intent/kind :forage}: choose the next leg of the search, then walk it as a :walk (the
   ;; intent becomes the walk, so its arrival is a walk's: memory/arrived). The leg and the time the
-  ;; search began are kept in :hunt/forage; none found at any heading and reach ends the search
-  ;; (:forage/spent), done with nothing walked
+  ;; search began are kept in :hunt/forage; none found at any heading and reach is done with
+  ;; nothing walked, and the next look comes forage-retry-ms on (:forage/retry-at): the bot may
+  ;; stand in a pit or a thicket a few blocks from open ground
   [world i event]
   (let [state (or (:hunt/forage world) {:forage/since (:time/now world) :forage/leg 0})
         found (forage-leg world state)]
     (cond (nil? found)
           (-> world
-              (assoc :hunt/forage (assoc state :forage/spent true) :player/controls {})
+              (assoc :hunt/forage
+                     (assoc state :forage/retry-at (+ (:time/now world 0) forage-retry-ms))
+                     :player/controls {})
               intent/done)
           :else
           (let [[to leg] found
                 walk (assoc i :intent/kind :walk :intent/target to)]
-            (intent/run (assoc world :hunt/forage (assoc state :forage/leg leg) :plan/intent walk)
+            (intent/run (assoc world
+                               :hunt/forage
+                               (-> state
+                                   (assoc :forage/leg leg)
+                                   (dissoc :forage/retry-at))
+                               :plan/intent walk)
                         walk
                         event)))))
