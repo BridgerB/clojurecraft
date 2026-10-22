@@ -1156,7 +1156,9 @@
                      {[5 48 5] blocks/water-base
                       [6 48 5] blocks/water-base
                       [6 47 5] blocks/water-base
-                      [7 48 5] blocks/water-base}))
+                      [7 48 5] blocks/water-base
+                      [6 48 4] 0
+                      [6 48 6] 0}))
         cells (stairs/up-cells [5 48 5] [0 1])]
     (is (= [[6 48 5]] (stairs/wet-feet w cells)) "the one water cell beside the feet")
     (is (nil? (place/support w [6 48 5])) "no solid neighbour of its own")
