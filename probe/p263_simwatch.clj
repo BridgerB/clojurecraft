@@ -11,6 +11,7 @@
 ;;
 ;;   clojure -M probe/sim_endermen_pearls.clj <max-min> <seed> R1 [R2 ...]
 (require '[clojurecraft.blocks :as blocks]
+         '[clojurecraft.pearls :as pearls]
          '[clojurecraft.dimension :as dimension]
          '[clojurecraft.game :as game]
          '[clojurecraft.mob :as mob]
@@ -184,28 +185,42 @@
                 minute (atom -1)
                 spawn [(+ x 0.5) (double (inc y)) (+ z 0.5)]
                 _ (out set-name "start at" (pr-str spawn))
-                watch (fn [w]
-                        (let [k (get (recipe/counts (:player/inventory w)) :ender_pearl 0)
-                              d (:stats/deaths w 0)]
-                          (when (not= k @held)
-                            (out set-name "PEARLS t" (quot (:time/now w 0) 1000) "held" k)
-                            (reset! held k))
-                          (when (not= (quot (:time/now w 0) 60000) @minute)
-                            (reset! minute (quot (:time/now w 0) 60000))
-                            (out set-name
-                                 "MINUTE" @minute
-                                 "feet" (pr-str (mapv long (:player/pos w)))
-                                 "health" (:player/health w)
-                                 "food" (:player/food w)
-                                 "intent"
-                                 (pr-str (select-keys (:plan/intent w)
-                                                      [:intent/kind :intent/target :intent/for]))
-                                 "shelter" (pr-str (:pearls/shelter w))
-                                 "mouth" (pr-str (:pearls/mouth w))
-                                 "blacklist" (count (:plan/blacklist w))))
-                          (when (not= d @deaths)
-                            (out set-name "DEATH t" (quot (:time/now w 0) 1000) "deaths" d)
-                            (reset! deaths d))))
+                watch
+                (fn [w]
+                  (let [k (get (recipe/counts (:player/inventory w)) :ender_pearl 0)
+                        d (:stats/deaths w 0)]
+                    (when (not= k @held)
+                      (out set-name "PEARLS t" (quot (:time/now w 0) 1000) "held" k)
+                      (reset! held k))
+                    (when (not= (quot (:time/now w 0) 60000) @minute)
+                      (reset! minute (quot (:time/now w 0) 60000))
+                      (out set-name
+                           "MINUTE" @minute
+                           "feet" (pr-str (mapv long (:player/pos w)))
+                           "health" (:player/health w)
+                           "food" (:player/food w)
+                           "intent"
+                           (pr-str (select-keys (:plan/intent w)
+                                                [:intent/kind :intent/target :intent/for]))
+                           "shelter" (pr-str (:pearls/shelter w))
+                           "mouth" (pr-str (:pearls/mouth w))
+                           "blacklist" (count (:plan/blacklist w))
+                           "why"
+                           (pr-str
+                            (into
+                             {}
+                             (for [[k f]
+                                   [[:shelter pearls/shelter]
+                                    [:angry-near (comp first pearls/angry-near)]
+                                    [:blocking (comp first pearls/blocking)]
+                                    [:crowded? pearls/crowded?] [:quarry (comp first pearls/quarry)]
+                                    [:at-hand (comp first pearls/at-hand)] [:stale? pearls/stale?]
+                                    [:lure? pearls/lure?] [:threat (comp first pearls/threat)]]]
+                               [k
+                                (try (f w) (catch Exception e (str "THREW " (ex-message e))))])))))
+                    (when (not= d @deaths)
+                      (out set-name "DEATH t" (quot (:time/now w 0) 1000) "deaths" d)
+                      (reset! deaths d))))
                 [w s] (sim/run simrace/step
                                (game/init {:host "sim" :port 0 :name "Clj_sim"})
                                (sim/init (assoc base :spawn spawn))
