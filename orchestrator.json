@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T20:33:15.649Z",
+  "at" : "2026-10-22T20:34:25.412Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -92,11 +92,6 @@
     "title" : "Bot stops at blaze-rods: blocked",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
-  }, {
-    "number" : 178,
-    "title" : "Bot stops at portal: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
-    "copilot" : false
   }, {
     "number" : 531,
     "title" : "Bot stops at ingots: boxed",
@@ -213,10 +208,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 502,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
