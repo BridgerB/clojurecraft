@@ -458,6 +458,17 @@
            ((juxt :intent/status :intent/reason) (:plan/intent (rest w1 (+ 1001 blaze/rest-ms)))))
         "nothing came back")))
 
+(deftest a-tunnel-to-the-spawner-first-makes-the-pickaxe-it-lacks
+  ;; sim race 39742401798 (issue #504) R4-6-2: no pickaxe, three sticks, cobblestone and a table
+  ;; held; each tunnel step ended :no-pickaxe and the bot dug by hand
+  (let [kit {1 (item :cobblestone 8) 2 (item :stick 3) 3 (item :crafting_table 1)}
+        making? #(contains? #{:place :craft :open-container} (:intent/kind (next-intent %)))]
+    (is (making? (with-spawner (standing kit {}))) "a pickaxe from what is held, before the way")
+    (is (not (making? (with-spawner (standing (assoc kit 4 (item :stone_pickaxe 1)) {}))))
+        "with a pickaxe held, the way as before")
+    (is (not (making? (with-spawner (standing {} {}))))
+        "nothing to make one from: the way as before")))
+
 (deftest a-fire-by-the-spawner-is-put-out
   ;; gym blaze-7a run 3 (run 38891910129): the floor by the spawner lit, and no blaze for three
   ;; minutes
