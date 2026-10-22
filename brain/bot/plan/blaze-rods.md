@@ -67,7 +67,6 @@ sourceRefs:
   - test/clojurecraft/blaze_test.clj#watched-by-a-volley-the-bot-takes-cover
   - test/clojurecraft/blaze_test.clj#a-camp-ends-when-the-bot-is-hit
   - test/clojurecraft/blaze_test.clj#a-rest-ends-rested-hit-or-watched
-  - test/clojurecraft/blaze_test.clj#a-rest-that-cannot-heal-ends-once-the-bot-is-no-longer-wary
   - test/clojurecraft/blaze_test.clj#a-tunnel-to-the-spawner-first-makes-the-pickaxe-it-lacks
   - test/clojurecraft/blaze_test.clj#a-fire-by-the-spawner-is-put-out
   - test/clojurecraft/sim_test.clj#watched-by-three-of-the-models-blazes-the-bot-hides
@@ -114,8 +113,6 @@ The `:defend` row (priority 0) still answers anything else hostile within 4 firs
 
 ## The :rest intent
 `{:intent/kind :rest}` (`rest-intent`) stands still out of sight: done when the health is back to `rested` 18, or a blaze watches the bot that did not when it began (`:intent/blazes`, the watchers then), or the health falls under what it was then (`:intent/health`: shot from somewhere unseen), and the act looks again; failed `:no-heal` after `rest-ms` 90 s (no food in the bar, nothing comes back). An intent and not the planner wait `:healing` it replaced: the slow heal brings a point every four seconds, and a wait fails the plan after 20 s.
-
-A rest that cannot heal (`heals?` false: the food under 18 and nothing to eat) holds in cover while the bot is wary, but is done once the health is back at `eat-under` or over: the act then neither hides nor rests (not hurt, not wary) and fights on. Sim race 39742401798's R4-6-2 (issue #504) rested from 12 health to 14.7 on a meal of rotten flesh and then for hours more, a stall for ever.
 
 ## The pickaxe on the way
 Before a tunnel to the spawner (`to-spawner`) or on the search, the act makes the pickaxe the bot lacks from what it holds (`build/pickaxe-at-hand?`, `make/decide`: the `:fortress` row's rule, nothing gathered). The same R4-6-2 tunnelled by hand with no pickaxe, three sticks, 569 cobblestone and a table held: each step ended `:no-pickaxe`, the tunnel `done`, and the act asked again every 150 ms, 25 blocks in fifteen minutes.
