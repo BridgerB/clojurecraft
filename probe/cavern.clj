@@ -20,7 +20,8 @@
 (defn track!
   "Counts a stone pickaxe made in the Nether: the best durability held rises."
   [world]
-  (when (and (= :nether (dimension/of world)) (nil? @entry)) (reset! entry (:player/pos world)))
+  (when (and (= "minecraft:the_nether" (dimension/of world)) (nil? @entry))
+    (reset! entry (:player/pos world)))
   (when @entry
     (let [best (apply max
                       0
@@ -42,7 +43,7 @@
         move (:intent/move p)]
     (when (and (= :tunnel-to (:intent/kind p))
                move
-               (= :nether (dimension/of world))
+               (= "minecraft:the_nether" (dimension/of world))
                (not= [from move] @last-step))
       (reset! last-step [from move])
       (let [feet (vec (map #(long (math/floor %)) (:player/pos world)))
