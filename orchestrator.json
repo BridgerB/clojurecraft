@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T09:12:32.279Z",
+  "at" : "2026-10-22T09:13:41.211Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -41,7 +41,7 @@
     "number" : 513,
     "title" : "Bot stops at portal: stair-not-taken",
     "labels" : [ "bot-failure", "real", "sim" ],
-    "copilot" : false
+    "copilot" : true
   } ],
   "moves" : [ {
     "issue" : 504,
@@ -73,7 +73,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 513,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   } ],
   "log" : [ {
     "issue" : 135,
