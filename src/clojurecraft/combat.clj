@@ -385,15 +385,27 @@
   [world e]
   (clear? world (game/eye world) (aim e)))
 
+(defn floor-pos
+  "The bot's feet position with y at the floor of the cell they are in (a hair over a whole number
+   counts as that number): where the bot stands whatever its jump has lifted it, a stairs up's
+   shaft bobbing it 0.2 on every step."
+  [world]
+  (update (:player/pos world) 1 #(math/floor (+ (double %) 1.0e-3))))
+
 (defn hittable?
   "Can entity e be fought from where the bot stands: its feet no more than over-feet over the
-   bot's nor under-feet under them, and in sight (seen?). Gym blaze-fortress-c (run 38895759229):
-   from its tunnel beside a fortress the :defend row went after blazes through the walls and
-   hovering over it, failed :unreachable, and switched every half second between one of them and
-   the blaze the blaze-rods row was fighting, killing neither, three times until the plan failed."
+   bot's nor under-feet under them, and in sight from the eye of a bot standing on its floor
+   (floor-pos, clear?). Gym blaze-fortress-c (run 38895759229): from its tunnel beside a fortress
+   the :defend row went after blazes through the walls and hovering over it, failed :unreachable,
+   and switched every half second between one of them and the blaze the blaze-rods row was
+   fighting, killing neither, three times until the plan failed. Sim race 39698814387 (issue
+   #178, world R4/14): two zombies three over the shaft of a stairs up were in sight only at the
+   top of each jump (y 1.2, not 1.0), so a fight began and ended every fourteen ticks, the stairs
+   up preempted and restarted each time, for the last quarter hour."
   [world e]
-  (let [dy (- (physics/y-of (:entity/pos e)) (physics/y-of (:player/pos world)))]
-    (and (<= (- under-feet) dy over-feet) (seen? world e))))
+  (let [feet (floor-pos world)
+        dy (- (physics/y-of (:entity/pos e)) (physics/y-of feet))]
+    (and (<= (- under-feet) dy over-feet) (clear? world (physics/eye feet) (aim e)))))
 
 (defn reach
   "Blocks within which hostile eid (entity e) is a threat, base at most: base, less once the bot
