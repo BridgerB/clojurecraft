@@ -215,10 +215,11 @@
 
 (defn bridging?
   "Is the intent running one that may lay a floor over a fluid: a descent toward the trees
-   (:stairs-down, :intent/for :trees)? Its way down ends at the water, where the swim to the
-   trunk takes over (wood/crossing); the mine's stairs and a level step's causeway never bridge."
+   (:stairs-down, :intent/for :trees or :valley)? Its way down ends at the water, where the swim
+   to the trunk takes over (wood/crossing); the mine's stairs never bridge."
   [world]
-  (let [{:intent/keys [kind for]} (:plan/intent world)] (and (= :stairs-down kind) (= :trees for))))
+  (let [{:intent/keys [kind for]} (:plan/intent world)]
+    (and (= :stairs-down kind) (contains? #{:trees :valley} for))))
 
 (defn floor-laying
   "The cells to lay, in order, so that a floor lies under the new feet of a stair (or a level
@@ -1118,7 +1119,7 @@
    below the feet (issue #229). Other descents and tunnels stop for the tool (tool-missing)."
   [i]
   (or (= :stairs-up (:intent/kind i))
-      (and (= :stairs-down (:intent/kind i)) (= :trees (:intent/for i)))))
+      (and (= :stairs-down (:intent/kind i)) (contains? #{:trees :valley} (:intent/for i)))))
 
 (defn dig-next
   "Start a child for cell, the next of a stair's to open: a :dig, or first an :equip of the tool

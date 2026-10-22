@@ -202,7 +202,7 @@
          :intent/dir (toward feet trunk)
          :intent/for :trees}))))
 
-(declare water-toward? crossing)
+(declare water-toward? crossing valley valley-leg?)
 
 (defn trees-bridge
   "Out of the ground (stairs/out?) with a standing trunk close by and level with the feet that no
@@ -341,6 +341,7 @@
     (when (seq trunks)
       (or (some (fn [bottom] (let [i (log-walk world bottom)] (when (intent/routable? world i) i)))
                 trunks)
+          (when (valley-leg? world) (valley world))
           (when (descended? world) (trees-descend world trunks))
           (when (tunneled? world) (trees-tunnel world))
           (when-not (or (stairs/out? world feet) (contains? (:plan/boxed-at world #{}) feet))
@@ -556,29 +557,48 @@
         (when (and (scoop/boxed-here? world) (not (terrain/under-sky? world (intent/feet world))))
           (or (stone/retreat world) (stone/climb world))))))
 
+(def valley-floor 16)                 ; blocks under a trunk's bottom a valley's stairs down go no deeper than
+
+(defn valley-leg?
+  "Did the intent that just ended cut a length of a valley's stairs down (a done :stairs-down
+   :intent/for :valley)? The next length goes on from where it stopped."
+  [world]
+  (let [{:intent/keys [kind for] :as l} (:plan/last world)]
+    (boolean (and l (= :stairs-down kind) (= :valley for) (intent/done? l)))))
+
 (defn valley
-  "The last resort before the wait, out of the ground (stairs/out?) and never from a cell where
-   a climb died :boxed: a length of stairs down toward the nearest trunk (far-trunks, within
-   descend-reach on the plane), stone/stair-depth deep whatever the trunk's height, from a perch
-   no walk, hunt or crossing leaves. Sim snapshot real-2-s2-Clj_r15 (issue #186) stood on the
+  "The last resort before the wait: a length of stairs down toward the nearest trunk
+   (far-trunks, within descend-reach on the plane), stone/stair-depth deep whatever the trunk's
+   height, from a perch no walk, hunt or crossing leaves. Out of the ground (stairs/out?), and
+   never from a cell where a climb died :boxed; or on from the foot of a length just cut
+   (valley-leg?) while the foot is still in the ground, toward the trunk it began for, no deeper
+   than valley-floor under that trunk's bottom: from the foot the walk up the stairs just cut
+   (intent/opening) took the bot back to the perch, every few seconds, to cut the same length
+   again (sim snapshot real-2-s2-Clj_r15, issue #186, played on). That snapshot stood on the
    top of an ice spike with the nearest trunk thirty-five blocks off at its own height across a
    valley no route crosses: the trunk is no lower than the eye, so trees-descend never cut, and
-   nothing else applied. From the foot the trunk is above the eye and trees-climb cuts the way
-   up toward it; each leg closes on the trunk. nil with no trunk in reach."
+   nothing else applied. Once down on open ground the trunk is above the eye and trees-climb
+   cuts the way up toward it; each leg closes on the trunk. nil with no trunk in reach."
   [world]
   (let [feet (intent/feet world)
-        [_ fy _] feet]
-    (when (and (stairs/out? world feet) (not (contains? (:plan/boxed-at world #{}) feet)))
-      (when-let [trunk (first (filter (fn [[tx _ tz]]
-                                        (<= (physics/horizontal-distance (:player/pos world)
-                                                                         [tx 0 tz])
-                                            descend-reach))
-                                      (far-trunks world)))]
-        {:intent/kind :stairs-down
-         :intent/trunk trunk
-         :intent/to-y (- fy stone/stair-depth)
-         :intent/dir (toward feet trunk)
-         :intent/for :trees}))))
+        [_ fy _] feet
+        continuing? (valley-leg? world)]
+    (when (and (if continuing? (not (stairs/out? world feet)) (stairs/out? world feet))
+               (not (contains? (:plan/boxed-at world #{}) feet)))
+      (when-let [[_ ty _ :as trunk]
+                 (let [near (filter (fn [[tx _ tz]]
+                                      (<= (physics/horizontal-distance (:player/pos world)
+                                                                       [tx 0 tz])
+                                          descend-reach))
+                                    (far-trunks world))
+                       kept (when continuing? (:intent/trunk (:plan/last world)))]
+                   (or (some #(when (= kept %) %) near) (first near)))]
+        (when (or (not continuing?) (> fy (- ty valley-floor)))
+          {:intent/kind :stairs-down
+           :intent/trunk trunk
+           :intent/to-y (- fy stone/stair-depth)
+           :intent/dir (toward feet trunk)
+           :intent/for :valley})))))
 
 (defn gather-or-out
   "The :gather act: gather-next, or when it waits :no-log the way out (way-out), else the valley

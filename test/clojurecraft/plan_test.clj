@@ -267,13 +267,43 @@
               :intent/trunk [15 64 8]
               :intent/to-y (- 64 stone/stair-depth)
               :intent/dir [1 0]
-              :intent/for :trees}]
+              :intent/for :valley}]
     (is (stairs/out? perch (intent/feet perch)) "on open ground")
     (is (= {:plan/wait :no-log} (wood/gather-next perch)) "no walk, climb, hunt or crossing")
     (is (= down (wood/valley perch)) "down toward the trunk, whatever its height")
     (is (= down (wood/gather-or-out perch)) "the gather act takes it before the wait")
     (is (nil? (wood/valley (assoc perch :plan/boxed-at #{(intent/feet perch)})))
         "never from a cell where a climb died boxed")))
+
+(deftest a-valley-goes-on-from-the-foot-of-its-last-length
+  ;; sim snapshot real-2-s2-Clj_r15 (issue #186) played on: from the foot of the first length, in
+  ;; the ice, the walk up the air already dug took the bot back to the perch every few seconds to
+  ;; cut the same length again. The next length goes on from the foot, toward the same trunk,
+  ;; until the bot is out on open ground, and no deeper than valley-floor under the trunk
+  (let [w (remembered {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [12 60 8] 136}
+                      [8.5 50.0 8.5])
+        leg
+        {:intent/kind :stairs-down :intent/for :valley :intent/trunk [12 60 8] :intent/status :done}
+        on (assoc w :plan/last leg)]
+    (is (not (stairs/out? w (intent/feet w))) "in the ground")
+    (is (wood/valley-leg? on))
+    (is (= {:intent/kind :stairs-down
+            :intent/trunk [12 60 8]
+            :intent/to-y (- 50 stone/stair-depth)
+            :intent/dir [1 0]
+            :intent/for :valley}
+           (wood/gather-next on))
+        "on, before the walk up to the mouth")
+    (is (not (wood/valley-leg? w)) "nothing cut before")
+    (is (not (wood/valley-leg? (assoc w :plan/last (assoc leg :intent/for :trees))))
+        "a descent toward the trees is trees-descend's")
+    (is (nil? (wood/valley
+               (assoc (remembered
+                       {[8 50 8] blocks/air [8 51 8] blocks/air [8 52 8] blocks/air [12 70 8] 136}
+                       [8.5 50.0 8.5])
+                      :plan/last
+                      (assoc leg :intent/trunk [12 70 8]))))
+        "never deeper than valley-floor under the trunk")))
 
 (deftest a-mouth-below-the-feet-is-the-way-down-not-out
   ;; sim world R2/16 (issue #87): stairs cut up from the mouth at y 83 toward trees on a cliff
