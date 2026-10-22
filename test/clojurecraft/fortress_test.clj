@@ -900,6 +900,7 @@
         table (blocks/default-state :crafting_table)
         w (-> (rock {table-cell table})
               (assoc :world/facts (memory/empty-facts)
+                     :window/grid {}
                      :player/dimension dimension/nether
                      :time/now 0
                      :player/inventory {0 {:item (recipe/item-id :stone_pickaxe) :count 1}})
