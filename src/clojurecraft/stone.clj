@@ -231,18 +231,33 @@
 (def filler-states
   "Every state of the blocks dug by hand for filler: dirt, and the grass over it."
   (into #{} (mapcat blocks/states-of) [:dirt :grass_block]))
-(def filler-drops #{(blocks/items :dirt)}) ; what digging them gives
+(def stone-filler-row
+  "The blocks that give a filler to a pick: stone and the stones that drop themselves."
+  {:goal/blocks [:stone :cobblestone :granite :diorite :andesite :tuff]})
+(def filler-drops
+  "What digging a block of filler-states or of stone-filler-row gives."
+  (into #{(blocks/items :dirt)} (drops-of-row stone-filler-row)))
+
+(defn filler-states-for
+  "The states a boxed mine digs for filler: dirt and the grass over it, and, when a pickaxe is
+   held (nothing is missing for stone-filler-row), the stones as well: a strip of granite over open
+   air, or a hillside of stone, is filler too."
+  [world]
+  (cond-> filler-states
+    (nil? (tool-missing world stone-filler-row)) (into (states-of-row stone-filler-row))))
 
 (defn filler-dig
-  "A walk to the nearest dirt of filler-states that a route reaches and its dig exposes no fluid
-   to (exposed-of-states), tagged :filler for the chain that digs it and picks it up, or nil: only
-   once a staircase died :boxed here or before (:plan/boxed-at) and less than filler-want filler is
-   carried (stairs/carried-filler). A staircase refused for the water beside it is sealed from
-   what is carried, and the lake shores it was refused on gave the bots two dirt to seal with
-   (issues #342 and #65, real bot Clj_r15 landed at R1/30): the dirt they stood on was filler."
+  "A walk to the nearest block of filler-states-for that a route reaches and its dig exposes no
+   fluid to (exposed-of-states), tagged :filler for the chain that digs it and picks it up, or nil:
+   only once a staircase died :boxed here or before (:plan/boxed-at) and less than filler-want
+   filler is carried (stairs/carried-filler). A staircase refused for the water beside it is sealed
+   from what is carried, and the lake shores it was refused on gave the bots two dirt to seal with
+   (issues #342 and #65, real bot Clj_r15 landed at R1/30): the dirt they stood on was filler. Real
+   bots Clj_r15 (R1) and Clj_r16 (R3, issue #37) dug the dirt they could reach, climbed it away,
+   and failed :boxed with stone and granite round them."
   [world]
   (when (and (seq (:plan/boxed-at world)) (< (stairs/carried-filler world) filler-want))
-    (->> (exposed-of-states world filler-states)
+    (->> (exposed-of-states world (filler-states-for world))
          (take max-candidates)
          (map #(walk-to world % :filler))
          (filter #(intent/routable? world %))
