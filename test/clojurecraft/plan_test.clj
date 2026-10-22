@@ -852,12 +852,13 @@
   (is (nil? (plan/goals-for "play"))))
 
 (deftest the-current-stage-is-the-furthest-target
-  (is (= "blaze-rods" (plan/current-until)))
+  (is (= "pearls-12" (plan/current-until)))
   ;; A gym stage names only its own target. A fresh run plays every step up to it.
-  (is (= [:blaze-rods] (plan/goals-for (plan/current-until))))
+  (is (= [:ender-pearls] (plan/goals-for (plan/current-until))))
   (let [chain (plan/through (plan/current-until))]
     (is (= [:wood :kit :pickaxe :cobblestone :stone-pickaxe :furnace :ingots :bucket :water-bucket
-            :flint-and-steel :iron-kit :portal-kit :cast-one :portal :nether :fortress :blaze-rods]
+            :flint-and-steel :iron-kit :portal-kit :cast-one :portal :nether :fortress :blaze-rods
+            :ender-pearls]
            chain))
     (is (= [:wood] (plan/through "wood")))
     (is (nil? (plan/through "play")))
