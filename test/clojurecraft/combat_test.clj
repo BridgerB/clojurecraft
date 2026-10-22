@@ -387,3 +387,14 @@
     (is (= :active (:intent/status (:plan/intent early))))
     (is (= [:failed :unreachable] ((juxt :intent/status :intent/reason) (:plan/intent late)))
         "past hold-timeout-ms with no blow")))
+
+(deftest a-threat-in-sight-only-at-the-top-of-a-jump-is-none
+  ;; issue #178 (R4/14): a stairs up's jump lifts the bot 0.2, enough to see two zombies past a
+  ;; corner; the fight began and ended every fourteen ticks and the stairs up never went on
+  (let [wall (into {} (for [z (range 16) y [65 66]] [[10 y z] (blocks/default-state :stone)]))
+        w (assoc (standing {}) :world/chunks {[0 0] (world/column wall)})
+        zombie (mob :zombie [12.5 66.0 8.5] 20.0)
+        low (assoc w :player/pos [8.5 64.0 8.5])
+        jumped (assoc w :player/pos [8.5 64.2 8.5])]
+    (is (= (combat/hittable? low zombie) (combat/hittable? jumped zombie))
+        "the jump changes neither the sight nor the height")))
