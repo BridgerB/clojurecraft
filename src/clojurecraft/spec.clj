@@ -192,6 +192,10 @@
 (s/def :search/leg nat-int?)
 (s/def :search/tunnels nat-int?)
 (s/def :fortress/search (s/keys :req [:search/from :search/heading :search/leg :search/tunnels]))
+(s/def :trail/target (s/coll-of number? :kind vector? :count 3))
+(s/def :trail/cells (s/coll-of ::block-pos :kind vector?))
+(s/def :trail/dead (s/coll-of ::block-pos :kind set?))
+(s/def :fortress/trail (s/keys :req [:trail/target :trail/cells :trail/dead]))
 
 ;; packets, effects, events
 (s/def :packet/name keyword?)
