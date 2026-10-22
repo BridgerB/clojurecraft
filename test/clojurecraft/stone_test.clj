@@ -896,6 +896,23 @@
     (is (= [[6 63 5]] (stairs/reserve-level-lay (at 1) :stairs-up cells feet))
         "a climb's step is what the reserve is for")))
 
+(deftest a-stair-up-over-open-air-pillars-rather-than-laying-its-step
+  ;; issue #37 (real bot Clj_r16, snapshot real-7-s2): a climb over open air laid a holder and a
+  ;; step a level, two blocks a rise, and its eight were gone five levels up; a pillar is one
+  (let [i {:intent/kind :stairs-up
+           :intent/to-y 70
+           :intent/dir [1 0]
+           :intent/for :boxed
+           :intent/status :active}
+        at (fn [i]
+             (assoc (standing 64)
+                    :player/inventory {0 {:item (blocks/items :dirt) :count 20}}
+                    :plan/intent i))
+        stage #(:intent/stage (:plan/intent
+                               (stairs/stairs-stage % (:plan/intent %) {:event/kind :tick})))]
+    (is (= :shaft (stage (at i))) "the step is missing: the shaft")
+    (is (= :lay (stage (at (assoc i :intent/no-shaft :unsafe)))) "a shaft given up lays the step")))
+
 (deftest a-boxed-climb-pillars-up-from-gravel
   ;; issue #37 (sim snapshots R3-15-1 and R3-15-2): a bot on mineshaft planks over open air holding
   ;; only gravel had every stair and level step refused for the floor it lacked, and was :boxed;

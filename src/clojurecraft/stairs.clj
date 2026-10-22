@@ -665,6 +665,17 @@
                 (intent/centred? world feet)
                 (shaft-safe? world feet))))
 
+(defn shaft-up
+  "world with the intent in the :shaft stage from here, a child gone, saying why."
+  [world why]
+  (-> world
+      (assoc :player/controls {})
+      (intent/assoc-intent :intent/stage :shaft
+                           :intent/started-y (physics/y-of (:player/pos world))
+                           :intent/started-tick (:time/tick world))
+      (intent/dissoc-intent :intent/child :intent/cells :intent/lay :intent/level-cells)
+      (game/say why)))
+
 (defn box
   "Every heading was refused: a stair up with a block to pillar from goes up as a shaft instead
    (pillar-up?, the :pillar intent dragon.clj defines, called as it is); else fail the staircase
@@ -690,13 +701,7 @@
   (let [{:intent/keys [kind for target] :as i} (:plan/intent world)
         feet (intent/feet world)]
     (cond (pillar-up? world i feet)
-          (-> world
-              (assoc :player/controls {})
-              (intent/assoc-intent :intent/stage :shaft
-                                   :intent/started-y (physics/y-of (:player/pos world))
-                                   :intent/started-tick (:time/tick world))
-              (intent/dissoc-intent :intent/child :intent/cells :intent/lay :intent/level-cells)
-              (game/say "stairs: every way refused, a shaft of pillars up instead"))
+          (shaft-up world "stairs: every way refused, a shaft of pillars up")
           (and (= :stairs-up kind) (= :surface for))
           (-> world
               (assoc :player/controls {})
@@ -1076,6 +1081,8 @@
                                    :intent/started-tick (:time/tick world))
               (game/say (str "stairs: into the rock toward " rock
                              " rather than a floor laid toward " dir)))
+          (and needed (pillar-up? world i feet))
+          (shaft-up world "stairs: a stair up would lay its step, a pillar a level instead")
           to-lay
           (-> world
               (intent/assoc-intent :intent/dir dir
