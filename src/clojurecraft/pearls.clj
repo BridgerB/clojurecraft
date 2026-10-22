@@ -154,7 +154,7 @@
                             (endermen (dissoc world :plan/blacklist)))
                       (:player/pos world)))))
 
-(def danger-radius 16.0)              ; blocks from the burrow's mouth an angry enderman keeps the bot in from: the enderman's own stare range (EndermanLookForPlayerGoal: within 16 an angry one stands while looked at and rushes when not; farther, one with a target teleports to it after 30 ticks, so one farther that has not come has lost its target). Eight let batch pearls-warped7-a's run 1 give its burrow up over one blacklisted and angry farther off, walk out and be slain by it at 6 minutes; the wait within is bounded by the lure (lure?), where one that never comes held batch pearls-warped-d run 1 thirty-four minutes
+(def danger-radius 16.0)              ; blocks from the burrow's mouth an angry enderman keeps the bot in from: the enderman's own stare range (EndermanLookForPlayerGoal: within 16 an angry one stands while looked at and rushes when not; farther, one with a target teleports to it after 30 ticks, so one farther that has not come has lost its target); eight let a burrow go stale with one angry nine to sixteen off that would rush the bot stepping out. The wait within is bounded by the lure (lure?), where one that never comes held batch pearls-warped-d run 1 thirty-four minutes
 (def danger-rise 8)                   ; blocks above or below the burrow's mouth an angry enderman keeps the bot in from: one seventeen below in another cave never comes (batch pearls-warped-c run 1's forty minutes); one five or six below on the slope beside the mouth comes the moment the bot steps out (batch pearls-warped6-a run 4, three times, the third its death)
 
 (defn angry-near

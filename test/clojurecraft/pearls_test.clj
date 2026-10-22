@@ -183,11 +183,10 @@
                      (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))]
       (is (nil? (pearls/bore pocket (pearls/endermen pocket pearls/descend-radius)))
           "one five off through the rock, four below: a tunnel of eight would run past it")
-      (is (= :tunnel
-             (:intent/kind (pearls/bore
-                            (assoc-in pocket [:world/entities 7 :entity/pos] [8.5 60.0 16.5])
-                            (pearls/endermen pocket pearls/descend-radius))))
-          "eight off: the tunnel ends beside it"))))
+      (let [eight (assoc-in pocket [:world/entities 7 :entity/pos] [8.5 60.0 16.5])]
+        (is (= :tunnel
+               (:intent/kind (pearls/bore eight (pearls/endermen eight pearls/descend-radius))))
+            "eight off: the tunnel ends beside it")))))
 
 (def cliff
   "Stone six high (y 64 to 69) across z 20 to 31 of the chunk column [0 1]: a ledge no route
@@ -430,12 +429,20 @@
   ;; and were slain; the third's run 2 went from the end to the mouth and back for two minutes
   ;; while a calm one stood beside the mouth. Batch pearls-warped-d (plan run 39160760074) run 1:
   ;; three pearls in six minutes, then thirty-four in the burrow over such ones standing off
-  (let [angry (assoc (enderman [3.5 64.0 20.5]) :entity/creepy? true)]
+  (let [angry (assoc (enderman [3.5 64.0 20.5]) :entity/creepy? true)
+        given-up (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})]
+    (is
+     (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent given-up row plan/goals))
+     "in the burrow, the one given up on angry twelve off the mouth, within its stare range of
+         16 (danger-radius): kept in")
     (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
-           (plan/next-intent (assoc (burrowed [8.5 61.0 8.5] {7 angry}) :plan/blacklist #{7})
+           (plan/next-intent (looked given-up 6) row plan/goals))
+        "half a minute of it not coming: out to the mouth to lure it")
+    (is (= {:intent/kind :walk :intent/target [3 64 8] :intent/for :shelter}
+           (plan/next-intent (assoc-in given-up [:world/entities 7 :entity/pos] [3.5 64.0 26.5])
                              row
                              plan/goals))
-        "in the burrow, the one given up on angry twelve blocks off: out to the mouth")
+        "eighteen off, past its stare range: out to the mouth at once, as before")
     (is (= {:intent/kind :walk :intent/target [8 61 8] :intent/for :shelter}
            (plan/next-intent (assoc (burrowed [3.5 64.0 8.5]
                                               {7 (assoc angry :entity/pos [5.5 64.0 10.5])})
