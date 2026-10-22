@@ -647,7 +647,9 @@
     :gym/land :warped-forest
     :gym/difficulty "normal"
     :gym/prereqs (conj pearl-kit "minecraft:cooked_beef 32")
-    :gym/timeout-ms 2400000
+    ;; 90 minutes: about 24 kills at the half-drop rate; the best runs held 6 pearls at 40, so
+    ;; 40 minutes measured the clock, not the hunt (a race run has 5.5 hours)
+    :gym/timeout-ms 5400000
     :gym/truth [(pearls-held "(1[2-9]|[2-9][0-9]|[1-9][0-9][0-9])")]}
    ;; issue #264: twelve eyes of ender crafted from what the two stages before make, given on a
    ;; surface landing: seven rods and twelve pearls. Nothing to fight or fetch, so the row measures
