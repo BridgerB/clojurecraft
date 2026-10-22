@@ -203,6 +203,16 @@
      (some-> (terrain/block-at world pos)
              blocks/name-of)))
 
+(defn unplaceable-in?
+  "Does the loaded cell hold a block that is not solid and that no block is placed into
+   (blocks/placeable-into?): powder snow, a flower, a bush? The server refuses a placement into
+   it, the hand breaks it, and a given cell holding one is dug first. Real race 39807290314 bot
+   Clj_r18 (issue #279) stood on a mountainside to cast a portal; the cell of its first floor
+   held powder snow, and the cobblestone for it was refused three times, :rejected."
+  [world cell]
+  (let [id (terrain/block-at world cell)]
+    (boolean (and id (not (blocks/solid? id)) (not (blocks/placeable-into? id))))))
+
 (defn dug-spot
   "[target support] for the niche the bot has cut (the intent's :intent/niche) once it is empty:
    the cell itself, against the solid under it, where spot would refuse it as a passage (a niche
@@ -367,7 +377,8 @@
          :intent/status :active}))))
 
 (defmethod place-stage :spot
-  ;; a given cell (:intent/cell, a build's) against a solid neighbour; else the niche already cut
+  ;; a given cell (:intent/cell, a build's) against a solid neighbour (dug first when it holds powder
+  ;; snow or the like, unplaceable-in?); else the niche already cut
   ;; (:intent/niche, dug-spot), else a plain spot, else a niche cut in the wall, else (passage-ok?)
   ;; a spot in the passage: a table or a gravel to dig again leaves the way open when the bot goes on
   [world
@@ -383,7 +394,14 @@
                           (when (and (nil? at) (nil? n) passage-ok?) (spot world true refused)))
         wet (when (and retreated? (nil? at) (nil? n) (nil? target)) (water-spot world refused))
         [wet-against wet-face] (when wet (support world wet))]
-    (cond (and given (inside-player? world at) (< nudges max-nudges)) (nudge-off world nudges)
+    (cond (and at
+               (unplaceable-in? world at)
+               (<= (physics/distance (game/eye world) (physics/centre at)) place-reach))
+          (intent/assoc-intent world
+                               :intent/stage :niche
+                               :intent/niche at
+                               :intent/child (intent/child-dig at))
+          (and given (inside-player? world at) (< nudges max-nudges)) (nudge-off world nudges)
           given (settle-at world at against face)
           at (intent/fail world :no-support)
           target (settle-at world target from :up)

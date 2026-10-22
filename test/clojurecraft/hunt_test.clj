@@ -276,15 +276,24 @@
                  :plan/intent
                  {:intent/kind :forage :intent/for :hunt :intent/status :active})]
     (with-redefs [path/plan (route-to [60 64 8])]
-      (let [out (intent/run w (:plan/intent w) nil)]
+      (let [out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})]
         (is (= :walk (get-in out [:plan/intent :intent/kind])))
         (is (= [60 64 8] (get-in out [:plan/intent :intent/target])))
         (is (= :hunt (get-in out [:plan/intent :intent/for])))
         (is (= {:forage/since 1000 :forage/leg 1} (:hunt/forage out)))))
     (with-redefs [path/plan (constantly {:path/status :none :path/waypoints []})]
-      (let [out (intent/run w (:plan/intent w) nil)]
+      (let [out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})]
         (is (intent/done? (:plan/intent out)))
         (is (= (+ 1000 hunt/forage-retry-ms) (get-in out [:hunt/forage :forage/retry-at])))
         (is (not (hunt/foraging? out)) "it waits before it looks again")
         (is (hunt/foraging? (assoc out :time/now (+ 1000 hunt/forage-retry-ms))))
         (is (plan/done-by (dissoc out :plan/intent) hunt-row) "the portal goes on meanwhile")))))
+
+(deftest an-animal-whose-cell-a-walk-failed-at-is-not-hunted-again
+  ;; issue #162 (snapshot R1-41-1): fail-intent blacklists the walk's cell, the hunt skipped
+  ;; animals by id, so the same sheep was walked at every twelve seconds until twelve failed
+  (let [cow {5 (animal :cow [14.5 64.0 8.5])}
+        w (standing 8 {} cow)]
+    (is (some? (hunt/game w)))
+    (is (nil? (hunt/game (assoc w :plan/blacklist #{[14 64 8]}))) "the cell it stands in")
+    (is (nil? (hunt/game (assoc w :player/in-water? true))) "no walk is routed from the water")))
