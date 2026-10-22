@@ -799,6 +799,64 @@
        :intent/length bore-length
        :intent/for :pearls})))
 
+(def first-cut
+  ;; the cells the first cut of each kind opens from the feet along a heading (stairs.clj)
+  {:stairs-up stairs/up-cells :stairs-down stairs/stair-cells :tunnel stairs/level-cells})
+
+(defn cheapest-heading
+  "The heading of the four straight ones (stairs/directions) whose first cut of kind (:stairs-up,
+   :stairs-down or :tunnel) from feet opens the fewest solid cells (solid-at?), toward first among
+   equals. Where the rock is already cut a stair costs no digs, and a step a later cut took out is
+   laid (stairs/up-lay): gym batch pearls-warped8-a (plan run 39731473452, probe 39778589970) run
+   2's second flight down took the floor of its first flight's third stair, and the way back up
+   lay two stairs north, open, one block to lay and no dig."
+  [world kind feet toward]
+  (first (sort-by (fn [h] (count (filter #(solid-at? world %) ((first-cut kind) feet h))))
+                  (cons toward (remove #{toward} stairs/directions)))))
+
+(defn dig-out
+  "A way cut out of the pocket the bot stands in, for when the roam finds no end either: toward the
+   nearest enderman within descend-radius, a walk to the end of the route that comes nearest it
+   (path/plan's :partial or :none) while that end is past a walk's reach of the eye, and from
+   there a :stairs-up to it or descend-step higher when it stands two or more above, a
+   :stairs-down when two or more below, else a :tunnel bore-length long, along the heading whose
+   first cut digs least (cheapest-heading); nil with no enderman tracked, no pickaxe held, or a
+   staircase from these feet boxed (:plan/boxed-at). Neither cut-reach nor spare digs are asked,
+   as descend, ascend and bore ask: walled in, the digs buy nothing else. Gym batch
+   pearls-warped8-a (plan run 39731473452, probes 39776762205, 39776787768, 39778589970 and
+   39780802996): runs 2 and 3 held 3 and 4 pearls by their 21st and 31st minutes and then stood
+   in lookouts for four and a half hours, run 2 at y 45 in its own stairs and tunnels with 21
+   digs left, run 3 on a ledge over a pit with 208, every route from the feet ending within a
+   few blocks and every enderman past cut-reach."
+  [world]
+  (let [pos (:player/pos world)
+        feet (path/feet-cell pos)
+        [_ e] (entity/nearest (endermen world descend-radius) pos)]
+    (when (and e (pickaxe? world) (not (contains? (:plan/boxed-at world) (intent/feet world))))
+      (let [c (cell (:entity/pos e))
+            i {:intent/kind :walk :intent/target c :intent/for :pearls}
+            to (or (last (:path/waypoints (path/plan world feet (intent/goal-of i) {}))) feet)
+            rise (- (physics/y-of c) (physics/y-of feet))
+            toward (mapv - (away world e))]
+        (cond (> (physics/distance (game/eye world) (physics/centre to)) intent/reach)
+              (assoc i :intent/target to)
+              (>= rise 2)
+              {:intent/kind :stairs-up
+               :intent/to-y (+ (physics/y-of feet) (min rise descend-step))
+               :intent/dir (cheapest-heading world :stairs-up feet toward)
+               :intent/to-height? true
+               :intent/for :pearls}
+              (<= rise -2)
+              {:intent/kind :stairs-down
+               :intent/to-y (- (physics/y-of feet) (min (- rise) descend-step))
+               :intent/dir (cheapest-heading world :stairs-down feet toward)
+               :intent/for :pearls}
+              :else
+              {:intent/kind :tunnel
+               :intent/dir (cheapest-heading world :tunnel feet toward)
+               :intent/length bore-length
+               :intent/for :pearls})))))
+
 (defmethod intent/run :burrow
   ;; {:intent/kind :burrow :intent/dir [dx dz]}: stairs down burrow-depth (stairs.clj, refusing
   ;; water, lava and drops, turning where refused), then a tunnel burrow-length on along the
@@ -942,7 +1000,9 @@
    floor the same way); after
    the walk toward, a tunnel toward the nearest on this level no route reaches (bore: the foot
    of a descent is inside the rock); after a lookout that found nothing, a roam somewhere else to
-   look from. The stairs down and the tunnel toward one are cut only with digs to spare past a
+   look from, and with no end for a roam either, a way cut out of the pocket toward the nearest
+   enderman (dig-out: batch pearls-warped8-a's runs 2 and 3 stood four and a half hours walled
+   in, one in its own diggings, one on a ledge over a pit). The stairs down and the tunnel toward one are cut only with digs to spare past a
    burrow's (spare?): the burrow is what the pickaxe is for, and batch pearls-warped3-a's run 1
    wore its iron pickaxe out on them at fourteen minutes and had no burrow after. A walk toward
    one never ends where a walk already arrived (memory/arrived): the same batch's run 3 walked
@@ -1013,7 +1073,8 @@
               (ascend world (endermen world descend-radius))
               (toward world far)
               (bore world (endermen world descend-radius))
-              (when (= :lookout (:intent/kind (:plan/last world))) (roam world))
+              (when (= :lookout (:intent/kind (:plan/last world)))
+                (or (roam world) (dig-out world)))
               {:intent/kind :lookout :intent/for :pearls}))))
 
 (defmethod combat/answers :pearls

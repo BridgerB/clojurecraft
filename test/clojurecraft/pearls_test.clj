@@ -296,6 +296,82 @@
             plan/goals))
         "the burrow is what the digs are kept for")))
 
+(defn rock
+  "Four chunk columns (x 0 to 31, z 0 to 31) of stone from the floor up to y 79, with the cells of
+   open (world coordinates) left as air: a pocket deep in the rock, open to the sky from y 80."
+  [open]
+  (into {}
+        (for [cx [0 1]
+              cz [0 1]]
+          [[cx cz]
+           (world/column (into {}
+                               (for [lx (range 16)
+                                     lz (range 16)
+                                     y (range 64 80)
+                                     :let [x (+ (* 16 cx) lx)
+                                           z (+ (* 16 cz) lz)]
+                                     :when (not (contains? open [x y z]))]
+                                 [[lx y lz] stone])))])))
+
+(defn walled-in
+  "A bot in a pocket of the rock (rock open) with an iron pickaxe 21 digs from worn out, as
+   batch pearls-warped8-a's run 2 stood, and an enderman at pos."
+  [open pos]
+  (-> (standing {7 (enderman pos)})
+      (assoc :world/chunks (rock open))
+      (assoc-in [:player/inventory 1] (assoc (item :iron_pickaxe 1) :components {:damage 229}))))
+
+(def feet-cells #{[8 64 8] [8 65 8]})
+
+(deftest a-hunt-walled-in-with-no-end-to-roam-to-cuts-its-way-out
+  ;; gym batch pearls-warped8-a (plan run 39731473452, probes 39776762205, 39776787768,
+  ;; 39778589970 and 39780802996): runs 2 and 3 held 3 and 4 pearls by their 21st and 31st
+  ;; minutes, then stood in lookouts for four and a half hours, every route from the feet ending
+  ;; within a few blocks, the roam finding no end and every enderman past cut-reach; run 2 at y 45
+  ;; in its own stairs and tunnels with 21 digs left, its second flight down having taken a stair
+  ;; of its first
+  (let [above [8.5 80.0 20.5]
+        w (walled-in feet-cells above)]
+    (is (= 21 (pearls/digs-left w)))
+    (is (nil? (pearls/roam w)) "no end for a roam in the pocket")
+    (is (nil? (pearls/ascend w (pearls/endermen w pearls/descend-radius)))
+        "and no digs to spare for the stairs up toward one")
+    (is (= {:intent/kind :lookout :intent/for :pearls} (plan/next-intent w row plan/goals)))
+    (is (= {:intent/kind :stairs-up
+            :intent/to-y 72
+            :intent/dir [0 1]
+            :intent/to-height? true
+            :intent/for :pearls}
+           (plan/next-intent (looked-out w) row plan/goals))
+        "after a lookout that found nothing, stairs up toward it, descend-step up")
+    (is (= {:intent/kind :stairs-down :intent/to-y 56 :intent/dir [0 1] :intent/for :pearls}
+           (pearls/dig-out (walled-in feet-cells [8.5 50.0 20.5])))
+        "down toward one below")
+    (is
+     (=
+      {:intent/kind :tunnel :intent/dir [0 1] :intent/length pearls/bore-length :intent/for :pearls}
+      (pearls/dig-out (walled-in feet-cells [8.5 65.0 20.5])))
+     "a tunnel toward one on this level")
+    (is (= {:intent/kind :walk :intent/target [8 64 14] :intent/for :pearls}
+           (pearls/dig-out (walled-in (passage 14 8) [8.5 80.0 24.5])))
+        "from the end of the pocket nearest it first")
+    (is (nil? (pearls/dig-out (assoc w :plan/boxed-at #{[8 64 8]}))) "boxed here: not again")
+    (is (nil? (pearls/dig-out (update w :player/inventory dissoc 1))) "no pickaxe: no cut")
+    (is (nil? (pearls/dig-out (assoc w :world/entities {}))) "no enderman: nowhere to cut to")))
+
+(deftest a-way-out-is-cut-where-the-rock-is-already-cut
+  ;; the same run 2: its second flight down took the floor of its first flight's third stair, and
+  ;; the way back up lay two stairs north, open, one block to lay and no dig
+  (let [open (into feet-cells [[8 66 8] [7 66 8] [7 65 8]])
+        w (walled-in open [8.5 80.0 20.5])]
+    (is (=
+         [0 1]
+         (pearls/cheapest-heading (walled-in feet-cells [8.5 80.0 20.5]) :stairs-up [8 64 8] [0 1]))
+        "every heading as dear: toward it")
+    (is (= [-1 0] (pearls/cheapest-heading w :stairs-up [8 64 8] [0 1]))
+        "the heading whose stair is open")
+    (is (= [-1 0] (:intent/dir (pearls/dig-out w))))))
+
 (deftest the-provoke-stares-at-the-head-until-the-server-says-it-has-a-target
   (let [pos [8.5 64.0 15.5]
         w (assoc (standing {7 (enderman pos)})
