@@ -91,10 +91,15 @@
 
 (defn fresh-kill
   "The hunt's kill whose drop is still to pick up: the last intent, when it is a :fight for :hunt
-   that ended done with where its target was last seen; nil otherwise."
+   that ended done with where its target was last seen, and the target is gone (entity/gone?: a
+   fight that ended with the animal alive is no kill, whatever ended it); nil otherwise."
   [world]
   (let [l (:plan/last world)]
-    (when (and (= :fight (:intent/kind l)) (= :hunt (:intent/for l)) (:intent/target-pos l)) l)))
+    (when (and (= :fight (:intent/kind l))
+               (= :hunt (:intent/for l))
+               (:intent/target-pos l)
+               (entity/gone? world (:intent/target l)))
+      l)))
 
 (defn hunting?
   "Is the running intent the hunt's (:intent/for :hunt): a walk to an animal, its fight, the

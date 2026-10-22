@@ -271,7 +271,11 @@
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
   ;; Where the target was last seen is kept (:intent/target-pos): a hunt collects its drop there.
   ;; With :intent/yield? it ends there instead (done), and its row plans the retreat itself; with
-  ;; :intent/to-the-end? it never breaks off (a blaze at hand follows any retreat).
+  ;; :intent/to-the-end? it never breaks off (a blaze at hand follows any retreat). A fight for
+  ;; :hunt never breaks off either: an animal does not strike back, and a starving bot (food 0,
+  ;; health under retreat-health) that backed off ended the fight done with the animal alive,
+  ;; which the hunt took for a kill: it collected at the live animal, failed :not-picked-up and
+  ;; fought again, to the end of the run (issue #178, sim race 39742404581, world R2/37).
   ;; With :intent/hold? the bot never walks: it waits for the target to come within approach-range,
   ;; never presses after it, and never breaks off (issue #263: the pearl hunt fights from a burrow
   ;; an enderman cannot reach into, where a step out is the one way to be hit)
@@ -290,6 +294,7 @@
           (and (not= :retreat (:intent/stage i))
                (not (:intent/hold? i))
                (not (:intent/to-the-end? i))
+               (not= :hunt (:intent/for i))
                (< (:player/health world 20.0) retreat-health))
           (-> world
               (intent/dissoc-intent :intent/child)
@@ -380,15 +385,34 @@
   [world e]
   (clear? world (game/eye world) (aim e)))
 
+(defn floor-pos
+  "The bot's feet position with y at the floor it stands on or jumped from: the cell the feet are
+   in (a hair over a whole number counts as that number), or the one under it when nothing solid
+   is under that (a jump rises at most a block and a quarter, so one cell down is the floor it left).
+   Where the bot is whatever its jump has lifted it to, a stairs up's shaft lifting it to the next
+   level at the top of every step."
+  [world]
+  (let [[x y z] (:player/pos world)
+        solid? (terrain/solid-fn world)
+        cx (long (math/floor x))
+        cz (long (math/floor z))
+        top (long (math/floor (+ (double y) 1.0e-3)))]
+    [x (double (if (or (solid? cx (dec top) cz) (not (solid? cx (- top 2) cz))) top (dec top))) z]))
+
 (defn hittable?
   "Can entity e be fought from where the bot stands: its feet no more than over-feet over the
-   bot's nor under-feet under them, and in sight (seen?). Gym blaze-fortress-c (run 38895759229):
-   from its tunnel beside a fortress the :defend row went after blazes through the walls and
-   hovering over it, failed :unreachable, and switched every half second between one of them and
-   the blaze the blaze-rods row was fighting, killing neither, three times until the plan failed."
+   bot's nor under-feet under them, and in sight from the eye of a bot standing on its floor
+   (floor-pos, clear?). Gym blaze-fortress-c (run 38895759229): from its tunnel beside a fortress
+   the :defend row went after blazes through the walls and hovering over it, failed :unreachable,
+   and switched every half second between one of them and the blaze the blaze-rods row was
+   fighting, killing neither, three times until the plan failed. Sim race 39698814387 (issue
+   #178, world R4/14): two zombies three over the shaft of a stairs up were in sight only at the
+   top of each jump (y 1.2, not 1.0), so a fight began and ended every fourteen ticks, the stairs
+   up preempted and restarted each time, for the last quarter hour."
   [world e]
-  (let [dy (- (physics/y-of (:entity/pos e)) (physics/y-of (:player/pos world)))]
-    (and (<= (- under-feet) dy over-feet) (seen? world e))))
+  (let [feet (floor-pos world)
+        dy (- (physics/y-of (:entity/pos e)) (physics/y-of feet))]
+    (and (<= (- under-feet) dy over-feet) (clear? world (physics/eye feet) (aim e)))))
 
 (defn reach
   "Blocks within which hostile eid (entity e) is a threat, base at most: base, less once the bot
