@@ -57,7 +57,9 @@
         r (sim/play-from simrace/step
                          m
                          stop?
-                         (simrace/window-of snap)
+                         (or (some-> (System/getenv "WINDOW_MS")
+                                     parse-long)
+                             (simrace/window-of snap))
                          (simrace/go-of w (:snapshot/until snap))
                          nil)]
     (println "BRICKS"
