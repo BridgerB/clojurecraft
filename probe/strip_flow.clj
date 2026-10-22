@@ -51,3 +51,36 @@
     (out "walk-home" (pr-str (stone/walk-home world)))
     (out "climb" (pr-str (stone/climb world)))
     (cells world feet 6)))
+
+(require '[clojurecraft.stairs :as stairs])
+(doseq [p *command-line-args*
+        :when (re-find #"r18" p)]
+  (let [snap (capture/read-world p)
+        w (sr/world-for! snap)
+        m (sr/moment-of snap w)
+        stop? #(or (plan/failed? %) (>= (:plan/attempts % 0) 2))
+        {:keys [world]} (sim/play-from sr/step m stop? 120000 nil nil)
+        feet (intent/feet world)
+        i (:plan/intent world)]
+    (out "== stairs-up probe" feet
+         "intent" (pr-str (select-keys i [:intent/kind :intent/for :intent/dir :intent/stage])))
+    (doseq [d stairs/directions
+            :let [cells (stairs/up-cells feet d)]]
+      (out "dir" d
+           "cells" cells
+           "kinds" (mapv #(path/classify world %) cells)
+           "step"
+           (path/classify world
+                          [(+ (first feet) (first d)) (second feet) (+ (nth feet 2) (second d))]))
+      (out "  safe?" (stairs/safe? world cells)
+           "clear-way?" (stairs/clear-way? world cells)
+           "up-safe?" (stairs/up-safe? world cells)
+           "up-sealed?" (stairs/up-sealed? world cells)
+           "up-dry?" (stairs/up-dry? world cells)
+           "water-over?" (stairs/water-over? world cells))
+      (out "  seal" (stairs/seal world feet cells)
+           "dry-feet" (stairs/dry-feet world feet cells)
+           "step-lay" (stairs/step-lay world feet cells)
+           "wet-feet" (stairs/wet-feet world cells)
+           "up-lay" (stairs/up-lay world feet cells)
+           "filler" (stairs/filler world 1)))))
