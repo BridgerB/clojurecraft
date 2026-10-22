@@ -1559,6 +1559,22 @@
            (build/bridge (at (range 3 7)) stand))
         "a gap past the reach: onto the floor laid so far")))
 
+(deftest a-bridge-digs-a-cobweb-out-of-the-floor-before-it-lays-there
+  ;; real race 39781947117 runner 2 (issue #44, Clj_r14): a tunnel through an abandoned mineshaft
+  ;; laid a cobblestone into a cobweb in its floor three times, :rejected
+  (let [at (fn [id]
+             (assoc (standing-at (open-ground {[8 62 10] id}) feet-pos)
+                    :player/inventory
+                    {1 {:item (recipe/item-id :cobblestone) :count 8}}))
+        w (at (blocks/default-state :cobweb))
+        stand [3 63 10]]
+    (is (= [8 62 10] (build/floor-gap w stand)) "the web is no floor")
+    (is (= {:intent/kind :dig :intent/target [8 62 10] :intent/status :active :intent/drop-ok? true}
+           (build/bridge w stand))
+        "dug out first, never laid into")
+    (is (= :place (:intent/kind (build/bridge (at blocks/air) stand)))
+        "the cell laid once it is air")))
+
 (deftest the-lava-hunt-climbs-to-a-source-just-over-the-feet
   ;; real race 39408516353 (issue #392, Clj_r05): a tunnel at y -58 ended in the lava sea's edge
   ;; with every source level or below the feet roofed in lava, and the hunt waited :no-site with a

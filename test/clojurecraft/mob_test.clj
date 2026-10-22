@@ -76,6 +76,56 @@
          [3.065 64.0 0.5]
          (mob/step-toward free? [2.95 64.0 0.5] [8.5 64.0 0.5] 0.115 1.12 (mob/tall :zombie))))))
 
+(defn pit-free?
+  "A free? over a stone floor under y 64 with solid cells added and the cells of pit dug out."
+  [solid pit]
+  (let [floor (floor-free? solid)] (fn [c] (or (contains? pit c) (floor c)))))
+
+(deftest a-route-steps-round-a-wall-down-a-drop-and-ends-nearest-when-it-cannot-arrive
+  ;; issue #263: vanilla's mobs walk a path; the model's enderman searches one when its straight
+  ;; walk is stopped (mob/route), ending, like the pathfinder, at the cell nearest the target
+  (let [pit #{[1 63 0] [1 62 0] [1 61 0]}]
+    (is (some #{[1 61 0]} (mob/moves (pit-free? #{} pit) [0 64 0] 3)) "a drop of three")
+    (is (not-any? #(= 1 (first %)) (mob/moves (pit-free? #{} (conj pit [1 60 0])) [0 64 0] 3))
+        "never four")
+    (is (some #{[1 65 0]} (mob/moves (pit-free? #{[1 64 0]} #{}) [0 64 0] 3)) "a jump of one")
+    (is (not-any? #(= 1 (first %)) (mob/moves (pit-free? #{[1 64 0] [0 67 0]} #{}) [0 64 0] 3))
+        "never with the head against a roof"))
+  (let [wall (set (for [z (range -3 4) y (range 64 67)] [4 y z]))
+        r (mob/route (floor-free? wall) [8 64 0] [0.5 64.0 0.5] 3)]
+    (is (= [0 64 0] (peek r)) "round the wall to the target's cell")
+    (is (every? (fn [[[ax _ az] [bx _ bz]]] (= 1 (+ (abs (- ax bx)) (abs (- az bz)))))
+                (partition 2 1 (cons [8 64 0] r)))
+        "a side step at a time")
+    (is (not-any? wall r) "never through it"))
+  (let [roof (set (for [x (range 3 10) z (range -20 21)] [x 66 z]))]
+    (is (= [2 64 0] (peek (mob/route (floor-free? roof) [0 64 0] [8.5 64.0 0.5] 3)))
+        "a tunnel two high keeps it at the mouth, the cell nearest")
+    (is (= [] (mob/route (floor-free? roof) [2 64 0] [8.5 64.0 0.5] 3)) "already there")))
+
+(deftest an-enderman-aims-its-teleports-as-vanilla-and-lands-on-a-floor-with-room
+  ;; EnderMan.teleportTowards: 16 along the line from its middle to the target's eye, spread 8
+  ;; on x and z and -8 to 7 on y; EnderMan.teleport: up to 32 off on each axis;
+  ;; LivingEntity.randomTeleport: down to a floor, the body clear of blocks and liquids
+  (let [eye (physics/eye [0.5 64.0 0.5])
+        y (- (second eye) 1.45)]
+    (is (near? [4.5 y 0.5] (mob/toward-aim [20.5 y 0.5] eye 0.5 0.5 0.5)) "sixteen nearer")
+    (is (near? [0.5 (- y 8.0) 4.5] (mob/toward-aim [20.5 y 0.5] eye 0.0 0.0 1.0))
+        "four aside, eight down at most"))
+  (is (near? [-31.5 32.0 32.5] (mob/away-aim [0.5 64.0 0.5] 0.0 0.0 1.0)))
+  (let [world (fn [blocks]
+                (fn [[x y z :as c]]
+                  (cond (> (max (abs x) (abs z)) 20) nil
+                        (contains? blocks c) (blocks c)
+                        (< y 64) 1
+                        :else 0)))
+        water (first blocks/water-states)]
+    (is (= [3.3 64.0 2.2] (mob/landing (world {}) [3.3 70.6 2.2] -64)) "down onto the floor")
+    (is (nil? (mob/landing (world {}) [3.3 60.2 2.2] -64)) "never into the rock")
+    (is (nil? (mob/landing (world {[3 64 2] water}) [3.3 70.6 2.2] -64)) "nor into water")
+    (is (nil? (mob/landing (world {[3 66 2] 1}) [3.3 65.4 2.2] -64)) "nor under a roof two high")
+    (is (nil? (mob/landing (world {}) [30.3 70.6 2.2] -64)) "nor where nothing is loaded")))
+
 ;; ---------------------------------------------------------------- on the model
 
 (defn arena
@@ -226,7 +276,12 @@
         look (fn [sim yaw pitch]
                (sends sim {:packet/name :move-player-rot :yaw yaw :pitch pitch :flags 1}))
         ignored (ticks (look sim (+ yaw 90.0) 0.0) 40)
-        stared (ticks (look sim yaw pitch) 40)]
+        ;; a stare kept up within 4 would teleport it away (an-angry-enderman-stared-at-up-close-teleports-away)
+        stared (-> sim
+                   (look yaw pitch)
+                   (ticks 3)
+                   (look (+ yaw 90.0) 0.0)
+                   (ticks 40))]
     (is (not (:angry? (val (the-mob ignored :enderman)))))
     (is (= 20.0 (:sim/health ignored)) "it leaves a player who looks away alone")
     (is (:angry? (val (the-mob stared :enderman))))
@@ -245,6 +300,60 @@
   [blocks]
   (let [column (world/column-bytes blocks)]
     (into {} (for [cx (range -3 4) cz (range -3 4)] [[cx cz] column]))))
+
+(defn angry-enderman
+  "A Normal model by day over flat-world's floor topped by blocks, the player at [0.5 64 0.5]
+   looking nowhere, and one enderman at pos already turned on it: [model eid]."
+  [blocks pos]
+  (let [sim (-> (sim/init {:columns (flat-world blocks)
+                           :spawn [0.5 64.0 0.5]
+                           :difficulty :normal
+                           :day-time 1000
+                           :seed 3})
+                (assoc :sim/phase :play :sim/player-pos [0.5 64.0 0.5] :sim/on-ground? true)
+                (sim/with-mobs [{:type :enderman :pos pos}]))
+        [eid] (the-mob sim :enderman)]
+    [(assoc-in sim [:sim/mobs eid :angry?] true) eid]))
+
+(defn jumps
+  "How many of the n ticks after sim moved mob eid more than two blocks at once."
+  [sim eid n]
+  (->> (reductions (fn [s _] (ticks s 1)) sim (range n))
+       (map #(get-in % [:sim/mobs eid :pos]))
+       (partition 2 1)
+       (filter (fn [[a b]] (> (physics/distance a b) 2.0)))
+       count))
+
+(deftest an-angry-enderman-far-off-teleports-toward-the-player
+  ;; EndermanLookForPlayerGoal: farther than 16 for 30 ticks, it teleports toward its target
+  (let [[sim eid] (angry-enderman {} [40.5 64.0 0.5])
+        later (ticks sim 60)]
+    (is (zero? (jumps sim eid 29)) "it walks the first thirty ticks")
+    (is (= 1 (jumps sim eid 60)) "then teleports once")
+    (is (seq (filter #(= eid (:entity-id %)) (said later :entity-position-sync)))
+        "the client told of a jump too long for a move")
+    (is (< (physics/distance (get-in later [:sim/mobs eid :pos]) [0.5 64.0 0.5]) 24.0))
+    (is (zero? (apply jumps (conj (angry-enderman {} [14.5 64.0 0.5]) 60)))
+        "within 16 it only walks")))
+
+(deftest an-angry-enderman-stared-at-up-close-teleports-away
+  (let [[sim eid] (angry-enderman {} [3.5 64.0 0.5])
+        [yaw pitch] (physics/look-at (physics/eye [0.5 64.0 0.5])
+                                     (mob/head :enderman [3.5 64.0 0.5]))
+        look #(sends sim {:packet/name :move-player-rot :yaw %1 :pitch %2 :flags 1})]
+    (is (pos? (jumps (look yaw pitch) eid 20)) "looked in the face within 4, it teleports")
+    (is (zero? (jumps (look (+ yaw 90.0) 0.0) eid 20)) "looked away from, it comes on")))
+
+(deftest an-angry-enderman-walks-round-a-wall-to-the-player
+  ;; vanilla's enderman paths round a wall; the model's searches a route once its straight walk
+  ;; stops (sim/trail, mob/route). A wall three high from z -3 to 3 at x 4 (every chunk's)
+  (let [wall (into {} (for [lz (concat (range 0 4) (range 13 16)) y (range 64 67)] [[4 y lz] 1]))
+        [sim eid] (angry-enderman wall [8.5 64.0 0.5])
+        later (ticks sim 200)]
+    (is (< (:sim/health later) 20.0) "it found its way round and hit")
+    (is (zero? (jumps sim eid 200)) "walking, within 16")
+    (is (= 20.0 (:sim/health (ticks (update-in sim [:sim/mobs eid] dissoc :angry?) 200)))
+        "one not angry stays where it is")))
 
 (deftest a-night-spawns-a-hostile-in-the-ring-and-a-day-does-not
   (let [play (fn [day]
