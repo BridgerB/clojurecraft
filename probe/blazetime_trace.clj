@@ -85,6 +85,8 @@
 
 (doseq [p (clojure.string/split (or (System/getenv "SNAPS") "") #",")
         :when (seq p)]
-  (try (play p 1800000) (catch Exception e (println "ERR" p (str e)))))
+  (try (play p 1800000)
+       (catch Exception e
+         (println "ERR" p (str e) (pr-str (take 8 (map str (.getStackTrace e))))))))
 (println "done")
 (shutdown-agents)
