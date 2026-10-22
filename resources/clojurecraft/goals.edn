@@ -123,8 +123,9 @@
   :goal/target? true
   :goal/until "portal-kit"
   :goal/doc
-  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from the pool to each hole, beside the filled water bucket poured over it and scooped back (issue #124). The few blocks a cast places where the rock is missing are asked for by the build itself, counted from the plan for the place chosen (build/held-first, blocks-needed), never a constant. The water bucket is counted here too: a chained run reaches a step once and never asks for it again, and race 38477665442 reached this one holding its only bucket still empty, then filled it, and the cast found no bucket for the lava (issue #49)"
+  "what a portal cast spends that the iron kit does not hold: an empty bucket to carry lava from the pool to each hole, beside the filled water bucket poured over it and scooped back (issue #124). The few blocks a cast places where the rock is missing are asked for by the build itself, counted from the plan for the place chosen (build/held-first, blocks-needed), never a constant. Twenty-four sticks are kept too, twelve stone pickaxes' handles cut once from the trees at the surface, the last place the bot passes before the descent: the Nether's tunnel wears a pickaxe out every 65 blocks, the fortress is 250 to 630 blocks off, and the Nether has no wood (issue #338: sim traces came through the portal with one to five sticks and dug by hand at 11 s a step). The water bucket is counted here too: a chained run reaches a step once and never asks for it again, and race 38477665442 reached this one holding its only bucket still empty, then filled it, and the cast found no bucket for the lava (issue #49)"
   :goal/provides {:item/water_bucket 1 :item/bucket 1}
+  :goal/spares {:item/stick 24}
   :goal/done? :provided?}
  {:goal/id :cast-one
   :goal/priority 14
