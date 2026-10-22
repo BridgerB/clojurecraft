@@ -14,9 +14,11 @@
    (32 ticks for most) with no further word from the client, then sends set-health with the new
    food. A deadline of the food's eating time (food/eating-ticks, stretched by the server's
    slowdown, intent/slowdown) plus answer-ms fails it :not-eaten."
-  (:require [clojurecraft.food :as food]
+  (:require [clojurecraft.dimension :as dimension]
+            [clojurecraft.food :as food]
             [clojurecraft.game :as game]
             [clojurecraft.intent :as intent]
+            [clojurecraft.inventory :as inventory]
             [clojurecraft.packet :as packet]
             [clojurecraft.place :as place]
             [clojurecraft.plan :as plan]
@@ -26,6 +28,7 @@
 (set! *warn-on-reflection* true)
 
 (def hungry-below 14)                 ; food under this is hunger to answer: six short of full, four below where natural healing stops (18)
+(def portal-fed 18)                   ; food under this is eaten once the portal kit is held, in the overworld: health comes back in the Nether only from food 18 (hunger/heal-level), which has no game
 (def answer-ms 3000)                  ; past the eating time, how long the server's food may take to rise
 
 (def unsafe
@@ -54,12 +57,27 @@
        first
        last))
 
+(defn portal-kit?
+  "Is the bot in the overworld with flint and steel and a water bucket held: the portal's goods,
+   the Nether next?"
+  [world]
+  (and (= dimension/overworld (dimension/of world))
+       (pos? (inventory/item-count world (recipe/item-id :flint_and_steel)))
+       (pos? (inventory/item-count world (recipe/item-id :water_bucket)))))
+
+(defn hungry-under
+  "The food level under which a meal is eaten now: portal-fed once portal-kit?, else hungry-below.
+   Sim race 39712220957 (issue #501, R1/2) entered the Nether at food 16 with food held and none
+   eaten: health comes back only from food 18, and the Nether has no game."
+  [world]
+  (if (portal-kit? world) portal-fed hungry-below))
+
 (defn hungry?
-  "Is the food the server last sent (set-health) under hungry-below? Not before the first
+  "Is the food the server last sent (set-health) under hungry-under? Not before the first
    set-health: what the bot does not know is no reason to eat."
   [world]
   (boolean (some-> (:player/food world)
-                   (< hungry-below))))
+                   (< (long (hungry-under world))))))
 
 (defmethod plan/done-by :fed?
   ;; fed, or nothing to eat: a row with nothing to do must be done, or it would stand in front of

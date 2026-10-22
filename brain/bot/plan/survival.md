@@ -10,6 +10,9 @@ verifiedAgainst: HEAD
 sourceRefs:
   - src/clojurecraft/eat.clj#defn food-held
   - src/clojurecraft/eat.clj#defn hungry?
+  - src/clojurecraft/eat.clj#defn portal-kit?
+  - src/clojurecraft/eat.clj#defn hungry-under
+  - test/clojurecraft/eat_test.clj#with-the-portal-kit-held-the-meal-is-eaten-up-to-food-18
   - src/clojurecraft/eat.clj#def hungry-below 14
   - src/clojurecraft/eat.clj#def unsafe
   - src/clojurecraft/eat.clj#defn deadline

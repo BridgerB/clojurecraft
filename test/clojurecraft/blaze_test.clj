@@ -81,11 +81,63 @@
     (is (= {:intent/kind :walk :intent/target spawner-at}
            (next-intent (with-spawner (standing {8 far}))))
         "none within 12: to the spawner, by a route")
-    (is (= {:plan/wait :no-blaze} (next-intent (standing {8 far}))) "no spawner known: a wait")
+    (is (= :tunnel-to (:intent/kind (next-intent (standing {8 far}))))
+        "no spawner known: the search")
     (testing "a ghost is left alone, and a spawner no walk nor tunnel reached"
-      (is (= {:plan/wait :no-blaze}
-             (next-intent
-              (assoc (with-spawner (standing {7 near})) :plan/blacklist #{7 spawner-at})))))))
+      (is (= :tunnel-to
+             (:intent/kind (next-intent (assoc (with-spawner (standing {7 near}))
+                                               :plan/blacklist
+                                               #{7 spawner-at}))))
+          "the search, not a wait"))))
+
+(defn closed
+  "w with a world of its feet's two cells alone, no way to go: nothing for a search."
+  [w]
+  (assoc w :world/chunks {} :world/blocks {[8 64 8] blocks/air [8 65 8] blocks/air}))
+
+(deftest with-no-spawner-known-the-bot-searches-for-one
+  ;; sim races R2/47 and R4/2 (issue #507): healthy at a fortress's edge, no spawner on record,
+  ;; the plan waited :no-blaze; the captured Nethers' spawners were 117 and 134 blocks off
+  (let [w (standing {})
+        i (next-intent w)]
+    (is (= :tunnel-to (:intent/kind i)))
+    (is (= (fortress/leg-target (:intent/search i)) (:intent/target i)) "the spiral's leg")
+    (is (= fortress/steps-per-tunnel (:intent/steps i)))
+    (is (= [1 0] (:search/heading (:intent/search i))) "east first, as the fortress row's")
+    (is (= {:plan/wait :no-blaze} (next-intent (closed w))) "no way to go: a wait")
+    (is (= :tunnel-to
+           (:intent/kind (next-intent (assoc (with-spawner w) :plan/blacklist #{spawner-at}))))
+        "a spawner given up: the search too")))
+
+(deftest a-blocked-tunnel-tries-another-stand-then-gives-the-spawner-up
+  ;; real race s2 Clj_r06 (issue #502): four tunnels in a row to one stand, each :blocked; the
+  ;; stand did not depend on the blacklist, and the spawner was never given up
+  (let [sp [8 60 11]
+        w (-> (standing {})
+              (memory/observe sp blaze/spawner)
+              (assoc :world/chunks
+                     {[0 0] (world/column {[9 60 11] blocks/air
+                                           [9 61 11] blocks/air
+                                           [7 60 11] blocks/air
+                                           [7 61 11] blocks/air
+                                           [8 60 12] blocks/air
+                                           [8 61 12] blocks/air})}))
+        tunnel-target #(:intent/target (next-intent %))
+        first-stand (blaze/stand w sp)
+        w2 (assoc w :plan/blacklist #{first-stand})
+        second-stand (blaze/stand w2 sp)
+        w3 (assoc w :plan/blacklist #{first-stand second-stand})]
+    (is (= first-stand (tunnel-target w)))
+    (is (some? second-stand))
+    (is (not= first-stand second-stand) "after one blocked tunnel, another face")
+    (is (= second-stand (tunnel-target w2)))
+    (is (= sp (blaze/nearest-spawner w2)) "one blocked stand: the spawner is still the one")
+    (is (blaze/given-up? w3 sp) "after two, given up")
+    (is (nil? (blaze/nearest-spawner w3)))
+    (testing "the next spawner remembered is taken"
+      (let [other [8 60 14]
+            w4 (memory/observe w3 other blaze/spawner)]
+        (is (= other (blaze/nearest-spawner w4)))))))
 
 (deftest a-drop-in-a-pit-is-walked-onto-and-one-in-stone-is-left
   ;; sim race 39712220957 (issue #500): drops lying under the floor, or in a block placed over
