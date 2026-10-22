@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T03:57:42.093Z",
+  "at" : "2026-10-22T03:58:48.146Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -15,7 +15,7 @@
   }, {
     "number" : 501,
     "title" : "Bot stops at blaze-rods: no-heal",
-    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
   }, {
     "number" : 500,
