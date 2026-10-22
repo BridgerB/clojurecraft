@@ -195,11 +195,7 @@
   "The steps to try from feet toward target, best first: along the axis with the farther way to go,
    then the other, then sideways and back (aside, when target is straight over or under); each
    up or down first when target is more than climb (climb-past when not given) above or below,
-   then level, then the other way. A target that is farther over or under the feet than off to
-   the side (vertical?) puts the height first: every direction's step toward it before any level
-   or opposite one, else the tunnel of sim snapshot R2-39-1 (issue #286), a fortress 35 blocks
-   straight overhead, took a safe step down in the second direction tried before the safe step up
-   in the fourth, and went down into a cavern's pocket."
+   then level, then the other way."
   ([feet target] (moves feet target climb-past))
   ([[fx fy fz] [tx ty tz] climb]
    (let [ddx (- tx fx)
@@ -213,9 +209,8 @@
          z [0 (toward ddz)]
          [a b] (if (>= (abs ddx) (abs ddz)) [x z] [z x])
          side (fn [[p q]] [[q p] [(- q) (- p)]])
-         dirs (distinct (remove #(= [0 0] %) (concat [a b] (side (if (= [0 0] a) b a)) aside)))
-         vertical? (and (not (zero? dy)) (> (abs ddy) (max (abs ddx) (abs ddz))))]
-     (if vertical? (for [dy ys [dx dz] dirs] [dx dy dz]) (for [[dx dz] dirs dy ys] [dx dy dz])))))
+         dirs (distinct (remove #(= [0 0] %) (concat [a b] (side (if (= [0 0] a) b a)) aside)))]
+     (for [[dx dz] dirs dy ys] [dx dy dz]))))
 
 (defn choose-move
   "The first of moves from feet toward target (climbing past climb, climb-past when not given)
