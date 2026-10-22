@@ -3,7 +3,7 @@ title: Ender pearls
 description: How the bot gets twelve ender pearls (issue #263) - endermen hunted with the sword, never bartered; the loot table, the warped forest and the enderman's stare and teleport rules read from the jar; the :pearls plan (the kill's drop, the fight, a stare from range to provoke, a walk), the :provoke intent, the two goal rows, the sim test and the model's armour.
 type: reference
 tags: [bot, plan, combat, nether, goals, intents]
-aliases: [:pearls, :provoke, :burrow, :lookout, cut-reach, roam-reaches, at-hand, lure?, lure-lookouts, :pearls/shelter, :entity/creepy?, :intent/hold?, :ender-pearls, :ender-pearl, pearls-12, pearls-1, :unprovoked, :no-enderman, stare-from, stare-range, :toward, roam-goal, descend, descend-radius, spare-digs, spare?, memory/arrived, vantage, threat, stale?, warped-origins, ascend, pearl-arena]
+aliases: [:pearls, :provoke, :burrow, :lookout, cut-reach, roam-reaches, at-hand, lure?, lure-lookouts, mouth-cells, :pearls/shelter, :entity/creepy?, :intent/hold?, :ender-pearls, :ender-pearl, pearls-12, pearls-1, :unprovoked, :no-enderman, stare-from, stare-range, :toward, roam-goal, descend, descend-radius, spare-digs, spare?, memory/arrived, vantage, threat, stale?, warped-origins, ascend, pearl-arena]
 status: verified
 lastUpdated: 2026-10-22
 verifiedAgainst: HEAD
@@ -57,6 +57,8 @@ sourceRefs:
   - src/clojurecraft/path.clj#defmethod goal-done? :afar
   - src/clojurecraft/pearls.clj#defn burrow-site
   - src/clojurecraft/pearls.clj#defn burrow-steps
+  - src/clojurecraft/pearls.clj#defn mouth-cells
+  - test/clojurecraft/pearls_test.clj#a-burrows-mouth-is-opened-to-an-endermans-height-first
   - src/clojurecraft/stairs.clj#defn tall-stair-cells
   - test/clojurecraft/pearls_test.clj#a-burrow-site-is-one-a-walk-reaches-and-none-a-walk-failed-toward
   - test/clojurecraft/pearls_test.clj#a-burrows-stairs-are-four-high-so-an-enderman-walks-down-them
@@ -150,6 +152,8 @@ Gym batch pearls-263a (plan run 38892130785) put three live endermen round the b
 
 `:burrow` (`{:intent/kind :burrow :intent/dir [dx dz]}`) cuts one with the executors already there: `:stairs-down` `burrow-depth` 3 (each stair four cells high, `:intent/tall` 3 and `stairs/tall-stair-cells`, refusing water, lava and drops), then `:tunnel` `burrow-length` 2 along the heading the stairs ended on (two high, the ground over it from the third stair down), each a child run through `stone/link`. Done when the feet stand in a `shelter?`, kept as `:pearls/shelter` with `:pearls/mouth` where it began; failed `:no-shelter` otherwise. An enderman follows down the stairs and stops at the last one, two cells from the bot: out of its reach, inside the sword's (1.5). The stairs are four high because a body steps off a stair at its old height before it falls: the column it steps into must be clear from the new feet to its height over the old ones, four cells for the enderman's 2.9 (three for the player's 1.8, which is `stair-cells`). Batch pearls-warped2-b (plan run 39182782203, probe 39206015361 over its run 3) cut three-high stairs into a hill: each provoked enderman stood on the first stair, the ground over it open, stepped no lower, then walked off a ledge into the chasm beside the burrow and stood seven under the bot; six held fights in six timed out `:unreachable`. On flat ground every stair of a burrow three deep is open above, which is why the stone arena (and the sim test) never showed it.
 
+The mouth itself must take an enderman too: the bot stands in two open cells, an enderman in three, and a burrow whose mouth it cannot stand in (`stand?`) it never enters, however its stairs are cut. `:burrow` first digs the cells over the mouth an enderman would fill and the bot does not (`mouth-cells`: from two over the feet to one under `mob/tall` over them, the one cell `[x y+2 z]` for 2.9), one child `:dig` each while one is solid, then the stairs; `burrowable?` opens them on the overlay first and refuses a mouth whose roof may not be opened (`stairs/clear-way?`: water or lava). Batch pearls-warped7-b (plan run 39725964182, probe 39732372050) run 3 cut its burrow under a huge fungus's cap, a warped wart block two over the mouth's feet, every stair below it four high; the enderman the lure brought stood in the hollows two to four blocks beside the mouth, and six held fights in six timed out `:unreachable` over twenty minutes. The pure test walks the model's three-tall enderman at the mouth under the cap and stops it outside, and down to the last stair once the cap is dug.
+
 ## The :provoke intent
 `{:intent/kind :provoke :intent/target eid}`: the look on its head (`mob/head`) until the server says it has a target (`entity/creepy?`) or it comes nearer than `stare-from`, then done with the look moved to its legs at once (stared at within 16 an angry one stands frozen, within 4 it teleports away); failed `:unprovoked` after `stare-ms` 3000 with neither, and the planner blacklists it. Done at once when it is gone. The plan then takes the bot back to the burrow's end to meet it.
 
@@ -161,7 +165,7 @@ The model's enderman (`mob/kinds`) is neutral until stared at (`sim/provoke`, fr
 
 ## Limits
 - The burrow needs ground it can be cut in: three stairs of rock with no water or lava beside them. Where it cannot be dug the hunt fights in the open, which loses.
-- The enderman must come down the stairs: the server's pathfinder takes it to the nearest place it fits, the last stair. One that stays at the top is out of reach: the held fight fails `:unreachable` after `hold-timeout-ms` 60 s and the enderman is blacklisted. The model's walker (`mob/step-toward`) steps off at its old height as the server's does, so the pure test walks it down the four-high stairs and not the three-high ones.
+- The enderman must come down the stairs: the server's pathfinder takes it to the nearest place it fits, the last stair. One that stays at the top is out of reach: the held fight fails `:unreachable` after `hold-timeout-ms` 60 s and the enderman is blacklisted. The model's walker (`mob/step-toward`) steps off at its old height as the server's does, so the pure test walks it down the four-high stairs and not the three-high ones, and into the mouth only once the cap over it is dug (`mouth-cells`). The cells it crosses to reach the mouth are not checked: on the forest floor they are open ground.
 - No emergency escape into water yet (the Nether has none; water poured there evaporates).
 - Gym batch pearls-263b (plan run 38895776486), with the burrow: `pearls-1-live` passed 3 of 5 where the open fight had died five times in five. One death came from a zombie the unlit midnight arena spawned, which the `:defend` row backed away from turn about with the hunt; the other from an enderman met in the open. The arena is lit and walled now, and an enderman at hand, one coming or a hurt bot sends it back to its burrow.
 - No exploring beyond `seek-radius`: with no enderman tracked within 64 the bot roams sixteen blocks at a time and looks round until one comes, or the run's time ends. A cave pocket no route leaves (batch pearls-263f) holds it: the hunt never digs its way out.

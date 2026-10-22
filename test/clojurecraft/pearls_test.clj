@@ -667,6 +667,48 @@
     (is (= [6 61 8] (walk (set (apply concat steps)))) "down to the last stair")
     (is (= [3 64 8] (walk three-high)) "three high: it stands at the mouth")))
 
+(deftest a-burrows-mouth-is-opened-to-an-endermans-height-first
+  ;; batch pearls-warped7-b (plan run 39725964182, probe 39732372050) run 3: the burrow was cut
+  ;; under a huge fungus's cap, a warped wart block two over the mouth's feet, its stairs four
+  ;; high below it; the bot stands in two cells and an enderman needs three, so the enderman the
+  ;; lure brought stood in the hollows beside the mouth, and six held fights in six timed out
+  ;; :unreachable. The model's enderman (mob/step-toward, three tall) stops outside the mouth
+  ;; under the cap and walks down to the last stair once the cap is dug
+  (let [mouth [3 64 8]
+        roof [3 66 8]
+        cap (blocks/default-state :warped_wart_block)
+        rock? (fn [[x y z]] (or (<= y 63) (= [x y z] roof))) ; flat ground, the cap over the mouth
+        walk (fn [opened]
+               (let [free? (fn [c] (or (contains? opened c) (not (rock? c))))]
+                 (mob/cell-of (nth (iterate #(mob/step-toward free? % [8.5 61.0 8.5] 0.3 0.0 3)
+                                            [0.5 64.0 8.5])
+                                   200))))
+        steps (set (apply concat (pearls/burrow-steps mouth [1 0])))
+        seen {7 (enderman [0.5 64.0 8.5])} ; calm, at hand, west of the mouth
+        capped (-> (standing seen {roof cap})
+                   (assoc :player/pos [3.5 64.0 8.5])
+                   (assoc-in [:player/inventory 1] (item :iron_pickaxe 1)))
+        open (assoc capped :world/chunks (:world/chunks (standing seen)))
+        burrow {:intent/kind :burrow :intent/dir [1 0] :intent/for :pearls :intent/status :active}
+        first-child (fn [w]
+                      (let [i (:plan/intent (intent-step (assoc w :plan/intent burrow) (tick 1)))]
+                        [(:intent/stage i)
+                         (select-keys (:intent/child i) [:intent/kind :intent/target])]))]
+    (is (= [roof] (pearls/mouth-cells mouth)) "one cell, the third over the feet, for 2.9")
+    (is (not (pearls/stand? capped mouth)) "under the cap no enderman stands in the mouth")
+    (is (= [2 64 8] (walk steps))
+        "the stairs four high and the cap over the mouth: it stays outside")
+    (is (= [6 61 8] (walk (conj steps roof))) "the cap dug: down to the last stair")
+    (is (= {:intent/kind :burrow :intent/dir [1 0] :intent/for :pearls}
+           (plan/next-intent capped row plan/goals))
+        "a burrow is cut where the bot stands under the cap: the cap is dug first")
+    (is (not (pearls/burrowable? (standing seen {roof (blocks/default-state :lava)}) mouth [1 0]))
+        "lava over the mouth: no burrow here")
+    (is (= [:roof {:intent/kind :dig :intent/target roof}] (first-child capped))
+        "the burrow's first child digs the cap")
+    (is (= [:down {:intent/kind :stairs-down}] (first-child open))
+        "nothing over the mouth: the stairs at once")))
+
 (deftest a-burrow-crowded-by-a-calm-one-for-a-minute-is-given-up-for-one-beside-it
   ;; gym batch pearls-warped4-a (plan run 39544677155): run 1 stood in its burrow from 308 s to
   ;; the end over a calm enderman 2.7 blocks from the mouth that never moved, run 5 twenty-one

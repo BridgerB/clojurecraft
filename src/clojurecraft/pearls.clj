@@ -630,17 +630,34 @@
                            (range (dec burrow-length)))]
     (vec (concat stairs tunnel))))
 
+(defn mouth-cells
+  "The cells over a burrow's mouth [x y z] (the feet it is cut from) that an enderman standing
+   in it fills and the bot does not: from two over the feet to one under mob/tall over them,
+   one cell, [x y+2 z], for its 2.9. The bot stands in two open cells and an enderman needs
+   three, so a burrow whose mouth it cannot stand in (stand?) it never enters, however its
+   stairs are cut: :burrow digs these first. Gym batch pearls-warped7-b (plan run 39725964182,
+   probe 39732372050) run 3 cut its burrow under a huge fungus's cap, a warped wart block two
+   over the mouth's feet, with every stair four high below it; the enderman the lure brought
+   stood in the hollows two to four blocks beside the mouth, and six held fights in six timed
+   out :unreachable over twenty minutes."
+  [[x y z]]
+  (mapv (fn [dy] [x (+ y dy) z]) (range 2 (mob/tall :enderman))))
+
 (defn burrowable?
-  "Would a burrow cut from feet along dir end in a shelter?: each of its steps (burrow-steps)
-   may be cut (stairs/safe?: no water, lava or drop, not a cell a staircase was boxed on) once
-   the steps before it are open, and its end, every step open, is a shelter?. The steps are
-   opened on the world's block overlay (:world/blocks), as the digs would open them."
+  "Would a burrow cut from feet along dir end in a shelter?: the cells over its mouth an
+   enderman needs (mouth-cells) may be opened (stairs/clear-way?: no water or lava), each of
+   its steps (burrow-steps) may be cut (stairs/safe?: no water, lava or drop, not a cell a
+   staircase was boxed on) once the steps before it are open, and its end, every step open, is
+   a shelter?. The cells are opened on the world's block overlay (:world/blocks), as the digs
+   would open them."
   [world feet dir]
-  (let [steps (burrow-steps feet dir)
+  (let [roof (mouth-cells feet)
+        steps (burrow-steps feet dir)
         open (fn [w cells] (reduce #(assoc-in %1 [:world/blocks %2] blocks/air) w cells))
-        dug (reduce (fn [w cells] (if (stairs/safe? w cells) (open w cells) (reduced nil)))
-                    world
-                    steps)]
+        dug (when (stairs/clear-way? world roof)
+              (reduce (fn [w cells] (if (stairs/safe? w cells) (open w cells) (reduced nil)))
+                      (open world roof)
+                      steps))]
     (boolean (and dug (shelter? dug (last (last steps)))))))
 
 (defn standable?
@@ -788,13 +805,26 @@
   ;; heading the stairs ended on: the stairs are four high (:intent/tall, mob/tall), so an
   ;; enderman follows down them, and the tunnel two high, so it stops at its mouth, two cells
   ;; from the bot (three-high stairs under a hill held it at the first: probe 39206015361).
-  ;; Done when the feet stand in a shelter?, kept as :pearls/shelter, with where it began as
-  ;; :pearls/mouth; failed :no-shelter when they do not, or with a child's reason
+  ;; First, while a cell over the mouth that an enderman standing in it would fill is solid
+  ;; (mouth-cells), a child :dig of it: under a fungus's cap the mouth is two high, the
+  ;; enderman never enters, and batch pearls-warped7-b's run 3 held six fights :unreachable
+  ;; (probe 39732372050). Done when the feet stand in a shelter?, kept as :pearls/shelter, with
+  ;; where it began as :pearls/mouth; failed :no-shelter when they do not, or with a child's
+  ;; reason
   [world {:intent/keys [stage dir mouth] :as i} event]
   (let [mouth (or mouth (intent/feet world))
-        i (assoc i :intent/mouth mouth :intent/stage (or stage :down))
+        roof (first (filter #(solid-at? world %) (mouth-cells mouth)))
+        i (assoc i :intent/mouth mouth :intent/stage (or stage (if roof :roof :down)))
         world (assoc world :plan/intent i)]
     (case (:intent/stage i)
+      :roof
+      (cond (nil? roof) (intent/assoc-intent world :intent/stage :down)
+            :else
+            (stone/link world
+                        i
+                        event
+                        (intent/child-dig roof)
+                        (fn [w _] (intent/assoc-intent w :intent/stage :down))))
       :down
       (stone/link
        world
