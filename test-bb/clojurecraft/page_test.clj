@@ -4,6 +4,7 @@
    whichever of two writers pushes first. Babashka runs these (bb test:bb)."
   (:require [cheshire.core :as json]
             [clojure.test :refer [deftest is testing]]
+            [clojurecraft.failures :as failures]
             [clojurecraft.page :as page]))
 
 (def legacy-line
@@ -160,3 +161,74 @@
                {:goal/id :pickaxe :goal/priority 3 :goal/target? true :goal/until "pickaxe"}]]
     (is (= [:wood :kit] (page/chain goals "table")))
     (is (= [:wood :kit :pickaxe] (page/chain goals "pickaxe")))))
+
+(def refused
+  "A real bot whose server refused it (race 39817745908's server 2): its RESULT, the plan never
+   begun, as bb failures reads it from race.log."
+  {:ok false
+   :reason :crashed
+   :error "Connection refused (connect failed)"
+   :until "nether"
+   :plan {}
+   :run/signature [:wood :crashed]
+   :run/infra? false
+   :run/bot "Clj_r05"})
+
+(deftest a-run-that-never-got-into-play-is-no-run
+  (let [played {:ok false
+                :reason :no-site
+                :until "nether"
+                :plan {:plan/status :failed :plan/reached #{:wood}}
+                :run/signature [:kit :no-site]
+                :run/bot "Clj_r01"}
+        r (page/round (concat [played] (repeat 375 refused))
+                      []
+                      [:wood :kit]
+                      {:kind :real :run 1 :commit "c" :at "2026-10-22T15:34:51Z"})]
+    (testing "bb failures reports it under infrastructure stops, even from a RESULT marked before"
+      (is (failures/infra? refused))
+      (is (empty? (failures/failed [refused])))
+      (is (not (failures/infra? played)))
+      (is (not (failures/unplayed? (assoc refused :run/file "R1/3.edn.gz")))
+          "a sim run is the model's: never infrastructure for want of a plan"))
+    (testing "the batch counts only the runs that played"
+      (is (= 1 (:round/runs r)))
+      (is (= 375 (:round/unplayed r)))
+      (is (= {:wood 1 :kit 0} (:round/reached r)))
+      (is (= [[[:kit :no-site] 1]] (:round/failures r)))
+      (is (= 375 (:unplayed (page/batch r)))))))
+
+(deftest a-stored-batch-drops-the-runs-that-never-played
+  (let [stored (page/read-json (page/json-line
+                                {:run 39817745908
+                                 :kind "real"
+                                 :runner 1
+                                 :batch 1
+                                 :runs 380
+                                 :ok 0
+                                 :reached {:wood 1 :kit 1}
+                                 :failures [["wood" "crashed" 375] ["portal-kit" "unreachable" 1]]
+                                 :issues {(page/sig-key [:wood :crashed]) 152
+                                          (page/sig-key [:portal-kit :unreachable]) 515}}))
+        b (page/played stored)]
+    (is (= 5 (:runs b)))
+    (is (= 375 (:unplayed b)))
+    (is (= [["portal-kit" "unreachable" 1]] (:failures b)))
+    (is (= {(page/sig-key [:portal-kit :unreachable]) 515} (:issues b)))
+    (is (= {:wood 1 :kit 1} (:reached b)) "they reached nothing: the reach stays")
+    (is (= b (page/played b)) "a batch counted so is unchanged")
+    (is (= (assoc stored :unplayed 0) (page/played (assoc stored :unplayed 0)))
+        "a batch bb churn already counted (it carries :unplayed) is unchanged")
+    (is (= (assoc stored :kind "sim") (page/played (assoc stored :kind "sim")))
+        "a sim run's crash at wood is the model's: kept")
+    (testing "the day and the summary count it so"
+      (let [files (page/rebuilt {"2026-10-22" (page/ndjson [stored])}
+                                {:days [{:date "2026-10-21" :runs 7}] :updated "u"})
+            d (page/read-json (get files (page/day-path "2026-10-22")))
+            s (page/read-json (get files page/summary-file))]
+        (is (= 5 (get-in d [:totals :real :runs])))
+        (is (= 375 (get-in d [:totals :real :unplayed])))
+        (is (= {:portal-kit 1} (get-in d [:totals :real :stops])))
+        (is (= ["2026-10-21" "2026-10-22"] (map :date (:days s))) "a day with no batches is kept")
+        (is (= 5 (get-in s [:days 1 :real :runs])))
+        (is (= "u" (:updated s)))))))

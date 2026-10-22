@@ -15,10 +15,12 @@
    it (loaded and not solid), or solid?, its opposite for sight: what a mob does is a function of
    the cells round it, its own value and the player's. Time and rolls are the caller's.
 
-   Not modelled: pathfinding round walls (a mob walks straight and stops at what it cannot step
-   up), knockback, an arrow's flight (the damage lands when the skeleton fires), a blast breaking
-   blocks, an enderman's teleports, spiders climbing, mobs swimming, armour wearing out. The armour
-   the player wears takes its share of a mob's hit (absorbed, issue #263)."
+   Not modelled: pathfinding round walls for any kind but the enderman (a mob walks straight and
+   stops at what it cannot step up; an enderman stuck so finds a route, route), knockback, an
+   arrow's flight (the damage lands when the skeleton fires), a blast breaking blocks, an
+   enderman's teleports out of water, rain, daylight or a non-living hurt (its teleports at its
+   target are, toward-aim and away-aim), spiders climbing, mobs swimming, armour wearing out. The
+   armour the player wears takes its share of a mob's hit (absorbed, issue #263)."
   (:require [clojure.math :as math]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.physics :as physics]
@@ -38,7 +40,9 @@
    :fuse a creeper's ticks from swelling to blast, :swell how near the player starts it, :blast
    the blast's power; :undead burns in daylight under the sky; :neutral attacks only once hurt or
    stared at; :passive never attacks; :hostile spawns by the night rule, :weight how often among
-   them; :loot [[item lo hi]], each item lo to hi when killed by the player."
+   them; :loot [[item lo hi]], each item lo to hi when killed by the player; :paths finds a
+   route round what stops its straight walk (route); :teleports teleports at its target as an
+   enderman does (toward-aim, away-aim)."
   {:zombie {:health 20.0
             :box [0.6 1.95]
             :speed 0.115
@@ -92,6 +96,8 @@
               :neutral true
               :hostile true
               :weight 10
+              :paths true
+              :teleports true
               :loot [[:ender_pearl 0 1]]}
    :blaze {:health 20.0
            :box [0.6 1.8]
@@ -363,6 +369,121 @@
            (and (stands-in? free? [cx (inc cy) cz] n) (free? (update (cell-of pos) 1 + n)))
            [nx (double (inc cy)) nz]
            :else pos))))
+
+(defn in-reach?
+  "Is a melee mob of kind at pos near enough to hit a player at target: on the plane within its
+   :reach, the feet within 1.5 in height?"
+  [kind pos target]
+  (and (<= (flat-distance pos target) (:reach (kinds kind) 0.0))
+       (< (abs (- (second pos) (second target))) 1.5)))
+
+;; ---------------------------------------------------------------- a route round a wall (issue #263)
+
+(def route-budget 1024)               ; cells a route search visits at most: the follow range times 16, vanilla's PathFinder budget (Mob.createNavigation), an enderman's 64
+(def route-drop 3)                    ; blocks a route steps down at once at most: a mob's safe fall (Mob.getMaxFallDistance)
+(def route-every 10)                  ; ticks between a stuck mob's route searches: about MeleeAttackGoal's 4 + nextInt(7) between recalculations, unrolled
+(def route-near 1.0)                  ; blocks from the target a route's cell ends the search
+
+(defn moves
+  "The cells a body n cells tall goes to from cell [x y z] in one move, on the four sides: the
+   side cell at its height when its n cells are free, where it falls to the first floor at most
+   route-drop below (none when the drop is deeper); one up when that cell's n cells are free and
+   the head clears the cell n over [x y z] (a jump)."
+  [free? [x y z] n]
+  (keep (fn [[dx dz]]
+          (let [nx (+ x dx)
+                nz (+ z dz)
+                fy (reduce (fn [fy _] (if (free? [nx (dec fy) nz]) (dec fy) (reduced fy)))
+                           y
+                           (range route-drop))]
+            (cond (and (stands-in? free? [nx y nz] n) (not (free? [nx (dec fy) nz]))) [nx fy nz]
+                  (stands-in? free? [nx y nz] n) nil
+                  (and (stands-in? free? [nx (inc y) nz] n) (free? [x (+ y n) z])) [nx (inc y) nz]
+                  :else nil)))
+        [[1 0] [-1 0] [0 1] [0 -1]]))
+
+(defn route
+  "The cells, in order and without from, a body n cells tall walks from cell from toward point
+   target: a breadth-first search over moves visiting route-budget cells at most, ended early by
+   a cell within route-near of target, to the cell it reached nearest target (by its feet's
+   centre; the first reached of equals), as vanilla's pathfinder ends a path it cannot finish at
+   its node nearest the target. Empty when from is that cell."
+  [free? from target n]
+  (let [far #(physics/distance [(+ (first %) 0.5) (double (second %)) (+ (nth % 2) 0.5)] target)
+        [came best]
+        (loop [queue (conj clojure.lang.PersistentQueue/EMPTY from)
+               came {from from}
+               best from]
+          (cond (or (empty? queue) (>= (count came) route-budget) (< (far best) route-near))
+                [came best]
+                :else
+                (let [c (peek queue)
+                      fresh (remove came (moves free? c n))]
+                  (recur (into (pop queue) fresh)
+                         (reduce #(assoc %1 %2 c) came fresh)
+                         (reduce #(if (< (far %2) (far %1)) %2 %1) best fresh)))))]
+    (vec (reverse (take-while #(not= from %) (iterate came best))))))
+
+;; ---------------------------------------------------------------- an enderman's teleports (issue #263)
+
+(def teleport-far 16.0)               ; blocks from its target past which an angry enderman teleports toward it (EndermanLookForPlayerGoal.tick: distanceToSqr over 256)
+(def teleport-wait 30)                ; ticks it stays that far first: the goal's adjustedTickDelay(30), 15 of its ticks, the goal ticking every other game tick
+(def teleport-near 4.0)               ; blocks within which an angry enderman stared at teleports away (distanceToSqr under 16)
+(def toward-reach 16.0)               ; blocks teleportTowards aims along the line from the enderman to its target
+(def toward-spread 8.0)               ; blocks its aim is spread over on x and on z: (nextDouble - 0.5) * 8
+(def toward-rise 16)                  ; its aim's rise: nextInt(16) - 8
+(def away-spread 64.0)                ; EnderMan.teleport's aim on x and z: (nextDouble - 0.5) * 64
+(def away-rise 64)                    ; and on y: nextInt(64) - 32
+
+(defn toward-aim
+  "The point an enderman at pos aims a teleport toward a target whose eye is at eye, for rolls
+   r1 r2 r3 in [0, 1) (EnderMan.teleportTowards): toward-reach along the line from its middle to
+   the eye, spread (r1 - 0.5) toward-spread on x, floor(toward-rise r2) - toward-rise/2 on y and
+   (r3 - 0.5) toward-spread on z."
+  [[x y z] eye r1 r2 r3]
+  (let [mid [x (+ y (/ (second (:box (kinds :enderman))) 2.0)) z]
+        d (physics/distance mid eye)
+        [ux uy uz] (if (pos? d) (mapv #(/ (- %1 %2) d) mid eye) [0.0 0.0 0.0])]
+    [(- (+ x (* (- r1 0.5) toward-spread)) (* ux toward-reach))
+     (- (+ y (- (long (math/floor (* r2 toward-rise))) (quot toward-rise 2))) (* uy toward-reach))
+     (- (+ z (* (- r3 0.5) toward-spread)) (* uz toward-reach))]))
+
+(defn away-aim
+  "The point an enderman at [x y z] aims a teleport away at for rolls r1 r2 r3 in [0, 1)
+   (EnderMan.teleport): (r1 - 0.5) away-spread on x, floor(away-rise r2) - away-rise/2 on y,
+   (r3 - 0.5) away-spread on z."
+  [[x y z] r1 r2 r3]
+  [(+ x (* (- r1 0.5) away-spread))
+   (+ y (- (long (math/floor (* r2 away-rise))) (quot away-rise 2)))
+   (+ z (* (- r3 0.5) away-spread))])
+
+(defn landing
+  "Where an enderman aiming a teleport at point [x y z] lands, or nil where it lands nowhere and
+   stays (LivingEntity.randomTeleport): straight down from the point's cell, at min-y at the
+   lowest, to the cell over the first solid one, its feet on that floor, when every cell on the
+   way is loaded (at of a cell: its state, nil unloaded) and its tall cells there hold no block,
+   water or lava (noCollision, containsAnyLiquid). Two things are simpler than vanilla: the feet
+   are put on the floor, not the point's fraction of a block over it (the next tick's fall ends
+   there), and only the point's column is looked at, not the cells the body's 0.6 width
+   straddles."
+  [at [x y z] min-y]
+  (let [[cx cy cz] (cell-of [x y z])
+        solid? #(blocks/solid? (at [cx % cz]))
+        feet (reduce (fn [_ fy]
+                       (cond (nil? (at [cx (dec fy) cz])) (reduced nil)
+                             (solid? (dec fy)) (reduced fy)
+                             :else nil))
+                     nil
+                     (range cy min-y -1))
+        clear? (fn [fy]
+                 (let [id (at [cx fy cz])]
+                   (boolean (and id
+                                 (not (blocks/solid? id))
+                                 (not (contains? blocks/water-states id))
+                                 (not (contains? blocks/lava-states id))))))]
+    (cond (nil? feet) nil
+          (every? #(clear? (+ feet %)) (range (tall :enderman))) [x (double feet) z]
+          :else nil)))
 
 ;; ---------------------------------------------------------------- spawning
 

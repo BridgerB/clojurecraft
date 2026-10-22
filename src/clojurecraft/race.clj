@@ -55,6 +55,10 @@
 (def min-play-ms 300000)              ; a slot starts no bot with less of the job left than this: it would only be cut
 (def quick-ms 30000)                  ; a bot that crashed or was cut off sooner than this never played: the server is gone or failing
 (def backoff-max-ms 60000)            ; the longest a slot waits before its next bot after quick ends
+(def dead-after 5)                    ; bots in a row that never got into play before the race calls its server down
+(def probe-every-ms 30000)            ; how often a slot asks a down server whether it accepts again
+(def start-gap-ms 1000)               ; the least time between two bots starting on one server, whatever the slots do
+(def recovered {:race/unplayed 0 :race/down? false}) ; a server's health when it plays, or accepts again
 
 (defn bot-name
   "The name of racer k (from 1) with prefix: a server name, sixteen characters at most."
@@ -106,6 +110,24 @@
         (min backoff-max-ms (max 1000 (* 2 wait)))
         :else 0))
 
+(defn health
+  "A server's health ({:race/unplayed :race/down?}) after one of its bots ended with RESULT r:
+   :race/unplayed counts the bots in a row that never got into play (failure/unplayed?), and a bot
+   that played sets it back to 0; :race/down? turns true at dead-after of them and stays true
+   until a probe finds the server accepting again (recovered). Backing off alone still let a dead
+   server's 15 slots start one bot a minute each for three hours (race 39817745908: 2,864 runs
+   that never connected)."
+  [h r]
+  (let [n (if (failure/unplayed? r) (inc (:race/unplayed h 0)) 0)]
+    {:race/unplayed n :race/down? (boolean (or (:race/down? h) (>= n dead-after)))}))
+
+(defn next-start
+  "When the next bot may start on a server, ms: now, or start-gap-ms after the last start (last),
+   whichever is later. Every slot of a server takes its start from one clock, so however its bots
+   end, the server sees at most one new bot a start-gap-ms."
+  [last now]
+  (max now (+ (or last 0) start-gap-ms)))
+
 (defn run-ms
   "How long a race plays, ms: :race/deadline-ms (the capacity ramp's one deadline), else
    :race/run-minutes (the churn's job, up to GitHub's cap), else :race/timeout-ms."
@@ -116,10 +138,13 @@
       timeout-ms))
 
 (defn marked
-  "A RESULT as the race prints it: marked for bb failures (failure/mark), and cut (failure/cut)
-   when the job's end stopped the bot (a :timeout, the only timeout a churn bot has)."
+  "A RESULT as the race prints it: marked for bb failures (failure/mark), cut (failure/cut) when
+   the job's end stopped the bot (a :timeout, the only timeout a churn bot has), and :run/infra?
+   when the bot never got into play (failure/unplayed?: its server refused it or was gone)."
   [r]
-  (cond-> (failure/mark r) (= :timeout (:reason r)) failure/cut))
+  (cond-> (failure/mark r)
+    (= :timeout (:reason r)) failure/cut
+    (failure/unplayed? r) (assoc :run/infra? true)))
 
 (defn tick-times
   "The server's tick times in ms, {:avg :p50 :p95 :p99}, from its tick query reply; {} when the
@@ -420,23 +445,71 @@
              {:name name :result r}))
          (finally ((:unwatch watcher) world*) (swap! live dissoc name)))))
 
+(defn accepts?
+  "Does the server take a connection on its game port now (within 2 s)?"
+  [{:keys [^String host port]}]
+  (try (with-open [s (java.net.Socket.)]
+         (.connect s (java.net.InetSocketAddress. host (int port)) 2000)
+         true)
+       (catch Exception _ false)))
+
+(defn ended!
+  "Fold a bot's RESULT r into the server's health (its atom :health*, by health); the slot whose
+   bot turns it down prints it once, loudly, on the board (the job's log shows BOARD lines)."
+  [{:keys [health*]} r]
+  (let [[before after] (swap-vals! health* health r)]
+    (when (and (:race/down? after) (not (:race/down? before)))
+      (println "BOARD SERVER DOWN:"
+               dead-after
+               "bots in a row never got into play; its slots start none until it accepts again,"
+               "asking every"
+               (quot probe-every-ms 1000)
+               "s")
+      (flush))))
+
+(defn probe!
+  "Ask a down server whether it accepts again; when it does, its health is recovered, and the
+   slot that finds it so says it on the board and sets the game rules again (a restarted server,
+   race.yml's watch, may have lost them)."
+  [{:keys [server health*]}]
+  (when (accepts? server)
+    (let [[before _] (swap-vals! health* (constantly recovered))]
+      (when (:race/down? before)
+        (println "BOARD SERVER BACK: it accepts again; its slots start bots")
+        (flush)
+        (set-gamerules! server)))))
+
+(defn start-turn!
+  "Take this slot's turn on the server's start clock (an atom of the last start, next-start) and
+   sleep until it comes."
+  [{:keys [starts]}]
+  (let [now (System/currentTimeMillis)
+        at (swap! starts next-start now)]
+    (Thread/sleep (long (max 0 (- at now))))))
+
 (defn slot!
   "One bot slot, on a thread of its own: it joins at its place in the schedule (start-at), then
    plays bot after bot (play-one!), the next the moment the last ends, or after backoff-ms when
-   the last never got to play, until less than min-play-ms is left of the job. Returns a channel
-   of its results."
-  [{:keys [config t0 deadline] :as ctx} i]
+   the last never got to play, never sooner than its turn on the server's start clock
+   (start-turn!), until less than min-play-ms is left of the job. While the server is down
+   (health: dead-after bots in a row never got into play) it starts none and asks every
+   probe-every-ms whether the server accepts again. Returns a channel of its results."
+  [{:keys [config t0 deadline health*] :as ctx} i]
   (async/thread
    (Thread/sleep (long (max 0 (- (+ t0 (start-at config i)) (System/currentTimeMillis)))))
    (loop [results []
           wait 0]
      (cond (< (- deadline (System/currentTimeMillis)) min-play-ms) results
+           (:race/down? @health*)
+           (do (Thread/sleep (long probe-every-ms)) (probe! ctx) (recur results 0))
            :else
            (let [_ (Thread/sleep (long wait))
+                 _ (start-turn! ctx)
                  t (System/currentTimeMillis)
                  r (play-one! ctx)]
+             (ended! ctx (:result r))
              (recur (conj results r)
-                    (backoff-ms wait (- (System/currentTimeMillis) t) (:result r))))))))
+                    (long (backoff-ms wait (- (System/currentTimeMillis) t) (:result r)))))))))
 
 (defn -main
   "Run the race ci/race.edn (or --config) describes on the server at --port, its RCON at
@@ -475,6 +548,8 @@
              :ch (claims!)
              :centre (promise)
              :serials (atom 0)
+             :health* (atom recovered)
+             :starts (atom 0)
              :live live
              :watcher (milestones! (assoc where :seed seed) record-dir)
              :prefix prefix

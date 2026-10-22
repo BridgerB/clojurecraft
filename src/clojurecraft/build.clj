@@ -960,18 +960,25 @@
    floor to stand on, failed :no-path three times. Sim race 39550827333 (issue #162, world R3/43
    seed 2): the bridge laid three cells from the end of the stairs up and the fourth lay past
    the reach of the place, so the plain walk to the stand over the gap was tried and failed
-   :no-path, three times in the plan."
+   :no-path, three times in the plan. A gap that holds a block the server will not place into (a
+   cobweb: not solid, not replaceable) is dug first, the floor laid after it: real race
+   39781947117 runner 2 (issue #44, Clj_r14) tunnelled west through an abandoned mineshaft at
+   y 1, laid a cobblestone into a cobweb in the floor three times, :rejected."
   [world stand]
   (when-let [gap (and (held? world :cobblestone) (floor-gap world stand))]
-    (if (<= (physics/distance (game/eye world) (physics/centre gap)) place/place-reach)
-      (when-let [c (foundation world gap)]
-        {:intent/kind :place :intent/item :cobblestone :intent/cell c})
-      (when-let [edge (before-gap world stand gap)]
-        (let [walk {:intent/kind :walk :intent/target edge :intent/for :build}]
-          (when (and (not (intent/centred? world edge))
-                     (path/standable? world edge)
-                     (intent/routable? world walk))
-            walk))))))
+    (cond (and (<= (physics/distance (game/eye world) (physics/centre gap)) place/place-reach)
+               (not (blocks/placeable-into? (terrain/block-at world gap))))
+          (assoc (intent/child-dig gap) :intent/drop-ok? true)
+          (<= (physics/distance (game/eye world) (physics/centre gap)) place/place-reach)
+          (when-let [c (foundation world gap)]
+            {:intent/kind :place :intent/item :cobblestone :intent/cell c})
+          :else
+          (when-let [edge (before-gap world stand gap)]
+            (let [walk {:intent/kind :walk :intent/target edge :intent/for :build}]
+              (when (and (not (intent/centred? world edge))
+                         (path/standable? world edge)
+                         (intent/routable? world walk))
+                walk))))))
 
 (defn stand-walk
   "A walk to stand, a cell of the build's way, when the feet can stand in it as it is
@@ -1010,6 +1017,18 @@
    source last. nil when the line is clear."
   [world src]
   (first (filter #(terrain/block-at world %) (scoop/ray-walls world (scoop/aim-point src)))))
+
+(defn plant-in-sight
+  "The first loaded block on the eyes' ray to point (scoop/ray-walls) when it is one the bucket's
+   ray stops at yet nothing is built of: a plant or a vein (not solid?, a sculk vein, glow lichen,
+   a vine), the cell the cast's scoop line crosses; nil when the line is clear or its first wall
+   is solid (the cast's own rock, which a dig would not clear). Sim race 39768353246 (issue #227,
+   world R2/15): a sculk vein stood in the cell before the cast's water, the line
+   otherwise clear, and the scoop of the water sent three times was never answered, :no-scoop,
+   in every build after."
+  [world point]
+  (let [wall (first (filter #(terrain/block-at world %) (scoop/ray-walls world point)))]
+    (when (and wall (not (blocks/solid? (terrain/block-at world wall)))) wall)))
 
 (defn source-in-sight
   "[src block] for the first of sources (nearest first) the eyes can be given a clear line to:
@@ -1350,7 +1369,11 @@
                    :intent/target into
                    :intent/expect done}
                   :scoop
-                  (cond-> {:intent/kind :scoop :intent/target pos} aim (assoc :intent/aim aim))
+                  (let [plant (when aim (plant-in-sight world aim))]
+                    (cond plant (way-dig plant)
+                          :else
+                          (cond-> {:intent/kind :scoop :intent/target pos}
+                            aim (assoc :intent/aim aim))))
                   :use-on
                   {:intent/kind :use-on
                    :intent/item item
