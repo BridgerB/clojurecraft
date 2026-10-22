@@ -585,7 +585,8 @@
    beyond), the player at pos with a stack of cobblestone: issue #45 R1-17-2, a swim whose lift
    peaks at 63.95 under the bank's top 64.0."
   [pos intent stone]
-  (let [sea (into {}
+  (let [air (into {} (for [x (range 3 16) z (range 16)] [[x 63 z] blocks/air]))
+        sea (into {}
                   (for [x (range 3 16) z (range 16) y (range 56 63)] [[x y z] blocks/water-base]))
         bank
         (into
@@ -605,7 +606,7 @@
            :player/inventory
            (if (pos? stone) {0 {:item (blocks/items :cobblestone) :count stone}} {})
            :time/tick 200
-           :world/chunks {[0 0] (world/column (merge sea bank cliff))}
+           :world/chunks {[0 0] (world/column (merge air sea bank cliff))}
            :plan/intent intent)))
 
 (deftest a-swim-stuck-under-a-banks-top-lays-a-block-for-a-step
