@@ -15,6 +15,9 @@
          '[clojure.string :as str])
 
 (defn out [& xs] (println (str/join " " xs)))
+;; the branch's vars, looked up when called: they exist only after its pearls.clj is loaded
+(defn dig-out [w] ((resolve (quote clojurecraft.pearls/dig-out)) w))
+(defn first-cut [kind] (@(resolve (quote clojurecraft.pearls/first-cut)) kind))
 
 (def path-arg (first *command-line-args*))
 (def stop-ms (* 1000 (parse-long (second *command-line-args*))))
@@ -24,11 +27,11 @@
   (let [feet (intent/feet w)
         lw (assoc w :plan/last {:intent/kind :lookout :intent/status :done})]
     (out "==" label "feet" (pr-str feet) "digs-left" (pearls/digs-left w))
-    (out " dig-out" (pr-str (pearls/dig-out w)))
+    (out " dig-out" (pr-str (dig-out w)))
     (out " hunt after a lookout" (pr-str (pearls/hunt lw)))
     (doseq [kind [:stairs-up :stairs-down :tunnel]
             h stairs/directions]
-      (let [cells ((pearls/first-cut kind) feet h)]
+      (let [cells ((first-cut kind) feet h)]
         (out " "
              kind
              (pr-str h)
@@ -54,7 +57,7 @@
 (load-file (nth *command-line-args* 2))
 
 (let [w (:world final)
-      d (pearls/dig-out w)]
+      d (dig-out w)]
   (ask w "at the stall")
   (when (= :walk (:intent/kind d))
     (ask (assoc w :player/pos (pearls/feet-at (:intent/target d))) "at the walk's end")))
