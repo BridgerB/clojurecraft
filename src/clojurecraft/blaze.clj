@@ -13,8 +13,9 @@
    :fight, attacks 650 ms apart, aimed at its body as it hovers); a fire by the spawner is put
    out (a lit floor stops its blazes); else the remembered spawner (a spawner seen in the Nether
    is a fortress's, memory/nether-landmark-kinds) is walked to, or tunnelled to by the fortress's
-   steps when no route reaches it, and camped by until its blazes come; with no spawner known, a
-   wait :no-blaze. Before all of it, a blaze at hand (within 4, at-hand-blaze) is fought to the
+   steps when no route reaches it, and camped by until its blazes come; with no spawner known (or each one
+   given-up?: stands beside it blocked), the next leg of the fortress row's spiral search, and a wait :no-blaze
+   only when no heading has a way to go. Before all of it, a blaze at hand (within 4, at-hand-blaze) is fought to the
    end (:intent/to-the-end?), whatever the health, and ends any other running intent
    (plan/interrupts?): it follows into any cover. The :defend row answers anything else hostile within 4 first; blazes it
    leaves to this row while it is worked (combat/answers), or its fights would override the
@@ -52,6 +53,8 @@
 (def spawner-radius 256)              ; how far off a remembered spawner may be and still be gone to
 (def candidates 3)                    ; nearest blazes asked for a route, as the hunt asks of its animals
 (def side-steps [[1 0 0] [-1 0 0] [0 0 1] [0 0 -1]]) ; the cells beside a spawner a stand is looked for in
+(def stand-levels [0 -1 1])           ; the heights from the spawner's own a stand is looked for at, in this order: its blazes' floor first
+(def stands-tried 2)                  ; stands beside one spawner whose tunnel ended :blocked before the spawner is given up
 (def spawner-reach 2.0)                ; blocks from the feet cell's centre to the spawner's a tunnel to it ends within: in its room, at the blazes' floor
 (def cover-range 16.0)                ; blazes this near that see the bot are the ones a hurt bot takes cover from (they shoot that far)
 (def at-hand combat/defend-radius)    ; blocks within which a blaze is fought first and to the end: it follows the bot into any cover and round any retreat
@@ -143,14 +146,29 @@
          (take candidates)
          (some (fn [[_ e :as ee]] (when (fetchable? world e) ee))))))
 
+(defn cells-beside
+  "Every cell a stand beside spawner sp may be: its side-steps at each of stand-levels, level
+   by level."
+  [sp]
+  (for [dy stand-levels s side-steps] (fortress/plus sp (update s 1 + dy))))
+
+(defn given-up?
+  "Have stands-tried of spawner sp's stand cells been blacklisted (a tunnel to each ended
+   :blocked)? Real race s2 Clj_r06 (issue #502) tunnelled four times in a row to the same stand
+   beside a spawner 50 blocks off and 14 up, each one :blocked: nothing blacklisted the spawner,
+   and the stand it chose did not depend on the blacklist."
+  [world sp]
+  (let [bl (:plan/blacklist world #{})] (>= (count (filter bl (cells-beside sp))) stands-tried)))
+
 (defn nearest-spawner
   "The spawner on record in the bot's dimension nearest the eye, within spawner-radius and not
-   blacklisted (no walk nor tunnel reached it), or nil."
+   blacklisted (no walk nor tunnel reached it) nor given-up?, or nil."
   [world]
   (let [bl (:plan/blacklist world #{})]
     (memory/nearest-of (game/eye world)
                        spawner-radius
-                       (remove bl (memory/positions-now world [spawner])))))
+                       (remove #(or (bl %) (given-up? world %))
+                               (memory/positions-now world [spawner])))))
 
 (defn level-with?
   "Are the feet within a block of spawner sp's height: its blazes' floor?"
@@ -194,12 +212,18 @@
           [c [x (inc y) z]]))
 
 (defn stand
-  "The cell beside spawner sp, at its height, with room for the body (open?), nearest the feet:
-   where a tunnel to it ends, on its blazes' floor; nil when none is."
+  "The cell beside spawner sp with room for the body (open?) and not blacklisted (a tunnel to it
+   ended :blocked), at its own height when one is there, else a level under or over it
+   (stand-levels), nearest the feet: where a tunnel to it ends, on its blazes' floor; nil when
+   none is."
   [world sp]
-  (memory/nearest-of (physics/centre (intent/feet world))
-                     Double/POSITIVE_INFINITY
-                     (filter #(open? world %) (map #(fortress/plus sp %) side-steps))))
+  (let [bl (:plan/blacklist world #{})
+        open (remove bl (filter #(open? world %) (cells-beside sp)))]
+    (some (fn [dy]
+            (memory/nearest-of (physics/centre (intent/feet world))
+                               Double/POSITIVE_INFINITY
+                               (filter #(= (+ (physics/y-of sp) dy) (physics/y-of %)) open)))
+          stand-levels)))
 
 (defn hurt?
   "Is the health the server last told under combat/retreat-health?"
@@ -207,11 +231,11 @@
   (< (:player/health world 20.0) combat/retreat-health))
 
 (defn meal
-  "An :eat of the food held when the food is under hunger/heal-level (health comes back only from
+  "An :eat of the food held (rotten flesh when it is all there is, eat/scrap-held) when the food is under hunger/heal-level (health comes back only from
    there, and fast while the meal's saturation lasts), or nil."
   [world]
   (when-let [food (and (< (:player/food world hunger/heal-level) hunger/heal-level)
-                       (eat/food-held world))]
+                       (or (eat/food-held world) (eat/scrap-held world)))]
     {:intent/kind :eat :intent/item food}))
 
 (defn heals?
@@ -221,7 +245,8 @@
    falling, and the run ended :no-heal: a rest that cannot heal holds in cover instead of
    failing, and never goes back out to fight at that health."
   [world]
-  (or (>= (:player/food world hunger/heal-level) hunger/heal-level) (some? (eat/food-held world))))
+  (or (>= (:player/food world hunger/heal-level) hunger/heal-level)
+      (some? (or (eat/food-held world) (eat/scrap-held world)))))
 
 (defn watchers
   "{eid entity} of the blazes alive within cover-range of the feet that have the bot in sight
@@ -383,6 +408,18 @@
            :intent/reach spawner-reach
            :intent/climb 0})))
 
+(defn search
+  "The next leg of the spiral search for a spawner, a :tunnel-to as the :fortress row's
+   (fortress/exploring), or nil when no heading has a way to go. Sim races R2/47 and R4/2 (issue
+   #507) stood healthy at a fortress's edge with no spawner on record and waited :no-blaze: the
+   captured Nethers' spawners lay 117 and 134 blocks off, beyond what the server showed."
+  [world]
+  (when-let [s (fortress/exploring world)]
+    {:intent/kind :tunnel-to
+     :intent/target (fortress/leg-target s)
+     :intent/steps fortress/steps-per-tunnel
+     :intent/search s}))
+
 (defmethod plan/done-by :rods-held? [world _] (>= (rods world) rods-wanted))
 
 (defmethod combat/answers :blaze-rods [_] #{:blaze})
@@ -418,7 +455,7 @@
           @fire @fire
           (and sp (not (at-spawner? world sp))) (to-spawner world sp)
           sp {:intent/kind :camp :intent/spawner sp}
-          :else {:plan/wait :no-blaze})))
+          :else (or (search world) {:plan/wait :no-blaze}))))
 
 ;; ---------------------------------------------------------------- the :camp intent
 

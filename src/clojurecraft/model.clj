@@ -342,6 +342,9 @@
    [:intent/retreats
     "retreats in a row a :tunnel-to has stepped, into cells it already stood in (fortress/retreat?); a fresh step resets it, and more than fortress/retreats-allowed fail the tunnel :blocked (issue #338)"
     ":tunnel-to, after choosing its first step"]
+   [:intent/airborne
+    "ticks a :tunnel-to has waited for feet in the air to land before choosing a step (fortress/air-grace); absent while it has not waited"
+    ":tunnel-to, with the feet off the ground and no step chosen"]
    [:intent/move "the step a :tunnel-to is taking, [dx dy dz], chosen when it starts"
     ":tunnel-to, during a step"]
    [:intent/from-feet

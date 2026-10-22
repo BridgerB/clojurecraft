@@ -681,6 +681,32 @@
         (is (= [1 0 0] (:intent/move out)))
         (is (= 0 (:intent/retreats out)))))))
 
+(deftest a-tunnel-waits-in-the-air-for-the-ground-before-it-fails
+  ;; issue #502's R4-31-1: a bot knocked off a ledge started three tunnels in the air and each
+  ;; failed :blocked within a tick, which failed the plan
+  (let [w (assoc (ledge {})
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/on-ground? false
+                 :player/vel [0.0 -0.3 0.0])
+        tick {:event/kind :tick :event/now 0}
+        i {:intent/kind :tunnel-to
+           :intent/target [10 64 0]
+           :intent/steps 32
+           :intent/status :active
+           :intent/retreats 1
+           :intent/tunnel-visited #{[0 64 0] [1 64 0]}}
+        run (fn [i w] (:plan/intent (intent/run (assoc w :plan/intent i) i tick)))]
+    (let [out (run i w)]
+      (is (= :active (:intent/status out)) "in the air: no verdict yet")
+      (is (= 1 (:intent/airborne out))))
+    (is (= :blocked (:intent/reason (run (assoc i :intent/airborne fortress/air-grace) w)))
+        "still in the air after air-grace ticks: blocked")
+    (is (= :blocked (:intent/reason (run i (assoc w :player/on-ground? true))))
+        "on the ground the verdict is immediate")))
+
 (deftest a-floor-to-replace-needs-a-filler-carried
   ;; Issue #410's R3-38-1: a soul sand floor was dug with no filler left to lay, and the place
   ;; failed :not-held three times. Soul soil, basalt and blackstone are fillers too.
