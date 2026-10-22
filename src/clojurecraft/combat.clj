@@ -271,7 +271,11 @@
   ;; retreat-health it breaks off and walks away (done once away: a fight left is not a failure).
   ;; Where the target was last seen is kept (:intent/target-pos): a hunt collects its drop there.
   ;; With :intent/yield? it ends there instead (done), and its row plans the retreat itself; with
-  ;; :intent/to-the-end? it never breaks off (a blaze at hand follows any retreat).
+  ;; :intent/to-the-end? it never breaks off (a blaze at hand follows any retreat). A fight for
+  ;; :hunt never breaks off either: an animal does not strike back, and a starving bot (food 0,
+  ;; health under retreat-health) that backed off ended the fight done with the animal alive,
+  ;; which the hunt took for a kill: it collected at the live animal, failed :not-picked-up and
+  ;; fought again, to the end of the run (issue #178, sim race 39742404581, world R2/37).
   ;; With :intent/hold? the bot never walks: it waits for the target to come within approach-range,
   ;; never presses after it, and never breaks off (issue #263: the pearl hunt fights from a burrow
   ;; an enderman cannot reach into, where a step out is the one way to be hit)
@@ -290,6 +294,7 @@
           (and (not= :retreat (:intent/stage i))
                (not (:intent/hold? i))
                (not (:intent/to-the-end? i))
+               (not= :hunt (:intent/for i))
                (< (:player/health world 20.0) retreat-health))
           (-> world
               (intent/dissoc-intent :intent/child)
