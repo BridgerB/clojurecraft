@@ -746,18 +746,6 @@
           (intent/dissoc-intent :intent/child :intent/cells :intent/lay :intent/level-cells)
           (game/say (str "stairs: under a lake with no pickaxe, a bore up through " cells))))))
 
-(defn ahead-boxed?
-  "Does a level step from feet [x y z] in direction [dx dz] head for a boxed cell: its new feet
-   cell, or the one beyond it in the same direction, in :plan/boxed-at. A staircase's level steps
-   along a corridor or a one-wide strip end :boxed, the climb's steps back end :boxed too, and
-   each lap added one cell to :plan/boxed-at and began again beside it, for the whole window
-   (issues #37, #71 and #62's causeway and pillar: the boxed-at set held nine cells at the end);
-   a step toward a cell already boxed is refused, so each lap ends a cell sooner and the order
-   falls through to the retreat and the climb."
-  [world feet [dx dz :as d]]
-  (let [[x y z] (last (level-cells feet d))]
-    (boolean (some (:plan/boxed-at world #{}) [[x y z] [(+ x dx) y (+ z dz)]]))))
-
 (defn step-aside
   "Every stair refused: a level step, the turns counted afresh, or :boxed when none is allowed
    or max-level-steps are spent. The step keeps the last one's way (:intent/level-dir) while it
@@ -799,7 +787,6 @@
                         kept)
                :stairs-down (sort-by #(or (floor-distance world feet %) Long/MAX_VALUE) kept)
                kept)
-        ways (remove #(ahead-boxed? world feet %) ways)
         ways (cond->> ways
                (= :stairs-up kind)
                (sort-by #(if (under-falling? world (last (level-cells feet %))) 1 0)))

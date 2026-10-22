@@ -1128,15 +1128,6 @@
     (is (nil? (:intent/dead-end (stone/dead-end-retreat (assoc boxed :player/in-water? true))))
         "out of water first: a swim, not a walk from a cell")))
 
-(deftest a-level-step-toward-a-boxed-cell-is-refused
-  ;; issues #37, #71 and #62: a corridor's level steps and the climb's steps back each ended
-  ;; :boxed one cell further on, for the whole window
-  (let [feet [8 60 8]]
-    (is (stairs/ahead-boxed? {:plan/boxed-at #{[7 60 8]}} feet [-1 0]) "the next cell boxed")
-    (is (stairs/ahead-boxed? {:plan/boxed-at #{[6 60 8]}} feet [-1 0]) "the cell beyond boxed")
-    (is (not (stairs/ahead-boxed? {:plan/boxed-at #{[6 60 8]}} feet [1 0])) "the other way is free")
-    (is (not (stairs/ahead-boxed? {} feet [-1 0])) "nothing boxed")))
-
 (deftest a-cell-adjoining-a-boxed-one-is-boxed-for-the-descent
   (let [w (assoc (standing 48) :plan/boxed-at #{[6 48 5]})
         row {:goal/depth 16}]
