@@ -978,6 +978,16 @@
 
 ;; ---------------------------------------------------------------- the plan
 
+(defn at-site?
+  "Has the bot just walked to a burrow site: the last intent a :walk for :shelter that ended done?
+   There the burrow is cut away from the nearest enderman (at-hand) even with none in sight: sim
+   probe 39861051222 (world R4, teleporting endermen) walked for fifty-seven minutes between a site,
+   from which its quarry was hidden, and the walk toward that quarry, from which it showed again,
+   three pearls held."
+  [world]
+  (let [{:intent/keys [kind for status]} (:plan/last world)]
+    (and (= :walk kind) (= :shelter for) (= :done status))))
+
 (def provoke-health 18.0)             ; health under which no enderman is provoked, from the mouth or anywhere: the bot rests in its burrow first (sim-endermen3's probe 39847287615: in worlds R1, R2 and R4 the first death came of a provoke 4 to 8 blocks off at 10.8 to 17.8 health just outside the burrow, the enderman landing three to five blows in five seconds); away from the mouth (a vantage) only at full health
 
 (defn hunt
@@ -1082,7 +1092,9 @@
         [aid _] (when home (angry-near world))
         [qid q] (quarry world)
         ghost? (and near? (not angry?) (contains? (:plan/blacklist world #{}) eid))
-        dir (when (and (nil? home) (pickaxe? world) (or ce q (and near? (not ghost?))))
+        dir (when (and (nil? home)
+                       (pickaxe? world)
+                       (or ce q (and near? (not ghost?)) (and e (at-site? world))))
               (away world (or q ce e)))
         digs? (and dir (burrowable? world (intent/feet world) dir))
         site (when (and dir (not digs?)) (burrow-site world dir))

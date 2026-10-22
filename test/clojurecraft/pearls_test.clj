@@ -669,6 +669,19 @@
          {:intent/kind :provoke :intent/target 7 :intent/for :pearls}
          (plan/next-intent (assoc at-mouth :player/health pearls/provoke-health) row plan/goals)))))
 
+(deftest at-a-burrow-site-the-burrow-is-cut-with-the-quarry-hidden
+  ;; sim probe 39861051222 (world R4): fifty-seven minutes between a site, from which the quarry
+  ;; was hidden, and the walk toward it, from which it showed again
+  (let [w (assoc-in (standing {7 (enderman [8.5 64.0 15.5])} wall)
+           [:player/inventory 1]
+           (item :iron_pickaxe 1))
+        arrived (assoc w :plan/last {:intent/kind :walk :intent/for :shelter :intent/status :done})]
+    (is (nil? (pearls/quarry w)) "hidden by the wall")
+    (is (not= :burrow (:intent/kind (plan/next-intent w row plan/goals))))
+    (is (= {:intent/kind :burrow :intent/dir [0 -1] :intent/for :pearls}
+           (plan/next-intent arrived row plan/goals))
+        "walked to a site: the burrow, away from the nearest")))
+
 (deftest no-sword-held-no-hunt
   ;; gym batch pearls-warped8-b (plan run 39775345028): runs 1 and 3 respawned with nothing held
   ;; after their first deaths and hunted on bare-handed, 39 and 26 deaths in five hours
