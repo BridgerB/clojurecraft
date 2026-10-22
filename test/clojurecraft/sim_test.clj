@@ -3515,3 +3515,37 @@
     (is (zero? (:stats/deaths w 0)) "alive")
     (is (pos? (:sim/health sim)))
     (is (= [] (:sim/violations sim)))))
+
+(deftest a-nether-death-respawns-over-the-overworld-as-it-was
+  ;; issue #504: a death in the Nether left the Nether's columns under the overworld's dimension,
+  ;; so the respawned bot stood in a world with no chunk at the spawn, and the portal it built was
+  ;; gone; the overworld's columns and its placed and broken blocks come back
+  (let [overworld (world/column-bytes {})
+        feet [1 62 1]
+        placed {feet (blocks/default-state :nether_portal)
+                [3 70 3] (blocks/default-state :obsidian)}
+        s (-> (sim/init {:column overworld
+                         :spawn [1.27 62.0 1.7]
+                         :nether {:column (world/column-bytes {[4 64 4] (blocks/default-state
+                                                                         :netherrack)}
+                                                              dimension/nether)
+                                  :at [8.5 64.0 8.5]}})
+              (assoc :sim/player-pos [1.27 62.0 1.7]
+                     :sim/portal-since 0
+                     :sim/placed placed
+                     :sim/broken #{[2 63 2]}))
+        nether (sim/through-portal s sim/portal-ms)
+        dead (assoc nether :sim/health 0.0 :sim/out [])
+        alive (sim/on-packet dead
+                             {:packet/name :client-command
+                              :action (packet/value :client-command :perform-respawn)})]
+    (is (= dimension/nether (:sim/dimension nether)))
+    (is (not= (:sim/columns s) (:sim/columns nether)) "the Nether's own column")
+    (is (= dimension/overworld (:sim/dimension alive)))
+    (is (= (:sim/columns s) (:sim/columns alive)) "the overworld's columns again")
+    (is (= placed (:sim/placed alive)) "the portal and the obsidian still stand")
+    (is (= #{[2 63 2]} (:sim/broken alive)))
+    (is (= :obsidian (blocks/name-of (sim/block-at alive [3 70 3]))))
+    (is (not (contains? alive :sim/overworld)) "nothing set aside once it is back")
+    (is (some #(= :level-chunk-with-light (:packet/name %)) (:sim/out alive))
+        "the client is sent the overworld's chunks")))
