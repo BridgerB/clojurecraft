@@ -304,7 +304,7 @@
   :goal/target? true
   :goal/always? true
   :goal/doc
-  "hungry (food under 14) with nothing edible held, kill the nearest cow, pig, sheep or rabbit a route reaches within 24 blocks and pick its meat up, for the meal row to eat raw (issue #259: the food producer); an always row at priority 0 after the meal in this table"
+  "hungry (food under 14) with nothing edible held, kill the nearest cow, pig, sheep or rabbit a route reaches within 24 blocks and pick its meat up, for the meal row to eat raw (issue #259: the food producer); in the overworld with the portal's iron held and under six foods it hunts within 48 blocks and, with none there, searches for animals on foot for six minutes at most (issue #501: the Nether has no game); an always row at priority 0 after the meal in this table"
   :goal/done? :provisioned?
   :goal/plan :hunt}
  {:goal/id :wear-armour
