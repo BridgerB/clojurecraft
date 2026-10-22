@@ -202,6 +202,12 @@
     (is (not= still live))
     (is (every? #(str/includes? % "NoAI:1b") (:gym/summon still)) "first, endermen that never move")
     (is (not-any? #(str/includes? % "NoAI") (:gym/summon live)) "then live ones")
+    ;; batch pearls-warped6-b (plan run 39700288080): the kit's one iron pickaxe, 250 digs, wore
+    ;; out at eleven and thirty-two minutes in the runs that killed most; the chain's :cast-one
+    ;; and :portal rows keep a spare pickaxe (#485), so a run comes into the Nether with two
+    (is (every? #(some #{"minecraft:iron_pickaxe 2"} (:gym/prereqs %))
+                [still live (gym/gym "pearls-12")])
+        "the pearl kit carries the spare pickaxe a chained run holds by then")
     (is (= ["pearls-1" "pearls-1-live"] (mapv gym/trial-name [still live])))
     (is (str/includes? (gym/plan-matrix ["pearls-1-live"] 1)
                        "{\"goal\":\"pearls-1-live\",\"run\":1")
