@@ -98,4 +98,8 @@
            "min"
            (inv-line world)
            (pr-str (select-keys world [:plan/status :plan/reason :plan/last :plan/waiting])))
+  (doseq [line (simrace/story world
+                              (* 60000
+                                 (Long/parseLong (or (System/getenv "STORY_FROM") "100000"))))]
+    (println "STORY" (quot (first line) 1000) "s" (pr-str (rest line))))
   (shutdown-agents))
