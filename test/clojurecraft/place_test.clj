@@ -502,3 +502,29 @@
     (is (= water (terrain/block-at w (:intent/cell wet))) "into a water cell")
     (is (not (place/inside-player? w (:intent/cell wet))))
     (is (= :retreat (:intent/stage (run {}))) "fresh rock is tried first")))
+
+(deftest a-given-cell-holding-powder-snow-is-dug-before-it-is-placed-into
+  ;; real race 39807290314 bot Clj_r18 (issue #279): the portal's first floor cell held powder
+  ;; snow, which no block is placed into; the cobblestone was refused three times, :rejected
+  (let [powder (blocks/default-state :powder_snow)
+        floor (into {} (for [x (range 3 10) z (range 3 10)] [[x 63 z] 1]))
+        at (fn [cell-state]
+             (-> (standing [4.5 64.0 5.5])
+                 (assoc :world/chunks {[0 0] (world/column (assoc floor [6 64 5] cell-state))})
+                 (assoc :plan/intent
+                        {:intent/kind :place
+                         :intent/item :cobblestone
+                         :intent/status :active
+                         :intent/stage :spot
+                         :intent/cell [6 64 5]})))
+        run (fn [w]
+              (first (fx/fold intent-step w [{:event/kind :tick :event/now 0 :event/rand 0.5}])))]
+    (is (place/unplaceable-in? (at powder) [6 64 5]))
+    (is (not (place/unplaceable-in? (at 0) [6 64 5])) "air takes a block")
+    (is (not (place/unplaceable-in? (at 1) [6 64 5])) "stone is the build's own done")
+    (let [i (:plan/intent (run (at powder)))]
+      (is (= :niche (:intent/stage i)))
+      (is (= {:intent/kind :dig :intent/target [6 64 5]}
+             (select-keys (:intent/child i) [:intent/kind :intent/target]))
+          "the hand breaks it first"))
+    (is (= :settle (:intent/stage (:plan/intent (run (at 0))))) "air: placed as before")))
