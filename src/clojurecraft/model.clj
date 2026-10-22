@@ -251,15 +251,15 @@
     "the tunnels the leg has taken, one more at each look of the planner; too many end the leg"
     "inside :fortress/search"]
    [:hunt/forage
-    "the search for animals a bot about to light its portal makes with fewer than hunt/provision-wanted foods held: {:forage/since :forage/leg :forage/spent}; the :forage intent keeps it, and hunt/foraging? ends the search forage-ms after its first leg (issue #501)"
+    "the search for animals a bot about to light its portal makes with fewer than hunt/provision-wanted foods held: {:forage/since :forage/leg :forage/retry-at}; the :forage intent keeps it, and hunt/foraging? ends the search forage-ms after its first leg (issue #501)"
     "after a :forage intent chose its first leg"]
    [:forage/since "ms the search's first leg was chosen" "inside :hunt/forage"]
    [:forage/leg
     "the leg the next :forage turns to, from 0: its heading is a quarter turn right of the last (hunt/forage-headings)"
     "inside :hunt/forage"]
-   [:forage/spent
-    "true once no heading had a route at any reach: the search ends without a leg walked"
-    "inside :hunt/forage, only when spent"]
+   [:forage/retry-at
+    "ms before which the search looks for no leg: set when no heading had a route at any reach (hunt/forage-retry-ms on)"
+    "inside :hunt/forage, after such a look"]
    [:fortress/trail
     "the way back a :tunnel-to to a target keeps across its tunnels: {:trail/target :trail/cells :trail/dead}; a cell no fresh step leaves is stepped back from to the last cell, never entered again (fortress/step-back, issue #502); another target starts a new one"
     "after a :tunnel-to chose a fresh step or a step back"]

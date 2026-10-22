@@ -81,10 +81,10 @@
     (is (plan/done-by (standing 20 {0 (item :flint_and_steel 1)} cow) hunt-row)
         "the water bucket is the kit's too")
     (is (plan/done-by (assoc (standing 20 kit {})
-                             :hunt/forage
-                             {:forage/since 0 :forage/leg 4 :forage/spent true})
+                             :hunt/forage {:forage/since 0 :forage/leg 4}
+                             :time/now hunt/forage-ms)
                       hunt-row)
-        "no animal and the search spent: the portal is not held up")
+        "no animal and the search's time spent: the portal is not held up")
     (is (plan/done-by (assoc (standing 20 kit cow) :player/dimension "minecraft:the_nether")
                       hunt-row)
         "the Nether has no game: only the overworld provisions")))
@@ -212,7 +212,9 @@
         "forage-ms after its first leg it is over, however many legs")
     (is (plan/done-by (assoc began :time/now (+ 1000 hunt/forage-ms)) hunt-row)
         "and the row is done, the portal goes on with what is held")
-    (is (not (hunt/foraging? (assoc-in w [:hunt/forage :forage/spent] true))) "no route: spent")
+    (let [looked (assoc w :hunt/forage {:forage/since 1000 :forage/leg 0 :forage/retry-at 5000})]
+      (is (not (hunt/foraging? (assoc looked :time/now 4999))) "no route lately: it waits")
+      (is (hunt/foraging? (assoc looked :time/now 5000)) "then it looks again"))
     (is (not (hunt/foraging? (assoc w :plan/attempts 1))) "a failed leg ends it for the moment")
     (is (not (hunt/foraging? (assoc w :plan/unwalkable 1))) "so does a leg that found no path")
     (is (not (hunt/foraging? (assoc w :player/health (dec hunt/forage-health)))) "hurt: it stays")
@@ -257,7 +259,17 @@
     (with-redefs [path/plan (plan-at (fn [[x _ _]] (> x 8)))]
       (is (= [[60 64 8] 4] (leg-from 2)) "no route west at 48: north"))
     (with-redefs [path/plan (constantly {:path/status :none :path/waypoints []})]
-      (is (nil? (leg-from 0)) "no way at all"))))
+      (is (nil? (leg-from 0)) "no way at all"))
+    (with-redefs [path/plan (constantly {:path/status :partial :path/waypoints [[30 64 8]]})]
+      (is (= [[30 64 8] 1] (leg-from 0)) "a route that spent its budget but goes on is walked"))
+    (with-redefs [path/plan (constantly {:path/status :partial :path/waypoints [[10 64 8]]})]
+      (is (nil? (leg-from 0)) "one that goes nowhere is not"))))
+
+(deftest the-legs-go-round-a-square-that-grows
+  (is (= [48 32 16] (hunt/forage-reaches 0)))
+  (is (= [48 32 16] (hunt/forage-reaches 1)))
+  (is (= [96 48 32 16] (hunt/forage-reaches 2)))
+  (is (= [96 48 32 16] (hunt/forage-reaches 40)) "never past what the server shows"))
 
 (deftest the-forage-intent-becomes-the-walk-it-chose-or-ends-the-search
   (let [w (assoc (provisioning 1000)
@@ -272,6 +284,7 @@
     (with-redefs [path/plan (constantly {:path/status :none :path/waypoints []})]
       (let [out (intent/run w (:plan/intent w) nil)]
         (is (intent/done? (:plan/intent out)))
-        (is (true? (get-in out [:hunt/forage :forage/spent])))
-        (is (plan/done-by (dissoc out :plan/intent) hunt-row)
-            "the search is over, the portal goes on")))))
+        (is (= (+ 1000 hunt/forage-retry-ms) (get-in out [:hunt/forage :forage/retry-at])))
+        (is (not (hunt/foraging? out)) "it waits before it looks again")
+        (is (hunt/foraging? (assoc out :time/now (+ 1000 hunt/forage-retry-ms))))
+        (is (plan/done-by (dissoc out :plan/intent) hunt-row) "the portal goes on meanwhile")))))
