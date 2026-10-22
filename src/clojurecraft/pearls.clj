@@ -845,6 +845,21 @@
   (first (sort-by (fn [h] (count (filter #(solid-at? world %) ((first-cut kind) feet h))))
                   (cons toward (remove #{toward} stairs/directions)))))
 
+(def brink-drop 3)                    ; blocks of open air under a cell beside the feet that make the feet a brink no cut starts from
+
+(defn brink?
+  "Does one of the eight cells beside feet [x y z] at its height stand open over brink-drop or more
+   open cells: a drop the bot can be pushed or step off into? Gym batch pearls-warped8-c (plan run
+   39845223845, probe 39854206523) run 2 started dig-out's stairs up on a ledge over a lava lake;
+   the stair's lay backed the bot off the edge, eleven blocks down into the lava, the plan failing
+   :no-footing."
+  [world [x y z]]
+  (boolean (some (fn [[dx dz]]
+                   (let [cx (+ x dx)
+                         cz (+ z dz)]
+                     (not-any? #(solid-at? world [cx (- y %) cz]) (range 0 (inc brink-drop)))))
+                 (for [dx [-1 0 1] dz [-1 0 1] :when (not= [0 0] [dx dz])] [dx dz]))))
+
 (defn dig-out
   "A way cut out of the pocket the bot stands in, for when the roam finds no end either: toward the
    nearest enderman within descend-radius, a walk to the end of the route that comes nearest it
@@ -852,7 +867,8 @@
    there a :stairs-up to it or descend-step higher when it stands two or more above, a
    :stairs-down when two or more below, else a :tunnel bore-length long, along the heading whose
    first cut digs least (cheapest-heading); nil with no enderman tracked, no pickaxe held, or a
-   staircase from these feet boxed (:plan/boxed-at). Neither cut-reach nor spare digs are asked,
+   staircase from these feet boxed (:plan/boxed-at), and no cut from a brink (brink?: batch
+   pearls-warped8-c's run 2 was backed off a ledge into lava). Neither cut-reach nor spare digs are asked,
    as descend, ascend and bore ask: walled in, the digs buy nothing else. Gym batch
    pearls-warped8-a (plan run 39731473452, probes 39776762205, 39776787768, 39778589970 and
    39780802996): runs 2 and 3 held 3 and 4 pearls by their 21st and 31st minutes and then stood
@@ -871,6 +887,7 @@
             toward (mapv - (away world e))]
         (cond (> (physics/distance (game/eye world) (physics/centre to)) intent/reach)
               (assoc i :intent/target to)
+              (brink? world feet) nil
               (>= rise 2)
               {:intent/kind :stairs-up
                :intent/to-y (+ (physics/y-of feet) (min rise descend-step))

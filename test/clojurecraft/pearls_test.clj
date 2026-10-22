@@ -359,6 +359,18 @@
     (is (nil? (pearls/dig-out (update w :player/inventory dissoc 1))) "no pickaxe: no cut")
     (is (nil? (pearls/dig-out (assoc w :world/entities {}))) "no enderman: nowhere to cut to")))
 
+(deftest no-way-out-is-cut-from-the-brink-of-a-drop
+  ;; gym batch pearls-warped8-c (plan run 39845223845, probe 39854206523) run 2: dig-out's stairs
+  ;; up from a ledge over a lava lake, the stair's lay backing the bot off the edge into the lava
+  (let [shaft (into feet-cells (for [y (range 61 66)] [9 y 8]))
+        w (walled-in shaft [8.5 80.0 20.5])]
+    (is (pearls/brink? w [8 64 8]) "open beside the feet down to y 61")
+    (is (not (pearls/brink? (walled-in (into feet-cells [[9 64 8] [9 65 8] [9 63 8]])
+                                       [8.5 80.0 20.5])
+                            [8 64 8]))
+        "a step down beside the feet is no brink")
+    (is (nil? (pearls/dig-out w)) "no cut from it")))
+
 (deftest a-way-out-is-cut-where-the-rock-is-already-cut
   ;; the same run 2: its second flight down took the floor of its first flight's third stair, and
   ;; the way back up lay two stairs north, open, one block to lay and no dig
