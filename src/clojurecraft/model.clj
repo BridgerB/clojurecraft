@@ -566,6 +566,9 @@
    [:sim/fluid-sources-ready?
     "the fluid scheduler includes aquatic and waterlogged sources beside changed cells"
     "new models; older saved models after their first fluid tick"]
+   [:sim/wild-rng
+    "the Nether's own spawns' roll stream (sim/wild-roll): the warped forests' spawn tries roll apart from the mobs' stream, so a try that finds no forest costs the mobs' rolls nothing"
+    "a model with a difficulty; an older saved model after its first Nether spawn try"]
    ;; ---- packets
    [:packet/name "which packet; its other fields are the wire's names, unqualified" "every packet"]
    [:chunk/column "the decoded column, added on the reader thread; never recorded"
