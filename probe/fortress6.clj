@@ -76,5 +76,5 @@
            (quot (:time/now world) 60000)
            "min"
            (inv-line world)
-           (pr-str (plan/failed? world)))
+           (pr-str (select-keys world [:plan/status :plan/reason :plan/last :plan/waiting])))
   (shutdown-agents))
