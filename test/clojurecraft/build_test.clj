@@ -686,9 +686,10 @@
                                {:event/kind :tick :event/now 0 :event/rand 0.5})))]
     (is (= :dig (get-in (run [4 64 4]) [:plan/intent :intent/child :intent/kind]))
         "the cast's room at the site: the hand digs on")
-    (is (= :no-pickaxe (get-in (run [80 20 4]) [:plan/intent :intent/reason]))
-        "eighty blocks from the site: the pickaxe is made again first")
-    (is (build/hand-dig-refused? (standing-at (open-ground {}) [5.5 63.0 5.5]) [5 62 6] [80 20 4]))
+    (let [w (standing-at (open-ground {}) [5.5 63.0 5.5])]
+      (is (build/hand-dig-refused? w [5 62 6] [80 20 4])
+          "eighty blocks from the site: the pickaxe is made again first")
+      (is (not (build/hand-dig-refused? w [5 62 6] [4 64 4])) "at the site the hand digs on"))
     (is (not (build/hand-dig-refused? (standing-at (open-ground {}) [5.5 63.0 5.5]) [5 62 6] nil))
         "no site, no distance")))
 

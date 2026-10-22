@@ -346,7 +346,11 @@
 
 (deftest a-snapshot-after-an-old-nether-respawn-streams-the-overworld-again
   ;; issue #504: respawned over the Nether's columns the bot held none and its view stayed put
-  (let [sim {:sim/dimension dimension/overworld :sim/view #{} :sim/view-at [237 123]}
+  (let [sim {:sim/dimension dimension/overworld
+             :sim/view #{}
+             :sim/view-at [237 123]
+             :sim/player-pos [8.5 64.0 8.5]
+             :sim/out []}
         w {:time/now 0
            :stats/deaths 1
            :world/chunks {}
