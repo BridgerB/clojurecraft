@@ -254,9 +254,11 @@
    did. A corridor or strip with nothing to lay was cut again from the cell next to the last
    one that died, a cell a lap, for the whole window (issues #37, #71 and #62's causeway and
    pillar cases); from there the order falls through to the walk home, the retreat and the
-   climb."
+   climb. The cells a boxed climb crossed (:plan/boxed-route) count as boxed too: the bot's own
+   stairs-up ends :boxed away from the cell that died, and the next stairs-down began from there
+   (issue #37, one-wide strips of floor over open air)."
   [world [x y z :as feet]]
-  (let [boxed (:plan/boxed-at world #{})]
+  (let [boxed (into (:plan/boxed-at world #{}) (:plan/boxed-route world))]
     (boolean (or (contains? boxed feet)
                  (some (fn [[dx dz]] (contains? boxed [(+ x dx) y (+ z dz)])) stairs/directions)))))
 

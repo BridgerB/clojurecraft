@@ -1136,4 +1136,7 @@
     (is (not (stone/adjoins-boxed? w [5 49 5])) "a level above is another cell")
     (is (not (stone/adjoins-boxed? w [4 48 5])) "two away is free")
     (is (nil? (stone/stairs w row)) "no stair from beside the cell a staircase died on")
-    (is (some? (stone/stairs (assoc w :plan/boxed-at #{}) row)))))
+    (is (some? (stone/stairs (assoc w :plan/boxed-at #{}) row)))
+    (let [r (assoc w :plan/boxed-at #{} :plan/boxed-route #{[6 48 5]})]
+      (is (stone/adjoins-boxed? r [5 48 5]) "beside a cell a boxed climb crossed")
+      (is (nil? (stone/stairs r row)) "no descent from a strip a boxed climb crossed"))))
