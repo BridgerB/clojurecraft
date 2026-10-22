@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T12:14:28.677Z",
+  "at" : "2026-10-22T12:20:01.067Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -41,6 +41,11 @@
     "number" : 227,
     "title" : "Bot stops at portal: no-scoop",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 518,
+    "title" : "Bot stops at portal: no-bucket",
+    "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
     "number" : 513,
@@ -96,6 +101,9 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 518,
+    "move" : "assign"
+  }, {
     "issue" : 513,
     "move" : "leave",
     "why" : "hands-off label"
@@ -113,11 +121,6 @@
     "why" : "hands-off label"
   } ],
   "log" : [ {
-    "issue" : 135,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment",
-    "at" : "2026-10-21T07:59:39.252Z"
-  }, {
     "issue" : 135,
     "move" : "assign",
     "at" : "2026-10-21T08:00:48.374Z"
@@ -1459,5 +1462,9 @@
     "issue" : 514,
     "move" : "assign",
     "at" : "2026-10-22T11:46:55.305Z"
+  }, {
+    "issue" : 518,
+    "move" : "assign",
+    "at" : "2026-10-22T12:20:01.067Z"
   } ]
 }
