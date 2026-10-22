@@ -1058,7 +1058,10 @@
                  (lay world feet cells))
         to-lay (when (and needed (or (safe? world cells) (floors-affordable? world i feet needed)))
                  needed)
-        rock (when needed (rock-heading i #(fresh-safe? world (cells-of feet %))))]
+        rock (when needed (rock-heading i #(fresh-safe? world (cells-of feet %))))
+        up-open (when (and needed (= :stairs-up kind))
+                  (first (filter #(fresh-safe? world (cells-of feet %))
+                                 (rest (take 4 (iterate turn dir))))))]
     (cond (airborne? world) (assoc world :player/controls {}) ; land first
           (shaft? world i feet)
           (intent/assoc-intent world
@@ -1081,6 +1084,15 @@
                                    :intent/started-tick (:time/tick world))
               (game/say (str "stairs: into the rock toward " rock
                              " rather than a floor laid toward " dir)))
+          up-open
+          (-> world
+              (intent/assoc-intent :intent/dir up-open
+                                   :intent/cells (cells-of feet up-open)
+                                   :intent/stage :open
+                                   :intent/started-y (physics/y-of (:player/pos world))
+                                   :intent/started-tick (:time/tick world))
+              (game/say (str "stairs: up the step already there toward " up-open
+                             " rather than one laid toward " dir)))
           (and needed (pillar-up? world i feet))
           (shaft-up world "stairs: a stair up would lay its step, a pillar a level instead")
           to-lay
