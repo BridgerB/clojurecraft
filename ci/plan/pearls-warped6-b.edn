@@ -1,0 +1,20 @@
+;; Issue #263, branch feat/263-warped6, second batch: after pearls-warped6-a (pearls-1-live 3/3 behind
+;; the arena's wall, pearls-12 0/5 with 2 held at best), an angry enderman up to eight below or above
+;; the mouth keeps the bot in (run 4 was slain on its third walk out past one six below), a climb
+;; toward one far above goes only with none left on this level (run 1 cut 161 stairs up and 25 down
+;; toward a ledge), and a boxed climb's cell is remembered like a descent's.
+{:plans/label "pearls-warped6-b"
+ :plans/jobs 4
+ :plans/issue 263
+ :plans/experiments [{:exp/name "pearls-12"
+                      :exp/kind :gym
+                      :exp/goal "pearls-12"
+                      :exp/runs 5
+                      :exp/bots 1
+                      :exp/est-s 2400}
+                     {:exp/name "pearls-1-live"
+                      :exp/kind :gym
+                      :exp/goal "pearls-1-live"
+                      :exp/runs 3
+                      :exp/bots 1
+                      :exp/est-s 300}]}
