@@ -52,6 +52,12 @@
 
 (defn next-intent [w] (plan/next-intent w row plan/goals))
 
+(defn idle?
+  "Is intent i nothing to fight nor fetch: the wait :no-blaze, or the search for a spawner a bot
+   with none on record carries on with (issue #507)?"
+  [i]
+  (or (= {:plan/wait :no-blaze} i) (some? (:intent/search i))))
+
 (def spawner-at [15 64 15])
 
 (defn with-spawner
@@ -155,7 +161,7 @@
     (is (= :collect-drops (:intent/kind (next-intent near))) "one on the floor: pressed toward")
     (is (nil? (blaze/rod-lying (standing {40 (drop (+ pit-floor-y 0.25))})))
         "one inside the stone under the floor: no contact reaches it, left")
-    (is (= {:plan/wait :no-blaze} (next-intent (standing {40 (drop (+ pit-floor-y 0.25))}))))))
+    (is (idle? (next-intent (standing {40 (drop (+ pit-floor-y 0.25))}))))))
 
 (def boxed-in
   "Stone round the feet cell [8 64 8], two high, and a roof over it: no route leaves it."
@@ -171,11 +177,10 @@
   ;; gym blaze-fortress-a (run 38892386220): three fights in a row failed :unreachable on blazes
   ;; seen through the fortress's walls from the tunnel, every run
   (let [near (entity :blaze [12.5 65.0 8.5] :entity/health 20.0)]
-    (is (= {:plan/wait :no-blaze}
-           (next-intent (assoc (standing {7 near}) :world/chunks {[0 0] (world/column boxed-in)})))
+    (is (idle? (next-intent
+                (assoc (standing {7 near}) :world/chunks {[0 0] (world/column boxed-in)})))
         "behind a wall: no route, no fight")
-    (is (= {:plan/wait :no-blaze}
-           (next-intent (standing {7 (entity :blaze [10.5 72.0 8.5] :entity/health 20.0)})))
+    (is (idle? (next-intent (standing {7 (entity :blaze [10.5 72.0 8.5] :entity/health 20.0)})))
         "eight over the feet: out of reach from the floor")
     (testing "a camp that began with it there goes on"
       (let [w (assoc (standing {7 near})

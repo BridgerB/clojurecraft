@@ -397,7 +397,7 @@
           (reduce intent/dissoc-intent (assoc world :player/controls {}) step-keys)
           (buried world feet)
           (build/work-op (assoc world :player/controls {}) i (buried world feet) event)
-          (and (nil? move) (not (:player/on-ground? world)) (< airborne air-grace))
+          (and (nil? move) (false? (:player/on-ground? world)) (< airborne air-grace))
           (intent/assoc-intent (assoc world :player/controls {}) :intent/airborne (inc airborne))
           (nil? move)
           (let [back (recentre world feet)
