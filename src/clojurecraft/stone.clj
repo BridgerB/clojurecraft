@@ -248,6 +248,20 @@
          (filter #(intent/routable? world %))
          first)))
 
+(defn adjoins-boxed?
+  "Do the feet [x y z] stand in :plan/boxed-at or on a cell beside one on the plane, at the same
+   height: a staircase, tunnel or deeper stair started there ends :boxed as the one beside it
+   did. A corridor or strip with nothing to lay was cut again from the cell next to the last
+   one that died, a cell a lap, for the whole window (issues #37, #71 and #62's causeway and
+   pillar cases); from there the order falls through to the walk home, the retreat and the
+   climb. The cells a boxed climb crossed (:plan/boxed-route) count as boxed too: the bot's own
+   stairs-up ends :boxed away from the cell that died, and the next stairs-down began from there
+   (issue #37, one-wide strips of floor over open air)."
+  [world [x y z :as feet]]
+  (let [boxed (into (:plan/boxed-at world #{}) (:plan/boxed-route world))]
+    (boolean (or (contains? boxed feet)
+                 (some (fn [[dx dz]] (contains? boxed [(+ x dx) y (+ z dz)])) stairs/directions)))))
+
 (defn stairs
   "The staircase to cut when nothing is in sight: stair-depth down from the feet, never below
    the row's :goal/depth, which a mine row's staircase carries as :intent/floor-to (how far a
@@ -258,7 +272,7 @@
   [world {:goal/keys [depth act]}]
   (let [feet (long (math/floor (physics/y-of (:player/pos world))))
         to (cond-> (- feet stair-depth) depth (max depth))]
-    (when (and (< to feet) (not (contains? (:plan/boxed-at world #{}) (intent/feet world))))
+    (when (and (< to feet) (not (adjoins-boxed? world (intent/feet world))))
       (cond-> {:intent/kind :stairs-down :intent/to-y to}
         (and depth (= :mine act)) (assoc :intent/floor-to depth)))))
 
@@ -354,7 +368,7 @@
                                                                                home))
                                                0)])
                         stairs/directions)]
-    (when-not (contains? (:plan/boxed-at world #{}) feet)
+    (when-not (adjoins-boxed? world feet)
       (first (filter (fn [d]
                        (let [cells (stairs/level-cells feet d)]
                          (and (not= back d)
@@ -391,7 +405,7 @@
                     (let [cells (stairs/stair-cells feet d)]
                       (or (stairs/level-safe? world cells)
                           (and (stairs/level-clear? world cells) (stairs/lay world feet cells)))))]
-    (when (and (not (contains? (:plan/boxed-at world #{}) feet))
+    (when (and (not (adjoins-boxed? world feet))
                (> to (+ chunk/min-y floor-margin))
                (some cuttable? stairs/directions))
       {:intent/kind :stairs-down :intent/to-y to})))
@@ -465,6 +479,27 @@
                  (terrain/under-sky? world feet))
         {:intent/kind :cross
          :intent/target [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]}))))
+
+(def home-walk-distance 12)           ; feet this far or nearer the landing have nothing to walk home for
+
+(defn walk-home
+  "A walk to the landing (:plan/go-at) when the feet stand where a climb already died :boxed
+   (:plan/boxed-at) and the landing is routable on foot and farther than home-walk-distance;
+   nil elsewhere. A bridge or causeway over open water or air is no islet (islet? wants water on
+   all four sides) and no stair is cut from it, but it leads to the shore the bot came from.
+   Sim worlds R4/1 and R2/38 (issue #62's four snapshots, which fail `[:ingots :timeout]`): a bot
+   with no filler left on a one-wide dirt strip stepped level along it, was :boxed at the limit,
+   retreated twelve blocks back, and stepped level again, for the whole window."
+  [world]
+  (let [feet (intent/feet world)]
+    (when-let [[hx hy hz] (:plan/go-at world)]
+      (let [home [(long (math/floor hx)) (long (math/floor hy)) (long (math/floor hz))]
+            walk {:intent/kind :walk :intent/target home :intent/for :retreat}]
+        (when (and (adjoins-boxed? world feet)
+                   (> (physics/distance (physics/centre feet) (physics/centre home))
+                      home-walk-distance)
+                   (intent/routable? world walk))
+          walk)))))
 
 (defn climb
   "Stairs up out of the ground, climb-stairs at a time (stairs/climb-to), when nothing can be
@@ -584,6 +619,7 @@
                   (when-let [d (tunnel-heading world)]
                     {:intent/kind :tunnel :intent/dir d :intent/length tunnel-length})
                   (deeper world)
+                  (walk-home world)
                   (dead-end-retreat world)
                   (cross-home world)
                   (climb world)

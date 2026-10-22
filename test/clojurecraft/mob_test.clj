@@ -4,6 +4,7 @@
    stage's sim tests start, and the whole bot against them."
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojurecraft.blocks :as blocks]
+            [clojurecraft.dimension :as dimension]
             [clojurecraft.entity :as entity]
             [clojurecraft.fixtures :as fx]
             [clojurecraft.game :as game]
@@ -304,3 +305,90 @@
         burnt (ticks sim 20)]
     (is (some? (:dead-at (get-in burnt [:sim/mobs eid]))))
     (is (= 20.0 (:sim/health burnt)))))
+
+;; ---------------------------------------------------------------- blaze spawners
+
+(def sp [12 64 12])
+
+(deftest a-spawner-wakes-within-sixteen-of-a-player
+  (is (mob/spawner-awake? sp [12.5 64.0 12.5]))
+  (is (mob/spawner-awake? sp [12.5 64.5 28.5]) "sixteen from its centre exactly")
+  (is (not (mob/spawner-awake? sp [12.5 64.5 28.6]))))
+
+(deftest a-spawners-delay-and-batch-are-rolled-from-their-ranges
+  (is (= 200 (mob/spawner-delay 0.0)))
+  (is (= 800 (mob/spawner-delay 0.9999)))
+  (is (= 2 (mob/spawner-batch 0.0)))
+  (is (= 3 (mob/spawner-batch 0.5)))
+  (is (= 4 (mob/spawner-batch 0.99))))
+
+(deftest a-spawner-makes-no-more-blazes-once-six-stand-about-it
+  (is (= 6 (mob/spawner-room 0)))
+  (is (= 2 (mob/spawner-room 4)))
+  (is (= 0 (mob/spawner-room 6)))
+  (is (= 0 (mob/spawner-room 9)) "never under zero")
+  (is (mob/spawner-crowded? sp [8.0 64.0 12.0]))
+  (is (mob/spawner-crowded? sp [17.0 68.0 12.0]))
+  (is (not (mob/spawner-crowded? sp [7.9 64.0 12.0])))
+  (is (not (mob/spawner-crowded? sp [17.1 64.0 12.0]))))
+
+(deftest a-spawners-box-is-nine-wide-three-high-nine-deep
+  (is (= [8 63 8] (mob/spawner-spot sp 0.0 0.0 0.0)) "the near, low corner")
+  (is (= [16 65 16] (mob/spawner-spot sp 0.999 0.999 0.999)) "the far, high corner")
+  (is (= [12 64 12] (mob/spawner-spot sp 0.5 0.5 0.5)) "the middle")
+  (is (mob/spawner-dark? 11) "a blaze spawns at 11")
+  (is (not (mob/spawner-dark? 12)))
+  (is (mob/spawner-dark? mob/interior-light) "the model's fortress is dark"))
+
+(deftest a-blaze-is-placed-where-its-body-fits-once-to-a-cell
+  (let [free? (floor-free? #{sp [8 65 9]})]
+    (is (mob/spawner-fits? free? [8 64 8] #{}))
+    (is (not (mob/spawner-fits? free? [8 64 8] #{[8 64 8]})) "taken")
+    (is (not (mob/spawner-fits? free? [8 63 8] #{})) "in the floor")
+    (is (not (mob/spawner-fits? free? [8 64 9] #{})) "a roof over its head")
+    (is (= [[8 64 8]] (mob/spawner-spawns free? sp 3 [[0.0 0.5 0.0] [0.0 0.5 0.0] [0.5 0.5 0.5]]))
+        "the second try's cell is taken, the third is the spawner")
+    (is (= [] (mob/spawner-spawns free? sp 3 [[0.0 0.0 0.0]])) "a try in the floor makes none")
+    (is (= [[8 64 8]] (mob/spawner-spawns free? sp 1 [[0.0 0.5 0.0] [0.9 0.5 0.9]]))
+        "one try, one blaze at most")))
+
+(def fortress-floor
+  "A Nether column with a spawner at sp on its floor and the cells under the floor round it
+   carved out, so every cell of the spawner's box is open but its own."
+  (assoc (into {} (for [x (range 8 17) z (range 8 17)] [[x 63 z] 0])) sp mob/spawner-block))
+
+(defn in-fortress
+  "A model in play in the Nether over fortress-floor, the player standing at feet, at difficulty."
+  [feet difficulty]
+  (-> (sim/init {:column (world/column-bytes fortress-floor dimension/nether)
+                 :spawn feet
+                 :dimension dimension/nether
+                 :difficulty difficulty
+                 :food 20})
+      (assoc :sim/phase :play :sim/player-pos feet :sim/on-ground? true)))
+
+(defn blazes-of
+  "The living blazes of the model, {eid mob}."
+  [sim]
+  (into {} (filter #(= :blaze (:type (val %))) (:sim/mobs sim))))
+
+(deftest a-spawner-near-the-player-makes-blazes-within-eight-hundred-ticks
+  (let [sim (in-fortress [8.5 64.0 8.5] :normal)]
+    (is (empty? (blazes-of (ticks sim 100))) "none before its delay")
+    (let [later (ticks sim 810)
+          bs (blazes-of later)]
+      (is (<= 1 (count bs) 6) "a batch of two to four, never past the cap")
+      (is (every? #(mob/spawner-crowded? sp (:pos %)) (vals bs)) "in the box about it")
+      (is (= (count bs) (count (said later :add-entity))) "each told to the client"))))
+
+(deftest a-spawner-the-player-is-far-from-or-a-peaceful-one-makes-none
+  (is (empty? (blazes-of (ticks (in-fortress [8.5 64.0 -10.5] :normal) 900))) "asleep")
+  (is (empty? (blazes-of (ticks (in-fortress [8.5 64.0 8.5] :peaceful) 900))) "peaceful"))
+
+(deftest a-broken-spawner-stops
+  (let [sim (-> (in-fortress [8.5 64.0 8.5] :normal)
+                (ticks 10)
+                (update :sim/broken conj sp)
+                (ticks 900))]
+    (is (empty? (blazes-of sim)))
+    (is (not (contains? (:sim/spawners sim) sp)))))
