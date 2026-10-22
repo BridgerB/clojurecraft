@@ -1,5 +1,6 @@
 (ns probe.portal2-buckets
-  (:require [clojurecraft.capture :as capture]
+  (:require [clojurecraft.blocks :as blocks]
+            [clojurecraft.capture :as capture]
             [clojurecraft.inventory :as inventory]
             [clojurecraft.plan :as plan]
             [clojurecraft.sim :as sim]
@@ -7,7 +8,9 @@
 
 (def prev (atom nil))
 
-(defn counts [world] (mapv #(inventory/item-count world %) [:bucket :water_bucket :lava_bucket]))
+(defn counts
+  [world]
+  (mapv #(inventory/item-count world (get blocks/items %)) [:bucket :water_bucket :lava_bucket]))
 
 (defn show
   [world]
