@@ -276,13 +276,13 @@
                  :plan/intent
                  {:intent/kind :forage :intent/for :hunt :intent/status :active})]
     (with-redefs [path/plan (route-to [60 64 8])]
-      (let [out (intent/run w (:plan/intent w) nil)]
+      (let [out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})]
         (is (= :walk (get-in out [:plan/intent :intent/kind])))
         (is (= [60 64 8] (get-in out [:plan/intent :intent/target])))
         (is (= :hunt (get-in out [:plan/intent :intent/for])))
         (is (= {:forage/since 1000 :forage/leg 1} (:hunt/forage out)))))
     (with-redefs [path/plan (constantly {:path/status :none :path/waypoints []})]
-      (let [out (intent/run w (:plan/intent w) nil)]
+      (let [out (intent/run w (:plan/intent w) {:event/kind :tick :event/now 1000})]
         (is (intent/done? (:plan/intent out)))
         (is (= (+ 1000 hunt/forage-retry-ms) (get-in out [:hunt/forage :forage/retry-at])))
         (is (not (hunt/foraging? out)) "it waits before it looks again")
