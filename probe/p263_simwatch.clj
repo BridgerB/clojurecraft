@@ -12,6 +12,7 @@
 ;;   clojure -M probe/sim_endermen_pearls.clj <max-min> <seed> R1 [R2 ...]
 (require '[clojurecraft.blocks :as blocks]
          '[clojurecraft.pearls :as pearls]
+         '[clojurecraft.memory]
          '[clojurecraft.dimension :as dimension]
          '[clojurecraft.game :as game]
          '[clojurecraft.mob :as mob]
@@ -178,71 +179,76 @@
               :tick-seed seed
               :inventory kit}
         [x y z :as spot] (forest-spot (sim/init (assoc base :spawn [0.5 64.0 0.5])))]
-    (cond (nil? spot) (out set-name "SUMMARY no warped forest found")
-          :else
-          (let [held (atom 0)
-                deaths (atom 0)
-                minute (atom -1)
-                spawn [(+ x 0.5) (double (inc y)) (+ z 0.5)]
-                _ (out set-name "start at" (pr-str spawn))
-                watch
-                (fn [w]
-                  (let [k (get (recipe/counts (:player/inventory w)) :ender_pearl 0)
-                        d (:stats/deaths w 0)]
-                    (when (not= k @held)
-                      (out set-name "PEARLS t" (quot (:time/now w 0) 1000) "held" k)
-                      (reset! held k))
-                    (when (not= (quot (:time/now w 0) 60000) @minute)
-                      (reset! minute (quot (:time/now w 0) 60000))
-                      (out set-name
-                           "MINUTE" @minute
-                           "feet" (pr-str (mapv long (:player/pos w)))
-                           "health" (:player/health w)
-                           "food" (:player/food w)
-                           "intent"
-                           (pr-str (select-keys (:plan/intent w)
-                                                [:intent/kind :intent/target :intent/for]))
-                           "shelter" (pr-str (:pearls/shelter w))
-                           "mouth" (pr-str (:pearls/mouth w))
-                           "blacklist" (count (:plan/blacklist w))
-                           "why"
-                           (pr-str
-                            (into
-                             {}
-                             (for [[k f]
-                                   [[:shelter pearls/shelter]
-                                    [:angry-near (comp first pearls/angry-near)]
-                                    [:blocking (comp first pearls/blocking)]
-                                    [:crowded? pearls/crowded?] [:quarry (comp first pearls/quarry)]
-                                    [:at-hand (comp first pearls/at-hand)] [:stale? pearls/stale?]
-                                    [:lure? pearls/lure?] [:threat (comp first pearls/threat)]]]
-                               [k
-                                (try (f w) (catch Exception e (str "THREW " (ex-message e))))])))))
-                    (when (not= d @deaths)
-                      (out set-name "DEATH t" (quot (:time/now w 0) 1000) "deaths" d)
-                      (reset! deaths d))))
-                [w s] (sim/run simrace/step
-                               (game/init {:host "sim" :port 0 :name "Clj_sim"})
-                               (sim/init (assoc base :spawn spawn))
-                               #(do (watch %)
-                                    (or (plan/done? %)
-                                        (plan/failed? %)
-                                        (> (System/currentTimeMillis) wall-end)))
-                               (* 60000 max-min)
-                               {:event/kind :go :go/goals [:ender-pearls]})]
-            (out set-name
-                 "SUMMARY done" (plan/done? w)
-                 "pearls" @held
-                 "deaths" (:stats/deaths w 0)
-                 "sim-min" (quot (:time/now w 0) 60000)
-                 "endermen-alive"
-                 (count (filter #(and (= :enderman (:type %)) (not (:dead-at %)))
-                                (vals (:sim/mobs s))))
-                 "violations" (count (:sim/violations s))
-                 "counts"
-                 (pr-str (into (sorted-map)
-                               (keep (fn [[[t w] c]] (when (= t set-name) [w c])) @counts)))
-                 "plan" (pr-str (plan/summary w)))))))
+    (cond
+      (nil? spot) (out set-name "SUMMARY no warped forest found")
+      :else
+      (let [held (atom 0)
+            deaths (atom 0)
+            minute (atom -1)
+            spawn [(+ x 0.5) (double (inc y)) (+ z 0.5)]
+            _ (out set-name "start at" (pr-str spawn))
+            watch
+            (fn [w]
+              (let [k (get (recipe/counts (:player/inventory w)) :ender_pearl 0)
+                    d (:stats/deaths w 0)]
+                (when (not= k @held)
+                  (out set-name "PEARLS t" (quot (:time/now w 0) 1000) "held" k)
+                  (reset! held k))
+                (when (not= (quot (:time/now w 0) 60000) @minute)
+                  (reset! minute (quot (:time/now w 0) 60000))
+                  (out set-name
+                       "MINUTE" @minute
+                       "feet" (pr-str (mapv long (:player/pos w)))
+                       "health" (:player/health w)
+                       "food" (:player/food w)
+                       "intent"
+                       (pr-str (select-keys (:plan/intent w)
+                                            [:intent/kind :intent/target :intent/for]))
+                       "shelter" (pr-str (:pearls/shelter w))
+                       "mouth" (pr-str (:pearls/mouth w))
+                       "blacklist" (count (:plan/blacklist w))
+                       "why"
+                       (pr-str
+                        (into
+                         {}
+                         (for [[k f]
+                               [[:shelter pearls/shelter]
+                                [:angry-near (comp first pearls/angry-near)]
+                                [:blocking (comp first pearls/blocking)] [:crowded? pearls/crowded?]
+                                [:quarry (comp first pearls/quarry)]
+                                [:at-hand (comp first pearls/at-hand)] [:stale? pearls/stale?]
+                                [:lure? pearls/lure?] [:threat (comp first pearls/threat)]
+                                [:lookouts-since-burrow
+                                 #(clojurecraft.memory/done-since % :lookout :burrow)]
+                                [:burrows-done #(clojurecraft.memory/done-since % :burrow :lookout)]
+                                [:last
+                                 #(select-keys (:plan/last %)
+                                               [:intent/kind :intent/status :intent/reason])]]]
+                           [k (try (f w) (catch Exception e (str "THREW " (ex-message e))))])))))
+                (when (not= d @deaths)
+                  (out set-name "DEATH t" (quot (:time/now w 0) 1000) "deaths" d)
+                  (reset! deaths d))))
+            [w s] (sim/run simrace/step
+                           (game/init {:host "sim" :port 0 :name "Clj_sim"})
+                           (sim/init (assoc base :spawn spawn))
+                           #(do (watch %)
+                                (or (plan/done? %)
+                                    (plan/failed? %)
+                                    (> (System/currentTimeMillis) wall-end)))
+                           (* 60000 max-min)
+                           {:event/kind :go :go/goals [:ender-pearls]})]
+        (out set-name
+             "SUMMARY done" (plan/done? w)
+             "pearls" @held
+             "deaths" (:stats/deaths w 0)
+             "sim-min" (quot (:time/now w 0) 60000)
+             "endermen-alive"
+             (count (filter #(and (= :enderman (:type %)) (not (:dead-at %))) (vals (:sim/mobs s))))
+             "violations" (count (:sim/violations s))
+             "counts"
+             (pr-str (into (sorted-map)
+                           (keep (fn [[[t w] c]] (when (= t set-name) [w c])) @counts)))
+             "plan" (pr-str (plan/summary w)))))))
 
 (run! deref (mapv #(future (try (play %) (catch Exception e (out % "CRASH" (str e))))) sets))
 (out "done")
