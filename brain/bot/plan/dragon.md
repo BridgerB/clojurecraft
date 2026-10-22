@@ -17,6 +17,8 @@ sourceRefs:
   - src/clojurecraft/dragon.clj#defn toward-crystals
   - src/clojurecraft/dragon.clj#defn climb
   - src/clojurecraft/dragon.clj#defmethod intent/run :pillar
+  - src/clojurecraft/dragon.clj#defn equipped
+  - test/clojurecraft/dragon_test.clj#a-climb-reads-no-click-as-a-placement-and-refills-an-emptied-hand
   - src/clojurecraft/dragon.clj#defmethod intent/run :dig-down
   - src/clojurecraft/dragon.clj#defn hit
   - src/clojurecraft/dragon.clj#defmethod intent/run :strike
@@ -110,7 +112,7 @@ A crystal stands on the bedrock over each of the ten obsidian spikes (`end/spike
 
 `toward-crystals` reads the world each tick for the crystal nearest the feet: at the stand, a `:place` into the wall's first gap (`wall-gap`; any block counts, a cage's bars too), then the `:strike`; in the pillar's column under the top, the `:pillar`; at the pillar's top short of the stand, the walk to it; else on a spike (`on-spike?`, three obsidian under the feet; the arrival platform is one thick) the walk back to the nearest pillar top (`pillar-top`), on a pillar (`on-pillar?`, a pillar block under the feet: one, not two, since the fight's dragon smashes what it flies through, cobblestone included, and dragon-c run 1 fell to a stump with a gap under it and walked for the next foot from up there) the `:dig-down`, on the ground the walk to the pillar's foot. Waits `:no-blocks` (nothing to pillar with), `:no-approach`, `:stranded`. Nothing records progress.
 
-- `:pillar` (`climb`): the block in hand, then a jump from the ground, the feet cell kept as `:intent/under`; once the body has risen `clear-rise` over it (the server refuses a block into a body), a `use-item-on` against the top of the block under, looking straight down; the block shown, the next jump. Refusals counted (`:intent/refusals`), `:stuck` after `block-ms` with no block. Pillar blocks are cobblestone and the like, never end stone (the End's ground, which the way down would dig on into).
+- `:pillar` (`climb`): the block in hand, then a jump from the ground, the feet cell kept as `:intent/under`; once the body has risen `clear-rise` over it (the server refuses a block into a body), a `use-item-on` against the top of the block under, looking straight down; the block shown, the next jump. Refusals counted (`:intent/refusals`), `:stuck` after `block-ms` with no block. Pillar blocks are cobblestone and the like, never end stone (the End's ground, which the way down would dig on into). After a swap into the hand `equipped` clears the click's leftovers (`:intent/awaiting`, `:intent/sent-at` while no placement is pending), which the climb would read as a block put and unanswered (:no-answer, issue #178, R1-11-5); a stack used up in the hand goes back to the equip while more is in the pack, and fails :not-held only with none.
 - `:dig-down`: a child `:dig` of the block under the feet (its drop wanted or not), the fall waited out, until the feet stand on less than two pillar blocks.
 - `:strike`: the best sword in hand (`combat/sword`), then `hit`: the eyes on the nearest point of the target's box, and an attack (`combat/attack`, 650 ms apart) once the look went out a tick before and the box is within `strike-reach` (3, the client's entity reach) of the eye; done when the target is gone, failed `:out-of-reach`.
 
