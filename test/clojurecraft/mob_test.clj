@@ -123,7 +123,7 @@
     (is (= [3.3 64.0 2.2] (mob/landing (world {}) [3.3 70.6 2.2] -64)) "down onto the floor")
     (is (nil? (mob/landing (world {}) [3.3 60.2 2.2] -64)) "never into the rock")
     (is (nil? (mob/landing (world {[3 64 2] water}) [3.3 70.6 2.2] -64)) "nor into water")
-    (is (nil? (mob/landing (world {[3 66 2] 1}) [3.3 70.6 2.2] -64)) "nor under a roof two high")
+    (is (nil? (mob/landing (world {[3 66 2] 1}) [3.3 65.4 2.2] -64)) "nor under a roof two high")
     (is (nil? (mob/landing (world {}) [30.3 70.6 2.2] -64)) "nor where nothing is loaded")))
 
 ;; ---------------------------------------------------------------- on the model
@@ -333,7 +333,7 @@
     (is (seq (filter #(= eid (:entity-id %)) (said later :entity-position-sync)))
         "the client told of a jump too long for a move")
     (is (< (physics/distance (get-in later [:sim/mobs eid :pos]) [0.5 64.0 0.5]) 24.0))
-    (is (zero? (jumps (second (angry-enderman {} [14.5 64.0 0.5])) eid 60))
+    (is (zero? (apply jumps (conj (angry-enderman {} [14.5 64.0 0.5]) 60)))
         "within 16 it only walks")))
 
 (deftest an-angry-enderman-stared-at-up-close-teleports-away
