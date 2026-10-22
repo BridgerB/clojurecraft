@@ -1601,3 +1601,15 @@
     (is (= [5 63 12] (:intent/target (child-at 1.3))))
     (is (build/near-enough? (standing-at (open-ground rock) [1.7 63.0 12.5]) [5 63 12]))
     (is (not (build/near-enough? (standing-at (open-ground rock) [1.3 63.0 12.5]) [5 63 12])))))
+
+(deftest a-cast-digs-the-vein-before-its-water-scoop
+  ;; issue #227, sim R2/15: a sculk vein in the cell before the cast's water stopped the bucket's
+  ;; ray; the scoop was sent three times unanswered and the build failed :no-scoop
+  (let [aim [5.5 63.6 8.5]
+        vein [5 64 7]
+        w (standing-at (open-ground {[5 63 8] blocks/water-base}) [5.5 63.0 5.5])
+        veined (assoc-in w [:world/blocks vein] (blocks/default-state :sculk_vein))
+        rocked (assoc-in w [:world/blocks vein] 1)]
+    (is (nil? (build/plant-in-sight w aim)) "a clear line needs no dig")
+    (is (= vein (build/plant-in-sight veined aim)) "the vein is the block to dig")
+    (is (nil? (build/plant-in-sight rocked aim)) "a solid wall is the cast's, never dug here")))
