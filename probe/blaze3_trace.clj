@@ -14,18 +14,21 @@
              (:time/now world)
              (mapv #(/ (math/round (* 100 (double %))) 100.0) (:player/pos world))
              (:player/on-ground? world)
+             (:player/health world)
+             (:player/in-lava? world)
              (pr-str (select-keys (:plan/intent world)
                                   [:intent/kind :intent/target :intent/move :intent/from
                                    :intent/stage :intent/ops :intent/airborne]))
              "under" (terrain/block-at world under)
              "feet" (terrain/block-at world cell))))
 
-(let [path "test/issues/502/R4-31-1.edn.gz"
+(let [path "test/issues/502/b10220650-R4-31-1.edn.gz"
       snap (capture/read-world path)
       w (sr/world-for! snap)
       m (sr/moment-of snap w)
       stop? (fn [world]
-              (when (<= 3100800 (:time/now world) 3102000) (line world))
-              (> (:time/now world) 3102000))]
+              (when (and (<= 3100800 (:time/now world) 3114500) (zero? (mod (:time/now world) 250)))
+                (line world))
+              (> (:time/now world) 3114500))]
   (sim/play-from sr/step m stop? (sr/window-of snap) (sr/go-of w nil) nil)
   (println "done"))
