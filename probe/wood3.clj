@@ -17,15 +17,17 @@
 (declare diag heights)
 
 (defn column
+  "The blocks of the feet's column from 30 over the feet down 60, as runs: [top bottom name]."
   [world [fx fy fz]]
   (let [x (long (math/floor fx))
         y (long (math/floor fy))
-        z (long (math/floor fz))]
+        z (long (math/floor fz))
+        cells (for [dy (range 30 -60 -1)]
+                [(+ y dy) (blocks/name-of (terrain/block-at world [x (+ y dy) z]))])]
     (println "COLUMN"
              [x y z]
-             (pr-str (vec (for [dy (range 3 -40 -1)]
-                            [(+ y dy)
-                             (blocks/name-of (terrain/block-at world [x (+ y dy) z]))]))))))
+             (pr-str (mapv (fn [run] [(ffirst run) (first (last run)) (second (first run))])
+                           (partition-by second cells))))))
 
 (defn brief
   [i]
@@ -82,6 +84,7 @@
                              :world
                              :player/pos)))
     (diag (:world r))
+    (column (:world r) (:player/pos (:world r)))
     (heights (:world r))))
 
 (defn -main [& paths] (doseq [p paths] (go p)) (shutdown-agents))
