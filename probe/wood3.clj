@@ -53,6 +53,13 @@
                              (pr-str (brief i))))
                   (or (= :failed (:plan/status wd)) false)))
         _ (println "PATH" path)
+        _ (doseq [f (take-last 45 (filter #(< (:intention/at % 0) t0) (memory/intentions world)))]
+            (println "BEFORE"
+                     (- (:intention/at f 0) t0)
+                     (:intention/event f)
+                     (:intention/kind f)
+                     (:intention/target f)
+                     (:intention/reason f)))
         _ (column world (:player/pos world))
         _ (println "GATHER-NEXT" (pr-str (brief (wood/gather-next world))))
         _ (println "BLACKLIST" (pr-str (:plan/blacklist world))
