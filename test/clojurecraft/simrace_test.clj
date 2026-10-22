@@ -13,7 +13,8 @@
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as simrace]
             [clojurecraft.wood]
-            [clojurecraft.world :as world]))
+            [clojurecraft.world :as world]
+            [datascript.core :as d]))
 
 (use-fixtures :once fx/instrumented)
 
@@ -314,3 +315,52 @@
         (is (identical? (get-in bare [:capture/decoded [0 0]])
                         (get-in before [:world :world/chunks [0 0]])))
         (is (= nether (get-in before [:sim :sim/nether])) "its portal leading to the Nether")))))
+
+(deftest a-snapshot-from-a-nether-death-keeps-the-overworld-aside-without-its-columns
+  ;; issue #504: the Nether's columns stood over the overworld's after a respawn; a moment in the
+  ;; Nether keeps the overworld set aside (its placed blocks) and gets its columns back from w
+  (let [columns {[0 0] (world/column-bytes {} dimension/nether)}
+        nether {:columns columns :decoded (update-vals columns chunk/decode)}
+        w (simrace/with-nether bare nether "cache/sim-nether/test.edn.gz")
+        placed {[3 70 3] 1}
+        sim {:sim/phase :play
+             :sim/now 0
+             :sim/out []
+             :sim/dimension dimension/nether
+             :sim/nether nether
+             :sim/columns columns
+             :sim/decoded (:decoded nether)
+             :sim/overworld {:sim/columns (:capture/columns bare)
+                             :sim/decoded (:capture/decoded bare)
+                             :sim/placed placed}}
+        world {:time/now 0
+               :world/chunks (:decoded nether)
+               :world/facts (memory/empty-facts)
+               :plan/go-at (simrace/spawn-of bare)}
+        snap
+        (simrace/snapshot w 1 "fortress" "abc" [:fortress :blocked] {:world world :sim sim :t 0})
+        played (simrace/moment-of snap w)]
+    (is (= {:sim/placed placed} (get-in snap [:snapshot/sim :sim/overworld])) "no columns copied")
+    (is (= (:capture/columns bare) (get-in played [:sim :sim/overworld :sim/columns])))
+    (is (= placed (get-in played [:sim :sim/overworld :sim/placed])))))
+
+(deftest a-snapshot-after-an-old-nether-respawn-streams-the-overworld-again
+  ;; issue #504: respawned over the Nether's columns the bot held none and its view stayed put
+  (let [sim {:sim/dimension dimension/overworld
+             :sim/view #{}
+             :sim/view-at [237 123]
+             :sim/player-pos [8.5 64.0 8.5]
+             :sim/out []}
+        w {:time/now 0
+           :stats/deaths 1
+           :world/chunks {}
+           :world/facts (d/serializable (memory/empty-facts))}
+        snap {:snapshot/chunks #{} :snapshot/world w :snapshot/sim sim}
+        played (simrace/moment-of snap bare)]
+    (is (simrace/stranded? #{} w sim))
+    (is (not (simrace/stranded? #{[0 0]} w sim)) "a bot holding chunks is not stranded")
+    (is (not (simrace/stranded? #{} w (assoc sim :sim/dimension dimension/nether))))
+    (is (not (simrace/stranded? #{} (dissoc w :stats/deaths) sim)) "one that never died is not")
+    (is (some #(= :level-chunk-with-light (:packet/name %)) (:sim/out (:sim played)))
+        "so the model sends its columns again")
+    (is (= (:capture/columns bare) (get-in played [:sim :sim/columns])))))
