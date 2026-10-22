@@ -4,6 +4,7 @@
          '[clojurecraft.plan :as plan]
          '[clojurecraft.game :as game]
          '[clojurecraft.dimension :as dimension]
+         '[clojurecraft.build :as build]
          '[clojurecraft.recipe :as recipe]
          '[clojure.math :as math]
          '[clojure.string :as str])
@@ -19,20 +20,25 @@
                       (let [n (recipe/item-name item)]
                         (when (str/ends-with? (name n) "_pickaxe") [n durability])))
                     inv)]
-    (pr-str {:dim (some-> (dimension/of world)
-                          str)
-             :pos (mapv #(math/round (double %)) (:player/pos world))
-             :hp (:player/health world)
-             :food (:player/food world)
-             :picks (vec picks)
-             :stick (get tally :stick 0)
-             :planks (reduce + (for [[k v] tally :when (str/ends-with? (name k) "_planks")] v))
-             :logs (reduce + (for [[k v] tally :when (str/ends-with? (name k) "_log")] v))
-             :table (get tally :crafting_table 0)
-             :cobble (+ (get tally :cobblestone 0)
-                        (get tally :cobbled_deepslate 0)
-                        (get tally :blackstone 0))
-             :intent (:intent/kind (:plan/intent world))})))
+    (pr-str
+     {:dim (some-> (dimension/of world)
+                   str)
+      :pos (mapv #(math/round (double %)) (:player/pos world))
+      :hp (:player/health world)
+      :food (:player/food world)
+      :picks (vec picks)
+      :stick (get tally :stick 0)
+      :planks (reduce + (for [[k v] tally :when (str/ends-with? (name k) "_planks")] v))
+      :logs (reduce + (for [[k v] tally :when (str/ends-with? (name k) "_log")] v))
+      :table (get tally :crafting_table 0)
+      :cobble
+      (+ (get tally :cobblestone 0) (get tally :cobbled_deepslate 0) (get tally :blackstone 0))
+      :goal (:intent/goal (:plan/intent world))
+      :intent (:intent/kind (:plan/intent world))
+      :wood-near (try (build/wood-near? world) (catch Exception e :err))
+      :carry-sticks (try (build/carry-sticks? world) (catch Exception e :err))
+      :carry-table (try (build/carry-table? world) (catch Exception e :err))
+      :wanted (try (build/kit-sticks-wanted world) (catch Exception e :err))})))
 
 (let [[file seed until minutes every] *command-line-args*
       seed (Long/parseLong seed)
