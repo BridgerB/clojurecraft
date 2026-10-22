@@ -79,6 +79,23 @@
            :search (some-> (:intent/search p)
                            (select-keys [:search/leg :search/heading]))})))))
 
+(defn nether-map
+  "Prints slices of the loaded blocks round the feet: # solid, . air, L lava, ? unloaded."
+  [world]
+  (let [[px py pz] (mapv #(long (math/floor %)) (:player/pos world))]
+    (println "MAPCENTRE" px py pz)
+    (doseq [y (map #(+ py %) [-6 -2 2 6])]
+      (println "MAP y" y "x from" (- px 50) "z from" (- pz 40) "(rows are z, columns x)")
+      (doseq [z (range (- pz 40) (+ pz 41))]
+        (println "M"
+                 z
+                 (str/join (for [x (range (- px 50) (+ px 51))
+                                 :let [b (clojurecraft.terrain/block-at world [x y z])]]
+                             (cond (nil? b) \?
+                                   (contains? clojurecraft.blocks/lava-states b) \L
+                                   (clojurecraft.blocks/solid? b) \#
+                                   :else \.))))))))
+
 (defn step-report
   "Per minute: steps, digs, mean heading cosine, net progress toward the target, move kinds."
   []
@@ -223,6 +240,7 @@
                                 (* 60000 minutes)
                                 (simrace/go-of w until))]
   (step-report)
+  (when (System/getenv "MAP") (nether-map world))
   (println file
            "END"
            (quot (:time/now world) 60000)
