@@ -1,12 +1,12 @@
 {
-  "at" : "2026-10-22T18:57:12.957Z",
+  "at" : "2026-10-22T18:59:33.518Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
     "number" : 537,
     "title" : "Bot stops at blaze-rods: timeout",
     "labels" : [ "bot-failure", "sim" ],
-    "copilot" : false
+    "copilot" : true
   }, {
     "number" : 536,
     "title" : "Bot stops at blaze-rods: timeout",
@@ -133,6 +133,11 @@
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
+    "number" : 45,
+    "title" : "Bot stops at cast-one: no-path",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
     "number" : 514,
     "title" : "Bot stops at blaze-rods: no-footing",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -148,11 +153,6 @@
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : false
   }, {
-    "number" : 45,
-    "title" : "Bot stops at cast-one: no-path",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
     "number" : 501,
     "title" : "Bot stops at blaze-rods: no-heal",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
@@ -160,7 +160,8 @@
   } ],
   "moves" : [ {
     "issue" : 537,
-    "move" : "assign"
+    "move" : "wait",
+    "why" : "session starting"
   }, {
     "issue" : 527,
     "move" : "leave",
@@ -222,15 +223,15 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
+    "issue" : 45,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
     "issue" : 514,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
     "issue" : 518,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 45,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
