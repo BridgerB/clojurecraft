@@ -10,6 +10,7 @@
          '[clojurecraft.dimension :as dimension]
          '[clojurecraft.game :as game]
          '[clojurecraft.mob :as mob]
+         '[clojurecraft.physics :as physics]
          '[clojurecraft.plan :as plan]
          '[clojurecraft.recipe :as recipe]
          '[clojurecraft.sim :as sim]
@@ -44,7 +45,15 @@
                   (constantly (fn [s eid]
                                 (let [m (get-in s [:sim/mobs eid])]
                                   (when (and (= :enderman (:type m)) (not (:angry? m)))
-                                    (out (tag) "PROVOKED t" (secs s) "eid" eid)))
+                                    (out (tag)
+                                         "PROVOKED t" (secs s)
+                                         "eid" eid
+                                         "health" (:sim/health s)
+                                         "mob" (pr-str (mapv long (:pos m)))
+                                         "player" (pr-str (mapv long (:sim/player-pos s)))
+                                         "angry-now"
+                                         (count (filter #(and (:angry? %) (not (:dead-at %)))
+                                                        (vals (:sim/mobs s)))))))
                                 (ang s eid)))))
 (def counts (atom {}))                 ; [set what] → how many (teleports landed, routes searched)
 (defn bump [what] (swap! counts update [(tag) what] (fnil inc 0)))
@@ -74,6 +83,26 @@
                                 (let [r (rt free? from target n)]
                                   (bump (if (seq r) :routes :routes-empty))
                                   r)))))
+(let [st sim/strike]
+  (alter-var-root
+   #'sim/strike
+   (constantly
+    (fn [s eid]
+      (let [s' (st s eid)
+            m (get-in s [:sim/mobs eid])
+            p (:sim/player-pos s)]
+        (when (< (:sim/health s') (:sim/health s))
+          (out (tag)
+               "HIT t"
+               (secs s)
+               (name (:type m))
+               "eid" eid
+               "mob" (pr-str (mapv #(/ (clojure.math/round (* 10.0 %)) 10.0) (:pos m)))
+               "player" (pr-str (mapv #(/ (clojure.math/round (* 10.0 %)) 10.0) p))
+               "sight" (mob/sight? (sim/solid-fn s) (mob/head (:type m) (:pos m)) (physics/eye p))
+               "health" (:sim/health s)
+               "->" (:sim/health s')))
+        s')))))
 (let [die sim/die-mob]
   (alter-var-root #'sim/die-mob
                   (constantly (fn [s eid by-player?]
