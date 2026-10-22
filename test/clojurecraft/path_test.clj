@@ -398,6 +398,29 @@
     (is (= {:path/waypoints [] :path/cost 0.0 :path/status :none}
            (path/plan w [5 64 5] {:goal/kind :block :goal/pos [2 70 5]})))))
 
+(deftest a-box-over-a-ledge-starts-on-the-block-it-rests-on-not-one-across-a-gap
+  ;; sim snapshot R1-26-1 (issue #284): the centre at x 401.73 on a one-block ledge, the box over
+  ;; the east block's edge, the feet cell's floor air. The first standable neighbour in start-cell's
+  ;; order was the block across the gap to the west, and no route led from it to the east: every
+  ;; walk failed :no-path three times in a row and the tunnel with it
+  (let [gap (fill 0 [2] [63] (range 16)) ; a one-block gap in the ground at x 2
+        pos [2.9 64.0 5.5] ; the box spans x 2.6 to 3.2: over the gap and the block east of it
+        w (world-of gap pos)
+        from (path/feet-cell pos)
+        goal {:goal/kind :block :goal/pos [8 64 5]}]
+    (is (= [2 64 5] from))
+    (is (not (path/standable? w from)) "the feet cell's floor is the gap")
+    (is (= [[2 64 5] [3 64 5]] (path/rests w from))
+        "the cells the box overlaps, the one under most of it first")
+    (is (= [1 64 5] (path/start-cell w from))
+        "without the box, the first neighbour is across the gap")
+    (is (= [3 64 5] (path/start-cell w from (path/rests w from))))
+    (let [r (path/plan w from goal)]
+      (is (= [3 64 5] (:path/from r)) "the search begins on the block under the box")
+      (is (= :found (:path/status r)))
+      (is (sound-route? w from r)))
+    (is (nil? (path/rests w [3 64 5])) "only the feet cell of the position has a box")))
+
 (deftest a-route-leaves-occupied-awkward-footing-without-entering-it
   (let [from [5 64 5]
         to [4 65 5]
