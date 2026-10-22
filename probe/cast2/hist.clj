@@ -1,12 +1,13 @@
 (ns cast2.hist
   (:require [clojurecraft.capture :as capture]
-            [clojurecraft.memory :as memory]))
+            [clojurecraft.memory :as memory]
+            [datascript.core :as d]))
 
 (defn -main
   [& paths]
   (doseq [p paths]
     (let [snap (capture/read-world p)
-          w (:snapshot/world snap)
+          w (update (:snapshot/world snap) :world/facts d/from-serializable)
           t (:t (:snapshot/moment snap))
           fs (memory/intentions w)]
       (println "HIST" p "moment" t "intentions" (count fs))
