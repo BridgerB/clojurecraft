@@ -191,6 +191,31 @@ jobs:
           }
           load
           ( while playing; do sleep 300; load; done ) &
+          # a server that dies is started again on its world, up to 3 times (race 39817745908:
+          # server 2 crashed 25 s in on a vanilla NPE generating a chunk, MoonPhase null in
+          # ServerLevel.getMoonBrightness, and its slots spent three hours on bots that could not
+          # connect). Its race's slots stop starting bots once 5 in a row never got into play and
+          # start again when it accepts (race.clj, health). Each dead server's log is kept as
+          # server-died-<n>.log beside its race.log; its crash reports go in the artifact (Pack)
+          watch_servers() {
+            for k in $(seq 1 "$SERVERS"); do
+              w="work/world-$k"
+              pid=$(cat "$w/server.pid" 2>/dev/null || true)
+              if [ -z "$pid" ] || kill -0 "$pid" 2>/dev/null; then continue; fi
+              n=$(( $(find "data/race/s$k" -maxdepth 1 -name 'server-died-*.log' | wc -l) + 1 ))
+              cp "$w/server.log" "data/race/s$k/server-died-$n.log" 2>/dev/null || true
+              if [ "$n" -gt 3 ]; then
+                echo "SERVER $k DIED again $(date -u +%FT%TZ), after 3 restarts: left down"
+                rm -f "$w/server.pid"
+                continue
+              fi
+              echo "SERVER $k DIED $(date -u +%FT%TZ): its log's last lines, then restart $n of 3"
+              tail -n 15 "$w/server.log" || true
+              PORT=$((25564 + k)) RCON_PORT=$((25574 + k)) WORLD="$PWD/$w" bb server start \
+                || echo "SERVER $k did not come back"
+            done
+          }
+          ( while playing; do sleep 60; watch_servers; done ) &
           # shellcheck disable=SC2086 # one pid per word
           wait $races || true   # the races alone: the tail above never ends on its own. Bots
                                 # failing is what the issues are for; the step is red only when
@@ -239,6 +264,7 @@ jobs:
         run: |
           for f in data/race/s*/*.edn; do [ -f "$f" ] && [ "$(basename "$f")" != summary.edn ] && zstd -q -3 -T0 --rm "$f"; done
           for k in $(seq 1 "$SERVERS"); do cp "work/world-$k/server.log" "data/race/s$k/server.log" 2>/dev/null || true; done
+          for k in $(seq 1 "$SERVERS"); do cp -r "work/world-$k/crash-reports" "data/race/s$k/" 2>/dev/null || true; done
       - uses: actions/upload-artifact@v7
         if: always()              # a cancelled round's artifact too; the snapshots the issues name are in the evidence releases
         with:

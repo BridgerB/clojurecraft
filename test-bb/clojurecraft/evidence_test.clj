@@ -64,7 +64,12 @@
 
 (deftest small-recordings-and-every-signature-fold-first
   (let [run (fn [bot sig bytes]
-              {:run/bot bot :run/dir "s1" :run/signature sig :run/bytes bytes :reason (second sig)})
+              {:run/bot bot
+               :run/dir "s1"
+               :run/signature sig
+               :run/bytes bytes
+               :reason (second sig)
+               :plan {:plan/status :failed}}) ; it played: a run that never did is infrastructure
         runs [(run "a" [:ingots :boxed] 900) (run "b" [:ingots :boxed] 100)
               (run "c" [:ingots :boxed] 50) (run "d" [:portal :no-stand] 700)
               (run "e" [:portal :no-stand] 300) (run "f" [:fortress :no-path] 2000)]]
