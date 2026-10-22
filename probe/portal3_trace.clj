@@ -17,8 +17,9 @@
         n (atom 0)
         stop? (fn [wd]
                 (let [i (:plan/intent wd)
-                      id (:intent/id i)]
-                  (when (and id (not= id @seen) (< @n 60))
+                      ch (:intent/child i)
+                      id (when i [(:intent/id i) (:intent/id ch) (:intent/status ch)])]
+                  (when (and id (not= id @seen) (< @n 400))
                     (reset! seen id)
                     (swap! n inc)
                     (println "TRACE"
@@ -28,6 +29,14 @@
                                                   [:intent/id :intent/kind :intent/for
                                                    :intent/target :intent/reason :intent/dir
                                                    :intent/to-y]))
+                             "op"
+                             (pr-str (select-keys (:intent/op i)
+                                                  [:build/op :build/step :build/pos :build/cell
+                                                   :build/stand]))
+                             "child"
+                             (pr-str (select-keys ch
+                                                  [:intent/kind :intent/target :intent/status
+                                                   :intent/reason :intent/for :intent/stage]))
                              "feet" (pr-str (intent/feet wd))
                              "go-at" (pr-str (:plan/go-at wd))
                              "unwalk" (:plan/unwalkable wd)
