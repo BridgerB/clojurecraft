@@ -142,6 +142,9 @@ sourceRefs:
   - src/clojurecraft/build.clj#defn lava-gone?
   - src/clojurecraft/build.clj#defn water-needed?
   - src/clojurecraft/build.clj#defn last-bucket-scoop?
+  - src/clojurecraft/build.clj#defn stance-way
+  - src/clojurecraft/build.clj#defn way-open?
+  - test/clojurecraft/build_test.clj#a-stand-no-line-can-dig-to-is-no-station
   - src/clojurecraft/build.clj#defn seal-source
   - src/clojurecraft/build.clj#defn spare-pour-op
   - test/clojurecraft/build_test.clj#a-cleanup-scoop-never-takes-the-last-empty-bucket
@@ -243,6 +246,8 @@ A refill's source can turn to obsidian after it is chosen, when the cast's water
 A water pour can land in the lava's own cell, where the lava becomes obsidian and the water goes with it: no source is left to scoop back and both buckets are empty. `held-first` adds a water bucket to the row's holds while a water pour is unsatisfied and none is held (`water-needed?`), so the build's next start asks the needs planner to fill one. Issue #455 failed `:not-held` three times in 300 ms at the next cell's water pour (`a-spent-water-bucket-is-asked-for-again`).
 
 A resumed cast can find the cleanup scoop of a cell whose water source is still there while the bot holds one empty bucket and one water bucket (issue #518). The scoop would end with two water buckets and no empty one, and the next lava pour fails `:no-bucket`. `last-bucket-scoop?` catches it and `op-child` removes the source with a filler block instead (`seal-source`, `stairs/filler`): the cleanup's job is to delete the source, not to collect water. The filler is dug out where a later op needs the cell open (the next cell's hole dig, the interior digs). A bot already holding water buckets and no empty one pours one into the cell over a cast frame cell (`spare-pour-op`, obsidian under it), where the cleanup then seals it with a filler, and refills with the freed bucket.
+
+A refill's station must have a way: `refill` passes `station-among` an `open?` predicate (`way-open?`), true when the stand can be walked to as it is or the line `stance-way` digs along (the `stance-block` line) has no solid cell a build's dig may not take (the frame's rock, a cell beside lava). A stand behind such a cell was chosen, nothing was dug, and the fallback walk at the solid stand failed `:no-path` three times (issue #162, real-4-s1-Clj_r08, a cave's lava lake).
 
 Refill sight lines must be safe to excavate as well as reachable. `safe-source?` refuses a source whose ray walls touch lava at or above the stand's feet; lava below the feet may still be uncovered. Both `station-among` and `source-in-sight` apply this rule, so a new station avoids the dangerous opening and a resumed refill reconsiders it. Issue #231's R1/32 snapshot targeted a source at y -26 from a stand at y -25, but the rock on its ray held back lava at y -24. Opening it flooded the stand and three escapes failed `:no-footing`. With the unsafe sight line rejected, the snapshot casts its first obsidian after 30700 ms (`a-refill-never-opens-lava-over-its-stand`).
 
