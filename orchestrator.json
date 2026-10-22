@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T03:45:45.655Z",
+  "at" : "2026-10-22T03:46:54.622Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -10,11 +10,6 @@
   }, {
     "number" : 286,
     "title" : "Bot stops at fortress: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : false
-  }, {
-    "number" : 37,
-    "title" : "Bot stops at ingots: boxed",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
@@ -35,8 +30,8 @@
   }, {
     "number" : 504,
     "title" : "Bot stops at blaze-rods: timeout",
-    "labels" : [ "bot-failure", "sim" ],
-    "copilot" : true
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
   } ],
   "moves" : [ {
     "issue" : 338,
@@ -44,10 +39,6 @@
     "why" : "hands-off label"
   }, {
     "issue" : 286,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
-    "issue" : 37,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -64,8 +55,8 @@
     "why" : "hands-off label"
   }, {
     "issue" : 504,
-    "move" : "unassign",
-    "why" : "no pull request and no session since the assignment"
+    "move" : "leave",
+    "why" : "hands-off label"
   } ],
   "log" : [ {
     "issue" : 135,
