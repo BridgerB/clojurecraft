@@ -219,8 +219,10 @@
    ground (:retreat: a short way out of a boxed pocket must leave that pocket), and the surface over
    stone no route reaches (:over-stone, issue #342: a walk that ended near it ended again at once, and
    the mine planned it again every tick) and the neighbour cell that stands, from feet resting on
-   a rim over a gap (:footing, issue #105: a walk that ended near it ended on the rim)."
-  #{:build :shelter :cover :fight :retreat :over-stone :footing})
+   a rim over a gap (:footing, issue #105: a walk that ended near it ended on the rim) and a drop
+   lying in a pit under the floor (:rod, issue #500: only the feet in its cell are in the pickup
+   box)."
+  #{:build :shelter :cover :fight :retreat :over-stone :footing :rod})
 
 (defn walk-goal
   "Where a walk's route may end: for a block mined from beside (:intent/pickup?), any cell

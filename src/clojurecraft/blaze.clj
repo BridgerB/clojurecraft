@@ -113,15 +113,35 @@
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (some (fn [[_ e :as ee]] (when (reachable? world e) ee))))))
 
+(defn fetch-walk
+  "The walk onto the cell drop e lies in: the feet there are in the pickup box of a drop in a pit
+   under the floor (:intent/for :rod ends standing in the cell)."
+  [e]
+  {:intent/kind :walk :intent/target (hunt/cell (:entity/pos e)) :intent/for :rod})
+
+(defn fetchable?
+  "Can the bot pick drop e up: its cell is not solid (a drop a block was placed over, no
+   contact reaches), and it lies in reach of the pickup box from the floor, or a route walks
+   onto its cell (under-reach?)?"
+  [world e]
+  (and (not (some-> (terrain/block-at world (hunt/cell (:entity/pos e)))
+                    blocks/solid?))
+       (or (not (drops/under-reach? world e)) (intent/routable? world (fetch-walk e)))))
+
 (defn rod-lying
   "[eid entity] of the nearest drop that may be a rod (drops/holds?) within drops/drop-radius of
-   the feet, not in a cell a pickup failed in (the cell is blacklisted), or nil."
+   the feet, not in a cell a pickup failed in (the cell is blacklisted), the first of the
+   candidates nearest that is fetchable?, or nil. Sim race 39712220957 (issue #500): drops of the
+   tunnel's own digs, lying in pits the bot's floor was over, were gone to and stood over until
+   the collect failed :not-picked-up, three times, and the plan with it."
   [world]
-  (let [bl (:plan/blacklist world #{})]
-    (entity/nearest (into {}
-                          (remove (fn [[_ e]] (contains? bl (hunt/cell (:entity/pos e)))))
-                          (drops/lying world rod (:player/pos world) drops/drop-radius))
-                    (:player/pos world))))
+  (let [bl (:plan/blacklist world #{})
+        pos (:player/pos world)]
+    (->> (drops/lying world rod pos drops/drop-radius)
+         (remove (fn [[_ e]] (contains? bl (hunt/cell (:entity/pos e)))))
+         (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
+         (take candidates)
+         (some (fn [[_ e :as ee]] (when (fetchable? world e) ee))))))
 
 (defn nearest-spawner
   "The spawner on record in the bot's dimension nearest the eye, within spawner-radius and not
@@ -378,6 +398,7 @@
           (hurt? world) (healing world)
           @wary @wary
           @away @away
+          (and lying (drops/under-reach? world lying)) (fetch-walk lying)
           lying
           {:intent/kind :collect-drops
            :intent/item :blaze_rod

@@ -87,6 +87,24 @@
              (next-intent
               (assoc (with-spawner (standing {7 near})) :plan/blacklist #{7 spawner-at})))))))
 
+(deftest a-drop-in-a-pit-is-walked-onto-and-one-in-stone-is-left
+  ;; sim race 39712220957 (issue #500): drops lying under the floor, or in a block placed over
+  ;; them, were stood over until the collect failed :not-picked-up
+  (let [pit-floor-y 63
+        drop (fn [y] (entity :item [10.5 y 9.5]))
+        pit (assoc-in (standing {40 (drop (+ pit-floor-y 0.25))})
+             [:world/blocks [10 pit-floor-y 9]]
+             blocks/air)
+        near (standing {40 (drop 64.0)})]
+    (is
+     (= {:intent/kind :walk :intent/target [10 pit-floor-y 9] :intent/for :rod} (next-intent pit))
+     "a drop in a pit under the floor: the feet onto its cell, the pickup box is half a block deep")
+    (is (some? (blaze/rod-lying pit)))
+    (is (= :collect-drops (:intent/kind (next-intent near))) "one on the floor: pressed toward")
+    (is (nil? (blaze/rod-lying (standing {40 (drop (+ pit-floor-y 0.25))})))
+        "one inside the stone under the floor: no contact reaches it, left")
+    (is (= {:plan/wait :no-blaze} (next-intent (standing {40 (drop (+ pit-floor-y 0.25))}))))))
+
 (def boxed-in
   "Stone round the feet cell [8 64 8], two high, and a roof over it: no route leaves it."
   (merge (into {}
