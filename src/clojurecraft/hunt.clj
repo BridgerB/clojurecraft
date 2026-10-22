@@ -14,6 +14,7 @@
             [clojurecraft.entity :as entity]
             [clojurecraft.intent :as intent]
             [clojurecraft.inventory :as inventory]
+            [clojurecraft.path :as path]
             [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]))
@@ -68,10 +69,29 @@
     starving-radius
     hunt-radius))
 
+(defn fightable-from-route?
+  "Can a fight reach animal e, and its drop be picked up, from where a walk to it ends: the end of
+   the planned route (the feet when it is already there) no more than intent/pickup-rise under
+   its feet. A route that is not found yet (chunks still loading) is not held against it. Sim
+   race 39768347249 (issue #515, R2/30): three sheep stood on a spruce crown at y 82; the route
+   ended at 79 and the walk, in reach of a straight line, at 77, under a wall the bot pressed
+   against: the first sheep fell to a blow and its meat lay above the pickup box, the other two
+   fights failed :unreachable, and three failures ended the plan."
+  [world e]
+  (let [c (cell (:entity/pos e))
+        {:path/keys [status waypoints]} (path/plan world
+                                                   (path/feet-cell (:player/pos world))
+                                                   (intent/goal-of {:intent/kind :walk
+                                                                    :intent/target c}))
+        end (or (last waypoints) (intent/feet world))]
+    (or (not= :found status)
+        (<= (- (physics/y-of (:entity/pos e)) (physics/y-of end)) intent/pickup-rise))))
+
 (defn game
   "[eid entity] of the nearest animal of game-kinds, alive, not blacklisted, within reach
    (hunt-radius, starving-radius when starving), the first of the candidates nearest that a route
-   reaches (intent/routable?); nil when there is none."
+   reaches (intent/routable?) and a fight can reach from its end (fightable-from-route?); nil
+   when there is none."
   [world]
   (let [pos (:player/pos world)
         bl (:plan/blacklist world #{})
@@ -85,8 +105,10 @@
          (sort-by (fn [[_ e]] (physics/distance pos (:entity/pos e))))
          (take candidates)
          (some (fn [[_ e :as ee]]
-                 (when (intent/routable? world
-                                         {:intent/kind :walk :intent/target (cell (:entity/pos e))})
+                 (when (and (intent/routable? world
+                                              {:intent/kind :walk
+                                               :intent/target (cell (:entity/pos e))})
+                            (fightable-from-route? world e))
                    ee))))))
 
 (defn fresh-kill
