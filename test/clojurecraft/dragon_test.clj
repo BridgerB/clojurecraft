@@ -620,3 +620,34 @@
     (is (true? (:world/dragon-dead? w)) "the server said it died")
     (is (= 20.0 (:sim/health sim)) "never under its head")
     (is (empty? (:sim/violations sim)))))
+
+(deftest a-climb-reads-no-click-as-a-placement-and-refills-an-emptied-hand
+  ;; issue #178, sim R1-11-5: a swap into the hand left its send time on the intent and the climb
+  ;; failed :no-answer three seconds on; a stack used up in the hand failed it :not-held with
+  ;; more cobblestone in the pack
+  (let [intent {:intent/kind :pillar
+                :intent/item :cobblestone
+                :intent/top 66
+                :intent/stage :climb
+                :intent/since 1000
+                :intent/status :active
+                :intent/awaiting 5
+                :intent/awaiting-window 0
+                :intent/clicks [1]
+                :intent/sent-at 1000}
+        w (assoc (standing {} [8.5 64.0 8.5] cobblestone {}) :plan/intent intent)
+        cleared (dragon/equipped w)
+        placing (dragon/equipped (assoc-in w [:plan/intent :intent/under] [8 63 8]))
+        packed (-> w
+                   (assoc :player/inventory {20 {:item (recipe/item-id :cobblestone) :count 64}})
+                   (assoc-in [:plan/intent :intent/sent-at] nil))]
+    (is (nil? (get-in cleared [:plan/intent :intent/sent-at])) "no send time with nothing placed")
+    (is (nil? (get-in cleared [:plan/intent :intent/awaiting])) "the click's wait cleared")
+    (is (= 1000 (get-in placing [:plan/intent :intent/sent-at]))
+        "a placement pending keeps its send time")
+    (is (= :equip (get-in (dragon/climb packed (:plan/intent packed)) [:plan/intent :intent/stage]))
+        "the block in the pack, back to the equip")
+    (is (= :not-held
+           (:intent/reason (:plan/intent (dragon/climb (assoc packed :player/inventory {})
+                                                       (:plan/intent packed)))))
+        "none anywhere: failed")))
