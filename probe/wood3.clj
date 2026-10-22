@@ -2,6 +2,7 @@
   "Wood3 probe: the play of a snapshot with every intent change, the column under the feet, and
    the trunks the planner sees."
   (:require [clojure.math :as math]
+            [clojure.string :as str]
             [clojurecraft.blocks :as blocks]
             [clojurecraft.capture :as capture]
             [clojurecraft.game :as game]
@@ -13,7 +14,7 @@
             [clojurecraft.terrain :as terrain]
             [clojurecraft.wood :as wood]))
 
-(declare diag)
+(declare diag heights)
 
 (defn column
   [world [fx fy fz]]
@@ -80,7 +81,8 @@
              (pr-str (some-> r
                              :world
                              :player/pos)))
-    (diag (:world r))))
+    (diag (:world r))
+    (heights (:world r))))
 
 (defn -main [& paths] (doseq [p paths] (go p)) (shutdown-agents))
 
@@ -118,3 +120,38 @@
              "trees-tunnel" (pr-str (brief (wood/trees-tunnel world)))
              "trees-descend" (pr-str (brief (wood/trees-descend world trunks)))
              "return-walk" (pr-str (brief (wood/return-walk world))))))
+
+(defn heights
+  "A map of the ground round the feet: the top solid height of every other column (x every 2, z every
+   4, 40 out each way), '..' where nothing loaded, 'TT' a column holding a remembered log, '@@' the feet."
+  [world]
+  (let [[fx fy fz] (intent/feet world)
+        logs (into #{} (map (fn [[x _ z]] [x z])) (memory/positions-now world blocks/log-states))
+        top (fn [x z]
+              (some (fn [y]
+                      (let [id (terrain/block-at world [x y z])]
+                        (when (and id (blocks/solid? id) (not (blocks/leaves? id))) y)))
+                    (range (+ fy 12) (- fy 70) -1)))]
+    (println "HEIGHTS feet"
+             [fx fy fz]
+             "x from"
+             (- fx 40)
+             "to"
+             (+ fx 40)
+             "step 2; z from"
+             (- fz 40)
+             "step 4")
+    (doseq [dz (range -40 41 4)]
+      (println
+       (format "%5d" (+ fz dz))
+       (str/join
+        (for [dx (range -40 41 2)]
+          (let [x (+ fx dx)
+                z (+ fz dz)]
+            (cond (and (zero? dx) (zero? dz)) "@@ "
+                  (or (logs [x z]) (logs [(inc x) z]) (logs [x (inc z)]) (logs [(inc x) (inc z)]))
+                  "TT "
+                  :else
+                  (if-let [t (top x z)]
+                    (format "%02d " (mod (- t fy -50) 100))
+                    ".. ")))))))))
