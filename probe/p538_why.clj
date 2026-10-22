@@ -23,7 +23,11 @@
      :safe? (fortress/safe? world feet move)
      :cells (mapv nm cells)
      :floor [(nm floor) (path/floor? world floor)]
-     :lava-beside (vec (fortress/lava-beside world feet move))}))
+     :lava-beside (vec (fortress/lava-beside world feet move))
+     :below (let [[x y z] floor]
+              (some (fn [d]
+                      (let [n (nm [x (- y d) z])] (when (and n (not (#{:air :cave_air} n))) [d n])))
+                    (range 1 60)))}))
 
 (let [[file & t] *command-line-args*
       target (mapv parse-long t)
