@@ -28,7 +28,7 @@
   (is (= 20 (:goal/priority goal)))
   (is (plan/aside? goal))
   (is (= [:eyes-of-ender] (plan/goals-for "eyes")))
-  (is (= "fortress" (plan/current-until)) "the chain's stage is still the fortress")
+  (is (= "blaze-rods" (plan/current-until)) "the chain's stage is the blaze rods (#491)")
   (is (= 2 eyes/powder-per-rod) "from the game's recipe"))
 
 (deftest what-is-short-is-named
