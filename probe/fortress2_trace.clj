@@ -33,7 +33,13 @@
                                "taken" (:intent/taken i)
                                "dig-ms" (:intent/dig-ms i)
                                "tool" (:intent/tool i)
-                               "chunks" (count (:world/chunks world)))))
+                               "chunks" (count (:world/chunks world))
+                               "sticks" (get (make/counts world) :stick 0)
+                               "picks"
+                               (reduce +
+                                       (for [[k n] (make/counts world)
+                                             :when (clojure.string/ends-with? (name k) "_pickaxe")]
+                                         n)))))
                   false))]
     (sim/play-from simrace/step
                    m
