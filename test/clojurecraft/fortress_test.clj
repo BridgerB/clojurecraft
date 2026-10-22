@@ -911,3 +911,39 @@
                                 [:player/inventory 1]
                                 {:item (recipe/item-id :crafting_table) :count 1}))))
         "a table held: tunnel on")))
+
+(deftest a-tunnel-in-the-air-waits-to-land-before-it-is-blocked
+  ;; issue #338, sim runs R2/1, R2/2, R3/13: the bot fell off a ledge on its way to pick up its
+  ;; table, no step had a floor to start from, and three :blocked failures in three ticks ended
+  ;; the plan in the air
+  (let [airy (rock (into {} (for [x (range -4 5) y (range 60 71) z (range -4 5)] [[x y z] air])))
+        w (assoc airy
+                 :bot/phase :play
+                 :bot/effects []
+                 :time/now 0
+                 :time/tick 0
+                 :player/vel [0.0 0.0 0.0])
+        tick {:event/kind :tick :event/now 0}
+        i {:intent/kind :tunnel-to :intent/target [10 64 0] :intent/steps 32 :intent/status :active}
+        run (fn [ground?]
+              (:plan/intent
+               (intent/run (assoc w :player/on-ground? ground? :plan/intent i) i tick)))]
+    (is (= :blocked (:intent/reason (run true))) "on the ground with no step: blocked")
+    (is (= :active (:intent/status (run false))) "in the air: wait for the ground")
+    (is (true? (fortress/falling? (assoc w :player/on-ground? false))))
+    (is (not (fortress/falling? (assoc w :player/on-ground? false :player/in-lava? true))))))
+
+(deftest a-full-pack-is-cleared-of-junk-before-a-pickaxe-is-made
+  ;; issue #338, sim runs R2/5 and R2/7: the pack held 640 basalt and every slot, and the craft
+  ;; failed :inventory-full
+  (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        stack (fn [item n] {:item (recipe/item-id item) :count n})
+        kit {0 (stack :stick 2) 1 (stack :cobblestone 3) 2 (stack :crafting_table 1)}
+        full (into kit (for [p (range 3 36)] [p (stack :basalt 64)]))
+        w (assoc (rock {})
+                 :world/facts (memory/empty-facts)
+                 :player/dimension dimension/nether
+                 :player/inventory full)
+        next #(plan/next-intent % goal plan/goals)]
+    (is (= :toss (:intent/kind (next w))) "no slot free: throw the junk first")
+    (is (= :place (:intent/kind (next (assoc w :player/inventory kit)))) "room: make the pickaxe")))

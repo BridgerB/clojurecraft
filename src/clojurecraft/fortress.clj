@@ -22,7 +22,8 @@
             [clojurecraft.plan :as plan]
             [clojurecraft.recipe :as recipe]
             [clojurecraft.stairs :as stairs]
-            [clojurecraft.terrain :as terrain]))
+            [clojurecraft.terrain :as terrain]
+            [clojurecraft.window :as window]))
 
 (set! *warn-on-reflection* true)
 
@@ -388,6 +389,14 @@
   (some #(when (build/holds? world [:solid %]) (build/dig-op % feet nil :unbury))
         [(plus feet up) feet]))
 
+(defn falling?
+  "Is the bot in the air, off the ground and in no fluid? A tunnel that starts a step from there
+   has no safe one (no floor to enter from), and three such failures in three ticks failed the
+   plan before the bot landed: sim races at 2165f97 (issue #338, R2/1, R2/2, R3/13) walked off a
+   ledge to pick up a table and failed :blocked in the air."
+  [world]
+  (not (or (:player/on-ground? world) (:player/in-water? world) (:player/in-lava? world))))
+
 (defmethod intent/run :tunnel-to
   ;; one step at a time toward :intent/target: a step's move is chosen when it starts and its ops
   ;; worked until the bot stands in the cell stepped into; done at the target (within
@@ -417,7 +426,8 @@
                 m (or back (next-move world feet target climb (boolean dry?) tunnel-visited))
                 retreated
                 (if (and m (not back) (retreat? feet m tunnel-visited)) (inc (long retreats)) 0)]
-            (cond (or (nil? m) (> retreated retreats-allowed))
+            (cond (and (nil? m) (falling? world)) (assoc world :player/controls {})
+                  (or (nil? m) (> retreated retreats-allowed))
                   (-> world
                       (assoc :player/controls {})
                       (intent/fail :blocked))
@@ -565,7 +575,8 @@
     (plan/next-intent world (assoc goal :goal/plan :build) table)))
 
 (defmethod plan/next-intent :fortress
-  ;; replace a missing pickaxe from held supplies and take the placed table along (the next
+  ;; replace a missing pickaxe from held supplies (a slot cleared of junk first when the pack is
+  ;; full) and take the placed table along (the next
   ;; pickaxe is made where the bot stands, not out of four more planks), then tunnel to the
   ;; nearest brick on record; with none, the next leg of the spiral search (exploring); with
   ;; nowhere safe, or outside the Nether, wait
@@ -576,7 +587,10 @@
     (cond (not nether?) {:plan/wait :other-dimension}
           :else
           (or (when (build/pickaxe-at-hand? world)
-                (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
+                (or (when (and (nil? (:window/open world))
+                               (window/tossable world (window/view world :inventory)))
+                      {:intent/kind :toss})
+                    (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table)))
               (intent/chain-next (:plan/last world) :take-table make/table-drops {})
               (make/take-table-along world)
               (when brick

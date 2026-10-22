@@ -133,8 +133,11 @@
 (def cobblestone-keep 128)            ; cobblestone a full inventory never throws below: a cast's walls, floors and seals
 
 (def filler-keep
-  "How many of each building block a full inventory keeps when throwing surplus stacks."
-  (zipmap [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack]
+  "How many of each building block a full inventory keeps when throwing surplus stacks. Basalt
+   and blackstone are the Nether's: sim runs R2/5 and R2/7 (issue #338) held 640 basalt in ten
+   slots and the pickaxe's craft failed :inventory-full with nothing to throw."
+  (zipmap [:cobblestone :cobbled_deepslate :andesite :diorite :granite :tuff :dirt :netherrack
+           :basalt :blackstone]
           (repeat cobblestone-keep)))
 
 (def spare-uses 40)                   ; digs a tool must have left to count as a spare: a tunnel's twelve level steps dig about thirty
