@@ -664,6 +664,32 @@
                    [:plan/intent :intent/reason]))
         "deepslate, fifteen seconds a block by hand: a trip out for a pickaxe beats it")))
 
+(deftest a-build-far-from-its-site-never-digs-stone-by-hand
+  ;; sim race 39723238841 (issue #504, R1/5): the pickaxe broke at y 21 on the way back to the
+  ;; portal with one stick and no planks, and the eighty blocks still to go were dug by hand,
+  ;; 7.5 s each; a trip out for the wood beats it, a few blocks at the site do not
+  (let [op {:build/op :dig :build/pos [5 62 6] :build/stand [5 63 5] :build/step :room}
+        run (fn [origin]
+              (let [i {:intent/kind :build
+                       :intent/build :cast-one
+                       :intent/origin origin
+                       :intent/facing :south
+                       :intent/status :active
+                       :intent/op op}]
+                (build/work-op (assoc (standing-at (open-ground {}) [5.5 63.0 5.5])
+                                      :plan/intent i
+                                      :player/inventory {})
+                               i
+                               op
+                               {:event/kind :tick :event/now 0 :event/rand 0.5})))]
+    (is (= :dig (get-in (run [4 64 4]) [:plan/intent :intent/child :intent/kind]))
+        "the cast's room at the site: the hand digs on")
+    (is (= :no-pickaxe (get-in (run [80 20 4]) [:plan/intent :intent/reason]))
+        "eighty blocks from the site: the pickaxe is made again first")
+    (is (build/hand-dig-refused? (standing-at (open-ground {}) [5.5 63.0 5.5]) [5 62 6] [80 20 4]))
+    (is (not (build/hand-dig-refused? (standing-at (open-ground {}) [5.5 63.0 5.5]) [5 62 6] nil))
+        "no site, no distance")))
+
 (deftest a-build-replans-for-a-broken-pickaxe-before-the-last-attempt
   (let [origin [5 63 5]
         w (assoc (standing-at (open-ground {[7 63 7] 1}) [5.5 63.0 5.5])
