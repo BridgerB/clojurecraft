@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T14:14:57.241Z",
+  "at" : "2026-10-22T14:23:50.509Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -46,6 +46,11 @@
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 284,
+    "title" : "Bot stops at fortress: no-path",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : false
   }, {
     "number" : 227,
@@ -97,6 +102,10 @@
     "why" : "hands-off label"
   }, {
     "issue" : 178,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 284,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
