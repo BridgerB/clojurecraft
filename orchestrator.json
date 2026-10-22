@@ -1,5 +1,5 @@
 {
-  "at" : "2026-10-22T09:13:41.211Z",
+  "at" : "2026-10-22T09:14:47.863Z",
   "cap" : 1,
   "agent-tasks" : true,
   "issues" : [ {
@@ -8,15 +8,15 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 338,
-    "title" : "Bot stops at fortress: timeout",
-    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
-    "copilot" : false
-  }, {
     "number" : 501,
     "title" : "Bot stops at blaze-rods: no-heal",
     "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
     "copilot" : true
+  }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
   }, {
     "number" : 286,
     "title" : "Bot stops at fortress: blocked",
@@ -28,11 +28,6 @@
     "labels" : [ "bot-failure", "sim", "no-agent" ],
     "copilot" : false
   }, {
-    "number" : 502,
-    "title" : "Bot stops at blaze-rods: blocked",
-    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
-    "copilot" : true
-  }, {
     "number" : 178,
     "title" : "Bot stops at portal: timeout",
     "labels" : [ "bot-failure", "sim", "no-agent" ],
@@ -42,17 +37,22 @@
     "title" : "Bot stops at portal: stair-not-taken",
     "labels" : [ "bot-failure", "real", "sim" ],
     "copilot" : true
+  }, {
+    "number" : 502,
+    "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
   } ],
   "moves" : [ {
     "issue" : 504,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 338,
+    "issue" : 501,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 501,
+    "issue" : 338,
     "move" : "leave",
     "why" : "hands-off label"
   }, {
@@ -64,10 +64,6 @@
     "move" : "leave",
     "why" : "hands-off label"
   }, {
-    "issue" : 502,
-    "move" : "leave",
-    "why" : "hands-off label"
-  }, {
     "issue" : 178,
     "move" : "leave",
     "why" : "hands-off label"
@@ -75,6 +71,10 @@
     "issue" : 513,
     "move" : "wait",
     "why" : "session starting"
+  }, {
+    "issue" : 502,
+    "move" : "leave",
+    "why" : "hands-off label"
   } ],
   "log" : [ {
     "issue" : 135,
