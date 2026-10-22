@@ -142,3 +142,12 @@
     (is (not (plan/done-by (wide 4) hunt-row)) "starving: it is hunted")
     (is (= {:intent/kind :walk :intent/target [38 64 8] :intent/for :hunt}
            (plan/next-intent (wide 4) hunt-row plan/goals)))))
+
+(deftest an-animal-up-a-tree-is-not-game-from-beneath-it
+  ;; sim race 39768347249 (issue #515, R2/30): sheep on a spruce crown five over the walk's end
+  ;; were fought three times from beneath and the third :unreachable ended the plan
+  (let [on (fn [y] (standing 20 {} {5 (animal :sheep [11.5 y 8.5])}))]
+    (is (hunt/fightable-from-route? (on 65.0) (get-in (on 65.0) [:world/entities 5]))
+        "a step up is within a blow")
+    (is (not (hunt/fightable-from-route? (on 69.5) (get-in (on 69.5) [:world/entities 5])))
+        "five over is out of reach from where the walk ends")))
