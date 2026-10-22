@@ -1671,3 +1671,17 @@
         (is (= over (:build/into spare)))
         (is (= [:water-source over] (:build/done spare)))
         (is (nil? (build/spare-pour-op (held [[:water_bucket 2]]) i)) "no filler to seal it")))))
+
+(deftest a-stand-no-line-can-dig-to-is-no-station
+  ;; issue #162 (snapshot real-4-s1-Clj_r08): the lava's stand lay behind cells beside lava the
+  ;; build never digs, and the walk at it failed :no-path three times
+  (let [stand [3 5 0]
+        stone (blocks/default-state :stone)
+        rock (into {} (for [x [1 2 3] y [5 6]] [[x y 0] stone]))
+        w (-> (game/init fx/opts)
+              (assoc :player/pos [0.5 5.0 0.5] :world/chunks {})
+              (assoc :world/blocks rock))
+        lava (assoc-in w [:world/blocks [2 5 1]] blocks/lava-base)]
+    (is (true? (build/way-open? w stand :portal origin :south)) "stone to dig through")
+    (is (false? (build/way-open? lava stand :portal origin :south))
+        "a cell of the line beside lava is never dug")))

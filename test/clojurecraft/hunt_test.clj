@@ -172,3 +172,12 @@
                   :intent/status :done})]
     (is (nil? (hunt/fresh-kill w)))
     (is (= :fight (:intent/kind (plan/next-intent w hunt-row plan/goals))))))
+
+(deftest an-animal-whose-cell-a-walk-failed-at-is-not-hunted-again
+  ;; issue #162 (snapshot R1-41-1): fail-intent blacklists the walk's cell, the hunt skipped
+  ;; animals by id, so the same sheep was walked at every twelve seconds until twelve failed
+  (let [cow {5 (animal :cow [14.5 64.0 8.5])}
+        w (standing 8 {} cow)]
+    (is (some? (hunt/game w)))
+    (is (nil? (hunt/game (assoc w :plan/blacklist #{[14 64 8]}))) "the cell it stands in")
+    (is (nil? (hunt/game (assoc w :player/in-water? true))) "no walk is routed from the water")))
