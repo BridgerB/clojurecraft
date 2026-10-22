@@ -159,3 +159,16 @@
     (is (with-redefs [path/plan (constantly {:path/status :none :path/waypoints []})]
           (let [w (on 69.5)] (hunt/fightable-from-route? w (get-in w [:world/entities 5]))))
         "no route found yet is not held against it")))
+
+(deftest a-fight-that-left-the-animal-alive-is-no-kill
+  ;; issue #178 (R2/37): a starving bot at 0.7 health broke the fight off, the animal still
+  ;; standing, and collected the meat of a kill that never was, again and again
+  (let [w (assoc (standing 0 {} {5 (animal :cow [11.7 64.0 8.2])})
+                 :plan/last
+                 {:intent/kind :fight
+                  :intent/for :hunt
+                  :intent/target 5
+                  :intent/target-pos [11.7 64.0 8.2]
+                  :intent/status :done})]
+    (is (nil? (hunt/fresh-kill w)))
+    (is (= :fight (:intent/kind (plan/next-intent w hunt-row plan/goals))))))
