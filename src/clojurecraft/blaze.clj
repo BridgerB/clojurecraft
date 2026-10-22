@@ -218,7 +218,8 @@
   "Can a rest bring the health back: the food the server last sent at or over hunger/heal-level
    (natural regeneration), or edible food held (the meal first)? Sim race 39712220957 (issue
    #501, world R1/2) rested three times ninety seconds at food 16 with nothing to eat, health
-   falling, and the run ended :no-heal."
+   falling, and the run ended :no-heal: a rest that cannot heal holds in cover instead of
+   failing, and never goes back out to fight at that health."
   [world]
   (or (>= (:player/food world hunger/heal-level) hunger/heal-level) (some? (eat/food-held world))))
 
@@ -296,8 +297,8 @@
 
 (defn healing
   "What a hurt bot does: out of the watching blazes' sight (hide); else the meal; else back away
-   from the nearest watcher; else, with none watching and a rest able to heal (heals?), a :rest;
-   else nil, and the act fights on (a dead bot is back with a full bar; a stopped one is not). Cover before the meal where
+   from the nearest watcher; else, with none watching, a :rest (held in cover when it cannot heal,
+   heals?: a death is no plan, the bot stays alive). Cover before the meal where
    there is cover: a meal takes a second and a half standing still, two hits from a burst, and
    gym blazefort-k run 3 (run 38913023560) ate at 9.4 by its spawner and was dead before the
    food came. The meal before the back-off where there is none: gym blaze-7 run 1 (run
@@ -309,8 +310,7 @@
     (cond away away
           (meal world) (meal world)
           weid {:intent/kind :back-off :intent/target weid}
-          (heals? world) rest-intent
-          :else nil)))
+          :else rest-intent)))
 
 (defn wary?
   "Is the health under eat-under: a meal then comes before the next fight. Gym blaze-7b run 2 (run
@@ -321,14 +321,14 @@
 
 (defn warily
   "What a wary bot does before the next fight: out of the watching blazes' sight (hide); else
-   the meal; else, with no blaze watching, a :rest until rested; else nil, and it fights on.
+   the meal; else, with no blaze watching, a :rest until rested (held when it cannot heal); else nil, and it fights on.
    Gym blazefort-k run 3 (run 38913023560) fought on at 11.5, watched by the spawner's burst,
    and was under 10 a second later."
   [world]
   (let [away (hide world)]
     (cond away away
           (meal world) (meal world)
-          (and (empty? (watchers world)) (heals? world)) rest-intent
+          (empty? (watchers world)) rest-intent
           :else nil)))
 
 (defn fires
@@ -469,5 +469,5 @@
             (intent/assoc-intent :intent/since since :intent/blazes seen :intent/health health))]
     (cond (or (>= now-health rested) (< now-health health) (seq (remove seen here)))
           (intent/done world)
-          (> (- now since) rest-ms) (intent/fail world :no-heal)
+          (and (> (- now since) rest-ms) (heals? world)) (intent/fail world :no-heal)
           :else world)))
