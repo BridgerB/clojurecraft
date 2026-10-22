@@ -132,6 +132,9 @@ A step's move and the cell it started from are kept on the intent until the step
 
 A block in the body's own cells (gravel fallen into the tunnel) is dug out first (`buried`: the head's cell, then the feet's, from the feet), before any step is chosen or worked. A walk has no route from inside a block: issue #338's snapshot R1-33-1 stood in gravel at y 34 mid-step, its stand-in's walk failed `:no-path` with no route, was dropped as unreachable-but-routable and asked again, every tick of its fifteen-minute window.
 
+## The pickaxes the tunnel wears out
+A stone pickaxe digs about 65 blocks of the Nether's tunnel (two minutes; probes 39778484412 and 39782256061, issue #338), and the fortress is 250 to 630 blocks off, so the tunnel makes four to ten pickaxes, two sticks and three cobblestone each, at a table. The Nether has no wood. Sim runs came through the portal with 1 to 3 sticks, a pickaxe of 15 to 34 uses left or none, and no table (left standing at the last pickaxe made before the portal and at the first made in the tunnel). So: the build's kit holds `build/kit-sticks-fill` sticks while the trees are a short trip (`kit-sticks-wanted`), the build takes the placed table along even once the portal is lit, and the fortress step takes it along after the pickaxe is made (`make/take-table-along`). A bot already in the Nether with no table and under four planks, or a table and one stick, cannot make one: that state is handed off, not fixed.
+
 ## Gotchas
 - The sightings are passive: a brick is remembered when its chunk loads (`memory/landmark-kinds`), in the dimension it was seen in, so no scan and no line of sight.
 - The gym row (`fortress`, `:gym/land :nether-fortress`) carves a pocket of netherrack 48 blocks west of `locate structure minecraft:fortress` at y 72 and judges with `execute as {name} at @s if dimension minecraft:the_nether` and a filtered clone that counts bricks within 6.

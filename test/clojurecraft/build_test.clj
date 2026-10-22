@@ -1119,6 +1119,18 @@
     (is (not (build/carry-table? (remembered-ground {} pos)))
         "no trunk a route reaches: nothing to fetch")))
 
+(deftest a-kit-holds-sticks-for-the-nether-tunnel-when-the-trees-are-near
+  ;; probes 39778484412 and 39782256061 (issue #338): a stone pickaxe wears out in the tunnel in
+  ;; two minutes, the fortress is 250 to 630 blocks off, and the snapshots came through the portal
+  ;; with one to three sticks
+  (let [pos [5.5 63.0 5.5]
+        trunk {[9 63 9] 136 [9 64 9] 136}
+        near (remembered-ground trunk pos)
+        far (remembered-ground {} pos)]
+    (is (= build/kit-sticks-fill (build/kit-sticks-wanted near))
+        "a trunk a route reaches: the whole tunnel's")
+    (is (= build/kit-sticks (build/kit-sticks-wanted far)) "none: one pickaxe's worth, as before")))
+
 (deftest a-refill-never-opens-lava-over-its-stand
   ;; Issue #231, R1/32: the ray to a low source opened the wall under higher lava,
   ;; which flowed onto the stand before the next dig finished.

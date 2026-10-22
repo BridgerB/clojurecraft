@@ -1936,7 +1936,8 @@
        (nil? (make/take-table-along world))
        (or (table-at-hand? world) (wood-near? world))))
 
-(def kit-sticks 2)                    ; sticks a build carries: one pickaxe's worth, made again where the cast wore the last out
+(def kit-sticks 2)                    ; sticks a build carries when no trunk is near: one pickaxe's worth, made again where the cast wore the last out
+(def kit-sticks-fill 24)              ; sticks it carries when the trees are a short trip: twelve stone pickaxes' handles, three logs, for the Nether's tunnel
 
 (defn sticks-at-hand?
   "Could kit-sticks be made without going out for anything: the needs planner's next step toward
@@ -1947,17 +1948,27 @@
                            plan/goals)]
     (boolean (and (map? row) (not (make/fetch? row))))))
 
+(defn kit-sticks-wanted
+  "The sticks a build's kit holds now: kit-sticks-fill while the trees are a short trip (wood-near?),
+   where the logs for them are cut once for the whole road, else kit-sticks. A stone pickaxe wears
+   out in the Nether's tunnel in about two minutes and 65 blocks (probes 39778484412 and
+   39782256061, issue #338: R3/29 seed 2 went 84, 60, new 130, 62 and none in five minutes), the
+   fortress is 250 to 630 blocks off, so the tunnel makes four to ten pickaxes, two sticks each;
+   the snapshots came through the portal with one to three sticks and dug by hand at 11 s a step."
+  [world]
+  (if (wood-near? world) kit-sticks-fill kit-sticks))
+
 (defn carry-sticks?
-  "Should a build take kit-sticks into its kit beside the table: fewer held, a table held or placed
-   within reach already (the table first: carry-table?, so the planks a table needs are never
-   spent on sticks), and they can be made from what is held (sticks-at-hand?) or their wood is a
-   short trip (wood-near?). A table and
+  "Should a build take kit-sticks-wanted into its kit beside the table: fewer held, a table held or
+   placed within reach already (the table first: carry-table?, so the planks a table needs are
+   never spent on sticks), and they can be made from what is held (sticks-at-hand?) or their wood
+   is a short trip (wood-near?). A table and
    cobblestone make no pickaxe without sticks: a probe of world R3/12 seed 1 from spawn on main
    (Refs #178) wore out its pickaxes in the cast holding a table, 684 cobblestone and one plank,
    no sticks, and cut stairs up through deepslate by hand for a log, fifteen seconds a block,
    until its ninety minutes ran out."
   [world]
-  (and (< (get (make/counts world) :stick 0) kit-sticks)
+  (and (< (get (make/counts world) :stick 0) (kit-sticks-wanted world))
        (or (pos? (get (make/counts world) :crafting_table 0)) (some? (make/take-table-along world)))
        (or (sticks-at-hand? world) (wood-near? world))))
 
@@ -1989,7 +2000,7 @@
                 (pos? n) (assoc :item/cobblestone n)
                 (water-needed? world plan) (assoc :item/water_bucket 1)
                 (carry-table? world) (assoc :item/crafting_table 1)
-                (carry-sticks? world) (assoc :item/stick kit-sticks))]
+                (carry-sticks? world) (assoc :item/stick (kit-sticks-wanted world)))]
     (when (seq holds) (make/decide world (assoc goal :goal/provides holds) table))))
 
 (defmethod plan/next-intent :build
@@ -2000,7 +2011,10 @@
   ;; build the row's plan (:goal/build) at the site remembered while its pool can finish it
   ;; (spent?), else at one chosen now (the :build intent remembers it), its access steps up to the
   ;; lava's height (station); with none, hunt for lava (lava-hunt), else wait :no-site.
-  ;; A reachable lit portal skips the kit and table collection: only entry remains (lit-entry)
+  ;; A reachable lit portal skips the kit but not the placed table, taken along on the way in: a
+  ;; pickaxe made at the portal leaves the table standing, and the Nether has no wood for another
+  ;; (sim race probe 39782256061, issue #338, R2/12 seed 2: table held at 15 minutes, gone at 16
+  ;; in the Nether, one stick, one plank; the tunnel dug by hand for the next hour)
   [world {:goal/keys [build] :as goal} table]
   (let [{:site/keys [origin facing]}
         (let [{:site/keys [origin facing] :as site} (memory/site world)]
@@ -2017,9 +2031,9 @@
     (or (when-not (and entry
                        (or (intent/centred? world (:build/stand entry))
                            (stand-walk world (:build/stand entry))))
-          (or (held-first world goal table ops)
-              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
-              (make/take-table-along world)))
+          (held-first world goal table ops))
+        (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+        (make/take-table-along world)
         (cond origin
               {:intent/kind :build
                :intent/build build

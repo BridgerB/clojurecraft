@@ -552,7 +552,10 @@
     (plan/next-intent world (assoc goal :goal/plan :build) table)))
 
 (defmethod plan/next-intent :fortress
-  ;; replace a missing pickaxe from held supplies, then tunnel to the nearest brick on record;
+  ;; replace a missing pickaxe from held supplies and take the placed table along (the next
+  ;; pickaxe is made where the bot stands, not out of four more planks: probe 39782256061, issue
+  ;; #338, R3/29 seed 2 left its table at the first pickaxe made in the tunnel and had sticks and
+  ;; 937 cobblestone and no pickaxe from the second), then tunnel to the nearest brick on record;
   ;; with none, the next leg of the spiral search (exploring); with nowhere safe, or outside the
   ;; Nether, wait
   [world goal table]
@@ -563,6 +566,8 @@
           :else
           (or (when (build/pickaxe-at-hand? world)
                 (make/decide world (assoc goal :goal/provides {:tag/pickaxes 1}) table))
+              (intent/chain-next (:plan/last world) :take-table make/table-drops {})
+              (make/take-table-along world)
               (when brick
                 {:intent/kind :tunnel-to :intent/target brick :intent/steps steps-per-tunnel})
               (when search

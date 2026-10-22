@@ -83,6 +83,26 @@
         "no supplies: keep clearing the way by hand, not a hunt for overworld wood")
     (is (= {:plan/wait :other-dimension} (next (assoc w :player/dimension dimension/overworld))))))
 
+(deftest a-fortress-tunnel-takes-its-placed-table-along
+  ;; probe 39782256061 (issue #338, R3/29 seed 2): the pickaxe made in the Nether's tunnel left the
+  ;; table standing, and the next, with sticks and 937 cobblestone in hand, had no table to be made at
+  (let [goal (first (filter #(= :fortress (:goal/id %)) plan/goals))
+        pick {:item (recipe/item-id :stone_pickaxe) :count 1}
+        w (memory/observe (assoc (rock {})
+                                 :world/facts (memory/empty-facts)
+                                 :player/dimension dimension/nether
+                                 :player/inventory {0 pick})
+                          [1 64 0]
+                          (blocks/default-state :crafting_table))
+        next #(plan/next-intent % goal plan/goals)]
+    (is (= :take-table (:intent/for (next w)))
+        "a pickaxe made, the placed table within reach is dug")
+    (is (= :tunnel-to
+           (:intent/kind (next (assoc-in w
+                                [:player/inventory 1]
+                                {:item (recipe/item-id :crafting_table) :count 1}))))
+        "a table held already: on with the tunnel")))
+
 (deftest a-tunnel-replans-when-its-pickaxe-breaks
   (let [w (assoc (rock {})
                  :world/facts (memory/empty-facts)
