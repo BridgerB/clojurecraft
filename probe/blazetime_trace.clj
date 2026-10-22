@@ -6,8 +6,10 @@
             [clojurecraft.blaze :as blaze]
             [clojurecraft.capture :as capture]
             [clojurecraft.dimension :as dimension]
+            [clojurecraft.entity :as entity]
             [clojurecraft.game :as game]
             [clojurecraft.hunt :as hunt]
+            [clojurecraft.physics :as physics]
             [clojurecraft.plan :as plan]
             [clojurecraft.sim :as sim]
             [clojurecraft.simrace :as sr]))
@@ -53,7 +55,17 @@
                           "sp" sp
                           "pos"
                           (some-> (:player/pos world)
-                                  r1))))
+                                  r1)
+                          "prov" (when (:player/pos world) (hunt/provisioning? world))
+                          "animals"
+                          (when (:player/pos world)
+                            (let [p (:player/pos world)
+                                  ds (sort (for [[_ e] (:world/entities world)
+                                                 :when (hunt/game-kinds (entity/kind e))
+                                                 :let [d (physics/distance p (:entity/pos e))]]
+                                             (long d)))]
+                              (vec (take 3 ds))))
+                          "game" (when (:player/pos world) (some? (hunt/game world))))))
         stop? (fn [world]
                 (let [i (:plan/intent world)
                       id (:intent/id i)
@@ -63,7 +75,7 @@
                   (when (and (not= id @last-id) (contains? kinds (:intent/kind i)))
                     (line "I" world))
                   (reset! last-id id)
-                  (when (> (- now @last-status) 600000) (reset! last-status now) (line "S" world))
+                  (when (> (- now @last-status) 120000) (reset! last-status now) (line "S" world))
                   (if (= :rest (:intent/kind i))
                     (do (when-not @rest-since (reset! rest-since now))
                         (and (> (- now @rest-since) stop-rest-ms) (do (line "STOP" world) true)))
