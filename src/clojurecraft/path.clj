@@ -196,6 +196,17 @@
   (let [at (cells world)]
     (and (floor? at [x (dec y) z]) (clear? at [x y z]) (clear? at [x (inc y) z]))))
 
+(defn wet-standable?
+  "Could the feet rest at node [x y z] with water standing in their cell: a floor under it, the
+   feet cell water (a shallow flow over the floor), the head cell clear, no lava beside or
+   under either. world is a world or its cells."
+  [world [x y z]]
+  (let [at (cells world)]
+    (and (floor? at [x (dec y) z])
+         (= :water (at [x y z]))
+         (clear? at [x (inc y) z])
+         (not (lava-near? at [x y z])))))
+
 ;; ---------------------------------------------------------------- moves as data
 
 (def templates
@@ -476,11 +487,13 @@
    nearest standable cell within one block on the plane and one up or down. A player whose feet
    sit on a block edge floors into the neighbouring column, which on a hillside is inside the
    hill (recorded by the gym at landing 21280,18720: the feet at x 21281.0 on a stone edge, the
-   cell they floor into solid, every plan :none); the box rests on the cell beside it. nil when
+   cell they floor into solid, every plan :none); the box rests on the cell beside it. A cell with
+   water in its feet over a floor (wet-standable?) is a start too: a bot in a shallow flow
+   (issue #130, real-7 Clj_r18: not :player/in-water?, every retreat found no route). nil when
    nothing near can be stood on. world is a world or its cells."
   [world [x y z :as from]]
   (let [at (cells world)]
-    (if (standable? at from)
+    (if (or (standable? at from) (wet-standable? at from))
       from
       (->> (for [dy [0 -1 1] dx [0 -1 1] dz [0 -1 1]] [(+ x dx) (+ y dy) (+ z dz)])
            (filter #(standable? at %))
