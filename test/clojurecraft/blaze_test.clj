@@ -261,7 +261,7 @@
                                                :intent/since 0
                                                :intent/health 8.0))
                                  (assoc blaze/rest-intent :intent/since 0 :intent/health 8.0)
-                                 nil))]
+                                 {:event/kind :tick :event/now now}))]
       (is (= :failed (:intent/status (:plan/intent (rest-for 20 (inc blaze/rest-ms)))))
           "fed and no health back in rest-ms: :no-heal")
       (is (not= :failed (:intent/status (:plan/intent (rest-for 16 (inc blaze/rest-ms)))))
