@@ -1,9 +1,145 @@
 {
-  "at" : "2026-10-22T15:30:28.843Z",
+  "at" : "2026-10-22T15:32:13.548Z",
   "cap" : 1,
-  "agent-tasks" : false,
-  "issues" : [ ],
-  "moves" : [ ],
+  "agent-tasks" : true,
+  "issues" : [ {
+    "number" : 525,
+    "title" : "Bot stops at blaze-rods: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : true
+  }, {
+    "number" : 504,
+    "title" : "Bot stops at blaze-rods: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 524,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 338,
+    "title" : "Bot stops at fortress: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent", "agent-stuck" ],
+    "copilot" : false
+  }, {
+    "number" : 286,
+    "title" : "Bot stops at fortress: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 37,
+    "title" : "Bot stops at ingots: boxed",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 44,
+    "title" : "Bot stops at cast-one: rejected",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 514,
+    "title" : "Bot stops at blaze-rods: no-footing",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : true
+  }, {
+    "number" : 135,
+    "title" : "Bot stops at cast-one: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 526,
+    "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "sim" ],
+    "copilot" : false
+  }, {
+    "number" : 502,
+    "title" : "Bot stops at blaze-rods: blocked",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
+  }, {
+    "number" : 284,
+    "title" : "Bot stops at fortress: no-path",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 227,
+    "title" : "Bot stops at portal: no-scoop",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 178,
+    "title" : "Bot stops at portal: timeout",
+    "labels" : [ "bot-failure", "sim", "no-agent" ],
+    "copilot" : false
+  }, {
+    "number" : 518,
+    "title" : "Bot stops at portal: no-bucket",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
+  }, {
+    "number" : 501,
+    "title" : "Bot stops at blaze-rods: no-heal",
+    "labels" : [ "bot-failure", "real", "sim", "no-agent" ],
+    "copilot" : true
+  } ],
+  "moves" : [ {
+    "issue" : 525,
+    "move" : "wait",
+    "why" : "session starting"
+  }, {
+    "issue" : 504,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 338,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 286,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 37,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 44,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 514,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 135,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 502,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 284,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 227,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 178,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 518,
+    "move" : "leave",
+    "why" : "hands-off label"
+  }, {
+    "issue" : 501,
+    "move" : "leave",
+    "why" : "hands-off label"
+  } ],
   "log" : [ {
     "issue" : 135,
     "move" : "unassign",
