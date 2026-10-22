@@ -579,3 +579,65 @@
     (is (swim/solid-cell? w ore))
     (is (not (swim/diggable-cell? w ore)) "iron ore with no pickaxe")
     (is (swim/diggable-cell? w rock) "stone is dug by hand if it must be")))
+
+(defn- bank-world
+  "A sea (water up to y 62) against a one-block bank at x 2 (stone to y 63, air over it, a cliff
+   beyond), the player at pos with a stack of cobblestone: issue #45 R1-17-2, a swim whose lift
+   peaks at 63.95 under the bank's top 64.0."
+  [pos intent stone]
+  (let [sea (into {}
+                  (for [x (range 3 16) z (range 16) y (range 56 63)] [[x y z] blocks/water-base]))
+        bank
+        (into
+         {}
+         (for [x (range 3) z (range 16) y (range 56 64)] [[x y z] (blocks/default-state :stone)]))
+        cliff
+        (into
+         {}
+         (for [x (range 2) z (range 16) y (range 64 72)] [[x y z] (blocks/default-state :stone)]))]
+    (assoc (game/init fx/opts)
+           :bot/phase :play
+           :player/pos pos
+           :player/loaded? true
+           :player/on-ground? false
+           :player/in-water? false
+           :player/eye-in-water? false
+           :player/inventory
+           (if (pos? stone) {0 {:item (blocks/items :cobblestone) :count stone}} {})
+           :time/tick 200
+           :world/chunks {[0 0] (world/column (merge sea bank cliff))}
+           :plan/intent intent)))
+
+(deftest a-swim-stuck-under-a-banks-top-lays-a-block-for-a-step
+  ;; the bot is pressed to the bank's face, bobbing between 62.6 and 63.95 with nothing to dig: a
+  ;; block laid into the water beside it is the step; with no filler it still fails :stuck
+  (let [swim {:intent/kind :swim-out
+              :intent/status :active
+              :intent/bank [2 64 8]
+              :intent/started 100
+              :intent/best-tick 100
+              :intent/best-dist 1.0}
+        tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
+        w (bank-world [3.3 63.2 8.5] swim 20)
+        laid (:intent/child (:plan/intent (intent/run w swim tick)))
+        bare (:plan/intent (intent/run (bank-world [3.3 63.2 8.5] swim 0) swim tick))]
+    (is (= :place (:intent/kind laid)))
+    (is (= :cobblestone (:intent/item laid)))
+    (is (= 3 (first (:intent/cell laid))) "against the bank's face")
+    (is (= 62 (second (:intent/cell laid))) "into the water's top cell")
+    (is (= :failed (:intent/status bare)))
+    (is (= :stuck (:intent/reason bare)))))
+
+(deftest a-body-bobbing-at-a-bank-is-trapped-but-a-swimmer-is-not
+  (let [at (fn [kind ground? ticks]
+             (-> (bank-world [3.3 63.2 8.5] {:intent/kind kind :intent/status :active} 0)
+                 (assoc :player/on-ground? ground? :plan/afloat-ticks ticks)
+                 trap/trapped-tick))
+        almost (dec trap/afloat-after-ticks)]
+    (is (nil? (:plan/trap (at :walk false 10))) "a short hop over water is not a trap")
+    (is (= 11 (:plan/afloat-ticks (at :walk false 10))))
+    (is (= :water (:plan/trap (at :walk false almost))) "afloat for three seconds is")
+    (is (nil? (:plan/trap (at :cross false almost))) "a crossing swims at the surface on purpose")
+    (is (nil? (:plan/trap (at :wade false almost))) "so does a wade")
+    (is (zero? (:plan/afloat-ticks (at :cross false almost))))
+    (is (zero? (:plan/afloat-ticks (at :walk true almost))) "on the ground the count restarts")))
