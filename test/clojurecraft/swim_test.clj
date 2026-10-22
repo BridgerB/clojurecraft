@@ -616,7 +616,7 @@
               :intent/bank [2 64 8]
               :intent/started 100
               :intent/best-tick 100
-              :intent/best-dist 1.0}
+              :intent/best-dist 0.5}
         tick {:event/kind :tick :event/now 1000 :event/rand 0.5}
         w (bank-world [3.3 63.2 8.5] swim 20)
         laid (:intent/child (:plan/intent (intent/run w swim tick)))
