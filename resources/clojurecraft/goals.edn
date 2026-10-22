@@ -344,10 +344,9 @@
  {:goal/id :blaze-rods
   :goal/priority 18
   :goal/target? true
-  :goal/aside? true
   :goal/until "blaze-rods"
   :goal/doc
-  "seven blaze rods (six for the twelve blaze powder twelve eyes of ender take, one spare), from the blazes a fortress's spawner makes (issue #262): a rod lying near picked up, the nearest blaze in sight and in reach of the floor fought, else the remembered spawner walked to on its floor or tunnelled to, into the open cell beside it, and camped by; hurt under 10, into a cell out of every watching blaze's sight, else food eaten, else backed away from the nearest watcher, else a rest; under 14 the same cover, meal or rest before the next fight; watched by three blazes at once, cover whatever the health; a fire by the spawner put out; in the Nether only. An aside until the stages before it are proven from the fortress pad and the chain is raised to it"
+  "seven blaze rods (six for the twelve blaze powder twelve eyes of ender take, one spare), from the blazes a fortress's spawner makes (issue #262): a rod lying near picked up, the nearest blaze in sight and in reach of the floor fought, else the remembered spawner walked to on its floor or tunnelled to, into the open cell beside it, and camped by; hurt under 10, into a cell out of every watching blaze's sight, else food eaten, else backed away from the nearest watcher, else a rest; under 14 the same cover, meal or rest before the next fight; watched by three blazes at once, cover whatever the health; a fire by the spawner put out; in the Nether only. A step of the chain since the real race was raised to it (#491): an aside before, so plan/through stopped at the fortress"
   :goal/dimension "minecraft:the_nether"
   :goal/done? :rods-held?
   :goal/plan :blaze-rods}

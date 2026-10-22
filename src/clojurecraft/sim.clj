@@ -1444,7 +1444,7 @@
                        :sim/player-pos (:at landed)
                        :sim/view #{})
                 (cond-> view-distance (assoc :sim/view-distance view-distance))
-                (dissoc :sim/view-at)))
+                (dissoc :sim/view-at :sim/spawners :sim/spawners-at)))
           column
           (-> sim
               (assoc :sim/columns {[0 0] column}
@@ -1452,7 +1452,7 @@
                      :sim/broken #{}
                      :sim/player-pos at
                      :sim/view #{}) ; a dimension change drops every chunk the client held
-              (dissoc :sim/view-at))
+              (dissoc :sim/view-at :sim/spawners :sim/spawners-at))
           :else (dissoc sim :sim/view-at))))
 
 (defn through-portal
@@ -2440,6 +2440,81 @@
             sim
             (if player (sort (keys (:sim/mobs sim))) []))))
 
+(defn in-nether?
+  "Is the player in the Nether, where a fortress's spawners run?"
+  [sim]
+  (= dimension/nether (:sim/dimension sim)))
+
+(defn spawner-cells
+  "The set of cells holding a spawner block in the decoded columns within one chunk of the
+   player's column (a spawner wakes within 16 blocks, never farther than the next column)."
+  [sim]
+  (let [[hx hz] (column-key (:sim/player-pos sim))
+        near (into {}
+                   (for [x (range (dec hx) (+ hx 2))
+                         z (range (dec hz) (+ hz 2))
+                         :let [c (column-of sim [x z])]
+                         :when c]
+                     [[x z] c]))]
+    (set (for [[x y z] (chunk/find-blocks near #(= % mob/spawner-block))] [x y z]))))
+
+(defn spawner-nearby
+  "How many living blazes stand where the spawner at cell sp counts them (mob/spawner-crowded?)."
+  [sim sp]
+  (count (filter (fn [[_ {:keys [type pos dead-at]}]]
+                   (and (= (:kind mob/spawner) type) (not dead-at) (mob/spawner-crowded? sp pos)))
+                 (:sim/mobs sim))))
+
+(defn spawn-batch
+  "The model after the spawner at cell sp spawns: a batch rolled (mob/spawner-batch), cut to the
+   room it has (mob/spawner-room), each try three rolls of the mobs' stream, each blaze placed
+   where one fits (mob/spawner-spawns)."
+  [sim sp]
+  (let [[sim rb] (mob-roll sim)
+        tries (min (mob/spawner-batch rb) (mob/spawner-room (spawner-nearby sim sp)))
+        [sim rolls] (reduce (fn [[sim acc] _] (let [[sim r] (mob-roll sim)] [sim (conj acc r)]))
+                            [sim []]
+                            (range (* 3 tries)))]
+    (reduce (fn [sim [x y z]] (add-mob sim (:kind mob/spawner) [(+ x 0.5) (double y) (+ z 0.5)] {}))
+            sim
+            (mob/spawner-spawns (free-fn sim) sp tries (partition 3 rolls)))))
+
+(defn due-at
+  "The time in ms of the spawner's next spawn, a delay rolled (mob/spawner-delay) from now:
+   [sim' ms]."
+  [sim]
+  (let [[sim r] (mob-roll sim)] [sim (+ (:sim/now sim) (* physics/tick-ms (mob/spawner-delay r)))]))
+
+(defn tick-spawner
+  "One tick of the spawner at cell sp: gone when its block is (broken); nothing with the player
+   out of its range (mob/spawner-awake?); the first tick in range sets its delay; once the delay
+   is over, a batch (spawn-batch) and the next delay."
+  [sim sp]
+  (let [due (get-in sim [:sim/spawners sp])]
+    (cond (not= mob/spawner-block (block-at sim sp)) (update sim :sim/spawners dissoc sp)
+          (not (mob/spawner-awake? sp (:sim/player-pos sim))) sim
+          (nil? due) (let [[sim at] (due-at sim)] (assoc-in sim [:sim/spawners sp] at))
+          (< (:sim/now sim) due) sim
+          :else
+          (let [[sim at] (due-at (spawn-batch sim sp))] (assoc-in sim [:sim/spawners sp] at)))))
+
+(defn tick-spawners
+  "A tick of the Nether's spawners, in a model with a difficulty above peaceful and a player in
+   the Nether: the spawners round the player are found when it comes into another column
+   (:sim/spawners {cell due-ms}, kept apart from the mobs' timers), then each ticks in order
+   (tick-spawner)."
+  [sim]
+  (let [player (:sim/player-pos sim)
+        here (when player (column-key player))]
+    (cond (not (and player (#{:easy :normal :hard} (:sim/difficulty sim)) (in-nether? sim))) sim
+          :else
+          (let [sim (cond-> sim
+                      (not= here (:sim/spawners-at sim))
+                      (-> (assoc :sim/spawners-at here)
+                          (update :sim/spawners
+                                  #(merge (zipmap (spawner-cells sim) (repeat nil)) %))))]
+            (reduce tick-spawner sim (sort (keys (:sim/spawners sim))))))))
+
 (defn grass-top
   "The feet height on the highest grass block of column x z with room to stand over it, from 32
    over y down to 32 under it; nil when there is none."
@@ -2499,15 +2574,16 @@
 
 (defn tick-mobs
   "One game tick of the mobs: the day moves on (:sim/day-time), chunks coming near get their
-   animals (populate), a hostile is tried for (try-spawn), every mob acts in id order (act-mob),
-   and far hostiles despawn (despawn). A model with no difficulty and no mobs only keeps its day."
+   animals (populate), a hostile is tried for (try-spawn), the Nether's spawners run
+   (tick-spawners), every mob acts in id order (act-mob), and far hostiles despawn (despawn). A model with no difficulty and no mobs only keeps its day."
   [sim]
   (let [sim (cond-> sim (:sim/day-time sim) (update :sim/day-time inc))]
     (cond (not (or (:sim/difficulty sim) (seq (:sim/mobs sim)))) sim
           :else
           (let [sim (-> sim
                         populate
-                        try-spawn)]
+                        try-spawn
+                        tick-spawners)]
             (despawn (reduce act-mob sim (sort (keys (:sim/mobs sim)))))))))
 
 

@@ -7,7 +7,9 @@
    block, falls, and hurts the player by its kind: a melee hit in reach on a cooldown, an arrow
    or a fireball at range with a clear line, a creeper's fuse and blast. Passive animals stand
    where the world placed them, food for the player. A player's attack hurts a mob by the held
-   item; a mob at zero health dies and drops its loot.
+   item; a mob at zero health dies and drops its loot. A fortress's blaze spawner (the Nether's only
+   spawning) runs by the rules at the end: awake within 16 of a player, a batch every 200 to 800
+   ticks, under a cap of six blazes about it.
 
    Every function here takes free?, a function of a cell [x y z] to whether a body may stand in
    it (loaded and not solid), or solid?, its opposite for sight: what a mob does is a function of
@@ -401,3 +403,86 @@
   (+ lo (long (math/floor (* r (inc (- hi lo)))))))
 
 (defn loot-item "The item id of a loot row [item lo hi]." [[item]] (recipe/item-id item))
+
+;; ---------------------------------------------------------------- spawners
+
+(def spawner-block
+  "The state id of a spawner block: a fortress's makes blazes (every spawner the model's Nether
+   holds, a dungeon's zombies being the overworld's)."
+  (blocks/default-state :spawner))
+
+(def spawner
+  "A blaze spawner as vanilla 26.1.2 runs it (BaseSpawner): :wake the distance from its centre a
+   player must be within for it to run; :delay [lo hi] the ticks to the next spawn, rolled from
+   lo to hi; :batch [lo hi] the blazes one spawn tries for; :cap the blazes of its kind that may
+   stand within :near blocks of it before it makes no more; :box [x y z] the cells round it a
+   blaze is placed in; :light the greatest light level a blaze spawns in."
+  {:kind :blaze :wake 16.0 :delay [200 800] :batch [2 4] :cap 6 :near 4 :box [9 3 9] :light 11})
+
+(def interior-light
+  "The light level the model gives every cell of a fortress: none is lit, no torch being modelled."
+  0)
+
+(defn spawner-awake?
+  "Is a player whose feet are at p within the spawner's :wake of the spawner block at cell
+   [x y z] (its centre)? A spawner does nothing with no player near."
+  [[x y z] p]
+  (<= (physics/distance [(+ x 0.5) (+ y 0.5) (+ z 0.5)] p) (:wake spawner)))
+
+(defn spawner-between
+  "The whole number a roll r in [0, 1) lands on from lo to hi, evenly."
+  [[lo hi] r]
+  (+ lo (long (math/floor (* r (inc (- hi lo)))))))
+
+(defn spawner-delay
+  "The game ticks to a spawner's next spawn for a roll r in [0, 1): 200 to 800, evenly."
+  [r]
+  (spawner-between (:delay spawner) r))
+
+(defn spawner-batch
+  "How many blazes one spawn tries for, for a roll r in [0, 1): 2 to 4, evenly."
+  [r]
+  (spawner-between (:batch spawner) r))
+
+(defn spawner-crowded?
+  "Is a blaze at mob position m within the cells a spawner at cell [x y z] counts: its :near
+   blocks each way of the cell, the cell's own span included (the box vanilla counts blazes in)?"
+  [[x y z] [mx my mz]]
+  (let [n (:near spawner)]
+    (and (<= (- x n) mx (+ x n 1)) (<= (- y n) my (+ y n 1)) (<= (- z n) mz (+ z n 1)))))
+
+(defn spawner-room
+  "How many more blazes a spawner may make with nearby of its kind already round it: the :cap
+   less them, never under zero."
+  [nearby]
+  (max 0 (- (:cap spawner) nearby)))
+
+(defn spawner-dark?
+  "May a blaze spawn at light level l: at most the spawner's :light?"
+  [l]
+  (<= l (:light spawner)))
+
+(defn spawner-spot
+  "The cell of the spawner's :box round the spawner at cell [x y z] that rolls rx, ry, rz in
+   [0, 1) land on: across the box's width and depth, and its height from one under the spawner."
+  [[x y z] rx ry rz]
+  (let [[w h d] (:box spawner)]
+    [(+ x (long (math/floor (* rx w))) (- (quot w 2))) (+ y (long (math/floor (* ry h))) -1)
+     (+ z (long (math/floor (* rz d))) (- (quot d 2)))]))
+
+(defn spawner-fits?
+  "May a blaze be placed at cell c: its body free there (stands-in? of its tall cells), dark
+   (the model's interior-light), and no other taken (cells already chosen this spawn)?"
+  [free? c taken]
+  (and (spawner-dark? interior-light) (not (contains? taken c)) (stands-in? free? c (tall :blaze))))
+
+(defn spawner-spawns
+  "The cells a spawner at cell sp places blazes in for one spawn: one try for each of tries, each
+   try three rolls of rolls ([rx ry rz] each, in order), a try whose cell does not fit
+   (spawner-fits?) making none. Distinct cells, in the order tried."
+  [free? sp tries rolls]
+  (reduce (fn [cells [rx ry rz]]
+            (let [c (spawner-spot sp rx ry rz)]
+              (cond-> cells (spawner-fits? free? c (set cells)) (conj c))))
+          []
+          (take tries rolls)))
