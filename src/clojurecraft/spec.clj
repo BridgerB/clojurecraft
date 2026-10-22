@@ -727,6 +727,7 @@
 (s/def :sim/mobs (s/map-of int? ::sim-mob))
 (s/def :sim/fixture-mobs (s/coll-of (s/keys :req-un [:sim.mob/type :sim.mob/pos]) :kind vector?))
 (s/def :sim/mob-rng int?)                      ; the mobs' own roll stream (sim/mob-roll)
+(s/def :sim/wild-rng int?)                     ; the Nether's own spawns' roll stream (sim/wild-roll, issue #263)
 (s/def :sim/day-time int?)                     ; game ticks into the days, night from 13000 of each 24000
 (s/def :sim/populated (s/coll-of (s/tuple int? int?) :kind set?)) ; chunks whose animals were placed
 (s/def :sim/populated-at (s/tuple int? int?))  ; the column the player was in when they last were

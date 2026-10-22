@@ -306,6 +306,116 @@
     (is (some? (:dead-at (get-in burnt [:sim/mobs eid]))))
     (is (= 20.0 (:sim/health burnt)))))
 
+;; ---------------------------------------------------------------- the Nether's own spawns (issue #263)
+
+(def nylium (blocks/default-state :warped_nylium))
+
+(def warped-floor
+  "A column's top at y 63 of warped nylium: a warped forest's floor, as the model tells one."
+  (into {} (for [x (range 16) z (range 16)] [[x 63 z] nylium])))
+
+(defn nether-world
+  "Seven by seven Nether columns of the stone floor round [0 0], each topped by blocks."
+  [blocks]
+  (let [column (world/column-bytes blocks dimension/nether)]
+    (into {} (for [cx (range -3 4) cz (range -3 4)] [[cx cz] column]))))
+
+(def nether-spawn [0.5 64.0 0.5])
+
+(defn nether-play
+  "A Normal model in play in the Nether over nether-world's columns, by the overworld's day
+   (nothing to do with the Nether's spawns), after n ticks."
+  [blocks seed n]
+  (-> (sim/init {:columns (nether-world blocks)
+                 :spawn nether-spawn
+                 :dimension dimension/nether
+                 :difficulty :normal
+                 :day-time 1000
+                 :seed seed})
+      (assoc :sim/phase :play :sim/player-pos nether-spawn :sim/on-ground? true)
+      (ticks n)))
+
+(deftest an-enderman-spawns-on-warped-nylium-with-three-cells-of-room
+  (let [floor (fn [[_ y _]]
+                (cond (= y 63) nylium
+                      (< y 63) 1))
+        rock (fn [[_ y _]] (cond (<= y 63) 1))
+        open (fn [c] (nil? (floor c)))
+        low (fn [[_ y _ :as c]] (and (open c) (< y 66)))]
+    (is (mob/nether-spot? floor open [3 64 3]) "nylium under the feet, the air above open")
+    (is (not (mob/nether-spot? rock open [3 64 3])) "netherrack or stone is no warped forest")
+    (is (not (mob/nether-spot? floor low [3 64 3])) "2.9 tall, it needs three cells (mob/tall)")
+    (is (not (mob/nether-spot? floor open [3 65 3])) "nothing under the feet")
+    (is (= [[3 64 3]] (mob/nether-spots floor open 3 3 48 80)))
+    (is (= 5 (mob/pack-step 0.99 0.0)) "nextInt(6) - nextInt(6): five at most")
+    (is (= -5 (mob/pack-step 0.0 0.99)))
+    (is (= 0 (mob/pack-step 0.5 0.5)))))
+
+(deftest a-warped-forest-spawns-packs-of-endermen-by-day-and-netherrack-spawns-nothing
+  ;; issue #263: vanilla spawns the Nether's hostiles by biome, the warped forest's list being
+  ;; the enderman alone in packs of four, in any light the model tells (the overworld's night
+  ;; rule would spawn nothing here by day, with no roof); the model tells the forest by its floor
+  (let [forest (nether-play warped-floor 7 500)
+        mobs (vals (:sim/mobs forest))]
+    (is (<= 1 (count mobs) (* 5 mob/enderman-pack))
+        "five tries, a pack of up to four each, some despawned beyond 32")
+    (is (every? #(= :enderman (:type %)) mobs) "the forest's one kind")
+    (is (every? #(= 64.0 (second (:pos %))) mobs) "standing on the nylium")
+    (is (every? #(<= mob/spawn-near (physics/distance (:pos %) nether-spawn)) mobs)
+        "none nearer the player than 24")
+    (is (every? #(<= (mob/flat-distance (:pos %) nether-spawn)
+                     (+ mob/spawn-far (* mob/enderman-pack (dec mob/pack-walk)) 1.0))
+                mobs)
+        "in the ring, a pack's walk past it at most")
+    (is (empty? (:sim/mobs (nether-play {} 7 500))) "a stone floor is no warped forest")))
+
+(deftest the-overworld-spends-no-roll-of-the-nethers-stream
+  ;; the Nether's spawns roll from their own stream (sim/wild-roll), so the overworld's night
+  ;; rule rolls as it did before it: a seed's run is the same with the Nether's rule or without
+  (let [sim0 (-> (sim/init {:columns (flat-world {})
+                            :spawn nether-spawn
+                            :difficulty :normal
+                            :day-time night
+                            :seed 7})
+                 (assoc :sim/phase :play :sim/player-pos nether-spawn))
+        states (reductions (fn [sim _] (ticks sim 1)) sim0 (range 500))
+        sim (last states)]
+    (is (seq (:sim/mobs sim)) "the night rule spawned")
+    (is (= (:sim/wild-rng sim0) (:sim/wild-rng sim)) "and the Nether's stream never rolled")
+    (is (every? #(identical? % (sim/try-nether-spawn %)) states)
+        "the Nether's rule leaves every overworld tick as it was")))
+
+(deftest the-bot-takes-a-pearl-from-the-warped-forests-own-endermen
+  ;; the pearl stage against the model's own spawns, no fixture enderman: the bot lands on the
+  ;; forest's floor with the chain's kit, a pack spawns in the ring round it, and the hunt
+  ;; (pearls.clj: a burrow, a stare, the fight from its end) takes its first pearl, one kill in
+  ;; two, and lives
+  (let [step (game/compose game/step plan/step)
+        item (fn [k n] {:item (recipe/item-id k) :count n})
+        [w sim] (sim/run step
+                         (game/init fx/opts)
+                         (sim/init {:columns (nether-world warped-floor)
+                                    :spawn [8.5 64.0 8.5]
+                                    :dimension dimension/nether
+                                    :difficulty :easy
+                                    :food 20
+                                    :seed 3
+                                    :inventory {[:hotbar 0] (item :iron_sword 1)
+                                                [:hotbar 1] (item :iron_pickaxe 1)
+                                                [:armour 0] (item :iron_helmet 1)
+                                                [:armour 1] (item :iron_chestplate 1)
+                                                [:armour 2] (item :iron_leggings 1)
+                                                [:armour 3] (item :iron_boots 1)}})
+                         #(or (plan/done? %) (plan/failed? %) (pos? (:stats/deaths % 0)))
+                         1200000
+                         {:event/kind :go :go/goals [:ender-pearl]})
+        endermen (filter #(= :enderman (:type %)) (vals (:sim/mobs sim)))]
+    (is (plan/done? w) (pr-str (plan/summary w)))
+    (is (pos? (get (recipe/counts (:player/inventory w)) :ender_pearl 0)))
+    (is (seq endermen) "the forest spawned them")
+    (is (zero? (:stats/deaths w 0)) "alive")
+    (is (= [] (:sim/violations sim)))))
+
 ;; ---------------------------------------------------------------- blaze spawners
 
 (def sp [12 64 12])
