@@ -9,6 +9,7 @@
 (require '[clojurecraft.blocks :as blocks]
          '[clojurecraft.dimension :as dimension]
          '[clojurecraft.game :as game]
+         '[clojurecraft.mob :as mob]
          '[clojurecraft.plan :as plan]
          '[clojurecraft.recipe :as recipe]
          '[clojurecraft.sim :as sim]
@@ -45,6 +46,34 @@
                                   (when (and (= :enderman (:type m)) (not (:angry? m)))
                                     (out (tag) "PROVOKED t" (secs s) "eid" eid)))
                                 (ang s eid)))))
+(def counts (atom {}))                 ; [set what] → how many (teleports landed, routes searched)
+(defn bump [what] (swap! counts update [(tag) what] (fnil inc 0)))
+(let [tp sim/teleport-mob]
+  (alter-var-root
+   #'sim/teleport-mob
+   (constantly
+    (fn [s eid point]
+      (let [from (get-in s [:sim/mobs eid :pos])
+            [s' landed?] (tp s eid point)
+            to (get-in s' [:sim/mobs eid :pos])
+            p (:sim/player-pos s)]
+        (bump (if landed? :teleports :teleport-misses))
+        (when landed?
+          (out (tag)
+               "TELEPORT t" (secs s)
+               "eid" eid
+               "from" (pr-str (mapv long from))
+               "to" (pr-str (mapv long to))
+               "player" (pr-str (mapv long p))
+               "dist" (long (clojure.math/sqrt (reduce + (map #(* (- %1 %2) (- %1 %2)) from p))))
+               "->" (long (clojure.math/sqrt (reduce + (map #(* (- %1 %2) (- %1 %2)) to p))))))
+        [s' landed?])))))
+(let [rt mob/route]
+  (alter-var-root #'mob/route
+                  (constantly (fn [free? from target n]
+                                (let [r (rt free? from target n)]
+                                  (bump (if (seq r) :routes :routes-empty))
+                                  r)))))
 (let [die sim/die-mob]
   (alter-var-root #'sim/die-mob
                   (constantly (fn [s eid by-player?]
@@ -148,6 +177,9 @@
                  (count (filter #(and (= :enderman (:type %)) (not (:dead-at %)))
                                 (vals (:sim/mobs s))))
                  "violations" (count (:sim/violations s))
+                 "counts"
+                 (pr-str (into (sorted-map)
+                               (keep (fn [[[t w] c]] (when (= t set-name) [w c])) @counts)))
                  "plan" (pr-str (plan/summary w)))))))
 
 (run! deref (mapv #(future (try (play %) (catch Exception e (out % "CRASH" (str e))))) sets))
