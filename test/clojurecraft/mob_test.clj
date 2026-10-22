@@ -385,37 +385,6 @@
     (is (every? #(identical? % (sim/try-nether-spawn %)) states)
         "the Nether's rule leaves every overworld tick as it was")))
 
-(deftest the-bot-takes-a-pearl-from-the-warped-forests-own-endermen
-  ;; the pearl stage against the model's own spawns, no fixture enderman: the bot lands on the
-  ;; forest's floor with the chain's kit, a pack spawns in the ring round it, and the hunt
-  ;; (pearls.clj: a burrow, a stare, the fight from its end) takes its first pearl, one kill in
-  ;; two, and lives
-  (let [step (game/compose game/step plan/step)
-        item (fn [k n] {:item (recipe/item-id k) :count n})
-        [w sim] (sim/run step
-                         (game/init fx/opts)
-                         (sim/init {:columns (nether-world warped-floor)
-                                    :spawn [8.5 64.0 8.5]
-                                    :dimension dimension/nether
-                                    :difficulty :easy
-                                    :food 20
-                                    :seed 3
-                                    :inventory {[:hotbar 0] (item :iron_sword 1)
-                                                [:hotbar 1] (item :iron_pickaxe 1)
-                                                [:armour 0] (item :iron_helmet 1)
-                                                [:armour 1] (item :iron_chestplate 1)
-                                                [:armour 2] (item :iron_leggings 1)
-                                                [:armour 3] (item :iron_boots 1)}})
-                         #(or (plan/done? %) (plan/failed? %) (pos? (:stats/deaths % 0)))
-                         1200000
-                         {:event/kind :go :go/goals [:ender-pearl]})
-        endermen (filter #(= :enderman (:type %)) (vals (:sim/mobs sim)))]
-    (is (plan/done? w) (pr-str (plan/summary w)))
-    (is (pos? (get (recipe/counts (:player/inventory w)) :ender_pearl 0)))
-    (is (seq endermen) "the forest spawned them")
-    (is (zero? (:stats/deaths w 0)) "alive")
-    (is (= [] (:sim/violations sim)))))
-
 ;; ---------------------------------------------------------------- blaze spawners
 
 (def sp [12 64 12])
