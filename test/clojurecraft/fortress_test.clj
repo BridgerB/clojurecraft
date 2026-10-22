@@ -90,6 +90,7 @@
         pick {:item (recipe/item-id :stone_pickaxe) :count 1}
         w (memory/observe (assoc (rock {})
                                  :world/facts (memory/empty-facts)
+                                 :time/now 0
                                  :player/dimension dimension/nether
                                  :player/inventory {0 pick})
                           [1 64 0]
